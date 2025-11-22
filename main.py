@@ -11,6 +11,8 @@ from starlette.routing import Mount
 # Configuration / GitHub credentials
 # ============================================================
 
+# Read the GitHub token from environment variables. Render will
+# provide these at process start, so this is safe to do at import.
 GITHUB_TOKEN = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
 GITHUB_GRAPHQL_URL = os.environ.get("GITHUB_GRAPHQL_URL", "https://api.github.com/graphql")
@@ -58,6 +60,7 @@ async def _github_request(
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
+        # Use the recommended GitHub API version header
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
@@ -108,6 +111,18 @@ async def github_request(
 ) -> Dict[str, Any]:
     """
     Make an arbitrary call to the GitHub REST API.
+
+    Parameters
+    ----------
+    method:
+        HTTP method, e.g. 'GET', 'POST', 'PATCH', 'PUT', 'DELETE'.
+    path:
+        Path relative to the REST API base URL, e.g. '/user',
+        '/repos/{owner}/{repo}/issues'.
+    query:
+        Optional query parameters object.
+    body:
+        Optional JSON request body.
     """
     return await _github_request(method, path, params=query, json_body=body)
 
@@ -119,6 +134,13 @@ async def github_graphql(
 ) -> Dict[str, Any]:
     """
     Call the GitHub GraphQL API.
+
+    Parameters
+    ----------
+    query:
+        GraphQL query string.
+    variables:
+        Optional variables object.
     """
     token = GITHUB_TOKEN
     if not token:
@@ -172,11 +194,11 @@ async def sanity_check(ctx: Context[ServerSession, None]) -> str:
 # ASGI app with SSE endpoints
 # ============================================================
 
-# IMPORTANT: mount the SSE app at the ROOT.
+# Mount the FastMCP SSE app at the ROOT.
 # This exposes:
-#   - GET /sse      (SSE stream)
+#   - GET  /sse       (SSE stream)
 #   - POST /messages/ (MCP messages)
-# exactly as the MCP SDK expects. 
+# on the same port Render provides via $PORT.
 app = Starlette(
     routes=[
         Mount("/", app=mcp.sse_app()),
@@ -187,5 +209,6 @@ app = Starlette(
 if __name__ == "__main__":
     import uvicorn
 
+    # Render binds your service to the PORT env var and requires 0.0.0.0
     port = int(os.environ.get("PORT", "8000"))
     uvicorn.run(app, host="0.0.0.0", port=port)
