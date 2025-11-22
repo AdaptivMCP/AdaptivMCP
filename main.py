@@ -1,10 +1,12 @@
 # main.py
 """
 Fast GitHub MCP connector optimized for private repositories.
-- Uses a pooled httpx.AsyncClient with HTTP/2 and default Authorization header.
+- Uses a pooled httpx.AsyncClient with default Authorization header.
 - fetch_file defaults to raw content (application/vnd.github.v3.raw) for minimal overhead.
 - fetch_files supports concurrent reads.
 - fetch_url allows arbitrary web checks.
+- HTTP/2 is OFF by default (no h2 dependency required). To enable HTTP/2, install
+  httpx[http2] and set HTTPX_HTTP2=1 in the environment.
 """
 
 import os
@@ -33,7 +35,10 @@ GITHUB_GRAPHQL_URL = os.environ.get("GITHUB_GRAPHQL_URL", "https://api.github.co
 HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", "30.0"))
 HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", "40"))
 HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", "200"))
-HTTPX_HTTP2 = os.environ.get("HTTPX_HTTP2", "1") != "0"  # enable http2 by default
+
+# IMPORTANT: default http2 OFF to avoid requiring `h2`.
+# If you later install `httpx[http2]`, you can set HTTPX_HTTP2=1 to enable it.
+HTTPX_HTTP2 = os.environ.get("HTTPX_HTTP2", "0") != "0"
 
 # Default concurrency used by fetch_files
 DEFAULT_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "12"))
@@ -79,15 +84,35 @@ def _ensure_github_client() -> httpx.AsyncClient:
             max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
             max_connections=HTTPX_MAX_CONNECTIONS,
         )
-        _github_client = httpx.AsyncClient(
-            base_url=GITHUB_API_BASE,
-            timeout=httpx.Timeout(HTTPX_TIMEOUT),
-            limits=limits,
-            follow_redirects=True,
-            http2=HTTPX_HTTP2,
-            headers=_make_github_headers(),
-            trust_env=False,
-        )
+
+        # Try to create client with http2 if requested; if the environment
+        # is missing h2, fall back to http1.1 automatically.
+        http2_enabled = HTTPX_HTTP2
+        try:
+            _github_client = httpx.AsyncClient(
+                base_url=GITHUB_API_BASE,
+                timeout=httpx.Timeout(HTTPX_TIMEOUT),
+                limits=limits,
+                follow_redirects=True,
+                http2=http2_enabled,
+                headers=_make_github_headers(),
+                trust_env=False,
+            )
+        except RuntimeError as e:
+            # Typical error if http2=True but h2 package is not installed.
+            if "http2=True" in str(e) or "h2" in str(e):
+                # Fallback: logically disable http2 and retry with http1.1
+                _github_client = httpx.AsyncClient(
+                    base_url=GITHUB_API_BASE,
+                    timeout=httpx.Timeout(HTTPX_TIMEOUT),
+                    limits=limits,
+                    follow_redirects=True,
+                    http2=False,
+                    headers=_make_github_headers(),
+                    trust_env=False,
+                )
+            else:
+                raise
     return _github_client
 
 def _ensure_external_client() -> httpx.AsyncClient:
@@ -100,14 +125,28 @@ def _ensure_external_client() -> httpx.AsyncClient:
             max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
             max_connections=HTTPX_MAX_CONNECTIONS,
         )
-        _external_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(HTTPX_TIMEOUT),
-            limits=limits,
-            follow_redirects=True,
-            http2=HTTPX_HTTP2,
-            headers={"User-Agent": "GitHub-Fast-MCP/1.0"},
-            trust_env=False,
-        )
+        http2_enabled = HTTPX_HTTP2
+        try:
+            _external_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(HTTPX_TIMEOUT),
+                limits=limits,
+                follow_redirects=True,
+                http2=http2_enabled,
+                headers={"User-Agent": "GitHub-Fast-MCP/1.0"},
+                trust_env=False,
+            )
+        except RuntimeError as e:
+            if "http2=True" in str(e) or "h2" in str(e):
+                _external_client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(HTTPX_TIMEOUT),
+                    limits=limits,
+                    follow_redirects=True,
+                    http2=False,
+                    headers={"User-Agent": "GitHub-Fast-MCP/1.0"},
+                    trust_env=False,
+                )
+            else:
+                raise
     return _external_client
 
 async def _close_clients() -> None:
@@ -145,10 +184,6 @@ async def _github_request(
     client = _ensure_github_client()
     request_url = path_or_url if full_url or path_or_url.lower().startswith("http") else path_or_url
     req_headers = headers or {}
-    # Don't overwrite Authorization/default headers on a per-call basis unless explicitly provided.
-    # If caller provides headers, merge with client's defaults (client.headers are already present).
-    # httpx will automatically combine client.headers and per-request headers.
-
     resp = await client.request(
         method.upper(),
         request_url,
@@ -159,36 +194,37 @@ async def _github_request(
     )
 
     result: Dict[str, Any] = {"status": resp.status_code, "url": str(resp.url), "headers": dict(resp.headers)}
-    # Put both bytes and text where appropriate; keep json if content-type JSON
-    content_type = resp.headers.get("content-type", "")
-    result["bytes"] = resp.content  # raw bytes always available
+    result["bytes"] = resp.content
     try:
-        # resp.text decodes using response encoding, helpful for text data
         result["text"] = resp.text
     except Exception:
         result["text"] = None
 
-    if "application/json" in content_type.lower() or resp.headers.get("content-type", "").lower().startswith("application/json"):
+    content_type = resp.headers.get("content-type", "")
+    if "application/json" in content_type.lower():
         try:
             result["json"] = resp.json()
         except Exception:
             pass
 
     if resp.status_code >= 400:
-        # Keep a clipped body for diagnostics
-        body_sample = (result.get("text") or result.get("bytes") and result.get("bytes")[:1000]) or ""
-        raise GitHubAPIError(f"GitHub API error {resp.status_code} for {method} {request_url}: {str(body_sample)[:1000]}")
+        body_sample = (result.get("text") or (result.get("bytes") and result["bytes"][:1000]) or b"")
+        raise GitHubAPIError(
+            f"GitHub API error {resp.status_code} for {method} {request_url}: {str(body_sample)[:1000]}"
+        )
     return result
 
-# Generic external fetch helper (for checking the web)
 async def _external_fetch(
     url: str,
     *,
     method: str = "GET",
     headers: Optional[Dict[str, str]] = None,
-    body: Optional[Union[str, bytes]] = None,
+    body: Optional[Union[str, bytes, Dict[str, Any]]] = None,
     timeout: Optional[float] = None,
 ) -> Dict[str, Any]:
+    """
+    Generic external HTTP(s) fetch; follows redirects and uses pooled client.
+    """
     client = _ensure_external_client()
     request_kwargs: Dict[str, Any] = {}
     if headers:
@@ -197,20 +233,34 @@ async def _external_fetch(
         request_kwargs["content"] = body
     elif body is not None:
         request_kwargs["json"] = body
-    resp = await client.request(method.upper(), url, timeout=httpx.Timeout(timeout) if timeout else None, **request_kwargs)
-    result = {"status": resp.status_code, "url": str(resp.url), "headers": dict(resp.headers), "bytes": resp.content}
+
+    resp = await client.request(
+        method.upper(),
+        url,
+        timeout=httpx.Timeout(timeout) if timeout else None,
+        **request_kwargs,
+    )
+
+    result: Dict[str, Any] = {
+        "status": resp.status_code,
+        "url": str(resp.url),
+        "headers": dict(resp.headers),
+        "bytes": resp.content,
+    }
     try:
         result["text"] = resp.text
     except Exception:
         result["text"] = None
+
     content_type = resp.headers.get("content-type", "")
     if "application/json" in content_type.lower():
         try:
             result["json"] = resp.json()
         except Exception:
             pass
+
     if resp.status_code >= 400:
-        body_sample = (result.get("text") or result.get("bytes") and result.get("bytes")[:1000]) or ""
+        body_sample = (result.get("text") or (result.get("bytes") and result["bytes"][:1000]) or b"")
         raise RuntimeError(f"HTTP error {resp.status_code} when fetching {url}: {str(body_sample)[:1000]}")
     return result
 
@@ -259,7 +309,6 @@ async def fetch_url(
     """
     Fetch an arbitrary URL on the web (follows redirects). Useful for "checking the web".
     """
-    # Use external client (pooled for speed)
     return await _external_fetch(url, method=method, headers=headers, body=body, timeout=timeout)
 
 @mcp.tool()
@@ -292,7 +341,6 @@ async def _decode_contents_api_item(item: Dict[str, Any], encoding: str = "utf-8
                 return {"type": "file", "bytes": raw, "size": len(raw)}
         else:
             return {"type": "file", "text": item.get("content", ""), "size": len(item.get("content", ""))}
-    # fallback
     return {"type": t or "unknown", "json": item}
 
 @mcp.tool()
@@ -320,16 +368,31 @@ async def fetch_file(
     params = {"ref": ref}
 
     if raw:
-        # Request raw via API; client already includes Authorization.
-        # This returns raw bytes/text rather than JSON when Accept is v3.raw.
         headers = {"Accept": "application/vnd.github.v3.raw"}
-        result = await _github_request("GET", endpoint, params=params, headers=headers, full_url=False, timeout=timeout)
-        # result will contain 'bytes' and 'text' where appropriate
-        return {"status": result["status"], "url": result["url"], "text": result.get("text"), "bytes": result.get("bytes")}
+        result = await _github_request(
+            "GET",
+            endpoint,
+            params=params,
+            headers=headers,
+            full_url=False,
+            timeout=timeout,
+        )
+        return {
+            "status": result["status"],
+            "url": result["url"],
+            "text": result.get("text"),
+            "bytes": result.get("bytes"),
+        }
     else:
-        # JSON contents and base64 decode
         headers = None
-        result = await _github_request("GET", endpoint, params=params, headers=headers, full_url=False, timeout=timeout)
+        result = await _github_request(
+            "GET",
+            endpoint,
+            params=params,
+            headers=headers,
+            full_url=False,
+            timeout=timeout,
+        )
         item = result.get("json")
         if item is None:
             raise GitHubAPIError(f"Unexpected response when fetching file: {result.get('text') or result.get('bytes')}")
@@ -357,7 +420,14 @@ async def fetch_files(
     async def _one(p: str) -> Tuple[str, Dict[str, Any]]:
         async with sem:
             try:
-                res = await fetch_file(repository_full_name, p, ref=ref, encoding=encoding, raw=raw, timeout=timeout)
+                res = await fetch_file(
+                    repository_full_name,
+                    p,
+                    ref=ref,
+                    encoding=encoding,
+                    raw=raw,
+                    timeout=timeout,
+                )
                 return p, {"ok": True, "result": res}
             except Exception as e:
                 return p, {"ok": False, "error": str(e)}
