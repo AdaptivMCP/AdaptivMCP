@@ -7,6 +7,13 @@ Fast GitHub MCP connector optimized for private repositories.
 - fetch_url allows arbitrary web checks.
 - HTTP/2 is OFF by default (no h2 dependency required). To enable HTTP/2, install
   httpx[http2] and set HTTPX_HTTP2=1 in the environment.
+
+Extended tools:
+- github_rate_limit: inspect GitHub API rate limits.
+- github_whoami: see which GitHub user the token belongs to.
+- list_repo_tree: expose /git/trees for a repo at a ref.
+- list_repo_files: flat list of file paths from the tree.
+- search_code: GitHub code search scoped to a repo.
 """
 
 import os
@@ -49,8 +56,10 @@ DEFAULT_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "12"))
 class GitHubAuthError(RuntimeError):
     """Missing GitHub credentials or invalid token."""
 
+
 class GitHubAPIError(RuntimeError):
     """GitHub API call failed."""
+
 
 # ============================================================
 # MCP server
@@ -63,6 +72,7 @@ mcp = FastMCP("GitHub Fast MCP (private repos)", json_response=True)
 _github_client: Optional[httpx.AsyncClient] = None
 _external_client: Optional[httpx.AsyncClient] = None
 
+
 def _make_github_headers() -> Dict[str, str]:
     # Set token and recommended headers once (keeps per-request overhead minimal).
     return {
@@ -72,6 +82,7 @@ def _make_github_headers() -> Dict[str, str]:
         "User-Agent": "GitHub-Fast-MCP/1.0",
         "Connection": "keep-alive",
     }
+
 
 def _ensure_github_client() -> httpx.AsyncClient:
     """
@@ -115,6 +126,7 @@ def _ensure_github_client() -> httpx.AsyncClient:
                 raise
     return _github_client
 
+
 def _ensure_external_client() -> httpx.AsyncClient:
     """
     Return a shared AsyncClient for external (non-GitHub) web checks.
@@ -149,6 +161,7 @@ def _ensure_external_client() -> httpx.AsyncClient:
                 raise
     return _external_client
 
+
 async def _close_clients() -> None:
     global _github_client, _external_client
     try:
@@ -161,6 +174,7 @@ async def _close_clients() -> None:
             await _external_client.aclose()
     finally:
         _external_client = None
+
 
 # ============================================================
 # Low-level request helpers
@@ -214,6 +228,7 @@ async def _github_request(
         )
     return result
 
+
 async def _external_fetch(
     url: str,
     *,
@@ -264,8 +279,9 @@ async def _external_fetch(
         raise RuntimeError(f"HTTP error {resp.status_code} when fetching {url}: {str(body_sample)[:1000]}")
     return result
 
+
 # ============================================================
-# MCP tools (exposed)
+# MCP tools (exposed) - low-level
 # ============================================================
 @mcp.tool()
 async def github_request(
@@ -280,6 +296,7 @@ async def github_request(
     """
     headers = None  # default client headers include Authorization and Accept
     return await _github_request(method, path, params=query, json_body=body, headers=headers)
+
 
 @mcp.tool()
 async def github_graphql(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -298,6 +315,7 @@ async def github_graphql(query: str, variables: Optional[Dict[str, Any]] = None)
     except Exception:
         return {"status": resp.status_code, "url": str(resp.url), "text": resp.text}
 
+
 @mcp.tool()
 async def fetch_url(
     url: str,
@@ -311,6 +329,7 @@ async def fetch_url(
     """
     return await _external_fetch(url, method=method, headers=headers, body=body, timeout=timeout)
 
+
 @mcp.tool()
 async def sanity_check(ctx: Context[ServerSession, None]) -> str:
     """
@@ -318,6 +337,99 @@ async def sanity_check(ctx: Context[ServerSession, None]) -> str:
     """
     await ctx.debug("sanity_check tool was called successfully.")
     return "GitHub Fast MCP server is up and responding."
+
+
+# ============================================================
+# MCP tools (exposed) - higher-level / introspection
+# ============================================================
+@mcp.tool()
+async def github_rate_limit() -> Dict[str, Any]:
+    """
+    Inspect current GitHub REST API rate limits for this token.
+    """
+    return await _github_request("GET", "/rate_limit")
+
+
+@mcp.tool()
+async def github_whoami() -> Dict[str, Any]:
+    """
+    Return information about the authenticated GitHub user for this token.
+    """
+    return await _github_request("GET", "/user")
+
+
+@mcp.tool()
+async def list_repo_tree(
+    repository_full_name: str,
+    ref: str = "main",
+    recursive: bool = True,
+) -> Dict[str, Any]:
+    """
+    Return the raw Git tree for a repository at a given ref (branch, tag, or tree SHA).
+    This uses the /git/trees endpoint.
+    """
+    if "/" not in repository_full_name:
+        raise ValueError("repository_full_name must be 'owner/repo'")
+    owner_repo = repository_full_name.strip()
+    endpoint = f"/repos/{owner_repo}/git/trees/{ref}"
+    params: Optional[Dict[str, Any]] = {"recursive": 1} if recursive else None
+    result = await _github_request("GET", endpoint, params=params)
+    return {
+        "status": result["status"],
+        "url": result["url"],
+        "tree": result.get("json"),
+    }
+
+
+@mcp.tool()
+async def list_repo_files(
+    repository_full_name: str,
+    ref: str = "main",
+) -> Dict[str, Any]:
+    """
+    Return a flat list of file paths from the git tree at the given ref.
+    Useful for quickly enumerating all files in a repo.
+    """
+    tree_result = await list_repo_tree(repository_full_name, ref=ref, recursive=True)
+    tree = tree_result.get("tree") or {}
+    entries = tree.get("tree") or []
+    files = [entry["path"] for entry in entries if entry.get("type") == "blob"]
+    return {
+        "status": tree_result.get("status", 200),
+        "url": tree_result.get("url"),
+        "file_count": len(files),
+        "files": files,
+    }
+
+
+@mcp.tool()
+async def search_code(
+    repository_full_name: str,
+    query: str,
+    per_page: int = 50,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """
+    Perform a GitHub code search scoped to a specific repository.
+    - query: the search query string (without the 'repo:' qualifier; it will be added automatically).
+    """
+    if "/" not in repository_full_name:
+        raise ValueError("repository_full_name must be 'owner/repo'")
+
+    q = f"{query} repo:{repository_full_name}"
+    params = {
+        "q": q,
+        "per_page": max(1, min(per_page, 100)),
+        "page": max(1, page),
+    }
+    result = await _github_request("GET", "/search/code", params=params)
+    return {
+        "status": result["status"],
+        "url": result["url"],
+        "search_query": q,
+        "results": result.get("json"),
+    }
+
 
 # ============================================================
 # High-level file fetch helpers optimized for private repos
@@ -342,6 +454,7 @@ async def _decode_contents_api_item(item: Dict[str, Any], encoding: str = "utf-8
         else:
             return {"type": "file", "text": item.get("content", ""), "size": len(item.get("content", ""))}
     return {"type": t or "unknown", "json": item}
+
 
 @mcp.tool()
 async def fetch_file(
@@ -399,6 +512,7 @@ async def fetch_file(
         decoded = await _decode_contents_api_item(item, encoding=encoding)
         return {"status": result["status"], "url": result["url"], "decoded": decoded}
 
+
 @mcp.tool()
 async def fetch_files(
     repository_full_name: str,
@@ -411,7 +525,7 @@ async def fetch_files(
 ) -> Dict[str, Any]:
     """
     Fetch many files concurrently from a private repo.
-    Returns mapping: path -> {"ok": True, "result": {...}} or {"ok": False, "error": "..." }
+    Returns mapping: path -> {"ok": True, "result": {...}} or {"ok": False, "error": "..."}
     """
     if not isinstance(paths, list):
         raise ValueError("paths must be a list of file paths.")
@@ -436,6 +550,7 @@ async def fetch_files(
     results = await asyncio.gather(*tasks)
     return {k: v for k, v in results}
 
+
 # ============================================================
 # ASGI app wiring and graceful shutdown
 # ============================================================
@@ -446,5 +561,6 @@ app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.environ.get("PORT", "8000"))
     uvicorn.run(app, host="0.0.0.0", port=port)
