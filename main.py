@@ -14,6 +14,8 @@ Extended tools:
 - list_repo_tree: expose /git/trees for a repo at a ref.
 - list_repo_files: flat list of file paths from the tree.
 - search_code: GitHub code search scoped to a repo.
+- commit_file_from_url: commit a file whose content is fetched from a URL
+  (useful when the caller only has a sandbox/local URL or when content is large).
 """
 
 import os
@@ -33,10 +35,14 @@ from starlette.routing import Mount
 GITHUB_TOKEN = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
 if not GITHUB_TOKEN:
     # For this deployment we require a token (private repo access).
-    raise RuntimeError("GITHUB_PAT or GITHUB_TOKEN environment variable must be set for private repo access.")
+    raise RuntimeError(
+        "GITHUB_PAT or GITHUB_TOKEN environment variable must be set for private repo access."
+    )
 
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
-GITHUB_GRAPHQL_URL = os.environ.get("GITHUB_GRAPHQL_URL", "https://api.github.com/graphql")
+GITHUB_GRAPHQL_URL = os.environ.get(
+    "GITHUB_GRAPHQL_URL", "https://api.github.com/graphql"
+)
 
 # Connection / performance tuning (tweak for your environment)
 HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", "300"))
@@ -53,6 +59,8 @@ DEFAULT_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "100"))
 # ============================================================
 # Errors
 # ============================================================
+
+
 class GitHubAuthError(RuntimeError):
     """Missing GitHub credentials or invalid token."""
 
@@ -65,6 +73,12 @@ class GitHubAPIError(RuntimeError):
 # MCP server
 # ============================================================
 mcp = FastMCP("GitHub Fast MCP (private repos)", json_response=True)
+
+# Session-scoped permission switch. The GitHub tools will refuse to run until the
+# session is explicitly approved via the authorize_github_session tool. This
+# avoids repeated per-call confirmations while still keeping a single opt-in per
+# session.
+SESSION_APPROVED: bool = False
 
 # ============================================================
 # Shared pooled clients
@@ -82,6 +96,15 @@ def _make_github_headers() -> Dict[str, str]:
         "User-Agent": "GitHub-Fast-MCP/1.0",
         "Connection": "keep-alive",
     }
+
+
+async def _ensure_session_allowed() -> None:
+    """Require that the session has been explicitly authorized once."""
+    if not SESSION_APPROVED:
+        raise GitHubAuthError(
+            "GitHub MCP tools need to be authorized for this session. "
+            "Call authorize_github_session once to proceed."
+        )
 
 
 def _ensure_github_client() -> httpx.AsyncClient:
@@ -196,7 +219,9 @@ async def _github_request(
     Returns a dict containing status, url, headers, text, bytes (if available), json (if JSON).
     """
     client = _ensure_github_client()
-    request_url = path_or_url if full_url or path_or_url.lower().startswith("http") else path_or_url
+    request_url = (
+        path_or_url if full_url or path_or_url.lower().startswith("http") else path_or_url
+    )
     req_headers = headers or {}
     resp = await client.request(
         method.upper(),
@@ -207,7 +232,11 @@ async def _github_request(
         timeout=httpx.Timeout(timeout) if timeout else None,
     )
 
-    result: Dict[str, Any] = {"status": resp.status_code, "url": str(resp.url), "headers": dict(resp.headers)}
+    result: Dict[str, Any] = {
+        "status": resp.status_code,
+        "url": str(resp.url),
+        "headers": dict(resp.headers),
+    }
     result["bytes"] = resp.content
     try:
         result["text"] = resp.text
@@ -222,9 +251,14 @@ async def _github_request(
             pass
 
     if resp.status_code >= 400:
-        body_sample = (result.get("text") or (result.get("bytes") and result["bytes"][:1000]) or b"")
+        body_sample = (
+            result.get("text")
+            or (result.get("bytes") and result["bytes"][:1000])
+            or b""
+        )
         raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for {method} {request_url}: {str(body_sample)[:1000]}"
+            f"GitHub API error {resp.status_code} for {method} {request_url}: "
+            f"{str(body_sample)[:1000]}"
         )
     return result
 
@@ -275,14 +309,30 @@ async def _external_fetch(
             pass
 
     if resp.status_code >= 400:
-        body_sample = (result.get("text") or (result.get("bytes") and result["bytes"][:1000]) or b"")
-        raise RuntimeError(f"HTTP error {resp.status_code} when fetching {url}: {str(body_sample)[:1000]}")
+        body_sample = (
+            result.get("text")
+            or (result.get("bytes") and result["bytes"][:1000])
+            or b""
+        )
+        raise RuntimeError(
+            f"HTTP error {resp.status_code} when fetching {url}: "
+            f"{str(body_sample)[:1000]}"
+        )
     return result
 
 
 # ============================================================
 # MCP tools (exposed) - low-level
 # ============================================================
+@mcp.tool()
+async def authorize_github_session() -> str:
+    """Approve GitHub MCP actions for the current session to avoid repeated prompts."""
+
+    global SESSION_APPROVED
+    SESSION_APPROVED = True
+    return "GitHub MCP tools authorized for this session."
+
+
 @mcp.tool()
 async def github_request(
     method: str,
@@ -294,24 +344,37 @@ async def github_request(
     Generic request to the GitHub REST API using pooled client.
     - path: path under the API (e.g. '/user' or '/repos/{owner}/{repo}/issues')
     """
+    await _ensure_session_allowed()
     headers = None  # default client headers include Authorization and Accept
-    return await _github_request(method, path, params=query, json_body=body, headers=headers)
+    return await _github_request(
+        method, path, params=query, json_body=body, headers=headers
+    )
 
 
 @mcp.tool()
-async def github_graphql(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def github_graphql(
+    query: str, variables: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Run a GraphQL query against GitHub's GraphQL API using pooled client.
     """
+    await _ensure_session_allowed()
     client = _ensure_github_client()
     payload = {"query": query}
     if variables is not None:
         payload["variables"] = variables
     resp = await client.post(GITHUB_GRAPHQL_URL, json=payload)
     if resp.status_code >= 400:
-        raise GitHubAPIError(f"GitHub GraphQL error {resp.status_code}: {resp.text[:1000]}")
+        raise GitHubAPIError(
+            f"GitHub GraphQL error {resp.status_code}: {resp.text[:1000]}"
+        )
     try:
-        return {"status": resp.status_code, "url": str(resp.url), "json": resp.json(), "text": resp.text}
+        return {
+            "status": resp.status_code,
+            "url": str(resp.url),
+            "json": resp.json(),
+            "text": resp.text,
+        }
     except Exception:
         return {"status": resp.status_code, "url": str(resp.url), "text": resp.text}
 
@@ -327,7 +390,9 @@ async def fetch_url(
     """
     Fetch an arbitrary URL on the web (follows redirects). Useful for "checking the web".
     """
-    return await _external_fetch(url, method=method, headers=headers, body=body, timeout=timeout)
+    return await _external_fetch(
+        url, method=method, headers=headers, body=body, timeout=timeout
+    )
 
 
 @mcp.tool()
@@ -347,6 +412,7 @@ async def github_rate_limit() -> Dict[str, Any]:
     """
     Inspect current GitHub REST API rate limits for this token.
     """
+    await _ensure_session_allowed()
     return await _github_request("GET", "/rate_limit")
 
 
@@ -355,6 +421,7 @@ async def github_whoami() -> Dict[str, Any]:
     """
     Return information about the authenticated GitHub user for this token.
     """
+    await _ensure_session_allowed()
     return await _github_request("GET", "/user")
 
 
@@ -370,6 +437,7 @@ async def list_repo_tree(
     """
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
     owner_repo = repository_full_name.strip()
     endpoint = f"/repos/{owner_repo}/git/trees/{ref}"
     params: Optional[Dict[str, Any]] = {"recursive": 1} if recursive else None
@@ -390,7 +458,10 @@ async def list_repo_files(
     Return a flat list of file paths from the git tree at the given ref.
     Useful for quickly enumerating all files in a repo.
     """
-    tree_result = await list_repo_tree(repository_full_name, ref=ref, recursive=True)
+    await _ensure_session_allowed()
+    tree_result = await list_repo_tree(
+        repository_full_name, ref=ref, recursive=True
+    )
     tree = tree_result.get("tree") or {}
     entries = tree.get("tree") or []
     files = [entry["path"] for entry in entries if entry.get("type") == "blob"]
@@ -415,6 +486,7 @@ async def search_code(
     """
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
 
     q = f"{query} repo:{repository_full_name}"
     params = {
@@ -434,7 +506,9 @@ async def search_code(
 # ============================================================
 # High-level file fetch helpers optimized for private repos
 # ============================================================
-async def _decode_contents_api_item(item: Dict[str, Any], encoding: str = "utf-8") -> Dict[str, Any]:
+async def _decode_contents_api_item(
+    item: Dict[str, Any], encoding: str = "utf-8"
+) -> Dict[str, Any]:
     """
     Decode a JSON item from /contents endpoint into text/bytes.
     """
@@ -452,7 +526,12 @@ async def _decode_contents_api_item(item: Dict[str, Any], encoding: str = "utf-8
             except Exception:
                 return {"type": "file", "bytes": raw, "size": len(raw)}
         else:
-            return {"type": "file", "text": item.get("content", ""), "size": len(item.get("content", ""))}
+            content = item.get("content", "")
+            return {
+                "type": "file",
+                "text": content,
+                "size": len(content),
+            }
     return {"type": t or "unknown", "json": item}
 
 
@@ -475,6 +554,7 @@ async def fetch_file(
     """
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
 
     owner_repo = repository_full_name.strip()
     endpoint = f"/repos/{owner_repo}/contents/{path}"
@@ -508,9 +588,16 @@ async def fetch_file(
         )
         item = result.get("json")
         if item is None:
-            raise GitHubAPIError(f"Unexpected response when fetching file: {result.get('text') or result.get('bytes')}")
+            raise GitHubAPIError(
+                f"Unexpected response when fetching file: "
+                f"{result.get('text') or result.get('bytes')}"
+            )
         decoded = await _decode_contents_api_item(item, encoding=encoding)
-        return {"status": result["status"], "url": result["url"], "decoded": decoded}
+        return {
+            "status": result["status"],
+            "url": result["url"],
+            "decoded": decoded,
+        }
 
 
 @mcp.tool()
@@ -529,6 +616,7 @@ async def fetch_files(
     """
     if not isinstance(paths, list):
         raise ValueError("paths must be a list of file paths.")
+    await _ensure_session_allowed()
     sem = asyncio.Semaphore(max(1, int(concurrency)))
 
     async def _one(p: str) -> Tuple[str, Dict[str, Any]]:
@@ -549,6 +637,137 @@ async def fetch_files(
     tasks = [asyncio.create_task(_one(p)) for p in paths]
     results = await asyncio.gather(*tasks)
     return {k: v for k, v in results}
+
+
+@mcp.tool()
+async def commit_file(
+    repository_full_name: str,
+    path: str,
+    content: str,
+    message: str,
+    branch: str = "main",
+    encoding: str = "utf-8",
+    sha: Optional[str] = None,
+    committer_name: Optional[str] = None,
+    committer_email: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Create or update a file in a GitHub repository using the Contents API.
+    If sha is omitted and the file already exists, the current sha is fetched automatically.
+    """
+
+    if "/" not in repository_full_name:
+        raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
+
+    owner_repo = repository_full_name.strip()
+    endpoint = f"/repos/{owner_repo}/contents/{path}"
+    target_branch = branch.strip() or "main"
+
+    payload: Dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(content.encode(encoding)).decode("utf-8"),
+        "branch": target_branch,
+    }
+
+    if committer_name and committer_email:
+        payload["committer"] = {"name": committer_name, "email": committer_email}
+
+    file_sha = sha
+    if file_sha is None:
+        try:
+            existing = await _github_request(
+                "GET", endpoint, params={"ref": target_branch}
+            )
+            file_sha = (existing.get("json") or {}).get("sha")
+        except GitHubAPIError:
+            file_sha = None
+
+    if file_sha:
+        payload["sha"] = file_sha
+
+    result = await _github_request("PUT", endpoint, json_body=payload)
+    return {
+        "status": result["status"],
+        "url": result["url"],
+        "result": result.get("json"),
+    }
+
+
+@mcp.tool()
+async def commit_file_from_url(
+    repository_full_name: str,
+    path: str,
+    content_url: str,
+    message: str,
+    branch: str = "main",
+    binary: bool = False,
+    encoding: str = "utf-8",
+    sha: Optional[str] = None,
+    committer_name: Optional[str] = None,
+    committer_email: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Create or update a file in a GitHub repository using the Contents API, fetching
+    the file content from a URL before committing.
+
+    This is especially useful when the calling environment has the file available at
+    a local or sandbox URL (e.g. a large YAML or JSON document) and would otherwise
+    exceed tool argument size limits.
+    """
+
+    if "/" not in repository_full_name:
+        raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
+
+    # Fetch the content from the provided URL using the shared external client.
+    fetched = await _external_fetch(content_url, method="GET", timeout=timeout)
+
+    if binary:
+        data_bytes = fetched.get("bytes") or b""
+        if not data_bytes:
+            # Fallback to text if bytes is unexpectedly empty.
+            text = fetched.get("text") or ""
+            data_bytes = text.encode(encoding)
+    else:
+        text = fetched.get("text")
+        if text is None:
+            raw = fetched.get("bytes") or b""
+            text = raw.decode(encoding, errors="replace")
+        data_bytes = text.encode(encoding)
+
+    owner_repo = repository_full_name.strip()
+    endpoint = f"/repos/{owner_repo}/contents/{path}"
+    target_branch = branch.strip() or "main"
+
+    payload: Dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(data_bytes).decode("utf-8"),
+        "branch": target_branch,
+    }
+
+    if committer_name and committer_email:
+        payload["committer"] = {"name": committer_name, "email": committer_email}
+
+    file_sha = sha
+    if file_sha is None:
+        try:
+            existing = await _github_request(
+                "GET", endpoint, params={"ref": target_branch}
+            )
+            file_sha = (existing.get("json") or {}).get("sha")
+        except GitHubAPIError:
+            file_sha = None
+
+    if file_sha:
+        payload["sha"] = file_sha
+
+    result = await _github_request("PUT", endpoint, json_body=payload)
+    return {
+        "status": result["status"],
+        "url": result["url"],
+        "result": result.get("json"),
+    }
 
 
 # ============================================================
