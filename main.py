@@ -77,8 +77,9 @@ mcp = FastMCP("GitHub Fast MCP (private repos)", json_response=True)
 # Session-scoped permission switch. The GitHub tools will refuse to run until the
 # session is explicitly approved via the authorize_github_session tool. This
 # avoids repeated per-call confirmations while still keeping a single opt-in per
-# session.
-SESSION_APPROVED: bool = False
+# session. If you want to bypass the approval step (e.g., in trusted deployments
+# such as a Render.com service you control), set GITHUB_MCP_AUTO_APPROVE=1.
+SESSION_APPROVED: bool = os.environ.get("GITHUB_MCP_AUTO_APPROVE", "0") != "0"
 
 # ============================================================
 # Shared pooled clients
