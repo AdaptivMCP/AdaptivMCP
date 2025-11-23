@@ -459,9 +459,13 @@ async def list_repo_files(
     Useful for quickly enumerating all files in a repo.
     """
     await _ensure_session_allowed()
+<<<<<<< HEAD
     tree_result = await list_repo_tree(
         repository_full_name, ref=ref, recursive=True
     )
+=======
+    tree_result = await list_repo_tree(repository_full_name, ref=ref, recursive=True)
+>>>>>>> 8045154300871dbd9654c06be95761317696ae97
     tree = tree_result.get("tree") or {}
     entries = tree.get("tree") or []
     files = [entry["path"] for entry in entries if entry.get("type") == "blob"]
@@ -676,9 +680,13 @@ async def commit_file(
     file_sha = sha
     if file_sha is None:
         try:
+<<<<<<< HEAD
             existing = await _github_request(
                 "GET", endpoint, params={"ref": target_branch}
             )
+=======
+            existing = await _github_request("GET", endpoint, params={"ref": target_branch})
+>>>>>>> 8045154300871dbd9654c06be95761317696ae97
             file_sha = (existing.get("json") or {}).get("sha")
         except GitHubAPIError:
             file_sha = None
@@ -687,6 +695,7 @@ async def commit_file(
         payload["sha"] = file_sha
 
     result = await _github_request("PUT", endpoint, json_body=payload)
+<<<<<<< HEAD
     return {
         "status": result["status"],
         "url": result["url"],
@@ -768,6 +777,9 @@ async def commit_file_from_url(
         "url": result["url"],
         "result": result.get("json"),
     }
+=======
+    return {"status": result["status"], "url": result["url"], "result": result.get("json")}
+>>>>>>> 8045154300871dbd9654c06be95761317696ae97
 
 
 # ============================================================
