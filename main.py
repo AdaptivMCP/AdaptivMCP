@@ -48,7 +48,7 @@ HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", "512"))
 HTTPX_HTTP2 = os.environ.get("HTTPX_HTTP2", "0") != "0"
 
 # Default concurrency used by fetch_files
-DEFAULT_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "50"))
+DEFAULT_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "100"))
 
 # ============================================================
 # Errors
