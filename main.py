@@ -66,6 +66,12 @@ class GitHubAPIError(RuntimeError):
 # ============================================================
 mcp = FastMCP("GitHub Fast MCP (private repos)", json_response=True)
 
+# Session-scoped permission switch. The GitHub tools will refuse to run until the
+# session is explicitly approved via the authorize_github_session tool. This
+# avoids repeated per-call confirmations while still keeping a single opt-in per
+# session.
+SESSION_APPROVED: bool = False
+
 # ============================================================
 # Shared pooled clients
 # ============================================================
@@ -82,6 +88,15 @@ def _make_github_headers() -> Dict[str, str]:
         "User-Agent": "GitHub-Fast-MCP/1.0",
         "Connection": "keep-alive",
     }
+
+
+async def _ensure_session_allowed() -> None:
+    """Require that the session has been explicitly authorized once."""
+    if not SESSION_APPROVED:
+        raise GitHubAuthError(
+            "GitHub MCP tools need to be authorized for this session. "
+            "Call authorize_github_session once to proceed."
+        )
 
 
 def _ensure_github_client() -> httpx.AsyncClient:
@@ -284,6 +299,15 @@ async def _external_fetch(
 # MCP tools (exposed) - low-level
 # ============================================================
 @mcp.tool()
+async def authorize_github_session() -> str:
+    """Approve GitHub MCP actions for the current session to avoid repeated prompts."""
+
+    global SESSION_APPROVED
+    SESSION_APPROVED = True
+    return "GitHub MCP tools authorized for this session."
+
+
+@mcp.tool()
 async def github_request(
     method: str,
     path: str,
@@ -294,6 +318,7 @@ async def github_request(
     Generic request to the GitHub REST API using pooled client.
     - path: path under the API (e.g. '/user' or '/repos/{owner}/{repo}/issues')
     """
+    await _ensure_session_allowed()
     headers = None  # default client headers include Authorization and Accept
     return await _github_request(method, path, params=query, json_body=body, headers=headers)
 
@@ -303,6 +328,7 @@ async def github_graphql(query: str, variables: Optional[Dict[str, Any]] = None)
     """
     Run a GraphQL query against GitHub's GraphQL API using pooled client.
     """
+    await _ensure_session_allowed()
     client = _ensure_github_client()
     payload = {"query": query}
     if variables is not None:
@@ -347,6 +373,7 @@ async def github_rate_limit() -> Dict[str, Any]:
     """
     Inspect current GitHub REST API rate limits for this token.
     """
+    await _ensure_session_allowed()
     return await _github_request("GET", "/rate_limit")
 
 
@@ -355,6 +382,7 @@ async def github_whoami() -> Dict[str, Any]:
     """
     Return information about the authenticated GitHub user for this token.
     """
+    await _ensure_session_allowed()
     return await _github_request("GET", "/user")
 
 
@@ -370,6 +398,7 @@ async def list_repo_tree(
     """
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
     owner_repo = repository_full_name.strip()
     endpoint = f"/repos/{owner_repo}/git/trees/{ref}"
     params: Optional[Dict[str, Any]] = {"recursive": 1} if recursive else None
@@ -390,6 +419,7 @@ async def list_repo_files(
     Return a flat list of file paths from the git tree at the given ref.
     Useful for quickly enumerating all files in a repo.
     """
+    await _ensure_session_allowed()
     tree_result = await list_repo_tree(repository_full_name, ref=ref, recursive=True)
     tree = tree_result.get("tree") or {}
     entries = tree.get("tree") or []
@@ -415,6 +445,7 @@ async def search_code(
     """
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
 
     q = f"{query} repo:{repository_full_name}"
     params = {
@@ -475,6 +506,7 @@ async def fetch_file(
     """
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
 
     owner_repo = repository_full_name.strip()
     endpoint = f"/repos/{owner_repo}/contents/{path}"
@@ -529,6 +561,7 @@ async def fetch_files(
     """
     if not isinstance(paths, list):
         raise ValueError("paths must be a list of file paths.")
+    await _ensure_session_allowed()
     sem = asyncio.Semaphore(max(1, int(concurrency)))
 
     async def _one(p: str) -> Tuple[str, Dict[str, Any]]:
@@ -549,6 +582,55 @@ async def fetch_files(
     tasks = [asyncio.create_task(_one(p)) for p in paths]
     results = await asyncio.gather(*tasks)
     return {k: v for k, v in results}
+
+
+@mcp.tool()
+async def commit_file(
+    repository_full_name: str,
+    path: str,
+    content: str,
+    message: str,
+    branch: str = "main",
+    encoding: str = "utf-8",
+    sha: Optional[str] = None,
+    committer_name: Optional[str] = None,
+    committer_email: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Create or update a file in a GitHub repository using the Contents API.
+    If sha is omitted and the file already exists, the current sha is fetched automatically.
+    """
+
+    if "/" not in repository_full_name:
+        raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
+
+    owner_repo = repository_full_name.strip()
+    endpoint = f"/repos/{owner_repo}/contents/{path}"
+    target_branch = branch.strip() or "main"
+
+    payload: Dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(content.encode(encoding)).decode("utf-8"),
+        "branch": target_branch,
+    }
+
+    if committer_name and committer_email:
+        payload["committer"] = {"name": committer_name, "email": committer_email}
+
+    file_sha = sha
+    if file_sha is None:
+        try:
+            existing = await _github_request("GET", endpoint, params={"ref": target_branch})
+            file_sha = (existing.get("json") or {}).get("sha")
+        except GitHubAPIError:
+            file_sha = None
+
+    if file_sha:
+        payload["sha"] = file_sha
+
+    result = await _github_request("PUT", endpoint, json_body=payload)
+    return {"status": result["status"], "url": result["url"], "result": result.get("json")}
 
 
 # ============================================================
