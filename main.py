@@ -39,16 +39,16 @@ GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
 GITHUB_GRAPHQL_URL = os.environ.get("GITHUB_GRAPHQL_URL", "https://api.github.com/graphql")
 
 # Connection / performance tuning (tweak for your environment)
-HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", "30.0"))
-HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", "40"))
-HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", "200"))
+HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", "300"))
+HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", "256"))
+HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", "512"))
 
 # IMPORTANT: default http2 OFF to avoid requiring `h2`.
 # If you later install `httpx[http2]`, you can set HTTPX_HTTP2=1 to enable it.
 HTTPX_HTTP2 = os.environ.get("HTTPX_HTTP2", "0") != "0"
 
 # Default concurrency used by fetch_files
-DEFAULT_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "12"))
+DEFAULT_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "50"))
 
 # ============================================================
 # Errors
