@@ -14,13 +14,13 @@ Extended tools:
 - list_repo_tree: expose /git/trees for a repo at a ref.
 - list_repo_files: flat list of file paths from the tree.
 - search_code: GitHub code search scoped to a repo.
-- commit_file_from_url: commit a file whose content is fetched from a URL
-  (useful when the caller only has a sandbox/local URL or when content is large).
+- commit_file_from_url: commit a file whose content is fetched from a URL or sandbox path.
 """
 
 import os
 import base64
 import asyncio
+import pathlib
 from typing import Any, Dict, Optional, Union, List, Tuple
 
 import httpx
@@ -709,32 +709,42 @@ async def commit_file_from_url(
     timeout: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Create or update a file in a GitHub repository using the Contents API, fetching
-    the file content from a URL before committing.
+    the file content from a URL or sandbox/local path before committing.
 
-    This is especially useful when the calling environment has the file available at
-    a local or sandbox URL (e.g. a large YAML or JSON document) and would otherwise
-    exceed tool argument size limits.
+    - If content_url starts with 'sandbox:/' or '/mnt/', treat it as a local file path.
+    - Otherwise, treat content_url as a normal HTTP(S) URL and fetch it with _external_fetch.
     """
 
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
     await _ensure_session_allowed()
 
-    # Fetch the content from the provided URL using the shared external client.
-    fetched = await _external_fetch(content_url, method="GET", timeout=timeout)
-
-    if binary:
-        data_bytes = fetched.get("bytes") or b""
-        if not data_bytes:
-            # Fallback to text if bytes is unexpectedly empty.
-            text = fetched.get("text") or ""
-            data_bytes = text.encode(encoding)
+    # Decide how to obtain data_bytes
+    if content_url.startswith("sandbox:/") or content_url.startswith("/mnt/"):
+        # Treat as local sandbox path
+        local_path = content_url
+        if local_path.startswith("sandbox:/"):
+            local_path = local_path[len("sandbox:") :]
+        try:
+            data_bytes = pathlib.Path(local_path).read_bytes()
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to read local file at {local_path}: {e}"
+            ) from e
     else:
-        text = fetched.get("text")
-        if text is None:
-            raw = fetched.get("bytes") or b""
-            text = raw.decode(encoding, errors="replace")
-        data_bytes = text.encode(encoding)
+        # Treat as real HTTP(S) URL
+        fetched = await _external_fetch(content_url, method="GET", timeout=timeout)
+        if binary:
+            data_bytes = fetched.get("bytes") or b""
+            if not data_bytes:
+                text = fetched.get("text") or ""
+                data_bytes = text.encode(encoding)
+        else:
+            text = fetched.get("text")
+            if text is None:
+                raw = fetched.get("bytes") or b""
+                text = raw.decode(encoding, errors="replace")
+            data_bytes = text.encode(encoding)
 
     owner_repo = repository_full_name.strip()
     endpoint = f"/repos/{owner_repo}/contents/{path}"
