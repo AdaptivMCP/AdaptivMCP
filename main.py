@@ -56,6 +56,10 @@ HTTPX_HTTP2 = os.environ.get("HTTPX_HTTP2", "0") != "0"
 # Default concurrency used by fetch_files
 DEFAULT_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "100"))
 
+# Auto-authorize sessions without requiring an explicit authorize_github_session call.
+# This is useful for hosts/clients that cannot easily support a two-step auth flow.
+AUTO_AUTHORIZE_SESSION = os.environ.get("GITHUB_AUTO_AUTHORIZE", "1") != "0"
+
 # ============================================================
 # Errors
 # ============================================================
@@ -78,7 +82,7 @@ mcp = FastMCP("GitHub Fast MCP (private repos)", json_response=True)
 # session is explicitly approved via the authorize_github_session tool. This
 # avoids repeated per-call confirmations while still keeping a single opt-in per
 # session.
-SESSION_APPROVED: bool = False
+SESSION_APPROVED: bool = AUTO_AUTHORIZE_SESSION
 
 # ============================================================
 # Shared pooled clients
@@ -100,6 +104,12 @@ def _make_github_headers() -> Dict[str, str]:
 
 async def _ensure_session_allowed() -> None:
     """Require that the session has been explicitly authorized once."""
+    global SESSION_APPROVED
+
+    # If auto-authorize is enabled we treat all sessions as pre-approved.
+    if AUTO_AUTHORIZE_SESSION:
+        SESSION_APPROVED = True
+
     if not SESSION_APPROVED:
         raise GitHubAuthError(
             "GitHub MCP tools need to be authorized for this session. "
