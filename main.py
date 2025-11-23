@@ -77,8 +77,9 @@ mcp = FastMCP("GitHub Fast MCP (private repos)", json_response=True)
 # Session-scoped permission switch. The GitHub tools will refuse to run until the
 # session is explicitly approved via the authorize_github_session tool. This
 # avoids repeated per-call confirmations while still keeping a single opt-in per
-# session.
-SESSION_APPROVED: bool = False
+# session. If you want to bypass the approval step (e.g., in trusted deployments
+# such as a Render.com service you control), set GITHUB_MCP_AUTO_APPROVE=1.
+SESSION_APPROVED: bool = os.environ.get("GITHUB_MCP_AUTO_APPROVE", "0") != "0"
 
 # ============================================================
 # Shared pooled clients
@@ -725,8 +726,14 @@ async def commit_file_from_url(
         local_path = content_url
         if local_path.startswith("sandbox:/"):
             local_path = local_path[len("sandbox:") :]
+        path_obj = pathlib.Path(local_path)
+        if not path_obj.is_file():
+            raise RuntimeError(
+                "Local path not found inside the MCP container. "
+                "Mount the file (e.g., into /mnt/data) or pass an HTTP(S) URL via content_url."
+            )
         try:
-            data_bytes = pathlib.Path(local_path).read_bytes()
+            data_bytes = path_obj.read_bytes()
         except Exception as e:
             raise RuntimeError(
                 f"Failed to read local file at {local_path}: {e}"
