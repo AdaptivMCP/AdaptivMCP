@@ -14,13 +14,12 @@ Extended tools:
 - list_repo_tree: expose /git/trees for a repo at a ref.
 - list_repo_files: flat list of file paths from the tree.
 - search_code: GitHub code search scoped to a repo.
-- commit_file_from_url: commit a file whose content is fetched from a URL or sandbox path.
+- commit_file: create or update a file in a repository using the Contents API.
 """
 
 import os
 import base64
 import asyncio
-import pathlib
 from typing import Any, Dict, Optional, Union, List, Tuple
 
 import httpx
@@ -668,98 +667,6 @@ async def commit_file(
     payload: Dict[str, Any] = {
         "message": message,
         "content": base64.b64encode(content.encode(encoding)).decode("utf-8"),
-        "branch": target_branch,
-    }
-
-    if committer_name and committer_email:
-        payload["committer"] = {"name": committer_name, "email": committer_email}
-
-    file_sha = sha
-    if file_sha is None:
-        try:
-            existing = await _github_request(
-                "GET", endpoint, params={"ref": target_branch}
-            )
-            file_sha = (existing.get("json") or {}).get("sha")
-        except GitHubAPIError:
-            file_sha = None
-
-    if file_sha:
-        payload["sha"] = file_sha
-
-    result = await _github_request("PUT", endpoint, json_body=payload)
-    return {
-        "status": result["status"],
-        "url": result["url"],
-        "result": result.get("json"),
-    }
-
-
-@mcp.tool()
-async def commit_file_from_url(
-    repository_full_name: str,
-    path: str,
-    content_url: str,
-    message: str,
-    branch: str = "main",
-    binary: bool = False,
-    encoding: str = "utf-8",
-    sha: Optional[str] = None,
-    committer_name: Optional[str] = None,
-    committer_email: Optional[str] = None,
-    timeout: Optional[float] = None,
-) -> Dict[str, Any]:
-    """Create or update a file in a GitHub repository using the Contents API, fetching
-    the file content from a URL or sandbox/local path before committing.
-
-    - If content_url starts with 'sandbox:/' or '/mnt/', treat it as a local file path.
-    - Otherwise, treat content_url as a normal HTTP(S) URL and fetch it with _external_fetch.
-    """
-
-    if "/" not in repository_full_name:
-        raise ValueError("repository_full_name must be 'owner/repo'")
-    await _ensure_session_allowed()
-
-    # Decide how to obtain data_bytes
-    if content_url.startswith("sandbox:/") or content_url.startswith("/mnt/"):
-        # Treat as local sandbox path
-        local_path = content_url
-        if local_path.startswith("sandbox:/"):
-            local_path = local_path[len("sandbox:") :]
-        path_obj = pathlib.Path(local_path)
-        if not path_obj.is_file():
-            raise RuntimeError(
-                "Local path not found inside the MCP container. "
-                "Mount the file (e.g., into /mnt/data) or pass an HTTP(S) URL via content_url."
-            )
-        try:
-            data_bytes = path_obj.read_bytes()
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to read local file at {local_path}: {e}"
-            ) from e
-    else:
-        # Treat as real HTTP(S) URL
-        fetched = await _external_fetch(content_url, method="GET", timeout=timeout)
-        if binary:
-            data_bytes = fetched.get("bytes") or b""
-            if not data_bytes:
-                text = fetched.get("text") or ""
-                data_bytes = text.encode(encoding)
-        else:
-            text = fetched.get("text")
-            if text is None:
-                raw = fetched.get("bytes") or b""
-                text = raw.decode(encoding, errors="replace")
-            data_bytes = text.encode(encoding)
-
-    owner_repo = repository_full_name.strip()
-    endpoint = f"/repos/{owner_repo}/contents/{path}"
-    target_branch = branch.strip() or "main"
-
-    payload: Dict[str, Any] = {
-        "message": message,
-        "content": base64.b64encode(data_bytes).decode("utf-8"),
         "branch": target_branch,
     }
 
