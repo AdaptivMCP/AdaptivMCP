@@ -30,10 +30,12 @@ if not GITHUB_TOKEN:
     )
 
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
+GITHUB_GRAPHQL_URL = os.environ.get("GITHUB_GRAPHQL_URL", "https://api.github.com/graphql")
 HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", "120"))
 HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", "100"))
 HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", "200"))
 HTTPX_HTTP2 = os.environ.get("HTTPX_HTTP2", "0") != "0"
+FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "100"))
 
 # ============================================================
 # Errors
@@ -192,6 +194,30 @@ async def _github_request(
     return result
 
 
+def _decode_github_content(data: Dict[str, Any]) -> Dict[str, Any]:
+    decoded: Optional[str] = None
+    if isinstance(data, dict) and data.get("encoding") == "base64" and "content" in data:
+        decoded = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+    return {"decoded": decoded, "raw": data}
+
+
+async def _github_graphql(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    client = _github_client_instance()
+    response = await client.post(GITHUB_GRAPHQL_URL, json={"query": query, "variables": variables or {}})
+    result = {
+        "status": response.status_code,
+        "url": str(response.url),
+        "headers": dict(response.headers),
+    }
+    try:
+        result["json"] = response.json()
+    except Exception:
+        result["text"] = response.text
+    if response.status_code >= 400:
+        raise GitHubAPIError(f"GitHub GraphQL error {response.status_code}: {response.text}")
+    return result
+
+
 # ============================================================
 # Tools (read)
 # ============================================================
@@ -202,11 +228,6 @@ async def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
     WRITE_ACTIONS_APPROVED = bool(approved)
     return {"write_actions_enabled": WRITE_ACTIONS_APPROVED}
 
-
-@mcp_tool(write_action=False)
-async def get_rate_limit() -> Dict[str, Any]:
-    """Return the current GitHub rate limit status."""
-    return await _github_request("GET", "/rate_limit")
 
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
@@ -239,10 +260,45 @@ async def get_file_contents(full_name: str, path: str, ref: str = "main") -> Dic
         "GET", f"/repos/{full_name.strip()}/contents/{path.lstrip('/')}", params={"ref": ref}
     )
     data = result.get("json", {})
-    decoded: Optional[str] = None
-    if isinstance(data, dict) and data.get("encoding") == "base64" and "content" in data:
-        decoded = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
-    return {"status": result["status"], "path": path, "ref": ref, "decoded": decoded, "raw": data}
+    decoded = _decode_github_content(data)
+    return {"status": result["status"], "path": path, "ref": ref, **decoded}
+
+
+@mcp_tool(write_action=False)
+async def fetch_files(full_name: str, paths: list[str], ref: str = "main") -> Dict[str, Any]:
+    """Fetch multiple files concurrently (decoded when base64-encoded)."""
+
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    if not paths:
+        raise ValueError("paths must include at least one entry")
+
+    semaphore = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
+
+    async def _fetch(path: str) -> Dict[str, Any]:
+        async with semaphore:
+            try:
+                result = await _github_request(
+                    "GET",
+                    f"/repos/{full_name.strip()}/contents/{path.lstrip('/')}",
+                    params={"ref": ref},
+                )
+                data = result.get("json", {})
+                decoded = _decode_github_content(data)
+                return {"path": path, "status": result["status"], "ref": ref, **decoded}
+            except Exception as exc:  # pylint: disable=broad-except
+                return {"path": path, "error": str(exc)}
+
+    results = await asyncio.gather(*[_fetch(path) for path in paths])
+    return {"count": len(results), "results": results}
+
+
+@mcp_tool(write_action=False)
+async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Execute a GraphQL query against the GitHub GraphQL endpoint."""
+
+    result = await _github_graphql(query, variables)
+    return result
 
 
 @mcp_tool(write_action=False)
@@ -425,28 +481,34 @@ async def create_pull_request(
 _sse_app = mcp.sse_app()
 
 
-async def _sse_mount(scope, receive, send):
+async def _sse_endpoint(scope, receive, send):
     """ASGI wrapper for the MCP SSE app that accepts POST/HEAD for compatibility."""
 
     if scope.get("type") != "http":
         return await _sse_app(scope, receive, send)
 
     method = scope.get("method", "GET").upper()
+    normalized_scope = dict(scope)
+
     if method in {"POST", "HEAD"}:  # normalize to GET for FastMCP SSE handler
-        scope = dict(scope)
-        scope["method"] = "GET"
+        normalized_scope["method"] = "GET"
 
     if method == "OPTIONS":
         response = PlainTextResponse("OK", status_code=204)
-        await response(scope, receive, send)
+        await response(normalized_scope, receive, send)
         return
 
     if method not in {"GET", "POST", "HEAD"}:
         response = PlainTextResponse("Method Not Allowed", status_code=405)
-        await response(scope, receive, send)
+        await response(normalized_scope, receive, send)
         return
 
-    return await _sse_app(scope, receive, send)
+    # Starlette Mount strips the prefix into ``root_path``; rebuild the full path so
+    # FastMCP sees the expected /sse endpoint instead of "/".
+    full_path = f"{normalized_scope.get('root_path', '')}{normalized_scope.get('path', '')}" or "/sse"
+    normalized_scope["path"] = full_path
+
+    return await _sse_app(normalized_scope, receive, send)
 
 
 routes = [
@@ -459,11 +521,12 @@ routes = [
         methods=["GET", "HEAD"],
     ),
     # Support both /sse and /sse/ without Starlette redirecting to a trailing slash.
-    Mount("/sse", app=_sse_mount),
-    Mount("/sse/", app=_sse_mount),
+    Mount("/sse", app=_sse_endpoint),
+    Mount("/sse/", app=_sse_endpoint),
 ]
 
-app = Starlette(routes=routes, redirect_slashes=False)
+app = Starlette(routes=routes)
+app.router.redirect_slashes = False
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 
 
