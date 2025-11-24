@@ -694,6 +694,76 @@ async def commit_file(
     }
 
 
+async def _get_branch_sha(repository_full_name: str, branch: str) -> str:
+    """Fetch the commit SHA for a branch head."""
+
+    owner_repo = repository_full_name.strip()
+    endpoint = f"/repos/{owner_repo}/git/ref/heads/{branch}"
+    result = await _github_request("GET", endpoint)
+    obj = (result.get("json") or {}).get("object") or {}
+    sha = obj.get("sha")
+    if not sha:
+        raise GitHubAPIError(
+            f"Could not resolve branch '{branch}' for {repository_full_name}."
+        )
+    return sha
+
+
+@mcp.tool()
+async def create_branch(
+    repository_full_name: str,
+    new_branch: str,
+    from_ref: str = "main",
+) -> Dict[str, Any]:
+    """
+    Create a new branch in a repository from the specified base ref.
+    """
+
+    if "/" not in repository_full_name:
+        raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
+
+    base_sha = await _get_branch_sha(repository_full_name, from_ref)
+    payload = {"ref": f"refs/heads/{new_branch}", "sha": base_sha}
+    endpoint = f"/repos/{repository_full_name.strip()}/git/refs"
+    result = await _github_request("POST", endpoint, json_body=payload)
+    return {
+        "status": result["status"],
+        "url": result["url"],
+        "result": result.get("json"),
+    }
+
+
+@mcp.tool()
+async def create_pull_request(
+    repository_full_name: str,
+    title: str,
+    head: str,
+    base: str = "main",
+    body: Optional[str] = None,
+    draft: bool = False,
+) -> Dict[str, Any]:
+    """
+    Open a pull request from head to base in the given repository.
+    """
+
+    if "/" not in repository_full_name:
+        raise ValueError("repository_full_name must be 'owner/repo'")
+    await _ensure_session_allowed()
+
+    payload: Dict[str, Any] = {"title": title, "head": head, "base": base, "draft": draft}
+    if body:
+        payload["body"] = body
+
+    endpoint = f"/repos/{repository_full_name.strip()}/pulls"
+    result = await _github_request("POST", endpoint, json_body=payload)
+    return {
+        "status": result["status"],
+        "url": result["url"],
+        "pull_request": result.get("json"),
+    }
+
+
 # ============================================================
 # ASGI app wiring and graceful shutdown
 # ============================================================
