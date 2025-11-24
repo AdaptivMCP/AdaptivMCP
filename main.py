@@ -216,10 +216,48 @@ async def _github_request(
 
 
 def _decode_github_content(data: Dict[str, Any]) -> Dict[str, Any]:
-    decoded: Optional[str] = None
-    if isinstance(data, dict) and data.get("encoding") == "base64" and "content" in data:
-        decoded = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
-    return {"decoded": decoded, "raw": data}
+    """
+    Decode a GitHub /contents response into a small, tool-friendly shape.
+
+    Returns:
+        {
+            "text": <decoded text or None>,
+            "sha": <blob sha or None>,
+            "path": <path or None>,
+            "html_url": <file URL or None>,
+        }
+
+    Note: we intentionally DO NOT return the original base64 "content" field
+    or the entire raw JSON, to keep MCP tool responses small and avoid
+    timeouts on large files.
+    """
+    text: Optional[str] = None
+    sha: Optional[str] = None
+    html_url: Optional[str] = None
+    path: Optional[str] = None
+
+    if isinstance(data, dict):
+        path = data.get("path")
+        sha = data.get("sha")
+        html_url = data.get("html_url")
+
+        if data.get("encoding") == "base64" and "content" in data:
+            try:
+                text = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+            except Exception:
+                # Fallback if GitHub ever sends non-UTF-8 content
+                text = base64.b64decode(data["content"]).decode("latin-1", errors="replace")
+        else:
+            # Some shapes may already have plain text in "content"
+            text = data.get("content")
+
+    return {
+        "text": text,
+        "sha": sha,
+        "path": path,
+        "html_url": html_url,
+    }
+
 
 
 async def _github_graphql(
