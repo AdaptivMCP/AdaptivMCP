@@ -458,10 +458,12 @@ routes = [
         ),
         methods=["GET", "HEAD"],
     ),
+    # Support both /sse and /sse/ without Starlette redirecting to a trailing slash.
     Mount("/sse", app=_sse_mount),
+    Mount("/sse/", app=_sse_mount),
 ]
 
-app = Starlette(routes=routes)
+app = Starlette(routes=routes, redirect_slashes=False)
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 
 
