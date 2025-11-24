@@ -241,7 +241,7 @@ async def _github_graphql(
 # ---------------------------------------------------------------------------
 @mcp_tool(write_action=False)
 async def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Enable or disable write operations for the current MCP session."""
+    """Enable or disable write tools (branch/commit/PR) for this MCP session."""
     global WRITE_ACTIONS_APPROVED
     WRITE_ACTIONS_APPROVED = bool(approved)
     return {"write_actions_enabled": WRITE_ACTIONS_APPROVED}
@@ -249,13 +249,13 @@ async def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
-    """Return the current GitHub rate limit status for the configured token."""
+    """Show current GitHub REST API rate limits for the configured token."""
     return await _github_request("GET", "/rate_limit")
 
 
 @mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
-    """Fetch repository metadata (`owner/repo`)."""
+    """Return repository metadata (owner/repo, default branch, visibility, etc.)."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     return await _github_request("GET", f"/repos/{full_name.strip()}")
@@ -267,7 +267,7 @@ async def list_branches(
     per_page: int = 100,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List branches for a repository."""
+    """List branches for a repository (paginated)."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     params = {"per_page": per_page, "page": page}
@@ -280,7 +280,7 @@ async def get_file_contents(
     path: str,
     ref: str = "main",
 ) -> Dict[str, Any]:
-    """Fetch a file's decoded text contents and raw metadata from a repository."""
+    """Fetch a single file’s contents plus raw GitHub metadata (content/encoding/etc.)."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     result = await _github_request(
@@ -299,7 +299,7 @@ async def fetch_files(
     paths: list[str],
     ref: str = "main",
 ) -> Dict[str, Any]:
-    """Fetch multiple files concurrently (decoded when base64-encoded)."""
+    """Fetch multiple files concurrently; each result includes decoded text and raw metadata."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     if not paths:
@@ -335,13 +335,13 @@ async def graphql_query(
     query: str,
     variables: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Execute a GraphQL query against the configured GitHub GraphQL endpoint."""
+    """Run an arbitrary GraphQL query against the GitHub GraphQL API."""
     return await _github_graphql(query, variables)
 
 
 @mcp_tool(write_action=False)
 async def fetch_url(url: str) -> Dict[str, Any]:
-    """Fetch an external URL (for diagnostics or simple checks)."""
+    """Fetch an external URL for diagnostics or simple checks (not GitHub-specific)."""
     client = _external_client_instance()
     response = await client.get(url)
     return {
@@ -361,7 +361,7 @@ async def list_workflow_runs(
     per_page: int = 20,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List recent GitHub Actions workflow runs for a repository."""
+    """List recent GitHub Actions workflow runs with optional branch/status/event filters."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
@@ -401,7 +401,7 @@ async def list_workflow_run_jobs(
     per_page: int = 50,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List jobs for a specific GitHub Actions workflow run."""
+    """List jobs (and their statuses) for a given GitHub Actions workflow run."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
@@ -418,7 +418,7 @@ async def get_job_logs(
     full_name: str,
     job_id: int,
 ) -> Dict[str, Any]:
-    """Retrieve raw logs for a GitHub Actions job."""
+    """Fetch raw logs for a GitHub Actions job (useful for debugging failed workflows)."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
@@ -452,7 +452,11 @@ async def create_branch(
     new_branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
-    """Create a new branch from an existing reference."""
+    """Create or update a file in a repo (write tool).
+    Use `content` for small text files.
+    Use `content_url` for large or uploaded files (e.g. sandbox paths in ChatGPT);
+    the server fetches the bytes and commits them to the target private repo."""
+        
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
@@ -485,20 +489,8 @@ async def commit_file(
     branch: str = "main",
     sha: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create or update a file in a repository.
-
-    Recommended usage in Joey's GitHub / ChatGPT:
-
-    - For normal-sized text files, pass ``content`` directly.
-    - For large files or files uploaded by the user in ChatGPT, pass the
-      uploaded file path as ``content_url`` (for example a sandbox path like
-      ``sandbox:/mnt/data/...``) and leave ``content`` as None.
-
-    The ChatGPT platform will rewrite that path into an HTTP URL before
-    it reaches this server. This server then fetches the raw bytes,
-    base64-encodes them, and sends them to GitHub's Create/Update
-    file contents API for the target private repository.
-    """
+    """Open a pull request from head to base (requires write actions enabled)."""
+    
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
