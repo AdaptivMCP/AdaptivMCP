@@ -263,18 +263,43 @@ async def commit_file(
     full_name: str,
     path: str,
     message: str,
-    content: str,
+    content: Optional[str] = None,
+    *,
+    content_url: Optional[str] = None,
     branch: str = "main",
     sha: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create or update a file in a repository."""
+    """Create or update a file in a repository.
+
+    The caller can provide the file contents directly via ``content`` or supply a
+    ``content_url`` that will be fetched with the shared external client. This
+    avoids JSON escaping limits when committing large files through MCP tool
+    transports that struggle with big string arguments.
+    """
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     await _ensure_write_allowed(f"commit file {path}")
 
+    if content is None and content_url is None:
+        raise ValueError("Either content or content_url must be provided")
+    if content is not None and content_url is not None:
+        raise ValueError("Provide content or content_url, but not both")
+
+    body_content = content
+    if content_url is not None:
+        client = _external_client_instance()
+        response = await client.get(content_url)
+        if response.status_code >= 400:
+            raise GitHubAPIError(
+                f"Failed to fetch content from {content_url}: {response.status_code}"
+            )
+        body_content = response.text
+
+    assert body_content is not None  # for type checkers
+
     payload: Dict[str, Any] = {
         "message": message,
-        "content": base64.b64encode(content.encode("utf-8")).decode("utf-8"),
+        "content": base64.b64encode(body_content.encode("utf-8")).decode("utf-8"),
         "branch": branch,
     }
     if sha:
