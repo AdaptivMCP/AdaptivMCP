@@ -503,10 +503,10 @@ async def _sse_endpoint(scope, receive, send):
         await response(normalized_scope, receive, send)
         return
 
-    # Starlette Mount strips the prefix into ``root_path``; rebuild the full path so
-    # FastMCP sees the expected /sse endpoint instead of "/".
-    full_path = f"{normalized_scope.get('root_path', '')}{normalized_scope.get('path', '')}" or "/sse"
-    normalized_scope["path"] = full_path
+    # Starlette Mount strips the prefix into ``root_path``; force the path to /sse so
+    # FastMCP always matches the SSE route and avoid trailing-slash mismatches.
+    normalized_scope["root_path"] = ""
+    normalized_scope["path"] = "/sse"
 
     return await _sse_app(normalized_scope, receive, send)
 
