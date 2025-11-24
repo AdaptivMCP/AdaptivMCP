@@ -18,7 +18,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
-from starlette.routing import Mount, Route
+from starlette.routing import Mount
 
 # ============================================================
 # Configuration
@@ -208,6 +208,12 @@ async def get_rate_limit() -> Dict[str, Any]:
     """Return the current GitHub rate limit status."""
     return await _github_request("GET", "/rate_limit")
 
+@mcp_tool(write_action=False)
+async def get_repository(full_name: str) -> Dict[str, Any]:
+    """Fetch repository metadata (owner/repo)."""
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    return await _github_request("GET", f"/repos/{full_name.strip()}")
 
 @mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
@@ -216,6 +222,13 @@ async def get_repository(full_name: str) -> Dict[str, Any]:
         raise ValueError("full_name must be in 'owner/repo' format")
     return await _github_request("GET", f"/repos/{full_name.strip()}")
 
+@mcp_tool(write_action=False)
+async def list_branches(full_name: str, per_page: int = 100, page: int = 1) -> Dict[str, Any]:
+    """List branches for a repository."""
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    params = {"per_page": per_page, "page": page}
+    return await _github_request("GET", f"/repos/{full_name.strip()}/branches", params=params)
 
 @mcp_tool(write_action=False)
 async def list_branches(full_name: str, per_page: int = 100, page: int = 1) -> Dict[str, Any]:
@@ -425,6 +438,12 @@ async def _sse_dispatch(scope, receive, send):
     if scope.get("type") != "http":
         return await _sse_app(scope, receive, send)
 
+    path = scope.get("path", "")
+    if path not in {"/", "/sse"}:
+        response = PlainTextResponse("Not Found", status_code=404)
+        await response(scope, receive, send)
+        return
+
     method = scope.get("method", "GET").upper()
     if method in {"GET", "POST"}:  # Accept POST for compatibility
         scoped = dict(scope)
@@ -436,10 +455,11 @@ async def _sse_dispatch(scope, receive, send):
     await response(scope, receive, send)
 
 
-routes = [
-    Route("/sse", _sse_dispatch, methods=["GET", "POST"]),
-    Route("/", _sse_dispatch, methods=["GET", "POST"]),
-]
+# Mount the ASGI dispatch app so Starlette passes ``scope, receive, send`` rather
+# than a Request object (which would omit the send callable). This avoids the
+# ``TypeError: _sse_dispatch() missing 2 required positional arguments: 'receive'
+# and 'send'`` error seen when using ``Route`` with a request-response endpoint.
+routes = [Mount("/", app=_sse_dispatch)]
 
 app = Starlette(routes=routes)
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
