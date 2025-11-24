@@ -9,4 +9,6 @@ Custom GitHub connector for ChatGPT MCP.
 ## Available tools
 
 - `commit_file`: Create or update a file in a repository via the GitHub Contents API using text content provided in the request.
+- `create_branch`: Create a new branch from an existing ref in a repository.
+- `create_pull_request`: Open a pull request from a head branch to a base branch.
 
