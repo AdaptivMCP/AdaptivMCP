@@ -614,6 +614,10 @@ async def commit_file(
     Use ``content_url`` for large or uploaded files (for example,
     sandbox paths in ChatGPT); the server fetches the bytes and
     commits them to the target private repo.
+
+    The response is trimmed to avoid huge payloads:
+    it returns only minimal commit + content info, not the full
+    base64 file representation from GitHub.
     """
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
@@ -661,11 +665,33 @@ async def commit_file(
     if sha:
         payload["sha"] = sha
 
-    return await _github_request(
+    result = await _github_request(
         "PUT",
         f"/repos/{full_name.strip()}/contents/{path.lstrip('/')}",
         json_body=payload,
     )
+
+    # Trim the GitHub response to avoid huge base64 payloads.
+    raw_json = result.get("json", {}) or {}
+    content_info = raw_json.get("content") or {}
+    commit_info = raw_json.get("commit") or {}
+
+    return {
+        "status": result.get("status"),
+        "path": path,
+        "branch": branch,
+        "content": {
+            "path": content_info.get("path"),
+            "sha": content_info.get("sha"),
+            "html_url": content_info.get("html_url"),
+        },
+        "commit": {
+            "sha": commit_info.get("sha"),
+            "url": commit_info.get("url"),
+            "html_url": commit_info.get("html_url"),
+            "message": commit_info.get("message"),
+        },
+    }
 
 
 @mcp_tool(write_action=True)
