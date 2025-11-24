@@ -1,4 +1,4 @@
-mcp[cli]
-httpx[http2]
-starlette
-uvicorn
+mcp[cli]>=0.1.0
+httpx[http2]>=0.27.0
+starlette>=0.37.0
+uvicorn>=0.30.0
