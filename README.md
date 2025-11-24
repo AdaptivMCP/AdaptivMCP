@@ -18,12 +18,14 @@ All tools return JSON responses. Paths requiring a repository expect the format 
 
 ### General / setup
 - `authorize_write_actions(approved=True)`: Mark the current session as trusted so write tools (commits, branches, PRs) run without extra prompts.
+- `graphql_query(query, variables=None)`: Execute GraphQL queries against the configured GitHub endpoint.
 
 ### GitHub inspection
 - `get_rate_limit()`: Inspect current REST API rate limits for the token.
 - `get_repository(full_name)`: Retrieve repository metadata (`owner/repo`).
 - `list_branches(full_name, per_page=100, page=1)`: List branches for a repository.
 - `get_file_contents(full_name, path, ref="main")`: Fetch decoded text and raw metadata for a repository file.
+- `fetch_files(full_name, paths, ref="main")`: Fetch multiple files concurrently with decoded content when base64-encoded.
 
 ### GitHub Actions visibility
 - `list_workflow_runs(full_name, branch=None, status=None, event=None, per_page=20, page=1)`: List recent workflow runs.
