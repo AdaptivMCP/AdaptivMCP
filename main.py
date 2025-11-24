@@ -490,10 +490,6 @@ async def _sse_endpoint(scope, receive, send):
     method = scope.get("method", "GET").upper()
     normalized_scope = dict(scope)
 
-    # Ensure the downstream SSE app sees the canonical path; mounting otherwise strips it.
-    if normalized_scope.get("path") in {"", "/"}:
-        normalized_scope["path"] = "/sse"
-
     if method in {"POST", "HEAD"}:  # normalize to GET for FastMCP SSE handler
         normalized_scope["method"] = "GET"
 
