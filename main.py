@@ -12,11 +12,13 @@ import base64
 import os
 from functools import wraps
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import httpx
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
-from starlette.routing import Mount
+from starlette.responses import PlainTextResponse
+from starlette.routing import Mount, Route
 
 # ============================================================
 # Configuration
@@ -64,7 +66,10 @@ def mcp_tool(*, write_action: bool = False, **kwargs):
     """
 
     def decorator(func):
-        tool = mcp.tool(**kwargs)(func)
+        try:
+            tool = mcp.tool(write_action=write_action, **kwargs)(func)
+        except TypeError:
+            tool = mcp.tool(**kwargs)(func)
 
         @wraps(func)
         async def wrapper(*args, **inner_kwargs):
@@ -72,6 +77,10 @@ def mcp_tool(*, write_action: bool = False, **kwargs):
 
         for obj in (func, tool, wrapper):
             setattr(obj, "write_action", write_action)
+            try:
+                obj.__dict__["write_action"] = write_action
+            except Exception:
+                pass
         return wrapper
 
     return decorator
@@ -355,13 +364,22 @@ async def commit_file(
 
     body_content = content
     if content_url is not None:
-        client = _external_client_instance()
-        response = await client.get(content_url)
-        if response.status_code >= 400:
-            raise GitHubAPIError(
-                f"Failed to fetch content from {content_url}: {response.status_code}"
-            )
-        body_content = response.text
+        parsed = urlparse(content_url)
+        if parsed.scheme in ("http", "https"):
+            client = _external_client_instance()
+            response = await client.get(content_url)
+            if response.status_code >= 400:
+                raise GitHubAPIError(
+                    f"Failed to fetch content from {content_url}: {response.status_code}"
+                )
+            body_content = response.text
+        else:
+            # Treat as local filesystem path (including file:// URIs)
+            file_path = parsed.path if parsed.scheme == "file" else content_url
+            if not os.path.isfile(file_path):
+                raise FileNotFoundError(f"Content path not found: {file_path}")
+            with open(file_path, "r", encoding="utf-8") as fp:
+                body_content = fp.read()
 
     assert body_content is not None  # for type checkers
 
@@ -400,7 +418,30 @@ async def create_pull_request(
 # ============================================================
 # ASGI wiring
 # ============================================================
-app = Starlette(routes=[Mount("/", app=mcp.sse_app())])
+_sse_app = mcp.sse_app()
+
+
+async def _sse_dispatch(scope, receive, send):
+    if scope.get("type") != "http":
+        return await _sse_app(scope, receive, send)
+
+    method = scope.get("method", "GET").upper()
+    if method in {"GET", "POST"}:  # Accept POST for compatibility
+        scoped = dict(scope)
+        if method == "POST":
+            scoped["method"] = "GET"
+        return await _sse_app(scoped, receive, send)
+
+    response = PlainTextResponse("Method Not Allowed", status_code=405)
+    await response(scope, receive, send)
+
+
+routes = [
+    Route("/sse", _sse_dispatch, methods=["GET", "POST"]),
+    Route("/", _sse_dispatch, methods=["GET", "POST"]),
+]
+
+app = Starlette(routes=routes)
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 
 
