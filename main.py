@@ -209,11 +209,6 @@ async def get_rate_limit() -> Dict[str, Any]:
     return await _github_request("GET", "/rate_limit")
 
 @mcp_tool(write_action=False)
-async def get_rate_limit() -> Dict[str, Any]:
-    """Return the current GitHub rate limit status."""
-    return await _github_request("GET", "/rate_limit")
-
-@mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
     """Fetch repository metadata (owner/repo)."""
     if "/" not in full_name:
@@ -463,7 +458,8 @@ routes = [
     Mount("/sse/", app=_sse_mount),
 ]
 
-app = Starlette(routes=routes, redirect_slashes=False)
+app = Starlette(routes=routes)
+app.router.redirect_slashes = False
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 
 
