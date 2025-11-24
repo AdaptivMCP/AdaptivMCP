@@ -10,19 +10,22 @@ Key capabilities:
 - Inspect GitHub Actions runs, jobs, and logs.
 - Write operations (opt-in): create branches, commit files, open pull requests.
 - Large-file support for private repos via `commit_file(..., content_url=...)`.
+- High-level workflows: ensure branches, update multiple files, open PRs,
+  trigger CI and wait for completion.
 
 Environment variables:
 - GITHUB_PAT or GITHUB_TOKEN (required)
 - GITHUB_API_BASE, GITHUB_GRAPHQL_URL (optional)
 - GITHUB_MCP_AUTO_APPROVE (optional)
 - HTTPX_* tuning vars (optional)
-- FETCH_FILES_CONCURRENCY (optional)
+- FETCH_FILES_CONCURRENCY (optional, default 500)
 """
 from __future__ import annotations
 
 import asyncio
 import base64
 import os
+import uuid
 from functools import wraps
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
@@ -49,7 +52,8 @@ HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", "120"))
 HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", "100"))
 HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", "200"))
 HTTPX_HTTP2 = os.environ.get("HTTPX_HTTP2", "0") != "0"
-FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "100"))
+# Increased default so we can comfortably fetch hundreds of files if needed.
+FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "500"))
 
 # ---------------------------------------------------------------------------
 # Errors
@@ -444,7 +448,7 @@ async def get_job_logs(
 
 
 # ---------------------------------------------------------------------------
-# Tools (write)
+# Tools (write, low-level)
 # ---------------------------------------------------------------------------
 @mcp_tool(write_action=True)
 async def create_branch(
@@ -453,7 +457,6 @@ async def create_branch(
     from_ref: str = "main",
 ) -> Dict[str, Any]:
     """Create a new branch at the tip of an existing ref (requires write actions enabled)."""
-        
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
@@ -487,11 +490,13 @@ async def commit_file(
     sha: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create or update a file in a repo (write tool).
+
     Use `content` for normal-sized text files.
+
     Use `content_url` for large or uploaded files (for example,
     sandbox paths in ChatGPT); the server fetches the bytes and
-    commits them to the target private repo."""
-    
+    commits them to the target private repo.
+    """
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
@@ -574,6 +579,203 @@ async def create_pull_request(
         f"/repos/{full_name.strip()}/pulls",
         json_body=payload,
     )
+
+
+# ---------------------------------------------------------------------------
+# Tools (workflow helpers: branches, PRs, CI)
+# ---------------------------------------------------------------------------
+@mcp_tool(write_action=True)
+async def ensure_branch(
+    full_name: str,
+    branch: str,
+    from_ref: str = "main",
+) -> Dict[str, Any]:
+    """Ensure a branch exists; if missing, create it from `from_ref`.
+
+    Returns a structure indicating whether the branch was created.
+    """
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+
+    await _ensure_write_allowed(f"ensure branch {branch}")
+
+    client = _github_client_instance()
+    # First, see if the branch already exists.
+    response = await client.get(
+        f"/repos/{full_name.strip()}/git/refs/heads/{branch}"
+    )
+    if response.status_code == 200:
+        return {
+            "created": False,
+            "status": response.status_code,
+            "url": str(response.url),
+            "headers": dict(response.headers),
+            "json": response.json(),
+        }
+    if response.status_code != 404:
+        raise GitHubAPIError(
+            f"GitHub API error {response.status_code}: {response.text}"
+        )
+
+    # 404 -> create it using the low-level create_branch tool.
+    created = await create_branch(
+        full_name=full_name,
+        new_branch=branch,
+        from_ref=from_ref,
+    )
+    return {
+        "created": True,
+        "branch": branch,
+        "result": created,
+    }
+
+
+@mcp_tool(write_action=True)
+async def update_files_and_open_pr(
+    full_name: str,
+    base_branch: str,
+    title: str,
+    files: list[Dict[str, Any]],
+    body: Optional[str] = None,
+    new_branch: Optional[str] = None,
+    commit_message: str = "Update files via MCP",
+    draft: bool = False,
+) -> Dict[str, Any]:
+    """High-level workflow: ensure branch, commit files, open a PR.
+
+    - Ensures `new_branch` exists (or generates one) from `base_branch`.
+    - Commits each entry in `files` using `commit_file` (one commit per file).
+      Each file dict can contain:
+        - path (required)
+        - content (optional)
+        - content_url (optional)
+        - sha (optional, for updates)
+        - message (optional per-file commit message)
+    - Opens a pull request from `new_branch` to `base_branch`.
+
+    Returns branch info, per-file commit results, and PR metadata.
+    """
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    if not files:
+        raise ValueError("files must contain at least one entry")
+
+    await _ensure_write_allowed("update files and open PR")
+
+    branch_name = new_branch or f"ally-{uuid.uuid4().hex[:8]}"
+    branch_result = await ensure_branch(
+        full_name=full_name,
+        branch=branch_name,
+        from_ref=base_branch,
+    )
+
+    commit_results: list[Dict[str, Any]] = []
+    for file_spec in files:
+        path = file_spec.get("path")
+        if not path:
+            raise ValueError("Each file must include a 'path' field")
+
+        file_content = file_spec.get("content")
+        file_content_url = file_spec.get("content_url")
+        file_sha = file_spec.get("sha")
+        per_file_message = file_spec.get("message", commit_message)
+
+        commit_result = await commit_file(
+            full_name=full_name,
+            path=path,
+            message=per_file_message,
+            content=file_content,
+            content_url=file_content_url,
+            branch=branch_name,
+            sha=file_sha,
+        )
+        commit_results.append({"path": path, "result": commit_result})
+
+    pr_result = await create_pull_request(
+        full_name=full_name,
+        title=title,
+        head=branch_name,
+        base=base_branch,
+        body=body,
+        draft=draft,
+    )
+
+    return {
+        "branch": branch_name,
+        "branch_result": branch_result,
+        "commits": commit_results,
+        "pull_request": pr_result,
+    }
+
+
+@mcp_tool(write_action=True)
+async def trigger_workflow_dispatch(
+    full_name: str,
+    workflow_id_or_file: str,
+    ref: str = "main",
+    inputs: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Trigger a workflow_dispatch event for a GitHub Actions workflow."""
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+
+    await _ensure_write_allowed(f"trigger workflow {workflow_id_or_file}")
+
+    payload: Dict[str, Any] = {"ref": ref}
+    if inputs:
+        payload["inputs"] = inputs
+
+    return await _github_request(
+        "POST",
+        f"/repos/{full_name.strip()}/actions/workflows/{workflow_id_or_file}/dispatches",
+        json_body=payload,
+    )
+
+
+@mcp_tool(write_action=False)
+async def wait_for_workflow_run(
+    full_name: str,
+    run_id: int,
+    poll_interval_seconds: float = 10.0,
+    timeout_seconds: int = 1800,
+) -> Dict[str, Any]:
+    """Poll a workflow run until it completes or times out.
+
+    Returns the final run JSON, status, and conclusion. If the timeout is hit,
+    returns the last seen run payload with `timed_out=True`.
+    """
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    last_run: Optional[Dict[str, Any]] = None
+
+    while True:
+        run_wrapper = await get_workflow_run(full_name=full_name, run_id=run_id)
+        run_json = run_wrapper.get("json", {})
+        last_run = run_json
+
+        status = run_json.get("status")
+        conclusion = run_json.get("conclusion")
+
+        if status == "completed":
+            return {
+                "timed_out": False,
+                "status": status,
+                "conclusion": conclusion,
+                "run": run_json,
+            }
+
+        elapsed = loop.time() - start
+        if elapsed >= timeout_seconds:
+            return {
+                "timed_out": True,
+                "elapsed_seconds": elapsed,
+                "last_run": last_run,
+            }
+
+        await asyncio.sleep(poll_interval_seconds)
 
 
 # ---------------------------------------------------------------------------
