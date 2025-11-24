@@ -240,6 +240,74 @@ async def fetch_url(url: str) -> Dict[str, Any]:
     return {"status": response.status_code, "url": str(response.url), "text": response.text}
 
 
+@mcp_tool(write_action=False)
+async def list_workflow_runs(
+    full_name: str,
+    *,
+    branch: Optional[str] = None,
+    status: Optional[str] = None,
+    event: Optional[str] = None,
+    per_page: int = 20,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """List GitHub Actions workflow runs for a repository."""
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    params: Dict[str, Any] = {"per_page": per_page, "page": page}
+    if branch:
+        params["branch"] = branch
+    if status:
+        params["status"] = status
+    if event:
+        params["event"] = event
+    return await _github_request("GET", f"/repos/{full_name.strip()}/actions/runs", params=params)
+
+
+@mcp_tool(write_action=False)
+async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
+    """Get details for a specific GitHub Actions workflow run."""
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    return await _github_request(
+        "GET", f"/repos/{full_name.strip()}/actions/runs/{run_id}"
+    )
+
+
+@mcp_tool(write_action=False)
+async def list_workflow_run_jobs(
+    full_name: str, run_id: int, per_page: int = 50, page: int = 1
+) -> Dict[str, Any]:
+    """List jobs for a GitHub Actions workflow run."""
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    params = {"per_page": per_page, "page": page}
+    return await _github_request(
+        "GET", f"/repos/{full_name.strip()}/actions/runs/{run_id}/jobs", params=params
+    )
+
+
+@mcp_tool(write_action=False)
+async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
+    """Retrieve raw logs for a GitHub Actions job."""
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    client = _github_client_instance()
+    response = await client.get(f"/repos/{full_name.strip()}/actions/jobs/{job_id}/logs")
+    result = {
+        "status": response.status_code,
+        "url": str(response.url),
+        "headers": dict(response.headers),
+    }
+    try:
+        # Some environments return text/plain; others may return JSON error bodies.
+        result["text"] = response.text
+    except Exception:
+        result["content"] = base64.b64encode(response.content).decode("utf-8")
+    if response.status_code >= 400:
+        raise GitHubAPIError(f"GitHub API error {response.status_code}: {result.get('text', '')}")
+    return result
+
+
 # ============================================================
 # Tools (write)
 # ============================================================
