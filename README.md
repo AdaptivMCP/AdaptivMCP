@@ -54,7 +54,8 @@ All of these have sensible defaults and can usually be left alone:
 - `HTTPX_HTTP2`  set to `1` to enable HTTP/2 where available (default `1`).
 - `MAX_CONCURRENCY`  general concurrency limit for some tools (default `80`).
 - `FETCH_FILES_CONCURRENCY`  overrides concurrency for `fetch_files`; if unset, falls back to `MAX_CONCURRENCY`.
-- `TOOL_STDOUT_MAX_CHARS`  max characters of stdout or stderr preserved from commands (default `12000`).
+- `TOOL_STDOUT_MAX_CHARS`  max characters of stdout preserved from commands (default `12000`).
+- `TOOL_STDERR_MAX_CHARS`  max characters of stderr preserved from commands (default `12000`).
 
 ## Running locally
 
@@ -136,7 +137,7 @@ Once connected, the client should expose tools such as:
 - `get_rate_limit`, `get_repository`, `list_branches`
 - `get_file_contents`, `fetch_files`
 - `graphql_query`, `fetch_url`
-- GitHub Actions tools  `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, `get_job_logs`
+- GitHub Actions tools  `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, `get_job_logs`, `wait_for_workflow_run`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`
 - PR tools  `list_pull_requests`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `compare_refs`
 - Branch and commit tools  `create_branch`, `ensure_branch`, `commit_file_async`, `create_pull_request`, `update_files_and_open_pr`
 - Workspace tools  `run_command`, `run_tests`, `apply_patch_and_open_pr`
