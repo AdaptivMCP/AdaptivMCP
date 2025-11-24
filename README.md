@@ -37,6 +37,7 @@ All tools return JSON responses. Paths requiring a repository expect the format 
 
 ### Repository write operations
 - `commit_file(repository_full_name, path, content, message, branch="main", encoding="utf-8", sha=None, committer_name=None, committer_email=None)`: Create or update a file via the Contents API. If `sha` is omitted, the current file sha is retrieved automatically to allow updates.
+- `commit_files_git(repository_full_name, files, message, branch="main", encoding="utf-8", force=False, use_base64=True)`: Commit one or more files using the Git Data API (blobs/trees/commits). This is optimized for large modules because it bypasses Contents API size limits.
 - `create_branch(repository_full_name, new_branch, from_ref="main")`: Create a new branch from the specified base ref (uses `/git/refs`).
 - `create_pull_request(repository_full_name, title, head, base="main", body=None, draft=False)`: Open a pull request from `head` to `base`.
 
