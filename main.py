@@ -73,12 +73,10 @@ class GitHubAPIError(RuntimeError):
 # ============================================================
 mcp = FastMCP("GitHub Fast MCP (private repos)", json_response=True)
 
-# Session-scoped permission switch. The GitHub tools will refuse to run until the
-# session is explicitly approved via the authorize_github_session tool. This
-# avoids repeated per-call confirmations while still keeping a single opt-in per
-# session. If you want to bypass the approval step (e.g., in trusted deployments
-# such as a Render.com service you control), set GITHUB_MCP_AUTO_APPROVE=1.
-SESSION_APPROVED: bool = os.environ.get("GITHUB_MCP_AUTO_APPROVE", "0") != "0"
+# Write actions (commits, branches, PRs) require a one-time approval per session
+# so that read-only operations do not constantly prompt for confirmation. To
+# auto-approve in trusted deployments, set GITHUB_MCP_AUTO_APPROVE=1.
+WRITE_ACTIONS_APPROVED: bool = os.environ.get("GITHUB_MCP_AUTO_APPROVE", "0") != "0"
 
 # ============================================================
 # Shared pooled clients
@@ -98,12 +96,14 @@ def _make_github_headers() -> Dict[str, str]:
     }
 
 
-async def _ensure_session_allowed() -> None:
-    """Require that the session has been explicitly authorized once."""
-    if not SESSION_APPROVED:
+async def _ensure_write_allowed(action: str) -> None:
+    """Require a one-time opt-in before performing write actions."""
+
+    if not WRITE_ACTIONS_APPROVED:
         raise GitHubAuthError(
-            "GitHub MCP tools need to be authorized for this session. "
-            "Call authorize_github_session once to proceed."
+            "Write operations (commit files, create branches, open PRs) "
+            "need to be authorized for this session. Call authorize_github_session "
+            "or authorize_write_actions once to proceed."
         )
 
 
@@ -326,11 +326,21 @@ async def _external_fetch(
 # ============================================================
 @mcp.tool()
 async def authorize_github_session() -> str:
-    """Approve GitHub MCP actions for the current session to avoid repeated prompts."""
+    """Approve GitHub MCP write actions for the current session."""
 
-    global SESSION_APPROVED
-    SESSION_APPROVED = True
-    return "GitHub MCP tools authorized for this session."
+    global WRITE_ACTIONS_APPROVED
+    WRITE_ACTIONS_APPROVED = True
+    return (
+        "GitHub MCP write actions authorized for this session. "
+        "You can now commit files, create branches, and open PRs without extra prompts."
+    )
+
+
+@mcp.tool()
+async def authorize_write_actions() -> str:
+    """Alias for authorize_github_session for clarity."""
+
+    return await authorize_github_session()
 
 
 @mcp.tool()
@@ -344,10 +354,12 @@ async def github_request(
     Generic request to the GitHub REST API using pooled client.
     - path: path under the API (e.g. '/user' or '/repos/{owner}/{repo}/issues')
     """
-    await _ensure_session_allowed()
+    method_upper = method.upper()
+    if method_upper not in {"GET", "HEAD", "OPTIONS"}:
+        await _ensure_write_allowed(f"{method_upper} {path}")
     headers = None  # default client headers include Authorization and Accept
     return await _github_request(
-        method, path, params=query, json_body=body, headers=headers
+        method_upper, path, params=query, json_body=body, headers=headers
     )
 
 
@@ -358,7 +370,6 @@ async def github_graphql(
     """
     Run a GraphQL query against GitHub's GraphQL API using pooled client.
     """
-    await _ensure_session_allowed()
     client = _ensure_github_client()
     payload = {"query": query}
     if variables is not None:
@@ -412,7 +423,6 @@ async def github_rate_limit() -> Dict[str, Any]:
     """
     Inspect current GitHub REST API rate limits for this token.
     """
-    await _ensure_session_allowed()
     return await _github_request("GET", "/rate_limit")
 
 
@@ -421,7 +431,6 @@ async def github_whoami() -> Dict[str, Any]:
     """
     Return information about the authenticated GitHub user for this token.
     """
-    await _ensure_session_allowed()
     return await _github_request("GET", "/user")
 
 
@@ -437,7 +446,6 @@ async def list_repo_tree(
     """
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
-    await _ensure_session_allowed()
     owner_repo = repository_full_name.strip()
     endpoint = f"/repos/{owner_repo}/git/trees/{ref}"
     params: Optional[Dict[str, Any]] = {"recursive": 1} if recursive else None
@@ -458,7 +466,6 @@ async def list_repo_files(
     Return a flat list of file paths from the git tree at the given ref.
     Useful for quickly enumerating all files in a repo.
     """
-    await _ensure_session_allowed()
     tree_result = await list_repo_tree(
         repository_full_name, ref=ref, recursive=True
     )
@@ -486,7 +493,6 @@ async def search_code(
     """
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
-    await _ensure_session_allowed()
 
     q = f"{query} repo:{repository_full_name}"
     params = {
@@ -554,7 +560,6 @@ async def fetch_file(
     """
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
-    await _ensure_session_allowed()
 
     owner_repo = repository_full_name.strip()
     endpoint = f"/repos/{owner_repo}/contents/{path}"
@@ -616,7 +621,6 @@ async def fetch_files(
     """
     if not isinstance(paths, list):
         raise ValueError("paths must be a list of file paths.")
-    await _ensure_session_allowed()
     sem = asyncio.Semaphore(max(1, int(concurrency)))
 
     async def _one(p: str) -> Tuple[str, Dict[str, Any]]:
@@ -658,7 +662,7 @@ async def commit_file(
 
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
-    await _ensure_session_allowed()
+    await _ensure_write_allowed(f"commit {path}")
 
     owner_repo = repository_full_name.strip()
     endpoint = f"/repos/{owner_repo}/contents/{path}"
@@ -807,7 +811,7 @@ async def commit_files_git(
     if not isinstance(files, list) or not files:
         raise ValueError("files must be a non-empty list of {path, content} items")
 
-    await _ensure_session_allowed()
+    await _ensure_write_allowed("commit multiple files")
 
     owner_repo = repository_full_name.strip()
     target_branch = branch.strip() or "main"
@@ -872,7 +876,7 @@ async def create_branch(
 
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
-    await _ensure_session_allowed()
+    await _ensure_write_allowed(f"create branch {new_branch}")
 
     base_sha = await _get_branch_sha(repository_full_name, from_ref)
     payload = {"ref": f"refs/heads/{new_branch}", "sha": base_sha}
@@ -900,7 +904,7 @@ async def create_pull_request(
 
     if "/" not in repository_full_name:
         raise ValueError("repository_full_name must be 'owner/repo'")
-    await _ensure_session_allowed()
+    await _ensure_write_allowed(f"create PR from {head} to {base}")
 
     payload: Dict[str, Any] = {"title": title, "head": head, "base": base, "draft": draft}
     if body:

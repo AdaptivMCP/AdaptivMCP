@@ -5,19 +5,19 @@ Fast GitHub MCP connector optimized for private repositories. The server exposes
 - `GITHUB_PAT` / `GITHUB_TOKEN` (required): Token used for all GitHub requests (needed for private repos).
 - `GITHUB_API_BASE` (optional): Override the GitHub REST base URL (defaults to `https://api.github.com`).
 - `GITHUB_GRAPHQL_URL` (optional): Override the GraphQL endpoint (defaults to `https://api.github.com/graphql`).
-- `GITHUB_MCP_AUTO_APPROVE` (optional): Set to `1` to skip the authorization prompt and auto-approve tools for the session.
+- `GITHUB_MCP_AUTO_APPROVE` (optional): Set to `1` to auto-approve write tools (commits, branches, PRs) for the session.
 - `HTTPX_TIMEOUT`, `HTTPX_MAX_KEEPALIVE`, `HTTPX_MAX_CONNECTIONS` (optional): Tune httpx connection pooling and timeouts.
 - `HTTPX_HTTP2` (optional): Set to `1` to enable HTTP/2 if `httpx[http2]` is installed.
 - `FETCH_FILES_CONCURRENCY` (optional): Maximum concurrent requests when using `fetch_files` (default `100`).
 
 ### Session authorization
-Most tools refuse to run until the session is explicitly approved. Call `authorize_github_session` once (or set `GITHUB_MCP_AUTO_APPROVE=1`) before using the other tools.
+Read-only tools no longer require approval. Call `authorize_github_session` (or `authorize_write_actions`) once to enable write tools (commit files, create branches, open PRs). Set `GITHUB_MCP_AUTO_APPROVE=1` to skip the prompt entirely in trusted deployments.
 
 ## Tool reference
 All tools return JSON responses. Paths requiring a repository expect the format `owner/repo`.
 
 ### General / setup
-- `authorize_github_session()`: Mark the current session as trusted so subsequent GitHub tools can run without extra prompts.
+- `authorize_github_session()` / `authorize_write_actions()`: Mark the current session as trusted so write tools (commits, branches, PRs) run without extra prompts.
 - `sanity_check(ctx)`: Lightweight probe to confirm the server is reachable and logging works.
 
 ### GitHub REST & GraphQL
