@@ -1,9 +1,17 @@
 """
 GitHub Fast MCP server exposing common read/write utilities for private repositories.
 
-The server keeps write/read intent metadata via a compatibility-friendly decorator so
-clients can accurately label mutating operations even on FastMCP versions that do not
-recognize the ``write_action`` argument.
+This is a full replacement implementation intended to be deployed on Render.
+It exposes a FastMCP instance over HTTP(S) and provides robust handling for the
+MCP SSE endpoints and message endpoints used by clients and connectors.
+
+Environment variables:
+- GITHUB_PAT or GITHUB_TOKEN : required (PAT for private repo access)
+- GITHUB_API_BASE : optional (default https://api.github.com)
+- GITHUB_GRAPHQL_URL : optional (default https://api.github.com/graphql)
+- HTTPX_TIMEOUT, HTTPX_MAX_KEEPALIVE, HTTPX_MAX_CONNECTIONS, HTTPX_HTTP2
+- FETCH_FILES_CONCURRENCY
+- GITHUB_MCP_AUTO_APPROVE : "1" to auto-approve write actions for the MCP session
 """
 from __future__ import annotations
 
@@ -21,9 +29,9 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import PlainTextResponse
 from starlette.routing import Mount, Route
 
-# ============================================================
+# -------------------------
 # Configuration
-# ============================================================
+# -------------------------
 GITHUB_TOKEN = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
 if not GITHUB_TOKEN:
     raise RuntimeError(
@@ -38,11 +46,9 @@ HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", "200"))
 HTTPX_HTTP2 = os.environ.get("HTTPX_HTTP2", "0") != "0"
 FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "100"))
 
-# ============================================================
+# -------------------------
 # Errors
-# ============================================================
-
-
+# -------------------------
 class GitHubAuthError(RuntimeError):
     """Raised when a write action is attempted without prior approval."""
 
@@ -51,21 +57,18 @@ class GitHubAPIError(RuntimeError):
     """Raised when GitHub returns a non-success status code."""
 
 
-# ============================================================
+# -------------------------
 # MCP setup and decorator compatibility
-# ============================================================
+# -------------------------
 mcp = FastMCP("GitHub Fast MCP", json_response=True)
 WRITE_ACTIONS_APPROVED: bool = os.environ.get("GITHUB_MCP_AUTO_APPROVE", "0") != "0"
 
 
 def mcp_tool(*, write_action: bool = False, **kwargs):
     """
-    Wrapper around ``@mcp.tool`` that preserves write/read intent metadata.
-
-    Older FastMCP releases reject unknown keyword arguments, so we attach the
-    ``write_action`` flag to the original function, the decorated tool, and a thin
-    wrapper that forwards calls. Clients can then introspect any of these objects to
-    determine whether a tool mutates state.
+    Compatibility wrapper for @mcp.tool that preserves the write_action metadata.
+    Older FastMCP versions rejected unknown kwargs, so attempt to pass write_action,
+    otherwise fall back to plain mcp.tool(...).
     """
 
     def decorator(func):
@@ -78,20 +81,23 @@ def mcp_tool(*, write_action: bool = False, **kwargs):
         async def wrapper(*args, **inner_kwargs):
             return await tool(*args, **inner_kwargs)
 
+        # Attach the write_action flag to the function, the tool and the wrapper
         for obj in (func, tool, wrapper):
-            setattr(obj, "write_action", write_action)
             try:
+                setattr(obj, "write_action", write_action)
                 obj.__dict__["write_action"] = write_action
             except Exception:
+                # Non-critical if we cannot set attribute on some objects
                 pass
+
         return wrapper
 
     return decorator
 
 
-# ============================================================
-# HTTP clients
-# ============================================================
+# -------------------------
+# HTTPX clients
+# -------------------------
 _github_client: Optional[httpx.AsyncClient] = None
 _external_client: Optional[httpx.AsyncClient] = None
 
@@ -122,7 +128,7 @@ def _build_client(base_url: Optional[str] = None) -> httpx.AsyncClient:
             trust_env=False,
         )
     except RuntimeError as exc:
-        # Some environments disable HTTP/2; gracefully fall back to HTTP/1.1
+        # Some environments disallow http2; fall back gracefully
         if "http2" in str(exc).lower():
             return httpx.AsyncClient(
                 base_url=base_url,
@@ -160,9 +166,9 @@ async def _close_clients() -> None:
         _external_client = None
 
 
-# ============================================================
+# -------------------------
 # Helpers
-# ============================================================
+# -------------------------
 async def _ensure_write_allowed(action: str) -> None:
     if not WRITE_ACTIONS_APPROVED:
         raise GitHubAuthError(
@@ -180,11 +186,7 @@ async def _github_request(
 ) -> Dict[str, Any]:
     client = _github_client_instance()
     response = await client.request(method.upper(), path, params=params, json=json_body)
-    result = {
-        "status": response.status_code,
-        "url": str(response.url),
-        "headers": dict(response.headers),
-    }
+    result = {"status": response.status_code, "url": str(response.url), "headers": dict(response.headers)}
     try:
         result["json"] = response.json()
     except Exception:
@@ -204,11 +206,7 @@ def _decode_github_content(data: Dict[str, Any]) -> Dict[str, Any]:
 async def _github_graphql(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     client = _github_client_instance()
     response = await client.post(GITHUB_GRAPHQL_URL, json={"query": query, "variables": variables or {}})
-    result = {
-        "status": response.status_code,
-        "url": str(response.url),
-        "headers": dict(response.headers),
-    }
+    result = {"status": response.status_code, "url": str(response.url), "headers": dict(response.headers)}
     try:
         result["json"] = response.json()
     except Exception:
@@ -218,9 +216,9 @@ async def _github_graphql(query: str, variables: Optional[Dict[str, Any]] = None
     return result
 
 
-# ============================================================
+# -------------------------
 # Tools (read)
-# ============================================================
+# -------------------------
 @mcp_tool(write_action=False)
 async def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
     """Enable write operations for the current MCP session."""
@@ -268,7 +266,6 @@ async def get_file_contents(full_name: str, path: str, ref: str = "main") -> Dic
 @mcp_tool(write_action=False)
 async def fetch_files(full_name: str, paths: list[str], ref: str = "main") -> Dict[str, Any]:
     """Fetch multiple files concurrently (decoded when base64-encoded)."""
-
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     if not paths:
@@ -319,7 +316,6 @@ async def list_workflow_runs(
     per_page: int = 20,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List GitHub Actions workflow runs for a repository."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     params: Dict[str, Any] = {"per_page": per_page, "page": page}
@@ -334,7 +330,6 @@ async def list_workflow_runs(
 
 @mcp_tool(write_action=False)
 async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
-    """Get details for a specific GitHub Actions workflow run."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     return await _github_request("GET", f"/repos/{full_name.strip()}/actions/runs/{run_id}")
@@ -342,7 +337,6 @@ async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
 
 @mcp_tool(write_action=False)
 async def list_workflow_run_jobs(full_name: str, run_id: int, per_page: int = 50, page: int = 1) -> Dict[str, Any]:
-    """List jobs for a GitHub Actions workflow run."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     params = {"per_page": per_page, "page": page}
@@ -353,18 +347,12 @@ async def list_workflow_run_jobs(full_name: str, run_id: int, per_page: int = 50
 
 @mcp_tool(write_action=False)
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
-    """Retrieve raw logs for a GitHub Actions job."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     client = _github_client_instance()
     response = await client.get(f"/repos/{full_name.strip()}/actions/jobs/{job_id}/logs")
-    result = {
-        "status": response.status_code,
-        "url": str(response.url),
-        "headers": dict(response.headers),
-    }
+    result = {"status": response.status_code, "url": str(response.url), "headers": dict(response.headers)}
     try:
-        # Some environments return text/plain; others may return JSON error bodies.
         result["text"] = response.text
     except Exception:
         result["content"] = base64.b64encode(response.content).decode("utf-8")
@@ -373,16 +361,14 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     return result
 
 
-# ============================================================
+# -------------------------
 # Tools (write)
-# ============================================================
+# -------------------------
 @mcp_tool(write_action=True)
 async def create_branch(full_name: str, new_branch: str, from_ref: str = "main") -> Dict[str, Any]:
-    """Create a new branch from an existing reference."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     await _ensure_write_allowed(f"create branch {new_branch}")
-
     ref_info = await _github_request("GET", f"/repos/{full_name.strip()}/git/refs/heads/{from_ref}")
     sha = ref_info.get("json", {}).get("object", {}).get("sha")
     if not sha:
@@ -402,13 +388,6 @@ async def commit_file(
     branch: str = "main",
     sha: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create or update a file in a repository.
-
-    The caller can provide the file contents directly via ``content`` or supply a
-    ``content_url`` that will be fetched with the shared external client. This
-    avoids JSON escaping limits when committing large files through MCP tool
-    transports that struggle with big string arguments.
-    """
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     await _ensure_write_allowed(f"commit file {path}")
@@ -430,7 +409,6 @@ async def commit_file(
                 )
             body_content = response.text
         else:
-            # Treat as local filesystem path (including file:// URIs)
             file_path = parsed.path if parsed.scheme == "file" else content_url
             if not os.path.isfile(file_path):
                 raise FileNotFoundError(f"Content path not found: {file_path}")
@@ -455,57 +433,59 @@ async def commit_file(
 async def create_pull_request(
     full_name: str, title: str, head: str, base: str = "main", body: Optional[str] = None, draft: bool = False
 ) -> Dict[str, Any]:
-    """Open a pull request."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     await _ensure_write_allowed(f"open PR from {head} to {base}")
-
     payload: Dict[str, Any] = {"title": title, "head": head, "base": base, "draft": draft}
     if body:
         payload["body"] = body
     return await _github_request("POST", f"/repos/{full_name.strip()}/pulls", json_body=payload)
 
 
-# ============================================================
+# -------------------------
 # ASGI wiring
-# ============================================================
+# -------------------------
 _sse_app = mcp.sse_app()
 
-
+# The wrapper accepts HTTP and non-HTTP scopes and forwards relevant requests to
+# the FastMCP SSE app. It normalizes the scope so FastMCP always sees absolute
+# paths like "/sse" or "/messages".
 async def _sse_endpoint(scope, receive, send):
-    """ASGI wrapper for the MCP SSE app that accepts POST/HEAD for compatibility."""
-
-    # Non-HTTP scopes just pass through to the MCP app
+    # If it's not an HTTP scope, pass through
     if scope.get("type") != "http":
         return await _sse_app(scope, receive, send)
 
-    path = scope.get("path", "")
-    if not path.startswith("/sse"):
-        response = PlainTextResponse("Not Found", status_code=404)
-        await response(scope, receive, send)
-        return
-
+    path = scope.get("path", "") or "/"
     method = scope.get("method", "GET").upper()
 
+    # Allow CORS preflight commonly used by clients
     if method == "OPTIONS":
         response = PlainTextResponse("OK", status_code=204)
         await response(scope, receive, send)
         return
 
-    if method not in {"GET", "POST", "HEAD"}:
+    # Accept GET/POST/HEAD for SSE compatibility
+    if method not in {"GET", "POST", "HEAD", "OPTIONS"}:
         response = PlainTextResponse("Method Not Allowed", status_code=405)
         await response(scope, receive, send)
         return
 
-    # Normalize scope so FastMCP sees the full /sse path regardless of mount behavior.
+    # We will forward all MCP related paths to the FastMCP app.
+    # Normalize the scope so the FastMCP app sees an absolute path.
+    # When this application is mounted at "/", the incoming path is already absolute (e.g. "/sse").
+    # When it's mounted under a subpath by a fronting framework, normalize root_path and path.
     normalized_scope = dict(scope)
     normalized_scope["root_path"] = ""
-    normalized_scope["path"] = "/sse"
+    # Ensure path begins with a leading slash
+    if not normalized_scope.get("path", "").startswith("/"):
+        normalized_scope["path"] = "/" + normalized_scope.get("path", "")
 
-    # Forward to the FastMCP SSE ASGI app (preserve receive/send so POST bodies stream properly)
+    # Forward to the FastMCP SSE ASGI app with the normalized scope.
+    # This preserves the original receive/send so POST bodies and streaming work.
     return await _sse_app(normalized_scope, receive, send)
 
 
+# Application routes:
 routes = [
     Route(
         "/",
@@ -520,7 +500,8 @@ routes = [
         methods=["GET", "HEAD"],
         name="healthz",
     ),
-    # Route SSE traffic through the FastMCP app while keeping root/health unaltered.
+    # Mount the SSE wrapper at the root so FastMCP can expose its full set of endpoints
+    # (e.g. /sse and /messages). Starlette checks routes in order, so root/healthz remain active.
     Mount("/", app=_sse_endpoint),
 ]
 
@@ -534,9 +515,8 @@ app.add_middleware(
 app.router.redirect_slashes = False
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 
-
 if __name__ == "__main__":
     import uvicorn
 
-    # Use Render's expected default port (10000) if PORT is unset locally.
+    # On Render, PORT is set; default to 10000 (Render-friendly) if not set locally.
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "10000")))
