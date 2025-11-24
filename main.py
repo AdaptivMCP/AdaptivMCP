@@ -183,6 +183,39 @@ async def _close_clients() -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+async def _perform_github_commit(
+    full_name: str,
+    path: str,
+    message: str,
+    body_bytes: bytes,
+    branch: str,
+    sha: Optional[str],
+) -> None:
+    """Internal helper to perform the actual GitHub commit.
+
+    Runs in a background task for commit_file_async so the MCP tool
+    can return immediately and avoid connector timeouts.
+    """
+    payload: Dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(body_bytes).decode("ascii"),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+
+    try:
+        await _github_request(
+            "PUT",
+            f"/repos/{full_name.strip()}/contents/{path.lstrip('/')}",
+            json_body=payload,
+        )
+    except Exception as exc:
+        # Best-effort logging; this won't crash the server or block the MCP call.
+        print(f"[commit_file_async] commit failed for {full_name}:{path}: {exc}")
+
+
+
 async def _ensure_write_allowed(action: str) -> None:
     if not WRITE_ACTIONS_APPROVED:
         raise GitHubAuthError(
