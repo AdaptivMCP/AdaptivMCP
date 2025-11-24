@@ -208,6 +208,10 @@ async def get_rate_limit() -> Dict[str, Any]:
     """Return the current GitHub rate limit status."""
     return await _github_request("GET", "/rate_limit")
 
+@mcp_tool(write_action=False)
+async def get_rate_limit() -> Dict[str, Any]:
+    """Return the current GitHub rate limit status."""
+    return await _github_request("GET", "/rate_limit")
 
 @mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
