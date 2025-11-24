@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import httpx
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import PlainTextResponse
 from starlette.routing import Mount, Route
 
@@ -107,8 +108,7 @@ def _github_headers() -> Dict[str, str]:
 
 def _build_client(base_url: Optional[str] = None) -> httpx.AsyncClient:
     limits = httpx.Limits(
-        max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
-        max_connections=HTTPX_MAX_CONNECTIONS,
+        max_keepalive_connections=HTTPX_MAX_KEEPALIVE, max_connections=HTTPX_MAX_CONNECTIONS
     )
     headers = _github_headers() if base_url else {"User-Agent": "GitHub-Fast-MCP/1.0"}
     try:
@@ -234,6 +234,7 @@ async def get_rate_limit() -> Dict[str, Any]:
     """Return the current GitHub rate limit status."""
     return await _github_request("GET", "/rate_limit")
 
+
 @mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
     """Fetch repository metadata (owner/repo)."""
@@ -296,7 +297,6 @@ async def fetch_files(full_name: str, paths: list[str], ref: str = "main") -> Di
 @mcp_tool(write_action=False)
 async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Execute a GraphQL query against the GitHub GraphQL endpoint."""
-
     result = await _github_graphql(query, variables)
     return result
 
@@ -337,15 +337,11 @@ async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
     """Get details for a specific GitHub Actions workflow run."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
-    return await _github_request(
-        "GET", f"/repos/{full_name.strip()}/actions/runs/{run_id}"
-    )
+    return await _github_request("GET", f"/repos/{full_name.strip()}/actions/runs/{run_id}")
 
 
 @mcp_tool(write_action=False)
-async def list_workflow_run_jobs(
-    full_name: str, run_id: int, per_page: int = 50, page: int = 1
-) -> Dict[str, Any]:
+async def list_workflow_run_jobs(full_name: str, run_id: int, per_page: int = 50, page: int = 1) -> Dict[str, Any]:
     """List jobs for a GitHub Actions workflow run."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
@@ -457,12 +453,7 @@ async def commit_file(
 
 @mcp_tool(write_action=True)
 async def create_pull_request(
-    full_name: str,
-    title: str,
-    head: str,
-    base: str = "main",
-    body: Optional[str] = None,
-    draft: bool = False,
+    full_name: str, title: str, head: str, base: str = "main", body: Optional[str] = None, draft: bool = False
 ) -> Dict[str, Any]:
     """Open a pull request."""
     if "/" not in full_name:
@@ -484,30 +475,34 @@ _sse_app = mcp.sse_app()
 async def _sse_endpoint(scope, receive, send):
     """ASGI wrapper for the MCP SSE app that accepts POST/HEAD for compatibility."""
 
+    # Non-HTTP scopes just pass through to the MCP app
     if scope.get("type") != "http":
         return await _sse_app(scope, receive, send)
 
-    method = scope.get("method", "GET").upper()
-    normalized_scope = dict(scope)
+    path = scope.get("path", "")
+    if not path.startswith("/sse"):
+        response = PlainTextResponse("Not Found", status_code=404)
+        await response(scope, receive, send)
+        return
 
-    if method in {"POST", "HEAD"}:  # normalize to GET for FastMCP SSE handler
-        normalized_scope["method"] = "GET"
+    method = scope.get("method", "GET").upper()
 
     if method == "OPTIONS":
         response = PlainTextResponse("OK", status_code=204)
-        await response(normalized_scope, receive, send)
+        await response(scope, receive, send)
         return
 
     if method not in {"GET", "POST", "HEAD"}:
         response = PlainTextResponse("Method Not Allowed", status_code=405)
-        await response(normalized_scope, receive, send)
+        await response(scope, receive, send)
         return
 
-    # Starlette Mount strips the prefix into ``root_path``; rebuild the full path so
-    # FastMCP sees the expected /sse endpoint instead of "/".
-    full_path = f"{normalized_scope.get('root_path', '')}{normalized_scope.get('path', '')}" or "/sse"
-    normalized_scope["path"] = full_path
+    # Normalize scope so FastMCP sees the full /sse path regardless of mount behavior.
+    normalized_scope = dict(scope)
+    normalized_scope["root_path"] = ""
+    normalized_scope["path"] = "/sse"
 
+    # Forward to the FastMCP SSE ASGI app (preserve receive/send so POST bodies stream properly)
     return await _sse_app(normalized_scope, receive, send)
 
 
@@ -515,17 +510,27 @@ routes = [
     Route(
         "/",
         lambda request: PlainTextResponse(
-            "GitHub Fast MCP server active. Connect to /sse for the event stream.",
-            status_code=200,
+            "GitHub Fast MCP server active. Connect to /sse for the event stream.", status_code=200
         ),
         methods=["GET", "HEAD"],
     ),
-    # Support both /sse and /sse/ without Starlette redirecting to a trailing slash.
-    Mount("/sse", app=_sse_endpoint),
-    Mount("/sse/", app=_sse_endpoint),
+    Route(
+        "/healthz",
+        lambda request: PlainTextResponse("ok", status_code=200),
+        methods=["GET", "HEAD"],
+        name="healthz",
+    ),
+    # Route SSE traffic through the FastMCP app while keeping root/health unaltered.
+    Mount("/", app=_sse_endpoint),
 ]
 
 app = Starlette(routes=routes)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.router.redirect_slashes = False
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 
@@ -533,4 +538,5 @@ app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
+    # Use Render's expected default port (10000) if PORT is unset locally.
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "10000")))
