@@ -481,28 +481,33 @@ async def create_pull_request(
 _sse_app = mcp.sse_app()
 
 
-async def _sse_mount(scope, receive, send):
+async def _sse_endpoint(scope, receive, send):
     """ASGI wrapper for the MCP SSE app that accepts POST/HEAD for compatibility."""
 
     if scope.get("type") != "http":
         return await _sse_app(scope, receive, send)
 
     method = scope.get("method", "GET").upper()
+    normalized_scope = dict(scope)
+
+    # Ensure the downstream SSE app sees the canonical path; mounting otherwise strips it.
+    if normalized_scope.get("path") in {"", "/"}:
+        normalized_scope["path"] = "/sse"
+
     if method in {"POST", "HEAD"}:  # normalize to GET for FastMCP SSE handler
-        scope = dict(scope)
-        scope["method"] = "GET"
+        normalized_scope["method"] = "GET"
 
     if method == "OPTIONS":
         response = PlainTextResponse("OK", status_code=204)
-        await response(scope, receive, send)
+        await response(normalized_scope, receive, send)
         return
 
     if method not in {"GET", "POST", "HEAD"}:
         response = PlainTextResponse("Method Not Allowed", status_code=405)
-        await response(scope, receive, send)
+        await response(normalized_scope, receive, send)
         return
 
-    return await _sse_app(scope, receive, send)
+    return await _sse_app(normalized_scope, receive, send)
 
 
 routes = [
@@ -515,8 +520,8 @@ routes = [
         methods=["GET", "HEAD"],
     ),
     # Support both /sse and /sse/ without Starlette redirecting to a trailing slash.
-    Mount("/sse", app=_sse_mount),
-    Mount("/sse/", app=_sse_mount),
+    Route("/sse", _sse_endpoint, methods=["GET", "POST", "HEAD", "OPTIONS"]),
+    Route("/sse/", _sse_endpoint, methods=["GET", "POST", "HEAD", "OPTIONS"]),
 ]
 
 app = Starlette(routes=routes)
