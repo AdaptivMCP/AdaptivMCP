@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import httpx
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import PlainTextResponse
 from starlette.routing import Mount, Route
 
@@ -488,27 +489,19 @@ async def _sse_endpoint(scope, receive, send):
         return await _sse_app(scope, receive, send)
 
     method = scope.get("method", "GET").upper()
-    normalized_scope = dict(scope)
-
-    if method in {"POST", "HEAD"}:  # normalize to GET for FastMCP SSE handler
-        normalized_scope["method"] = "GET"
 
     if method == "OPTIONS":
         response = PlainTextResponse("OK", status_code=204)
-        await response(normalized_scope, receive, send)
+        await response(scope, receive, send)
         return
 
     if method not in {"GET", "POST", "HEAD"}:
         response = PlainTextResponse("Method Not Allowed", status_code=405)
-        await response(normalized_scope, receive, send)
+        await response(scope, receive, send)
         return
 
-    # Starlette Mount strips the prefix into ``root_path``; force the path to /sse so
-    # FastMCP always matches the SSE route and avoid trailing-slash mismatches.
-    normalized_scope["root_path"] = ""
-    normalized_scope["path"] = "/sse"
-
-    return await _sse_app(normalized_scope, receive, send)
+    # Pass the request straight through so FastMCP can handle GET or POST bodies.
+    return await _sse_app(scope, receive, send)
 
 
 routes = [
@@ -520,12 +513,23 @@ routes = [
         ),
         methods=["GET", "HEAD"],
     ),
-    # Support both /sse and /sse/ without Starlette redirecting to a trailing slash.
-    Mount("/sse", app=_sse_endpoint),
-    Mount("/sse/", app=_sse_endpoint),
+    Route(
+        "/healthz",
+        lambda request: PlainTextResponse("ok", status_code=200),
+        methods=["GET", "HEAD"],
+        name="healthz",
+    ),
+    # Route SSE traffic through the FastMCP app while keeping root/health unaltered.
+    Mount("/", app=_sse_endpoint),
 ]
 
 app = Starlette(routes=routes)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.router.redirect_slashes = False
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 
