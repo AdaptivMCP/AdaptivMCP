@@ -1110,7 +1110,7 @@ async def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 # FastMCP HTTP app (streamable HTTP transport).
 # This exposes the MCP JSON-RPC interface under the /mcp path prefix.
-mcp_http_app = mcp.http_app(path="/mcp")
+mcp_http_app = mcp.http_app(path="/")
 
 
 async def _healthz(request: Request) -> Response:
