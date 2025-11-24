@@ -18,7 +18,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
-from starlette.routing import Mount
+from starlette.routing import Mount, Route
 
 # ============================================================
 # Configuration
@@ -425,43 +425,41 @@ async def create_pull_request(
 _sse_app = mcp.sse_app()
 
 
-async def _sse_dispatch(scope, receive, send):
+async def _sse_mount(scope, receive, send):
+    """ASGI wrapper for the MCP SSE app that accepts POST/HEAD for compatibility."""
+
     if scope.get("type") != "http":
         return await _sse_app(scope, receive, send)
 
-    path = scope.get("path", "")
     method = scope.get("method", "GET").upper()
+    if method in {"POST", "HEAD"}:  # normalize to GET for FastMCP SSE handler
+        scope = dict(scope)
+        scope["method"] = "GET"
 
-    if path == "/":
-        # Return a lightweight landing message instead of a 404 so health checks and
-        # connector refresh requests succeed even when they probe the root.
-        response = PlainTextResponse(
-            "GitHub Fast MCP server active. Connect to /sse for the event stream.",
-            status_code=200,
-        )
+    if method == "OPTIONS":
+        response = PlainTextResponse("OK", status_code=204)
         await response(scope, receive, send)
         return
 
-    if path == "/sse":
-        if method in {"GET", "POST"}:  # Accept POST for compatibility
-            scoped = dict(scope)
-            if method == "POST":
-                scoped["method"] = "GET"
-            return await _sse_app(scoped, receive, send)
-
+    if method not in {"GET", "POST", "HEAD"}:
         response = PlainTextResponse("Method Not Allowed", status_code=405)
         await response(scope, receive, send)
         return
 
-    response = PlainTextResponse("Not Found", status_code=404)
-    await response(scope, receive, send)
+    return await _sse_app(scope, receive, send)
 
 
-# Mount the ASGI dispatch app so Starlette passes ``scope, receive, send`` rather
-# than a Request object (which would omit the send callable). This avoids the
-# ``TypeError: _sse_dispatch() missing 2 required positional arguments: 'receive'
-# and 'send'`` error seen when using ``Route`` with a request-response endpoint.
-routes = [Mount("/", app=_sse_dispatch)]
+routes = [
+    Route(
+        "/",
+        lambda request: PlainTextResponse(
+            "GitHub Fast MCP server active. Connect to /sse for the event stream.",
+            status_code=200,
+        ),
+        methods=["GET", "HEAD"],
+    ),
+    Mount("/sse", app=_sse_mount),
+]
 
 app = Starlette(routes=routes)
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
