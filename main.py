@@ -324,7 +324,7 @@ async def _external_fetch(
 # ============================================================
 # MCP tools (exposed) - low-level
 # ============================================================
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def authorize_github_session() -> str:
     """Approve GitHub MCP write actions for the current session."""
 
@@ -336,14 +336,14 @@ async def authorize_github_session() -> str:
     )
 
 
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def authorize_write_actions() -> str:
     """Alias for authorize_github_session for clarity."""
 
     return await authorize_github_session()
 
 
-@mcp.tool()
+@mcp.tool(write_action=True)
 async def github_request(
     method: str,
     path: str,
@@ -363,7 +363,7 @@ async def github_request(
     )
 
 
-@mcp.tool()
+@mcp.tool(write_action=True)
 async def github_graphql(
     query: str, variables: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
@@ -390,7 +390,7 @@ async def github_graphql(
         return {"status": resp.status_code, "url": str(resp.url), "text": resp.text}
 
 
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def fetch_url(
     url: str,
     method: str = "GET",
@@ -406,7 +406,7 @@ async def fetch_url(
     )
 
 
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def sanity_check(ctx: Context[ServerSession, None]) -> str:
     """
     Simple tool to validate MCP server wiring.
@@ -418,7 +418,7 @@ async def sanity_check(ctx: Context[ServerSession, None]) -> str:
 # ============================================================
 # MCP tools (exposed) - higher-level / introspection
 # ============================================================
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def github_rate_limit() -> Dict[str, Any]:
     """
     Inspect current GitHub REST API rate limits for this token.
@@ -426,7 +426,7 @@ async def github_rate_limit() -> Dict[str, Any]:
     return await _github_request("GET", "/rate_limit")
 
 
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def github_whoami() -> Dict[str, Any]:
     """
     Return information about the authenticated GitHub user for this token.
@@ -434,7 +434,7 @@ async def github_whoami() -> Dict[str, Any]:
     return await _github_request("GET", "/user")
 
 
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def list_repo_tree(
     repository_full_name: str,
     ref: str = "main",
@@ -457,7 +457,7 @@ async def list_repo_tree(
     }
 
 
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def list_repo_files(
     repository_full_name: str,
     ref: str = "main",
@@ -480,7 +480,7 @@ async def list_repo_files(
     }
 
 
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def search_code(
     repository_full_name: str,
     query: str,
@@ -541,7 +541,7 @@ async def _decode_contents_api_item(
     return {"type": t or "unknown", "json": item}
 
 
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def fetch_file(
     repository_full_name: str,
     path: str,
@@ -605,7 +605,7 @@ async def fetch_file(
         }
 
 
-@mcp.tool()
+@mcp.tool(write_action=False)
 async def fetch_files(
     repository_full_name: str,
     paths: List[str],
@@ -643,7 +643,7 @@ async def fetch_files(
     return {k: v for k, v in results}
 
 
-@mcp.tool()
+@mcp.tool(write_action=True)
 async def commit_file(
     repository_full_name: str,
     path: str,
@@ -788,7 +788,7 @@ async def _get_branch_sha(repository_full_name: str, branch: str) -> str:
     return sha
 
 
-@mcp.tool()
+@mcp.tool(write_action=True)
 async def commit_files_git(
     repository_full_name: str,
     files: List[Dict[str, Any]],
@@ -864,7 +864,7 @@ async def commit_files_git(
     }
 
 
-@mcp.tool()
+@mcp.tool(write_action=True)
 async def create_branch(
     repository_full_name: str,
     new_branch: str,
@@ -889,7 +889,7 @@ async def create_branch(
     }
 
 
-@mcp.tool()
+@mcp.tool(write_action=True)
 async def create_pull_request(
     repository_full_name: str,
     title: str,
