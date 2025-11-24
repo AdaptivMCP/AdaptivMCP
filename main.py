@@ -497,19 +497,20 @@ async def _sse_endpoint(scope, receive, send):
     method = scope.get("method", "GET").upper()
     normalized_scope = dict(scope)
 
-    if method in {"POST", "HEAD"}:  # normalize to GET for FastMCP SSE handler
-        normalized_scope["method"] = "GET"
+    method = scope.get("method", "GET").upper()
 
     if method == "OPTIONS":
         response = PlainTextResponse("OK", status_code=204)
-        await response(normalized_scope, receive, send)
+        await response(scope, receive, send)
         return
 
     if method not in {"GET", "POST", "HEAD"}:
         response = PlainTextResponse("Method Not Allowed", status_code=405)
-        await response(normalized_scope, receive, send)
+        await response(scope, receive, send)
         return
 
+    # Pass the request straight through so FastMCP can handle GET or POST bodies.
+    return await _sse_app(scope, receive, send)
     # Let the FastMCP SSE router see the full /sse path without any stripped prefix.
     normalized_scope["root_path"] = ""
     normalized_scope["path"] = "/sse"
