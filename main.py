@@ -70,6 +70,12 @@ def mcp_tool(*, write_action: bool = False, **kwargs):
     the ``write_action`` flag on both the original function and the wrapped tool so
     clients can still distinguish read vs write operations without breaking older
     deployments.
+    Compatibility wrapper for @mcp.tool that stores write intent metadata.
+
+    Older FastMCP versions do not accept a write_action keyword argument. This
+    helper forwards supported kwargs to mcp.tool and attaches the write_action
+    flag as an attribute so clients can still distinguish read vs write tools
+    without breaking deployment environments that reject the parameter.
     """
 
     def decorator(func):
@@ -86,6 +92,10 @@ def mcp_tool(*, write_action: bool = False, **kwargs):
 
     return decorator
 
+
+        return decorated
+
+    return decorator
 
 # ============================================================
 # Shared clients
@@ -287,6 +297,10 @@ async def _external_fetch(
 # MCP tools - auth
 # ============================================================
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def authorize_github_session() -> str:
     """Approve GitHub MCP write actions for the current session."""
 
@@ -299,6 +313,10 @@ async def authorize_github_session() -> str:
 
 
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def authorize_write_actions() -> str:
     """Alias for authorize_github_session for clarity."""
 
@@ -309,6 +327,10 @@ async def authorize_write_actions() -> str:
 # MCP tools - low level GitHub access
 # ============================================================
 @mcp_tool(write_action=True)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=True)
+@mcp.tool(write_action=True)
+main
 async def github_request(
     method: str,
     path: str,
@@ -322,6 +344,10 @@ async def github_request(
 
 
 @mcp_tool(write_action=True)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=True)
+@mcp.tool(write_action=True)
+main
 async def github_graphql(
     query: str, variables: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
@@ -347,6 +373,10 @@ async def github_graphql(
 
 
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def fetch_url(
     url: str,
     method: str = "GET",
@@ -360,6 +390,10 @@ async def fetch_url(
 
 
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def sanity_check(ctx: Context[ServerSession, None]) -> str:
     """Simple tool to validate MCP server wiring."""
 
@@ -371,16 +405,28 @@ async def sanity_check(ctx: Context[ServerSession, None]) -> str:
 # MCP tools - GitHub introspection
 # ============================================================
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def github_rate_limit() -> Dict[str, Any]:
     return await _github_request("GET", "/rate_limit")
 
 
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def github_whoami() -> Dict[str, Any]:
     return await _github_request("GET", "/user")
 
 
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def list_repo_tree(
     repository_full_name: str,
     ref: str = "main",
@@ -395,6 +441,10 @@ async def list_repo_tree(
 
 
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def list_repo_files(
     repository_full_name: str,
     ref: str = "main",
@@ -412,6 +462,10 @@ async def list_repo_files(
 
 
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def search_code(
     repository_full_name: str,
     query: str,
@@ -453,6 +507,10 @@ async def _decode_contents_item(item: Dict[str, Any], encoding: str = "utf-8") -
 
 
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def fetch_file(
     repository_full_name: str,
     path: str,
@@ -493,6 +551,10 @@ async def fetch_file(
 
 
 @mcp_tool(write_action=False)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=False)
+@mcp.tool(write_action=False)
+main
 async def fetch_files(
     repository_full_name: str,
     paths: List[str],
@@ -530,6 +592,10 @@ async def fetch_files(
 # MCP tools - write operations
 # ============================================================
 @mcp_tool(write_action=True)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=True)
+@mcp.tool(write_action=True)
+main
 async def commit_file(
     repository_full_name: str,
     path: str,
@@ -649,6 +715,10 @@ async def _get_branch_sha(repository_full_name: str, branch: str) -> str:
 
 
 @mcp_tool(write_action=True)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=True)
+@mcp.tool(write_action=True)
+main
 async def commit_files_git(
     repository_full_name: str,
     files: List[Dict[str, Any]],
@@ -709,6 +779,10 @@ async def commit_files_git(
 
 
 @mcp_tool(write_action=True)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=True)
+@mcp.tool(write_action=True)
+main
 async def create_branch(
     repository_full_name: str,
     new_branch: str,
@@ -726,6 +800,10 @@ async def create_branch(
 
 
 @mcp_tool(write_action=True)
+codex/label-actions-as-read-or-write
+@mcp_tool(write_action=True)
+@mcp.tool(write_action=True)
+main
 async def create_pull_request(
     repository_full_name: str,
     title: str,
