@@ -659,6 +659,7 @@ async def commit_file(
 
     await _ensure_write_allowed(f"commit file {path}")
 
+    # Validate input
     if content is None and content_url is None:
         raise ValueError("Either content or content_url must be provided")
     if content is not None and content_url is not None:
@@ -667,6 +668,10 @@ async def commit_file(
     body_bytes: Optional[bytes] = None
 
     if content_url is not None:
+        # Defensive: ensure we actually have a usable string
+        if not isinstance(content_url, str) or not content_url.strip():
+            raise ValueError("content_url must be a non-empty string when provided")
+
         # Always treat as a URL; the platform transforms local paths into URLs.
         client = _external_client_instance()
         response = await client.get(content_url)
@@ -717,6 +722,7 @@ async def commit_file(
             "message": commit_info.get("message"),
         },
     }
+
 
 
 @mcp_tool(write_action=True)
