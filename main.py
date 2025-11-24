@@ -452,10 +452,7 @@ async def create_branch(
     new_branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
-    """Create or update a file in a repo (write tool).
-    Use `content` for small text files.
-    Use `content_url` for large or uploaded files (e.g. sandbox paths in ChatGPT);
-    the server fetches the bytes and commits them to the target private repo."""
+    """Create a new branch at the tip of an existing ref (requires write actions enabled)."""
         
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
@@ -489,7 +486,11 @@ async def commit_file(
     branch: str = "main",
     sha: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Open a pull request from head to base (requires write actions enabled)."""
+    """Create or update a file in a repo (write tool).
+    Use `content` for normal-sized text files.
+    Use `content_url` for large or uploaded files (for example,
+    sandbox paths in ChatGPT); the server fetches the bytes and
+    commits them to the target private repo."""
     
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
@@ -553,7 +554,7 @@ async def create_pull_request(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
-    """Open a pull request."""
+    """Open a pull request from head to base (requires write actions enabled)."""
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
