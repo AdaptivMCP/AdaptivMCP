@@ -694,11 +694,86 @@ async def commit_file(
     }
 
 
+async def _create_git_blob(
+    repository_full_name: str,
+    *,
+    content: Union[str, bytes],
+    encoding: str = "utf-8",
+    use_base64: bool = True,
+) -> str:
+    """Create a git blob for large payloads.
+
+    GitHub's Contents API has tighter size limits; creating blobs directly lets us
+    store large modules (multi-megabyte) before wiring them into a tree/commit.
+    """
+
+    owner_repo = repository_full_name.strip()
+    payload: Dict[str, Any] = {"encoding": "base64" if use_base64 else "utf-8"}
+    if isinstance(content, bytes):
+        encoded = base64.b64encode(content).decode("utf-8") if use_base64 else content.decode(encoding)
+    else:
+        encoded = (
+            base64.b64encode(content.encode(encoding)).decode("utf-8")
+            if use_base64
+            else content
+        )
+    payload["content"] = encoded
+
+    result = await _github_request("POST", f"/repos/{owner_repo}/git/blobs", json_body=payload)
+    blob_sha = (result.get("json") or {}).get("sha")
+    if not blob_sha:
+        raise GitHubAPIError("Failed to create git blob")
+    return blob_sha
+
+
+async def _create_git_tree(
+    repository_full_name: str,
+    *,
+    base_tree: str,
+    entries: List[Dict[str, Any]],
+) -> str:
+    owner_repo = repository_full_name.strip()
+    payload = {"base_tree": base_tree, "tree": entries}
+    result = await _github_request("POST", f"/repos/{owner_repo}/git/trees", json_body=payload)
+    tree_sha = (result.get("json") or {}).get("sha")
+    if not tree_sha:
+        raise GitHubAPIError("Failed to create git tree")
+    return tree_sha
+
+
+async def _create_git_commit(
+    repository_full_name: str,
+    *,
+    message: str,
+    tree_sha: str,
+    parent_sha: str,
+) -> str:
+    owner_repo = repository_full_name.strip()
+    payload = {"message": message, "tree": tree_sha, "parents": [parent_sha]}
+    result = await _github_request("POST", f"/repos/{owner_repo}/git/commits", json_body=payload)
+    commit_sha = (result.get("json") or {}).get("sha")
+    if not commit_sha:
+        raise GitHubAPIError("Failed to create git commit")
+    return commit_sha
+
+
+async def _update_branch_ref(
+    repository_full_name: str,
+    *,
+    branch: str,
+    sha: str,
+    force: bool = False,
+) -> Dict[str, Any]:
+    owner_repo = repository_full_name.strip()
+    endpoint = f"/repos/{owner_repo}/git/refs/heads/{branch}"
+    return await _github_request("PATCH", endpoint, json_body={"sha": sha, "force": force})
+
+
 async def _get_branch_sha(repository_full_name: str, branch: str) -> str:
     """Fetch the commit SHA for a branch head."""
 
     owner_repo = repository_full_name.strip()
-    endpoint = f"/repos/{owner_repo}/git/ref/heads/{branch}"
+    endpoint = f"/repos/{owner_repo}/git/refs/heads/{branch}"
     result = await _github_request("GET", endpoint)
     obj = (result.get("json") or {}).get("object") or {}
     sha = obj.get("sha")
@@ -707,6 +782,82 @@ async def _get_branch_sha(repository_full_name: str, branch: str) -> str:
             f"Could not resolve branch '{branch}' for {repository_full_name}."
         )
     return sha
+
+
+@mcp.tool()
+async def commit_files_git(
+    repository_full_name: str,
+    files: List[Dict[str, Any]],
+    message: str,
+    branch: str = "main",
+    encoding: str = "utf-8",
+    force: bool = False,
+    use_base64: bool = True,
+) -> Dict[str, Any]:
+    """
+    Commit one or more files using the low-level Git Data API.
+
+    This path is optimized for large payloads (multi-megabyte modules) by creating
+    git blobs directly and stitching them into a new tree/commit. It avoids the
+    stricter size limits of the Contents API.
+    """
+
+    if "/" not in repository_full_name:
+        raise ValueError("repository_full_name must be 'owner/repo'")
+    if not isinstance(files, list) or not files:
+        raise ValueError("files must be a non-empty list of {path, content} items")
+
+    await _ensure_session_allowed()
+
+    owner_repo = repository_full_name.strip()
+    target_branch = branch.strip() or "main"
+
+    head_sha = await _get_branch_sha(owner_repo, target_branch)
+    commit_info = await _github_request(
+        "GET", f"/repos/{owner_repo}/git/commits/{head_sha}"
+    )
+    base_tree_sha = ((commit_info.get("json") or {}).get("tree") or {}).get("sha")
+    if not base_tree_sha:
+        raise GitHubAPIError(
+            f"Could not resolve base tree for branch '{target_branch}' in {owner_repo}."
+        )
+
+    tree_entries: List[Dict[str, Any]] = []
+    created_blobs: List[Dict[str, str]] = []
+
+    for item in files:
+        if not isinstance(item, dict):
+            raise ValueError("each file entry must be a dict with 'path' and 'content'")
+        path = item.get("path")
+        content = item.get("content")
+        mode = item.get("mode", "100644")
+        if not path or content is None:
+            raise ValueError("each file entry must include path and content")
+
+        blob_sha = await _create_git_blob(
+            owner_repo, content=content, encoding=encoding, use_base64=use_base64
+        )
+        created_blobs.append({"path": path, "sha": blob_sha})
+        tree_entries.append({"path": path, "mode": mode, "type": "blob", "sha": blob_sha})
+
+    new_tree_sha = await _create_git_tree(
+        owner_repo, base_tree=base_tree_sha, entries=tree_entries
+    )
+    new_commit_sha = await _create_git_commit(
+        owner_repo, message=message, tree_sha=new_tree_sha, parent_sha=head_sha
+    )
+    ref_update = await _update_branch_ref(
+        owner_repo, branch=target_branch, sha=new_commit_sha, force=force
+    )
+
+    return {
+        "status": ref_update.get("status", 200),
+        "branch": target_branch,
+        "commit_sha": new_commit_sha,
+        "tree_sha": new_tree_sha,
+        "blobs": created_blobs,
+        "ref_update": ref_update.get("json"),
+    }
 
 
 @mcp.tool()
