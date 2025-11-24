@@ -1,10 +1,56 @@
 # chatgpt-mcp-github
 
-GitHub MCP server optimized for **private repositories**.
+GitHub MCP server for private repositories, tuned for fast read and safe write workflows from ChatGPT.
 
-It exposes a focused set of GitHub tools (read + write) plus a small generic HTTP helper so assistants can read, write, and automate against GitHub repos with minimal setup. The server is implemented with `FastMCP`, wrapped in a Starlette app, and served by `uvicorn`.
+It runs as a Python web service on Render and exposes a Model Context Protocol (MCP) SSE endpoint at `/sse`.
 
-The MCP endpoint is exposed via **Server-Sent Events (SSE)** on `/sse`, with a simple health message on `/`. This is what your MCP client (e.g. ChatGPT) connects to.
+## What this server does
+
+- Reads repo metadata, branches and files (including batch fetch via `fetch_files`).
+- Runs GitHub GraphQL and REST calls with a PAT stored server side.
+- Inspects GitHub Actions runs, jobs and logs.
+- Creates branches, commits files, opens pull requests and can trigger `workflow_dispatch` workflows.
+- Provides a higher level `update_files_and_open_pr` tool for end-to-end edits.
+
+## Environment variables
+
+Required:
+- `GITHUB_PAT` or `GITHUB_TOKEN` with repo (and optionally `workflow`) scopes.
+
+Important options:
+- `GITHUB_MCP_AUTO_APPROVE` set to `1` to allow write tools without calling `authorize_write_actions`.
+- `FETCH_FILES_CONCURRENCY` max concurrent requests in `fetch_files` (e.g. `128` or `256`).
+- `HTTPX_MAX_CONNECTIONS` and `HTTPX_MAX_KEEPALIVE` to tune connection pooling.
+- `HTTPX_HTTP2` set to `1` to enable HTTP/2 when available.
+- `HTTPX_TIMEOUT` / `HTTP_TIMEOUT_SECONDS` to control request timeouts.
+
+## Running locally
+
+1. Create a virtualenv and install requirements:
+   `pip install -r requirements.txt`
+2. Export `GITHUB_PAT` and any tuning env vars.
+3. Start the server with:
+   `uvicorn main:app --host 0.0.0.0 --port 10000`
+4. Test health and SSE endpoints:
+   `curl http://localhost:10000/`, `curl http://localhost:10000/healthz`, `curl -N http://localhost:10000/sse`.
+
+## Deploying to Render
+
+- Create a Web Service pointing at this repo and branch `main`.
+- Build command: `pip install -r requirements.txt`.
+- Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`.
+- Set `GITHUB_PAT` plus the tuning env vars in the Environment tab.
+
+## Using from ChatGPT
+
+- Configure a custom MCP connector whose URL is `https://<service>.onrender.com/sse`.
+- Leave authorization empty; the server uses the PAT from its environment.
+- Optionally enable auto approve in the environment so assistants can create branches, commits and PRs without repeated prompts.
+After this commit:
+
+Use Joeys GitHub get_file_contents on README.md to verify text matches the above.
+
+Confirm in GitHub UI that README.md shows the new content and that the commit message is “Refresh README for GitHub MCP server”.
 
 ---
 
