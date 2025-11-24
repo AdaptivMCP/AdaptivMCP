@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import httpx
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import PlainTextResponse
 from starlette.routing import Mount, Route
 
@@ -520,12 +521,24 @@ routes = [
         ),
         methods=["GET", "HEAD"],
     ),
+    Route(
+        "/healthz",
+        lambda request: PlainTextResponse("ok", status_code=200),
+        methods=["GET", "HEAD"],
+        name="healthz",
+    ),
     # Support both /sse and /sse/ without Starlette redirecting to a trailing slash.
     Mount("/sse", app=_sse_endpoint),
     Mount("/sse/", app=_sse_endpoint),
 ]
 
 app = Starlette(routes=routes)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.router.redirect_slashes = False
 app.add_event_handler("shutdown", lambda: asyncio.create_task(_close_clients()))
 
