@@ -483,7 +483,7 @@ async def wait_for_workflow_run(
 
 
 # --------------------------------------------------------------------
-# PR / issue management tools (new)
+# PR / issue management tools
 # --------------------------------------------------------------------
 
 @mcp_tool(write_action=False)
@@ -912,7 +912,7 @@ async def update_files_and_open_pr(
 # Workspace tools (run_command / run_tests / apply_patch_and_open_pr)
 # --------------------------------------------------------------------
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=True)
 async def run_command(
     full_name: str,
     ref: str = "main",
@@ -932,7 +932,7 @@ async def run_command(
     return result
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=True)
 async def run_tests(
     full_name: str,
     ref: str = "main",
@@ -960,6 +960,7 @@ async def apply_patch_and_open_pr(
     new_branch: Optional[str] = None,
     run_tests_flag: bool = False,
     test_command: str = "pytest",
+    test_timeout_seconds: int = 600,
     draft: bool = False,
 ) -> Dict[str, Any]:
     _ensure_write_allowed(f"apply_patch_and_open_pr on {full_name}:{base_branch}")
@@ -967,11 +968,15 @@ async def apply_patch_and_open_pr(
     repo_dir = await _clone_repo(full_name, base_branch)
     try:
         await _run_shell(f"git checkout -b {branch}", cwd=repo_dir, timeout_seconds=60)
+
         patch_file = os.path.join(repo_dir, "mcp_patch.diff")
         with open(patch_file, "w", encoding="utf-8") as f:
             f.write(patch)
+
         result = await _run_shell(
-            f"git apply --whitespace=nowarn {patch_file}", cwd=repo_dir, timeout_seconds=60
+            f"git apply --whitespace=nowarn {patch_file}",
+            cwd=repo_dir,
+            timeout_seconds=60,
         )
         if result["exit_code"] != 0:
             raise GitHubAPIError(f"git apply failed: {result['stderr']}")
@@ -984,15 +989,19 @@ async def apply_patch_and_open_pr(
 
         tests_result = None
         if run_tests_flag:
-            tests_result = await run_tests(
-                full_name=full_name, ref=branch, test_command=test_command
+            tests_result = await _run_shell(
+                test_command,
+                cwd=repo_dir,
+                timeout_seconds=test_timeout_seconds,
             )
             if tests_result["exit_code"] != 0 or tests_result["timed_out"]:
                 return {"branch": branch, "tests": tests_result, "pull_request": None}
 
         push_url = _make_clone_url(full_name)
         await _run_shell(
-            f"git push {push_url} {branch}", cwd=repo_dir, timeout_seconds=120
+            f"git push {push_url} {branch}",
+            cwd=repo_dir,
+            timeout_seconds=120,
         )
 
         pr = await create_pull_request(
