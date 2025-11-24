@@ -209,11 +209,9 @@ async def get_rate_limit() -> Dict[str, Any]:
     return await _github_request("GET", "/rate_limit")
 
 @mcp_tool(write_action=False)
-async def get_repository(full_name: str) -> Dict[str, Any]:
-    """Fetch repository metadata (owner/repo)."""
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-    return await _github_request("GET", f"/repos/{full_name.strip()}")
+async def get_rate_limit() -> Dict[str, Any]:
+    """Return the current GitHub rate limit status."""
+    return await _github_request("GET", "/rate_limit")
 
 @mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
@@ -222,13 +220,6 @@ async def get_repository(full_name: str) -> Dict[str, Any]:
         raise ValueError("full_name must be in 'owner/repo' format")
     return await _github_request("GET", f"/repos/{full_name.strip()}")
 
-@mcp_tool(write_action=False)
-async def list_branches(full_name: str, per_page: int = 100, page: int = 1) -> Dict[str, Any]:
-    """List branches for a repository."""
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-    params = {"per_page": per_page, "page": page}
-    return await _github_request("GET", f"/repos/{full_name.strip()}/branches", params=params)
 
 @mcp_tool(write_action=False)
 async def list_branches(full_name: str, per_page: int = 100, page: int = 1) -> Dict[str, Any]:
@@ -439,19 +430,30 @@ async def _sse_dispatch(scope, receive, send):
         return await _sse_app(scope, receive, send)
 
     path = scope.get("path", "")
-    if path not in {"/", "/sse"}:
-        response = PlainTextResponse("Not Found", status_code=404)
+    method = scope.get("method", "GET").upper()
+
+    if path == "/":
+        # Return a lightweight landing message instead of a 404 so health checks and
+        # connector refresh requests succeed even when they probe the root.
+        response = PlainTextResponse(
+            "GitHub Fast MCP server active. Connect to /sse for the event stream.",
+            status_code=200,
+        )
         await response(scope, receive, send)
         return
 
-    method = scope.get("method", "GET").upper()
-    if method in {"GET", "POST"}:  # Accept POST for compatibility
-        scoped = dict(scope)
-        if method == "POST":
-            scoped["method"] = "GET"
-        return await _sse_app(scoped, receive, send)
+    if path == "/sse":
+        if method in {"GET", "POST"}:  # Accept POST for compatibility
+            scoped = dict(scope)
+            if method == "POST":
+                scoped["method"] = "GET"
+            return await _sse_app(scoped, receive, send)
 
-    response = PlainTextResponse("Method Not Allowed", status_code=405)
+        response = PlainTextResponse("Method Not Allowed", status_code=405)
+        await response(scope, receive, send)
+        return
+
+    response = PlainTextResponse("Not Found", status_code=404)
     await response(scope, receive, send)
 
 
