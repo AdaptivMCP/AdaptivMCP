@@ -668,7 +668,7 @@ async def ensure_branch(
 
 
 @mcp_tool(write_action=True)
-async def commit_file(
+async def commit_file_async(
     full_name: str,
     path: str,
     message: str,
@@ -678,23 +678,24 @@ async def commit_file(
     branch: str = "main",
     sha: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create or update a file in a repo (write tool).
+    """
+    Schedule a file commit in the background and return immediately.
 
-    Use ``content`` for normal-sized text files.
-
-    Use ``content_url`` for large or uploaded files. The MCP platform is
-    responsible for turning local sandbox paths (e.g. /mnt/data/...) into
-    HTTP URLs. This server always treats content_url as a URL and never
-    reads from the local filesystem.
-
-    If ``sha`` is not provided, the server will automatically look up the
-    current file on GitHub and use its sha when updating. If the file does
-    not exist (404), it is created.
+    Semantics mirror commit_file:
+    - Exactly one of content or content_url must be provided.
+    - content_url is always treated as a URL (sandbox paths are transformed upstream).
+    - If sha is not provided, auto-resolve it from the current file on the branch.
     """
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
-    await _ensure_write_allowed(f"commit file {path}")
+    await _ensure_write_allowed(f"commit file async {path}")
+
+    print(
+        "[commit_file_async] scheduling full_name=%r path=%r branch=%r message=%r "
+        "has_content=%s content_url=%r sha=%r"
+        % (full_name, path, branch, message, content is not None, content_url, sha)
+    )
 
     # Basic validation
     if content is None and content_url is None:
@@ -702,14 +703,11 @@ async def commit_file(
     if content is not None and content_url is not None:
         raise ValueError("Provide content or content_url, but not both")
 
-    body_bytes: Optional[bytes] = None
-
     # Resolve content bytes
     if content_url is not None:
         if not isinstance(content_url, str) or not content_url.strip():
             raise ValueError("content_url must be a non-empty string when provided")
 
-        # Always treat as URL; the platform transforms sandbox paths into URLs.
         client = _external_client_instance()
         response = await client.get(content_url)
         if response.status_code >= 400:
@@ -721,12 +719,7 @@ async def commit_file(
     else:
         body_bytes = content.encode("utf-8")
 
-    assert body_bytes is not None
-
-    # If sha is not provided, try to look up the existing file.
-    # - 200: existing file -> use its sha (update)
-    # - 404: new file -> no sha needed (create)
-    # - other 4xx/5xx: treat as error
+    # Auto-sha lookup (same semantics as commit_file)
     if sha is None:
         client = _github_client_instance()
         url = f"{GITHUB_API_BASE.rstrip('/')}/repos/{full_name.strip()}/contents/{path.lstrip('/')}"
@@ -738,48 +731,30 @@ async def commit_file(
                 existing_json = {}
             sha = existing_json.get("sha")
         elif resp.status_code not in (404, 410):
-            # 404/410 => treat as create; anything else is a real error
             raise GitHubAPIError(
                 f"Failed to look up existing file {full_name}/{path} for sha: "
                 f"{resp.status_code}"
             )
 
-    # Build GitHub payload
-    payload: Dict[str, Any] = {
-        "message": message,
-        "content": base64.b64encode(body_bytes).decode("ascii"),
-        "branch": branch,
-    }
-    if sha:
-        payload["sha"] = sha
-
-    result = await _github_request(
-        "PUT",
-        f"/repos/{full_name.strip()}/contents/{path.lstrip('/')}",
-        json_body=payload,
+    # Fire-and-forget background commit
+    asyncio.create_task(
+        _perform_github_commit(
+            full_name=full_name,
+            path=path,
+            message=message,
+            body_bytes=body_bytes,
+            branch=branch,
+            sha=sha,
+        )
     )
 
-    # Trim the GitHub response to avoid huge base64 payloads.
-    raw_json = result.get("json", {}) or {}
-    content_info = raw_json.get("content") or {}
-    commit_info = raw_json.get("commit") or {}
-
     return {
-        "status": result.get("status"),
+        "scheduled": True,
         "path": path,
         "branch": branch,
-        "content": {
-            "path": content_info.get("path"),
-            "sha": content_info.get("sha"),
-            "html_url": content_info.get("html_url"),
-        },
-        "commit": {
-            "sha": commit_info.get("sha"),
-            "url": commit_info.get("url"),
-            "html_url": commit_info.get("html_url"),
-            "message": commit_info.get("message"),
-        },
+        "message": message,
     }
+
 
 
 
