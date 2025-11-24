@@ -520,8 +520,8 @@ routes = [
         methods=["GET", "HEAD"],
     ),
     # Support both /sse and /sse/ without Starlette redirecting to a trailing slash.
-    Route("/sse", _sse_endpoint, methods=["GET", "POST", "HEAD", "OPTIONS"]),
-    Route("/sse/", _sse_endpoint, methods=["GET", "POST", "HEAD", "OPTIONS"]),
+    Mount("/sse", app=_sse_endpoint),
+    Mount("/sse/", app=_sse_endpoint),
 ]
 
 app = Starlette(routes=routes)
