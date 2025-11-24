@@ -649,13 +649,10 @@ async def commit_file(
 
     Use ``content`` for normal-sized text files.
 
-    Use ``content_url`` for large or uploaded files (for example,
-    sandbox paths in ChatGPT); the server fetches the bytes and
-    commits them to the target private repo.
-
-    The response is trimmed to avoid huge payloads:
-    it returns only minimal commit + content info, not the full
-    base64 file representation from GitHub.
+    Use ``content_url`` for large or uploaded files. The MCP platform is
+    responsible for turning local sandbox paths (e.g. /mnt/data/...) into
+    HTTP URLs. This server always treats content_url as a URL and never
+    reads from the local filesystem.
     """
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
@@ -670,25 +667,15 @@ async def commit_file(
     body_bytes: Optional[bytes] = None
 
     if content_url is not None:
-        parsed = urlparse(content_url)
-
-        if parsed.scheme in ("http", "https"):
-            # ChatGPT / platform will transform sandbox paths into HTTP URLs.
-            client = _external_client_instance()
-            response = await client.get(content_url)
-            if response.status_code >= 400:
-                raise GitHubAPIError(
-                    f"Failed to fetch content from {content_url}: "
-                    f"{response.status_code}"
-                )
-            body_bytes = response.content
-        else:
-            # Treat as local filesystem path (including file:// URIs)
-            file_path = parsed.path if parsed.scheme == "file" else content_url
-            if not os.path.isfile(file_path):
-                raise FileNotFoundError(f"Content path not found: {file_path}")
-            with open(file_path, "rb") as fp:
-                body_bytes = fp.read()
+        # Always treat as a URL; the platform transforms local paths into URLs.
+        client = _external_client_instance()
+        response = await client.get(content_url)
+        if response.status_code >= 400:
+            raise GitHubAPIError(
+                f"Failed to fetch content from {content_url}: "
+                f"{response.status_code}"
+            )
+        body_bytes = response.content
     else:
         # Inline content is treated as UTF-8 text
         body_bytes = content.encode("utf-8")
