@@ -488,6 +488,12 @@ async def _sse_endpoint(scope, receive, send):
     if scope.get("type") != "http":
         return await _sse_app(scope, receive, send)
 
+    path = scope.get("path", "")
+    if not path.startswith("/sse"):
+        response = PlainTextResponse("Not Found", status_code=404)
+        await response(scope, receive, send)
+        return
+
     method = scope.get("method", "GET").upper()
     normalized_scope = dict(scope)
 
@@ -504,8 +510,7 @@ async def _sse_endpoint(scope, receive, send):
         await response(normalized_scope, receive, send)
         return
 
-    # Starlette Mount strips the prefix into ``root_path``; force the path to /sse so
-    # FastMCP always matches the SSE route and avoid trailing-slash mismatches.
+    # Let the FastMCP SSE router see the full /sse path without any stripped prefix.
     normalized_scope["root_path"] = ""
     normalized_scope["path"] = "/sse"
 
@@ -527,9 +532,8 @@ routes = [
         methods=["GET", "HEAD"],
         name="healthz",
     ),
-    # Support both /sse and /sse/ without Starlette redirecting to a trailing slash.
-    Mount("/sse", app=_sse_endpoint),
-    Mount("/sse/", app=_sse_endpoint),
+    # Route SSE traffic through the FastMCP app while keeping root/health unaltered.
+    Mount("/", app=_sse_endpoint),
 ]
 
 app = Starlette(routes=routes)
