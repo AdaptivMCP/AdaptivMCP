@@ -33,6 +33,7 @@ MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 80))
 FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY))
 
 TOOL_STDOUT_MAX_CHARS = 12000
+TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
 LOGS_MAX_CHARS = 16000
 
 GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
@@ -242,7 +243,7 @@ async def _run_shell(
         timed_out = True
 
     stdout = stdout_bytes.decode("utf-8", errors="replace")[:TOOL_STDOUT_MAX_CHARS]
-    stderr = stderr_bytes.decode("utf-8", errors="replace")[:TOOL_STDOUT_MAX_CHARS]
+    stderr = stderr_bytes.decode("utf-8", errors="replace")[:TOOL_STDERR_MAX_CHARS]
 
     return {
         "exit_code": proc.returncode,
@@ -1082,3 +1083,13 @@ async def homepage(request: Request) -> PlainTextResponse:
 @mcp.custom_route("/healthz", methods=["GET"])
 async def healthz(request: Request) -> PlainTextResponse:
     return PlainTextResponse("OK\n")
+
+
+async def _shutdown_clients() -> None:
+    if _http_client_github is not None:
+        await _http_client_github.aclose()
+    if _http_client_external is not None:
+        await _http_client_external.aclose()
+
+
+app.add_event_handler("shutdown", _shutdown_clients)
