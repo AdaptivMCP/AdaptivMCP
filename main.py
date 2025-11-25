@@ -4,15 +4,14 @@ import base64
 import tempfile
 import shutil
 import subprocess
-import textwrap
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import httpx
 from fastmcp import FastMCP
-from starlette.applications import Starlette
+from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import PlainTextResponse, JSONResponse
-from starlette.routing import Route
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 
 # ------------------------------------------------------------------------------
@@ -46,7 +45,8 @@ _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
 _concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 
-mcp = FastMCP("GitHub Fast MCP", json_response=True)
+# Note: json_response is now configured per-transport, so we omit it here
+mcp = FastMCP("GitHub Fast MCP")
 
 
 # ------------------------------------------------------------------------------
@@ -291,11 +291,17 @@ def _ensure_write_allowed(context: str) -> None:
 
 
 def mcp_tool(*, write_action: bool = False, **kwargs):
+    """
+    Wrapper around FastMCP's @mcp.tool decorator that also tracks whether the
+    tool performs write actions, so clients can filter or gate them.
+    """
+
     def decorator(func):
-        # Use the FastMCP instance's tool decorator
-        decorated = mcp.tool(**kwargs)(func)
-        setattr(decorated, "write_action", write_action)
-        return decorated
+        # FastMCP's decorator returns a Tool object; attach metadata so clients
+        # can inspect write intent from the tool object itself.
+        tool_obj = mcp.tool(**kwargs)(func)
+        setattr(tool_obj, "write_action", write_action)
+        return tool_obj
 
     return decorator
 
@@ -306,8 +312,8 @@ def mcp_tool(*, write_action: bool = False, **kwargs):
 
 
 @mcp_tool(write_action=False)
-def get_rate_limit() -> Dict[str, Any]:
-    return asyncio.run(_github_request("GET", "/rate_limit"))
+async def get_rate_limit() -> Dict[str, Any]:
+    return await _github_request("GET", "/rate_limit")
 
 
 @mcp_tool(write_action=False)
@@ -807,7 +813,9 @@ async def update_files_and_open_pr(
         if content_url is not None:
             if not isinstance(content_url, str) or not content_url.strip():
                 raise ValueError("content_url must be a non-empty string when provided")
-            if not (content_url.startswith("http://") or content_url.startswith("https://")):
+            if not (
+                content_url.startswith("http://") or content_url.startswith("https://")
+            ):
                 raise GitHubAPIError(
                     "update_files_and_open_pr content_url must be an absolute http(s) URL. "
                     "In ChatGPT, pass the sandbox file path (e.g. sandbox:/mnt/data/file) "
@@ -1022,33 +1030,31 @@ async def apply_patch_and_open_pr(
 
 
 # ------------------------------------------------------------------------------
-# Starlette app and routes
+# FastMCP HTTP/SSE app and health routes
 # ------------------------------------------------------------------------------
 
+# Use SSE transport so your existing ChatGPT connector that points at /sse/
+# continues to work. This exposes:
+#   - MCP endpoint at /sse/  (for SSE transport)
+#   - Custom routes at / and /healthz
+middleware = [
+    Middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+]
 
-async def homepage(request):
+app = mcp.http_app(transport="sse", custom_middleware=middleware)
+
+
+@mcp.custom_route("/", methods=["GET"])
+async def homepage(request: Request) -> PlainTextResponse:
     return PlainTextResponse("GitHub MCP server is running\n")
 
 
-async def healthz(request):
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(request: Request) -> PlainTextResponse:
     return PlainTextResponse("OK\n")
-
-
-async def _sse_endpoint(request):
-    return await mcp.asgi_sse(request)
-
-
-routes = [
-    Route("/", homepage),
-    Route("/healthz", healthz),
-    Route("/sse", _sse_endpoint, methods=["GET", "POST", "OPTIONS"]),
-]
-
-app = Starlette(routes=routes)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
