@@ -214,6 +214,74 @@ async def _perform_github_commit(
     return result
 
 
+async def _load_body_from_content_url(content_url: str, *, context: str) -> bytes:
+    """Read bytes from a sandbox path, absolute path, or HTTP(S) URL.
+
+    Args:
+        content_url: The location of the content to load. Supported formats:
+            - ``sandbox:/path`` (preferred when running inside ChatGPT)
+            - Absolute file paths (e.g. ``/mnt/data/file``)
+            - ``http(s)`` URLs
+        context: Name of the calling tool for error messaging.
+
+    Raises:
+        ValueError: If the URL is empty.
+        GitHubAPIError: If the path cannot be read or the HTTP request fails.
+    """
+
+    if not isinstance(content_url, str) or not content_url.strip():
+        raise ValueError("content_url must be a non-empty string when provided")
+
+    content_url = content_url.strip()
+
+    def _read_local(local_path: str, missing_hint: str) -> bytes:
+        try:
+            with open(local_path, "rb") as f:
+                return f.read()
+        except FileNotFoundError:
+            raise GitHubAPIError(
+                f"{context} content_url path not found at {local_path}. {missing_hint}"
+            )
+        except OSError as e:
+            raise GitHubAPIError(
+                f"Failed to read content_url from {local_path}: {e}"
+            )
+
+    sandbox_hint = (
+        "If you are running inside ChatGPT, ensure the file exists in the sandbox "
+        "and pass the full sandbox:/ path so the host can rewrite it to an "
+        "accessible URL."
+    )
+
+    if content_url.startswith("sandbox:/"):
+        local_path = content_url[len("sandbox:") :]
+        return _read_local(local_path, sandbox_hint)
+
+    if content_url.startswith("/"):
+        return _read_local(
+            content_url,
+            "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
+            "hosts can rewrite it.",
+        )
+
+    if content_url.startswith("http://") or content_url.startswith("https://"):
+        client = _external_client_instance()
+        response = await client.get(content_url)
+        if response.status_code >= 400:
+            raise GitHubAPIError(
+                f"Failed to fetch content from {content_url}: "
+                f"{response.status_code}"
+            )
+        return response.content
+
+    raise GitHubAPIError(
+        f"{context} content_url must be an absolute http(s) URL, a sandbox:/ path, "
+        "or an absolute local file path. In ChatGPT, pass the sandbox file path "
+        "(e.g. sandbox:/mnt/data/file) and the host will rewrite it to a real URL "
+        "before it reaches this server."
+    )
+
+
 async def _run_shell(
     cmd: str,
     cwd: Optional[str] = None,
@@ -1028,41 +1096,9 @@ async def commit_file_async(
         raise ValueError("Provide content or content_url, but not both")
 
     if content_url is not None:
-        if not isinstance(content_url, str) or not content_url.strip():
-            raise ValueError("content_url must be a non-empty string when provided")
-
-        content_url = content_url.strip()
-        if content_url.startswith("sandbox:/"):
-            local_path = content_url[len("sandbox:") :]
-            try:
-                with open(local_path, "rb") as f:
-                    body_bytes = f.read()
-            except FileNotFoundError:
-                raise GitHubAPIError(
-                    "sandbox content_url path not found. If you are running inside "
-                    "ChatGPT, ensure the file exists in the sandbox and pass the full "
-                    "sandbox:/ path so the host can rewrite it to an accessible URL."
-                )
-            except OSError as e:
-                raise GitHubAPIError(
-                    f"Failed to read sandbox content from {local_path}: {e}"
-                )
-        elif content_url.startswith("http://") or content_url.startswith("https://"):
-            client = _external_client_instance()
-            response = await client.get(content_url)
-            if response.status_code >= 400:
-                raise GitHubAPIError(
-                    f"Failed to fetch content from {content_url}: "
-                    f"{response.status_code}"
-                )
-            body_bytes = response.content
-        else:
-            raise GitHubAPIError(
-                "commit_file_async content_url must be an absolute http(s) URL or "
-                "a sandbox:/ path. In ChatGPT, pass the sandbox file path (e.g. "
-                "sandbox:/mnt/data/file) and the host will rewrite it to a real URL "
-                "before it reaches this server."
-            )
+        body_bytes = await _load_body_from_content_url(
+            content_url, context="commit_file_async"
+        )
     else:
         body_bytes = content.encode("utf-8")
 
@@ -1160,6 +1196,9 @@ async def update_files_and_open_pr(
             raise ValueError(f"File entry for {path} must have content or content_url")
 
         if content_url is not None:
+            body_bytes = await _load_body_from_content_url(
+                content_url, context="update_files_and_open_pr"
+            )
             if not isinstance(content_url, str) or not content_url.strip():
                 raise ValueError("content_url must be a non-empty string when provided")
 
