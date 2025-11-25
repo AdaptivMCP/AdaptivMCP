@@ -4,7 +4,6 @@ import base64
 import tempfile
 import shutil
 import subprocess
-import functools
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -128,6 +127,7 @@ async def _github_request(
             f"GitHub API error {resp.status_code} for {method} {path}: "
             f"{message or resp.text}"
         )
+
     try:
         return {"status_code": resp.status_code, "json": resp.json()}
     except Exception:
@@ -314,7 +314,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     meta = {**existing_meta, "write_action": write_action}
 
     def decorator(func):
-        tool = mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
+        return mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
 
         if asyncio.iscoroutinefunction(func):
             @functools.wraps(func)
