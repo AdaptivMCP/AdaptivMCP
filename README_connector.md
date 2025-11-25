@@ -11,6 +11,10 @@ Use the SSE endpoint in your connector configuration:
 https://github-mcp-chatgpt.onrender.com/sse
 ```
 
+If you visit the base domain directly (``https://github-mcp-chatgpt.onrender.com/``),
+the server now responds with a plain-text banner pointing you to ``/sse`` and
+``/healthz`` instead of a generic 404.
+
 ## Write gating
 Write tools are gated to avoid accidental changes.
 
