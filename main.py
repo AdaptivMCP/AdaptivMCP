@@ -1162,23 +1162,44 @@ async def update_files_and_open_pr(
         if content_url is not None:
             if not isinstance(content_url, str) or not content_url.strip():
                 raise ValueError("content_url must be a non-empty string when provided")
-            if not (
-                content_url.startswith("http://") or content_url.startswith("https://")
-            ):
-                raise GitHubAPIError(
-                    "update_files_and_open_pr content_url must be an absolute "
-                    "http(s) URL. In ChatGPT, pass the sandbox file path "
-                    "(e.g. sandbox:/mnt/data/file) and the host will rewrite it "
-                    "to a real URL before it reaches this server.",
+
+            content_url = content_url.strip()
+            if content_url.startswith("sandbox:/") or content_url.startswith("/"):
+                local_path = (
+                    content_url[len("sandbox:") :]
+                    if content_url.startswith("sandbox:/")
+                    else content_url
                 )
-            client = _external_client_instance()
-            response = await client.get(content_url)
-            if response.status_code >= 400:
+                try:
+                    with open(local_path, "rb") as f:
+                        body_bytes = f.read()
+                except FileNotFoundError:
+                    raise GitHubAPIError(
+                        "sandbox content_url path not found. If you are running inside "
+                        "ChatGPT, ensure the file exists in the sandbox (e.g. /mnt/data) "
+                        "and pass the full sandbox:/ path so the host can rewrite it to "
+                        "an accessible URL."
+                    )
+                except OSError as e:
+                    raise GitHubAPIError(
+                        f"Failed to read sandbox content from {local_path}: {e}"
+                    )
+            elif content_url.startswith("http://") or content_url.startswith("https://"):
+                client = _external_client_instance()
+                response = await client.get(content_url)
+                if response.status_code >= 400:
+                    raise GitHubAPIError(
+                        f"Failed to fetch content from {content_url}: "
+                        f"{response.status_code}"
+                    )
+                body_bytes = response.content
+            else:
                 raise GitHubAPIError(
-                    f"Failed to fetch content from {content_url}: "
-                    f"{response.status_code}"
+                    "update_files_and_open_pr content_url must be an absolute http(s) "
+                    "URL or a sandbox:/ path. In ChatGPT, pass the sandbox file path "
+                    "(e.g. sandbox:/mnt/data/file) and the host will rewrite it to a real "
+                    "URL before it reaches this server."
                 )
-            body_bytes = response.content
         else:
             body_bytes = content.encode("utf-8")
 
