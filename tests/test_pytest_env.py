@@ -10,3 +10,4 @@ def test_pytest_is_importable():
     import pytest  # type: ignore[import-not-found]
 
     assert hasattr(pytest, "__version__")
+    assert pytest.__version__, "pytest should expose a non-empty __version__"
