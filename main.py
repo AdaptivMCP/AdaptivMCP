@@ -314,7 +314,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     meta = {**existing_meta, "write_action": write_action}
 
     def decorator(func):
-        return mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
+        tool = mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
 
         if asyncio.iscoroutinefunction(func):
             @functools.wraps(func)
@@ -331,6 +331,32 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         return wrapper
 
     return decorator
+
+
+@mcp_tool(write_action=False)
+def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
+    """Toggle write-tagged tools on or off for the running server instance.
+
+    Args:
+        approved: Set to ``true`` to allow tools marked ``write_action=True`` to
+            execute; set to ``false`` to block them. The environment variable
+            ``GITHUB_MCP_AUTO_APPROVE`` seeds the initial value, but this tool is
+            the runtime override assistants should call when they need to enable
+            writes for a session.
+
+    Returns:
+        ``{"write_allowed": bool}`` reflecting the current gate status.
+
+    Notes:
+        - This tool itself is not gated so it can re-enable writes after a
+          session starts.
+        - Callers should avoid enabling writes unless the user explicitly opts
+          in to changes on their repositories.
+    """
+
+    global WRITE_ALLOWED
+    WRITE_ALLOWED = bool(approved)
+    return {"write_allowed": WRITE_ALLOWED}
 
 
 @mcp_tool(write_action=False)
