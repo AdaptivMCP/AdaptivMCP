@@ -57,6 +57,12 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 
+
+def _with_numbered_lines(text: str) -> List[Dict[str, Any]]:
+    """Return a list of dicts pairing 1-based line numbers with text."""
+
+    return [{"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)]
+
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
 _concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
@@ -190,6 +196,7 @@ async def _decode_github_content(
     return {
         "status": data["status_code"],
         "text": text,
+        "numbered_lines": _with_numbered_lines(text),
         "sha": j.get("sha"),
         "path": j.get("path"),
         "html_url": j.get("html_url"),
