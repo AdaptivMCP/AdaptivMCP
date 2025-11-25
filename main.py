@@ -18,8 +18,6 @@ from starlette.responses import PlainTextResponse
 # ------------------------------------------------------------------------------
 
 GITHUB_PAT = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
-if not GITHUB_PAT:
-    raise RuntimeError("GITHUB_PAT or GITHUB_TOKEN must be set")
 
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
 
@@ -73,13 +71,21 @@ class WriteNotAuthorizedError(Exception):
 # ------------------------------------------------------------------------------
 
 
+def _get_github_token() -> str:
+    token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
+    if not token:
+        raise GitHubAuthError("GITHUB_PAT or GITHUB_TOKEN must be set")
+    return token
+
+
 def _github_client_instance() -> httpx.AsyncClient:
     global _http_client_github
     if _http_client_github is None:
+        token = _get_github_token()
         _http_client_github = httpx.AsyncClient(
             base_url=GITHUB_API_BASE,
             headers={
-                "Authorization": f"Bearer {GITHUB_PAT}",
+                "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
                 "User-Agent": "chatgpt-mcp-github",
             },
@@ -354,10 +360,8 @@ async def _run_shell(
 
 async def _clone_repo(full_name: str, ref: str = "main") -> str:
     tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
-    token = GITHUB_PAT
-    if not token:
-        raise GitHubAuthError("Missing GitHub token for cloning")
-
+    token = _get_github_token()
+    
     url = f"https://x-access-token:{token}@github.com/{full_name}.git"
     cmd = f"git clone --depth 1 --branch {ref} {url} {tmpdir}"
     result = await _run_shell(cmd, cwd=None, timeout_seconds=600)
@@ -1171,9 +1175,7 @@ async def apply_patch_and_open_pr(
                     "stderr": tests_result.get("stderr", ""),
                 }
 
-        token = GITHUB_PAT
-        if not token:
-            raise GitHubAuthError("Missing GitHub token for push")
+        token = _get_github_token()
 
         push_url = f"https://x-access-token:{token}@github.com/{full_name}.git"
         push_result = await _run_shell(
