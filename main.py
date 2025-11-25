@@ -2,150 +2,110 @@ import os
 import asyncio
 import base64
 import tempfile
-import secrets
 import shutil
-import textwrap
-import urllib.parse
-from typing import Optional, Dict, Any, List
+import subprocess
+from typing import Any, Dict, List, Optional
 
 import httpx
-from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import PlainTextResponse, Response
-from starlette.routing import Route, Mount
+from fastmcp import FastMCP
+from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
-import uvicorn
-
-# MCP framework
-from fastmcp import FastMCP  # FastMCP server; mcp_tool is defined below
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 
-# --------------------------------------------------------------------
-# Environment and constants
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Configuration and globals
+# ------------------------------------------------------------------------------
+
+GITHUB_PAT = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
+if not GITHUB_PAT:
+    raise RuntimeError("GITHUB_PAT or GITHUB_TOKEN must be set")
 
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
-HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", "150"))
-HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", "300"))
-HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", "200"))
-HTTPX_HTTP2 = bool(int(os.environ.get("HTTPX_HTTP2", "1")))
-MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", "80"))
-FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", str(MAX_CONCURRENCY)))
-TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
-TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
 
-GITHUB_TOKEN = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
-if not GITHUB_TOKEN:
-    raise RuntimeError("GITHUB_PAT or GITHUB_TOKEN must be set for GitHub authentication")
+HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", 150))
+HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", 300))
+HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", 200))
+
+MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 80))
+FETCH_FILES_CONCURRENCY = int(
+    os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY)
+)
+
+TOOL_STDOUT_MAX_CHARS = 12000
+LOGS_MAX_CHARS = 16000
+
+GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
+GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
+GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
+GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
+
+WRITE_ALLOWED = os.environ.get("GITHUB_MCP_AUTO_APPROVE", "0") == "1"
+
+_http_client_github: Optional[httpx.AsyncClient] = None
+_http_client_external: Optional[httpx.AsyncClient] = None
+_concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+
+# json_response is configured per-transport; do not pass it here
+mcp = FastMCP("GitHub Fast MCP")
 
 
-class GitHubAPIError(Exception):
-    pass
+# ------------------------------------------------------------------------------
+# Exceptions
+# ------------------------------------------------------------------------------
 
 
 class GitHubAuthError(Exception):
     pass
 
 
-# --------------------------------------------------------------------
-# Shared HTTPX clients
-# --------------------------------------------------------------------
+class GitHubAPIError(Exception):
+    pass
 
-_httpx_github_client: Optional[httpx.AsyncClient] = None
-_httpx_external_client: Optional[httpx.AsyncClient] = None
+
+class WriteNotAuthorizedError(Exception):
+    pass
+
+
+# ------------------------------------------------------------------------------
+# HTTP client helpers
+# ------------------------------------------------------------------------------
 
 
 def _github_client_instance() -> httpx.AsyncClient:
-    global _httpx_github_client
-    if _httpx_github_client is None:
-        headers = {
-            "Authorization": f"token {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github+json",
-        }
-        _httpx_github_client = httpx.AsyncClient(
-            base_url=GITHUB_API_BASE.rstrip("/"),
-            headers=headers,
+    global _http_client_github
+    if _http_client_github is None:
+        _http_client_github = httpx.AsyncClient(
+            base_url=GITHUB_API_BASE,
+            headers={
+                "Authorization": f"Bearer {GITHUB_PAT}",
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "chatgpt-mcp-github",
+            },
             timeout=HTTPX_TIMEOUT,
             limits=httpx.Limits(
                 max_connections=HTTPX_MAX_CONNECTIONS,
                 max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
             ),
-            http2=HTTPX_HTTP2,
+            http2=bool(int(os.environ.get("HTTPX_HTTP2", "1"))),
         )
-    return _httpx_github_client
+    return _http_client_github
 
 
 def _external_client_instance() -> httpx.AsyncClient:
-    global _httpx_external_client
-    if _httpx_external_client is None:
-        _httpx_external_client = httpx.AsyncClient(
+    global _http_client_external
+    if _http_client_external is None:
+        _http_client_external = httpx.AsyncClient(
             timeout=HTTPX_TIMEOUT,
             limits=httpx.Limits(
                 max_connections=HTTPX_MAX_CONNECTIONS,
                 max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
             ),
-            http2=HTTPX_HTTP2,
+            http2=bool(int(os.environ.get("HTTPX_HTTP2", "1"))),
         )
-    return _httpx_external_client
+    return _http_client_external
 
-
-async def _close_clients():
-    global _httpx_github_client, _httpx_external_client
-    if _httpx_github_client is not None:
-        await _httpx_github_client.aclose()
-        _httpx_github_client = None
-    if _httpx_external_client is not None:
-        await _httpx_external_client.aclose()
-        _httpx_external_client = None
-
-
-# --------------------------------------------------------------------
-# MCP server + decorator
-# --------------------------------------------------------------------
-
-mcp = FastMCP("GitHub Fast MCP", json_response=True)
-
-# Initialize write gating from env: if GITHUB_MCP_AUTO_APPROVE=1, enable writes by default.
-AUTO_APPROVE = bool(int(os.environ.get("GITHUB_MCP_AUTO_APPROVE", "0")))
-WRITE_ALLOWED = AUTO_APPROVE
-
-
-def mcp_tool(*tool_args, write_action: bool = False, **tool_kwargs):
-    """
-    Decorator that wraps mcp.tool. We register the function with FastMCP
-    but return the original function so it remains directly callable
-    inside this module.
-    """
-    def decorator(func):
-        # Register with FastMCP
-        mcp.tool(*tool_args, **tool_kwargs)(func)
-        # If you ever need write_action metadata, you can manage a separate
-        # registry here, but we do NOT set attributes on the FunctionTool.
-        return func
-
-    return decorator
-
-
-@mcp_tool(write_action=False)
-async def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """
-    Explicitly enable or disable write actions for the current process.
-    If GITHUB_MCP_AUTO_APPROVE=1, WRITE_ALLOWED starts as True and this
-    function can still be used to turn writes off or re-enable them.
-    """
-    global WRITE_ALLOWED
-    WRITE_ALLOWED = bool(approved)
-    return {"write_actions_enabled": WRITE_ALLOWED}
-
-
-def _ensure_write_allowed(context: str):
-    if not WRITE_ALLOWED:
-        raise GitHubAPIError(f"Write tools are not authorized for this session (context: {context})")
-
-
-# --------------------------------------------------------------------
-# GitHub helpers
-# --------------------------------------------------------------------
 
 async def _github_request(
     method: str,
@@ -155,8 +115,9 @@ async def _github_request(
     json_body: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     client = _github_client_instance()
-    url = f"{GITHUB_API_BASE.rstrip('/')}{path}"
-    resp = await client.request(method, url, params=params, json=json_body)
+    async with _concurrency_semaphore:
+        resp = await client.request(method, path, params=params, json=json_body)
+
     if resp.status_code >= 400:
         try:
             data = resp.json()
@@ -164,9 +125,19 @@ async def _github_request(
             data = None
         message = data.get("message") if isinstance(data, dict) else None
         raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for {method} {path}: {message or resp.text}"
+            f"GitHub API error {resp.status_code} for {method} {path}: "
+            f"{message or resp.text}"
         )
-    return {"status_code": resp.status_code, "json": resp.json(), "raw": resp}
+
+    try:
+        return {"status_code": resp.status_code, "json": resp.json()}
+    except Exception:
+        return {"status_code": resp.status_code, "json": None}
+
+
+# ------------------------------------------------------------------------------
+# GitHub helpers
+# ------------------------------------------------------------------------------
 
 
 async def _decode_github_content(
@@ -174,28 +145,74 @@ async def _decode_github_content(
     path: str,
     ref: str = "main",
 ) -> Dict[str, Any]:
-    client = _github_client_instance()
-    url = f"/repos/{full_name}/contents/{path}"
-    resp = await client.get(url, params={"ref": ref})
-    if resp.status_code == 404:
-        raise GitHubAPIError(f"File not found: {full_name}/{path}@{ref}")
-    if resp.status_code >= 400:
-        raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for GET {url}: {resp.text}"
-        )
-    data = resp.json()
-    content = data.get("content")
-    if data.get("encoding") == "base64" and content is not None:
-        decoded = base64.b64decode(content).decode("utf-8", errors="replace")
+    data = await _github_request(
+        "GET",
+        f"/repos/{full_name}/contents/{path}",
+        params={"ref": ref},
+    )
+    if not isinstance(data.get("json"), dict):
+        raise GitHubAPIError("Unexpected content response shape from GitHub")
+
+    j = data["json"]
+    content = j.get("content")
+    encoding = j.get("encoding")
+    if encoding == "base64" and isinstance(content, str):
+        try:
+            decoded_bytes = base64.b64decode(content)
+            text = decoded_bytes.decode("utf-8", errors="replace")
+        except Exception as e:
+            raise GitHubAPIError(f"Failed to decode file content: {e}")
     else:
-        decoded = ""
+        text = ""
+
     return {
-        "status_code": resp.status_code,
-        "text": decoded,
-        "sha": data.get("sha"),
-        "path": data.get("path"),
-        "html_url": data.get("html_url"),
+        "status": data["status_code"],
+        "text": text,
+        "sha": j.get("sha"),
+        "path": j.get("path"),
+        "html_url": j.get("html_url"),
     }
+
+
+async def _get_branch_sha(full_name: str, ref: str) -> str:
+    data = await _github_request("GET", f"/repos/{full_name}/git/ref/heads/{ref}")
+    j = data["json"]
+    if not isinstance(j, dict) or "object" not in j:
+        raise GitHubAPIError("Unexpected branch ref response from GitHub")
+    return j["object"]["sha"]
+
+
+async def _resolve_file_sha(full_name: str, path: str, branch: str) -> Optional[str]:
+    try:
+        decoded = await _decode_github_content(full_name, path, branch)
+        return decoded.get("sha")
+    except GitHubAPIError:
+        return None
+
+
+async def _perform_github_commit(
+    full_name: str,
+    path: str,
+    message: str,
+    body_bytes: bytes,
+    branch: str,
+    sha: Optional[str],
+) -> Dict[str, Any]:
+    b64_content = base64.b64encode(body_bytes).decode("ascii")
+    payload: Dict[str, Any] = {
+        "message": message,
+        "content": b64_content,
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+
+    result = await _github_request(
+        "PUT",
+        f"/repos/{full_name}/contents/{path}",
+        json_body=payload,
+    )
+    return result
 
 
 async def _run_shell(
@@ -203,21 +220,22 @@ async def _run_shell(
     cwd: Optional[str] = None,
     timeout_seconds: int = 300,
 ) -> Dict[str, Any]:
-    """
-    Run a shell command with a timeout, trimming stdout/stderr to avoid
-    huge MCP responses.
-    """
     proc = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": GIT_AUTHOR_NAME,
+            "GIT_AUTHOR_EMAIL": GIT_AUTHOR_EMAIL,
+            "GIT_COMMITTER_NAME": GIT_COMMITTER_NAME,
+            "GIT_COMMITTER_EMAIL": GIT_COMMITTER_EMAIL,
+        },
     )
-
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(
-            proc.communicate(),
-            timeout=timeout_seconds,
+            proc.communicate(), timeout=timeout_seconds
         )
         timed_out = False
     except asyncio.TimeoutError:
@@ -225,13 +243,8 @@ async def _run_shell(
         stdout_bytes, stderr_bytes = await proc.communicate()
         timed_out = True
 
-    stdout = stdout_bytes.decode("utf-8", errors="replace")
-    stderr = stderr_bytes.decode("utf-8", errors="replace")
-
-    if len(stdout) > TOOL_STDOUT_MAX_CHARS:
-        stdout = stdout[:TOOL_STDOUT_MAX_CHARS] + "\n...[truncated]..."
-    if len(stderr) > TOOL_STDERR_MAX_CHARS:
-        stderr = stderr[:TOOL_STDERR_MAX_CHARS] + "\n...[truncated]..."
+    stdout = stdout_bytes.decode("utf-8", errors="replace")[:TOOL_STDOUT_MAX_CHARS]
+    stderr = stderr_bytes.decode("utf-8", errors="replace")[:TOOL_STDOUT_MAX_CHARS]
 
     return {
         "exit_code": proc.returncode,
@@ -242,51 +255,85 @@ async def _run_shell(
 
 
 async def _clone_repo(full_name: str, ref: str = "main") -> str:
-    """
-    Clone the given repo at the given ref into a temporary directory.
-    """
-    if not GITHUB_TOKEN:
-        raise GitHubAuthError("GITHUB_PAT or GITHUB_TOKEN must be set for clone operations")
+    tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
+    token = GITHUB_PAT
+    if not token:
+        raise GitHubAuthError("Missing GitHub token for cloning")
 
-    tmp_dir = tempfile.mkdtemp(prefix="mcp-github-")
-    # Use a shallow clone for speed.
-    token = urllib.parse.quote(GITHUB_TOKEN, safe="")
-    clone_url = f"https://x-access-token:{token}@github.com/{full_name}.git"
-    cmd = f"git clone --depth 1 --branch {ref} {clone_url} {tmp_dir}"
-    result = await _run_shell(cmd, timeout_seconds=300)
+    url = f"https://x-access-token:{token}@github.com/{full_name}.git"
+    cmd = f"git clone --depth 1 --branch {ref} {url} {tmpdir}"
+    result = await _run_shell(cmd, cwd=None, timeout_seconds=600)
     if result["exit_code"] != 0:
-        await _cleanup_dir(tmp_dir)
-        raise GitHubAPIError(f"git clone failed: {result['stderr']}")
-    return tmp_dir
+        stderr = result.get("stderr", "")
+        raise GitHubAPIError(f"git clone failed: {stderr}")
+    return tmpdir
 
 
-async def _cleanup_dir(path: str):
+def _cleanup_dir(path: str) -> None:
     try:
-        shutil.rmtree(path, ignore_errors=True)
+        shutil.rmtree(path)
     except Exception:
         pass
 
 
-# --------------------------------------------------------------------
-# Tools: rate limit and repo inspection
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Write gating and mcp_tool decorator
+# ------------------------------------------------------------------------------
+
+
+def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
+    global WRITE_ALLOWED
+    WRITE_ALLOWED = bool(approved)
+    return {"write_allowed": WRITE_ALLOWED}
+
+
+def _ensure_write_allowed(context: str) -> None:
+    if not WRITE_ALLOWED:
+        raise WriteNotAuthorizedError(
+            f"MCP write action is temporarily disabled (context: {context})"
+        )
+
+
+def mcp_tool(*, write_action: bool = False, **tool_kwargs):
+    """
+    Wrapper around FastMCP's @mcp.tool decorator that also tracks whether the
+    tool performs write actions. We store this in tags/meta instead of trying
+    to set attributes on the FunctionTool object (which is a Pydantic model).
+    """
+
+    # Merge tags
+    existing_tags = tool_kwargs.pop("tags", None)
+    tags: set[str] = set(existing_tags or [])
+    if write_action:
+        tags.add("write")
+
+    # Merge meta
+    existing_meta = tool_kwargs.pop("meta", None) or {}
+    if not isinstance(existing_meta, dict):
+        existing_meta = {}
+    meta = {**existing_meta, "write_action": write_action}
+
+    def decorator(func):
+        return mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
+
+    return decorator
+
+
+# ------------------------------------------------------------------------------
+# Read-only tools
+# ------------------------------------------------------------------------------
+
 
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
-    """
-    Get GitHub rate limit status for the configured token.
-    """
-    data = await _github_request("GET", "/rate_limit")
-    return data["json"]
+    return await _github_request("GET", "/rate_limit")
 
 
 @mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
-    """
-    Get basic information about a repository.
-    """
-    data = await _github_request("GET", f"/repos/{full_name}")
-    return data["json"]
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    return await _github_request("GET", f"/repos/{full_name}")
 
 
 @mcp_tool(write_action=False)
@@ -295,19 +342,8 @@ async def list_branches(
     per_page: int = 100,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """
-    List branches in a repository.
-    """
-    client = _github_client_instance()
-    resp = await client.get(
-        f"/repos/{full_name}/branches",
-        params={"per_page": per_page, "page": page},
-    )
-    if resp.status_code >= 400:
-        raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for list_branches: {resp.text}"
-        )
-    return {"status_code": resp.status_code, "branches": resp.json()}
+    params = {"per_page": per_page, "page": page}
+    return await _github_request("GET", f"/repos/{full_name}/branches", params=params)
 
 
 @mcp_tool(write_action=False)
@@ -316,9 +352,6 @@ async def get_file_contents(
     path: str,
     ref: str = "main",
 ) -> Dict[str, Any]:
-    """
-    Get and decode the contents of a file from GitHub.
-    """
     return await _decode_github_content(full_name, path, ref)
 
 
@@ -328,71 +361,52 @@ async def fetch_files(
     paths: List[str],
     ref: str = "main",
 ) -> Dict[str, Any]:
-    """
-    Fetch multiple files concurrently, trimming content as needed.
-    """
     results: Dict[str, Any] = {}
-
     sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
 
-    async def _fetch_one(p: str):
+    async def _fetch_single(p: str) -> None:
         async with sem:
             try:
                 decoded = await _decode_github_content(full_name, p, ref)
-            except GitHubAPIError as e:
+                results[p] = decoded
+            except Exception as e:
                 results[p] = {"error": str(e)}
-                return
-            text = decoded["text"]
-            if len(text) > TOOL_STDOUT_MAX_CHARS:
-                text = text[:TOOL_STDOUT_MAX_CHARS] + "\n...[truncated]..."
-            results[p] = {
-                "text": text,
-                "sha": decoded["sha"],
-                "path": decoded["path"],
-                "html_url": decoded["html_url"],
-            }
 
-    await asyncio.gather(*[_fetch_one(p) for p in paths])
+    await asyncio.gather(*[_fetch_single(p) for p in paths])
     return {"files": results}
 
 
 @mcp_tool(write_action=False)
-async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Run a GraphQL query against the GitHub API.
-    """
+async def graphql_query(
+    query: str,
+    variables: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     client = _github_client_instance()
-    resp = await client.post(
-        "/graphql",
-        json={"query": query, "variables": variables or {}},
-    )
+    payload = {"query": query, "variables": variables or {}}
+    async with _concurrency_semaphore:
+        resp = await client.post("/graphql", json=payload)
+
     if resp.status_code >= 400:
-        raise GitHubAPIError(
-            f"GitHub GraphQL error {resp.status_code}: {resp.text}"
-        )
+        raise GitHubAPIError(f"GitHub GraphQL error {resp.status_code}: {resp.text}")
     return resp.json()
 
 
 @mcp_tool(write_action=False)
 async def fetch_url(url: str) -> Dict[str, Any]:
-    """
-    Fetch an arbitrary URL (for example, raw file content).
-    """
     client = _external_client_instance()
-    resp = await client.get(url)
-    text = resp.text
-    if len(text) > TOOL_STDOUT_MAX_CHARS:
-        text = text[:TOOL_STDOUT_MAX_CHARS] + "\n...[truncated]..."
+    async with _concurrency_semaphore:
+        resp = await client.get(url)
     return {
         "status_code": resp.status_code,
         "headers": dict(resp.headers),
-        "text": text,
+        "content": resp.text[:TOOL_STDOUT_MAX_CHARS],
     }
 
 
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # GitHub Actions tools
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 @mcp_tool(write_action=False)
 async def list_workflow_runs(
@@ -403,7 +417,6 @@ async def list_workflow_runs(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    client = _github_client_instance()
     params: Dict[str, Any] = {"per_page": per_page, "page": page}
     if branch:
         params["branch"] = branch
@@ -411,21 +424,19 @@ async def list_workflow_runs(
         params["status"] = status
     if event:
         params["event"] = event
-    resp = await client.get(f"/repos/{full_name}/actions/runs", params=params)
-    if resp.status_code >= 400:
-        raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for list_workflow_runs: {resp.text}"
-        )
-    return resp.json()
+    return await _github_request(
+        "GET",
+        f"/repos/{full_name}/actions/runs",
+        params=params,
+    )
 
 
 @mcp_tool(write_action=False)
-async def get_workflow_run(
-    full_name: str,
-    run_id: int,
-) -> Dict[str, Any]:
-    data = await _github_request("GET", f"/repos/{full_name}/actions/runs/{run_id}")
-    return data["json"]
+async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
+    return await _github_request(
+        "GET",
+        f"/repos/{full_name}/actions/runs/{run_id}",
+    )
 
 
 @mcp_tool(write_action=False)
@@ -435,34 +446,28 @@ async def list_workflow_run_jobs(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    client = _github_client_instance()
-    resp = await client.get(
+    params = {"per_page": per_page, "page": page}
+    return await _github_request(
+        "GET",
         f"/repos/{full_name}/actions/runs/{run_id}/jobs",
-        params={"per_page": per_page, "page": page},
+        params=params,
     )
-    if resp.status_code >= 400:
-        raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for list_workflow_run_jobs: {resp.text}"
-        )
-    return resp.json()
 
 
 @mcp_tool(write_action=False)
-async def get_job_logs(
-    full_name: str,
-    job_id: int,
-) -> Dict[str, Any]:
+async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     client = _github_client_instance()
-    resp = await client.get(f"/repos/{full_name}/actions/jobs/{job_id}/logs")
+    async with _concurrency_semaphore:
+        resp = await client.get(
+            f"/repos/{full_name}/actions/jobs/{job_id}/logs",
+            headers={"Accept": "application/vnd.github+json"},
+        )
     if resp.status_code >= 400:
         raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for get_job_logs: {resp.text}"
+            f"GitHub job logs error {resp.status_code}: {resp.text}"
         )
-    text = resp.text
-    max_chars = 16000
-    if len(text) > max_chars:
-        text = text[:max_chars] + "\n...[truncated]..."
-    return {"status_code": resp.status_code, "text": text}
+    text = resp.text[:LOGS_MAX_CHARS]
+    return {"status_code": resp.status_code, "logs": text}
 
 
 @mcp_tool(write_action=False)
@@ -472,27 +477,37 @@ async def wait_for_workflow_run(
     timeout_seconds: int = 900,
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
-    """
-    Poll a workflow run until it completes or times out.
-    """
     client = _github_client_instance()
-    deadline = asyncio.get_event_loop().time() + timeout_seconds
+    end_time = asyncio.get_event_loop().time() + timeout_seconds
 
     while True:
-        resp = await client.get(f"/repos/{full_name}/actions/runs/{run_id}")
+        async with _concurrency_semaphore:
+            resp = await client.get(
+                f"/repos/{full_name}/actions/runs/{run_id}",
+            )
         if resp.status_code >= 400:
             raise GitHubAPIError(
-                f"GitHub API error {resp.status_code} for get_workflow_run: {resp.text}"
+                f"GitHub workflow run error {resp.status_code}: {resp.text}"
             )
+
         data = resp.json()
         status = data.get("status")
         conclusion = data.get("conclusion")
-        if status in ("completed", "failure", "cancelled") or conclusion is not None:
-            return data
-        if asyncio.get_event_loop().time() >= deadline:
-            raise GitHubAPIError(
-                f"Timed out waiting for workflow run {run_id} in {full_name}"
-            )
+
+        if status == "completed":
+            return {
+                "status": status,
+                "conclusion": conclusion,
+                "run": data,
+            }
+
+        if asyncio.get_event_loop().time() > end_time:
+            return {
+                "status": status,
+                "timeout": True,
+                "run": data,
+            }
+
         await asyncio.sleep(poll_interval_seconds)
 
 
@@ -503,16 +518,22 @@ async def trigger_workflow_dispatch(
     ref: str,
     inputs: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """
-    Trigger a workflow_dispatch event on a workflow file.
-    """
-    _ensure_write_allowed(f"trigger_workflow_dispatch {full_name} {workflow}@{ref}")
-    path = f"/repos/{full_name}/actions/workflows/{workflow}/dispatches"
+    _ensure_write_allowed(f"trigger workflow {workflow} on {full_name}@{ref}")
     payload = {"ref": ref}
     if inputs:
         payload["inputs"] = inputs
-    await _github_request("POST", path, json_body=payload)
-    return {"triggered": True}
+
+    client = _github_client_instance()
+    async with _concurrency_semaphore:
+        resp = await client.post(
+            f"/repos/{full_name}/actions/workflows/{workflow}/dispatches",
+            json=payload,
+        )
+    if resp.status_code not in (204, 201):
+        raise GitHubAPIError(
+            f"GitHub workflow dispatch error {resp.status_code}: {resp.text}"
+        )
+    return {"status_code": resp.status_code}
 
 
 @mcp_tool(write_action=True)
@@ -524,44 +545,30 @@ async def trigger_and_wait_for_workflow(
     timeout_seconds: int = 900,
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
-    """
-    Trigger a workflow_dispatch workflow and wait for the most recent run
-    on that branch.
-    """
-    _ensure_write_allowed(
-        f"trigger_and_wait_for_workflow {full_name} {workflow}@{ref}"
-    )
+    _ensure_write_allowed(f"trigger+wait workflow {workflow} on {full_name}@{ref}")
     await trigger_workflow_dispatch(full_name, workflow, ref, inputs)
-    client = _github_client_instance()
 
-    deadline = asyncio.get_event_loop().time() + timeout_seconds
-    last_run = None
-    while True:
-        resp = await client.get(
-            f"/repos/{full_name}/actions/workflows/{workflow}/runs",
-            params={"branch": ref, "per_page": 1},
-        )
-        if resp.status_code >= 400:
-            raise GitHubAPIError(
-                f"GitHub API error {resp.status_code} for list_workflow_runs: {resp.text}"
-            )
-        runs = resp.json().get("workflow_runs", [])
-        if runs:
-            last_run = runs[0]
-            status = last_run.get("status")
-            conclusion = last_run.get("conclusion")
-            if status in ("completed", "failure", "cancelled") or conclusion is not None:
-                return {"run": last_run}
-        if asyncio.get_event_loop().time() >= deadline:
-            raise GitHubAPIError(
-                f"Timed out waiting for workflow {workflow} on {ref} in {full_name}"
-            )
-        await asyncio.sleep(poll_interval_seconds)
+    runs = await list_workflow_runs(
+        full_name,
+        branch=ref,
+        per_page=1,
+        page=1,
+    )
+    workflow_runs = runs.get("json", {}).get("workflow_runs", [])
+    if not workflow_runs:
+        raise GitHubAPIError("No workflow runs found after dispatch")
+    run_id = workflow_runs[0]["id"]
+
+    result = await wait_for_workflow_run(
+        full_name, run_id, timeout_seconds, poll_interval_seconds
+    )
+    return {"run_id": run_id, "result": result}
 
 
-# --------------------------------------------------------------------
-# PR / issue management
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# PR / issue management tools
+# ------------------------------------------------------------------------------
+
 
 @mcp_tool(write_action=False)
 async def list_pull_requests(
@@ -572,18 +579,16 @@ async def list_pull_requests(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    client = _github_client_instance()
-    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
+    params: Dict[str, Any] = {
+        "state": state,
+        "per_page": per_page,
+        "page": page,
+    }
     if head:
         params["head"] = head
     if base:
         params["base"] = base
-    resp = await client.get(f"/repos/{full_name}/pulls", params=params)
-    if resp.status_code >= 400:
-        raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for list_pull_requests: {resp.text}"
-        )
-    return {"status_code": resp.status_code, "pulls": resp.json()}
+    return await _github_request("GET", f"/repos/{full_name}/pulls", params=params)
 
 
 @mcp_tool(write_action=True)
@@ -594,32 +599,27 @@ async def merge_pull_request(
     commit_title: Optional[str] = None,
     commit_message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    _ensure_write_allowed(f"merge_pull_request {full_name} #{number}")
+    _ensure_write_allowed(f"merge PR #{number} in {full_name}")
     payload: Dict[str, Any] = {"merge_method": merge_method}
     if commit_title is not None:
         payload["commit_title"] = commit_title
     if commit_message is not None:
         payload["commit_message"] = commit_message
-    data = await _github_request(
+    return await _github_request(
         "PUT",
         f"/repos/{full_name}/pulls/{number}/merge",
         json_body=payload,
     )
-    return data["json"]
 
 
 @mcp_tool(write_action=True)
-async def close_pull_request(
-    full_name: str,
-    number: int,
-) -> Dict[str, Any]:
-    _ensure_write_allowed(f"close_pull_request {full_name} #{number}")
-    data = await _github_request(
+async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
+    _ensure_write_allowed(f"close PR #{number} in {full_name}")
+    return await _github_request(
         "PATCH",
         f"/repos/{full_name}/pulls/{number}",
         json_body={"state": "closed"},
     )
-    return data["json"]
 
 
 @mcp_tool(write_action=True)
@@ -628,13 +628,12 @@ async def comment_on_pull_request(
     number: int,
     body: str,
 ) -> Dict[str, Any]:
-    _ensure_write_allowed(f"comment_on_pull_request {full_name} #{number}")
-    data = await _github_request(
+    _ensure_write_allowed(f"comment on PR #{number} in {full_name}")
+    return await _github_request(
         "POST",
         f"/repos/{full_name}/issues/{number}/comments",
         json_body={"body": body},
     )
-    return data["json"]
 
 
 @mcp_tool(write_action=False)
@@ -643,48 +642,25 @@ async def compare_refs(
     base: str,
     head: str,
 ) -> Dict[str, Any]:
-    """
-    Compare two refs, returning a trimmed list of changed files and patches.
-    """
-    client = _github_client_instance()
-    resp = await client.get(f"/repos/{full_name}/compare/{base}...{head}")
-    if resp.status_code >= 400:
-        raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for compare_refs: {resp.text}"
-        )
-    data = resp.json()
-    files = data.get("files", [])[:100]
+    data = await _github_request(
+        "GET",
+        f"/repos/{full_name}/compare/{base}...{head}",
+    )
+    j = data.get("json") or {}
+    files = j.get("files", [])
     trimmed_files = []
-    for f in files:
+    for f in files[:100]:
         patch = f.get("patch")
-        if patch and len(patch) > 8000:
-            patch = patch[:8000] + "\n...[truncated]..."
-        trimmed_files.append(
-            {
-                "filename": f.get("filename"),
-                "status": f.get("status"),
-                "additions": f.get("additions"),
-                "deletions": f.get("deletions"),
-                "changes": f.get("changes"),
-                "patch": patch,
-            }
-        )
-    return {
-        "status": data.get("status"),
-        "ahead_by": data.get("ahead_by"),
-        "behind_by": data.get("behind_by"),
-        "total_commits": data.get("total_commits"),
-        "files": trimmed_files,
-    }
+        if isinstance(patch, str) and len(patch) > 8000:
+            patch = patch[:8000] + "\n... [truncated]"
+        trimmed_files.append({**f, "patch": patch})
+    j["files"] = trimmed_files
+    return j
 
 
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Branch / commit / PR tools
-# --------------------------------------------------------------------
-
-async def _get_branch_sha(full_name: str, ref: str) -> str:
-    resp = await _github_request("GET", f"/repos/{full_name}/git/ref/heads/{ref}")
-    return resp["json"]["object"]["sha"]
+# ------------------------------------------------------------------------------
 
 
 @mcp_tool(write_action=True)
@@ -693,11 +669,14 @@ async def create_branch(
     new_branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
-    _ensure_write_allowed(f"create_branch {new_branch} from {from_ref}")
+    _ensure_write_allowed(f"create branch {new_branch} from {from_ref} in {full_name}")
     sha = await _get_branch_sha(full_name, from_ref)
-    body = {"ref": f"refs/heads/{new_branch}", "sha": sha}
-    resp = await _github_request("POST", f"/repos/{full_name}/git/refs", json_body=body)
-    return {"ref": resp["json"].get("ref"), "sha": resp["json"].get("object", {}).get("sha")}
+    payload = {"ref": f"refs/heads/{new_branch}", "sha": sha}
+    return await _github_request(
+        "POST",
+        f"/repos/{full_name}/git/refs",
+        json_body=payload,
+    )
 
 
 @mcp_tool(write_action=True)
@@ -706,65 +685,17 @@ async def ensure_branch(
     branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
-    _ensure_write_allowed(f"ensure_branch {branch} from {from_ref}")
+    _ensure_write_allowed(f"ensure branch {branch} from {from_ref} in {full_name}")
     client = _github_client_instance()
-    # check if exists
-    resp = await client.get(f"/repos/{full_name}/git/ref/heads/{branch}")
-    if resp.status_code == 200:
-        j = resp.json()
-        return {"created": False, "ref": j.get("ref"), "sha": j.get("object", {}).get("sha")}
-    if resp.status_code != 404:
-        raise GitHubAPIError(f"Failed to check branch {branch}: {resp.status_code} {resp.text}")
-    created = await create_branch(full_name, branch, from_ref)
-    return {"created": True, **created}
-
-
-async def _resolve_file_sha(
-    full_name: str,
-    path: str,
-    branch: str,
-) -> Optional[str]:
-    client = _github_client_instance()
-    url = f"{GITHUB_API_BASE.rstrip('/')}/repos/{full_name.strip()}/contents/{path.lstrip('/')}"
-    resp = await client.get(url, params={"ref": branch})
-    if resp.status_code == 200:
-        try:
-            existing_json = resp.json()
-        except Exception:
-            existing_json = {}
-        return existing_json.get("sha")
-    elif resp.status_code in (404, 410):
-        return None
-    else:
-        raise GitHubAPIError(
-            f"Failed to look up existing file {full_name}/{path} for sha: {resp.status_code}"
-        )
-
-
-async def _perform_github_commit(
-    full_name: str,
-    path: str,
-    message: str,
-    body_bytes: bytes,
-    branch: str,
-    sha: Optional[str],
-) -> Dict[str, Any]:
-    client = _github_client_instance()
-    url = f"{GITHUB_API_BASE.rstrip('/')}/repos/{full_name.strip()}/contents/{path.lstrip('/')}"
-    encoded = base64.b64encode(body_bytes).decode("ascii")
-    json_payload: Dict[str, Any] = {
-        "message": message,
-        "content": encoded,
-        "branch": branch,
-    }
-    if sha:
-        json_payload["sha"] = sha
-    resp = await client.put(url, json=json_payload)
+    async with _concurrency_semaphore:
+        resp = await client.get(f"/repos/{full_name}/git/ref/heads/{branch}")
+    if resp.status_code == 404:
+        return await create_branch(full_name, branch, from_ref)
     if resp.status_code >= 400:
         raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for PUT {url}: {resp.text}"
+            f"GitHub ensure_branch error {resp.status_code}: {resp.text}"
         )
-    return resp.json()
+    return {"status_code": resp.status_code, "json": resp.json()}
 
 
 @mcp_tool(write_action=True)
@@ -778,75 +709,62 @@ async def commit_file_async(
     branch: str = "main",
     sha: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Schedule a GitHub file commit. To keep MCP responses small and avoid
-    connector timeouts, this tool returns immediately after scheduling
-    the commit in the background.
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
 
-    Exactly one of `content` or `content_url` must be provided.
-    - `content`: raw text to commit.
-    - `content_url`: absolute http(s) URL to fetch content from.
-    """
-    _ensure_write_allowed(f"commit_file_async {full_name}/{path}@{branch}")
+    _ensure_write_allowed(f"commit file async {path}")
 
-    # Ensure exactly one of content / content_url is provided.
-    if (content is None and content_url is None) or (
-        content is not None and content_url is not None
-    ):
-        raise GitHubAPIError(
-            "Exactly one of 'content' or 'content_url' must be provided"
-        )
+    print(
+        "[commit_file_async] scheduling full_name=%r path=%r branch=%r "
+        "message=%r has_content=%s content_url=%r sha=%r"
+        % (full_name, path, branch, message, content is not None, content_url, sha)
+    )
 
-    # Resolve existing file sha if not provided (so updates work correctly).
+    if content is None and content_url is None:
+        raise ValueError("Either content or content_url must be provided")
+    if content is not None and content_url is not None:
+        raise ValueError("Provide content or content_url, but not both")
+
+    if content_url is not None:
+        if not isinstance(content_url, str) or not content_url.strip():
+            raise ValueError("content_url must be a non-empty string when provided")
+        if not (content_url.startswith("http://") or content_url.startswith("https://")):
+            raise GitHubAPIError(
+                "commit_file_async content_url must be an absolute http(s) URL. "
+                "In ChatGPT, pass the sandbox file path (e.g. sandbox:/mnt/data/file) "
+                "and the host will rewrite it to a real URL before it reaches this "
+                "server.",
+            )
+        client = _external_client_instance()
+        response = await client.get(content_url)
+        if response.status_code >= 400:
+            raise GitHubAPIError(
+                f"Failed to fetch content from {content_url}: "
+                f"{response.status_code}"
+            )
+        body_bytes = response.content
+    else:
+        body_bytes = content.encode("utf-8")
+
     if sha is None:
         sha = await _resolve_file_sha(full_name, path, branch)
 
-    # Determine the bytes we will commit.
-    if content_url is not None:
-        # Detect sandbox/local paths which are not reachable from the MCP server.
-        if (
-            content_url.startswith("sandbox:")
-            or content_url.startswith("sandbox:/")
-            or content_url.startswith("/mnt/")
-        ):
-            raise GitHubAPIError(
-                "content_url points to a sandbox/local path "
-                f"({content_url!r}) which the MCP server cannot access. "
-                "Provide the file contents via the 'content' field instead."
-            )
-
-        # Validate URL scheme before handing to httpx, to avoid low-level
-        # UnsupportedProtocol errors.
-        if not (
-            content_url.startswith("http://")
-            or content_url.startswith("https://")
-        ):
-            raise GitHubAPIError(
-                f"content_url must be an absolute http(s) URL, got: {content_url!r}"
-            )
-
-        client = _external_client_instance()
-        resp = await client.get(content_url)
-        if resp.status_code >= 400:
-            raise GitHubAPIError(
-                f"Failed to fetch content from {content_url}: "
-                f"{resp.status_code} {resp.text}"
-            )
-        body_bytes = resp.content
-    else:
-        # content is not None here by earlier validation
-        body_bytes = content.encode("utf-8")
-
-    async def _commit_task():
+    async def _do_commit() -> None:
         try:
             await _perform_github_commit(
-                full_name, path, message, body_bytes, branch, sha
+                full_name=full_name,
+                path=path,
+                message=message,
+                body_bytes=body_bytes,
+                branch=branch,
+                sha=sha,
             )
+            print(f"[commit_file_async] commit completed for {full_name}/{path}")
         except Exception as e:
-            # We do not propagate this to the caller to keep the response small.
-            print(f"[commit_file_async] Error committing {path}: {e}")
+            print(f"[commit_file_async] commit failed for {full_name}/{path}: {e}")
 
-    asyncio.create_task(_commit_task())
+    asyncio.create_task(_do_commit())
+
     return {
         "scheduled": True,
         "path": path,
@@ -864,7 +782,7 @@ async def create_pull_request(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
-    _ensure_write_allowed(f"create_pull_request {full_name} {head}->{base}")
+    _ensure_write_allowed(f"create PR from {head} to {base} in {full_name}")
     payload: Dict[str, Any] = {
         "title": title,
         "head": head,
@@ -874,12 +792,11 @@ async def create_pull_request(
     if body is not None:
         payload["body"] = body
 
-    resp = await _github_request(
+    return await _github_request(
         "POST",
         f"/repos/{full_name}/pulls",
         json_body=payload,
     )
-    return resp["json"]
 
 
 @mcp_tool(write_action=True)
@@ -892,14 +809,9 @@ async def update_files_and_open_pr(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
-    """
-    High-level helper:
-    - ensure a branch from base_branch
-    - commit multiple files (content or content_url)
-    - open a pull request
-    """
-    _ensure_write_allowed(f"update_files_and_open_pr {title}")
-    branch = new_branch or f"ally-{base_branch}-{secrets.token_hex(4)}"
+    _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
+
+    branch = new_branch or f"ally-{os.urandom(4).hex()}"
     await ensure_branch(full_name, branch, from_ref=base_branch)
 
     for f in files:
@@ -907,48 +819,41 @@ async def update_files_and_open_pr(
         file_message = f.get("message") or title
         content = f.get("content")
         content_url = f.get("content_url")
-        sha = f.get("sha")
-
-        if (content is None and content_url is None) or (content is not None and content_url is not None):
-            raise GitHubAPIError(
-                f"For file {path}, exactly one of 'content' or 'content_url' must be provided"
-            )
-
-        if sha is None:
-            sha = await _resolve_file_sha(full_name, path, branch)
+        if content is None and content_url is None:
+            raise ValueError(f"File entry for {path} must have content or content_url")
 
         if content_url is not None:
-            # Same semantics as commit_file_async: sandbox/local paths are not reachable.
-            if (
-                content_url.startswith("sandbox:")
-                or content_url.startswith("sandbox:/")
-                or content_url.startswith("/mnt/")
-            ):
-                raise GitHubAPIError(
-                    "content_url values pointing at sandbox/local paths (e.g. "
-                    f"{content_url!r}) are not reachable from the MCP server. "
-                    "Provide the file contents via the 'content' field instead."
-                )
-
+            if not isinstance(content_url, str) or not content_url.strip():
+                raise ValueError("content_url must be a non-empty string when provided")
             if not (
-                content_url.startswith("http://")
-                or content_url.startswith("https://")
+                content_url.startswith("http://") or content_url.startswith("https://")
             ):
                 raise GitHubAPIError(
-                    f"content_url must be an absolute http(s) URL, got: {content_url!r}"
+                    "update_files_and_open_pr content_url must be an absolute "
+                    "http(s) URL. In ChatGPT, pass the sandbox file path "
+                    "(e.g. sandbox:/mnt/data/file) and the host will rewrite it "
+                    "to a real URL before it reaches this server.",
                 )
-
             client = _external_client_instance()
-            resp = await client.get(content_url)
-            if resp.status_code >= 400:
+            response = await client.get(content_url)
+            if response.status_code >= 400:
                 raise GitHubAPIError(
-                    f"Failed to fetch content from {content_url}: {resp.status_code} {resp.text}"
+                    f"Failed to fetch content from {content_url}: "
+                    f"{response.status_code}"
                 )
-            body_bytes = resp.content
+            body_bytes = response.content
         else:
             body_bytes = content.encode("utf-8")
 
-        await _perform_github_commit(full_name, path, file_message, body_bytes, branch, sha)
+        sha = await _resolve_file_sha(full_name, path, branch)
+        await _perform_github_commit(
+            full_name=full_name,
+            path=path,
+            message=file_message,
+            body_bytes=body_bytes,
+            branch=branch,
+            sha=sha,
+        )
 
     pr = await create_pull_request(
         full_name=full_name,
@@ -961,9 +866,10 @@ async def update_files_and_open_pr(
     return {"branch": branch, "pull_request": pr}
 
 
-# --------------------------------------------------------------------
-# Workspace tools (run_command / run_tests / apply_patch_and_open_pr)
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Workspace / full-environment tools
+# ------------------------------------------------------------------------------
+
 
 @mcp_tool(write_action=True)
 async def run_command(
@@ -973,24 +879,20 @@ async def run_command(
     timeout_seconds: int = 300,
     workdir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Clone the repo at the given ref, run a shell command, and clean up.
-    """
-    _ensure_write_allowed(f"run_command {full_name}@{ref}: {command}")
-    repo_dir = await _clone_repo(full_name, ref)
+    _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
+    repo_dir = await _clone_repo(full_name, ref=ref)
     try:
         cwd = repo_dir
         if workdir:
             cwd = os.path.join(repo_dir, workdir)
         result = await _run_shell(command, cwd=cwd, timeout_seconds=timeout_seconds)
         return {
-            "exit_code": result["exit_code"],
-            "timed_out": result["timed_out"],
-            "stdout": result["stdout"],
-            "stderr": result["stderr"],
+            "repo_dir": repo_dir,
+            "workdir": workdir,
+            "result": result,
         }
     finally:
-        await _cleanup_dir(repo_dir)
+        _cleanup_dir(repo_dir)
 
 
 @mcp_tool(write_action=True)
@@ -1001,9 +903,6 @@ async def run_tests(
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Convenience wrapper around run_command for running tests.
-    """
     return await run_command(
         full_name=full_name,
         ref=ref,
@@ -1026,71 +925,67 @@ async def apply_patch_and_open_pr(
     test_timeout_seconds: int = 600,
     draft: bool = False,
 ) -> Dict[str, Any]:
-    """
-    Apply a unified diff patch to a new branch off base_branch, optionally run tests,
-    push to origin, and open a PR.
+    _ensure_write_allowed(f"apply_patch_and_open_pr on {full_name}@{base_branch}")
 
-    On failure of git operations, return a structured result with an "error" field
-    instead of raising, so callers can handle failures without a ToolError.
-    """
-    _ensure_write_allowed(f"apply_patch_and_open_pr {full_name} {base_branch} {title}")
-    repo_dir = await _clone_repo(full_name, base_branch)
+    branch = new_branch or f"ally-patch-{os.urandom(4).hex()}"
+    repo_dir = await _clone_repo(full_name, ref=base_branch)
+    tests_result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    error_stderr: Optional[str] = None
+
     try:
-        branch = new_branch or f"ally-patch-{secrets.token_hex(4)}"
-        token = urllib.parse.quote(GITHUB_TOKEN, safe="")
-        push_url = f"https://x-access-token:{token}@github.com/{full_name}.git"
-
-        # Create and checkout branch
-        result = await _run_shell(
+        checkout_result = await _run_shell(
             f"git checkout -b {branch}",
             cwd=repo_dir,
             timeout_seconds=60,
         )
-        if result["exit_code"] != 0:
+        if checkout_result["exit_code"] != 0:
+            error = "git_checkout_failed"
+            error_stderr = checkout_result.get("stderr", "")
             return {
                 "branch": branch,
-                "tests": None,
+                "tests": tests_result,
                 "pull_request": None,
-                "error": "git_checkout_failed",
-                "stderr": result["stderr"],
+                "error": error,
+                "stderr": error_stderr,
             }
 
-        # Write patch to file
         patch_path = os.path.join(repo_dir, "mcp_patch.diff")
         with open(patch_path, "w", encoding="utf-8") as f:
             f.write(patch)
 
-        # Apply patch
-        result = await _run_shell(
-            "git apply --whitespace=nowarn mcp_patch.diff",
+        apply_result = await _run_shell(
+            f"git apply --whitespace=nowarn {patch_path}",
             cwd=repo_dir,
             timeout_seconds=60,
         )
-        if result["exit_code"] != 0:
+        if apply_result["exit_code"] != 0:
+            error = "git_apply_failed"
+            error_stderr = apply_result.get("stderr", "")
             return {
                 "branch": branch,
-                "tests": None,
+                "tests": tests_result,
                 "pull_request": None,
-                "error": "git_apply_failed",
-                "stderr": result["stderr"],
+                "error": error,
+                "stderr": error_stderr,
             }
 
-        # Commit changes
-        result = await _run_shell(
-            'git commit -am "{}"'.format(title.replace('"', '\\"')),
+        commit_result = await _run_shell(
+            f'git commit -am "{title}"',
             cwd=repo_dir,
             timeout_seconds=60,
         )
-        if result["exit_code"] != 0:
+        if commit_result["exit_code"] != 0:
+            error = "git_commit_failed"
+            error_stderr = commit_result.get("stderr", "")
             return {
                 "branch": branch,
-                "tests": None,
+                "tests": tests_result,
                 "pull_request": None,
-                "error": "git_commit_failed",
-                "stderr": result["stderr"],
+                "error": error,
+                "stderr": error_stderr,
             }
 
-        tests_result = None
         if run_tests_flag:
             tests_result = await _run_shell(
                 test_command,
@@ -1098,27 +993,34 @@ async def apply_patch_and_open_pr(
                 timeout_seconds=test_timeout_seconds,
             )
             if tests_result["exit_code"] != 0 or tests_result["timed_out"]:
-                # Do not push / open PR if tests fail
+                error = "tests_failed"
                 return {
                     "branch": branch,
                     "tests": tests_result,
                     "pull_request": None,
-                    "error": "tests_failed",
+                    "error": error,
+                    "stderr": tests_result.get("stderr", ""),
                 }
 
-        # Push branch
-        result = await _run_shell(
+        token = GITHUB_PAT
+        if not token:
+            raise GitHubAuthError("Missing GitHub token for push")
+
+        push_url = f"https://x-access-token:{token}@github.com/{full_name}.git"
+        push_result = await _run_shell(
             f"git push {push_url} {branch}",
             cwd=repo_dir,
-            timeout_seconds=120,
+            timeout_seconds=300,
         )
-        if result["exit_code"] != 0:
+        if push_result["exit_code"] != 0:
+            error = "git_push_failed"
+            error_stderr = push_result.get("stderr", "")
             return {
                 "branch": branch,
                 "tests": tests_result,
                 "pull_request": None,
-                "error": "git_push_failed",
-                "stderr": result["stderr"],
+                "error": error,
+                "stderr": error_stderr,
             }
 
         pr = await create_pull_request(
@@ -1129,49 +1031,42 @@ async def apply_patch_and_open_pr(
             body=body,
             draft=draft,
         )
+
         return {
             "branch": branch,
             "tests": tests_result,
             "pull_request": pr,
             "error": None,
+            "stderr": None,
         }
     finally:
-        await _cleanup_dir(repo_dir)
+        _cleanup_dir(repo_dir)
 
 
-# --------------------------------------------------------------------
-# ASGI / Starlette
-# --------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# FastMCP HTTP/SSE app and health routes
+# ------------------------------------------------------------------------------
 
-async def _healthz(request: Request) -> Response:
-    return PlainTextResponse("OK")
-
-
-async def _root(request: Request) -> Response:
-    return PlainTextResponse("GitHub MCP server is running")
-
-
-routes = [
-    Route("/", _root),
-    Route("/healthz", _healthz),
-    # Mount the FastMCP SSE app at the root so /sse and /messages work as expected.
-    Mount("/", app=mcp.sse_app()),
+# Use SSE transport so your existing config at /sse keeps working.
+middleware = [
+    Middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 ]
 
-app = Starlette(debug=False, routes=routes)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
+# SSE endpoint at /sse plus /messages for POSTs (handled internally by FastMCP)
+app = mcp.http_app(path="/sse", middleware=middleware, transport="sse")
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    await _close_clients()
+@mcp.custom_route("/", methods=["GET"])
+async def homepage(request: Request) -> PlainTextResponse:
+    return PlainTextResponse("GitHub MCP server is running\n")
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, log_level="info")
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(request: Request) -> PlainTextResponse:
+    return PlainTextResponse("OK\n")
