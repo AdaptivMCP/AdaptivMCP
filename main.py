@@ -33,6 +33,7 @@ MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 80))
 FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY))
 
 TOOL_STDOUT_MAX_CHARS = 12000
+TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
 LOGS_MAX_CHARS = 16000
 
 GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
@@ -218,6 +219,13 @@ async def _run_shell(
     cwd: Optional[str] = None,
     timeout_seconds: int = 300,
 ) -> Dict[str, Any]:
+    """Execute a shell command with author/committer env vars injected.
+
+    Stdout and stderr are truncated separately using ``TOOL_STDOUT_MAX_CHARS``
+    and ``TOOL_STDERR_MAX_CHARS`` so assistants see the most relevant output
+    while keeping responses bounded for the connector UI.
+    """
+
     proc = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
@@ -242,7 +250,7 @@ async def _run_shell(
         timed_out = True
 
     stdout = stdout_bytes.decode("utf-8", errors="replace")[:TOOL_STDOUT_MAX_CHARS]
-    stderr = stderr_bytes.decode("utf-8", errors="replace")[:TOOL_STDOUT_MAX_CHARS]
+    stderr = stderr_bytes.decode("utf-8", errors="replace")[:TOOL_STDERR_MAX_CHARS]
 
     return {
         "exit_code": proc.returncode,
@@ -338,11 +346,27 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
 
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
+    """Return the authenticated token's GitHub rate-limit document.
+
+    The response mirrors ``GET /rate_limit`` from the REST API so assistants can
+    inspect remaining requests, reset times, and secondary rate limits before
+    scheduling additional calls. No write permission is required.
+    """
+
     return await _github_request("GET", "/rate_limit")
 
 
 @mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
+    """Look up repository metadata (topics, default branch, permissions).
+
+    Args:
+        full_name: ``"owner/repo"`` identifier for the GitHub repository.
+
+    Raises:
+        ValueError: if the name is not in ``owner/repo`` format.
+    """
+
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     return await _github_request("GET", f"/repos/{full_name}")
@@ -354,6 +378,12 @@ async def list_branches(
     per_page: int = 100,
     page: int = 1,
 ) -> Dict[str, Any]:
+    """Enumerate branches for a repository.
+
+    Pagination parameters match the GitHub REST API. Use this to discover
+    feature branches before calling write tools that target specific refs.
+    """
+
     params = {"per_page": per_page, "page": page}
     return await _github_request("GET", f"/repos/{full_name}/branches", params=params)
 
@@ -364,6 +394,8 @@ async def get_file_contents(
     path: str,
     ref: str = "main",
 ) -> Dict[str, Any]:
+    """Fetch a single file from GitHub and decode base64 to UTF-8 text."""
+
     return await _decode_github_content(full_name, path, ref)
 
 
@@ -373,6 +405,14 @@ async def fetch_files(
     paths: List[str],
     ref: str = "main",
 ) -> Dict[str, Any]:
+    """Fetch multiple files concurrently with per-file error isolation.
+
+    Each entry in the returned ``files`` map either contains a decoded file
+    payload (``text``, ``sha``) or an ``error`` string when a path cannot be
+    retrieved. Results are truncated to the server's stdout/stderr limits to
+    keep payload sizes predictable.
+    """
+
     results: Dict[str, Any] = {}
     sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
 
@@ -393,6 +433,12 @@ async def graphql_query(
     query: str,
     variables: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """Execute a GitHub GraphQL query using the shared HTTP client.
+
+    This tool preserves variable support and raises ``GitHubAPIError`` on
+    non-2xx responses so assistants can surface clear diagnostics to users.
+    """
+
     client = _github_client_instance()
     payload = {"query": query, "variables": variables or {}}
     async with _concurrency_semaphore:
@@ -405,6 +451,14 @@ async def graphql_query(
 
 @mcp_tool(write_action=False)
 async def fetch_url(url: str) -> Dict[str, Any]:
+    """Fetch an arbitrary HTTP/HTTPS URL via the shared external client.
+
+    Responses include status, headers, and text content truncated to
+    ``TOOL_STDOUT_MAX_CHARS`` to prevent large payloads from overwhelming the
+    connector. Use this for retrieving non-GitHub resources referenced in PRs
+    or issues.
+    """
+
     client = _external_client_instance()
     async with _concurrency_semaphore:
         resp = await client.get(url)
@@ -429,6 +483,8 @@ async def list_workflow_runs(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
+    """List recent GitHub Actions workflow runs with optional filters."""
+
     params: Dict[str, Any] = {"per_page": per_page, "page": page}
     if branch:
         params["branch"] = branch
@@ -445,6 +501,8 @@ async def list_workflow_runs(
 
 @mcp_tool(write_action=False)
 async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
+    """Retrieve a specific workflow run including timing and conclusion."""
+
     return await _github_request(
         "GET",
         f"/repos/{full_name}/actions/runs/{run_id}",
@@ -458,6 +516,8 @@ async def list_workflow_run_jobs(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
+    """List jobs within a workflow run, useful for troubleshooting failures."""
+
     params = {"per_page": per_page, "page": page}
     return await _github_request(
         "GET",
@@ -468,6 +528,8 @@ async def list_workflow_run_jobs(
 
 @mcp_tool(write_action=False)
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
+    """Fetch raw logs for a GitHub Actions job, truncated to ``LOGS_MAX_CHARS``."""
+
     client = _github_client_instance()
     async with _concurrency_semaphore:
         resp = await client.get(
@@ -489,6 +551,13 @@ async def wait_for_workflow_run(
     timeout_seconds: int = 900,
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
+    """Poll a workflow run until completion or timeout.
+
+    Returns the latest run payload along with ``status``/``conclusion`` and a
+    ``timeout`` flag so the caller can decide whether to continue waiting or
+    surface a partial result.
+    """
+
     client = _github_client_instance()
     end_time = asyncio.get_event_loop().time() + timeout_seconds
 
@@ -530,6 +599,8 @@ async def trigger_workflow_dispatch(
     ref: str,
     inputs: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """Trigger a workflow dispatch event on the given ref."""
+
     _ensure_write_allowed(f"trigger workflow {workflow} on {full_name}@{ref}")
     payload = {"ref": ref}
     if inputs:
@@ -557,6 +628,8 @@ async def trigger_and_wait_for_workflow(
     timeout_seconds: int = 900,
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
+    """Trigger a workflow and block until it completes or hits timeout."""
+
     _ensure_write_allowed(f"trigger+wait workflow {workflow} on {full_name}@{ref}")
     await trigger_workflow_dispatch(full_name, workflow, ref, inputs)
 
@@ -591,6 +664,8 @@ async def list_pull_requests(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
+    """List pull requests with optional head/base filters."""
+
     params: Dict[str, Any] = {
         "state": state,
         "per_page": per_page,
@@ -611,6 +686,8 @@ async def merge_pull_request(
     commit_title: Optional[str] = None,
     commit_message: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Merge a pull request using squash (default), merge, or rebase."""
+
     _ensure_write_allowed(f"merge PR #{number} in {full_name}")
     payload: Dict[str, Any] = {"merge_method": merge_method}
     if commit_title is not None:
@@ -626,6 +703,8 @@ async def merge_pull_request(
 
 @mcp_tool(write_action=True)
 async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
+    """Close a pull request without merging."""
+
     _ensure_write_allowed(f"close PR #{number} in {full_name}")
     return await _github_request(
         "PATCH",
@@ -640,6 +719,8 @@ async def comment_on_pull_request(
     number: int,
     body: str,
 ) -> Dict[str, Any]:
+    """Post a comment on a pull request (issue API under the hood)."""
+
     _ensure_write_allowed(f"comment on PR #{number} in {full_name}")
     return await _github_request(
         "POST",
@@ -654,6 +735,12 @@ async def compare_refs(
     base: str,
     head: str,
 ) -> Dict[str, Any]:
+    """Compare two refs and return the GitHub diff summary (max 100 files).
+
+    Patch text is truncated to ~8k chars per file to keep responses small while
+    retaining enough context for review summaries.
+    """
+
     data = await _github_request(
         "GET",
         f"/repos/{full_name}/compare/{base}...{head}",
@@ -681,6 +768,12 @@ async def create_branch(
     new_branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
+    """Create a new branch from an existing ref (default ``main``).
+
+    Write operations are denied unless ``authorize_write_actions`` has been
+    invoked or the environment flag enables writes by default.
+    """
+
     _ensure_write_allowed(f"create branch {new_branch} from {from_ref} in {full_name}")
     sha = await _get_branch_sha(full_name, from_ref)
     payload = {"ref": f"refs/heads/{new_branch}", "sha": sha}
@@ -697,6 +790,8 @@ async def ensure_branch(
     branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
+    """Idempotently ensure a branch exists, creating it from ``from_ref``."""
+
     _ensure_write_allowed(f"ensure branch {branch} from {from_ref} in {full_name}")
     client = _github_client_instance()
     async with _concurrency_semaphore:
@@ -721,6 +816,14 @@ async def commit_file_async(
     branch: str = "main",
     sha: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Schedule a single file commit in the background.
+
+    Exactly one of ``content`` or ``content_url`` must be provided. When a
+    ``content_url`` is supplied, the server fetches it via the external HTTP
+    client before committing. The tool returns immediately with a ``scheduled``
+    flag while the commit executes asynchronously.
+    """
+
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
@@ -794,6 +897,13 @@ async def create_pull_request(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
+    """Open a pull request from ``head`` into ``base``.
+
+    The tool mirrors GitHub's PR creation API and respects the global write
+    gate. Populate ``body`` for detailed descriptions or set ``draft=True`` to
+    avoid triggering CI immediately.
+    """
+
     _ensure_write_allowed(f"create PR from {head} to {base} in {full_name}")
     payload: Dict[str, Any] = {
         "title": title,
@@ -821,6 +931,14 @@ async def update_files_and_open_pr(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
+    """Commit multiple files then open a PR in one call.
+
+    For each file entry, exactly one of ``content`` or ``content_url`` must be
+    present. The helper ensures a working branch exists, commits each file, and
+    finally opens a PR against ``base_branch``. Errors are raised eagerly for
+    fetch/commit failures so assistants can retry with corrected input.
+    """
+
     _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
 
     branch = new_branch or f"ally-{os.urandom(4).hex()}"
@@ -891,6 +1009,8 @@ async def run_command(
     timeout_seconds: int = 300,
     workdir: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Clone the repository and run an arbitrary shell command in a temp dir."""
+
     _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
     repo_dir = await _clone_repo(full_name, ref=ref)
     try:
@@ -915,6 +1035,8 @@ async def run_tests(
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Run the project's test command after cloning into a temp workspace."""
+
     return await run_command(
         full_name=full_name,
         ref=ref,
@@ -937,6 +1059,8 @@ async def apply_patch_and_open_pr(
     test_timeout_seconds: int = 600,
     draft: bool = False,
 ) -> Dict[str, Any]:
+    """Apply a unified diff, optionally run tests, push, and open a PR."""
+
     _ensure_write_allowed(f"apply_patch_and_open_pr on {full_name}@{base_branch}")
 
     branch = new_branch or f"ally-patch-{os.urandom(4).hex()}"
@@ -1082,3 +1206,13 @@ async def homepage(request: Request) -> PlainTextResponse:
 @mcp.custom_route("/healthz", methods=["GET"])
 async def healthz(request: Request) -> PlainTextResponse:
     return PlainTextResponse("OK\n")
+
+
+async def _shutdown_clients() -> None:
+    if _http_client_github is not None:
+        await _http_client_github.aclose()
+    if _http_client_external is not None:
+        await _http_client_external.aclose()
+
+
+app.add_event_handler("shutdown", _shutdown_clients)
