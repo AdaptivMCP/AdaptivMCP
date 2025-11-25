@@ -4,6 +4,7 @@ import base64
 import tempfile
 import shutil
 import subprocess
+import functools
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -311,7 +312,21 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     meta = {**existing_meta, "write_action": write_action}
 
     def decorator(func):
-        return mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
+        tool = mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
+
+        if asyncio.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def wrapper(*args, **kwargs):
+                return await func(*args, **kwargs)
+        else:
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+
+        # Keep a reference to the registered MCP tool while returning a callable
+        # function so internal code paths can invoke the wrapped coroutine.
+        wrapper._mcp_tool = tool  # type: ignore[attr-defined]
+        return wrapper
 
     return decorator
 
