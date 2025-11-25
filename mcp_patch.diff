@@ -1,202 +1,265 @@
-diff --git a/TROUBLESHOOTING.md b/TROUBLESHOOTING.md
+diff --git a/USAGE_EXAMPLES.md b/USAGE_EXAMPLES.md
 new file mode 100644
 index 0000000..0000000
 --- /dev/null
-+++ b/TROUBLESHOOTING.md
-@@ -0,0 +1,196 @@
-+# TROUBLESHOOTING.md
++++ b/USAGE_EXAMPLES.md
+@@ -0,0 +1,259 @@
++# USAGE_EXAMPLES.md
 +
-+Troubleshooting guide for Joey's GitHub MCP server and this repository.
++Practical examples for using Joey's GitHub MCP connector against this repository
++and others configured the same way.
 +
-+This document is intended for assistants and humans who are trying to understand
-+and fix issues with the GitHub MCP deployment and tools, especially on Render
-+and in MCP-aware clients like ChatGPT.
++These examples are written for assistants and tools that can call Joey's GitHub
++MCP methods (such as ChatGPT with the Joey's GitHub connector enabled). They
++assume you already know the repository full name, for example:
 +
-+## 1. Render service is failing to start
++- `Proofgate-Revocations/chatgpt-mcp-github`
 +
-+### Symptom
++Throughout, replace `FULL_NAME` with the appropriate `owner/repo` string.
 +
-+The Render deploy log shows something like:
++---
 +
-+- `ImportError: cannot import name 'tool' from 'fastmcp'`
-+- `ValueError: "FunctionTool" object has no field "write_action"`
-+- Or any exception thrown at module import time for `main.py`.
++## 1. Read-only inspection
 +
-+### Checks
++### 1.1 Inspect repository and branches
 +
-+1. Ensure you're deploying the **current** version of `main.py` from `main`.
-+2. Confirm Python version matches what this repo expects (Render uses 3.13.x).
-+3. Make sure `fastmcp` is installed from `requirements.txt` and you're not
-+   manually pinning an incompatible version.
++Use these patterns when you want to understand the shape of a repo before
++changing anything:
 +
-+### Fix
++- Repository metadata:
 +
-+- Never edit `main.py` directly in Render.
-+- Always update it via this repo, then let Render rebuild and deploy.
-+- If you see `FunctionTool` attribute errors, you're probably on an old
-+  version of `main.py` that tried to mutate the tool object directly instead
-+  of using the `write_action` decorator metadata.
++  - `get_repository("FULL_NAME")`
 +
-+## 2. MCP tools can’t write (WriteNotAuthorizedError)
++- Branches:
 +
-+### Symptom
++  - `list_branches("FULL_NAME", per_page=100, page=1)`
 +
-+A tool call response contains an error similar to:
++### 1.2 Read files with line numbers
 +
-+- `WriteNotAuthorizedError: write actions are currently disabled`
++To plan edits, always fetch live file content with line numbers:
 +
-+### Checks
++- Single file on `main`:
 +
-+1. Environment:
++  - `get_file_contents("FULL_NAME", "tests/test_smoke.py", "main")`
 +
-+   - `GITHUB_MCP_AUTO_APPROVE` is unset or set to a false-y value (e.g. `0`).
++- Multiple files at once:
 +
-+2. Workflow:
++  - `fetch_files("FULL_NAME", ["main.py", "README.md"], "main")`
 +
-+   - You never called `authorize_write_actions(approved=True)` at the start
-+     of your MCP session.
++Both tools return `numbered_lines` so you can reference specific lines when
++describing patches.
 +
-+### Fix
++---
 +
-+- Either:
++## 2. Code change via unified diff + tests
 +
-+  1. Set `GITHUB_MCP_AUTO_APPROVE=1` in Render to allow writes by default, or
-+  2. Call the `authorize_write_actions` tool with `{"approved": true}`
-+     before using write tools like `apply_patch_and_open_pr` or `run_tests`.
++This is the primary pattern for code changes: small, focused diffs applied via
++`apply_patch_and_open_pr` with tests.
 +
-+## 3. Git patch application fails (git_apply_failed)
++### 2.1 Example – add a new smoke test
 +
-+### Symptom
++Goal: add a new test to `tests/test_smoke.py` that imports `main.py` and checks
++that the FastMCP app exists.
 +
-+`apply_patch_and_open_pr` returns a result with:
++1. Read the current file:
 +
-+- `error: "git_apply_failed"`
-+- `stderr` mentioning `patch does not apply` or similar.
++   - `get_file_contents("FULL_NAME", "tests/test_smoke.py", "main")`
 +
-+### Why this happens
++2. Plan the change, for example adding:
 +
-+- The unified diff you sent does not match the current contents of the repo.
-+- Common causes:
++   ```python
++   def test_tools_available():
++       """Ensure Joey's GitHub MCP tools are importable."""
++       import importlib
 +
-+  - The file changed on `main` after you read it.
-+  - The diff was hand-written and the context lines don’t match exactly.
-+  - Line endings or spacing differ from what you assumed.
++       main = importlib.import_module("main")
++       assert hasattr(main, "app")
++   ```
 +
-+### Fix
++3. Construct a unified diff (conceptually similar to what `git diff` would
++   produce) that adds this block.
 +
-+1. Re-fetch the latest contents of the file(s) with `get_file_contents` or
-+   `fetch_files`.
-+2. Recompute the patch based on the **actual** content.
-+3. Keep patches small and focused (≤ 500 lines / 20k chars).
-+4. Try `apply_patch_and_open_pr` again once.
++4. Apply the patch and run tests:
 +
-+If the patch keeps failing, stop and surface the `stderr` to Joey for a
-+manual decision instead of brute-forcing more attempts.
++   - Tool: `apply_patch_and_open_pr`
++   - Arguments (conceptual):
 +
-+## 4. Tests fail in apply_patch_and_open_pr (tests_failed)
++     - `full_name`: `"FULL_NAME"`
++     - `base_branch`: `"main"`
++     - `patch`: the unified diff string
++     - `title`: `"Add MCP tools import smoke test"`
++     - `body`: brief explanation of the change
++     - `new_branch`: e.g. `"ally/test-mcp-smoke-tools"`
++     - `run_tests_flag`: `true`
++     - `test_command`: `"pytest"`
++     - `test_timeout_seconds`: `600`
++     - `draft`: `false`
 +
-+### Symptom
++5. Inspect the result:
 +
-+`apply_patch_and_open_pr` returns a result with:
++   - Confirm `error` is `null`.
++   - Check `tests.exit_code == 0` and review `tests.stdout` for pytest output.
++   - Use the returned PR metadata to report the branch and PR number to Joey.
 +
-+- `error: "tests_failed"`
-+- A `tests` object containing `exit_code`, `stdout`, and `stderr` from pytest.
++This is exactly the pattern used to create PR **#73** in this repository.
 +
-+### Fix pattern
++---
 +
-+1. Read the `stdout` / `stderr` from the `tests` field.
-+2. Summarize which tests failed and why.
-+3. Do **not** auto-edit large parts of the repo blindly to “fix” failures.
-+4. Propose targeted next steps (e.g. adjust a specific function or test) and
-+   wait for Joey’s confirmation before making more changes.
++## 3. Creating a brand new documentation file
 +
-+## 5. Git push fails (git_push_failed)
++You can create an entire new file from scratch using a unified diff that turns
++`/dev/null` into a concrete path.
 +
-+### Symptom
++### 3.1 Example – add `TROUBLESHOOTING.md`
 +
-+`apply_patch_and_open_pr` returns:
++Goal: create a new troubleshooting guide documenting common Render and MCP
++issues.
 +
-+- `error: "git_push_failed"`
-+- `stderr` with git push output.
++1. Draft the full markdown content for `TROUBLESHOOTING.md`.
 +
-+### Possible causes
++2. Build a unified diff that creates the file, conceptually like:
 +
-+- Branch protection rules on the target repo.
-+- Missing or invalid `GITHUB_PAT` in Render.
-+- Network or transient GitHub issues.
++   ```diff
++   diff --git a/TROUBLESHOOTING.md b/TROUBLESHOOTING.md
++   new file mode 100644
++   --- /dev/null
++   +++ b/TROUBLESHOOTING.md
++   @@ -0,0 +1,5 @@
++   +# TROUBLESHOOTING.md
++   +...
++   ```
 +
-+### Fix
++3. Call `apply_patch_and_open_pr` with that diff and `run_tests_flag=true`.
 +
-+1. Surface the full `stderr` in your assistant response.
-+2. Check:
++4. Verify:
 +
-+   - `GITHUB_PAT` is set in Render and has `repo` + `workflow` scopes.
-+   - The branch you are pushing is not targeting a protected branch with
-+     disallowed direct pushes.
++   - Tests pass.
++   - A new PR was opened on a branch like `"ally/add-troubleshooting-doc"`.
 +
-+3. Do not retry the same push endlessly; wait for Joey to adjust settings or
-+   confirm the next step.
++This is the pattern that created PR **#74** and the `TROUBLESHOOTING.md` file in
++this repo.
 +
-+## 6. Rate limiting and GitHub API errors
++---
 +
-+### Symptom
++## 4. Documentation edits
 +
-+Responses from tools like `get_rate_limit`, `get_repository`, or
-+`fetch_files` contain GitHub errors such as:
++For small and medium documentation changes, treat docs like code and use diffs.
 +
-+- `API rate limit exceeded for user`
-+- 4xx or 5xx status codes from `api.github.com`.
++### 4.1 Example – update `how_to_use_connector.md`
 +
-+### Fix
++1. Fetch the file:
 +
-+1. Use `get_rate_limit` to inspect current limits and reset times.
-+2. Avoid spamming GitHub with unnecessary calls.
-+3. For assistants: batch file fetches with `fetch_files` where reasonable.
++   - `get_file_contents("FULL_NAME", "how_to_use_connector.md", "main")`
 +
-+If rate limits are repeatedly a problem, Joey may need to adjust usage or
-+token scopes.
++2. Plan a small, focused change (for example, adding a new rule or clarifying a
++   section).
 +
-+## 7. MCP connector configuration issues
++3. Construct a unified diff with the minimal necessary edits.
 +
-+### Symptom
++4. Apply it via `apply_patch_and_open_pr` (tests are still useful, but may not
++   be strictly required for doc-only changes).
 +
-+ChatGPT (or another MCP client) cannot connect to Joey’s GitHub server at all.
++5. Link the resulting PR back to Joey for review and merge.
 +
-+### Checks
++For very large new docs, you can instead write the content to a sandbox path and
++use `content_url` with `update_files_and_open_pr` or `commit_file_async`, as
++described in `how_to_use_connector.md`.
 +
-+1. Connector URL:
++---
 +
-+   - Should be `https://github-mcp-chatgpt.onrender.com/sse`.
-+   - Path `/sse` is required; `/` alone will not speak MCP SSE.
++## 5. Running tests and linting
 +
-+2. Authentication:
++### 5.1 Run pytest on a branch
 +
-+   - In ChatGPT’s MCP configuration, **do not** configure OAuth or API keys
-+     for Joey’s GitHub.
-+   - The server authenticates to GitHub using `GITHUB_PAT` in the Render
-+     environment; the client does not need its own GitHub token.
++To verify a branch passes tests:
 +
-+3. Health check:
++- Tool: `run_tests`
++- Example arguments:
 +
-+   - Visit `https://github-mcp-chatgpt.onrender.com/` to see the banner.
-+   - Visit `https://github-mcp-chatgpt.onrender.com/healthz` to see `OK`.
++  - `full_name`: `"FULL_NAME"`
++  - `ref`: `"some-feature-branch"`
++  - `test_command`: `"pytest"`
++  - `timeout_seconds`: `600`
 +
-+If `/` and `/healthz` are healthy but the MCP client still cannot connect,
-+double-check the MCP configuration in the client (URL, path, and name).
++Inspect the result:
 +
-+## 8. When in doubt
++- `exit_code`: `0` indicates success.
++- `stdout`: collected pytest output.
++- `stderr`: any errors; do not ignore if present.
 +
-+If you are an assistant:
++### 5.2 Run flake8 (or other linters)
 +
-+- Do not keep retrying failing tools without changing anything.
-+- Always surface:
++You can use `run_tests` (or `run_command`) for linters as well:
 +
-+  - The tool name you called.
-+  - The arguments used (minus secrets).
-+  - The `error`, `stderr`, and any status fields.
++- `test_command`: `"flake8 ."`
 +
-+If you are Joey:
++Same rules apply: inspect `exit_code`, `stdout`, and `stderr`, and summarize
++any failures instead of hiding them.
 +
-+- Check Render logs for stack traces or import errors.
-+- Use the existing tests (`pytest`) via the `run_tests` tool to validate
-+  changes before debugging in production.
++---
++
++## 6. GitHub Actions workflows
++
++### 6.1 Inspect and trigger workflows
++
++Use the Actions-related tools to integrate CI/CD into your workflow:
++
++- List recent runs:
++
++  - `list_workflow_runs("FULL_NAME", branch="main", status="completed")`
++
++- Trigger a workflow:
++
++  - `trigger_workflow_dispatch("FULL_NAME", "ci.yml", "main", inputs={...})`
++
++- Trigger and wait for completion:
++
++  - `trigger_and_wait_for_workflow("FULL_NAME", "ci.yml", "main", inputs={...},
++    timeout_seconds=900, poll_interval_seconds=10)`
++
++Always treat these as write operations and use them only when there is a clear,
++documented reason to run CI/CD from the connector.
++
++---
++
++## 7. Branch and PR hygiene
++
++### 7.1 Creating feature branches
++
++Use the branch helpers when you need reusable branches:
++
++- `create_branch("FULL_NAME", "ally/feature-name", from_ref="main")`
++- `ensure_branch("FULL_NAME", "ally/feature-name", from_ref="main")`
++
++### 7.2 Opening PRs directly
++
++If you already have a branch pushed (for example, created by `apply_patch_and_open_pr`):
++
++- `create_pull_request("FULL_NAME", title, head="ally/feature-name", base="main", body=...)`
++
++### 7.3 Things to avoid
++
++- Do not merge or close PRs unless Joey explicitly requests it.
++- Do not delete branches unless Joey explicitly requests it.
++- Do not run destructive shell commands via `run_command` (e.g. `rm -rf`,
++  force pushes).
++
++---
++
++## 8. Advanced: content_url for large docs
++
++For situations where a document is too large for a single patch or needs to be
++generated in a different environment, you can use `content_url` with:
++
++- `commit_file_async`
++- `update_files_and_open_pr`
++
++High-level pattern:
++
++1. Generate the document and host it at a stable `https://` URL that Joey's
++   server can fetch.
++2. Call `commit_file_async` or `update_files_and_open_pr` with `content_url`
++   pointing at that URL.
++
++Use this only when patch-based workflows are not practical, and prefer unified
++diffs for all normal code and doc work in this repository.
