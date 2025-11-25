@@ -782,34 +782,66 @@ async def commit_file_async(
     Schedule a GitHub file commit. To keep MCP responses small and avoid
     connector timeouts, this tool returns immediately after scheduling
     the commit in the background.
+
+    Exactly one of `content` or `content_url` must be provided.
+    - `content`: raw text to commit.
+    - `content_url`: absolute http(s) URL to fetch content from.
     """
     _ensure_write_allowed(f"commit_file_async {full_name}/{path}@{branch}")
-    if (content is None and content_url is None) or (content is not None and content_url is not None):
-        raise GitHubAPIError("Exactly one of 'content' or 'content_url' must be provided")
 
+    # Ensure exactly one of content / content_url is provided.
+    if (content is None and content_url is None) or (
+        content is not None and content_url is not None
+    ):
+        raise GitHubAPIError(
+            "Exactly one of 'content' or 'content_url' must be provided"
+        )
+
+    # Resolve existing file sha if not provided (so updates work correctly).
     if sha is None:
         sha = await _resolve_file_sha(full_name, path, branch)
 
+    # Determine the bytes we will commit.
     if content_url is not None:
+        # Validate URL scheme before handing to httpx, to avoid low-level
+        # UnsupportedProtocol errors when callers pass e.g. a bare path.
+        if not (
+            content_url.startswith("http://")
+            or content_url.startswith("https://")
+        ):
+            raise GitHubAPIError(
+                f"content_url must be an absolute http(s) URL, got: {content_url!r}"
+            )
+
         client = _external_client_instance()
         resp = await client.get(content_url)
         if resp.status_code >= 400:
             raise GitHubAPIError(
-                f"Failed to fetch content from {content_url}: {resp.status_code} {resp.text}"
+                f"Failed to fetch content from {content_url}: "
+                f"{resp.status_code} {resp.text}"
             )
         body_bytes = resp.content
     else:
+        # content is not None here by earlier validation
         body_bytes = content.encode("utf-8")
 
     async def _commit_task():
         try:
-            await _perform_github_commit(full_name, path, message, body_bytes, branch, sha)
+            await _perform_github_commit(
+                full_name, path, message, body_bytes, branch, sha
+            )
         except Exception as e:
             # We do not propagate this to the caller to keep the response small.
             print(f"[commit_file_async] Error committing {path}: {e}")
 
     asyncio.create_task(_commit_task())
-    return {"scheduled": True, "path": path, "branch": branch, "message": message}
+    return {
+        "scheduled": True,
+        "path": path,
+        "branch": branch,
+        "message": message,
+    }
+
 
 
 @mcp_tool(write_action=True)
