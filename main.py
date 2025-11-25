@@ -264,6 +264,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         "accessible URL."
     )
 
+    # sandbox:/path → local path or optional rewrite via SANDBOX_CONTENT_BASE_URL
     if content_url.startswith("sandbox:/"):
         local_path = content_url[len("sandbox:") :]
         rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
@@ -276,6 +277,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
                 return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
             raise
 
+    # Absolute local path (e.g. /mnt/data/file)
     if content_url.startswith("/"):
         return _read_local(
             content_url,
@@ -283,6 +285,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             "hosts can rewrite it.",
         )
 
+    # Direct http(s) URL
     if content_url.startswith("http://") or content_url.startswith("https://"):
         client = _external_client_instance()
         response = await client.get(content_url)
@@ -293,6 +296,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             )
         return response.content
 
+    # Anything else is unsupported
     raise GitHubAPIError(
         f"{context} content_url must be an absolute http(s) URL, a sandbox:/ path, "
         "or an absolute local file path. In ChatGPT, pass the sandbox file path "
@@ -1285,8 +1289,13 @@ async def update_files_and_open_pr(
         file_message = f.get("message") or title
         content = f.get("content")
         content_url = f.get("content_url")
+
         if content is None and content_url is None:
             raise ValueError(f"File entry for {path} must have content or content_url")
+        if content is not None and content_url is not None:
+            raise ValueError(
+                f"File entry for {path} must not provide both content and content_url"
+            )
 
         if content_url is not None:
             body_bytes = await _load_body_from_content_url(
@@ -1515,6 +1524,9 @@ async def apply_patch_and_open_pr(
         )
         if commit_result["exit_code"] != 0:
             error = "git_commit_failed"
+            error_stderr = commit_result.get("stderr", "") or commit_result.get(
+                "stdout", ""
+            )
             error_stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             return {
                 "branch": branch,
