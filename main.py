@@ -966,6 +966,9 @@ async def apply_patch_and_open_pr(
     """
     Apply a unified diff patch to a new branch off base_branch, optionally run tests,
     push to origin, and open a PR.
+
+    On failure of git operations, return a structured result with an "error" field
+    instead of raising, so callers can handle failures without a ToolError.
     """
     _ensure_write_allowed(f"apply_patch_and_open_pr {full_name} {base_branch} {title}")
     repo_dir = await _clone_repo(full_name, base_branch)
@@ -981,7 +984,13 @@ async def apply_patch_and_open_pr(
             timeout_seconds=60,
         )
         if result["exit_code"] != 0:
-            raise GitHubAPIError(f"git checkout -b failed: {result['stderr']}")
+            return {
+                "branch": branch,
+                "tests": None,
+                "pull_request": None,
+                "error": "git_checkout_failed",
+                "stderr": result["stderr"],
+            }
 
         # Write patch to file
         patch_path = os.path.join(repo_dir, "mcp_patch.diff")
@@ -995,7 +1004,13 @@ async def apply_patch_and_open_pr(
             timeout_seconds=60,
         )
         if result["exit_code"] != 0:
-            raise GitHubAPIError(f"git apply failed: {result['stderr']}")
+            return {
+                "branch": branch,
+                "tests": None,
+                "pull_request": None,
+                "error": "git_apply_failed",
+                "stderr": result["stderr"],
+            }
 
         # Commit changes
         result = await _run_shell(
@@ -1004,7 +1019,13 @@ async def apply_patch_and_open_pr(
             timeout_seconds=60,
         )
         if result["exit_code"] != 0:
-            raise GitHubAPIError(f"git commit failed: {result['stderr']}")
+            return {
+                "branch": branch,
+                "tests": None,
+                "pull_request": None,
+                "error": "git_commit_failed",
+                "stderr": result["stderr"],
+            }
 
         tests_result = None
         if run_tests_flag:
@@ -1015,7 +1036,12 @@ async def apply_patch_and_open_pr(
             )
             if tests_result["exit_code"] != 0 or tests_result["timed_out"]:
                 # Do not push / open PR if tests fail
-                return {"branch": branch, "tests": tests_result, "pull_request": None}
+                return {
+                    "branch": branch,
+                    "tests": tests_result,
+                    "pull_request": None,
+                    "error": "tests_failed",
+                }
 
         # Push branch
         result = await _run_shell(
@@ -1024,7 +1050,13 @@ async def apply_patch_and_open_pr(
             timeout_seconds=120,
         )
         if result["exit_code"] != 0:
-            raise GitHubAPIError(f"git push failed: {result['stderr']}")
+            return {
+                "branch": branch,
+                "tests": tests_result,
+                "pull_request": None,
+                "error": "git_push_failed",
+                "stderr": result["stderr"],
+            }
 
         pr = await create_pull_request(
             full_name=full_name,
@@ -1034,9 +1066,15 @@ async def apply_patch_and_open_pr(
             body=body,
             draft=draft,
         )
-        return {"branch": branch, "tests": tests_result, "pull_request": pr}
+        return {
+            "branch": branch,
+            "tests": tests_result,
+            "pull_request": pr,
+            "error": None,
+        }
     finally:
         await _cleanup_dir(repo_dir)
+
 
 
 # --------------------------------------------------------------------
