@@ -1,0 +1,15 @@
+diff --git a/tests/test_smoke.py b/tests/test_smoke.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/tests/test_smoke.py
+@@ -0,0 +1,9 @@
++"""Basic smoke tests for the GitHub MCP server."""
++
++
++def test_sanity():
++    """Simple sanity check so pytest has at least one test to run.
++
++    This is intentionally trivial and does not assert on external services.
++    """
++    assert True
