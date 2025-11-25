@@ -33,6 +33,7 @@ MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 80))
 FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY))
 
 TOOL_STDOUT_MAX_CHARS = 12000
+TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
 LOGS_MAX_CHARS = 16000
 
 GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
@@ -218,6 +219,13 @@ async def _run_shell(
     cwd: Optional[str] = None,
     timeout_seconds: int = 300,
 ) -> Dict[str, Any]:
+    """Execute a shell command with author/committer env vars injected.
+
+    Stdout and stderr are truncated separately using ``TOOL_STDOUT_MAX_CHARS``
+    and ``TOOL_STDERR_MAX_CHARS`` so assistants see the most relevant output
+    while keeping responses bounded for the connector UI.
+    """
+
     proc = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
@@ -242,7 +250,7 @@ async def _run_shell(
         timed_out = True
 
     stdout = stdout_bytes.decode("utf-8", errors="replace")[:TOOL_STDOUT_MAX_CHARS]
-    stderr = stderr_bytes.decode("utf-8", errors="replace")[:TOOL_STDOUT_MAX_CHARS]
+    stderr = stderr_bytes.decode("utf-8", errors="replace")[:TOOL_STDERR_MAX_CHARS]
 
     return {
         "exit_code": proc.returncode,
@@ -279,12 +287,6 @@ def _cleanup_dir(path: str) -> None:
 # ------------------------------------------------------------------------------
 
 
-def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    global WRITE_ALLOWED
-    WRITE_ALLOWED = bool(approved)
-    return {"write_allowed": WRITE_ALLOWED}
-
-
 def _ensure_write_allowed(context: str) -> None:
     if not WRITE_ALLOWED:
         raise WriteNotAuthorizedError(
@@ -311,15 +313,19 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         existing_meta = {}
     meta = {**existing_meta, "write_action": write_action}
 
+    # Import locally so the decorator never fails if the module-level import is
+    # accidentally removed or shadowed in a future refactor.
+    import functools as _functools
+
     def decorator(func):
         tool = mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
 
         if asyncio.iscoroutinefunction(func):
-            @functools.wraps(func)
+            @_functools.wraps(func)
             async def wrapper(*args, **kwargs):
                 return await func(*args, **kwargs)
         else:
-            @functools.wraps(func)
+            @_functools.wraps(func)
             def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
 
@@ -331,6 +337,32 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     return decorator
 
 
+@mcp_tool(write_action=False)
+def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
+    """Toggle write-tagged tools on or off for the running server instance.
+
+    Args:
+        approved: Set to ``true`` to allow tools marked ``write_action=True`` to
+            execute; set to ``false`` to block them. The environment variable
+            ``GITHUB_MCP_AUTO_APPROVE`` seeds the initial value, but this tool is
+            the runtime override assistants should call when they need to enable
+            writes for a session.
+
+    Returns:
+        ``{"write_allowed": bool}`` reflecting the current gate status.
+
+    Notes:
+        - This tool itself is not gated so it can re-enable writes after a
+          session starts.
+        - Callers should avoid enabling writes unless the user explicitly opts
+          in to changes on their repositories.
+    """
+
+    global WRITE_ALLOWED
+    WRITE_ALLOWED = bool(approved)
+    return {"write_allowed": WRITE_ALLOWED}
+
+
 # ------------------------------------------------------------------------------
 # Read-only tools
 # ------------------------------------------------------------------------------
@@ -338,11 +370,33 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
 
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
+    """Return the authenticated token's GitHub rate-limit document.
+
+    Use this before firing off large batches of GitHub requests to avoid
+    throttling. The payload mirrors ``GET /rate_limit`` and includes core,
+    search, and GraphQL buckets with remaining counts and reset timestamps. This
+    is always read-only and available even when write tools are disabled.
+    """
+
     return await _github_request("GET", "/rate_limit")
 
 
 @mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
+    """Look up repository metadata (topics, default branch, permissions).
+
+    Args:
+        full_name: ``"owner/repo"`` identifier for the GitHub repository.
+
+    Returns:
+        GitHub's repository resource including topics, default branch, archived
+        state, and the current token's permission set. This is helpful before
+        attempting writes so assistants can confirm collaborator access.
+
+    Raises:
+        ValueError: if the name is not in ``owner/repo`` format.
+    """
+
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
     return await _github_request("GET", f"/repos/{full_name}")
@@ -354,6 +408,13 @@ async def list_branches(
     per_page: int = 100,
     page: int = 1,
 ) -> Dict[str, Any]:
+    """Enumerate branches for a repository with GitHub-style pagination.
+
+    Use this to discover feature branches before invoking tools that require a
+    target ref (e.g., merges or dispatches). ``per_page`` and ``page`` mirror the
+    REST API so callers can page through large repos consistently.
+    """
+
     params = {"per_page": per_page, "page": page}
     return await _github_request("GET", f"/repos/{full_name}/branches", params=params)
 
@@ -364,6 +425,19 @@ async def get_file_contents(
     path: str,
     ref: str = "main",
 ) -> Dict[str, Any]:
+    """Fetch a single file from GitHub and decode base64 to UTF-8 text.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        path: Path to the file within the repository.
+        ref: Branch, tag, or SHA to read from (defaults to ``main``).
+
+    Returns:
+        A mapping with ``status``, ``text``, ``sha``, ``path``, and ``html_url``
+        that mirrors the GitHub contents API. Use this for quick inspections
+        before proposing edits or patches.
+    """
+
     return await _decode_github_content(full_name, path, ref)
 
 
@@ -373,6 +447,19 @@ async def fetch_files(
     paths: List[str],
     ref: str = "main",
 ) -> Dict[str, Any]:
+    """Fetch multiple files concurrently with per-file error isolation.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        paths: List of repository-relative file paths to retrieve.
+        ref: Branch, tag, or SHA to read from (defaults to ``main``).
+
+    Returns:
+        ``{"files": {path: {text, sha, ...} | {error}}}`` so callers can safely
+        read successes alongside failures. Retrieval is parallelized (bounded by
+        ``FETCH_FILES_CONCURRENCY``) to keep connectors responsive.
+    """
+
     results: Dict[str, Any] = {}
     sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
 
@@ -393,6 +480,18 @@ async def graphql_query(
     query: str,
     variables: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """Execute a GitHub GraphQL query using the shared HTTP client.
+
+    Args:
+        query: The GraphQL document string to execute.
+        variables: Optional variables map to accompany the query.
+
+    Returns:
+        The parsed JSON body from the GraphQL API. Non-2xx responses raise
+        ``GitHubAPIError`` with the server-provided error text so assistants can
+        surface actionable diagnostics.
+    """
+
     client = _github_client_instance()
     payload = {"query": query, "variables": variables or {}}
     async with _concurrency_semaphore:
@@ -405,6 +504,18 @@ async def graphql_query(
 
 @mcp_tool(write_action=False)
 async def fetch_url(url: str) -> Dict[str, Any]:
+    """Fetch an arbitrary HTTP/HTTPS URL via the shared external client.
+
+    Args:
+        url: Full URL to request. Only HTTP(S) is supported.
+
+    Returns:
+        ``{"status_code", "headers", "content"}`` with the body truncated to
+        ``TOOL_STDOUT_MAX_CHARS``. This is handy for grabbing release notes or
+        linked artifacts mentioned in issues without overwhelming the connector
+        UI.
+    """
+
     client = _external_client_instance()
     async with _concurrency_semaphore:
         resp = await client.get(url)
@@ -429,6 +540,22 @@ async def list_workflow_runs(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
+    """List recent GitHub Actions workflow runs with optional filters.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        branch: Limit results to a branch name (e.g., ``main``).
+        status: Filter by workflow status (``queued``, ``in_progress``, etc.).
+        event: Filter by triggering event (e.g., ``push``, ``pull_request``).
+        per_page: Page size per GitHub's API (default 30).
+        page: Page number for pagination.
+
+    Returns:
+        The raw GitHub API response including ``workflow_runs`` so callers can
+        inspect IDs, commits, and timestamps before fetching specific runs or
+        logs.
+    """
+
     params: Dict[str, Any] = {"per_page": per_page, "page": page}
     if branch:
         params["branch"] = branch
@@ -445,6 +572,17 @@ async def list_workflow_runs(
 
 @mcp_tool(write_action=False)
 async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
+    """Retrieve a specific workflow run including timing and conclusion.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        run_id: Numeric workflow run identifier from ``list_workflow_runs``.
+
+    Returns:
+        The GitHub workflow run object with status, conclusion, timing, and job
+        URLs so assistants can summarize outcomes or link to the Actions UI.
+    """
+
     return await _github_request(
         "GET",
         f"/repos/{full_name}/actions/runs/{run_id}",
@@ -458,6 +596,19 @@ async def list_workflow_run_jobs(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
+    """List jobs within a workflow run, useful for troubleshooting failures.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        run_id: Workflow run identifier.
+        per_page: Page size for the jobs listing (default 30).
+        page: Page number for pagination.
+
+    Returns:
+        The GitHub jobs listing so callers can drill into per-job status and
+        retrieve logs when diagnosing CI problems.
+    """
+
     params = {"per_page": per_page, "page": page}
     return await _github_request(
         "GET",
@@ -468,6 +619,17 @@ async def list_workflow_run_jobs(
 
 @mcp_tool(write_action=False)
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
+    """Fetch raw logs for a GitHub Actions job, truncated to ``LOGS_MAX_CHARS``.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        job_id: Job identifier from ``list_workflow_run_jobs``.
+
+    Returns:
+        ``{"status_code", "logs"}`` where ``logs`` is trimmed to
+        ``LOGS_MAX_CHARS`` (~16k) to keep responses manageable for connectors.
+    """
+
     client = _github_client_instance()
     async with _concurrency_semaphore:
         resp = await client.get(
@@ -489,6 +651,20 @@ async def wait_for_workflow_run(
     timeout_seconds: int = 900,
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
+    """Poll a workflow run until completion or timeout.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        run_id: Workflow run identifier to monitor.
+        timeout_seconds: Maximum time to wait before returning ``timeout=True``.
+        poll_interval_seconds: Delay between status checks.
+
+    Returns:
+        ``{"status", "conclusion", "run", "timeout"?}`` capturing the most
+        recent run payload. Use this after dispatching a workflow to block until
+        completion while keeping connector output bounded.
+    """
+
     client = _github_client_instance()
     end_time = asyncio.get_event_loop().time() + timeout_seconds
 
@@ -530,6 +706,20 @@ async def trigger_workflow_dispatch(
     ref: str,
     inputs: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """Trigger a workflow dispatch event on the given ref.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        workflow: File name or ID of the workflow to dispatch (e.g., ``ci.yml``).
+        ref: Branch or tag the workflow should run against.
+        inputs: Optional inputs payload matching the workflow ``inputs`` schema.
+
+    Notes:
+        - Marked as a write action; guarded by ``authorize_write_actions``.
+        - Returns only the HTTP status (204/201 on success); use
+          ``list_workflow_runs`` to locate the resulting run.
+    """
+
     _ensure_write_allowed(f"trigger workflow {workflow} on {full_name}@{ref}")
     payload = {"ref": ref}
     if inputs:
@@ -557,6 +747,15 @@ async def trigger_and_wait_for_workflow(
     timeout_seconds: int = 900,
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
+    """Trigger a workflow and block until it completes or hits timeout.
+
+    Combines ``trigger_workflow_dispatch`` with ``wait_for_workflow_run`` to give
+    assistants a single call that starts CI and waits for the result. The first
+    run returned by ``list_workflow_runs`` is assumed to be the new dispatch.
+
+    Args mirror ``trigger_workflow_dispatch`` with additional wait controls.
+    """
+
     _ensure_write_allowed(f"trigger+wait workflow {workflow} on {full_name}@{ref}")
     await trigger_workflow_dispatch(full_name, workflow, ref, inputs)
 
@@ -591,6 +790,21 @@ async def list_pull_requests(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
+    """List pull requests with optional head/base filters.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        state: ``open`` (default), ``closed``, or ``all``.
+        head: Filter by ``user:branch`` head reference.
+        base: Filter by base branch (e.g., ``main``).
+        per_page: Page size (default 30).
+        page: Page number for pagination.
+
+    Returns:
+        The GitHub PR list payload, useful for locating PR numbers before
+        performing merges, comments, or closures.
+    """
+
     params: Dict[str, Any] = {
         "state": state,
         "per_page": per_page,
@@ -611,6 +825,22 @@ async def merge_pull_request(
     commit_title: Optional[str] = None,
     commit_message: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Merge a pull request using squash (default), merge, or rebase.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        number: Pull request number to merge.
+        merge_method: One of ``squash`` (default), ``merge``, or ``rebase``.
+        commit_title: Optional title for squash commit.
+        commit_message: Optional message/body for squash commit.
+
+    Notes:
+        - Marked as a write action; blocked until ``authorize_write_actions`` is
+          approved.
+        - Returns the GitHub merge API response including ``merged`` and
+          ``sha`` so callers can confirm success.
+    """
+
     _ensure_write_allowed(f"merge PR #{number} in {full_name}")
     payload: Dict[str, Any] = {"merge_method": merge_method}
     if commit_title is not None:
@@ -626,6 +856,17 @@ async def merge_pull_request(
 
 @mcp_tool(write_action=True)
 async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
+    """Close a pull request without merging.
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        number: Pull request number to close.
+
+    Returns:
+        The patched PR resource reflecting the closed state. Write-gated to
+        prevent accidental shutdown of user PRs.
+    """
+
     _ensure_write_allowed(f"close PR #{number} in {full_name}")
     return await _github_request(
         "PATCH",
@@ -640,6 +881,19 @@ async def comment_on_pull_request(
     number: int,
     body: str,
 ) -> Dict[str, Any]:
+    """Post a comment on a pull request (issue API under the hood).
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        number: Pull request number to comment on.
+        body: Markdown body for the comment.
+
+    Notes:
+        - Treated as a write action and gated.
+        - Uses the issues API endpoint so the comment appears on both PR and
+          underlying issue threads.
+    """
+
     _ensure_write_allowed(f"comment on PR #{number} in {full_name}")
     return await _github_request(
         "POST",
@@ -654,6 +908,13 @@ async def compare_refs(
     base: str,
     head: str,
 ) -> Dict[str, Any]:
+    """Compare two refs and return the GitHub diff summary (max 100 files).
+
+    The response mirrors ``GET /repos/:owner/:repo/compare`` but trims each
+    ``patch`` to ~8k characters and caps at 100 files to keep connector payloads
+    compact while preserving enough context for review summaries.
+    """
+
     data = await _github_request(
         "GET",
         f"/repos/{full_name}/compare/{base}...{head}",
@@ -681,6 +942,19 @@ async def create_branch(
     new_branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
+    """Create a new branch from an existing ref (default ``main``).
+
+    Args:
+        full_name: Repository in ``owner/repo`` form.
+        new_branch: Name for the new branch (``refs/heads/`` prefix is added).
+        from_ref: Source branch/tag/SHA to fork from (defaults to ``main``).
+
+    Notes:
+        - Write-gated via ``authorize_write_actions``.
+        - Returns the GitHub ref creation response so callers can inspect the
+          new branch SHA.
+    """
+
     _ensure_write_allowed(f"create branch {new_branch} from {from_ref} in {full_name}")
     sha = await _get_branch_sha(full_name, from_ref)
     payload = {"ref": f"refs/heads/{new_branch}", "sha": sha}
@@ -697,6 +971,13 @@ async def ensure_branch(
     branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
+    """Idempotently ensure a branch exists, creating it from ``from_ref``.
+
+    Checks for the branch first and only creates it when GitHub returns 404.
+    Useful for preparing dedicated work branches without failing when they
+    already exist. Write-gated via ``authorize_write_actions``.
+    """
+
     _ensure_write_allowed(f"ensure branch {branch} from {from_ref} in {full_name}")
     client = _github_client_instance()
     async with _concurrency_semaphore:
@@ -721,6 +1002,15 @@ async def commit_file_async(
     branch: str = "main",
     sha: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Schedule a single file commit in the background.
+
+    Exactly one of ``content`` or ``content_url`` must be provided. When a
+    ``content_url`` is supplied, the server fetches it via the external HTTP
+    client before committing. The tool returns immediately with a ``scheduled``
+    flag while the commit executes asynchronously, making it suitable for
+    fire-and-forget edits initiated by ChatGPT connectors.
+    """
+
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
@@ -794,6 +1084,14 @@ async def create_pull_request(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
+    """Open a pull request from ``head`` into ``base``.
+
+    The tool mirrors GitHub's PR creation API and respects the global write
+    gate. Populate ``body`` for detailed descriptions or set ``draft=True`` to
+    avoid triggering CI immediately. Returns the created PR resource so callers
+    can link or perform follow-up actions.
+    """
+
     _ensure_write_allowed(f"create PR from {head} to {base} in {full_name}")
     payload: Dict[str, Any] = {
         "title": title,
@@ -821,6 +1119,15 @@ async def update_files_and_open_pr(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
+    """Commit multiple files then open a PR in one call.
+
+    For each file entry, exactly one of ``content`` or ``content_url`` must be
+    present. The helper ensures a working branch exists, commits each file, and
+    finally opens a PR against ``base_branch``. Errors are raised eagerly for
+    fetch/commit failures so assistants can retry with corrected input. Returns
+    the branch name and PR response for immediate follow-up actions.
+    """
+
     _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
 
     branch = new_branch or f"ally-{os.urandom(4).hex()}"
@@ -891,6 +1198,14 @@ async def run_command(
     timeout_seconds: int = 300,
     workdir: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Clone the repository and run an arbitrary shell command in a temp dir.
+
+    The repository is cloned into a temporary workspace, author/committer env
+    vars are injected for git, and stdout/stderr are truncated separately using
+    ``TOOL_STDOUT_MAX_CHARS`` / ``TOOL_STDERR_MAX_CHARS``. This is a write-gated
+    helper because it executes arbitrary commands in the project's context.
+    """
+
     _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
     repo_dir = await _clone_repo(full_name, ref=ref)
     try:
@@ -915,6 +1230,12 @@ async def run_tests(
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Run the project's test command after cloning into a temp workspace.
+
+    Thin wrapper around ``run_command`` that defaults to ``pytest`` and a longer
+    timeout. Useful when assistants need to validate patches before opening PRs.
+    """
+
     return await run_command(
         full_name=full_name,
         ref=ref,
@@ -937,6 +1258,18 @@ async def apply_patch_and_open_pr(
     test_timeout_seconds: int = 600,
     draft: bool = False,
 ) -> Dict[str, Any]:
+    """Apply a unified diff, optionally run tests, push, and open a PR.
+
+    Steps:
+        1. Clone the repo at ``base_branch``.
+        2. Apply the provided unified diff via ``git apply``.
+        3. Optionally run tests (stdout/stderr truncated via tool limits).
+        4. Push a work branch and open a PR, returning both results.
+
+    This is write-gated and intended for end-to-end patch workflows from
+    ChatGPT connectors.
+    """
+
     _ensure_write_allowed(f"apply_patch_and_open_pr on {full_name}@{base_branch}")
 
     branch = new_branch or f"ally-patch-{os.urandom(4).hex()}"
@@ -982,6 +1315,22 @@ async def apply_patch_and_open_pr(
                 "stderr": error_stderr,
             }
 
+        add_result = await _run_shell(
+            "git add -A",
+            cwd=repo_dir,
+            timeout_seconds=60,
+        )
+        if add_result["exit_code"] != 0:
+            error = "git_add_failed"
+            error_stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
+            return {
+                "branch": branch,
+                "tests": tests_result,
+                "pull_request": None,
+                "error": error,
+                "stderr": error_stderr,
+            }
+
         commit_result = await _run_shell(
             f'git commit -am "{title}"',
             cwd=repo_dir,
@@ -989,7 +1338,7 @@ async def apply_patch_and_open_pr(
         )
         if commit_result["exit_code"] != 0:
             error = "git_commit_failed"
-            error_stderr = commit_result.get("stderr", "")
+            error_stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             return {
                 "branch": branch,
                 "tests": tests_result,
@@ -1074,11 +1423,37 @@ middleware = [
 app = mcp.http_app(path="/sse", middleware=middleware, transport="sse")
 
 
+HOME_MESSAGE = (
+    "GitHub MCP server is running. Connect your ChatGPT MCP client to /sse "
+    "(POST back to /messages) and use /healthz for health checks.\n"
+)
+
+
 @mcp.custom_route("/", methods=["GET"])
 async def homepage(request: Request) -> PlainTextResponse:
-    return PlainTextResponse("GitHub MCP server is running\n")
+    return PlainTextResponse(HOME_MESSAGE)
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
 async def healthz(request: Request) -> PlainTextResponse:
     return PlainTextResponse("OK\n")
+
+
+async def _shutdown_clients() -> None:
+    if _http_client_github is not None:
+        await _http_client_github.aclose()
+    if _http_client_external is not None:
+        await _http_client_external.aclose()
+
+
+app.add_event_handler("shutdown", _shutdown_clients)
+
+
+# Provide a graceful 404 fallback for the Render root URL to avoid confusing
+# "Not Found" responses when users check the base domain directly.
+@app.middleware("http")
+async def root_fallback(request: Request, call_next):
+    response = await call_next(request)
+    if response.status_code == 404 and request.url.path in {"", "/"}:
+        return PlainTextResponse(HOME_MESSAGE)
+    return response
