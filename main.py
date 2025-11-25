@@ -1090,9 +1090,11 @@ async def run_command(
 ) -> Dict[str, Any]:
     """Clone the repository and run an arbitrary shell command in a temp dir."""
 
-    _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
-    repo_dir = await _clone_repo(full_name, ref=ref)
+    repo_dir: Optional[str] = None
     try:
+        _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
+        repo_dir = await _clone_repo(full_name, ref=ref)
+
         cwd = repo_dir
         if workdir:
             cwd = os.path.join(repo_dir, workdir)
@@ -1102,8 +1104,11 @@ async def run_command(
             "workdir": workdir,
             "result": result,
         }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="run_command")
     finally:
-        _cleanup_dir(repo_dir)
+        if repo_dir:
+            _cleanup_dir(repo_dir)
 
 
 @mcp_tool(write_action=True)
