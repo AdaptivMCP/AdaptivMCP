@@ -803,8 +803,20 @@ async def commit_file_async(
 
     # Determine the bytes we will commit.
     if content_url is not None:
+        # Detect sandbox/local paths which are not reachable from the MCP server.
+        if (
+            content_url.startswith("sandbox:")
+            or content_url.startswith("sandbox:/")
+            or content_url.startswith("/mnt/")
+        ):
+            raise GitHubAPIError(
+                "content_url points to a sandbox/local path "
+                f"({content_url!r}) which the MCP server cannot access. "
+                "Provide the file contents via the 'content' field instead."
+            )
+
         # Validate URL scheme before handing to httpx, to avoid low-level
-        # UnsupportedProtocol errors when callers pass e.g. a bare path.
+        # UnsupportedProtocol errors.
         if not (
             content_url.startswith("http://")
             or content_url.startswith("https://")
@@ -841,7 +853,6 @@ async def commit_file_async(
         "branch": branch,
         "message": message,
     }
-
 
 
 @mcp_tool(write_action=True)
@@ -907,6 +918,26 @@ async def update_files_and_open_pr(
             sha = await _resolve_file_sha(full_name, path, branch)
 
         if content_url is not None:
+            # Same semantics as commit_file_async: sandbox/local paths are not reachable.
+            if (
+                content_url.startswith("sandbox:")
+                or content_url.startswith("sandbox:/")
+                or content_url.startswith("/mnt/")
+            ):
+                raise GitHubAPIError(
+                    "content_url values pointing at sandbox/local paths (e.g. "
+                    f"{content_url!r}) are not reachable from the MCP server. "
+                    "Provide the file contents via the 'content' field instead."
+                )
+
+            if not (
+                content_url.startswith("http://")
+                or content_url.startswith("https://")
+            ):
+                raise GitHubAPIError(
+                    f"content_url must be an absolute http(s) URL, got: {content_url!r}"
+                )
+
             client = _external_client_instance()
             resp = await client.get(content_url)
             if resp.status_code >= 400:
@@ -1106,7 +1137,6 @@ async def apply_patch_and_open_pr(
         }
     finally:
         await _cleanup_dir(repo_dir)
-
 
 
 # --------------------------------------------------------------------
