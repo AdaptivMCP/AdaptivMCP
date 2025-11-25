@@ -8,7 +8,7 @@ import textwrap
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-from fastmcp import FastMCP, tool
+from fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import PlainTextResponse, JSONResponse
@@ -292,7 +292,8 @@ def _ensure_write_allowed(context: str) -> None:
 
 def mcp_tool(*, write_action: bool = False, **kwargs):
     def decorator(func):
-        decorated = tool(**kwargs)(func)
+        # Use the FastMCP instance's tool decorator
+        decorated = mcp.tool(**kwargs)(func)
         setattr(decorated, "write_action", write_action)
         return decorated
 
