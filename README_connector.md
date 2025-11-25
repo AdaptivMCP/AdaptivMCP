@@ -18,8 +18,9 @@ the server now responds with a plain-text banner pointing you to ``/sse`` and
 ## Write gating
 Write tools are gated to avoid accidental changes.
 
-- Environment default: ``GITHUB_MCP_AUTO_APPROVE=1`` enables writes at startup;
-  ``0`` leaves them disabled.
+- Environment default: ``GITHUB_MCP_AUTO_APPROVE=0`` leaves writes disabled at
+  startup. Set it to truthy strings like ``1``, ``true``, ``yes``, or ``on`` to
+  enable write tools immediately.
 - Runtime override via the control tool:
 
 ```jsonc

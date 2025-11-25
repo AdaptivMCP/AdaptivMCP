@@ -1,0 +1,27 @@
+import importlib
+
+import pytest
+
+
+def _reload_main(monkeypatch: pytest.MonkeyPatch, value: str | None):
+    if value is None:
+        monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
+    else:
+        monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", value)
+
+    import main as main_module
+
+    return importlib.reload(main_module)
+
+
+def test_write_allowed_defaults_false(monkeypatch: pytest.MonkeyPatch):
+    module = _reload_main(monkeypatch, None)
+    assert module.WRITE_ALLOWED is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "Yes", "on", "y"])
+def test_write_allowed_accepts_truthy_strings(
+    monkeypatch: pytest.MonkeyPatch, value: str
+):
+    module = _reload_main(monkeypatch, value)
+    assert module.WRITE_ALLOWED is True
