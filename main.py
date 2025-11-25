@@ -112,16 +112,17 @@ WRITE_ALLOWED = AUTO_APPROVE
 
 def mcp_tool(*tool_args, write_action: bool = False, **tool_kwargs):
     """
-    Decorator that wraps mcp.tool and attaches write_action metadata
-    so clients can distinguish read vs write tools.
+    Decorator that wraps mcp.tool. We register the function with FastMCP
+    but return the original function so it remains directly callable
+    inside this module.
     """
     def decorator(func):
-        # Use FastMCP's native decorator to register the tool, but keep the
-        # underlying callable so it can still be invoked internally.
-        decorated = mcp.tool(*tool_args, **tool_kwargs)(func)
-        # Attach metadata to the function object (not the Pydantic FunctionTool model).
-        setattr(decorated, "write_action", write_action)
-        return decorated
+        # Register with FastMCP
+        mcp.tool(*tool_args, **tool_kwargs)(func)
+        # If you ever need write_action metadata, you can manage a separate
+        # registry here, but we do NOT set attributes on the FunctionTool.
+        return func
+
     return decorator
 
 
