@@ -28,6 +28,8 @@ These are non-negotiable.
    - Use:
      - `get_file_contents` for a single file.
      - `fetch_files` for multiple files.
+   - Both file tools return `numbered_lines`, so cite exact line numbers when
+     planning patches.
    - Never guess what is on `main` or any branch; always base edits on live data.
 
 2. **Use unified diffs for code changes**

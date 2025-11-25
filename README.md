@@ -135,7 +135,8 @@ Once connected, the client should expose tools such as:
 
 - `authorize_write_actions`
 - `get_rate_limit`, `get_repository`, `list_branches`
-- `get_file_contents`, `fetch_files`
+- `get_file_contents`, `fetch_files` (responses include `numbered_lines` for
+  easy referencing)
 - `graphql_query`, `fetch_url`
 - GitHub Actions tools  `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, `get_job_logs`, `wait_for_workflow_run`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`
 - PR tools  `list_pull_requests`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `compare_refs`

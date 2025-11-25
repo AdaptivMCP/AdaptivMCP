@@ -60,9 +60,11 @@ write gate rules above.
 - **list_branches(full_name, per_page=100, page=1)** — Enumerate branches using
   GitHub pagination.
 - **get_file_contents(full_name, path, ref="main")** — Fetch one file and
-  decode base64 to UTF-8 text.
+  decode base64 to UTF-8 text. Responses include `numbered_lines` to make
+  quoting specific lines in patches easier.
 - **fetch_files(full_name, paths, ref="main")** — Fetch multiple files
-  concurrently; each entry returns decoded content or an error string.
+  concurrently; each entry returns decoded content, `numbered_lines`, or an
+  error string.
 - **graphql_query(query, variables=None)** — Execute a GitHub GraphQL query.
 - **fetch_url(url)** — Fetch arbitrary HTTP/HTTPS URLs with content truncation.
 
