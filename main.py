@@ -259,9 +259,10 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         client = _external_client_instance()
         response = await client.get(rewritten_url)
         if response.status_code >= 400:
+            snippet = response.text[:500]
             raise GitHubAPIError(
                 f"Failed to fetch content from rewritten sandbox URL "
-                f"{rewritten_url}: {response.status_code}"
+                f"{rewritten_url}: {response.status_code}. Response: {snippet}"
             )
         return response.content
 
@@ -387,6 +388,29 @@ def _cleanup_dir(path: str) -> None:
         shutil.rmtree(path)
     except Exception:
         pass
+
+
+def _structured_tool_error(
+    exc: BaseException, *, context: str, path: Optional[str] = None
+) -> Dict[str, Any]:
+    """Build a serializable error payload for MCP clients.
+
+    Returning this structure instead of letting exceptions bubble prevents the
+    MCP transport layer from wrapping the failure inside generic TaskGroup
+    errors, while still surfacing the root cause and traceback to callers.
+    """
+
+    import traceback
+
+    error: Dict[str, Any] = {
+        "error": exc.__class__.__name__,
+        "message": str(exc),
+        "context": context,
+        "traceback": traceback.format_exc(),
+    }
+    if path:
+        error["path"] = path
+    return {"error": error}
 
 
 # ------------------------------------------------------------------------------
@@ -979,50 +1003,76 @@ async def update_files_and_open_pr(
 ) -> Dict[str, Any]:
     """Commit multiple files then open a PR in one call."""
 
-    _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
+    current_path: Optional[str] = None
+    try:
+        _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
 
-    branch = new_branch or f"ally-{os.urandom(4).hex()}"
-    await ensure_branch(full_name, branch, from_ref=base_branch)
+        branch = new_branch or f"ally-{os.urandom(4).hex()}"
+        await ensure_branch(full_name, branch, from_ref=base_branch)
 
-    for f in files:
-        path = f["path"]
-        file_message = f.get("message") or title
-        content = f.get("content")
-        content_url = f.get("content_url")
+        for f in files:
+            current_path = f["path"]
+            file_message = f.get("message") or title
+            content = f.get("content")
+            content_url = f.get("content_url")
 
-        if content is None and content_url is None:
-            raise ValueError(f"File entry for {path} must have content or content_url")
-        if content is not None and content_url is not None:
-            raise ValueError(
-                f"File entry for {path} must not provide both content and content_url"
+            if content is None and content_url is None:
+                raise ValueError(
+                    f"File entry for {current_path} must have content or content_url"
+                )
+            if content is not None and content_url is not None:
+                raise ValueError(
+                    f"File entry for {current_path} must not provide both content "
+                    "and content_url"
+                )
+
+            try:
+                if content_url is not None:
+                    body_bytes = await _load_body_from_content_url(
+                        content_url, context="update_files_and_open_pr"
+                    )
+                else:
+                    body_bytes = content.encode("utf-8")
+            except Exception as exc:
+                return _structured_tool_error(
+                    exc, context="update_files_and_open_pr.load_content", path=current_path
+                )
+
+            try:
+                sha = await _resolve_file_sha(full_name, current_path, branch)
+                await _perform_github_commit(
+                    full_name=full_name,
+                    path=current_path,
+                    message=file_message,
+                    body_bytes=body_bytes,
+                    branch=branch,
+                    sha=sha,
+                )
+            except Exception as exc:
+                return _structured_tool_error(
+                    exc,
+                    context="update_files_and_open_pr.commit_file",
+                    path=current_path,
+                )
+
+        try:
+            pr = await create_pull_request(
+                full_name=full_name,
+                title=title,
+                head=branch,
+                base=base_branch,
+                body=body,
+                draft=draft,
             )
-
-        if content_url is not None:
-            body_bytes = await _load_body_from_content_url(
-                content_url, context="update_files_and_open_pr"
+        except Exception as exc:
+            return _structured_tool_error(
+                exc, context="update_files_and_open_pr.create_pr", path=current_path
             )
-        else:
-            body_bytes = content.encode("utf-8")
-
-        sha = await _resolve_file_sha(full_name, path, branch)
-        await _perform_github_commit(
-            full_name=full_name,
-            path=path,
-            message=file_message,
-            body_bytes=body_bytes,
-            branch=branch,
-            sha=sha,
+        return {"branch": branch, "pull_request": pr}
+    except Exception as exc:
+        return _structured_tool_error(
+            exc, context="update_files_and_open_pr", path=current_path
         )
-
-    pr = await create_pull_request(
-        full_name=full_name,
-        title=title,
-        head=branch,
-        base=base_branch,
-        body=body,
-        draft=draft,
-    )
-    return {"branch": branch, "pull_request": pr}
 
 
 # ------------------------------------------------------------------------------
