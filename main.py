@@ -284,13 +284,24 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
                 return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
             raise
 
-    # Absolute local path (e.g. /mnt/data/file)
+    # Absolute local path (e.g. /mnt/data/file). If the file is missing, we may
+    # still be able to fetch it via a host-provided rewrite base (mirroring the
+    # sandbox:/ behavior) so that callers don't need to know whether the
+    # runtime supports direct filesystem access.
     if content_url.startswith("/"):
-        return _read_local(
-            content_url,
-            "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
-            "hosts can rewrite it.",
-        )
+        rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
+        try:
+            return _read_local(
+                content_url,
+                "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
+                "hosts can rewrite it.",
+            )
+        except GitHubAPIError:
+            if rewrite_base and (
+                rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
+            ):
+                return await _fetch_rewritten_path(content_url, base_url=rewrite_base)
+            raise
 
     # Direct http(s) URL
     if content_url.startswith("http://") or content_url.startswith("https://"):
