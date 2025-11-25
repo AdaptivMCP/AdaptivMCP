@@ -29,13 +29,7 @@ HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", 300))
 HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", 200))
 
 MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 80))
-<<<<<<< HEAD
-FETCH_FILES_CONCURRENCY = int(
-    os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY)
-)
-=======
 FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY))
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
 
 TOOL_STDOUT_MAX_CHARS = 12000
 LOGS_MAX_CHARS = 16000
@@ -51,11 +45,7 @@ _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
 _concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 
-<<<<<<< HEAD
 # json_response is configured per-transport; do not pass it here
-=======
-# Note: json_response is now configured per-transport, so we omit it here
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
 mcp = FastMCP("GitHub Fast MCP")
 
 
@@ -136,10 +126,6 @@ async def _github_request(
             f"GitHub API error {resp.status_code} for {method} {path}: "
             f"{message or resp.text}"
         )
-<<<<<<< HEAD
-
-=======
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
     try:
         return {"status_code": resp.status_code, "json": resp.json()}
     except Exception:
@@ -305,7 +291,6 @@ def _ensure_write_allowed(context: str) -> None:
         )
 
 
-<<<<<<< HEAD
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     """
     Wrapper around FastMCP's @mcp.tool decorator that also tracks whether the
@@ -327,20 +312,6 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
 
     def decorator(func):
         return mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
-=======
-def mcp_tool(*, write_action: bool = False, **kwargs):
-    """
-    Wrapper around FastMCP's @mcp.tool decorator that also tracks whether the
-    tool performs write actions, so clients can filter or gate them.
-    """
-
-    def decorator(func):
-        # FastMCP's decorator returns a Tool object; attach metadata so clients
-        # can inspect write intent from the tool object itself.
-        tool_obj = mcp.tool(**kwargs)(func)
-        setattr(tool_obj, "write_action", write_action)
-        return tool_obj
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
 
     return decorator
 
@@ -741,13 +712,8 @@ async def commit_file_async(
     _ensure_write_allowed(f"commit file async {path}")
 
     print(
-<<<<<<< HEAD
         "[commit_file_async] scheduling full_name=%r path=%r branch=%r "
         "message=%r has_content=%s content_url=%r sha=%r"
-=======
-        "[commit_file_async] scheduling full_name=%r path=%r branch=%r message=%r "
-        "has_content=%s content_url=%r sha=%r"
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
         % (full_name, path, branch, message, content is not None, content_url, sha)
     )
 
@@ -763,23 +729,15 @@ async def commit_file_async(
             raise GitHubAPIError(
                 "commit_file_async content_url must be an absolute http(s) URL. "
                 "In ChatGPT, pass the sandbox file path (e.g. sandbox:/mnt/data/file) "
-<<<<<<< HEAD
                 "and the host will rewrite it to a real URL before it reaches this "
                 "server.",
-=======
-                "and the host will rewrite it to a real URL before it reaches this server.",
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
             )
         client = _external_client_instance()
         response = await client.get(content_url)
         if response.status_code >= 400:
             raise GitHubAPIError(
-<<<<<<< HEAD
                 f"Failed to fetch content from {content_url}: "
                 f"{response.status_code}"
-=======
-                f"Failed to fetch content from {content_url}: {response.status_code}"
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
             )
         body_bytes = response.content
     else:
@@ -836,10 +794,6 @@ async def create_pull_request(
         f"/repos/{full_name}/pulls",
         json_body=payload,
     )
-<<<<<<< HEAD
-=======
-    return resp
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
 
 
 @mcp_tool(write_action=True)
@@ -872,27 +826,17 @@ async def update_files_and_open_pr(
                 content_url.startswith("http://") or content_url.startswith("https://")
             ):
                 raise GitHubAPIError(
-<<<<<<< HEAD
                     "update_files_and_open_pr content_url must be an absolute "
                     "http(s) URL. In ChatGPT, pass the sandbox file path "
                     "(e.g. sandbox:/mnt/data/file) and the host will rewrite it "
                     "to a real URL before it reaches this server.",
-=======
-                    "update_files_and_open_pr content_url must be an absolute http(s) URL. "
-                    "In ChatGPT, pass the sandbox file path (e.g. sandbox:/mnt/data/file) "
-                    "and the host will rewrite it to a real URL before it reaches this server.",
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
                 )
             client = _external_client_instance()
             response = await client.get(content_url)
             if response.status_code >= 400:
                 raise GitHubAPIError(
-<<<<<<< HEAD
                     f"Failed to fetch content from {content_url}: "
                     f"{response.status_code}"
-=======
-                    f"Failed to fetch content from {content_url}: {response.status_code}"
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
                 )
             body_bytes = response.content
         else:
@@ -1100,14 +1044,7 @@ async def apply_patch_and_open_pr(
 # FastMCP HTTP/SSE app and health routes
 # ------------------------------------------------------------------------------
 
-<<<<<<< HEAD
 # Use SSE transport so your existing config at /sse keeps working.
-=======
-# Use SSE transport so your existing ChatGPT connector that points at /sse/
-# continues to work. This exposes:
-#   - MCP endpoint at /sse/  (for SSE transport)
-#   - Custom routes at / and /healthz
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
 middleware = [
     Middleware(
         CORSMiddleware,
@@ -1118,12 +1055,8 @@ middleware = [
     )
 ]
 
-<<<<<<< HEAD
 # SSE endpoint at /sse plus /messages for POSTs (handled internally by FastMCP)
 app = mcp.http_app(path="/sse", middleware=middleware, transport="sse")
-=======
-app = mcp.http_app(transport="sse", custom_middleware=middleware)
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
 
 
 @mcp.custom_route("/", methods=["GET"])
@@ -1133,8 +1066,4 @@ async def homepage(request: Request) -> PlainTextResponse:
 
 @mcp.custom_route("/healthz", methods=["GET"])
 async def healthz(request: Request) -> PlainTextResponse:
-<<<<<<< HEAD
     return PlainTextResponse("OK\n")
-=======
-    return PlainTextResponse("OK\n")
->>>>>>> dad19b4683578d237510ae6bb2fec1edc017f234
