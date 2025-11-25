@@ -78,3 +78,16 @@ def test_load_body_from_absolute_with_rewrite(monkeypatch):
 
     assert called["url"].endswith("missing/abs.txt")
     assert result == b"absolute-rewritten"
+
+
+def test_load_body_from_sandbox_missing_without_rewrite():
+    with pytest.raises(GitHubAPIError) as excinfo:
+        asyncio.run(
+            _load_body_from_content_url(
+                "sandbox:/not/available.txt", context="missing"
+            )
+        )
+
+    message = str(excinfo.value)
+    assert "SANDBOX_CONTENT_BASE_URL" in message
+    assert "http(s) URL" in message

@@ -283,7 +283,12 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
                 rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
             ):
                 return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
-            raise
+            raise GitHubAPIError(
+                f"{context} content_url path not found at {local_path}. "
+                "Provide an http(s) URL that already points to the sandbox file "
+                "or configure SANDBOX_CONTENT_BASE_URL so the server can fetch it "
+                "when direct filesystem access is unavailable."
+            )
 
     # Absolute local path (e.g. /mnt/data/file). If the file is missing, we may
     # still be able to fetch it via a host-provided rewrite base (mirroring the
@@ -291,18 +296,23 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
     # runtime supports direct filesystem access.
     if content_url.startswith("/"):
         rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
+        missing_hint = (
+            "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
+            "hosts can rewrite it."
+        )
         try:
-            return _read_local(
-                content_url,
-                "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
-                "hosts can rewrite it.",
-            )
+            return _read_local(content_url, missing_hint)
         except GitHubAPIError:
             if rewrite_base and (
                 rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
             ):
                 return await _fetch_rewritten_path(content_url, base_url=rewrite_base)
-            raise
+            raise GitHubAPIError(
+                f"{context} content_url path not found at {content_url}. "
+                f"{missing_hint} Configure SANDBOX_CONTENT_BASE_URL or provide an "
+                "absolute http(s) URL so the server can fetch the sandbox file when "
+                "it is not mounted locally."
+            )
 
     # Direct http(s) URL
     if content_url.startswith("http://") or content_url.startswith("https://"):
@@ -1090,9 +1100,11 @@ async def run_command(
 ) -> Dict[str, Any]:
     """Clone the repository and run an arbitrary shell command in a temp dir."""
 
-    _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
-    repo_dir = await _clone_repo(full_name, ref=ref)
+    repo_dir: Optional[str] = None
     try:
+        _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
+        repo_dir = await _clone_repo(full_name, ref=ref)
+
         cwd = repo_dir
         if workdir:
             cwd = os.path.join(repo_dir, workdir)
@@ -1102,8 +1114,11 @@ async def run_command(
             "workdir": workdir,
             "result": result,
         }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="run_command")
     finally:
-        _cleanup_dir(repo_dir)
+        if repo_dir:
+            _cleanup_dir(repo_dir)
 
 
 @mcp_tool(write_action=True)
