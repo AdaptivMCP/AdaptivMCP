@@ -1,265 +1,254 @@
-diff --git a/USAGE_EXAMPLES.md b/USAGE_EXAMPLES.md
+diff --git a/PR_SCHEMA_GUIDE.md b/PR_SCHEMA_GUIDE.md
 new file mode 100644
 index 0000000..0000000
 --- /dev/null
-+++ b/USAGE_EXAMPLES.md
-@@ -0,0 +1,259 @@
-+# USAGE_EXAMPLES.md
++++ b/PR_SCHEMA_GUIDE.md
+@@ -0,0 +1,248 @@
++# PR_SCHEMA_GUIDE.md
 +
-+Practical examples for using Joey's GitHub MCP connector against this repository
-+and others configured the same way.
++Standard schema and expectations for pull requests created via Joey's GitHub MCP
++connector. Every assistant should follow this structure for **every PR body**
++they create, regardless of repo, unless Joey explicitly overrides it.
 +
-+These examples are written for assistants and tools that can call Joey's GitHub
-+MCP methods (such as ChatGPT with the Joey's GitHub connector enabled). They
-+assume you already know the repository full name, for example:
-+
-+- `Proofgate-Revocations/chatgpt-mcp-github`
-+
-+Throughout, replace `FULL_NAME` with the appropriate `owner/repo` string.
++This document is written for assistants and tools using the Joey's GitHub MCP
++server (e.g. via `apply_patch_and_open_pr`, `update_files_and_open_pr`, or
++`create_pull_request`).
 +
 +---
 +
-+## 1. Read-only inspection
++## 1. Branch naming
 +
-+### 1.1 Inspect repository and branches
++All assistant-created branches MUST follow this pattern:
 +
-+Use these patterns when you want to understand the shape of a repo before
-+changing anything:
++- Prefix with the assistant identity or role:
++  - `ally/` for this assistant.
++  - `codex/` or similar for other automation, if Joey defines it.
++- Short, kebab-case description of the change.
 +
-+- Repository metadata:
++Examples:
 +
-+  - `get_repository("FULL_NAME")`
++- `ally/add-troubleshooting-doc`
++- `ally/fix-content-url-validation`
++- `ally/update-how-to-use-connector`
 +
-+- Branches:
++Avoid:
 +
-+  - `list_branches("FULL_NAME", per_page=100, page=1)`
-+
-+### 1.2 Read files with line numbers
-+
-+To plan edits, always fetch live file content with line numbers:
-+
-+- Single file on `main`:
-+
-+  - `get_file_contents("FULL_NAME", "tests/test_smoke.py", "main")`
-+
-+- Multiple files at once:
-+
-+  - `fetch_files("FULL_NAME", ["main.py", "README.md"], "main")`
-+
-+Both tools return `numbered_lines` so you can reference specific lines when
-+describing patches.
++- Very long branch names.
++- Generic names like `patch-1`, `test`, `temp`.
 +
 +---
 +
-+## 2. Code change via unified diff + tests
++## 2. PR title schema
 +
-+This is the primary pattern for code changes: small, focused diffs applied via
-+`apply_patch_and_open_pr` with tests.
++PR titles MUST be:
 +
-+### 2.1 Example – add a new smoke test
++1. Short (ideally ≤ 80 characters).
++2. Action-oriented (what this change does).
++3. Specific enough that Joey can distinguish PRs in the list.
 +
-+Goal: add a new test to `tests/test_smoke.py` that imports `main.py` and checks
-+that the FastMCP app exists.
++Recommended patterns:
 +
-+1. Read the current file:
++- `Add <thing>`
++- `Fix <bug/issue>`
++- `Refactor <area>`
++- `Improve <behavior>`
++- `Docs: <document or area>`
++- `Tests: <suite or behavior>`
 +
-+   - `get_file_contents("FULL_NAME", "tests/test_smoke.py", "main")`
++Examples:
 +
-+2. Plan the change, for example adding:
++- `Add TROUBLESHOOTING.md for Joey's GitHub MCP`
++- `Docs: add USAGE_EXAMPLES.md usage guide`
++- `Tests: add MCP tools import smoke test`
++- `Refactor: simplify content_url validation`
 +
-+   ```python
-+   def test_tools_available():
-+       """Ensure Joey's GitHub MCP tools are importable."""
-+       import importlib
++Avoid:
 +
-+       main = importlib.import_module("main")
-+       assert hasattr(main, "app")
-+   ```
-+
-+3. Construct a unified diff (conceptually similar to what `git diff` would
-+   produce) that adds this block.
-+
-+4. Apply the patch and run tests:
-+
-+   - Tool: `apply_patch_and_open_pr`
-+   - Arguments (conceptual):
-+
-+     - `full_name`: `"FULL_NAME"`
-+     - `base_branch`: `"main"`
-+     - `patch`: the unified diff string
-+     - `title`: `"Add MCP tools import smoke test"`
-+     - `body`: brief explanation of the change
-+     - `new_branch`: e.g. `"ally/test-mcp-smoke-tools"`
-+     - `run_tests_flag`: `true`
-+     - `test_command`: `"pytest"`
-+     - `test_timeout_seconds`: `600`
-+     - `draft`: `false`
-+
-+5. Inspect the result:
-+
-+   - Confirm `error` is `null`.
-+   - Check `tests.exit_code == 0` and review `tests.stdout` for pytest output.
-+   - Use the returned PR metadata to report the branch and PR number to Joey.
-+
-+This is exactly the pattern used to create PR **#73** in this repository.
++- Titles like `Update files`, `Minor changes`, or `Fix stuff`.
++- Including issue numbers only (e.g. `#123`). Use the body for linkage.
 +
 +---
 +
-+## 3. Creating a brand new documentation file
++## 3. PR body schema (required sections)
 +
-+You can create an entire new file from scratch using a unified diff that turns
-+`/dev/null` into a concrete path.
++Every PR body created by an assistant MUST follow this exact section structure,
++in this order. Sections may be short, but they must be present.
 +
-+### 3.1 Example – add `TROUBLESHOOTING.md`
++### 3.1 Template
 +
-+Goal: create a new troubleshooting guide documenting common Render and MCP
-+issues.
++Assistants should treat the following as the canonical template and fill it in
++for each PR. Fields with `(required)` MUST be filled. Fields with `(optional)`
++can be omitted only if clearly not applicable.
 +
-+1. Draft the full markdown content for `TROUBLESHOOTING.md`.
++```markdown
++## Summary (required)
 +
-+2. Build a unified diff that creates the file, conceptually like:
++- One-line summary of the change.
++- Optional second bullet for extra context.
 +
-+   ```diff
-+   diff --git a/TROUBLESHOOTING.md b/TROUBLESHOOTING.md
-+   new file mode 100644
-+   --- /dev/null
-+   +++ b/TROUBLESHOOTING.md
-+   @@ -0,0 +1,5 @@
-+   +# TROUBLESHOOTING.md
-+   +...
-+   ```
++## Motivation / Context (required)
 +
-+3. Call `apply_patch_and_open_pr` with that diff and `run_tests_flag=true`.
++- Why this change is being made.
++- Link to any prior PRs, issues, or conversations if known.
 +
-+4. Verify:
++## Changes (required)
 +
-+   - Tests pass.
-+   - A new PR was opened on a branch like `"ally/add-troubleshooting-doc"`.
++- **Code:** Brief description of code-level changes (functions, modules, behavior).
++- **Tests:** What tests were added/updated (or explicitly: "No tests; explain why").
++- **Docs:** What documentation files were added/updated, if any.
 +
-+This is the pattern that created PR **#74** and the `TROUBLESHOOTING.md` file in
-+this repo.
++## Testing (required)
 +
-+---
++- Command(s) run:
++  - `pytest`
++  - `pytest tests/test_smoke.py`
++  - `flake8 .`
++- Result:
++  - `All tests passed`
++  - Or list failing tests and errors if `run_tests`/`run_command` returned failures.
 +
-+## 4. Documentation edits
++If no automated tests were run, state explicitly:
++- `No automated tests run (explain why, e.g. doc-only change).`
 +
-+For small and medium documentation changes, treat docs like code and use diffs.
++## Risk / Impact (required)
 +
-+### 4.1 Example – update `how_to_use_connector.md`
++- Risk level: `Low`, `Medium`, or `High`.
++- What could break if this change is wrong.
++- Any migration or rollout notes, if applicable.
 +
-+1. Fetch the file:
++## MCP / Tooling Details (required for assistant-created PRs)
 +
-+   - `get_file_contents("FULL_NAME", "how_to_use_connector.md", "main")`
++- Tools used (for example):
++  - `apply_patch_and_open_pr`
++  - `run_tests` with `pytest`
++- Branch name used.
++- Any notable tool errors encountered and resolved.
 +
-+2. Plan a small, focused change (for example, adding a new rule or clarifying a
-+   section).
++## Checklist (required)
 +
-+3. Construct a unified diff with the minimal necessary edits.
-+
-+4. Apply it via `apply_patch_and_open_pr` (tests are still useful, but may not
-+   be strictly required for doc-only changes).
-+
-+5. Link the resulting PR back to Joey for review and merge.
-+
-+For very large new docs, you can instead write the content to a sandbox path and
-+use `content_url` with `update_files_and_open_pr` or `commit_file_async`, as
-+described in `how_to_use_connector.md`.
-+
-+---
-+
-+## 5. Running tests and linting
-+
-+### 5.1 Run pytest on a branch
-+
-+To verify a branch passes tests:
-+
-+- Tool: `run_tests`
-+- Example arguments:
-+
-+  - `full_name`: `"FULL_NAME"`
-+  - `ref`: `"some-feature-branch"`
-+  - `test_command`: `"pytest"`
-+  - `timeout_seconds`: `600`
-+
-+Inspect the result:
-+
-+- `exit_code`: `0` indicates success.
-+- `stdout`: collected pytest output.
-+- `stderr`: any errors; do not ignore if present.
-+
-+### 5.2 Run flake8 (or other linters)
-+
-+You can use `run_tests` (or `run_command`) for linters as well:
-+
-+- `test_command`: `"flake8 ."`
-+
-+Same rules apply: inspect `exit_code`, `stdout`, and `stderr`, and summarize
-+any failures instead of hiding them.
++- [ ] Changes are small and focused (≤ ~500 lines / ~20k characters per patch).
++- [ ] No secrets, tokens, or credentials are included in code or docs.
++- [ ] Tests were run, or it is clearly explained why they were not.
++- [ ] The title and summary accurately describe the change.
++- [ ] This PR does not merge/close other PRs unless Joey explicitly requested it.
++```
 +
 +---
 +
-+## 6. GitHub Actions workflows
++## 4. Examples of well-formed PR bodies
 +
-+### 6.1 Inspect and trigger workflows
++### 4.1 Example: new troubleshooting document
 +
-+Use the Actions-related tools to integrate CI/CD into your workflow:
++```markdown
++## Summary (required)
 +
-+- List recent runs:
++- Add TROUBLESHOOTING.md documenting common Render and MCP issues.
++- Helps assistants and Joey debug problems without re-discovering prior fixes.
 +
-+  - `list_workflow_runs("FULL_NAME", branch="main", status="completed")`
++## Motivation / Context (required)
 +
-+- Trigger a workflow:
++- Joey wants a central place for render/MCP failure modes.
++- This captures known issues (write gate, git_apply_failed, tests_failed, etc.)
++  so future assistants can work from a stable baseline.
 +
-+  - `trigger_workflow_dispatch("FULL_NAME", "ci.yml", "main", inputs={...})`
++## Changes (required)
 +
-+- Trigger and wait for completion:
++- **Code:** No code changes.
++- **Tests:** No new tests; existing suite still used as validation.
++- **Docs:** New file TROUBLESHOOTING.md added at repo root.
 +
-+  - `trigger_and_wait_for_workflow("FULL_NAME", "ci.yml", "main", inputs={...},
-+    timeout_seconds=900, poll_interval_seconds=10)`
++## Testing (required)
 +
-+Always treat these as write operations and use them only when there is a clear,
-+documented reason to run CI/CD from the connector.
++- Command(s) run:
++  - `pytest`
++- Result:
++  - All tests passed (17 passed).
++
++## Risk / Impact (required)
++
++- Risk level: Low.
++- This PR is documentation-only and does not affect runtime behavior.
++
++## MCP / Tooling Details (required for assistant-created PRs)
++
++- Tools used:
++  - `apply_patch_and_open_pr` with a new-file diff.
++  - `run_tests` (invoked by apply_patch_and_open_pr) using `pytest`.
++- Branch name: `ally/add-troubleshooting-doc`.
++- No tool errors encountered.
++
++## Checklist (required)
++
++- [x] Changes are small and focused (single new doc).
++- [x] No secrets, tokens, or credentials included.
++- [x] Tests were run (`pytest`) and passed.
++- [x] Title and summary describe the change accurately.
++- [x] This PR does not merge or close any other PRs.
++```
++
++### 4.2 Example: small test-only change
++
++```markdown
++## Summary (required)
++
++- Add a smoke test that imports main.py and asserts that the MCP app exists.
++
++## Motivation / Context (required)
++
++- Ensure import-time errors in main.py are caught by pytest.
++- Validates that FastMCP and the HTTP app can be created successfully.
++
++## Changes (required)
++
++- **Code:** Added `test_tools_available` in `tests/test_smoke.py`.
++- **Tests:** Existing test suite extended with a simple import test.
++- **Docs:** No documentation changes.
++
++## Testing (required)
++
++- Command(s) run:
++  - `pytest`
++- Result:
++  - All tests passed (17 passed).
++
++## Risk / Impact (required)
++
++- Risk level: Low.
++- Changes are limited to test suite only.
++
++## MCP / Tooling Details (required for assistant-created PRs)
++
++- Tools used:
++  - `apply_patch_and_open_pr` with a unified diff against `tests/test_smoke.py`.
++  - Tests run via `pytest` as part of the tool call.
++- Branch name: `ally/test-mcp-smoke-tools`.
++- No tool errors encountered.
++
++## Checklist (required)
++
++- [x] Changes are small and focused (single test function).
++- [x] No secrets, tokens, or credentials included.
++- [x] Tests were run and passed.
++- [x] Title and summary describe the change accurately.
++- [x] This PR does not merge or close any other PRs.
++```
 +
 +---
 +
-+## 7. Branch and PR hygiene
++## 5. Assistant obligations each session
 +
-+### 7.1 Creating feature branches
++For every new MCP session where an assistant may create PRs in this repo (or
++others following the same rules), the assistant MUST:
 +
-+Use the branch helpers when you need reusable branches:
++1. Use Joey's GitHub MCP connector, not a generic GitHub connector.
++2. Confirm write access is enabled (via environment or `authorize_write_actions`).
++3. Follow the **branch naming** rules in section 1.
++4. Follow the **PR title** rules in section 2.
++5. Use the **PR body template** in section 3 whenever they create a PR.
++6. Keep patches small, targeted, and reviewable.
++7. Surface all tool errors (including `git_apply_failed`, `tests_failed`,
++   `git_push_failed`) in their explanation to Joey instead of hiding them.
 +
-+- `create_branch("FULL_NAME", "ally/feature-name", from_ref="main")`
-+- `ensure_branch("FULL_NAME", "ally/feature-name", from_ref="main")`
-+
-+### 7.2 Opening PRs directly
-+
-+If you already have a branch pushed (for example, created by `apply_patch_and_open_pr`):
-+
-+- `create_pull_request("FULL_NAME", title, head="ally/feature-name", base="main", body=...)`
-+
-+### 7.3 Things to avoid
-+
-+- Do not merge or close PRs unless Joey explicitly requests it.
-+- Do not delete branches unless Joey explicitly requests it.
-+- Do not run destructive shell commands via `run_command` (e.g. `rm -rf`,
-+  force pushes).
-+
-+---
-+
-+## 8. Advanced: content_url for large docs
-+
-+For situations where a document is too large for a single patch or needs to be
-+generated in a different environment, you can use `content_url` with:
-+
-+- `commit_file_async`
-+- `update_files_and_open_pr`
-+
-+High-level pattern:
-+
-+1. Generate the document and host it at a stable `https://` URL that Joey's
-+   server can fetch.
-+2. Call `commit_file_async` or `update_files_and_open_pr` with `content_url`
-+   pointing at that URL.
-+
-+Use this only when patch-based workflows are not practical, and prefer unified
-+diffs for all normal code and doc work in this repository.
++If any of these rules conflict with a direct instruction from Joey, Joey's
++explicit instruction wins, and the assistant should note the deviation in the
++PR body under **MCP / Tooling Details**.
