@@ -39,7 +39,23 @@ GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
 GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
 
-WRITE_ALLOWED = os.environ.get("GITHUB_MCP_AUTO_APPROVE", "0") == "1"
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Parse a boolean-like environment variable.
+
+    Accepts common truthy strings (``1``, ``true``, ``yes``, ``on``) in a
+    case-insensitive way and falls back to ``default`` when the variable is
+    unset. This keeps write gating predictable even when deployers set
+    ``GITHUB_MCP_AUTO_APPROVE`` to values other than ``1``.
+    """
+
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
