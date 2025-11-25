@@ -1,0 +1,25 @@
+diff --git a/tests/test_smoke.py b/tests/test_smoke.py
+--- a/tests/test_smoke.py
++++ b/tests/test_smoke.py
+@@ -1,9 +1,21 @@
+ """Basic smoke tests for the GitHub MCP server."""
+ 
+ 
+ def test_sanity():
+     """Simple sanity check so pytest has at least one test to run.
+ 
+     This is intentionally trivial and does not assert on external services.
+     """
+     assert True
++
++
++def test_tools_available():
++    """Ensure the Joey's GitHub MCP tools are importable.
++
++    This does not hit external services; it just verifies that main.py can be
++    imported without raising exceptions so tools can be registered.
++    """
++    import importlib
++
++    main = importlib.import_module("main")
++    assert hasattr(main, "app")

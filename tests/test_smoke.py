@@ -7,3 +7,15 @@ def test_sanity():
     This is intentionally trivial and does not assert on external services.
     """
     assert True
+
+
+def test_tools_available():
+    """Ensure the Joey's GitHub MCP tools are importable.
+
+    This does not hit external services; it just verifies that main.py can be
+    imported without raising exceptions so tools can be registered.
+    """
+    import importlib
+
+    main = importlib.import_module("main")
+    assert hasattr(main, "app")
