@@ -60,6 +60,17 @@ All of these have sensible defaults and can usually be left alone:
 - `TOOL_STDOUT_MAX_CHARS`  max characters of stdout preserved from commands (default `12000`).
 - `TOOL_STDERR_MAX_CHARS`  max characters of stderr preserved from commands (default `12000`).
 
+#### Suggested settings for a 1 CPU / 2 GB server
+
+For a single-connector deployment on a small Render instance (1 vCPU, 2 GB RAM), set these environment variables to keep the
+service responsive without overloading the container or the GitHub API:
+
+- `MAX_CONCURRENCY=12`  trims overall concurrent work to match the limited CPU.
+- `FETCH_FILES_CONCURRENCY=8`  balances batch file fetches against memory and network usage.
+- `HTTPX_MAX_CONNECTIONS=32` and `HTTPX_MAX_KEEPALIVE=16`  reduce connection pool sizes to a level the instance can keep
+  active without extra pressure.
+- `HTTPX_TIMEOUT=120`  slightly lowers timeouts so hung requests free resources sooner.
+
 ## Running locally
 
 1. Create a virtual environment and install dependencies:
