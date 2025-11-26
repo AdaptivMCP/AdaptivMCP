@@ -1,28 +1,10 @@
 """GitHub MCP server exposing connector-friendly tools and workflows.
 
-This module is the single entry point for the GitHub Model Context Protocol
-server used by ChatGPT connectors. It focuses on minimizing friction for
-assistant clients by documenting the happy-path flows that otherwise lead to
-looping retries:
-
-* **Capability probe first.** Call ``get_server_config`` as the first request to
-  see whether write tools are enabled, learn truncation limits, and pick
-  sensible timeouts for long-running commands.
-* **Explicitly enable writes.** Before attempting commits or shell commands,
-  call ``authorize_write_actions`` with ``approved=true``; this flips the
-  in-memory gate controlled by ``GITHUB_MCP_AUTO_APPROVE``.
-* **Read → modify → PR flow.** Use ``get_file_contents`` (or the repository
-  browse/search helpers) to fetch the exact blob you want to edit, then call
-  ``update_files_and_open_pr`` to commit changes and open a pull request in a
-  single round-trip.
-* **Workspace commands with patches.** ``run_command`` and ``run_tests`` clone
-  the repository into a temporary directory. Provide the current patch from
-  your editing session via the ``patch`` argument so lint/test commands execute
-  against the latest changes instead of the remote branch tip.
-
-The rest of this file stays intentionally self-contained so assistants can read
-the tools, arguments, and expected behaviors directly alongside the
-implementations. See ``ASSISTANT_WORKFLOWS.md`` for a concise recipe list.
+This module is the entry point for the GitHub Model Context Protocol server
+used by ChatGPT connectors. It lists the tools, arguments, and behaviors in a
+single place so an assistant can decide how to interact with the server without
+being pushed toward a particular working style. See ``ASSISTANT_WORKFLOWS.md``
+for optional, non-binding examples of how the tools can fit together.
 """
 
 import os

@@ -134,13 +134,15 @@ Configure a custom MCP connector in ChatGPT:
 
 If `GITHUB_MCP_AUTO_APPROVE` is `0`, call `authorize_write_actions` with `approved=true` at the start of a session to enable write tools. If you fully trust the server, set `GITHUB_MCP_AUTO_APPROVE=1` instead.
 
-### Assistant quickstart
+### Assistant quickstart (optional)
 
-1. Call `get_server_config` (and `list_write_tools` if you plan to write) to see whether writes are allowed and what limits apply.
-2. Use `list_repository_tree` to browse the repository layout. Pass `path_prefix` to focus on a subdirectory when the top-level tree is large.
-3. Fetch live file contents with `get_file_contents` or `fetch_files` so you have numbered lines for planning diffs.
-4. Build small, targeted patches and apply them with `apply_patch_and_open_pr`; keep tests on for code changes.
-5. Report results, including any test output or truncation notices, back to the user.
+These steps are an example of how tools can be combined; follow a different flow if it suits your workflow better.
+
+1. `get_server_config` (and `list_write_tools` if you plan to write) can show whether writes are allowed and what limits apply.
+2. `list_repository_tree` helps browse the repository layout. Pass `path_prefix` to focus on a subdirectory when the top-level tree is large.
+3. Fetch live file contents with `get_file_contents` or `fetch_files` to have numbered lines for planning diffs.
+4. Build and apply patches in whatever way you prefer; `apply_patch_and_open_pr` is available when you want a single round-trip.
+5. Include any relevant test output or truncation notices in your report if they help downstream users.
 
 Once connected, the client should expose tools such as:
 
