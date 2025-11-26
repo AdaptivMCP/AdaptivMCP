@@ -52,3 +52,55 @@ async def test_get_job_logs_follows_redirects(monkeypatch):
     assert dummy.follow_redirects is True
     assert dummy.headers.get("Accept") == "application/vnd.github+json"
     assert result["logs"] == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_get_job_logs_respects_custom_truncation(monkeypatch):
+    class DummyClient:
+        def build_request(self, method, url, headers=None):
+            return httpx.Request(method, url)
+
+        async def send(self, request, follow_redirects=False):
+            return httpx.Response(
+                200,
+                content=b"abcdef",
+                headers={"Content-Type": "text/plain"},
+                request=request,
+            )
+
+    dummy = DummyClient()
+
+    from main import _http_client_github
+
+    monkeypatch.setattr("main._http_client_github", dummy, raising=False)
+
+    result = await get_job_logs("octo/demo", 123, logs_max_chars=3)
+
+    assert result["logs"] == "abc"
+
+
+@pytest.mark.asyncio
+async def test_get_job_logs_can_disable_truncation(monkeypatch):
+    long_payload = "log" * 100
+
+    class DummyClient:
+        def build_request(self, method, url, headers=None):
+            return httpx.Request(method, url)
+
+        async def send(self, request, follow_redirects=False):
+            return httpx.Response(
+                200,
+                content=long_payload.encode(),
+                headers={"Content-Type": "text/plain"},
+                request=request,
+            )
+
+    dummy = DummyClient()
+
+    from main import _http_client_github
+
+    monkeypatch.setattr("main._http_client_github", dummy, raising=False)
+
+    result = await get_job_logs("octo/demo", 123, logs_max_chars=0)
+
+    assert result["logs"] == long_payload

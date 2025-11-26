@@ -40,7 +40,9 @@ ChatGPT connector UI:
 - ``TOOL_STDOUT_MAX_CHARS`` (fixed 12,000) trims stdout text.
 - ``TOOL_STDERR_MAX_CHARS`` (env configurable, default 12,000) trims stderr
   text separately.
-- ``LOGS_MAX_CHARS`` trims GitHub Actions logs (~16,000 chars).
+- ``LOGS_MAX_CHARS`` (env configurable, default ~16,000) trims GitHub Actions
+  logs; pass ``logs_max_chars`` to ``get_job_logs`` to override or disable
+  truncation per request (``0``/negative = no truncation).
 
 Adjust ``TOOL_STDERR_MAX_CHARS`` via environment variable if stderr snippets are
 being truncated too aggressively.
@@ -81,8 +83,8 @@ write gate rules above.
 - **get_workflow_run(full_name, run_id)** — Details for a single workflow run.
 - **list_workflow_run_jobs(full_name, run_id, per_page=30, page=1)** — Jobs
   inside a workflow run.
-- **get_job_logs(full_name, job_id)** — Raw job logs truncated to
-  ``LOGS_MAX_CHARS``.
+- **get_job_logs(full_name, job_id, logs_max_chars?)** — Raw job logs with
+  optional truncation override (``logs_max_chars`` = 0 for full logs).
 - **wait_for_workflow_run(full_name, run_id, timeout_seconds=900,
   poll_interval_seconds=10)** — Poll until completion or timeout.
 - **trigger_workflow_dispatch(full_name, workflow, ref, inputs?)** — Trigger a

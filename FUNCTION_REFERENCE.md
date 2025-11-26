@@ -240,10 +240,12 @@ patterns so assistants can automate workflows without step-by-step prompts.
 * **Purpose:** Enumerate jobs within a run.
 * **Chaining:** Pair with `get_job_logs` to drill into failing jobs.
 
-### `get_job_logs(full_name, job_id)`
-* **Purpose:** Fetch raw job logs truncated to `LOGS_MAX_CHARS`, automatically
-  unzipping the archive GitHub returns.
-* **Chaining:** Surface concise diagnostics in assistant responses.
+### `get_job_logs(full_name, job_id, logs_max_chars=None)`
+* **Purpose:** Fetch raw job logs with optional truncation override; pass
+  `0`/negative to disable truncation entirely or a positive integer to set the
+  limit. The server still unzips the archive GitHub returns.
+* **Chaining:** Surface concise diagnostics in assistant responses, or request
+  full logs when needed for deep debugging.
 
 ### `wait_for_workflow_run(full_name, run_id, timeout_seconds=900, poll_interval_seconds=10)`
 * **Purpose:** Poll a workflow run until completion or timeout.

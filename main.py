@@ -48,7 +48,7 @@ FETCH_FILES_CONCURRENCY = int(
 
 TOOL_STDOUT_MAX_CHARS = 12000
 TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
-LOGS_MAX_CHARS = 16000
+LOGS_MAX_CHARS = int(os.environ.get("LOGS_MAX_CHARS", "16000"))
 
 GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
 GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
@@ -97,6 +97,14 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
             return "\n\n".join(parts)
     except Exception:
         return ""
+
+
+def _truncate_text(text: str, max_chars: Optional[int]) -> str:
+    """Trim text when ``max_chars`` is positive; allow ``None``/non-positive for full logs."""
+
+    if max_chars is None or max_chars <= 0:
+        return text
+    return text[:max_chars]
 
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
@@ -198,7 +206,7 @@ async def _github_request(
     json_body: Optional[Dict[str, Any]] = None,
     headers: Optional[Dict[str, str]] = None,
     expect_json: bool = True,
-    text_max_chars: int = LOGS_MAX_CHARS,
+    text_max_chars: Optional[int] = LOGS_MAX_CHARS,
 ) -> Dict[str, Any]:
     client = _github_client_instance()
     async with _concurrency_semaphore:
@@ -225,7 +233,7 @@ async def _github_request(
 
     return {
         "status_code": resp.status_code,
-        "text": resp.text[:text_max_chars],
+        "text": _truncate_text(resp.text, text_max_chars),
         "headers": dict(resp.headers),
     }
 
@@ -1479,8 +1487,10 @@ async def list_workflow_run_jobs(
 
 
 @mcp_tool(write_action=False)
-async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
-    """Fetch raw logs for a GitHub Actions job, truncated to ``LOGS_MAX_CHARS``."""
+async def get_job_logs(
+    full_name: str, job_id: int, logs_max_chars: Optional[int] = None
+) -> Dict[str, Any]:
+    """Fetch raw logs for a GitHub Actions job with adjustable truncation."""
 
     client = _github_client_instance()
     request = client.build_request(
@@ -1500,9 +1510,11 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     else:
         logs = resp.text
 
+    effective_limit = LOGS_MAX_CHARS if logs_max_chars is None else logs_max_chars
+
     return {
         "status_code": resp.status_code,
-        "logs": logs[:LOGS_MAX_CHARS],
+        "logs": _truncate_text(logs, effective_limit),
         "content_type": content_type,
     }
 
