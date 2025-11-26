@@ -1347,6 +1347,58 @@ async def list_workflow_runs(
 
 
 @mcp_tool(write_action=False)
+def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
+    """Enumerate every available MCP tool with read/write metadata.
+
+    This helper exposes a structured catalog of all tools so assistants can see
+    the full command surface without reading this file. It is intentionally
+    read-only and can therefore be called before write approval is granted.
+
+    Args:
+        include_parameters: When ``True``, include the serialized input schema
+            for each tool to clarify argument names and types.
+    """
+
+    tools: List[Dict[str, Any]] = []
+    for maybe_func in globals().values():
+        tool = getattr(maybe_func, "_mcp_tool", None)
+        if tool is None:
+            continue
+
+        meta = getattr(tool, "meta", {}) or {}
+        annotations = getattr(tool, "annotations", None)
+
+        name = getattr(tool, "name", None) or getattr(maybe_func, "__name__", None)
+        description = getattr(tool, "description", None) or (maybe_func.__doc__ or "")
+
+        tool_info: Dict[str, Any] = {
+            "name": str(name),
+            "description": description.strip(),
+            "tags": sorted(list(getattr(tool, "tags", []) or [])),
+            "write_action": bool(meta.get("write_action")),
+            "auto_approved": bool(meta.get("auto_approved")),
+            "read_only_hint": getattr(annotations, "readOnlyHint", None),
+        }
+
+        if include_parameters:
+            schema = getattr(tool, "inputSchema", None)
+            if schema is not None:
+                try:
+                    tool_info["input_schema"] = schema.model_dump()
+                except Exception:
+                    tool_info["input_schema"] = None
+
+        tools.append(tool_info)
+
+    tools.sort(key=lambda entry: entry["name"])
+
+    return {
+        "write_actions_enabled": WRITE_ALLOWED,
+        "tools": tools,
+    }
+
+
+@mcp_tool(write_action=False)
 async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
     """Retrieve a specific workflow run including timing and conclusion."""
     return await _github_request(
