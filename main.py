@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
+from anyio import ClosedResourceError
 from mcp.types import ToolAnnotations
 from fastmcp import FastMCP
 from starlette.middleware import Middleware
@@ -106,6 +107,23 @@ _background_read_tasks: Dict[str, asyncio.Task[Any]] = {}
 
 # json_response is configured per transport; do not pass it here.
 mcp = FastMCP("GitHub Fast MCP")
+
+# Suppress noisy tracebacks when SSE clients disconnect mid-response. The
+# underlying MemoryObjectSendStream raises ClosedResourceError when we attempt
+# to send on a closed stream; swallow it so disconnects are treated as routine.
+from mcp.shared import session as mcp_shared_session
+
+_orig_send_response = mcp_shared_session.BaseSession._send_response
+
+
+async def _quiet_send_response(self, request_id, response):
+    try:
+        return await _orig_send_response(self, request_id, response)
+    except ClosedResourceError:
+        return None
+
+
+mcp_shared_session.BaseSession._send_response = _quiet_send_response
 
 
 # ------------------------------------------------------------------------------
@@ -1468,7 +1486,6 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     request = client.build_request(
         "GET",
         f"/repos/{full_name}/actions/jobs/{job_id}/logs",
-        headers={"Accept": "application/octet-stream"},
     )
     async with _concurrency_semaphore:
         resp = await client.send(request, follow_redirects=True)
