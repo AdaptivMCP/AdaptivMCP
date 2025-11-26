@@ -57,6 +57,8 @@ A tool call response contains an error similar to:
   1. Set `GITHUB_MCP_AUTO_APPROVE=1` in Render to allow writes by default, or
   2. Call the `authorize_write_actions` tool with `{"approved": true}`
      before using write tools like `apply_patch_and_open_pr` or `run_tests`.
+     Workspace helpers (`run_command` / `run_tests`) will not clone anything
+     until write access is enabled.
 
 ## 3. Git patch application fails (git_apply_failed)
 

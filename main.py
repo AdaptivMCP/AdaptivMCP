@@ -595,7 +595,8 @@ def _structured_tool_error(
 def _ensure_write_allowed(context: str) -> None:
     if not WRITE_ALLOWED:
         raise WriteNotAuthorizedError(
-            f"MCP write action is temporarily disabled (context: {context})"
+            "MCP write actions are disabled. Call authorize_write_actions(approved=true) "
+            f"first to enable tools such as run_command or apply_patch_and_open_pr (context: {context})."
         )
 
 
@@ -1968,6 +1969,14 @@ async def run_command(
         patch: Optional unified diff that will be applied before running the
             command so assistants can run tests against in-flight edits.
 
+    Notes:
+        - Write-gated tools require an explicit ``authorize_write_actions`` call
+          (or the ``GITHUB_MCP_AUTO_APPROVE`` environment variable) before they
+          will run. The clone will not be created until write access is
+          enabled.
+        - Each invocation clones a fresh working copy, applies ``patch`` when
+          provided, executes the command, and removes the temporary directory.
+
     The temporary directory is cleaned up automatically after execution, so
     callers should capture any artifacts they need from ``result.stdout`` or by
     writing to remote destinations during the command itself.
@@ -2010,7 +2019,9 @@ async def run_tests(
 
     ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
     default timeout. Provide ``patch`` when running tests against pending edits
-    so the checkout matches the assistant's current working diff.
+    so the checkout matches the assistant's current working diff. Write
+    approval is required before the clone is created; call
+    ``authorize_write_actions`` first when write gating is enabled.
     """
     return await run_command(
         full_name=full_name,
