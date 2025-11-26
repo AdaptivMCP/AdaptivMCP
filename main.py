@@ -947,6 +947,95 @@ async def fetch_files(
 
 
 @mcp_tool(write_action=False)
+async def list_repository_tree(
+    full_name: str,
+    ref: str = "main",
+    path_prefix: Optional[str] = None,
+    recursive: bool = True,
+    max_entries: int = 1000,
+    include_blobs: bool = True,
+    include_trees: bool = True,
+) -> Dict[str, Any]:
+    """List files and folders in a repository tree with optional filtering.
+
+    Args:
+        full_name: ``owner/repo`` string.
+        ref: Branch, tag, or commit SHA to inspect (default ``main``).
+        path_prefix: If set, only include entries whose paths start with this
+            prefix (useful for zooming into subdirectories without fetching a
+            huge response).
+        recursive: Whether to request a recursive tree (default ``True``).
+        max_entries: Maximum number of entries to return (default ``1000``).
+        include_blobs: Include files in the listing (default ``True``).
+        include_trees: Include directories in the listing (default ``True``).
+
+    The GitHub Trees API caps responses at 100,000 entries server side. This
+    tool applies an additional ``max_entries`` limit so assistants get a fast,
+    bounded listing. When ``truncated`` is true in the response, narrow the
+    ``path_prefix`` and call again.
+    """
+
+    if max_entries <= 0:
+        raise ValueError("max_entries must be a positive integer")
+
+    params = {"recursive": 1 if recursive else 0}
+    data = await _github_request(
+        "GET", f"/repos/{full_name}/git/trees/{ref}", params=params
+    )
+
+    payload = data.get("json") or {}
+    tree = payload.get("tree")
+    if not isinstance(tree, list):
+        raise GitHubAPIError("Unexpected tree response from GitHub")
+
+    allowed_types = set()
+    if include_blobs:
+        allowed_types.add("blob")
+    if include_trees:
+        allowed_types.add("tree")
+    if not allowed_types:
+        return {
+            "entries": [],
+            "entry_count": 0,
+            "truncated": False,
+            "message": "Both blobs and trees were excluded; nothing to return.",
+        }
+
+    normalized_prefix = path_prefix.lstrip("/") if path_prefix else None
+
+    filtered_entries: List[Dict[str, Any]] = []
+    for entry in tree:
+        if not isinstance(entry, dict):
+            continue
+        entry_type = entry.get("type")
+        if entry_type not in allowed_types:
+            continue
+        path = entry.get("path")
+        if not isinstance(path, str):
+            continue
+        if normalized_prefix and not path.startswith(normalized_prefix):
+            continue
+
+        filtered_entries.append(
+            {
+                "path": path,
+                "type": entry_type,
+                "mode": entry.get("mode"),
+                "size": entry.get("size"),
+                "sha": entry.get("sha"),
+            }
+        )
+
+    truncated = len(filtered_entries) > max_entries
+    return {
+        "ref": payload.get("sha") or ref,
+        "entry_count": len(filtered_entries),
+        "truncated": truncated,
+        "entries": filtered_entries[:max_entries],
+    }
+
+
+@mcp_tool(write_action=False)
 async def graphql_query(
     query: str,
     variables: Optional[Dict[str, Any]] = None,
