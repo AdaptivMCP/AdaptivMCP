@@ -87,20 +87,24 @@ A tool call response contains an error similar to:
 If the patch keeps failing, stop and surface the `stderr` to Joey for a
 manual decision instead of brute-forcing more attempts.
 
-## 4. Empty patches are rejected (empty_patch)
+## 4. Empty patches or no-op diffs are rejected (empty_patch / empty_diff)
 
 ### Symptom
 
-`apply_patch_and_open_pr` returns a result with:
+`apply_patch_and_open_pr` returns a result with either:
 
-- `error: "empty_patch"`
-- `stderr` explaining that the patch was empty or whitespace-only.
+- `error: "empty_patch"` and `stderr` explaining the patch body was empty or
+  whitespace-only (guardrail before any git ops).
+- `error: "empty_diff"` when the patch applied cleanly but produced no staged
+  changes (no-op diff after application).
 
 ### Fix
 
 - Rebuild the unified diff and confirm it contains the intended edits.
-- Avoid sending empty templates; the guardrail runs before any git operations
-  or clones to keep the workflow predictable.
+- Make sure the diff actually changes files; identical old/new hunks trigger
+  `empty_diff` even if the patch text is non-empty.
+- Avoid sending empty templates; both guardrails keep the workflow predictable
+  and avoid creating useless branches.
 
 ## 5. Tests fail in apply_patch_and_open_pr (tests_failed)
 
