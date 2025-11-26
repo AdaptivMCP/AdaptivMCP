@@ -13,6 +13,8 @@ import base64
 import tempfile
 import shutil
 import uuid
+import io
+import zipfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -74,6 +76,25 @@ def _with_numbered_lines(text: str) -> List[Dict[str, Any]]:
     """Return a list of dicts pairing 1-based line numbers with text."""
 
     return [{"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)]
+
+
+def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
+    """Extract and concatenate text files from a zipped job log archive."""
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zip_file:
+            parts: List[str] = []
+            for name in sorted(
+                entry
+                for entry in zip_file.namelist()
+                if not entry.endswith("/")
+            ):
+                with zip_file.open(name) as handle:
+                    content = handle.read().decode("utf-8", errors="replace")
+                parts.append(f"[{name}]\n{content}".rstrip())
+            return "\n\n".join(parts)
+    except Exception:
+        return ""
 
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
@@ -1438,8 +1459,17 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
         raise GitHubAPIError(
             f"GitHub job logs error {resp.status_code}: {resp.text}"
         )
-    text = resp.text[:LOGS_MAX_CHARS]
-    return {"status_code": resp.status_code, "logs": text}
+    content_type = resp.headers.get("Content-Type", "")
+    if "zip" in content_type.lower():
+        logs = _decode_zipped_job_logs(resp.content)
+    else:
+        logs = resp.text
+
+    return {
+        "status_code": resp.status_code,
+        "logs": logs[:LOGS_MAX_CHARS],
+        "content_type": content_type,
+    }
 
 
 @mcp_tool(write_action=False)
