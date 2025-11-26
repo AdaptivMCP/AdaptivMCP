@@ -2,6 +2,8 @@
 
 GitHub MCP server for private repositories, tuned for fast read and safe write workflows from ChatGPT.
 
+For a human-friendly, end-to-end guide on how assistants and people should collaborate with this server, see **[HUMAN_AI_WORKFLOW_MANUAL.md](HUMAN_AI_WORKFLOW_MANUAL.md)**. It explains every common workflow in natural language and maps each request to the right MCP tools.
+
 This service runs as a Python web service on Render and exposes a Model Context Protocol (MCP) SSE endpoint at `/sse` for use by ChatGPT or any other MCP client that understands the SSE transport.
 
 ## What this server does
@@ -147,17 +149,7 @@ If `GITHUB_MCP_AUTO_APPROVE` is `0`, call `authorize_write_actions` with `approv
 
 ### Assistant quickstart (optional)
 
-These steps are an example of how tools can be combined; follow a different flow if it suits your workflow better.
-
-1. `get_server_config` (and `list_write_tools` if you plan to write) can show whether writes are allowed and what limits apply.
-2. `list_repository_tree` helps browse the repository layout. Pass `path_prefix` to focus on a subdirectory when the top-level tree is large.
-3. Fetch live file contents with `get_file_contents` or `fetch_files` to have numbered lines for planning diffs.
-4. Build and apply patches in whatever way you prefer; `apply_patch_and_open_pr` is available when you want a single round-trip.
-5. Include any relevant test output or truncation notices in your report if they help downstream users.
-
-Once connected, the client should expose tools such as:
-
-- `authorize_write_actions`
+See [HUMAN_AI_WORKFLOW_MANUAL.md](HUMAN_AI_WORKFLOW_MANUAL.md) for the authoritative, natural-language playbook that covers discovery, editing, testing, and PR publication. The manual includes recommended tool choices for each step, how to mirror human requests, and how to report results clearly.
 - `get_server_config`, `list_write_tools`
 - `get_rate_limit`, `get_repository`, `list_branches`, `list_repository_tree`
 - `get_file_contents`, `fetch_files` (responses include `numbered_lines` for
