@@ -57,3 +57,19 @@ async def test_run_command_applies_patch_before_command(monkeypatch, tmp_path):
 
     assert result["result"]["exit_code"] == 0
     assert result["result"]["stdout"].strip() == "new"
+
+
+@pytest.mark.asyncio
+async def test_run_shell_flags_truncation(monkeypatch):
+    monkeypatch.setattr(main, "TOOL_STDOUT_MAX_CHARS", 18)
+    monkeypatch.setattr(main, "TOOL_STDERR_MAX_CHARS", 16)
+
+    cmd = "python - <<'PY'\nimport sys\nsys.stdout.write('A' * 20)\nsys.stderr.write('B' * 30)\nPY"
+    result = await main._run_shell(cmd)
+
+    assert result["stdout_truncated"] is True
+    assert result["stderr_truncated"] is True
+    assert len(result["stdout"]) <= main.TOOL_STDOUT_MAX_CHARS
+    assert len(result["stderr"]) <= main.TOOL_STDERR_MAX_CHARS
+    assert result["stdout"].endswith("[truncated]")
+    assert result["stderr"].endswith("[truncated]")
