@@ -87,7 +87,22 @@ A tool call response contains an error similar to:
 If the patch keeps failing, stop and surface the `stderr` to Joey for a
 manual decision instead of brute-forcing more attempts.
 
-## 4. Tests fail in apply_patch_and_open_pr (tests_failed)
+## 4. Empty patches are rejected (empty_patch)
+
+### Symptom
+
+`apply_patch_and_open_pr` returns a result with:
+
+- `error: "empty_patch"`
+- `stderr` explaining that the patch was empty or whitespace-only.
+
+### Fix
+
+- Rebuild the unified diff and confirm it contains the intended edits.
+- Avoid sending empty templates; the guardrail runs before any git operations
+  or clones to keep the workflow predictable.
+
+## 5. Tests fail in apply_patch_and_open_pr (tests_failed)
 
 ### Symptom
 
@@ -104,7 +119,7 @@ manual decision instead of brute-forcing more attempts.
 4. Propose targeted next steps (e.g. adjust a specific function or test) and
    wait for Joey’s confirmation before making more changes.
 
-## 5. Git push fails (git_push_failed)
+## 6. Git push fails (git_push_failed)
 
 ### Symptom
 
@@ -131,7 +146,7 @@ manual decision instead of brute-forcing more attempts.
 3. Do not retry the same push endlessly; wait for Joey to adjust settings or
    confirm the next step.
 
-## 6. Rate limiting and GitHub API errors
+## 7. Rate limiting and GitHub API errors
 
 ### Symptom
 
@@ -150,7 +165,7 @@ Responses from tools like `get_rate_limit`, `get_repository`, or
 If rate limits are repeatedly a problem, Joey may need to adjust usage or
 token scopes.
 
-## 7. MCP connector configuration issues
+## 8. MCP connector configuration issues
 
 ### Symptom
 
@@ -178,7 +193,7 @@ ChatGPT (or another MCP client) cannot connect to Joey’s GitHub server at all.
 If `/` and `/healthz` are healthy but the MCP client still cannot connect,
 double-check the MCP configuration in the client (URL, path, and name).
 
-## 8. When in doubt
+## 9. When in doubt
 
 If you are an assistant:
 
