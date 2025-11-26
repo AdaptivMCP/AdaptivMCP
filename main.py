@@ -542,6 +542,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     tags: set[str] = set(existing_tags or [])
     if write_action:
         tags.add("write")
+    else:
+        tags.add("read")
 
     existing_meta = tool_kwargs.pop("meta", None) or {}
     if not isinstance(existing_meta, dict):
