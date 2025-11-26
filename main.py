@@ -80,6 +80,17 @@ def _with_numbered_lines(text: str) -> List[Dict[str, Any]]:
     return [{"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)]
 
 
+def _format_numbered_block(text: str, max_lines: int = 400) -> str:
+    """Render ``text`` with line numbers, truncating after ``max_lines``."""
+
+    numbered = _with_numbered_lines(text)
+    limited = numbered[:max_lines]
+    formatted = "\n".join(f"{entry['line']:>6}: {entry['text']}" for entry in limited)
+    if len(numbered) > max_lines:
+        formatted += f"\n... (truncated after {max_lines} lines)"
+    return formatted
+
+
 def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
     """Extract and concatenate text files from a zipped job log archive."""
 
@@ -2272,6 +2283,35 @@ async def apply_patch_and_open_pr(
         with open(patch_path, "w", encoding="utf-8") as f:
             f.write(patch)
 
+        check_result = await _run_shell(
+            f"git apply --whitespace=nowarn --check --verbose {patch_path}",
+            cwd=repo_dir,
+            timeout_seconds=120,
+        )
+        if check_result["exit_code"] != 0:
+            error = "git_apply_failed"
+            diagnostics = check_result.get("stderr", "") or check_result.get(
+                "stdout", ""
+            )
+            numbered_patch = _format_numbered_block(patch)
+            error_stderr = "\n".join(
+                part
+                for part in [
+                    "git apply --check failed; patch was not applied.",
+                    diagnostics,
+                    "Patch with line numbers (truncated):",
+                    numbered_patch,
+                ]
+                if part.strip()
+            )
+            return {
+                "branch": branch,
+                "tests": tests_result,
+                "pull_request": None,
+                "error": error,
+                "stderr": error_stderr,
+            }
+
         apply_result = await _run_shell(
             f"git apply --whitespace=nowarn {patch_path}",
             cwd=repo_dir,
@@ -2279,7 +2319,9 @@ async def apply_patch_and_open_pr(
         )
         if apply_result["exit_code"] != 0:
             error = "git_apply_failed"
-            error_stderr = apply_result.get("stderr", "")
+            error_stderr = apply_result.get("stderr", "") or apply_result.get(
+                "stdout", ""
+            )
             return {
                 "branch": branch,
                 "tests": tests_result,
