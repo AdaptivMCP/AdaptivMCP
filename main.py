@@ -564,7 +564,14 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     existing_meta = tool_kwargs.pop("meta", None) or {}
     if not isinstance(existing_meta, dict):
         existing_meta = {}
-    meta = {**existing_meta, "write_action": write_action}
+    meta = {
+        **existing_meta,
+        "write_action": write_action,
+        # Read-only tools run without extra approval so agents can chain fetches
+        # and inspections automatically. Write-tagged tools still require an
+        # explicit opt-in via authorize_write_actions or the env flag.
+        "auto_approved": not write_action,
+    }
 
     import functools as _functools
 
@@ -635,6 +642,22 @@ async def get_server_config() -> Dict[str, Any]:
             "stdout_max_chars": TOOL_STDOUT_MAX_CHARS,
             "stderr_max_chars": TOOL_STDERR_MAX_CHARS,
             "logs_max_chars": LOGS_MAX_CHARS,
+        },
+        "approval_policy": {
+            "read_actions": {
+                "auto_approved": True,
+                "notes": "Read-only tools never require additional approval.",
+            },
+            "write_actions": {
+                "auto_approved": WRITE_ALLOWED,
+                "requires_authorization": not WRITE_ALLOWED,
+                "toggle_tool": "authorize_write_actions",
+                "notes": (
+                    "Write-tagged tools stay gated until explicitly enabled for a "
+                    "session; set GITHUB_MCP_AUTO_APPROVE to trust the server by "
+                    "default."
+                ),
+            },
         },
         "git_identity": {
             "author_name": GIT_AUTHOR_NAME,
