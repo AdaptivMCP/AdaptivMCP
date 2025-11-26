@@ -227,6 +227,18 @@ patterns so assistants can automate workflows without step-by-step prompts.
   `get_file_contents` to inspect files, and `update_files_and_open_pr` for
   edits.
 
+### `build_unified_diff(full_name, path, new_content, ref='main', context_lines=3, show_whitespace=false)`
+* **Purpose:** Produce a unified diff between a repository file and proposed
+  content without cloning locally.
+* **Behavior:** Fetches the current file contents, computes a unified diff with
+  configurable context, and returns both base/proposed numbered lines. When
+  `show_whitespace` is true, the response includes whitespace-marked variants of
+  the base/proposed/diff outputs so assistants can see tabs and trailing
+  spaces.
+* **Chaining:** Use before `apply_patch_and_open_pr` to validate patches or when
+  connectors hide whitespace, ensuring the generated diff matches Git's
+  expectations.
+
 ### GraphQL and external fetch
 * `graphql_query(query, variables=None)`: Execute GitHub GraphQL with shared
   auth client; raises on HTTP errors.

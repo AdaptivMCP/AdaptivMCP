@@ -16,6 +16,7 @@ import shutil
 import uuid
 import io
 import zipfile
+import difflib
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -74,6 +75,19 @@ def _with_numbered_lines(text: str) -> List[Dict[str, Any]]:
     """Return a list of dicts pairing 1-based line numbers with text."""
 
     return [{"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)]
+
+
+def _render_visible_whitespace(text: str) -> str:
+    """Surface whitespace characters for assistants that hide them by default."""
+
+    rendered_lines: List[str] = []
+    for line in text.splitlines(keepends=True):
+        body = line[:-1] if line.endswith("\n") else line
+        body = body.replace("\t", "→\t").replace(" ", "·")
+        newline_marker = "⏎" if line.endswith("\n") else "␄"
+        rendered_lines.append(f"{body}{newline_marker}")
+
+    return "\n".join(rendered_lines)
 
 
 def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
@@ -1105,6 +1119,69 @@ async def fetch_files(
 
     await asyncio.gather(*[_fetch_single(p) for p in paths])
     return {"files": results}
+
+
+@mcp_tool(write_action=False)
+async def build_unified_diff(
+    full_name: str,
+    path: str,
+    new_content: str,
+    ref: str = "main",
+    context_lines: int = 3,
+    show_whitespace: bool = False,
+) -> Dict[str, Any]:
+    """Generate a unified diff for a file against proposed new content.
+
+    Args:
+        full_name: ``owner/repo`` string.
+        path: Repository-relative file path to diff.
+        new_content: Proposed replacement content for the file.
+        ref: Branch, tag, or commit SHA to compare against (default ``main``).
+        context_lines: Number of unchanged context lines to include in the diff
+            (default ``3``).
+        show_whitespace: When ``True``, include a whitespace-visualized version
+            of the base, proposed, and diff outputs so assistants can see tabs
+            and trailing spaces that UI layers might hide.
+    """
+
+    if context_lines < 0:
+        raise ValueError("context_lines must be non-negative")
+
+    base = await _decode_github_content(full_name, path, ref)
+    base_text = base.get("text", "")
+
+    diff_lines = difflib.unified_diff(
+        base_text.splitlines(keepends=True),
+        new_content.splitlines(keepends=True),
+        fromfile=f"a/{path}",
+        tofile=f"b/{path}",
+        n=context_lines,
+    )
+    diff_text = "".join(diff_lines)
+
+    response: Dict[str, Any] = {
+        "path": path,
+        "ref": ref,
+        "context_lines": context_lines,
+        "base": {
+            "text": base_text,
+            "numbered_lines": base.get("numbered_lines"),
+        },
+        "proposed": {
+            "text": new_content,
+            "numbered_lines": _with_numbered_lines(new_content),
+        },
+        "diff": diff_text,
+    }
+
+    if show_whitespace:
+        response["visible_whitespace"] = {
+            "base": _render_visible_whitespace(base_text),
+            "proposed": _render_visible_whitespace(new_content),
+            "diff": _render_visible_whitespace(diff_text),
+        }
+
+    return response
 
 
 @mcp_tool(write_action=False)

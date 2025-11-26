@@ -166,6 +166,8 @@ Once connected, the client should expose tools such as:
   `list_repositories_by_installation`, `search`
 - `get_file_contents`, `fetch_files`, `download_user_content` (responses include
   `numbered_lines` for easy referencing)
+- `build_unified_diff` to create unified diffs (optionally with visible
+  whitespace markers) against repository files without leaving the connector
 - Background read helpers: `start_background_read`, `get_background_read`,
   `list_background_reads` (schedule long reads and poll later)
 - `graphql_query`, `fetch_url`
