@@ -1721,6 +1721,11 @@ async def apply_patch_and_open_pr(
                 "stderr": error_stderr,
             }
 
+        try:
+            os.remove(patch_path)
+        except OSError:
+            pass
+
         add_result = await _run_shell(
             "git add -A",
             cwd=repo_dir,
@@ -1737,6 +1742,33 @@ async def apply_patch_and_open_pr(
                 "pull_request": None,
                 "error": error,
                 "stderr": error_stderr,
+            }
+
+        diff_result = await _run_shell(
+            "git diff --cached --stat",
+            cwd=repo_dir,
+            timeout_seconds=60,
+        )
+        if diff_result["exit_code"] != 0:
+            error = "git_diff_failed"
+            error_stderr = diff_result.get("stderr", "") or diff_result.get(
+                "stdout", ""
+            )
+            return {
+                "branch": branch,
+                "tests": tests_result,
+                "pull_request": None,
+                "error": error,
+                "stderr": error_stderr,
+            }
+
+        if not diff_result.get("stdout", "").strip():
+            return {
+                "branch": branch,
+                "tests": tests_result,
+                "pull_request": None,
+                "error": "empty_diff",
+                "stderr": "apply_patch_and_open_pr: patch applied but no changes to commit",
             }
 
         commit_result = await _run_shell(
