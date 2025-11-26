@@ -42,8 +42,8 @@ patterns so assistants can automate workflows without step-by-step prompts.
 * **Purpose:** Thin wrapper around `httpx` requests against GitHub with shared
   concurrency semaphore, consistent error handling, JSON parsing, and optional
   text responses.
-* **Inputs:** HTTP method/path plus optional params, JSON body, headers,
-  `expect_json` toggle, and `text_max_chars` truncation.
+* **Inputs:** HTTP method/path plus optional params, JSON body, headers, and an
+  `expect_json` toggle.
 * **Returns:** Dict containing `status_code` and `json` or `text`/`headers`.
 * **Errors:** Raises `GitHubAPIError` on HTTP ≥400, including message extraction
   from JSON error payloads.
@@ -82,7 +82,7 @@ patterns so assistants can automate workflows without step-by-step prompts.
 
 ### `_run_shell(cmd, cwd=None, timeout_seconds=300)`
 * **Purpose:** Execute shell commands with Git identity env vars injected and
-  bounded stdout/stderr truncation markers.
+  full stdout/stderr passthrough.
 * **Returns:** Dict with `exit_code`, `timed_out`, `stdout`, `stderr`, and
   truncation booleans.
 * **Chaining:** Backbone for workspace commands, Git operations, and test runs.
@@ -140,7 +140,7 @@ patterns so assistants can automate workflows without step-by-step prompts.
 * **Purpose:** Expose runtime limits, gating status, HTTP settings, git identity,
   and sandbox hints.
 * **Chaining:** Recommended first call; informs whether `authorize_write_actions`
-  is required and provides truncation limits for later parsing.
+  is required and surfaces runtime settings for later parsing.
 
 ### `get_rate_limit()` / `get_user_login()` / `get_profile()`
 * **Purpose:** Inspect token rate limits and authenticated user identity
@@ -241,8 +241,8 @@ patterns so assistants can automate workflows without step-by-step prompts.
 * **Chaining:** Pair with `get_job_logs` to drill into failing jobs.
 
 ### `get_job_logs(full_name, job_id)`
-* **Purpose:** Fetch raw job logs truncated to `LOGS_MAX_CHARS`, automatically
-  unzipping the archive GitHub returns.
+* **Purpose:** Fetch raw job logs without truncation, automatically unzipping
+  the archive GitHub returns.
 * **Chaining:** Surface concise diagnostics in assistant responses.
 
 ### `wait_for_workflow_run(full_name, run_id, timeout_seconds=900, poll_interval_seconds=10)`

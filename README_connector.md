@@ -33,18 +33,6 @@ Write tools are gated to avoid accidental changes.
 If writes are disabled, write-tagged tools raise
 ``WriteNotAuthorizedError`` with context about the requested action.
 
-## Response truncation
-Shell outputs and fetched logs are trimmed to keep responses predictable for the
-ChatGPT connector UI:
-
-- ``TOOL_STDOUT_MAX_CHARS`` (fixed 12,000) trims stdout text.
-- ``TOOL_STDERR_MAX_CHARS`` (env configurable, default 12,000) trims stderr
-  text separately.
-- ``LOGS_MAX_CHARS`` trims GitHub Actions logs (~16,000 chars).
-
-Adjust ``TOOL_STDERR_MAX_CHARS`` via environment variable if stderr snippets are
-being truncated too aggressively.
-
 ## Tool catalog
 A concise reference for the Actions list inside ChatGPT. All tools inherit the
 write gate rules above.
@@ -55,8 +43,8 @@ write gate rules above.
 
 ### Server introspection
 - **get_server_config()** — Return non-sensitive connector configuration such as
-  write gating, HTTP timeouts, concurrency limits, log truncation, Git identity,
-  and whether sandbox content URLs are configured.
+  write gating, HTTP timeouts, concurrency limits, Git identity, and whether
+  sandbox content URLs are configured.
 - **list_write_tools()** — List write-capable tools, their categories, and
   safety notes to avoid scanning main.py manually.
 
@@ -73,7 +61,7 @@ write gate rules above.
   concurrently; each entry returns decoded content, `numbered_lines`, or an
   error string.
 - **graphql_query(query, variables=None)** — Execute a GitHub GraphQL query.
-- **fetch_url(url)** — Fetch arbitrary HTTP/HTTPS URLs with content truncation.
+- **fetch_url(url)** — Fetch arbitrary HTTP/HTTPS URLs without truncation.
 
 ### GitHub Actions
 - **list_workflow_runs(full_name, branch?, status?, event?, per_page=30,
@@ -81,8 +69,7 @@ write gate rules above.
 - **get_workflow_run(full_name, run_id)** — Details for a single workflow run.
 - **list_workflow_run_jobs(full_name, run_id, per_page=30, page=1)** — Jobs
   inside a workflow run.
-- **get_job_logs(full_name, job_id)** — Raw job logs truncated to
-  ``LOGS_MAX_CHARS``.
+- **get_job_logs(full_name, job_id)** — Raw job logs without truncation.
 - **wait_for_workflow_run(full_name, run_id, timeout_seconds=900,
   poll_interval_seconds=10)** — Poll until completion or timeout.
 - **trigger_workflow_dispatch(full_name, workflow, ref, inputs?)** — Trigger a

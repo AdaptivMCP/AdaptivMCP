@@ -184,5 +184,5 @@ to keep reasoning while data transfers are in flight.
 - If the MCP client reports errors talking to `/sse`, check Render logs for requests to `/sse` and confirm the Start Command uses `main:app`.
 - If GitHub calls fail with 401 or 403, verify the PAT value and scopes in the Render Environment tab.
 - If `fetch_files` or other tools hit timeouts, lower `FETCH_FILES_CONCURRENCY` or reduce the number of files requested per call.
-- Large logs and patches are truncated on purpose to keep responses safe for MCP transports.
+- Logs and patches are returned in full so assistants can read the complete context.
 - GitHub Actions job logs are automatically unzipped when GitHub serves them as archives, so copilots can read the text inline.

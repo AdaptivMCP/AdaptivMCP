@@ -46,9 +46,9 @@ FETCH_FILES_CONCURRENCY = int(
     os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY)
 )
 
-TOOL_STDOUT_MAX_CHARS = 12000
-TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
-LOGS_MAX_CHARS = 16000
+TOOL_STDOUT_MAX_CHARS: Optional[int] = None
+TOOL_STDERR_MAX_CHARS: Optional[int] = None
+LOGS_MAX_CHARS: Optional[int] = None
 
 GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
 GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
@@ -198,7 +198,7 @@ async def _github_request(
     json_body: Optional[Dict[str, Any]] = None,
     headers: Optional[Dict[str, str]] = None,
     expect_json: bool = True,
-    text_max_chars: int = LOGS_MAX_CHARS,
+    text_max_chars: Optional[int] = None,
 ) -> Dict[str, Any]:
     client = _github_client_instance()
     async with _concurrency_semaphore:
@@ -223,9 +223,10 @@ async def _github_request(
         except Exception:
             return {"status_code": resp.status_code, "json": None}
 
+    text = resp.text if text_max_chars is None else resp.text[:text_max_chars]
     return {
         "status_code": resp.status_code,
-        "text": resp.text[:text_max_chars],
+        "text": text,
         "headers": dict(resp.headers),
     }
 
@@ -438,24 +439,10 @@ async def _run_shell(
 ) -> Dict[str, Any]:
     """Execute a shell command with author/committer env vars injected.
 
-    Stdout and stderr are truncated separately using ``TOOL_STDOUT_MAX_CHARS``
-    and ``TOOL_STDERR_MAX_CHARS`` so assistants see the most relevant output
-    while keeping responses bounded for the connector UI. Git identity
-    environment variables are injected automatically so Git commits made inside
-    workspace commands are properly attributed.
+    Git identity environment variables are injected automatically so Git commits
+    made inside workspace commands are properly attributed. Outputs are returned
+    in full to preserve complete context for downstream tools and assistants.
     """
-
-    def _truncate_with_marker(text: str, max_chars: int) -> tuple[str, bool]:
-        if len(text) <= max_chars:
-            return text, False
-
-        marker = "\n... [truncated]"
-        if max_chars <= len(marker):
-            # Degenerate case when env vars force an extremely small limit
-            return marker[:max_chars], True
-
-        head_len = max_chars - len(marker)
-        return text[:head_len] + marker, True
 
     shell_executable = os.environ.get("SHELL")
     if os.name == "nt":
@@ -490,20 +477,13 @@ async def _run_shell(
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
 
-    stdout, stdout_truncated = _truncate_with_marker(
-        raw_stdout, TOOL_STDOUT_MAX_CHARS
-    )
-    stderr, stderr_truncated = _truncate_with_marker(
-        raw_stderr, TOOL_STDERR_MAX_CHARS
-    )
-
     return {
         "exit_code": proc.returncode,
         "timed_out": timed_out,
-        "stdout": stdout,
-        "stderr": stderr,
-        "stdout_truncated": stdout_truncated,
-        "stderr_truncated": stderr_truncated,
+        "stdout": raw_stdout,
+        "stderr": raw_stderr,
+        "stdout_truncated": False,
+        "stderr_truncated": False,
     }
 
 
@@ -686,7 +666,7 @@ async def get_server_config() -> Dict[str, Any]:
     """Return a non-sensitive snapshot of connector configuration for assistants.
 
     Safe to call at the start of a session to understand write gating, HTTP
-    timeouts, concurrency limits, log truncation, and sandbox configuration.
+    timeouts, concurrency limits, and sandbox configuration.
     """
 
     return {
@@ -1227,7 +1207,7 @@ async def fetch_url(url: str) -> Dict[str, Any]:
     return {
         "status_code": resp.status_code,
         "headers": dict(resp.headers),
-        "content": resp.text[:TOOL_STDOUT_MAX_CHARS],
+        "content": resp.text,
     }
 
 
@@ -1480,7 +1460,7 @@ async def list_workflow_run_jobs(
 
 @mcp_tool(write_action=False)
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
-    """Fetch raw logs for a GitHub Actions job, truncated to ``LOGS_MAX_CHARS``."""
+    """Fetch raw logs for a GitHub Actions job without truncation."""
 
     client = _github_client_instance()
     request = client.build_request(
@@ -1502,7 +1482,7 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
 
     return {
         "status_code": resp.status_code,
-        "logs": logs[:LOGS_MAX_CHARS],
+        "logs": logs,
         "content_type": content_type,
     }
 
