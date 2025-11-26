@@ -106,6 +106,27 @@ def _truncate_text(text: str, max_chars: Optional[int]) -> str:
         return text
     return text[:max_chars]
 
+
+def _summarize_workflow_run(run: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a trimmed workflow run payload suitable for chat surfaces."""
+
+    return {
+        "id": run.get("id"),
+        "name": run.get("name"),
+        "display_title": run.get("display_title"),
+        "event": run.get("event"),
+        "status": run.get("status"),
+        "conclusion": run.get("conclusion"),
+        "workflow_id": run.get("workflow_id"),
+        "run_number": run.get("run_number"),
+        "head_branch": run.get("head_branch"),
+        "head_sha": run.get("head_sha"),
+        "run_started_at": run.get("run_started_at"),
+        "created_at": run.get("created_at"),
+        "updated_at": run.get("updated_at"),
+        "html_url": run.get("html_url"),
+    }
+
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
 _concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
@@ -1393,7 +1414,11 @@ async def list_workflow_runs(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List recent GitHub Actions workflow runs with optional filters."""
+    """List recent GitHub Actions workflow runs with optional filters.
+
+    The raw GitHub response is returned under ``json`` and a trimmed,
+    chat-friendly version lives under ``workflow_runs_summary``.
+    """
 
     params: Dict[str, Any] = {"per_page": per_page, "page": page}
     if branch:
@@ -1402,11 +1427,20 @@ async def list_workflow_runs(
         params["status"] = status
     if event:
         params["event"] = event
-    return await _github_request(
+    result = await _github_request(
         "GET",
         f"/repos/{full_name}/actions/runs",
         params=params,
     )
+
+    runs = result.get("json", {}).get("workflow_runs")
+    if isinstance(runs, list):
+        result["workflow_runs_summary"] = [
+            _summarize_workflow_run(run)
+            for run in runs
+            if isinstance(run, dict)
+        ]
+    return result
 
 
 @mcp_tool(write_action=False)
