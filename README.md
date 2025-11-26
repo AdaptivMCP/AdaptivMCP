@@ -119,6 +119,13 @@ Build command:
 pip install -r requirements.txt
 ```
 
+> The Render build step already installs all runtime and dev requirements into
+> the service virtual environment. When using workspace tools like
+> `run_command` or `run_tests`, skip any additional `pip install ...` commands
+> inside the temporary clone. Reinstalling packages can downgrade the already
+> provisioned environment, add long pauses, or surface dependency resolver
+> warnings that are unrelated to the code under test.
+
 Start command:
 
 ```text
