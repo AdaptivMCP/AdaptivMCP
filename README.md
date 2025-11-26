@@ -170,6 +170,11 @@ Once connected, the client should expose tools such as:
 - Branch and commit tools  `create_branch`, `ensure_branch`, `commit_file_async`, `create_pull_request`, `update_files_and_open_pr`
 - Workspace tools  `run_command`, `run_tests`, `apply_patch_and_open_pr`
   - `apply_patch_and_open_pr` rejects empty patch bodies (`empty_patch`) and no-op diffs (`empty_diff`) before committing.
+  - Workspace tools clone the repository into a temporary directory for each
+    invocation. Call `authorize_write_actions` first (or set
+    `GITHUB_MCP_AUTO_APPROVE=1`) to permit the clone and command execution.
+    Provide a `patch` payload when you need the temporary workspace to match
+    local edits.
 
 ### Background reads
 
