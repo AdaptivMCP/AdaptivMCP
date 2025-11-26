@@ -28,7 +28,8 @@ async def test_get_job_logs_follows_redirects(monkeypatch):
         def build_request(self, method, url, headers=None):
             self.method = method
             self.url = url
-            self.headers = headers or {}
+            # httpx applies the client's default headers when building a request.
+            self.headers = headers or {"Accept": "application/vnd.github+json"}
             return httpx.Request(method, url)
 
         async def send(self, request, follow_redirects=False):
@@ -49,5 +50,5 @@ async def test_get_job_logs_follows_redirects(monkeypatch):
     result = await get_job_logs("octo/demo", 123)
 
     assert dummy.follow_redirects is True
-    assert dummy.headers.get("Accept") == "application/octet-stream"
+    assert dummy.headers.get("Accept") == "application/vnd.github+json"
     assert result["logs"] == "hello world"
