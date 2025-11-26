@@ -483,6 +483,11 @@ async def _run_shell(
     while keeping responses bounded for the connector UI. Git identity
     environment variables are injected automatically so Git commits made inside
     workspace commands are properly attributed.
+
+    The return value always includes ``elapsed_seconds`` and, when a timeout
+    occurs, appends a human-readable ``timeout_note`` to stderr so downstream
+    tools can surface actionable guidance instead of a generic "Request
+    timeout" message.
     """
 
     def _truncate_with_marker(text: str, max_chars: int) -> tuple[str, bool]:
@@ -517,6 +522,7 @@ async def _run_shell(
             "GIT_COMMITTER_EMAIL": GIT_COMMITTER_EMAIL,
         },
     )
+    started = asyncio.get_event_loop().time()
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(
             proc.communicate(), timeout=timeout_seconds
@@ -526,9 +532,21 @@ async def _run_shell(
         proc.kill()
         stdout_bytes, stderr_bytes = await proc.communicate()
         timed_out = True
+    elapsed_seconds = asyncio.get_event_loop().time() - started
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
+
+    timeout_note = None
+    if timed_out:
+        timeout_note = (
+            f"Command timed out after {timeout_seconds} seconds. "
+            "Increase timeout_seconds or run a narrower command."
+        )
+        if raw_stderr:
+            raw_stderr = f"{raw_stderr}\n\n{timeout_note}"
+        else:
+            raw_stderr = timeout_note
 
     stdout, stdout_truncated = _truncate_with_marker(
         raw_stdout, TOOL_STDOUT_MAX_CHARS
@@ -540,6 +558,9 @@ async def _run_shell(
     return {
         "exit_code": proc.returncode,
         "timed_out": timed_out,
+        "timeout_seconds": timeout_seconds,
+        "elapsed_seconds": elapsed_seconds,
+        "timeout_note": timeout_note,
         "stdout": stdout,
         "stderr": stderr,
         "stdout_truncated": stdout_truncated,
