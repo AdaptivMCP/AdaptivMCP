@@ -128,12 +128,6 @@ clean up afterward.
 - **run_tests(full_name, ref="main", test_command="pytest",
   timeout_seconds=600, workdir=None, patch=None)** — Thin wrapper over
   ``run_command`` with the same patch-support semantics.
-- **apply_patch_and_open_pr(full_name, base_branch, patch, title, body=None,
-  new_branch=None, run_tests_flag=False, test_command="pytest",
-  test_timeout_seconds=600, draft=False)** — Apply a unified diff, optionally
-  run tests, push, and open a PR (write). Empty patch bodies return
-  ``empty_patch``; patches that apply but stage no changes return
-  ``empty_diff`` so no-op commits are avoided.
 
 ## Operational hygiene
 - Shared httpx clients are closed on shutdown via the FastMCP shutdown handler

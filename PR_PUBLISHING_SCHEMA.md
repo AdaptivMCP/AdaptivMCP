@@ -64,15 +64,9 @@ Steps:
 
 1. Read the file with `get_file_contents(full_name, path, ref=<default_branch>)`.
 2. Explain to Joey what you will change in plain language.
-3. Generate a unified diff (standard git diff format) targeting the default branch.
-4. Call `apply_patch_and_open_pr` with:
-   - `full_name`
-   - `base_branch` (default branch, usually `main`)
-   - `patch` (your unified diff)
-   - `title` and `body` (see section 4)
-   - `new_branch` (ally/<scope>-<short-description>)
-   - `run_tests_flag` true for code changes, false for trivial docs.
-5. Confirm `error` is null and `pull_request` contains number and url.
+3. Prepare the full updated file content (avoid patch juggling).
+4. Call `update_file_and_open_pr` with the new content, a short branch name (ally/<scope>-<summary>), and your PR title/body.
+5. Confirm the PR response contains the branch and pull request details.
 6. Report the PR link, summary of changes, and test status to Joey.
 
 ### 3.2 Flow B: multi-file change
@@ -81,9 +75,9 @@ Use this when you are editing multiple files as part of one logical change.
 
 1. Read all affected files (via `fetch_files` or repeated `get_file_contents`).
 2. Plan per-file changes in bullets and share with Joey.
-3. Generate a single multi-file unified diff.
-4. Call `apply_patch_and_open_pr` with that diff.
-5. Split changes into multiple PRs if the diff is too large or touches unrelated concerns.
+3. Provide the updated content for each file.
+4. Call `update_files_and_open_pr` with the file list and PR metadata.
+5. Split changes into multiple PRs if the change is too large or touches unrelated concerns.
 
 ### 3.3 Flow C: new document from a stub
 
@@ -91,8 +85,7 @@ Use this when Joey has created a blank file or minimal stub on main and you want
 
 1. Confirm the stub exists with `get_file_contents` or `fetch_files`.
 2. Draft the full document content in the conversation and get Joey's approval.
-3. Generate a diff that replaces the stub content with the full document.
-4. Use `apply_patch_and_open_pr` as in Flow A/B.
+3. Use `update_file_and_open_pr` (one file) or `update_files_and_open_pr` (multiple files) to publish the finished document.
 5. In the PR body, clearly state that this is a new document from a stub and explain how assistants should use it.
 
 ### 3.4 Flow D: running tests
@@ -100,8 +93,8 @@ Use this when Joey has created a blank file or minimal stub on main and you want
 Use `run_tests` or `run_command` when you changed code or tests and need to validate the suite.
 
 1. Decide whether to run tests before or after opening the PR, based on Joey's guidance.
-2. With `apply_patch_and_open_pr`, set `run_tests_flag` true and choose an appropriate `test_command` (for example `pytest`).
-3. Inspect the `tests` field for exit code and output.
+2. Use `run_tests` or `run_command` with an optional `patch` that mirrors the change you are committing so the run matches the PR.
+3. Inspect the command result for exit code and output.
 4. If tests fail, include failure details in your report and ask Joey how to proceed.
 
 ---
@@ -151,25 +144,25 @@ One of:
 
 ## 5. Error handling and guardrails
 
-When using `apply_patch_and_open_pr` and related write tools, assistants must:
+When using write tools, assistants must:
 
-1. Handle empty diffs
+1. Handle empty edits
 
-- If your diff would produce no effective change, do not open a PR.
+- If your update would produce no effective change, do not open a PR.
 - Explain to Joey that the repo already matches the desired state.
 
-2. Handle `git_apply_failed`
+2. Handle content drift
 
-- Common causes: file content on main changed since you fetched; context mismatch in the patch.
+- Common causes: file content on main changed since you fetched.
 - Recovery steps:
   1. Re-fetch the current version of the affected files.
-  2. Rebuild the patch based on the new content.
-  3. Try `apply_patch_and_open_pr` again.
+  2. Rebuild the updated content from the latest version.
+  3. Retry the commit/PR tool once.
   4. If it still fails, stop and describe the failure rather than brute-forcing.
 
-3. Handle tests failing from `apply_patch_and_open_pr`
+3. Handle failing tests from workspace runs
 
-- If tests fail and the tool reports `tests_failed`, you must surface that to Joey.
+- If tests fail, you must surface that to Joey.
 - Include failing test names when available and key lines from the traceback.
 - Ask whether to fix tests in the same PR or in a follow-up.
 
@@ -186,9 +179,9 @@ When using `apply_patch_and_open_pr` and related write tools, assistants must:
 
 When deciding which tool to use:
 
-1. Prefer `apply_patch_and_open_pr` for code and doc changes that can be expressed as diffs.
+1. Prefer `update_file_and_open_pr` for single-file changes and `update_files_and_open_pr` for multi-file changes.
 2. Use `run_tests` or `run_command` when you need a full workspace for tests or custom commands.
-3. Use `commit_file_async` and `update_files_and_open_pr` sparingly, typically when Joey explicitly asks for that pattern.
+3. Use `commit_file_async` sparingly, typically when Joey explicitly asks for that pattern.
 4. Never push directly to main or use other connectors to modify the same repo in the same session.
 
 ---
