@@ -46,10 +46,6 @@ FETCH_FILES_CONCURRENCY = int(
     os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY)
 )
 
-TOOL_STDOUT_MAX_CHARS: Optional[int] = None
-TOOL_STDERR_MAX_CHARS: Optional[int] = None
-LOGS_MAX_CHARS: Optional[int] = None
-
 GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
 GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
 GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
@@ -680,11 +676,6 @@ async def get_server_config() -> Dict[str, Any]:
         "concurrency": {
             "max_concurrency": MAX_CONCURRENCY,
             "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
-        },
-        "limits": {
-            "stdout_max_chars": TOOL_STDOUT_MAX_CHARS,
-            "stderr_max_chars": TOOL_STDERR_MAX_CHARS,
-            "logs_max_chars": LOGS_MAX_CHARS,
         },
         "approval_policy": {
             "read_actions": {
@@ -1689,14 +1680,7 @@ async def compare_refs(
     )
     j = data.get("json") or {}
     files = j.get("files", [])
-    trimmed_files = []
-    for f in files[:100]:
-        patch = f.get("patch")
-        if isinstance(patch, str) and len(patch) > 8000:
-            patch = patch[:8000] + "\n... [truncated]"
-        trimmed_files.append({**f, "patch": patch})
-    j["files"] = trimmed_files
-    return j
+    return {**j, "files": files[:100]}
 
 
 # ------------------------------------------------------------------------------
