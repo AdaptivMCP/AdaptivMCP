@@ -151,12 +151,22 @@ Once connected, the client should expose tools such as:
 - `get_rate_limit`, `get_repository`, `list_branches`, `list_repository_tree`
 - `get_file_contents`, `fetch_files` (responses include `numbered_lines` for
   easy referencing)
+- Background read helpers: `start_background_read`, `get_background_read`,
+  `list_background_reads` (schedule long reads and poll later)
 - `graphql_query`, `fetch_url`
 - GitHub Actions tools  `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, `get_job_logs`, `wait_for_workflow_run`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`
 - PR tools  `list_pull_requests`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `compare_refs`
 - Branch and commit tools  `create_branch`, `ensure_branch`, `commit_file_async`, `create_pull_request`, `update_files_and_open_pr`
 - Workspace tools  `run_command`, `run_tests`, `apply_patch_and_open_pr`
   - `apply_patch_and_open_pr` rejects empty patch bodies (`empty_patch`) and no-op diffs (`empty_diff`) before committing.
+
+### Background reads
+
+Use `start_background_read` to launch any read-only tool without blocking the
+assistant. The response includes a `job_id` that you can poll with
+`get_background_read`; use `list_background_reads` to inspect all pending jobs.
+This is useful for large `fetch_files` batches or tree listings where you want
+to keep reasoning while data transfers are in flight.
 
 ## Troubleshooting
 
