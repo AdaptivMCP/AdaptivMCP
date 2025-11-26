@@ -145,9 +145,16 @@ class WriteNotAuthorizedError(Exception):
 
 
 def _get_github_token() -> str:
-    token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
-    if not token:
+    raw_token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
+    if raw_token is None:
         raise GitHubAuthError("GITHUB_PAT or GITHUB_TOKEN must be set")
+
+    token = raw_token.strip()
+    if not token:
+        raise GitHubAuthError("GITHUB_PAT or GITHUB_TOKEN is empty or whitespace")
+
+    # Preserve the original value in the environment to avoid surprising callers
+    # while ensuring outbound requests use the cleaned token.
     return token
 
 
