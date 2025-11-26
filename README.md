@@ -13,7 +13,7 @@ From the point of view of an MCP client, this server:
 - Inspects GitHub Actions workflow runs, jobs and logs.
 - Searches GitHub code/issues/repos and lists repositories available to an app installation.
 - Creates branches, commits files, opens pull requests and can trigger `workflow_dispatch` workflows.
-- Provides higher level tools like `update_files_and_open_pr` and `apply_patch_and_open_pr` to safely edit code and open PRs.
+- Provides higher level tools like `update_files_and_open_pr` to safely edit code and open PRs without diff-formatting errors.
 - Downloads sandbox or HTTP content as base64/text payloads for reuse.
 - Can clone repos into a temporary workspace and run commands or test suites there.
 
@@ -155,7 +155,7 @@ These steps are an example of how tools can be combined; follow a different flow
 2. `list_repository_tree` helps browse the repository layout. Pass `path_prefix` to focus on a subdirectory when the top-level tree is large.
 3. Fetch live file contents with `get_file_contents` or `fetch_files` to have numbered lines for planning diffs.
 4. For tiny lint/doc fixes, call `update_file_and_open_pr` with the new file body to commit and open a PR in one shot without cloning. Use `update_files_and_open_pr` when multiple files change.
-5. Build and apply patches in whatever way you prefer; `apply_patch_and_open_pr` is available when you want a single round-trip and optional test run.
+5. Build and apply patches however you like, but prefer direct file update tools to avoid patch formatting pitfalls.
 6. Include any relevant test output or truncation notices in your report if they help downstream users.
 
 Once connected, the client should expose tools such as:
@@ -175,8 +175,7 @@ Once connected, the client should expose tools such as:
 - PR tools  `list_pull_requests`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `compare_refs`
 - Branch and commit tools  `create_branch`, `ensure_branch`, `commit_file_async`,
   `update_file_and_open_pr`, `create_pull_request`, `update_files_and_open_pr`
-- Workspace tools  `run_command`, `run_tests`, `apply_patch_and_open_pr`
-  - `apply_patch_and_open_pr` rejects empty patch bodies (`empty_patch`) and no-op diffs (`empty_diff`) before committing.
+- Workspace tools  `run_command`, `run_tests`
 
 ### Background reads
 

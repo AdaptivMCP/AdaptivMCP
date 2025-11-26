@@ -92,8 +92,8 @@ patterns so assistants can automate workflows without step-by-step prompts.
   authentication.
 * **Returns:** Path to the temp directory.
 * **Errors:** `GitHubAPIError` when clone fails (non-zero git exit).
-* **Chaining:** Used by workspace tools (`run_command`, `run_tests`,
-  `apply_patch_and_open_pr`). Always paired with `_cleanup_dir` in finally.
+* **Chaining:** Used by workspace tools (`run_command`, `run_tests`). Always
+  paired with `_cleanup_dir` in finally.
 
 ### `_cleanup_dir(path)`
 * **Purpose:** Best-effort removal of temp directories.
@@ -208,8 +208,8 @@ patterns so assistants can automate workflows without step-by-step prompts.
 * **Purpose:** Enumerate all write-tagged tools with categories and notes so
   assistants can discover capabilities without scanning code.
 * **Chaining:** Call when planning automation flows to choose the right
-  higher-level primitive (e.g., `update_files_and_open_pr` vs
-  `apply_patch_and_open_pr`).
+  higher-level primitive (e.g., `update_file_and_open_pr` vs
+  `update_files_and_open_pr`).
 
 ### Repository browsing helpers
 * `list_branches(...)`: Paginated branch listing.
@@ -235,9 +235,9 @@ patterns so assistants can automate workflows without step-by-step prompts.
   `show_whitespace` is true, the response includes whitespace-marked variants of
   the base/proposed/diff outputs so assistants can see tabs and trailing
   spaces.
-* **Chaining:** Use before `apply_patch_and_open_pr` to validate patches or when
-  connectors hide whitespace, ensuring the generated diff matches Git's
-  expectations.
+* **Chaining:** Use before `run_tests`/`run_command` (with the `patch` option)
+  to validate diffs or when connectors hide whitespace, ensuring the generated
+  diff matches Git's expectations.
 
 ### GraphQL and external fetch
 * `graphql_query(query, variables=None)`: Execute GitHub GraphQL with shared
@@ -309,7 +309,7 @@ patterns so assistants can automate workflows without step-by-step prompts.
 ### `comment_on_pull_request(full_name, number, body)`
 * **Type:** Write tool posting an issue comment on the PR thread.
 * **Chaining:** Attach summaries, test results, or status updates after other
-  tools (e.g., after `run_tests` or `apply_patch_and_open_pr`).
+  tools (e.g., after `run_tests` or PR creation tools).
 
 ### `compare_refs(full_name, base, head)`
 * **Purpose:** Compare two refs (max 100 files) and truncate overly long patch
@@ -355,8 +355,8 @@ patterns so assistants can automate workflows without step-by-step prompts.
   content_url) with optional per-file message, then opens a PR.
 * **Error handling:** Returns structured errors from content loading or commit
   steps, including the `path` that failed.
-* **Chaining:** Ideal for documentation or simple code edits where a patch is
-  already materialized.
+* **Chaining:** Ideal for documentation or simple code edits when you can send
+  the full updated content without relying on diff formatting.
 
 ## Workspace / full-environment operations
 
@@ -371,19 +371,6 @@ patterns so assistants can automate workflows without step-by-step prompts.
 ### `run_tests(full_name, ref='main', test_command='pytest', timeout_seconds=600, workdir=None, patch=None)`
 * **Type:** Write tool wrapping `run_command` with longer default timeout.
 * **Chaining:** Preferred entry for test runs; same patch guidance applies.
-
-### `apply_patch_and_open_pr(full_name, base_branch, patch, title, body=None, new_branch=None, run_tests_flag=False, test_command='pytest', test_timeout_seconds=600, draft=False)`
-* **Type:** Write tool combining patch application, optional tests, push, and
-  PR creation.
-* **Behavior:** Creates a working branch, writes and applies the patch, commits
-  only when the patch changes files, optionally runs tests, pushes via PAT, and
-  opens a PR. Returns branch name, optional test results, PR response, and
-  error codes (`empty_patch`, `git_checkout_failed`, `apply_failed`,
-  `git_commit_failed`, `tests_failed`, `git_push_failed`, `empty_diff`).
-* **Chaining:** Primary single-call flow for proposing code changes when a
-  unified diff is available. Combine with
-  `get_file_contents`/`list_repository_tree` to build the patch, then
-  `comment_on_pull_request` for status updates.
 
 ## Webhook-style HTTP routes and lifecycle
 
@@ -403,8 +390,9 @@ patterns so assistants can automate workflows without step-by-step prompts.
 ## Building automation chains
 
 * **Read → analyze → edit → PR:** `get_server_config` → `authorize_write_actions`
-  (if needed) → `list_repository_tree`/`get_file_contents` → craft patch →
-  `apply_patch_and_open_pr` → `comment_on_pull_request` with results.
+  (if needed) → `list_repository_tree`/`get_file_contents` → prepare full file
+  content → `update_file_and_open_pr`/`update_files_and_open_pr` →
+  `comment_on_pull_request` with results.
 * **Doc update from sandbox file:** `authorize_write_actions` → `ensure_branch`
   → `commit_file_async` with `content_url` pointing to `sandbox:/...` →
   `create_pull_request`.
@@ -412,7 +400,7 @@ patterns so assistants can automate workflows without step-by-step prompts.
   `trigger_and_wait_for_workflow` → `get_job_logs` for failed jobs →
   `comment_on_pull_request` summarizing outcomes.
 * **Test before PR:** `run_tests` (with `patch`) → if clean, use
-  `apply_patch_and_open_pr` or `update_files_and_open_pr` to publish changes.
+  `update_file_and_open_pr` or `update_files_and_open_pr` to publish changes.
 
 Use these chains as templates; all write steps require `authorize_write_actions`
 unless `GITHUB_MCP_AUTO_APPROVE` is preset.
