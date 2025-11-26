@@ -1415,12 +1415,20 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
         }
 
         if include_parameters:
+            input_schema = None
             schema = getattr(tool, "inputSchema", None)
             if schema is not None:
                 try:
-                    tool_info["input_schema"] = schema.model_dump()
+                    input_schema = schema.model_dump()
                 except Exception:
-                    tool_info["input_schema"] = None
+                    input_schema = None
+            else:
+                try:
+                    input_schema = getattr(tool, "parameters", None)
+                except Exception:
+                    input_schema = None
+
+            tool_info["input_schema"] = input_schema
 
         tools.append(tool_info)
 
