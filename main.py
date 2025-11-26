@@ -521,9 +521,151 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
+async def get_server_config() -> Dict[str, Any]:
+    """Return a non-sensitive snapshot of connector configuration for assistants.
+
+    Safe to call at the start of a session to understand write gating, HTTP
+    timeouts, concurrency limits, log truncation, and sandbox configuration.
+    """
+
+    return {
+        "write_allowed": WRITE_ALLOWED,
+        "github_api_base": GITHUB_API_BASE,
+        "http": {
+            "timeout": HTTPX_TIMEOUT,
+            "max_connections": HTTPX_MAX_CONNECTIONS,
+            "max_keepalive": HTTPX_MAX_KEEPALIVE,
+        },
+        "concurrency": {
+            "max_concurrency": MAX_CONCURRENCY,
+            "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
+        },
+        "limits": {
+            "stdout_max_chars": TOOL_STDOUT_MAX_CHARS,
+            "stderr_max_chars": TOOL_STDERR_MAX_CHARS,
+            "logs_max_chars": LOGS_MAX_CHARS,
+        },
+        "git_identity": {
+            "author_name": GIT_AUTHOR_NAME,
+            "author_email": GIT_AUTHOR_EMAIL,
+            "committer_name": GIT_COMMITTER_NAME,
+            "committer_email": GIT_COMMITTER_EMAIL,
+        },
+        "sandbox": {
+            "sandbox_content_base_url_configured": bool(
+                os.environ.get("SANDBOX_CONTENT_BASE_URL")
+            ),
+        },
+        "environment": {
+            "github_token_present": bool(
+                os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
+            ),
+        },
+    }
+
+
+@mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
     """Return the authenticated token's GitHub rate-limit document."""
     return await _github_request("GET", "/rate_limit")
+
+
+@mcp_tool(write_action=False)
+def list_write_tools() -> Dict[str, Any]:
+    """Describe write-capable tools exposed by this server.
+
+    This is intended for assistants to discover what they can do safely without
+    reading the entire main.py.
+    """
+
+    tools = [
+        {
+            "name": "authorize_write_actions",
+            "category": "control",
+            "description": "Enable or disable write tools within this MCP session.",
+            "notes": "Call with approved=true before using any write tools.",
+        },
+        {
+            "name": "create_branch",
+            "category": "branch",
+            "description": "Create a new branch from a base ref.",
+            "notes": "Prefer ensure_branch unless you know the branch does not exist.",
+        },
+        {
+            "name": "ensure_branch",
+            "category": "branch",
+            "description": "Ensure a branch exists, creating it from a base ref if needed.",
+            "notes": "Safe default for preparing branches before commits or PRs.",
+        },
+        {
+            "name": "commit_file_async",
+            "category": "commit",
+            "description": "Commit a single file to a branch, optionally using content_url.",
+            "notes": "Use for small, targeted changes or external doc commits.",
+        },
+        {
+            "name": "create_pull_request",
+            "category": "pr",
+            "description": "Open a GitHub pull request between two branches.",
+            "notes": "Usually called indirectly by higher-level tools.",
+        },
+        {
+            "name": "update_files_and_open_pr",
+            "category": "pr",
+            "description": "Commit multiple files and open a PR in one call.",
+            "notes": "Use primarily for docs and multi-file updates.",
+        },
+        {
+            "name": "apply_patch_and_open_pr",
+            "category": "pr+workspace",
+            "description": "Apply a unified diff in a clone, optionally run tests, push, and open a PR.",
+            "notes": "Primary path for code changes; keep patches small and focused.",
+        },
+        {
+            "name": "run_command",
+            "category": "workspace",
+            "description": "Clone the repo and run an arbitrary shell command in a temp workspace.",
+            "notes": "Use carefully; bound stdout/stderr is returned.",
+        },
+        {
+            "name": "run_tests",
+            "category": "workspace",
+            "description": "Clone the repo and run tests (default: pytest) in a temp workspace.",
+            "notes": "Preferred way to run tests from assistants.",
+        },
+        {
+            "name": "trigger_workflow_dispatch",
+            "category": "workflow",
+            "description": "Trigger a GitHub Actions workflow via workflow_dispatch.",
+            "notes": "Use only when Joey explicitly asks to run a workflow.",
+        },
+        {
+            "name": "trigger_and_wait_for_workflow",
+            "category": "workflow",
+            "description": "Trigger a workflow and poll until completion or timeout.",
+            "notes": "Summarize the run result in your response.",
+        },
+        {
+            "name": "merge_pull_request",
+            "category": "pr",
+            "description": "Merge an existing PR using the chosen method.",
+            "notes": "Assistants should only merge when Joey explicitly requests it.",
+        },
+        {
+            "name": "close_pull_request",
+            "category": "pr",
+            "description": "Close an existing PR without merging.",
+            "notes": "Only when Joey asks to close a PR.",
+        },
+        {
+            "name": "comment_on_pull_request",
+            "category": "pr",
+            "description": "Post a comment on an existing PR.",
+            "notes": "Use for status, summaries, or test results if Joey likes that pattern.",
+        },
+    ]
+
+    return {"tools": tools}
 
 
 @mcp_tool(write_action=False)
@@ -1178,6 +1320,16 @@ async def apply_patch_and_open_pr(
     """Apply a unified diff, optionally run tests, push, and open a PR."""
 
     _ensure_write_allowed(f"apply_patch_and_open_pr on {full_name}@{base_branch}")
+
+    # Guardrail: do not proceed on empty / whitespace-only patches.
+    if not patch or not patch.strip():
+        return {
+            "branch": None,
+            "tests": None,
+            "pull_request": None,
+            "error": "empty_patch",
+            "stderr": "apply_patch_and_open_pr: received empty or whitespace-only patch",
+        }
 
     branch = new_branch or f"ally-patch-{os.urandom(4).hex()}"
     repo_dir = await _clone_repo(full_name, ref=base_branch)

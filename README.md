@@ -134,6 +134,7 @@ If `GITHUB_MCP_AUTO_APPROVE` is `0`, call `authorize_write_actions` with `approv
 Once connected, the client should expose tools such as:
 
 - `authorize_write_actions`
+- `get_server_config`, `list_write_tools`
 - `get_rate_limit`, `get_repository`, `list_branches`
 - `get_file_contents`, `fetch_files` (responses include `numbered_lines` for
   easy referencing)

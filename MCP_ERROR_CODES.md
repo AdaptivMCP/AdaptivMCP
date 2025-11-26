@@ -44,6 +44,7 @@ The apply_patch_and_open_pr tool returns an error field that indicates where the
 
 - git_checkout_failed
 - git_apply_failed
+- empty_patch
 - git_commit_failed
 - tests_failed
 - git_push_failed
@@ -54,8 +55,9 @@ Assistants should:
 
 1. Quote the error value and summarize any stderr lines that look important.
 2. For git_apply_failed, regenerate a smaller or simpler patch and try again.
-3. For tests_failed, summarize which tests failed and ask Joey whether to fix the tests in this PR or open a follow up task.
-4. For git_checkout_failed or git_push_failed, confirm the target branch and that Joey has not force pushed conflicting history.
+3. For empty_patch, rebuild the diff to include the intended changes; the server returns immediately before cloning or applying.
+4. For tests_failed, summarize which tests failed and ask Joey whether to fix the tests in this PR or open a follow up task.
+5. For git_checkout_failed or git_push_failed, confirm the target branch and that Joey has not force pushed conflicting history.
 
 ## 2. ChatGPT side and MCP host errors
 

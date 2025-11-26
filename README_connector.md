@@ -53,6 +53,13 @@ write gate rules above.
 - **authorize_write_actions(approved: bool = True)** — Toggle write tools on or
   off for the running process.
 
+### Server introspection
+- **get_server_config()** — Return non-sensitive connector configuration such as
+  write gating, HTTP timeouts, concurrency limits, log truncation, Git identity,
+  and whether sandbox content URLs are configured.
+- **list_write_tools()** — List write-capable tools, their categories, and
+  safety notes to avoid scanning main.py manually.
+
 ### Repository inspection / reads
 - **get_rate_limit()** — Return the authenticated token's rate-limit document.
 - **get_repository(full_name)** — Repository metadata (topics, default branch,
