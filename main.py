@@ -141,10 +141,15 @@ async def _github_request(
     *,
     params: Optional[Dict[str, Any]] = None,
     json_body: Optional[Dict[str, Any]] = None,
+    headers: Optional[Dict[str, str]] = None,
+    expect_json: bool = True,
+    text_max_chars: int = LOGS_MAX_CHARS,
 ) -> Dict[str, Any]:
     client = _github_client_instance()
     async with _concurrency_semaphore:
-        resp = await client.request(method, path, params=params, json=json_body)
+        resp = await client.request(
+            method, path, params=params, json=json_body, headers=headers
+        )
 
     if resp.status_code >= 400:
         try:
@@ -157,10 +162,17 @@ async def _github_request(
             f"{message or resp.text}"
         )
 
-    try:
-        return {"status_code": resp.status_code, "json": resp.json()}
-    except Exception:
-        return {"status_code": resp.status_code, "json": None}
+    if expect_json:
+        try:
+            return {"status_code": resp.status_code, "json": resp.json()}
+        except Exception:
+            return {"status_code": resp.status_code, "json": None}
+
+    return {
+        "status_code": resp.status_code,
+        "text": resp.text[:text_max_chars],
+        "headers": dict(resp.headers),
+    }
 
 
 # ------------------------------------------------------------------------------
@@ -568,6 +580,218 @@ async def get_server_config() -> Dict[str, Any]:
 async def get_rate_limit() -> Dict[str, Any]:
     """Return the authenticated token's GitHub rate-limit document."""
     return await _github_request("GET", "/rate_limit")
+
+
+@mcp_tool(write_action=False)
+async def get_user_login() -> Dict[str, Any]:
+    """Return the login for the authenticated GitHub user."""
+
+    data = await _github_request("GET", "/user")
+    login = None
+    if isinstance(data.get("json"), dict):
+        login = data["json"].get("login")
+    return {
+        "status_code": data.get("status_code"),
+        "login": login,
+        "user": data.get("json"),
+    }
+
+
+@mcp_tool(write_action=False)
+async def get_profile() -> Dict[str, Any]:
+    """Retrieve the authenticated user's GitHub profile."""
+
+    return await _github_request("GET", "/user")
+
+
+@mcp_tool(write_action=False)
+async def get_repo(full_name: str) -> Dict[str, Any]:
+    """Fetch repository metadata for ``owner/repo``."""
+
+    return await _github_request("GET", f"/repos/{full_name}")
+
+
+@mcp_tool(write_action=False)
+async def list_repositories(
+    affiliation: Optional[str] = None,
+    visibility: Optional[str] = None,
+    per_page: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """List repositories accessible to the authenticated user."""
+
+    params: Dict[str, Any] = {"per_page": per_page, "page": page}
+    if affiliation:
+        params["affiliation"] = affiliation
+    if visibility:
+        params["visibility"] = visibility
+    return await _github_request("GET", "/user/repos", params=params)
+
+
+@mcp_tool(write_action=False)
+async def list_recent_issues(
+    filter: str = "assigned",
+    state: str = "open",
+    per_page: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """Return recent issues the user can access (includes PRs)."""
+
+    params = {"filter": filter, "state": state, "per_page": per_page, "page": page}
+    return await _github_request("GET", "/issues", params=params)
+
+
+@mcp_tool(write_action=False)
+async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
+    """Fetch a GitHub issue."""
+
+    return await _github_request(
+        "GET", f"/repos/{full_name}/issues/{issue_number}"
+    )
+
+
+@mcp_tool(write_action=False)
+async def fetch_issue_comments(
+    full_name: str, issue_number: int, per_page: int = 30, page: int = 1
+) -> Dict[str, Any]:
+    """Fetch comments for a GitHub issue."""
+
+    params = {"per_page": per_page, "page": page}
+    return await _github_request(
+        "GET",
+        f"/repos/{full_name}/issues/{issue_number}/comments",
+        params=params,
+    )
+
+
+@mcp_tool(write_action=False)
+async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
+    """Fetch pull request details."""
+
+    return await _github_request("GET", f"/repos/{full_name}/pulls/{pull_number}")
+
+
+@mcp_tool(write_action=False)
+async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
+    """Get metadata for a pull request without downloading the diff."""
+
+    data = await fetch_pr(full_name, pull_number)
+    pr = data.get("json") or {}
+    if isinstance(pr, dict):
+        summary = {
+            "title": pr.get("title"),
+            "state": pr.get("state"),
+            "draft": pr.get("draft"),
+            "merged": pr.get("merged"),
+            "user": pr.get("user", {}).get("login") if isinstance(pr.get("user"), dict) else None,
+            "head": pr.get("head", {}).get("ref") if isinstance(pr.get("head"), dict) else None,
+            "base": pr.get("base", {}).get("ref") if isinstance(pr.get("base"), dict) else None,
+        }
+    else:
+        summary = None
+    return {"status_code": data.get("status_code"), "summary": summary, "pr": pr}
+
+
+@mcp_tool(write_action=False)
+async def fetch_pr_comments(
+    full_name: str, pull_number: int, per_page: int = 30, page: int = 1
+) -> Dict[str, Any]:
+    """Fetch issue-style comments for a pull request."""
+
+    params = {"per_page": per_page, "page": page}
+    return await _github_request(
+        "GET", f"/repos/{full_name}/issues/{pull_number}/comments", params=params
+    )
+
+
+@mcp_tool(write_action=False)
+async def get_pr_diff(full_name: str, pull_number: int) -> Dict[str, Any]:
+    """Fetch the unified diff for a pull request."""
+
+    return await _github_request(
+        "GET",
+        f"/repos/{full_name}/pulls/{pull_number}",
+        headers={"Accept": "application/vnd.github.v3.diff"},
+        expect_json=False,
+    )
+
+
+@mcp_tool(write_action=False)
+async def fetch_pr_patch(full_name: str, pull_number: int) -> Dict[str, Any]:
+    """Fetch the patch for a GitHub pull request."""
+
+    return await _github_request(
+        "GET",
+        f"/repos/{full_name}/pulls/{pull_number}",
+        headers={"Accept": "application/vnd.github.v3.patch"},
+        expect_json=False,
+    )
+
+
+@mcp_tool(write_action=False)
+async def list_pr_changed_filenames(
+    full_name: str, pull_number: int, per_page: int = 100, page: int = 1
+) -> Dict[str, Any]:
+    """List files changed in a pull request."""
+
+    params = {"per_page": per_page, "page": page}
+    return await _github_request(
+        "GET", f"/repos/{full_name}/pulls/{pull_number}/files", params=params
+    )
+
+
+@mcp_tool(write_action=False)
+async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
+    """Get combined status for a commit or ref."""
+
+    return await _github_request(
+        "GET", f"/repos/{full_name}/commits/{ref}/status"
+    )
+
+
+@mcp_tool(write_action=False)
+async def get_issue_comment_reactions(
+    full_name: str, comment_id: int, per_page: int = 30, page: int = 1
+) -> Dict[str, Any]:
+    """Fetch reactions for an issue comment."""
+
+    params = {"per_page": per_page, "page": page}
+    return await _github_request(
+        "GET",
+        f"/repos/{full_name}/issues/comments/{comment_id}/reactions",
+        params=params,
+        headers={"Accept": "application/vnd.github.squirrel-girl+json"},
+    )
+
+
+@mcp_tool(write_action=False)
+async def get_pr_reactions(
+    full_name: str, pull_number: int, per_page: int = 30, page: int = 1
+) -> Dict[str, Any]:
+    """Fetch reactions for a GitHub pull request."""
+
+    params = {"per_page": per_page, "page": page}
+    return await _github_request(
+        "GET",
+        f"/repos/{full_name}/issues/{pull_number}/reactions",
+        params=params,
+        headers={"Accept": "application/vnd.github.squirrel-girl+json"},
+    )
+
+
+@mcp_tool(write_action=False)
+async def get_pr_review_comment_reactions(
+    full_name: str, comment_id: int, per_page: int = 30, page: int = 1
+) -> Dict[str, Any]:
+    """Fetch reactions for a pull request review comment."""
+
+    params = {"per_page": per_page, "page": page}
+    return await _github_request(
+        "GET",
+        f"/repos/{full_name}/pulls/comments/{comment_id}/reactions",
+        params=params,
+        headers={"Accept": "application/vnd.github.squirrel-girl+json"},
+    )
 
 
 @mcp_tool(write_action=False)
