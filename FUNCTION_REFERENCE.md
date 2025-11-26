@@ -233,7 +233,8 @@ patterns so assistants can automate workflows without step-by-step prompts.
 
 ### `list_workflow_runs(...)`
 * **Purpose:** List workflow runs with optional `branch`, `status`, and `event`
-  filters.
+  filters. Returns the raw GitHub payload plus a trimmed
+  `workflow_runs_summary` list for quick scanning in chat surfaces.
 * **Chaining:** Narrow to recent runs before fetching jobs/logs.
 
 ### `list_jobs_for_run(full_name, run_id, per_page=100, page=1)`
