@@ -435,6 +435,34 @@ def _cleanup_dir(path: str) -> None:
         pass
 
 
+async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
+    """Write a unified diff to disk and apply it with ``git apply``.
+
+    This helper allows workspace tools (``run_command``/``run_tests``) to run
+    lint or test commands against in-flight changes supplied by the MCP client.
+    GitHub reports are much more accurate when the command runs against the
+    patched checkout instead of the unmodified remote branch.
+    """
+
+    if not patch or not patch.strip():
+        raise GitHubAPIError("Received empty patch to apply in workspace")
+
+    patch_path = os.path.join(repo_dir, "mcp_patch.diff")
+    with open(patch_path, "w", encoding="utf-8") as f:
+        f.write(patch)
+
+    apply_result = await _run_shell(
+        f"git apply --whitespace=nowarn {patch_path}",
+        cwd=repo_dir,
+        timeout_seconds=60,
+    )
+    if apply_result["exit_code"] != 0:
+        stderr = apply_result.get("stderr", "") or apply_result.get("stdout", "")
+        raise GitHubAPIError(
+            f"git apply failed while preparing workspace: {stderr}"
+        )
+
+
 def _structured_tool_error(
     exc: BaseException, *, context: str, path: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -1575,6 +1603,7 @@ async def run_command(
     command: str = "pytest",
     timeout_seconds: int = 300,
     workdir: Optional[str] = None,
+    patch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Clone the repository and run an arbitrary shell command in a temp dir."""
 
@@ -1582,6 +1611,9 @@ async def run_command(
     try:
         _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
         repo_dir = await _clone_repo(full_name, ref=ref)
+
+        if patch:
+            await _apply_patch_to_repo(repo_dir, patch)
 
         cwd = repo_dir
         if workdir:
@@ -1606,6 +1638,7 @@ async def run_tests(
     test_command: str = "pytest",
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
+    patch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the project's test command after cloning into a temp workspace."""
     return await run_command(
@@ -1614,6 +1647,7 @@ async def run_tests(
         command=test_command,
         timeout_seconds=timeout_seconds,
         workdir=workdir,
+        patch=patch,
     )
 
 

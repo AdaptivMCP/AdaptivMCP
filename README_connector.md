@@ -124,10 +124,13 @@ These clone the repository into a temporary directory on the MCP server and
 clean up afterward.
 
 - **run_command(full_name, ref="main", command="pytest", timeout_seconds=300,
-  workdir=None)** — Run an arbitrary command in a temp checkout (write gate for
-  safety).
+  workdir=None, patch=None)** — Run an arbitrary command in a temp checkout
+  (write gate for safety). If ``patch`` is provided, it is applied with
+  ``git apply`` before executing the command so linters/tests run against
+  in-flight changes.
 - **run_tests(full_name, ref="main", test_command="pytest",
-  timeout_seconds=600, workdir=None)** — Thin wrapper over ``run_command``.
+  timeout_seconds=600, workdir=None, patch=None)** — Thin wrapper over
+  ``run_command`` with the same patch-support semantics.
 - **apply_patch_and_open_pr(full_name, base_branch, patch, title, body=None,
   new_branch=None, run_tests_flag=False, test_command="pytest",
   test_timeout_seconds=600, draft=False)** — Apply a unified diff, optionally

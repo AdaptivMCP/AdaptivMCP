@@ -202,6 +202,8 @@ Inspect the result:
 You can use `run_tests` (or `run_command`) for linters as well:
 
 - `test_command`: `"flake8 ."`
+- `patch`: optional unified diff to apply before running (lets you lint the
+  in-progress changes you generated locally)
 
 Same rules apply: inspect `exit_code`, `stdout`, and `stderr`, and summarize
 any failures instead of hiding them.
