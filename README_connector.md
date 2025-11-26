@@ -54,14 +54,21 @@ write gate rules above.
   permissions). ``full_name`` must be ``"owner/repo"``.
 - **list_branches(full_name, per_page=100, page=1)** — Enumerate branches using
   GitHub pagination.
+- **list_repositories_by_installation(installation_id, per_page=30, page=1)** —
+  List repositories a specific GitHub App installation can access for the
+  authenticated user.
 - **get_file_contents(full_name, path, ref="main")** — Fetch one file and
   decode base64 to UTF-8 text. Responses include `numbered_lines` to make
   quoting specific lines in patches easier.
 - **fetch_files(full_name, paths, ref="main")** — Fetch multiple files
   concurrently; each entry returns decoded content, `numbered_lines`, or an
   error string.
+- **search(query, search_type="code", per_page=30, page=1, sort?, order?)** — GitHub
+  search for code, repositories, issues, or commits with native sorting.
 - **graphql_query(query, variables=None)** — Execute a GitHub GraphQL query.
 - **fetch_url(url)** — Fetch arbitrary HTTP/HTTPS URLs without truncation.
+- **download_user_content(content_url)** — Download sandbox/local/http content
+  as base64 with optional UTF-8 text/line numbers for reuse in commits.
 
 ### GitHub Actions
 - **list_workflow_runs(full_name, branch?, status?, event?, per_page=30,
@@ -98,6 +105,9 @@ write gate rules above.
   from the given ref (write).
 - **ensure_branch(full_name, branch, from_ref="main")** — Idempotently create
   the branch if missing (write).
+- **update_file_and_open_pr(full_name, path, content|content_url, title,
+  base_branch="main", new_branch?, body?, message?, draft=False)** — Fast path
+  for one-file fixes (lint nits, typos) without cloning.
 - **commit_file_async(full_name, path, message, content=None,
   content_url=None, branch="main", sha=None)** — Schedule a single file commit
   in the background; exactly one of ``content``/``content_url`` is required

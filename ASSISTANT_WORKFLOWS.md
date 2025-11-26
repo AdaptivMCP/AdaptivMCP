@@ -14,9 +14,9 @@ mix and match steps or take a different approach entirely.
 1. `get_file_contents` (or the listing/search helpers) can fetch the file you
    plan to change.
 2. Prepare the new content locally in whatever workflow you prefer.
-3. `update_files_and_open_pr` accepts `{path, content}` entries plus a PR
-   title/body and can create a branch, commit each file, and open the PR in one
-   request.
+3. For one-file lint/doc fixes, `update_file_and_open_pr` commits that file and
+   opens a PR in one call without cloning. For multiple files, use
+   `update_files_and_open_pr` with `{path, content}` entries plus a PR title/body.
 
 ## Run tests or linters against pending changes
 1. Provide a unified diff if you want `run_tests` or `run_command` to mirror
