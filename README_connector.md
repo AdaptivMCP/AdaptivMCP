@@ -11,6 +11,10 @@ Use the SSE endpoint in your connector configuration:
 https://github-mcp-chatgpt.onrender.com/sse
 ```
 
+The SSE stream itself is **GET /sse**; MCP JSON payloads should be posted to
+`/messages` (handled internally by FastMCP). Avoid POSTing directly to `/sse`
+to prevent 405s in Render logs.
+
 If you visit the base domain directly (``https://github-mcp-chatgpt.onrender.com/``),
 the server now responds with a plain-text banner pointing you to ``/sse`` and
 ``/healthz`` instead of a generic 404.

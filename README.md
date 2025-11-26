@@ -24,7 +24,7 @@ The deployment is meant for a single trusted user. The GitHub personal access to
 - A Starlette app wraps the FastMCP SSE ASGI app and exposes:
   - `GET /`  simple banner.
   - `GET /healthz`  health check for Render.
-  - `GET/POST /sse` and related MCP message endpoints via `mcp.sse_app()`.
+  - `GET /sse` for the SSE stream and `POST /messages` for MCP payloads (FastMCP internals).
 - GitHub and external HTTP requests go through shared `httpx.AsyncClient` instances with:
   - Connection pooling controlled by `HTTPX_MAX_CONNECTIONS` and `HTTPX_MAX_KEEPALIVE`.
   - Optional HTTP/2 via `HTTPX_HTTP2`.
