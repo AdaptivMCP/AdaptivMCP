@@ -1,7 +1,10 @@
 import io
 import zipfile
 
-from main import _decode_zipped_job_logs
+import httpx
+import pytest
+
+from main import _decode_zipped_job_logs, get_job_logs
 
 
 def test_decode_zipped_job_logs_combines_entries():
@@ -17,3 +20,34 @@ def test_decode_zipped_job_logs_combines_entries():
 
 def test_decode_zipped_job_logs_handles_invalid_zip():
     assert _decode_zipped_job_logs(b"not-a-zip") == ""
+
+
+@pytest.mark.asyncio
+async def test_get_job_logs_follows_redirects(monkeypatch):
+    class DummyClient:
+        def build_request(self, method, url, headers=None):
+            self.method = method
+            self.url = url
+            self.headers = headers or {}
+            return httpx.Request(method, url)
+
+        async def send(self, request, follow_redirects=False):
+            self.follow_redirects = follow_redirects
+            return httpx.Response(
+                200,
+                content=b"hello world",
+                headers={"Content-Type": "text/plain"},
+                request=request,
+            )
+
+    dummy = DummyClient()
+
+    from main import _http_client_github
+
+    monkeypatch.setattr("main._http_client_github", dummy, raising=False)
+
+    result = await get_job_logs("octo/demo", 123)
+
+    assert dummy.follow_redirects is True
+    assert dummy.headers.get("Accept") == "application/octet-stream"
+    assert result["logs"] == "hello world"
