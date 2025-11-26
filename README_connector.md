@@ -41,7 +41,7 @@ If writes are disabled, write-tagged tools raise
 Shell outputs and fetched logs are trimmed to keep responses predictable for the
 ChatGPT connector UI:
 
-- ``TOOL_STDOUT_MAX_CHARS`` (fixed 12,000) trims stdout text.
+- ``TOOL_STDOUT_MAX_CHARS`` (default 12,000, configurable via environment variable) trims stdout text.
 - ``TOOL_STDERR_MAX_CHARS`` (env configurable, default 12,000) trims stderr
   text separately.
 - ``LOGS_MAX_CHARS`` (env configurable, default ~16,000) trims GitHub Actions
