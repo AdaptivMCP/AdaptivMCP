@@ -8,6 +8,7 @@ for optional, non-binding examples of how the tools can fit together.
 """
 
 import os
+import re
 import asyncio
 import base64
 import tempfile
@@ -343,8 +344,15 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         "accessible URL."
     )
 
+    def _is_windows_absolute_path(path: str) -> bool:
+        # Match drive-letter paths like ``C:\foo`` or UNC paths like ``\\server``
+        return bool(
+            re.match(r"^[a-zA-Z]:[\\/].*", path)
+            or path.startswith("\\\\")
+        )
+
     # sandbox:/path → local path or optional rewrite via SANDBOX_CONTENT_BASE_URL
-    if content_url.startswith("sandbox:/"):
+    if content_url.startswith("sandbox:"):
         local_path = content_url[len("sandbox:") :]
         rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
         try:
@@ -365,7 +373,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
     # still be able to fetch it via a host-provided rewrite base (mirroring the
     # sandbox:/ behavior) so that callers don't need to know whether the
     # runtime supports direct filesystem access.
-    if content_url.startswith("/"):
+    if content_url.startswith("/") or _is_windows_absolute_path(content_url):
         rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
         missing_hint = (
             "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
@@ -431,11 +439,18 @@ async def _run_shell(
         head_len = max_chars - len(marker)
         return text[:head_len] + marker, True
 
+    shell_executable = os.environ.get("SHELL")
+    if os.name == "nt":
+        # Prefer bash when available (e.g., Git Bash) so multi-line commands and
+        # POSIX features like heredocs behave consistently across platforms.
+        shell_executable = shell_executable or shutil.which("bash")
+
     proc = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        executable=shell_executable,
         env={
             **os.environ,
             "GIT_AUTHOR_NAME": GIT_AUTHOR_NAME,
