@@ -241,7 +241,8 @@ patterns so assistants can automate workflows without step-by-step prompts.
 * **Chaining:** Pair with `get_job_logs` to drill into failing jobs.
 
 ### `get_job_logs(full_name, job_id)`
-* **Purpose:** Fetch raw job logs truncated to `LOGS_MAX_CHARS`.
+* **Purpose:** Fetch raw job logs truncated to `LOGS_MAX_CHARS`, automatically
+  unzipping the archive GitHub returns.
 * **Chaining:** Surface concise diagnostics in assistant responses.
 
 ### `wait_for_workflow_run(full_name, run_id, timeout_seconds=900, poll_interval_seconds=10)`
