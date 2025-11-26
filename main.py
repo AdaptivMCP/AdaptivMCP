@@ -410,6 +410,18 @@ async def _run_shell(
     workspace commands are properly attributed.
     """
 
+    def _truncate_with_marker(text: str, max_chars: int) -> tuple[str, bool]:
+        if len(text) <= max_chars:
+            return text, False
+
+        marker = "\n... [truncated]"
+        if max_chars <= len(marker):
+            # Degenerate case when env vars force an extremely small limit
+            return marker[:max_chars], True
+
+        head_len = max_chars - len(marker)
+        return text[:head_len] + marker, True
+
     proc = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
@@ -433,14 +445,23 @@ async def _run_shell(
         stdout_bytes, stderr_bytes = await proc.communicate()
         timed_out = True
 
-    stdout = stdout_bytes.decode("utf-8", errors="replace")[:TOOL_STDOUT_MAX_CHARS]
-    stderr = stderr_bytes.decode("utf-8", errors="replace")[:TOOL_STDERR_MAX_CHARS]
+    raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
+    raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
+
+    stdout, stdout_truncated = _truncate_with_marker(
+        raw_stdout, TOOL_STDOUT_MAX_CHARS
+    )
+    stderr, stderr_truncated = _truncate_with_marker(
+        raw_stderr, TOOL_STDERR_MAX_CHARS
+    )
 
     return {
         "exit_code": proc.returncode,
         "timed_out": timed_out,
         "stdout": stdout,
         "stderr": stderr,
+        "stdout_truncated": stdout_truncated,
+        "stderr_truncated": stderr_truncated,
     }
 
 
