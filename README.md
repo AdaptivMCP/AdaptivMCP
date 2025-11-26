@@ -43,6 +43,9 @@ The server trims very large logs, patches and command output to keep responses i
 - `GITHUB_MCP_AUTO_APPROVE` (default `0`)
   - `0`  write tools are disabled until the `authorize_write_actions` tool is called.
   - Truthy strings such as `1`, `true`, `yes`, or `on` enable write tools by default for all MCP sessions.
+  - Read-only tools are always auto-approved so assistants can run full read/plan
+    workflows without repeated prompts. Only tools tagged as write actions need
+    explicit authorization.
 
 ### HTTP client and concurrency tuning
 
