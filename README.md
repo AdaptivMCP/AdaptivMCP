@@ -11,8 +11,10 @@ From the point of view of an MCP client, this server:
 - Reads repository metadata, branches and files (including batch fetch via `fetch_files`).
 - Runs GitHub REST and GraphQL requests using a PAT stored server side.
 - Inspects GitHub Actions workflow runs, jobs and logs.
+- Searches GitHub code/issues/repos and lists repositories available to an app installation.
 - Creates branches, commits files, opens pull requests and can trigger `workflow_dispatch` workflows.
 - Provides higher level tools like `update_files_and_open_pr` and `apply_patch_and_open_pr` to safely edit code and open PRs.
+- Downloads sandbox or HTTP content as base64/text payloads for reuse.
 - Can clone repos into a temporary workspace and run commands or test suites there.
 
 The deployment is meant for a single trusted user. The GitHub personal access token (PAT) lives only in the server environment; the MCP client never sees it.
@@ -152,22 +154,25 @@ These steps are an example of how tools can be combined; follow a different flow
 1. `get_server_config` (and `list_write_tools` if you plan to write) can show whether writes are allowed and what limits apply.
 2. `list_repository_tree` helps browse the repository layout. Pass `path_prefix` to focus on a subdirectory when the top-level tree is large.
 3. Fetch live file contents with `get_file_contents` or `fetch_files` to have numbered lines for planning diffs.
-4. Build and apply patches in whatever way you prefer; `apply_patch_and_open_pr` is available when you want a single round-trip.
-5. Include any relevant test output or truncation notices in your report if they help downstream users.
+4. For tiny lint/doc fixes, call `update_file_and_open_pr` with the new file body to commit and open a PR in one shot without cloning. Use `update_files_and_open_pr` when multiple files change.
+5. Build and apply patches in whatever way you prefer; `apply_patch_and_open_pr` is available when you want a single round-trip and optional test run.
+6. Include any relevant test output or truncation notices in your report if they help downstream users.
 
 Once connected, the client should expose tools such as:
 
 - `authorize_write_actions`
 - `get_server_config`, `list_write_tools`
-- `get_rate_limit`, `get_repository`, `list_branches`, `list_repository_tree`
-- `get_file_contents`, `fetch_files` (responses include `numbered_lines` for
-  easy referencing)
+- `get_rate_limit`, `get_repository`, `list_branches`, `list_repository_tree`,
+  `list_repositories_by_installation`, `search`
+- `get_file_contents`, `fetch_files`, `download_user_content` (responses include
+  `numbered_lines` for easy referencing)
 - Background read helpers: `start_background_read`, `get_background_read`,
   `list_background_reads` (schedule long reads and poll later)
 - `graphql_query`, `fetch_url`
 - GitHub Actions tools  `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, `get_job_logs`, `wait_for_workflow_run`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`
 - PR tools  `list_pull_requests`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `compare_refs`
-- Branch and commit tools  `create_branch`, `ensure_branch`, `commit_file_async`, `create_pull_request`, `update_files_and_open_pr`
+- Branch and commit tools  `create_branch`, `ensure_branch`, `commit_file_async`,
+  `update_file_and_open_pr`, `create_pull_request`, `update_files_and_open_pr`
 - Workspace tools  `run_command`, `run_tests`, `apply_patch_and_open_pr`
   - `apply_patch_and_open_pr` rejects empty patch bodies (`empty_patch`) and no-op diffs (`empty_diff`) before committing.
 

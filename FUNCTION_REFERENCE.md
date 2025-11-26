@@ -159,6 +159,12 @@ patterns so assistants can automate workflows without step-by-step prompts.
   `affiliation` and `visibility` filters.
 * **Chaining:** Feed results into subsequent `get_repo` or browse calls.
 
+### `list_repositories_by_installation(installation_id, per_page=30, page=1)`
+* **Purpose:** Enumerate repositories visible to a specific GitHub App
+  installation for the authenticated user.
+* **Chaining:** When an app exposes many repos, pick an `installation_id` from
+  `/user/installations` and feed names into `get_repository` or PR tools.
+
 ### `list_recent_issues(...)`
 * **Purpose:** List recent issues/PRs visible to the user using GitHub's
   combined `/issues` endpoint.
@@ -224,10 +230,17 @@ patterns so assistants can automate workflows without step-by-step prompts.
 ### GraphQL and external fetch
 * `graphql_query(query, variables=None)`: Execute GitHub GraphQL with shared
   auth client; raises on HTTP errors.
+* `search(query, search_type='code', per_page=30, page=1, sort=None, order=None)`: REST
+  search endpoint wrapper supporting code, repositories, issues, or commits
+  with optional sorting parameters.
 * `fetch_url(url)`: Generic HTTP GET via the external client with content
   truncation.
+* `download_user_content(content_url)`: Fetch sandbox/local/http content as
+  base64; decodes UTF-8 text when possible and returns numbered lines for text
+  bodies.
 * **Chaining:** Use GraphQL for complex queries (e.g., dependency insights);
-  `fetch_url` for ancillary data like changelogs referenced in issues.
+  `search` to locate files/PRs quickly; `download_user_content` or `fetch_url`
+  for ancillary data like changelogs referenced in issues.
 
 ## GitHub Actions observability and control
 
@@ -310,6 +323,14 @@ patterns so assistants can automate workflows without step-by-step prompts.
 * **Chaining:** Use for small doc/config edits; follow with
   `create_pull_request` or `compare_refs` if needed. Ensure branch exists via
   `ensure_branch` beforehand.
+
+### `update_file_and_open_pr(full_name, path, content, title, base_branch='main', new_branch=None, body=None, message=None, content_url=None, draft=False)`
+* **Type:** Write tool for one-file fixes without cloning.
+* **Behavior:** Ensures/creates the branch, commits either inline content or
+  bytes loaded from `content_url`, then opens a PR. Rejects simultaneous
+  `content`/`content_url` inputs.
+* **Chaining:** Fastest route for lint/typo fixes that touch a single file;
+  returns `branch` and PR payload for follow-up commentary or status checks.
 
 ### `create_pull_request(full_name, title, head, base='main', body=None, draft=False)`
 * **Type:** Write tool to open a PR.

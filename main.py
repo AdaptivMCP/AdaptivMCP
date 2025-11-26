@@ -765,6 +765,18 @@ async def list_repositories(
 
 
 @mcp_tool(write_action=False)
+async def list_repositories_by_installation(
+    installation_id: int, per_page: int = 30, page: int = 1
+) -> Dict[str, Any]:
+    """List repositories accessible via a specific GitHub App installation."""
+
+    params = {"per_page": per_page, "page": page}
+    return await _github_request(
+        "GET", f"/user/installations/{installation_id}/repositories", params=params
+    )
+
+
+@mcp_tool(write_action=False)
 async def list_recent_issues(
     filter: str = "assigned",
     state: str = "open",
@@ -962,6 +974,12 @@ def list_write_tools() -> Dict[str, Any]:
             "category": "commit",
             "description": "Commit a single file to a branch, optionally using content_url.",
             "notes": "Use for small, targeted changes or external doc commits.",
+        },
+        {
+            "name": "update_file_and_open_pr",
+            "category": "pr",
+            "description": "Fast path: commit one file and open a PR without cloning.",
+            "notes": "Use for tiny fixes like lint nits or typo corrections.",
         },
         {
             "name": "create_pull_request",
@@ -1199,6 +1217,50 @@ async def fetch_url(url: str) -> Dict[str, Any]:
         "status_code": resp.status_code,
         "headers": dict(resp.headers),
         "content": resp.text,
+    }
+
+
+@mcp_tool(write_action=False)
+async def search(
+    query: str,
+    search_type: str = "code",
+    per_page: int = 30,
+    page: int = 1,
+    sort: Optional[str] = None,
+    order: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Perform GitHub search queries (code, repos, issues, or commits)."""
+
+    allowed_types = {"code", "repositories", "issues", "commits"}
+    if search_type not in allowed_types:
+        raise ValueError(f"type must be one of {sorted(allowed_types)}")
+
+    params: Dict[str, Any] = {"q": query, "per_page": per_page, "page": page}
+    if sort:
+        params["sort"] = sort
+    if order:
+        params["order"] = order
+    return await _github_request("GET", f"/search/{search_type}", params=params)
+
+
+@mcp_tool(write_action=False)
+async def download_user_content(content_url: str) -> Dict[str, Any]:
+    """Download user-provided content (sandbox/local/http) with base64 encoding."""
+
+    body_bytes = await _load_body_from_content_url(
+        content_url, context="download_user_content"
+    )
+    text: Optional[str]
+    try:
+        text = body_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        text = None
+
+    return {
+        "size": len(body_bytes),
+        "base64": base64.b64encode(body_bytes).decode("ascii"),
+        "text": text,
+        "numbered_lines": _with_numbered_lines(text) if text is not None else None,
     }
 
 
@@ -1899,6 +1961,81 @@ async def update_files_and_open_pr(
     except Exception as exc:
         return _structured_tool_error(
             exc, context="update_files_and_open_pr", path=current_path
+        )
+
+
+@mcp_tool(write_action=True)
+async def update_file_and_open_pr(
+    full_name: str,
+    path: str,
+    content: Optional[str],
+    title: str,
+    base_branch: str = "main",
+    new_branch: Optional[str] = None,
+    body: Optional[str] = None,
+    message: Optional[str] = None,
+    content_url: Optional[str] = None,
+    draft: bool = False,
+) -> Dict[str, Any]:
+    """Fast path to commit a single file then open a PR without cloning."""
+
+    current_path: Optional[str] = path
+    try:
+        _ensure_write_allowed(f"update_file_and_open_pr {full_name} {path}")
+
+        if content is None and content_url is None:
+            raise ValueError("Provide either content or content_url for the file")
+        if content is not None and content_url is not None:
+            raise ValueError("Provide content or content_url, but not both")
+
+        branch = new_branch or f"ally-{os.urandom(4).hex()}"
+        await ensure_branch(full_name, branch, from_ref=base_branch)
+
+        try:
+            if content_url is not None:
+                body_bytes = await _load_body_from_content_url(
+                    content_url, context="update_file_and_open_pr"
+                )
+            else:
+                body_bytes = content.encode("utf-8")
+        except Exception as exc:
+            return _structured_tool_error(
+                exc, context="update_file_and_open_pr.load_content", path=current_path
+            )
+
+        try:
+            sha = await _resolve_file_sha(full_name, current_path, branch)
+            await _perform_github_commit(
+                full_name=full_name,
+                path=current_path,
+                message=message or title,
+                body_bytes=body_bytes,
+                branch=branch,
+                sha=sha,
+            )
+        except Exception as exc:
+            return _structured_tool_error(
+                exc, context="update_file_and_open_pr.commit_file", path=current_path
+            )
+
+        try:
+            pr = await create_pull_request(
+                full_name=full_name,
+                title=title,
+                head=branch,
+                base=base_branch,
+                body=body,
+                draft=draft,
+            )
+        except Exception as exc:
+            return _structured_tool_error(
+                exc, context="update_file_and_open_pr.create_pr", path=current_path
+            )
+
+        return {"branch": branch, "pull_request": pr}
+    except Exception as exc:
+        return _structured_tool_error(
+            exc, context="update_file_and_open_pr", path=current_path
         )
 
 
