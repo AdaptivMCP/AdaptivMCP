@@ -77,6 +77,8 @@ async def test_get_job_logs_respects_custom_truncation(monkeypatch):
     result = await get_job_logs("octo/demo", 123, logs_max_chars=3)
 
     assert result["logs"] == "abc"
+    assert result["truncated"] is True
+    assert result["max_chars"] == 3
 
 
 @pytest.mark.asyncio
@@ -104,3 +106,4 @@ async def test_get_job_logs_can_disable_truncation(monkeypatch):
     result = await get_job_logs("octo/demo", 123, logs_max_chars=0)
 
     assert result["logs"] == long_payload
+    assert result["truncated"] is False

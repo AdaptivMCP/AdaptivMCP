@@ -908,6 +908,9 @@ async def get_pr_diff(full_name: str, pull_number: int) -> Dict[str, Any]:
         f"/repos/{full_name}/pulls/{pull_number}",
         headers={"Accept": "application/vnd.github.v3.diff"},
         expect_json=False,
+        # Diffs are small enough for GitHub, but truncating them corrupts the
+        # patch and line numbers. Allow the full payload through.
+        text_max_chars=None,
     )
 
 
@@ -920,6 +923,8 @@ async def fetch_pr_patch(full_name: str, pull_number: int) -> Dict[str, Any]:
         f"/repos/{full_name}/pulls/{pull_number}",
         headers={"Accept": "application/vnd.github.v3.patch"},
         expect_json=False,
+        # Patches must remain intact; avoid truncation that would corrupt them.
+        text_max_chars=None,
     )
 
 
@@ -1689,11 +1694,14 @@ async def get_job_logs(
         logs = resp.text
 
     effective_limit = LOGS_MAX_CHARS if logs_max_chars is None else logs_max_chars
+    truncated = bool(effective_limit and len(logs) > effective_limit)
 
     return {
         "status_code": resp.status_code,
         "logs": _truncate_text(logs, effective_limit),
         "content_type": content_type,
+        "truncated": truncated,
+        "max_chars": effective_limit,
     }
 
 
