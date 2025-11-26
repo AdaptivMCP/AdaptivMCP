@@ -989,6 +989,223 @@ async def get_pr_review_comment_reactions(
     )
 
 
+WRITE_TOOL_GUIDE: List[Dict[str, str]] = [
+    {
+        "name": "authorize_write_actions",
+        "category": "control",
+        "description": "Enable or disable write tools within this MCP session.",
+        "notes": "Call with approved=true before using any write tools.",
+    },
+    {
+        "name": "create_branch",
+        "category": "branch",
+        "description": "Create a new branch from a base ref.",
+        "notes": "Prefer ensure_branch unless you know the branch does not exist.",
+    },
+    {
+        "name": "ensure_branch",
+        "category": "branch",
+        "description": "Ensure a branch exists, creating it from a base ref if needed.",
+        "notes": "Safe default for preparing branches before commits or PRs.",
+    },
+    {
+        "name": "commit_file_async",
+        "category": "commit",
+        "description": "Commit a single file to a branch, optionally using content_url.",
+        "notes": "Use for small, targeted changes or external doc commits.",
+    },
+    {
+        "name": "create_pull_request",
+        "category": "pr",
+        "description": "Open a GitHub pull request between two branches.",
+        "notes": "Usually called indirectly by higher-level tools.",
+    },
+    {
+        "name": "update_files_and_open_pr",
+        "category": "pr",
+        "description": "Commit multiple files and open a PR in one call.",
+        "notes": "Use primarily for docs and multi-file updates.",
+    },
+    {
+        "name": "apply_patch_and_open_pr",
+        "category": "pr+workspace",
+        "description": "Apply a unified diff in a clone, optionally run tests, push, and open a PR.",
+        "notes": "Primary path for code changes; keep patches small and focused.",
+    },
+    {
+        "name": "run_command",
+        "category": "workspace",
+        "description": "Clone the repo and run an arbitrary shell command in a temp workspace.",
+        "notes": "Use carefully; bound stdout/stderr is returned.",
+    },
+    {
+        "name": "run_tests",
+        "category": "workspace",
+        "description": "Clone the repo and run tests (default: pytest) in a temp workspace.",
+        "notes": "Preferred way to run tests from assistants.",
+    },
+    {
+        "name": "trigger_workflow_dispatch",
+        "category": "workflow",
+        "description": "Trigger a GitHub Actions workflow via workflow_dispatch.",
+        "notes": "Use only when Joey explicitly asks to run a workflow.",
+    },
+    {
+        "name": "trigger_and_wait_for_workflow",
+        "category": "workflow",
+        "description": "Trigger a workflow and poll until completion or timeout.",
+        "notes": "Summarize the run result in your response.",
+    },
+    {
+        "name": "merge_pull_request",
+        "category": "pr",
+        "description": "Merge an existing PR using the chosen method.",
+        "notes": "Assistants should only merge when Joey explicitly requests it.",
+    },
+    {
+        "name": "close_pull_request",
+        "category": "pr",
+        "description": "Close an existing PR without merging.",
+        "notes": "Only when Joey asks to close a PR.",
+    },
+    {
+        "name": "comment_on_pull_request",
+        "category": "pr",
+        "description": "Post a comment on an existing PR.",
+        "notes": "Use for status, summaries, or test results if Joey likes that pattern.",
+    },
+]
+
+
+DAILY_WORKFLOWS: List[Dict[str, Any]] = [
+    {
+        "name": "orient_and_plan",
+        "title": "Orient in a repository and plan work",
+        "summary": "Quickly understand repo state, constraints, and recent activity before editing.",
+        "steps": [
+            {
+                "goal": "Check connector limits and available tools",
+                "tools": ["get_server_config", "list_all_actions", "get_rate_limit"],
+                "notes": "First call gives concurrency/log limits; second enumerates everything exposed.",
+            },
+            {
+                "goal": "Locate the right code",
+                "tools": ["get_repo", "list_repository_tree", "fetch_files", "fetch_url"],
+                "notes": "Use tree listings to scope; fetch specific files or docs once targets are known.",
+            },
+            {
+                "goal": "Review open work",
+                "tools": ["list_pull_requests", "list_workflow_runs", "fetch_issue", "fetch_pr"],
+                "notes": "Skim outstanding PRs or issues to align changes with ongoing efforts.",
+            },
+        ],
+    },
+    {
+        "name": "implement_change",
+        "title": "Implement a change and open a PR",
+        "summary": "Branch, edit, test, and open a pull request with minimal calls.",
+        "steps": [
+            {
+                "goal": "Prepare the branch",
+                "tools": ["authorize_write_actions", "ensure_branch", "compare_refs"],
+                "notes": "Enable writes once approved, then create/sync the working branch.",
+            },
+            {
+                "goal": "Make and verify edits",
+                "tools": ["apply_patch_and_open_pr", "run_command", "run_tests"],
+                "notes": "Prefer patch-and-PR for code changes; run targeted commands/tests as needed.",
+            },
+            {
+                "goal": "Publish or update the PR",
+                "tools": ["create_pull_request", "update_files_and_open_pr", "comment_on_pull_request"],
+                "notes": "Use one-shot helpers to open PRs; leave a summary comment if tests were run.",
+            },
+        ],
+    },
+    {
+        "name": "pr_review",
+        "title": "Review and iterate on pull requests",
+        "summary": "Inspect diffs, feedback, and reactions to drive follow-up commits.",
+        "steps": [
+            {
+                "goal": "Inspect the PR surface",
+                "tools": ["get_pr_info", "get_pr_diff", "fetch_pr_comments", "list_pr_changed_filenames"],
+                "notes": "Use diff+files for scope; comments and reactions show reviewer concerns.",
+            },
+            {
+                "goal": "Address feedback",
+                "tools": ["get_pr_review_comment_reactions", "fetch_pr_patch", "apply_patch_and_open_pr"],
+                "notes": "Pull patches to edit locally and push fixes back through the patch helper.",
+            },
+            {
+                "goal": "Finalize",
+                "tools": ["trigger_and_wait_for_workflow", "merge_pull_request", "close_pull_request"],
+                "notes": "Only run/merge/close when explicitly requested; otherwise report status.",
+            },
+        ],
+    },
+    {
+        "name": "ci_triage",
+        "title": "Triage CI runs and logs",
+        "summary": "Follow failing runs to actionable logs with minimal polling.",
+        "steps": [
+            {
+                "goal": "Find relevant runs",
+                "tools": ["list_workflow_runs", "get_workflow_run", "list_workflow_run_jobs"],
+                "notes": "Filter by branch/event; drill into runs and jobs that look relevant.",
+            },
+            {
+                "goal": "Collect logs fast",
+                "tools": ["get_job_logs", "wait_for_workflow_run"],
+                "notes": "Use wait_for_workflow_run when a run is in-flight; then grab job-level logs.",
+            },
+            {
+                "goal": "Report or remediate",
+                "tools": ["comment_on_pull_request", "run_tests", "apply_patch_and_open_pr"],
+                "notes": "Comment with findings; reproduce locally and ship focused patches if needed.",
+            },
+        ],
+    },
+]
+
+
+def _build_tool_catalog(include_parameters: bool = False) -> Dict[str, Dict[str, Any]]:
+    """Return metadata for every registered MCP tool keyed by name."""
+
+    catalog: Dict[str, Dict[str, Any]] = {}
+    for maybe_func in globals().values():
+        tool = getattr(maybe_func, "_mcp_tool", None)
+        if tool is None:
+            continue
+
+        meta = getattr(tool, "meta", {}) or {}
+        annotations = getattr(tool, "annotations", None)
+
+        name = getattr(tool, "name", None) or getattr(maybe_func, "__name__", None)
+        description = getattr(tool, "description", None) or (maybe_func.__doc__ or "")
+
+        tool_info: Dict[str, Any] = {
+            "name": str(name),
+            "description": description.strip(),
+            "tags": sorted(list(getattr(tool, "tags", []) or [])),
+            "write_action": bool(meta.get("write_action")),
+            "auto_approved": bool(meta.get("auto_approved")),
+            "read_only_hint": getattr(annotations, "readOnlyHint", None),
+        }
+
+        if include_parameters:
+            schema = getattr(tool, "inputSchema", None)
+            if schema is not None:
+                try:
+                    tool_info["input_schema"] = schema.model_dump()
+                except Exception:
+                    tool_info["input_schema"] = None
+
+        catalog[tool_info["name"]] = tool_info
+
+    return catalog
+
+
 @mcp_tool(write_action=False)
 def list_write_tools() -> Dict[str, Any]:
     """Describe write-capable tools exposed by this server.
@@ -997,94 +1214,48 @@ def list_write_tools() -> Dict[str, Any]:
     reading the entire main.py.
     """
 
-    tools = [
-        {
-            "name": "authorize_write_actions",
-            "category": "control",
-            "description": "Enable or disable write tools within this MCP session.",
-            "notes": "Call with approved=true before using any write tools.",
-        },
-        {
-            "name": "create_branch",
-            "category": "branch",
-            "description": "Create a new branch from a base ref.",
-            "notes": "Prefer ensure_branch unless you know the branch does not exist.",
-        },
-        {
-            "name": "ensure_branch",
-            "category": "branch",
-            "description": "Ensure a branch exists, creating it from a base ref if needed.",
-            "notes": "Safe default for preparing branches before commits or PRs.",
-        },
-        {
-            "name": "commit_file_async",
-            "category": "commit",
-            "description": "Commit a single file to a branch, optionally using content_url.",
-            "notes": "Use for small, targeted changes or external doc commits.",
-        },
-        {
-            "name": "create_pull_request",
-            "category": "pr",
-            "description": "Open a GitHub pull request between two branches.",
-            "notes": "Usually called indirectly by higher-level tools.",
-        },
-        {
-            "name": "update_files_and_open_pr",
-            "category": "pr",
-            "description": "Commit multiple files and open a PR in one call.",
-            "notes": "Use primarily for docs and multi-file updates.",
-        },
-        {
-            "name": "apply_patch_and_open_pr",
-            "category": "pr+workspace",
-            "description": "Apply a unified diff in a clone, optionally run tests, push, and open a PR.",
-            "notes": "Primary path for code changes; keep patches small and focused.",
-        },
-        {
-            "name": "run_command",
-            "category": "workspace",
-            "description": "Clone the repo and run an arbitrary shell command in a temp workspace.",
-            "notes": "Use carefully; bound stdout/stderr is returned.",
-        },
-        {
-            "name": "run_tests",
-            "category": "workspace",
-            "description": "Clone the repo and run tests (default: pytest) in a temp workspace.",
-            "notes": "Preferred way to run tests from assistants.",
-        },
-        {
-            "name": "trigger_workflow_dispatch",
-            "category": "workflow",
-            "description": "Trigger a GitHub Actions workflow via workflow_dispatch.",
-            "notes": "Use only when Joey explicitly asks to run a workflow.",
-        },
-        {
-            "name": "trigger_and_wait_for_workflow",
-            "category": "workflow",
-            "description": "Trigger a workflow and poll until completion or timeout.",
-            "notes": "Summarize the run result in your response.",
-        },
-        {
-            "name": "merge_pull_request",
-            "category": "pr",
-            "description": "Merge an existing PR using the chosen method.",
-            "notes": "Assistants should only merge when Joey explicitly requests it.",
-        },
-        {
-            "name": "close_pull_request",
-            "category": "pr",
-            "description": "Close an existing PR without merging.",
-            "notes": "Only when Joey asks to close a PR.",
-        },
-        {
-            "name": "comment_on_pull_request",
-            "category": "pr",
-            "description": "Post a comment on an existing PR.",
-            "notes": "Use for status, summaries, or test results if Joey likes that pattern.",
-        },
-    ]
+    return {"tools": WRITE_TOOL_GUIDE}
 
-    return {"tools": tools}
+
+@mcp_tool(write_action=False)
+def list_daily_workflows(include_parameters: bool = False) -> Dict[str, Any]:
+    """Summarize the exported tools into connector-friendly daily workflows."""
+
+    catalog = _build_tool_catalog(include_parameters)
+    workflows: List[Dict[str, Any]] = []
+
+    for workflow in DAILY_WORKFLOWS:
+        steps: List[Dict[str, Any]] = []
+        for step in workflow["steps"]:
+            recommended_tools = []
+            for tool_name in step.get("tools", []):
+                tool_entry = catalog.get(tool_name)
+                if tool_entry is None:
+                    recommended_tools.append({"name": tool_name, "missing": True})
+                else:
+                    recommended_tools.append(tool_entry)
+
+            steps.append(
+                {
+                    "goal": step.get("goal"),
+                    "tools": recommended_tools,
+                    "notes": step.get("notes"),
+                }
+            )
+
+        workflows.append(
+            {
+                "name": workflow["name"],
+                "title": workflow["title"],
+                "summary": workflow["summary"],
+                "steps": steps,
+            }
+        )
+
+    return {
+        "write_actions_enabled": WRITE_ALLOWED,
+        "workflows": workflows,
+    }
 
 
 @mcp_tool(write_action=False)
@@ -1456,38 +1627,10 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
             for each tool to clarify argument names and types.
     """
 
-    tools: List[Dict[str, Any]] = []
-    for maybe_func in globals().values():
-        tool = getattr(maybe_func, "_mcp_tool", None)
-        if tool is None:
-            continue
-
-        meta = getattr(tool, "meta", {}) or {}
-        annotations = getattr(tool, "annotations", None)
-
-        name = getattr(tool, "name", None) or getattr(maybe_func, "__name__", None)
-        description = getattr(tool, "description", None) or (maybe_func.__doc__ or "")
-
-        tool_info: Dict[str, Any] = {
-            "name": str(name),
-            "description": description.strip(),
-            "tags": sorted(list(getattr(tool, "tags", []) or [])),
-            "write_action": bool(meta.get("write_action")),
-            "auto_approved": bool(meta.get("auto_approved")),
-            "read_only_hint": getattr(annotations, "readOnlyHint", None),
-        }
-
-        if include_parameters:
-            schema = getattr(tool, "inputSchema", None)
-            if schema is not None:
-                try:
-                    tool_info["input_schema"] = schema.model_dump()
-                except Exception:
-                    tool_info["input_schema"] = None
-
-        tools.append(tool_info)
-
-    tools.sort(key=lambda entry: entry["name"])
+    tools = sorted(
+        _build_tool_catalog(include_parameters).values(),
+        key=lambda entry: entry["name"],
+    )
 
     return {
         "write_actions_enabled": WRITE_ALLOWED,
