@@ -1468,7 +1468,6 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     request = client.build_request(
         "GET",
         f"/repos/{full_name}/actions/jobs/{job_id}/logs",
-        headers={"Accept": "application/octet-stream"},
     )
     async with _concurrency_semaphore:
         resp = await client.send(request, follow_redirects=True)
