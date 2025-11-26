@@ -17,6 +17,7 @@ import uuid
 import io
 import zipfile
 import difflib
+import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -453,6 +454,7 @@ async def _run_shell(
     cmd: str,
     cwd: Optional[str] = None,
     timeout_seconds: int = 300,
+    env: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Execute a shell command with author/committer env vars injected.
 
@@ -467,19 +469,23 @@ async def _run_shell(
         # POSIX features like heredocs behave consistently across platforms.
         shell_executable = shell_executable or shutil.which("bash")
 
+    proc_env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": GIT_AUTHOR_NAME,
+        "GIT_AUTHOR_EMAIL": GIT_AUTHOR_EMAIL,
+        "GIT_COMMITTER_NAME": GIT_COMMITTER_NAME,
+        "GIT_COMMITTER_EMAIL": GIT_COMMITTER_EMAIL,
+    }
+    if env is not None:
+        proc_env.update(env)
+
     proc = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         executable=shell_executable,
-        env={
-            **os.environ,
-            "GIT_AUTHOR_NAME": GIT_AUTHOR_NAME,
-            "GIT_AUTHOR_EMAIL": GIT_AUTHOR_EMAIL,
-            "GIT_COMMITTER_NAME": GIT_COMMITTER_NAME,
-            "GIT_COMMITTER_EMAIL": GIT_COMMITTER_EMAIL,
-        },
+        env=proc_env,
     )
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(
@@ -522,6 +528,27 @@ def _cleanup_dir(path: str) -> None:
         shutil.rmtree(path)
     except Exception:
         pass
+
+
+async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
+    """Create an isolated virtualenv and return env vars that activate it."""
+
+    venv_dir = os.path.join(repo_dir, ".venv-mcp")
+    result = await _run_shell(
+        f"{sys.executable} -m venv {venv_dir}",
+        cwd=repo_dir,
+        timeout_seconds=300,
+    )
+    if result["exit_code"] != 0:
+        stderr = result.get("stderr", "") or result.get("stdout", "")
+        raise GitHubAPIError(f"Failed to create temp virtualenv: {stderr}")
+
+    bin_dir = "Scripts" if os.name == "nt" else "bin"
+    bin_path = os.path.join(venv_dir, bin_dir)
+    return {
+        "VIRTUAL_ENV": venv_dir,
+        "PATH": f"{bin_path}{os.pathsep}" + os.environ.get("PATH", ""),
+    }
 
 
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
@@ -2130,6 +2157,7 @@ async def run_command(
     timeout_seconds: int = 300,
     workdir: Optional[str] = None,
     patch: Optional[str] = None,
+    use_temp_venv: bool = True,
 ) -> Dict[str, Any]:
     """Clone the repository and run an arbitrary shell command in a temp dir.
 
@@ -2142,6 +2170,9 @@ async def run_command(
             directory.
         patch: Optional unified diff that will be applied before running the
             command so assistants can run tests against in-flight edits.
+        use_temp_venv: When true (default), commands run inside a temporary
+            virtualenv rooted in the workspace so ``pip install`` steps do not
+            mutate the server-wide environment.
 
     The temporary directory is cleaned up automatically after execution, so
     callers should capture any artifacts they need from ``result.stdout`` or by
@@ -2149,6 +2180,7 @@ async def run_command(
     """
 
     repo_dir: Optional[str] = None
+    env: Optional[Dict[str, str]] = None
     try:
         _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
         repo_dir = await _clone_repo(full_name, ref=ref)
@@ -2156,10 +2188,18 @@ async def run_command(
         if patch:
             await _apply_patch_to_repo(repo_dir, patch)
 
+        if use_temp_venv:
+            env = await _prepare_temp_virtualenv(repo_dir)
+
         cwd = repo_dir
         if workdir:
             cwd = os.path.join(repo_dir, workdir)
-        result = await _run_shell(command, cwd=cwd, timeout_seconds=timeout_seconds)
+        result = await _run_shell(
+            command,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            env=env,
+        )
         return {
             "repo_dir": repo_dir,
             "workdir": workdir,
@@ -2180,6 +2220,7 @@ async def run_tests(
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
     patch: Optional[str] = None,
+    use_temp_venv: bool = True,
 ) -> Dict[str, Any]:
     """Run the project's test command after cloning into a temp workspace.
 
@@ -2194,6 +2235,7 @@ async def run_tests(
         timeout_seconds=timeout_seconds,
         workdir=workdir,
         patch=patch,
+        use_temp_venv=use_temp_venv,
     )
 
 
