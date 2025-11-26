@@ -1,3 +1,30 @@
+"""GitHub MCP server exposing connector-friendly tools and workflows.
+
+This module is the single entry point for the GitHub Model Context Protocol
+server used by ChatGPT connectors. It focuses on minimizing friction for
+assistant clients by documenting the happy-path flows that otherwise lead to
+looping retries:
+
+* **Capability probe first.** Call ``get_server_config`` as the first request to
+  see whether write tools are enabled, learn truncation limits, and pick
+  sensible timeouts for long-running commands.
+* **Explicitly enable writes.** Before attempting commits or shell commands,
+  call ``authorize_write_actions`` with ``approved=true``; this flips the
+  in-memory gate controlled by ``GITHUB_MCP_AUTO_APPROVE``.
+* **Read → modify → PR flow.** Use ``get_file_contents`` (or the repository
+  browse/search helpers) to fetch the exact blob you want to edit, then call
+  ``update_files_and_open_pr`` to commit changes and open a pull request in a
+  single round-trip.
+* **Workspace commands with patches.** ``run_command`` and ``run_tests`` clone
+  the repository into a temporary directory. Provide the current patch from
+  your editing session via the ``patch`` argument so lint/test commands execute
+  against the latest changes instead of the remote branch tip.
+
+The rest of this file stays intentionally self-contained so assistants can read
+the tools, arguments, and expected behaviors directly alongside the
+implementations. See ``ASSISTANT_WORKFLOWS.md`` for a concise recipe list.
+"""
+
 import os
 import asyncio
 import base64
@@ -378,7 +405,9 @@ async def _run_shell(
 
     Stdout and stderr are truncated separately using ``TOOL_STDOUT_MAX_CHARS``
     and ``TOOL_STDERR_MAX_CHARS`` so assistants see the most relevant output
-    while keeping responses bounded for the connector UI.
+    while keeping responses bounded for the connector UI. Git identity
+    environment variables are injected automatically so Git commits made inside
+    workspace commands are properly attributed.
     """
 
     proc = await asyncio.create_subprocess_shell(
@@ -438,10 +467,11 @@ def _cleanup_dir(path: str) -> None:
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     """Write a unified diff to disk and apply it with ``git apply``.
 
-    This helper allows workspace tools (``run_command``/``run_tests``) to run
-    lint or test commands against in-flight changes supplied by the MCP client.
-    GitHub reports are much more accurate when the command runs against the
-    patched checkout instead of the unmodified remote branch.
+    Assistants should pass the current workspace patch into ``run_command`` or
+    ``run_tests`` so the temporary clone mirrors the user's edits. Skipping this
+    step is a common cause of repeated test failures that appear unrelated to
+    the proposed changes because the command would otherwise execute against the
+    untouched remote branch.
     """
 
     if not patch or not patch.strip():
@@ -1605,7 +1635,22 @@ async def run_command(
     workdir: Optional[str] = None,
     patch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Clone the repository and run an arbitrary shell command in a temp dir."""
+    """Clone the repository and run an arbitrary shell command in a temp dir.
+
+    Args:
+        full_name: GitHub repository in ``owner/name`` format.
+        ref: Branch, tag, or commit to check out. Defaults to ``main``.
+        command: Shell command to execute inside the clone.
+        timeout_seconds: Hard timeout applied to the command execution.
+        workdir: Optional path inside the repository to use as the working
+            directory.
+        patch: Optional unified diff that will be applied before running the
+            command so assistants can run tests against in-flight edits.
+
+    The temporary directory is cleaned up automatically after execution, so
+    callers should capture any artifacts they need from ``result.stdout`` or by
+    writing to remote destinations during the command itself.
+    """
 
     repo_dir: Optional[str] = None
     try:
@@ -1640,7 +1685,12 @@ async def run_tests(
     workdir: Optional[str] = None,
     patch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Run the project's test command after cloning into a temp workspace."""
+    """Run the project's test command after cloning into a temp workspace.
+
+    ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
+    default timeout. Provide ``patch`` when running tests against pending edits
+    so the checkout matches the assistant's current working diff.
+    """
     return await run_command(
         full_name=full_name,
         ref=ref,
