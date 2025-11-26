@@ -43,6 +43,22 @@ To plan edits, always fetch live file content with line numbers:
 Both tools return `numbered_lines` so you can reference specific lines when
 describing patches.
 
+### 1.3 Browse the repository tree
+
+When you are unsure where a file lives, list the repository structure quickly:
+
+- Entire tree on `main` (truncated to 1000 entries by default):
+
+  - `list_repository_tree("FULL_NAME", ref="main")`
+
+- Zoom into a folder to avoid truncation and keep the response fast:
+
+  - `list_repository_tree("FULL_NAME", ref="main", path_prefix="tests/")`
+
+The response includes `entry_count`, `truncated`, and `entries` with the path
+and type for each item. If `truncated` is `true`, reduce `path_prefix` or lower
+`max_entries` and call again to navigate progressively without getting lost.
+
 ---
 
 ## 2. Code change via unified diff + tests
