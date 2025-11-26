@@ -311,6 +311,18 @@ Build a smaller or corrected patch.
 
 Try once more.
 
+empty_patch or empty_diff (from apply_patch_and_open_pr):
+
+Patch body was empty/whitespace or applied cleanly but produced no staged
+changes.
+
+Response:
+
+Rebuild the diff to include the intended edits.
+
+Confirm the hunks actually change files; identical old/new lines return
+`empty_diff` even when the patch text is non-empty.
+
 tests_failed:
 
 Tests ran but did not pass.

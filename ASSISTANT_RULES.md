@@ -74,6 +74,8 @@ This document defines the rules that all assistants must follow when using the *
 
 1. For `apply_patch_and_open_pr`, always inspect the `error` field:
    - `git_apply_failed` – patch did not apply; usually due to stale contents or incorrect hunks.
+   - `empty_patch` – the provided patch body was empty or whitespace only.
+   - `empty_diff` – the patch applied cleanly but produced no staged changes (no-op diff).
    - `git_commit_failed` – commit step failed; check `stderr` for details.
    - `tests_failed` – tests failed; include the failure summary in your response.
    - `git_push_failed` – push failed; often branch protection, auth, or network issues.

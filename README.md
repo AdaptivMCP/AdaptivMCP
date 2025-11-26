@@ -151,6 +151,7 @@ Once connected, the client should expose tools such as:
 - PR tools  `list_pull_requests`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `compare_refs`
 - Branch and commit tools  `create_branch`, `ensure_branch`, `commit_file_async`, `create_pull_request`, `update_files_and_open_pr`
 - Workspace tools  `run_command`, `run_tests`, `apply_patch_and_open_pr`
+  - `apply_patch_and_open_pr` rejects empty patch bodies (`empty_patch`) and no-op diffs (`empty_diff`) before committing.
 
 ## Troubleshooting
 
