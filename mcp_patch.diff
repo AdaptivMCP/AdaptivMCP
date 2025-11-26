@@ -1,19 +1,10 @@
-diff --git a/CONNECTOR_DOCS_OVERVIEW.md b/CONNECTOR_DOCS_OVERVIEW.md
---- a/CONNECTOR_DOCS_OVERVIEW.md
-+++ b/CONNECTOR_DOCS_OVERVIEW.md
-@@ -71,6 +71,15 @@ Use this as the route map for all connector-related docs.
-   - When to read:
-     - When you want concrete, copyable patterns for a specific type of change.
-
-+- **`MCP_ERROR_CODES.md`**
-+  - What it covers:
-+    - Common MCP / GitHub / Render failure modes and error patterns.
-+    - How to interpret `error` fields, HTTP status codes, and when to escalate.
-+  - When to read:
-+    - Immediately after any tool call fails or returns an unexpected error.
-+    - When deciding whether a failure is likely in code, configuration, or
-+      external infrastructure.
-+
- - **`TROUBLESHOOTING.md`**
-   - What it covers:
-     - Typical failure modes and their fixes:
+diff --git a/requirements.txt b/requirements.txt
+index 74c4477..c77f7b3 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,4 +1,5 @@
+ fastmcp>=2.13.0
++pydantic>=2.0,<3.0.0
+ httpx[http2]>=0.27.0
+ starlette>=0.37.0
+ uvicorn>=0.30.0
