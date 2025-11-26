@@ -15,6 +15,7 @@ import shutil
 from typing import Any, Dict, List, Optional
 
 import httpx
+from mcp.types import ToolAnnotations
 from fastmcp import FastMCP
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
@@ -542,8 +543,24 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     tags: set[str] = set(existing_tags or [])
     if write_action:
         tags.add("write")
+    else:
+        tags.add("read")
 
     existing_meta = tool_kwargs.pop("meta", None) or {}
+    existing_annotations = tool_kwargs.pop("annotations", None)
+
+    annotations: ToolAnnotations | None
+    if isinstance(existing_annotations, ToolAnnotations):
+        annotations = existing_annotations
+    elif isinstance(existing_annotations, dict):
+        annotations = ToolAnnotations(**existing_annotations)
+    else:
+        annotations = None
+
+    if annotations is None:
+        annotations = ToolAnnotations(readOnlyHint=not write_action)
+    elif annotations.readOnlyHint is None:
+        annotations = annotations.model_copy(update={"readOnlyHint": not write_action})
     if not isinstance(existing_meta, dict):
         existing_meta = {}
     meta = {
@@ -558,7 +575,12 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     import functools as _functools
 
     def decorator(func):
-        tool = mcp.tool(tags=tags or None, meta=meta or None, **tool_kwargs)(func)
+        tool = mcp.tool(
+            tags=tags or None,
+            meta=meta or None,
+            annotations=annotations,
+            **tool_kwargs,
+        )(func)
 
         if asyncio.iscoroutinefunction(func):
 
