@@ -70,6 +70,15 @@ Use this as the route map for all connector-related docs.
   - When to read:
     - When you want concrete, copyable patterns for a specific type of change.
 
+- **`MCP_ERROR_CODES.md`**
+  - What it covers:
+    - Common MCP / GitHub / Render failure modes and error patterns.
+    - How to interpret `error` fields, HTTP status codes, and when to escalate.
+  - When to read:
+    - Immediately after any tool call fails or returns an unexpected error.
+    - When deciding whether a failure is likely in code, configuration, or
+      external infrastructure.
+
 - **`TROUBLESHOOTING.md`**
   - What it covers:
     - Typical failure modes and their fixes:
