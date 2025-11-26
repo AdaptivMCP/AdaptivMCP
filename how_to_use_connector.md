@@ -197,9 +197,9 @@ Keep individual docs reasonably sized; split huge documents into multiple .md fi
 
 The connector provides tools that clone the repo and run commands in a temporary working directory:
 
-run_tests(full_name, ref, test_command, timeout_seconds, workdir)
+run_tests(full_name, ref, test_command, timeout_seconds, workdir, patch)
 
-run_command(full_name, ref, command, timeout_seconds, workdir)
+run_command(full_name, ref, command, timeout_seconds, workdir, patch)
 
 Typical usage:
 
@@ -209,7 +209,8 @@ run_tests(
   full_name="owner/repo",
   ref="main" or "some-branch",
   test_command="pytest",
-  timeout_seconds=600
+  timeout_seconds=600,
+  patch="<your diff>"  # optional; apply local changes before running
 )
 
 
@@ -219,7 +220,8 @@ run_tests(
   full_name="owner/repo",
   ref="main",
   test_command="flake8 .",
-  timeout_seconds=600
+  timeout_seconds=600,
+  patch="<your diff>"  # optional; apply local changes before running
 )
 
 
