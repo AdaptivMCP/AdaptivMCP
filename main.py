@@ -2245,13 +2245,24 @@ app = mcp.http_app(path="/sse", middleware=middleware, transport="sse")
 
 HOME_MESSAGE = (
     "GitHub MCP server is running. Connect your ChatGPT MCP client to /sse "
-    "(POST back to /messages) and use /healthz for health checks.\n"
+    "(GET) and POST back to /messages; use /healthz for health checks.\n"
 )
 
 
 @mcp.custom_route("/", methods=["GET"])
 async def homepage(request: Request) -> PlainTextResponse:
     return PlainTextResponse(HOME_MESSAGE)
+
+
+@mcp.custom_route("/sse", methods=["POST"])
+async def sse_post_info(request: Request) -> PlainTextResponse:
+    """Handle POST /sse with a friendly hint instead of a 405."""
+
+    hint = (
+        "Use GET /sse for the SSE stream and POST /messages for MCP payloads.\n"
+        "This endpoint is GET-only; POST is accepted here to avoid noisy logs.\n"
+    )
+    return PlainTextResponse(hint)
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
