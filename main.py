@@ -682,6 +682,26 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
 
     return decorator
 
+# ------------------------------------------------------------------------------
+# Optional dynamic tool registration (extra_tools.py)
+# ------------------------------------------------------------------------------
+
+try:
+    # If extra_tools.py exists and exposes register_extra_tools, use it
+    # to register additional tools using the same mcp_tool decorator.
+    from extra_tools import register_extra_tools  # type: ignore[import]
+except Exception:
+    register_extra_tools = None  # type: ignore[assignment]
+
+if callable(register_extra_tools):
+    try:
+        # Pass the decorator so extra_tools.py can define new tools without
+        # importing main.py directly.
+        register_extra_tools(mcp_tool)
+    except Exception:
+        # Extension tools are strictly optional; never break the core server
+        # if extension registration fails for any reason.
+        pass
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
