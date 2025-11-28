@@ -2303,12 +2303,12 @@ async def apply_text_update_and_commit(
 
     # 2) Commit the new content via the GitHub Contents API.
     commit_result = await _perform_github_commit(
-        full_name=full_name,
-        path=path,
-        message=commit_message,
-        body_bytes=body_bytes,
-        branch=branch,
-        sha=sha_before,
+        full_name,
+        path,
+        branch,
+        body_bytes,
+        commit_message,
+        sha_before,
     )
 
     # 3) Verify by reading the file again from the same branch.
