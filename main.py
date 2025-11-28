@@ -49,6 +49,12 @@ FETCH_FILES_CONCURRENCY = int(
 )
 
 GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
+
+# Upper bounds for tool stdout/stderr payloads returned to the connector. These
+# can be tuned via environment variables; set to 0 or a negative value to disable
+# truncation if a deployment prefers full logs at the cost of larger responses.
+TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
+TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "6000"))
 GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
 GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
@@ -528,13 +534,34 @@ async def _run_shell(
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
+    stdout = raw_stdout
+    stderr = raw_stderr
+    stdout_truncated = False
+    stderr_truncated = False
+
+    if (
+        TOOL_STDOUT_MAX_CHARS
+        and TOOL_STDOUT_MAX_CHARS > 0
+        and len(stdout) > TOOL_STDOUT_MAX_CHARS
+    ):
+        stdout = stdout[:TOOL_STDOUT_MAX_CHARS]
+        stdout_truncated = True
+
+    if (
+        TOOL_STDERR_MAX_CHARS
+        and TOOL_STDERR_MAX_CHARS > 0
+        and len(stderr) > TOOL_STDERR_MAX_CHARS
+    ):
+        stderr = stderr[:TOOL_STDERR_MAX_CHARS]
+        stderr_truncated = True
+
 
     return {
         "exit_code": proc.returncode,
-        "timed_out": timed_out,
-        "stdout": raw_stdout,
-        "stderr": raw_stderr,
-        "stdout_truncated": False,
+        "stdout": stdout,
+        "stderr": stderr,
+        "stdout_truncated": stdout_truncated,
+        "stderr_truncated": stderr_truncated,
         "stderr_truncated": False,
     }
 
@@ -1074,12 +1101,6 @@ def list_write_tools() -> Dict[str, Any]:
             "category": "branch",
             "description": "Ensure a branch exists, creating it from a base ref if needed.",
             "notes": "Safe default for preparing branches before commits or PRs.",
-        },
-        {
-            "name": "commit_file_async",
-            "category": "commit",
-            "description": "Commit a single file to a branch, optionally using content_url.",
-            "notes": "Use for small, targeted changes or external doc commits.",
         },
         {
             "name": "update_file_and_open_pr",
