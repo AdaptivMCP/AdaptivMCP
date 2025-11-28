@@ -1,6 +1,5 @@
 import pytest
 import main
-from main import WriteNotAuthorizedError
 
 
 def test_list_all_actions_includes_input_schema():
@@ -56,7 +55,7 @@ async def test_create_issue_respects_write_gate(monkeypatch):
     monkeypatch.setattr(main, "_github_request", fake_github_request)
     monkeypatch.setattr(main, "WRITE_ALLOWED", False)
 
-    with pytest.raises(WriteNotAuthorizedError):
+    with pytest.raises(main.WriteNotAuthorizedError):
         await main.create_issue(full_name="owner/repo", title="Test issue")
 
 
