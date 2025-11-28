@@ -2274,15 +2274,32 @@ async def apply_text_update_and_commit(
 
     _ensure_write_allowed(f"apply_text_update_and_commit {full_name} {path}")
 
-    # 1) Read the current file state on the target branch.
-    decoded = await _decode_github_content(full_name, path, branch)
-    old_text = decoded.get("text")
-    if not isinstance(old_text, str):
-        raise GitHubAPIError("Decoded content is not text")
+    # 1) Read the current file state on the target branch, treating a 404 as a new file.
+    is_new_file = False
+    try:
+        decoded = await _decode_github_content(full_name, path, branch)
+        old_text = decoded.get("text")
+        if not isinstance(old_text, str):
+            raise GitHubAPIError("Decoded content is not text")
+        sha_before = decoded.get("sha")
+    except GitHubAPIError as exc:
+        msg = str(exc)
+        if " 404 " in msg and "/contents/" in msg:
+            # The GitHub Contents API returns 404 when the file does not yet exist.
+            # In that case we treat this as a creation rather than an update.
+            is_new_file = True
+            old_text = ""
+            sha_before = None
+        else:
+            raise
 
-    sha_before = decoded.get("sha")
     body_bytes = updated_content.encode("utf-8")
-    commit_message = message or f"Update {path}"
+    if message is not None:
+        commit_message = message
+    elif is_new_file:
+        commit_message = f"Create {path}"
+    else:
+        commit_message = f"Update {path}"
 
     # 2) Commit the new content via the GitHub Contents API.
     commit_result = await _perform_github_commit(
