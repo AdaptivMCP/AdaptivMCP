@@ -2247,24 +2247,24 @@ async def update_files_and_open_pr(
                     "'content' and 'content_url'"
                 )
 
-            # Load content
-            if file_content_url is not None:
-                try:
-                    loaded = await _load_body_from_content_url(
-                        file_content_url,
-                        context=(
-                            f"update_files_and_open_pr({full_name}/{current_path})"
-                        ),
-                    )
-                    body_bytes = loaded["body"]
-                except Exception as exc:
-                    return _structured_tool_error(
-                        exc,
-                        context="update_files_and_open_pr.load_content",
-                        path=current_path,
-                    )
-            else:
-                body_bytes = file_content.encode("utf-8")
+         # Load content
+         if file_content_url is not None:
+             try:
+                 body_bytes = await _load_body_from_content_url(
+                     file_content_url,
+                     context=(
+                         f"update_files_and_open_pr({full_name}/{current_path})"
+                     ),
+                 )
+             except Exception as exc:
+                 return _structured_tool_error(
+                     exc,
+                     context="update_files_and_open_pr.load_content",
+                     path=current_path,
+                 )
+         else:
+             body_bytes = file_content.encode("utf-8")
+
 
             # Resolve SHA and commit
             try:
