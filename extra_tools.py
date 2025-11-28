@@ -5,7 +5,12 @@ import difflib
 
 # Reuse GitHub helpers from the core server implementation. These are defined
 # in main.py before extra_tools is imported, so this import is safe.
-from main import _github_request, _resolve_file_sha, GitHubAPIError
+from main import (
+    _github_request,
+    _resolve_file_sha,
+    GitHubAPIError,
+    _decode_github_content,
+)
 
 
 class ToolDecorator(Protocol):
@@ -208,3 +213,84 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             result["preview"] = "".join(preview_lines)
 
         return result
+
+    @mcp_tool(
+        write_action=False,
+        description=(
+            "Fetch a slice of a large text file by line range. "
+            "Useful when the full file would be too large to return in a single tool call."
+        ),
+        tags=["github", "read", "files"],
+    )
+    async def get_file_slice(
+        full_name: str,
+        path: str,
+        ref: str = "main",
+        start_line: int = 1,
+        max_lines: int = 200,
+    ) -> Dict[str, Any]:
+        """Return a window of lines from a text file.
+
+        Args:
+            full_name: "owner/repo" string.
+            path: Path to the file in the repository.
+            ref: Git ref (branch, tag, or SHA). Defaults to "main".
+            start_line: 1-based line number to start from.
+            max_lines: Maximum number of lines to return in this slice.
+
+        Returns:
+            A dict with:
+                - full_name, path, ref
+                - start_line, end_line, max_lines
+                - total_lines
+                - has_more_above / has_more_below
+                - lines: list of {"line": int, "text": str}
+        """
+
+        if start_line < 1:
+            raise ValueError("start_line must be >= 1")
+        if max_lines <= 0:
+            raise ValueError("max_lines must be > 0")
+
+        decoded = await _decode_github_content(full_name, path, ref)
+        text = decoded.get("text", "")
+        all_lines = text.splitlines(keepends=False)
+        total_lines = len(all_lines)
+
+        if total_lines == 0:
+            return {
+                "full_name": full_name,
+                "path": path,
+                "ref": ref,
+                "start_line": 1,
+                "end_line": 0,
+                "max_lines": max_lines,
+                "total_lines": 0,
+                "has_more_above": False,
+                "has_more_below": False,
+                "lines": [],
+            }
+
+        start_idx = min(max(start_line - 1, 0), total_lines - 1)
+        end_idx = min(start_idx + max_lines, total_lines)
+
+        slice_lines = [
+            {"line": i + 1, "text": all_lines[i]}
+            for i in range(start_idx, end_idx)
+        ]
+
+        has_more_above = start_idx > 0
+        has_more_below = end_idx < total_lines
+
+        return {
+            "full_name": full_name,
+            "path": path,
+            "ref": ref,
+            "start_line": start_idx + 1,
+            "end_line": end_idx,
+            "max_lines": max_lines,
+            "total_lines": total_lines,
+            "has_more_above": has_more_above,
+            "has_more_below": has_more_below,
+            "lines": slice_lines,
+        }
