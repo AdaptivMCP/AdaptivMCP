@@ -1610,19 +1610,24 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
     """
 
     tools: List[Dict[str, Any]] = []
-    for maybe_func in globals().values():
-        tool = getattr(maybe_func, "_mcp_tool", None)
-        if tool is None:
+    seen_names: set[str] = set()
+
+    for tool, func in _REGISTERED_MCP_TOOLS:
+        name = getattr(tool, "name", None) or getattr(func, "__name__", None)
+        if not name:
             continue
+        name_str = str(name)
+        if name_str in seen_names:
+            continue
+        seen_names.add(name_str)
 
         meta = getattr(tool, "meta", {}) or {}
         annotations = getattr(tool, "annotations", None)
 
-        name = getattr(tool, "name", None) or getattr(maybe_func, "__name__", None)
-        description = getattr(tool, "description", None) or (maybe_func.__doc__ or "")
+        description = getattr(tool, "description", None) or (func.__doc__ or "")
 
         tool_info: Dict[str, Any] = {
-            "name": str(name),
+            "name": name_str,
             "description": description.strip(),
             "tags": sorted(list(getattr(tool, "tags", []) or [])),
             "write_action": bool(meta.get("write_action")),
@@ -1654,6 +1659,7 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
         "write_actions_enabled": WRITE_ALLOWED,
         "tools": tools,
     }
+
 
 
 @mcp_tool(write_action=False)
