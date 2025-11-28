@@ -2229,27 +2229,42 @@ async def update_files_and_open_pr(
         # 2) Commit each file, with verification
         for f in files:
             current_path = f.get("path")
-            ...
-            if file_content is not None and file_content_url is not None:
-                ...
+            if not current_path:
+                raise ValueError("Each file dict must include a 'path' key")
 
-         # Load content
-         if file_content_url is not None:
-             try:
-                 body_bytes = await _load_body_from_content_url(
-                     file_content_url,
-                     context=(
-                         f"update_files_and_open_pr({full_name}/{current_path})"
-                     ),
-                 )
-             except Exception as exc:
-                 return _structured_tool_error(
-                     exc,
-                     context="update_files_and_open_pr.load_content",
-                     path=current_path,
-                 )
-         else:
-             body_bytes = file_content.encode("utf-8")
+            file_message = f.get("message") or title
+            file_content = f.get("content")
+            file_content_url = f.get("content_url")
+
+            if file_content is None and file_content_url is None:
+                raise ValueError(
+                    f"File entry for {current_path!r} must specify "
+                    "either 'content' or 'content_url'"
+                )
+            if file_content is not None and file_content_url is not None:
+                raise ValueError(
+                    f"File entry for {current_path!r} may not specify both "
+                    "'content' and 'content_url'"
+                )
+
+            # Load content
+            if file_content_url is not None:
+                try:
+                    body_bytes = await _load_body_from_content_url(
+                        file_content_url,
+                        context=(
+                            f"update_files_and_open_pr({full_name}/{current_path})"
+                        ),
+                    )
+                except Exception as exc:
+                    return _structured_tool_error(
+                        exc,
+                        context="update_files_and_open_pr.load_content",
+                        path=current_path,
+                    )
+            else:
+                body_bytes = file_content.encode("utf-8")
+
 
 
 
