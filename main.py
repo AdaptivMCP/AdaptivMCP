@@ -1957,69 +1957,6 @@ async def ensure_branch(
         )
     return {"status_code": resp.status_code, "json": resp.json()}
 @mcp_tool(write_action=True)
-async def commit_file_async(
-    full_name: str,
-    path: str,
-    message: str,
-    content: Optional[str] = None,
-    *,
-    content_url: Optional[str] = None,
-    branch: str = "main",
-    sha: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Schedule a single file commit in the background."""
-
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-
-    _ensure_write_allowed(f"commit file async {path}")
-
-    print(
-        "[commit_file_async] scheduling full_name=%r path=%r branch=%r "
-        "message=%r has_content=%s content_url=%r sha=%r"
-        % (full_name, path, branch, message, content is not None, content_url, sha)
-    )
-
-    if content is None and content_url is None:
-        raise ValueError("Either content or content_url must be provided")
-    if content is not None and content_url is not None:
-        raise ValueError("Provide content or content_url, but not both")
-
-    if content_url is not None:
-        body_bytes = await _load_body_from_content_url(
-            content_url, context="commit_file_async"
-        )
-    else:
-        body_bytes = content.encode("utf-8")
-
-    if sha is None:
-        sha = await _resolve_file_sha(full_name, path, branch)
-
-    async def _do_commit() -> None:
-        try:
-            await _perform_github_commit(
-                full_name=full_name,
-                path=path,
-                message=message,
-                body_bytes=body_bytes,
-                branch=branch,
-                sha=sha,
-            )
-            print(f"[commit_file_async] commit completed for {full_name}/{path}")
-        except Exception as e:
-            print(f"[commit_file_async] commit failed for {full_name}/{path}: {e}")
-
-    asyncio.create_task(_do_commit())
-
-    return {
-        "scheduled": True,
-        "path": path,
-        "branch": branch,
-        "message": message,
-    }
-
-
-@mcp_tool(write_action=True)
 async def create_pull_request(
     full_name: str,
     title: str,
