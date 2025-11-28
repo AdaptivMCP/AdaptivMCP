@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional, Protocol
+import difflib
 
 # Reuse GitHub helpers from the core server implementation. These are defined
 # in main.py before extra_tools is imported, so this import is safe.
@@ -23,6 +24,20 @@ class ToolDecorator(Protocol):
         ...
 
 
+def _render_visible_whitespace(line: str) -> str:
+    """Render spaces and tabs with visible glyphs for debugging diffs.
+
+    This is only used for human-oriented previews; the actual `patch` returned
+    by build_unified_diff remains a valid unified diff suitable for
+    apply_patch_and_open_pr.
+    """
+    return (
+        line.replace(" ", "·")
+        .replace("\t", "→\t")
+        .rstrip("\n")  # avoid duplicating newlines in the preview
+    )
+
+
 def register_extra_tools(mcp_tool: ToolDecorator) -> None:
     """Register optional extra tools on top of the core MCP toolset.
 
@@ -41,8 +56,10 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
     @mcp_tool(
         write_action=True,
-        description=("Delete a file from a GitHub repository using the Contents API."
-                     " Call ensure_branch first if you want to delete on a dedicated branch."),
+        description=(
+            "Delete a file from a GitHub repository using the Contents API."
+            " Call ensure_branch first if you want to delete on a dedicated branch."
+        ),
         tags=["github", "write", "files", "delete"],
     )
     async def delete_file(
@@ -110,3 +127,84 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "branch": branch,
             "commit": result,
         }
+
+    @mcp_tool(
+        write_action=False,
+        description=(
+            "Build a unified diff from original and updated file content. "
+            "Useful for large files where sending only a patch to apply_patch_and_open_pr "
+            "is safer than sending full file contents."
+        ),
+        tags=["github", "read", "diff"],
+    )
+    def build_unified_diff(
+        original: str,
+        updated: str,
+        path: str = "file.txt",
+        context_lines: int = 3,
+        show_whitespace: bool = False,
+    ) -> Dict[str, Any]:
+        """Construct a unified diff for a single file.
+
+        Args:
+            original: The current file content.
+            updated: The desired new file content.
+            path: Path of the file in the repository (used for diff headers).
+            context_lines: Number of context lines in the diff (default 3).
+            show_whitespace: If true, also return a human-oriented preview with
+                visible whitespace characters. This preview is *not* meant to be
+                applied; use the `patch` value for apply_patch_and_open_pr.
+
+        Returns:
+            A dict containing at least:
+                - patch: unified diff as a string suitable for git apply /
+                  apply_patch_and_open_pr.
+                - preview (optional): a diff string with visible whitespace
+                  markers for debugging.
+        """
+
+        if context_lines < 0:
+            raise ValueError("context_lines must be >= 0")
+
+        # Split while preserving newlines so diffs stay line-accurate.
+        original_lines = original.splitlines(keepends=True)
+        updated_lines = updated.splitlines(keepends=True)
+
+        fromfile = f"a/{path}"
+        tofile = f"b/{path}"
+
+        diff_lines = list(
+            difflib.unified_diff(
+                original_lines,
+                updated_lines,
+                fromfile=fromfile,
+                tofile=tofile,
+                n=context_lines,
+            )
+        )
+        patch = "".join(diff_lines)
+
+        result: Dict[str, Any] = {
+            "path": path,
+            "patch": patch,
+            "context_lines": context_lines,
+        }
+
+        if show_whitespace:
+            preview_lines = []
+            for line in diff_lines:
+                # Keep diff prefixes (+/-/@@) but render whitespace in the payload
+                if (
+                    line.startswith(("+", "-", " "))
+                    and not line.startswith("+++")
+                    and not line.startswith("---")
+                ):
+                    prefix, payload = line[0], line[1:]
+                    preview_lines.append(
+                        prefix + _render_visible_whitespace(payload) + "\n"
+                    )
+                else:
+                    preview_lines.append(line)
+            result["preview"] = "".join(preview_lines)
+
+        return result
