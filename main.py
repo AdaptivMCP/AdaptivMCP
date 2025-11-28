@@ -871,13 +871,6 @@ async def get_profile() -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
-async def get_repo(full_name: str) -> Dict[str, Any]:
-    """Fetch repository metadata for ``owner/repo``."""
-
-    return await _github_request("GET", f"/repos/{full_name}")
-
-
-@mcp_tool(write_action=False)
 async def list_repositories(
     affiliation: Optional[str] = None,
     visibility: Optional[str] = None,
