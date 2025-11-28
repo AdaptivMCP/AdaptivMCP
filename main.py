@@ -553,7 +553,7 @@ async def _run_shell(
         and len(stderr) > TOOL_STDERR_MAX_CHARS
     ):
         stderr = stderr[:TOOL_STDERR_MAX_CHARS]
-    ):
+        stderr_truncated = True
 
     return {
         "exit_code": proc.returncode,
