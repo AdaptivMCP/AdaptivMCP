@@ -1915,6 +1915,97 @@ async def comment_on_pull_request(
     )
 
 
+@mcp_tool(write_action=True)
+async def create_issue(
+    full_name: str,
+    title: str,
+    body: Optional[str] = None,
+    labels: Optional[List[str]] = None,
+    assignees: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    # Create a GitHub issue with optional body, labels, and assignees.
+
+    if '/' not in full_name:
+        raise ValueError('full_name must be in owner/repo format')
+
+    _ensure_write_allowed(f'create issue in {full_name}: {title!r}')
+
+    payload: Dict[str, Any] = {'title': title}
+    if body is not None:
+        payload['body'] = body
+    if labels is not None:
+        payload['labels'] = labels
+    if assignees is not None:
+        payload['assignees'] = assignees
+
+    return await _github_request(
+        'POST',
+        f'/repos/{full_name}/issues',
+        json_body=payload,
+    )
+
+
+@mcp_tool(write_action=True)
+async def update_issue(
+    full_name: str,
+    issue_number: int,
+    title: Optional[str] = None,
+    body: Optional[str] = None,
+    state: Optional[str] = None,
+    labels: Optional[List[str]] = None,
+    assignees: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    # Update fields on an existing GitHub issue.
+
+    if '/' not in full_name:
+        raise ValueError('full_name must be in owner/repo format')
+
+    _ensure_write_allowed(f'update issue #{issue_number} in {full_name}')
+
+    payload: Dict[str, Any] = {}
+    if title is not None:
+        payload['title'] = title
+    if body is not None:
+        payload['body'] = body
+    if state is not None:
+        allowed_states = {'open', 'closed'}
+        if state not in allowed_states:
+            raise ValueError('state must be ‘open’ or ‘closed’')
+        payload['state'] = state
+    if labels is not None:
+        payload['labels'] = labels
+    if assignees is not None:
+        payload['assignees'] = assignees
+
+    if not payload:
+        raise ValueError('At least one field must be provided to update_issue')
+
+    return await _github_request(
+        'PATCH',
+        f'/repos/{full_name}/issues/{issue_number}',
+        json_body=payload,
+    )
+
+
+@mcp_tool(write_action=True)
+async def comment_on_issue(
+    full_name: str,
+    issue_number: int,
+    body: str,
+) -> Dict[str, Any]:
+    # Post a comment on an issue.
+
+    if '/' not in full_name:
+        raise ValueError('full_name must be in owner/repo format')
+
+    _ensure_write_allowed(f'comment on issue #{issue_number} in {full_name}')
+
+    return await _github_request(
+        'POST',
+        f'/repos/{full_name}/issues/{issue_number}/comments',
+        json_body={'body': body},
+    )
+
 @mcp_tool(write_action=False)
 async def compare_refs(
     full_name: str,
