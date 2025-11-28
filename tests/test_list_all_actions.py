@@ -1,3 +1,4 @@
+import pytest
 import main
 from main import WriteNotAuthorizedError
 
