@@ -253,6 +253,35 @@ async def _github_request(
 # GitHub helpers
 # ------------------------------------------------------------------------------
 
+async def _verify_file_on_branch(
+    full_name: str,
+    path: str,
+    branch: str,
+) -> Dict[str, Any]:
+    """Verify that a file exists on a specific branch after a write.
+
+    This helper is used by higher-level orchestration tools to insert an
+    explicit verification step between committing changes and opening a PR.
+
+    Returns a small JSON-friendly payload summarizing the verification result.
+    Raises GitHubAPIError if the file cannot be fetched.
+    """
+    try:
+        decoded = await _decode_github_content(full_name, path, branch)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise GitHubAPIError(
+            f"Post-commit verification failed for {full_name}/{path}@{branch}: {exc}"
+        ) from exc
+
+    text = decoded.get("text", "")
+    return {
+        "full_name": full_name,
+        "path": path,
+        "branch": branch,
+        "verified": True,
+        "size": len(text) if isinstance(text, str) else None,
+    }
+
 
 async def _decode_github_content(
     full_name: str,
@@ -1913,6 +1942,89 @@ async def ensure_branch(
         )
     return {"status_code": resp.status_code, "json": resp.json()}
 
+@mcp_tool(write_action=True)
+async def commit_file(
+    full_name: str,
+    path: str,
+    message: str,
+    content: Optional[str] = None,
+    *,
+    content_url: Optional[str] = None,
+    branch: str = "main",
+    sha: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Synchronously commit a single file to a branch and verify it.
+
+    This is the synchronous counterpart to commit_file_async: it awaits the
+    GitHub API call and then performs a read-after-write verification on the
+    target branch before returning.
+
+    Args:
+        full_name: "owner/repo" string.
+        path: Path of the file in the repository.
+        message: Commit message.
+        content: New file contents as UTF-8 text.
+        content_url: Optional URL to fetch the content from instead of passing
+            it inline. Exactly one of `content` or `content_url` must be set.
+        branch: Target branch. Defaults to "main".
+        sha: Optional known current SHA of the file. If omitted, the connector
+            will resolve it automatically via _resolve_file_sha.
+
+    Returns:
+        A dict with:
+            - status: "committed"
+            - full_name, path, branch, message
+            - commit: raw GitHub commit/contents API response
+            - verification: result of _verify_file_on_branch
+    """
+
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+
+    _ensure_write_allowed(f"commit_file {path}")
+
+    if content is None and content_url is None:
+        raise ValueError("Either content or content_url must be provided")
+    if content is not None and content_url is not None:
+        raise ValueError("Only one of content or content_url may be provided")
+
+    # Load body bytes
+    if content_url is not None:
+        result = await _load_body_from_content_url(
+            content_url,
+            context=f"commit_file({full_name}/{path})",
+        )
+        body_bytes = result["body"]
+    else:
+        body_bytes = content.encode("utf-8")
+
+    # Resolve current SHA if not provided
+    if sha is None:
+        sha = await _resolve_file_sha(full_name, path, branch)
+
+    # Perform the commit synchronously
+    commit_result = await _perform_github_commit(
+        full_name=full_name,
+        path=path,
+        message=message,
+        branch=branch,
+        body_bytes=body_bytes,
+        sha=sha,
+    )
+
+    # Read-after-write verification
+    verification = await _verify_file_on_branch(full_name, path, branch)
+
+    return {
+        "status": "committed",
+        "full_name": full_name,
+        "path": path,
+        "branch": branch,
+        "message": message,
+        "commit": commit_result,
+        "verification": verification,
+    }
+
 
 @mcp_tool(write_action=True)
 async def commit_file_async(
@@ -2090,59 +2202,112 @@ async def update_files_and_open_pr(
 
 
 @mcp_tool(write_action=True)
-async def update_file_and_open_pr(
+async def update_files_and_open_pr(
     full_name: str,
-    path: str,
-    content: Optional[str],
     title: str,
+    files: List[Dict[str, Any]],
     base_branch: str = "main",
     new_branch: Optional[str] = None,
     body: Optional[str] = None,
-    message: Optional[str] = None,
-    content_url: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
-    """Fast path to commit a single file then open a PR without cloning."""
+    """Commit multiple files, verify each, then open a PR in one call."""
 
-    current_path: Optional[str] = path
+    current_path: Optional[str] = None
     try:
-        _ensure_write_allowed(f"update_file_and_open_pr {full_name} {path}")
+        _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
 
-        if content is None and content_url is None:
-            raise ValueError("Provide either content or content_url for the file")
-        if content is not None and content_url is not None:
-            raise ValueError("Provide content or content_url, but not both")
+        if not files:
+            raise ValueError("files must contain at least one item")
 
+        # 1) Ensure a dedicated branch exists
         branch = new_branch or f"ally-{os.urandom(4).hex()}"
         await ensure_branch(full_name, branch, from_ref=base_branch)
 
-        try:
-            if content_url is not None:
-                body_bytes = await _load_body_from_content_url(
-                    content_url, context="update_file_and_open_pr"
+        commit_results: List[Dict[str, Any]] = []
+        verifications: List[Dict[str, Any]] = []
+
+        # 2) Commit each file, with verification
+        for f in files:
+            current_path = f.get("path")
+            if not current_path:
+                raise ValueError("Each file dict must include a 'path' key")
+
+            file_message = f.get("message") or title
+            file_content = f.get("content")
+            file_content_url = f.get("content_url")
+
+            if file_content is None and file_content_url is None:
+                raise ValueError(
+                    f"File entry for {current_path!r} must specify "
+                    "either 'content' or 'content_url'"
                 )
+            if file_content is not None and file_content_url is not None:
+                raise ValueError(
+                    f"File entry for {current_path!r} may not specify both "
+                    "'content' and 'content_url'"
+                )
+
+            # Load content
+            if file_content_url is not None:
+                try:
+                    loaded = await _load_body_from_content_url(
+                        file_content_url,
+                        context=(
+                            f"update_files_and_open_pr({full_name}/{current_path})"
+                        ),
+                    )
+                    body_bytes = loaded["body"]
+                except Exception as exc:
+                    return _structured_tool_error(
+                        exc,
+                        context="update_files_and_open_pr.load_content",
+                        path=current_path,
+                    )
             else:
-                body_bytes = content.encode("utf-8")
-        except Exception as exc:
-            return _structured_tool_error(
-                exc, context="update_file_and_open_pr.load_content", path=current_path
+                body_bytes = file_content.encode("utf-8")
+
+            # Resolve SHA and commit
+            try:
+                sha = await _resolve_file_sha(full_name, current_path, branch)
+                commit_result = await _perform_github_commit(
+                    full_name=full_name,
+                    path=current_path,
+                    message=file_message,
+                    branch=branch,
+                    body_bytes=body_bytes,
+                    sha=sha,
+                )
+            except Exception as exc:
+                return _structured_tool_error(
+                    exc,
+                    context="update_files_and_open_pr.commit_file",
+                    path=current_path,
+                )
+
+            commit_results.append(
+                {
+                    "path": current_path,
+                    "message": file_message,
+                    "result": commit_result,
+                }
             )
 
-        try:
-            sha = await _resolve_file_sha(full_name, current_path, branch)
-            await _perform_github_commit(
-                full_name=full_name,
-                path=current_path,
-                message=message or title,
-                body_bytes=body_bytes,
-                branch=branch,
-                sha=sha,
-            )
-        except Exception as exc:
-            return _structured_tool_error(
-                exc, context="update_file_and_open_pr.commit_file", path=current_path
-            )
+            # Post-commit verification for this file
+            try:
+                verification = await _verify_file_on_branch(
+                    full_name, current_path, branch
+                )
+            except Exception as exc:
+                return _structured_tool_error(
+                    exc,
+                    context="update_files_and_open_pr.verify_file",
+                    path=current_path,
+                )
 
+            verifications.append(verification)
+
+        # 3) Open the PR
         try:
             pr = await create_pull_request(
                 full_name=full_name,
@@ -2154,14 +2319,21 @@ async def update_file_and_open_pr(
             )
         except Exception as exc:
             return _structured_tool_error(
-                exc, context="update_file_and_open_pr.create_pr", path=current_path
+                exc, context="update_files_and_open_pr.create_pr", path=current_path
             )
 
-        return {"branch": branch, "pull_request": pr}
+        return {
+            "branch": branch,
+            "pull_request": pr,
+            "commits": commit_results,
+            "verifications": verifications,
+        }
+
     except Exception as exc:
         return _structured_tool_error(
-            exc, context="update_file_and_open_pr", path=current_path
+            exc, context="update_files_and_open_pr", path=current_path
         )
+
 
 
 # ------------------------------------------------------------------------------
