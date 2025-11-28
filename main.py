@@ -643,6 +643,10 @@ def _ensure_write_allowed(context: str) -> None:
             f"MCP write action is temporarily disabled (context: {context})"
         )
 
+# Global registry of MCP tools, populated by the mcp_tool decorator. This lets
+# us enumerate tools defined in other modules (for example extra_tools.py) as
+# long as they are decorated with the shared mcp_tool wrapper.
+_REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
 
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     """
@@ -706,10 +710,15 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
             def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
 
+        # Attach the underlying FastMCP tool object so other helpers can inspect
+        # metadata, and register the tool in the global registry so we can
+        # enumerate tools defined in other modules.
         wrapper._mcp_tool = tool  # type: ignore[attr-defined]
+        _REGISTERED_MCP_TOOLS.append((tool, wrapper))
         return wrapper
 
     return decorator
+
 
 # ------------------------------------------------------------------------------
 # Optional dynamic tool registration (extra_tools.py)
