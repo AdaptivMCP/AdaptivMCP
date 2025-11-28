@@ -1990,11 +1990,10 @@ async def commit_file(
 
     # Load body bytes
     if content_url is not None:
-        result = await _load_body_from_content_url(
+        body_bytes = await _load_body_from_content_url(
             content_url,
             context=f"commit_file({full_name}/{path})",
         )
-        body_bytes = result["body"]
     else:
         body_bytes = content.encode("utf-8")
 
