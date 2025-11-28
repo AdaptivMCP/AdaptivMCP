@@ -132,10 +132,9 @@ Representative tools already implemented:
     - This allows Adaptiv Controller to discover examples and patterns in public code, search your own orgs codebase, and cross-reference issues and PRs at scale.
 
 - Write and orchestration
-  - commit_file and commit_file_async for single-file writes with verification.
-  - update_files_and_open_pr for multi-file commit plus verify plus PR.
-  - apply_text_update_and_commit for text-based edits with verification and diff.
+  - apply_text_update_and_commit for single-file text edits with verification and diff.
   - apply_patch_and_commit for patch-based edits via unified diffs.
+  - update_files_and_open_pr for multi-file commit plus verify plus PR.
   - Branch and PR helpers: ensure_branch, create_branch, create_pull_request, merge_pull_request, close_pull_request, comment_on_pull_request.
   - Extra tools in extra_tools.py: delete_file, delete_remote_branch, and similar.
 
