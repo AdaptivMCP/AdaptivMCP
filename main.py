@@ -2229,23 +2229,9 @@ async def update_files_and_open_pr(
         # 2) Commit each file, with verification
         for f in files:
             current_path = f.get("path")
-            if not current_path:
-                raise ValueError("Each file dict must include a 'path' key")
-
-            file_message = f.get("message") or title
-            file_content = f.get("content")
-            file_content_url = f.get("content_url")
-
-            if file_content is None and file_content_url is None:
-                raise ValueError(
-                    f"File entry for {current_path!r} must specify "
-                    "either 'content' or 'content_url'"
-                )
+            ...
             if file_content is not None and file_content_url is not None:
-                raise ValueError(
-                    f"File entry for {current_path!r} may not specify both "
-                    "'content' and 'content_url'"
-                )
+                ...
 
          # Load content
          if file_content_url is not None:
@@ -2264,6 +2250,7 @@ async def update_files_and_open_pr(
                  )
          else:
              body_bytes = file_content.encode("utf-8")
+
 
 
             # Resolve SHA and commit
