@@ -554,8 +554,6 @@ async def _run_shell(
     ):
         stderr = stderr[:TOOL_STDERR_MAX_CHARS]
     ):
-        stderr = stderr[:TOOL_STDERR_MAX_CHARS]
-        stderr_truncated = True
 
 
     return {
