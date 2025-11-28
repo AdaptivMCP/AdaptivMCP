@@ -2284,7 +2284,7 @@ async def apply_text_update_and_commit(
         sha_before = decoded.get("sha")
     except GitHubAPIError as exc:
         msg = str(exc)
-        if " 404 " in msg and "/contents/" in msg:
+        if "404" in msg and "/contents/" in msg:
             # The GitHub Contents API returns 404 when the file does not yet exist.
             # In that case we treat this as a creation rather than an update.
             is_new_file = True
