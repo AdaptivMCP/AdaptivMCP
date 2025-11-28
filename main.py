@@ -2335,6 +2335,105 @@ async def update_files_and_open_pr(
             exc, context="update_files_and_open_pr", path=current_path
         )
 
+@mcp_tool(write_action=True)
+async def apply_text_update_and_commit(
+    full_name: str,
+    path: str,
+    updated_content: str,
+    *,
+    branch: str = "main",
+    message: Optional[str] = None,
+    return_diff: bool = True,
+    context_lines: int = 3,
+) -> Dict[str, Any]:
+    """Apply a text update to a single file on a branch, then verify it.
+
+    This is a lower-level building block for "diff-first" flows:
+
+    1. Read the current file text from GitHub.
+    2. Commit the provided updated_content via the Contents API on the target branch.
+    3. Re-read the file to verify the new SHA and contents landed.
+    4. Optionally compute and return a unified diff between old and new text.
+
+    It does NOT create a PR; callers are expected to open a PR separately
+    (for example using create_pull_request or update_files_and_open_pr) if
+    they want reviewable changes.
+
+    Args:
+        full_name: "owner/repo" string.
+        path: Path of the file within the repository.
+        updated_content: New full text for the file (UTF-8).
+        branch: Branch to commit to (default "main").
+        message: Commit message; if omitted, a simple "Update <path>" is used.
+        return_diff: If true, include a unified diff in the response under "diff".
+        context_lines: Number of context lines for the unified diff.
+
+    Returns:
+        A dict with:
+            - status: "committed"
+            - full_name, path, branch
+            - message: commit message used
+            - commit: raw GitHub commit API response
+            - verification: {sha_before, sha_after, html_url}
+            - diff: unified diff text (if return_diff is true)
+    """
+
+    _ensure_write_allowed(f"apply_text_update_and_commit {full_name} {path}")
+
+    # 1) Read the current file state on the target branch.
+    decoded = await _decode_github_content(full_name, path, branch)
+    old_text = decoded.get("text")
+    if not isinstance(old_text, str):
+        raise GitHubAPIError("Decoded content is not text")
+
+    sha_before = decoded.get("sha")
+    body_bytes = updated_content.encode("utf-8")
+    commit_message = message or f"Update {path}"
+
+    # 2) Commit the new content via the GitHub Contents API.
+    commit_result = await _perform_github_commit(
+        full_name=full_name,
+        path=path,
+        message=commit_message,
+        body_bytes=body_bytes,
+        branch=branch,
+        sha=sha_before,
+    )
+
+    # 3) Verify by reading the file again from the same branch.
+    verified = await _decode_github_content(full_name, path, branch)
+    new_text = verified.get("text")
+    sha_after = verified.get("sha")
+
+    result: Dict[str, Any] = {
+        "status": "committed",
+        "full_name": full_name,
+        "path": path,
+        "branch": branch,
+        "message": commit_message,
+        "commit": commit_result,
+        "verification": {
+            "sha_before": sha_before,
+            "sha_after": sha_after,
+            "html_url": verified.get("html_url"),
+        },
+    }
+
+    # 4) Optionally compute a unified diff between the old and new text.
+    if return_diff:
+        import difflib
+
+        diff_iter = difflib.unified_diff(
+            old_text.splitlines(keepends=True),
+            (new_text or "").splitlines(keepends=True),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            n=context_lines,
+        )
+        result["diff"] = "".join(diff_iter)
+
+    return result
+
 
 
 # ------------------------------------------------------------------------------
