@@ -81,6 +81,22 @@ The MCP server is configured primarily via environment variables. Common setting
   - Once the refactor is merged, this should typically be set to `main`.
   - This value is used by the `_effective_ref_for_repo` helper to avoid accidental writes to the wrong branch.
 
+
+- `GITHUB_MCP_AUTO_APPROVE`
+  - Controls the default write behavior for tools tagged as write actions.
+  - When unset or set to a falsey value, the server starts in **manual approval**
+    mode and `WRITE_ALLOWED` defaults to `False`. In this mode, controllers
+    must call the `authorize_write_actions(approved=True)` tool before any
+    write-tagged tools will run.
+  - When set to a truthy value (for example `1`, `true`, `yes`, or `on`), the
+    server starts in **auto-approve** mode and `WRITE_ALLOWED` defaults to
+    `True`. Write tools are immediately allowed, but controllers can still call
+    `authorize_write_actions(approved=False)` to temporarily disable writes for
+    a session.
+  - For production deployments where you want an extra confirmation step for
+    destructive operations, leaving this variable unset (manual approval) is
+    recommended.
+
 Additional optional variables may exist for:
 
 - HTTP timeouts and retry settings.
