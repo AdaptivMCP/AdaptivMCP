@@ -300,7 +300,7 @@ async def _github_request(
             data = resp.json()
         except Exception:
             data = None
-        message = data.get("message") if isinstance(data, dict) else None
+        error_payload["error_message"] = (message or resp.text[:500])
         error_payload = dict(base_payload)
         error_payload["error"] = "http_error"
         # Truncate to avoid huge log records on large error bodies.
