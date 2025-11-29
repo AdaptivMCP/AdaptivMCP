@@ -207,6 +207,19 @@ You do not host or manage their deployment; you supply the controller logic and 
 
 ---
 
+## Documentation and workflows
+
+This repository includes (or will include) a small docs set under `docs/` to keep behavior clear and assistant-friendly:
+
+- `docs/SELF_HOSTED_SETUP.md` – deployment and configuration guide for operators (see issue #128).
+- `docs/ARCHITECTURE_AND_SAFETY.md` – internal architecture and safety model (see issue #129).
+- `docs/WORKFLOWS.md` – recommended end-to-end workflows for assistants and advanced users.
+- `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md` – guidance for keeping prompts, snapshots, and docs aligned with reality.
+
+Assistants should use these docs together with the live tool list to design safe, repeatable flows for their own Adaptiv Controller instances.
+
+---
+
 ## Status and roadmap (server-side)
 
 On main (after refactor merge):
