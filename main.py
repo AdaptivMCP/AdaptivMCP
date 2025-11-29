@@ -2327,12 +2327,12 @@ async def apply_text_update_and_commit(
         commit_message,
         body_bytes,
         effective_branch,
-        body_bytes,
-        effective_branch,
-        sha_before,
-    )
-    verified = await _decode_github_content(full_name, path, effective_branch)
-    new_text = verified.get("text")
+        full_name=full_name,
+        path=path,
+        message=commit_message,
+        body_bytes=body_bytes,
+        branch=effective_branch,
+        sha=sha_before,
     sha_after = verified.get("sha")
 
     result: Dict[str, Any] = {
