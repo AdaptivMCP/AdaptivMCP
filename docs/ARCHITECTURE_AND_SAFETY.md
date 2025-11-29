@@ -248,8 +248,37 @@ For discovering the current tool surface, use:
 Assistants should use these discovery tools rather than relying on hard-coded tool lists in prompts.
 
 ---
+## 9. Tool-level structured logging
 
-## 9. Tests and guarantees
+The server emits structured logs around every MCP tool call using a dedicated
+logger namespace:
+
+- Logger: `github_mcp.tools`.
+- Events: `tool_call_start`, `tool_call_success`, `tool_call_error`.
+
+The `mcp_tool` decorator wraps both read and write tools and records:
+
+- `tool_name`: the FastMCP tool name.
+- `write_action`: whether the tool is tagged as write-capable.
+- `tags`: the final tag set, including `read` and `write`.
+- `call_id`: a per-invocation UUID so operators can correlate start, success,
+  and error events.
+- `repo`, `ref`, `path`: coarse context extracted from arguments when
+  available (for example `full_name`, `branch`, and `path`).
+- `arg_keys`: the names of bound arguments, without logging full payloads.
+- `duration_ms`: execution time for the tool call.
+- `status`: values such as `ok` on success or `error` when an exception is raised.
+- `error_type`: the exception type name for failures.
+- `result_type` and `result_size_hint`: high-level hints about the returned
+  value without serializing full results.
+
+These logs are intended for operators and observability backends rather than
+for end users. They make it possible to trace how tools are used and how long
+they take without leaking secrets or large request bodies into log streams.
+
+---
+
+## 10. Tests and guarantees
 
 The behaviors described in this document are backed by a set of tests, including:
 
@@ -259,12 +288,10 @@ The behaviors described in this document are backed by a set of tests, including
 - `tests/test_apply_text_update_and_commit.py` for text-based commit flows and new file creation.
 - Workspace-related tests for `run_command` and truncation.
 - `tests/test_issue_tools.py` for issue-related behavior.
-
+- `tests/test_tool_logging.py` and `tests/test_tool_logging_write_tools.py` for tool-level logging behavior (read and write tools).
 When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.
 
----
-
-## 10. How to use this document
+## 11. How to use this document
 
 Use this document when you need to:
 

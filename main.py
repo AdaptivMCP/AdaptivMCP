@@ -18,6 +18,8 @@ import io
 import zipfile
 import difflib
 import sys
+import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -59,6 +61,21 @@ GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
 GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
 
+
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+LOG_FORMAT = os.environ.get(
+    "LOG_FORMAT",
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format=LOG_FORMAT,
+)
+
+BASE_LOGGER = logging.getLogger("github_mcp")
+GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
+TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
 
 def _env_flag(name: str, default: bool = False) -> bool:
     """Parse a boolean-like environment variable.
@@ -242,10 +259,41 @@ async def _github_request(
     text_max_chars: Optional[int] = None,
 ) -> Dict[str, Any]:
     client = _github_client_instance()
-    async with _concurrency_semaphore:
-        resp = await client.request(
-            method, path, params=params, json=json_body, headers=headers
+    started_at = time.monotonic()
+    try:
+        async with _concurrency_semaphore:
+            resp = await client.request(
+                method, path, params=params, json=json_body, headers=headers
+            )
+    except Exception as exc:  # pragma: no cover - defensive
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        GITHUB_LOGGER.error(
+            "github_request_error",
+            extra={
+                "event": "github_request",
+                "method": method,
+                "path": path,
+                "status_code": None,
+                "duration_ms": duration_ms,
+                "error": type(exc).__name__,
+            },
+            exc_info=True,
         )
+        raise
+
+    duration_ms = int((time.monotonic() - started_at) * 1000)
+    base_payload = {
+        "event": "github_request",
+        "method": method,
+        "path": path,
+        "status_code": resp.status_code,
+        "duration_ms": duration_ms,
+        "rate_limit": {
+            "limit": resp.headers.get("X-RateLimit-Limit"),
+            "remaining": resp.headers.get("X-RateLimit-Remaining"),
+            "reset": resp.headers.get("X-RateLimit-Reset"),
+        },
+    }
 
     if resp.status_code >= 400:
         try:
@@ -253,10 +301,17 @@ async def _github_request(
         except Exception:
             data = None
         message = data.get("message") if isinstance(data, dict) else None
+        error_payload = dict(base_payload)
+        error_payload["error"] = "http_error"
+        # Truncate to avoid huge log records on large error bodies.
+        error_payload["error_message"] = (message or resp.text[:500])
+        GITHUB_LOGGER.warning("github_request_error", extra=error_payload)
         raise GitHubAPIError(
             f"GitHub API error {resp.status_code} for {method} {path}: "
             f"{message or resp.text}"
         )
+
+    GITHUB_LOGGER.info("github_request", extra=base_payload)
 
     if expect_json:
         try:
@@ -695,10 +750,14 @@ def _ensure_write_allowed(context: str) -> None:
 _REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
 
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
-    """
-    Wrapper around FastMCP's @mcp.tool decorator that also tracks whether the
-    tool performs write actions via tags/meta instead of mutating the
-    FunctionTool object directly (it is a Pydantic model).
+    """Wrapper around FastMCP's @mcp.tool decorator.
+
+    The decorator:
+    * Adds ``read``/``write`` tags and ToolAnnotations.readOnlyHint.
+    * Attaches a ``write_action`` flag and ``auto_approved`` hint to meta.
+    * Registers the tool in a global registry for discovery.
+    * Emits structured logs around tool execution so operators can trace
+      behavior without logging full argument or result payloads.
     """
 
     existing_tags = tool_kwargs.pop("tags", None)
@@ -735,6 +794,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     }
 
     import functools as _functools
+    import inspect as _inspect
 
     def decorator(func):
         tool = mcp.tool(
@@ -744,17 +804,194 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
             **tool_kwargs,
         )(func)
 
+        # Resolve the function signature once so we can build a coarse argument
+        # map for logging without serializing full payloads.
+        try:
+            signature = _inspect.signature(func)
+        except (TypeError, ValueError):
+            signature = None
+
+        def _extract_call_context(args, **kwargs):
+            """Return coarse, non-sensitive context for logging purposes."""
+            all_args: Dict[str, Any] = {}
+
+            if signature is not None:
+                try:
+                    bound = signature.bind_partial(*args, **kwargs)
+                    all_args = dict(bound.arguments)
+                except Exception:
+                    # Fall back to kwargs-only mapping if binding fails.
+                    all_args = {}
+
+            if not all_args:
+                # Ignore positional arguments in the fallback path so we never
+                # accidentally log large payloads or opaque binary blobs.
+                all_args = dict(kwargs)
+
+            repo_full_name: Optional[str] = None
+            if isinstance(all_args.get("full_name"), str):
+                repo_full_name = all_args["full_name"]
+            elif isinstance(all_args.get("owner"), str) and isinstance(
+                all_args.get("repo"), str
+            ):
+                repo_full_name = f"{all_args['owner']}/{all_args['repo']}"
+
+            ref: Optional[str] = None
+            for key in ("ref", "branch", "base_ref", "head_ref"):
+                value = all_args.get(key)
+                if isinstance(value, str):
+                    ref = value
+                    break
+
+            path: Optional[str] = None
+            for key in ("path", "file_path"):
+                value = all_args.get(key)
+                if isinstance(value, str):
+                    path = value
+                    break
+
+            arg_keys = sorted(set(all_args.keys()))
+            return {
+                "repo": repo_full_name,
+                "ref": ref,
+                "path": path,
+                "arg_keys": arg_keys,
+            }
+
+        def _result_size_hint(result: Any) -> Optional[int]:
+            if isinstance(result, (list, tuple, str)):
+                return len(result)
+            if isinstance(result, dict):
+                return len(result)
+            return None
+
         if asyncio.iscoroutinefunction(func):
 
             @_functools.wraps(func)
             async def wrapper(*args, **kwargs):
-                return await func(*args, **kwargs)
+                call_id = str(uuid.uuid4())
+                context = _extract_call_context(args, **kwargs)
+                start = time.perf_counter()
+
+                TOOLS_LOGGER.info(
+                    "tool_call_start",
+                    extra={
+                        "tool_name": tool.name,
+                        "write_action": write_action,
+                        "tags": sorted(tags) if tags else [],
+                        "call_id": call_id,
+                        "repo": context["repo"],
+                        "ref": context["ref"],
+                        "path": context["path"],
+                        "arg_keys": context["arg_keys"],
+                    },
+                )
+
+                try:
+                    result = await func(*args, **kwargs)
+                except Exception as exc:
+                    duration_ms = int((time.perf_counter() - start) * 1000)
+                    TOOLS_LOGGER.exception(
+                        "tool_call_error",
+                        extra={
+                            "tool_name": tool.name,
+                            "write_action": write_action,
+                            "tags": sorted(tags) if tags else [],
+                            "call_id": call_id,
+                            "repo": context["repo"],
+                            "ref": context["ref"],
+                            "path": context["path"],
+                            "arg_keys": context["arg_keys"],
+                            "duration_ms": duration_ms,
+                            "status": "error",
+                            "error_type": exc.__class__.__name__,
+                        },
+                    )
+                    raise
+
+                duration_ms = int((time.perf_counter() - start) * 1000)
+                TOOLS_LOGGER.info(
+                    "tool_call_success",
+                    extra={
+                        "tool_name": tool.name,
+                        "write_action": write_action,
+                        "tags": sorted(tags) if tags else [],
+                        "call_id": call_id,
+                        "repo": context["repo"],
+                        "ref": context["ref"],
+                        "path": context["path"],
+                        "arg_keys": context["arg_keys"],
+                        "duration_ms": duration_ms,
+                        "status": "ok",
+                        "result_type": type(result).__name__,
+                        "result_size_hint": _result_size_hint(result),
+                    },
+                )
+                return result
 
         else:
 
             @_functools.wraps(func)
             def wrapper(*args, **kwargs):
-                return func(*args, **kwargs)
+                call_id = str(uuid.uuid4())
+                context = _extract_call_context(args, **kwargs)
+                start = time.perf_counter()
+
+                TOOLS_LOGGER.info(
+                    "tool_call_start",
+                    extra={
+                        "tool_name": tool.name,
+                        "write_action": write_action,
+                        "tags": sorted(tags) if tags else [],
+                        "call_id": call_id,
+                        "repo": context["repo"],
+                        "ref": context["ref"],
+                        "path": context["path"],
+                        "arg_keys": context["arg_keys"],
+                    },
+                )
+
+                try:
+                    result = func(*args, **kwargs)
+                except Exception as exc:
+                    duration_ms = int((time.perf_counter() - start) * 1000)
+                    TOOLS_LOGGER.exception(
+                        "tool_call_error",
+                        extra={
+                            "tool_name": tool.name,
+                            "write_action": write_action,
+                            "tags": sorted(tags) if tags else [],
+                            "call_id": call_id,
+                            "repo": context["repo"],
+                            "ref": context["ref"],
+                            "path": context["path"],
+                            "arg_keys": context["arg_keys"],
+                            "duration_ms": duration_ms,
+                            "status": "error",
+                            "error_type": exc.__class__.__name__,
+                        },
+                    )
+                    raise
+
+                duration_ms = int((time.perf_counter() - start) * 1000)
+                TOOLS_LOGGER.info(
+                    "tool_call_success",
+                    extra={
+                        "tool_name": tool.name,
+                        "write_action": write_action,
+                        "tags": sorted(tags) if tags else [],
+                        "call_id": call_id,
+                        "repo": context["repo"],
+                        "ref": context["ref"],
+                        "path": context["path"],
+                        "arg_keys": context["arg_keys"],
+                        "duration_ms": duration_ms,
+                        "status": "ok",
+                        "result_type": type(result).__name__,
+                        "result_size_hint": _result_size_hint(result),
+                    },
+                )
+                return result
 
         # Attach the underlying FastMCP tool object so other helpers can inspect
         # metadata, and register the tool in the global registry so we can
@@ -1390,16 +1627,15 @@ async def graphql_query(
     query: str,
     variables: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Execute a GitHub GraphQL query using the shared HTTP client."""
+    """Execute a GitHub GraphQL query using the shared HTTP client and logging wrapper."""
 
-    client = _github_client_instance()
     payload = {"query": query, "variables": variables or {}}
-    async with _concurrency_semaphore:
-        resp = await client.post("/graphql", json=payload)
-
-    if resp.status_code >= 400:
-        raise GitHubAPIError(f"GitHub GraphQL error {resp.status_code}: {resp.text}")
-    return resp.json()
+    result = await _github_request(
+        "POST",
+        "/graphql",
+        json_body=payload,
+    )
+    return result.get("json")
 
 
 @mcp_tool(write_action=False)
