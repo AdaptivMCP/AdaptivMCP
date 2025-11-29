@@ -2090,15 +2090,13 @@ async def create_pull_request(
     draft: bool = False,
 ) -> Dict[str, Any]:
     """Open a pull request from ``head`` into ``base``."""
-    effective_base = _effective_ref_for_repo(full_name, base)
-
     _ensure_write_allowed(
-        f"create PR from {head} to {effective_base} in {full_name}"
+        f"create PR from {head} to {base} in {full_name}"
     )
     payload: Dict[str, Any] = {
         "title": title,
         "head": head,
-        "base": effective_base,
+        "base": base,
         "draft": draft,
     }
     if body is not None:
