@@ -10,6 +10,7 @@ from main import (
     _resolve_file_sha,
     GitHubAPIError,
     _decode_github_content,
+    _effective_ref_for_repo,
 )
 
 
@@ -92,10 +93,12 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         if if_missing not in ("error", "noop"):
             raise ValueError("if_missing must be 'error' or 'noop'")
 
+        effective_branch = _effective_ref_for_repo(full_name, branch)
+
         # Resolve the current file SHA so we can issue a DELETE via the
         # Contents API. We piggyback on the existing _resolve_file_sha helper
         # rather than re-implementing the logic here.
-        sha = await _resolve_file_sha(full_name, path, branch)
+        sha = await _resolve_file_sha(full_name, path, effective_branch)
         if sha is None:
             if if_missing == "noop":
                 return {
@@ -103,19 +106,19 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
                     "reason": "file_not_found",
                     "full_name": full_name,
                     "path": path,
-                    "branch": branch,
+                    "branch": effective_branch,
                     "message": (
-                        f"File {path!r} not found in {full_name}@{branch}; nothing to delete."
+                        f"File {path!r} not found in {full_name}@{effective_branch}; nothing to delete."
                     ),
                 }
             raise GitHubAPIError(
-                f"File {path!r} not found in {full_name}@{branch}; cannot delete."
+                f"File {path!r} not found in {full_name}@{effective_branch}; cannot delete."
             )
 
         payload = {
             "message": message,
             "sha": sha,
-            "branch": branch,
+            "branch": effective_branch,
         }
 
         result = await _github_request(
@@ -252,7 +255,9 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         if max_lines <= 0:
             raise ValueError("max_lines must be > 0")
 
-        decoded = await _decode_github_content(full_name, path, ref)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+
+        decoded = await _decode_github_content(full_name, path, effective_ref)
         text = decoded.get("text", "")
         all_lines = text.splitlines(keepends=False)
         total_lines = len(all_lines)
@@ -261,7 +266,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             return {
                 "full_name": full_name,
                 "path": path,
-                "ref": ref,
+                "ref": effective_ref,
                 "start_line": 1,
                 "end_line": 0,
                 "max_lines": max_lines,
@@ -285,7 +290,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         return {
             "full_name": full_name,
             "path": path,
-            "ref": ref,
+            "ref": effective_ref,
             "start_line": start_idx + 1,
             "end_line": end_idx,
             "max_lines": max_lines,
