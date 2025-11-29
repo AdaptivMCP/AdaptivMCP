@@ -1445,16 +1445,15 @@ async def graphql_query(
     query: str,
     variables: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Execute a GitHub GraphQL query using the shared HTTP client."""
+    """Execute a GitHub GraphQL query using the shared HTTP client and logging wrapper."""
 
-    client = _github_client_instance()
     payload = {"query": query, "variables": variables or {}}
-    async with _concurrency_semaphore:
-        resp = await client.post("/graphql", json=payload)
-
-    if resp.status_code >= 400:
-        raise GitHubAPIError(f"GitHub GraphQL error {resp.status_code}: {resp.text}")
-    return resp.json()
+    result = await _github_request(
+        "POST",
+        "/graphql",
+        json_body=payload,
+    )
+    return result.get("json")
 
 
 @mcp_tool(write_action=False)
