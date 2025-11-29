@@ -21,6 +21,9 @@ All workflows in this controller should follow a few simple rules:
    - Avoid mixing large refactors with unrelated behavior changes.
 5. **Use issues to track work.**
    - Open, update, and close GitHub issues so humans always have a high-level summary.
+6. **Treat branch deletion as human-only.**
+   - Assistants may create and use feature branches and open PRs.
+   - Deleting branches (for example refactor branches after merge) should be done by the user directly in GitHub (UI or CLI), even if a branch-deletion tool exists.
 
 ---
 
@@ -61,7 +64,7 @@ Recommended pattern:
 
 Workflow:
 
-1. Use `ensure_branch` to create a feature branch from a base branch (usually `main` or the refactor branch).
+1. Use `ensure_branch` to create a feature branch from a base branch (usually `main`).
 2. Perform changes and commits only on the feature branch.
 3. Use `update_files_and_open_pr` or branch-specific edit flows to open a PR back into the base branch.
 
@@ -211,7 +214,7 @@ Here is a high-level example of how an assistant might implement and ship a feat
    - Decide on a feature branch name and confirm with the user.
 
 3. **Create and prepare the branch**
-   - Use `ensure_branch` to create the feature branch from the base (for example `main` or a refactor branch).
+   - Use `ensure_branch` to create the feature branch from the base (for example `main`).
 
 4. **Make code and doc changes**
    - For small or new files, use `apply_text_update_and_commit`.
