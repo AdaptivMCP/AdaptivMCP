@@ -98,7 +98,7 @@ CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
 )
 CONTROLLER_DEFAULT_BRANCH = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_BRANCH", "ally-mcp-github-refactor-fresh"
+    "GITHUB_MCP_CONTROLLER_BRANCH", "main"
 )
 
 
