@@ -253,6 +253,11 @@ async def _github_request(
     path: str,
     *,
     params: Optional[Dict[str, Any]] = None,
+    json_body: Optional[Dict[str, Any]] = None,
+    headers: Optional[Dict[str, str]] = None,
+    expect_json: bool = True,
+    text_max_chars: Optional[int] = None,
+) -> Dict[str, Any]:
     client = _github_client_instance()
     started_at = time.monotonic()
     try:
@@ -315,11 +320,6 @@ async def _github_request(
             return {"status_code": resp.status_code, "json": None}
 
     text = resp.text if text_max_chars is None else resp.text[:text_max_chars]
-    return {
-        "status_code": resp.status_code,
-        "text": text,
-        "headers": dict(resp.headers),
-    }
     return {
         "status_code": resp.status_code,
         "text": text,
