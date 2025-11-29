@@ -4,6 +4,26 @@ import main
 import extra_tools
 
 
+# Capture extra_tools MCP functions that are defined via register_extra_tools
+# so we can unit-test their behavior without depending on the MCP runtime.
+_TOOL_REGISTRY: dict[str, object] = {}
+
+
+def _capture_tool(*, write_action: bool = False, **tool_kwargs):  # type: ignore[override]
+    def decorator(fn):
+        _TOOL_REGISTRY[fn.__name__] = fn
+        return fn
+
+    return decorator
+
+
+# Register tools into the local registry for direct calling in tests.
+extra_tools.register_extra_tools(_capture_tool)
+
+DELETE_FILE = _TOOL_REGISTRY["delete_file"]
+GET_FILE_SLICE = _TOOL_REGISTRY["get_file_slice"]
+
+
 def test_effective_ref_for_repo_controller(monkeypatch: pytest.MonkeyPatch) -> None:
     # Pretend this repo is the controller and has a custom default branch.
     monkeypatch.setattr(main, "CONTROLLER_REPO", "owner/controller")
@@ -148,7 +168,7 @@ async def test_delete_file_uses_effective_branch(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(extra_tools, "_resolve_file_sha", fake_resolve_sha)
     monkeypatch.setattr(extra_tools, "_github_request", fake_github_request)
 
-    result = await extra_tools.delete_file(
+    result = await DELETE_FILE(
         full_name="owner/controller",
         path="foo.txt",
         branch="main",  # should be remapped via _effective_ref_for_repo
@@ -183,7 +203,7 @@ async def test_get_file_slice_uses_effective_ref(
     monkeypatch.setattr(extra_tools, "_effective_ref_for_repo", fake_effective_ref)
     monkeypatch.setattr(extra_tools, "_decode_github_content", fake_decode)
 
-    result = await extra_tools.get_file_slice(
+    result = await GET_FILE_SLICE(
         full_name="owner/controller",
         path="foo.txt",
         ref="main",  # input ref; should be remapped
