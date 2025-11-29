@@ -116,7 +116,7 @@ Lifecycle pattern:
 
 Over time, controller prompts and ChatGPT snapshots can drift away from the actual code. To manage this:
 
-- Include a small **version or commit reference** in the controller prompt or snapshot description (for example "Aligned with commit d0c7d94 on ally-mcp-github-refactor-fresh").
+- Include a small **version or commit reference** in the controller prompt or snapshot description (for example "Aligned with commit d0c7d94 on main").
 - Periodically re-sync the prompt with the live tool list and docs:
   - Re-run `list_all_actions`.
   - Scan for new tools or changed behaviors.
