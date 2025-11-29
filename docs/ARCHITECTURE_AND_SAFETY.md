@@ -48,8 +48,17 @@ Destructive operations are gated by a global flag and explicit tagging.
 
 ### 3.1 Global write flag
 
-- A global boolean `WRITE_ALLOWED` determines whether write tools may run.
-- `authorize_write_actions(approved: bool)` is the only tool that toggles this flag.
+- The environment variable `GITHUB_MCP_AUTO_APPROVE` seeds the initial value:
+  - When unset or set to a falsey value, `WRITE_ALLOWED` defaults to `False` and the
+    server starts in manual approval mode.
+  - When set to a truthy value (for example `1`, `true`, `yes`, or `on`),
+    `WRITE_ALLOWED` defaults to `True` and the server starts in auto-approve
+    mode.
+- `authorize_write_actions(approved: bool)` is the only tool that toggles this
+  flag at runtime. Controllers call this tool when they need to enable or
+  disable write actions for a session.
+- All tools created with `mcp_tool(write_action=True, ...)` call
+  `_ensure_write_allowed(context)` before doing any destructive work.
 - All tools created with `mcp_tool(write_action=True, ...)` call `_ensure_write_allowed(context)` before doing any destructive work.
 
 `_ensure_write_allowed`:
@@ -67,6 +76,22 @@ This design lets a controller keep the server in a read-only posture by default 
 
 Tests for the write gate live in `tests/test_write_gate.py`.
 
+
+### 3.3 Server configuration snapshot
+
+The `get_server_config` tool returns a non-sensitive snapshot of the current
+write policy, including:
+
+- `write_allowed`: the current value of `WRITE_ALLOWED`.
+- `approval_policy.write_actions.auto_approved`: whether the server considers
+  write tools auto-approved by default.
+- `approval_policy.write_actions.requires_authorization`: whether a controller
+  should call `authorize_write_actions` before using write tools.
+- `approval_policy.write_actions.toggle_tool`: the name of the tool that
+  toggles the write flag.
+
+Controllers can call `get_server_config` at the start of a session to decide
+whether they need to request user approval for writes.
 ---
 
 ## 4. Controller-aware branch and ref scoping
