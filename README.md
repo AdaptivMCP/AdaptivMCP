@@ -1,194 +1,256 @@
-# chatgpt-mcp-github
+# Adaptiv Controller – GitHub MCP Server
 
-GitHub MCP server for private repositories, tuned for fast read and safe write workflows from ChatGPT.
+> Self-hosted GitHub connector for ChatGPT, powering personal Adaptiv Controllers that you own and operate.
 
-This service runs as a Python web service on Render and exposes a Model Context Protocol (MCP) SSE endpoint at `/sse` for use by ChatGPT or any other MCP client that understands the SSE transport.
+This repository contains the GitHub MCP server that powers the Adaptiv Controller experience. It is designed to be self-hosted by each user (for example on Render.com) and connected to their own ChatGPT account and GitHub credentials.
 
-## What this server does
+The controller itself (Joeys GitHub, officially the Adaptiv Controller) is a separate ChatGPT-side configuration and workflow layer that you sell. This repo is the backend GitHub connector the controller talks to.
 
-From the point of view of an MCP client, this server:
+---
 
-- Reads repository metadata, branches and files (including batch fetch via `fetch_files`).
-- Runs GitHub REST and GraphQL requests using a PAT stored server side.
-- Inspects GitHub Actions workflow runs, jobs and logs.
-- Searches GitHub code/issues/repos and lists repositories available to an app installation.
-- Creates branches, commits files, opens pull requests and can trigger `workflow_dispatch` workflows.
-- Provides higher level tools like `update_files_and_open_pr` to safely edit code and open PRs without diff-formatting errors.
-- Downloads sandbox or HTTP content as base64/text payloads for reuse.
-- Can clone repos into a temporary workspace and run commands or test suites there.
+## Canonical branch and development model
 
-The deployment is meant for a single trusted user. The GitHub personal access token (PAT) lives only in the server environment; the MCP client never sees it.
+- main is the canonical, production branch.
+  - All refactors, behavioral changes, and new tools are developed on feature branches.
+  - Once changes are fully tested (including end-to-end smoke tests and documentation review), they are merged into main.
+  - Temporary or refactor branches are deleted after merge.
 
-## Architecture
+- As a user of this project:
+  - You should treat main as the source of truth.
+  - Any feature branches are internal development branches and may be short-lived or experimental.
 
-- `main.py` defines a FastMCP server named **GitHub Fast MCP**.
-- Tools are registered via a small `mcp_tool` decorator that also marks which tools are write actions.
-- A Starlette app wraps the FastMCP SSE ASGI app and exposes:
-  - `GET /`  simple banner.
-  - `GET /healthz`  health check for Render.
-  - `GET/POST /sse` and related MCP message endpoints via `mcp.sse_app()`.
-- GitHub and external HTTP requests go through shared `httpx.AsyncClient` instances with:
-  - Connection pooling controlled by `HTTPX_MAX_CONNECTIONS` and `HTTPX_MAX_KEEPALIVE`.
-  - Optional HTTP/2 via `HTTPX_HTTP2`.
-  - Tunable timeouts via `HTTPX_TIMEOUT`.
+---
 
-The server trims very large logs, patches and command output to keep responses inside MCP connector limits.
+## What this project is
 
-## Environment variables
+- A Model Context Protocol (MCP) server that exposes safe, high-level GitHub tools to ChatGPT.
+- A self-hosted GitHub connector: each user deploys this server with their own GitHub token and runs it in their own infrastructure.
+- A backend designed specifically to support the Adaptiv Controller pattern:
+  - Strong write gating.
+  - Branch-first workflows (no blind writes to main).
+  - Patch-based edits for large files.
+  - Clear verification after every write.
+  - Optional workspace execution (run_command and run_tests) to run tests and commands from the controller.
+  - Powerful search capabilities via GitHubs Search API, including public repositories.
 
-### Required
+What it is not:
 
-- `GITHUB_PAT` or `GITHUB_TOKEN`  GitHub personal access token used for all GitHub API calls. For private repos, give it at least the `repo` scope. Add `workflow` if you want to inspect or trigger Actions workflows.
+- Not a hosted SaaS. You deploy and operate it yourself.
+- Not the ChatGPT controller configuration. That is the Adaptiv Controller product you sell separately.
 
-### Write gating
+---
 
-- `GITHUB_MCP_AUTO_APPROVE` (default `0`)
-  - `0`  write tools are disabled until the `authorize_write_actions` tool is called.
-  - Truthy strings such as `1`, `true`, `yes`, or `on` enable write tools by default for all MCP sessions.
-  - Read-only tools are always auto-approved so assistants can run full read/plan
-    workflows without repeated prompts. Only tools tagged as write actions need
-    explicit authorization.
+## For buyers (product view)
 
-### HTTP client and concurrency tuning
+If you are purchasing this as a product:
 
-All of these have sensible defaults and can usually be left alone:
+- You are buying the Adaptiv Controller:
+  - The controller configuration, workflows, and usage model inside ChatGPT.
+  - The way the assistant uses the tools provided by this MCP server.
 
-- `HTTPX_TIMEOUT`  HTTP timeout in seconds (default `150`).
-- `HTTPX_MAX_CONNECTIONS`  max total pooled connections (default `300`).
-- `HTTPX_MAX_KEEPALIVE`  max idle keep alive connections (default `200`).
-- `HTTPX_HTTP2`  set to `1` to enable HTTP/2 where available (default `1`).
-- `MAX_CONCURRENCY`  general concurrency limit for some tools (default `80`).
-- `FETCH_FILES_CONCURRENCY`  overrides concurrency for `fetch_files`; if unset, falls back to `MAX_CONCURRENCY`.
-- `TOOL_STDOUT_MAX_CHARS`  max characters of stdout preserved from commands (default `12000`).
-- `TOOL_STDERR_MAX_CHARS`  max characters of stderr preserved from commands (default `12000`).
+- You are not buying hosting or managed infrastructure:
+  - You will deploy and operate this MCP server yourself (for example on Render.com).
+  - You will supply and manage your own GitHub tokens and secrets.
+  - You will decide which repos, branches, and environments the controller is allowed to touch.
 
-#### Suggested settings for a 1 CPU / 2 GB server
+In other words:
 
-For a single-connector deployment on a small Render instance (1 vCPU, 2 GB RAM), set these environment variables to keep the
-service responsive without overloading the container or the GitHub API:
+- You own the infrastructure and credentials.
+- Adaptiv Controller tells your assistant how to use the tools safely and effectively.
 
-- `MAX_CONCURRENCY=12`  trims overall concurrent work to match the limited CPU.
-- `FETCH_FILES_CONCURRENCY=8`  balances batch file fetches against memory and network usage.
-- `HTTPX_MAX_CONNECTIONS=32` and `HTTPX_MAX_KEEPALIVE=16`  reduce connection pool sizes to a level the instance can keep
-  active without extra pressure.
-- `HTTPX_TIMEOUT=120`  slightly lowers timeouts so hung requests free resources sooner.
+---
 
-## Running locally
+## Naming and branding
 
-1. Create a virtual environment and install dependencies:
+There are three relevant names:
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+1. Adaptiv Controller (official product name)
+   - This is your commercial controller concept and brand.
+   - It describes the way ChatGPT uses this MCP server to interact with GitHub safely.
 
-2. Export the GitHub token and optional env vars:
+2. Custom controller name in ChatGPT
+   - Each user is free to name their ChatGPT controller anything they like (for example My GitHub Copilot, Studio GitHub, Joeys GitHub).
+   - Internally, any controller that uses this server and follows the documented workflows is considered an Adaptiv Controller under your license and brand, regardless of the display name in ChatGPT.
 
-```bash
-export GITHUB_PAT=ghp_your_token_here
-# or
-export GITHUB_TOKEN=ghp_your_token_here
-export GITHUB_MCP_AUTO_APPROVE=1  # optional
-```
+3. This repository (Proofgate-Revocations/chatgpt-mcp-github)
+   - This is the GitHub MCP server implementation used by Adaptiv Controllers.
+   - It can also be used by other controllers or assistant prompts, as long as they respect the safety and write-gating model.
 
-3. Start the server:
+---
 
-```bash
-export PORT=10000  # or any free port
-uvicorn main:app --host 0.0.0.0 --port $PORT
-```
+## High-level architecture
 
-4. Quick health checks:
+At a high level, the flow looks like this:
 
-```bash
-curl http://localhost:10000/
-curl http://localhost:10000/healthz
-curl -N http://localhost:10000/sse
-```
+ChatGPT Assistant (Adaptiv Controller)
+    |
+    |  MCP tool calls (read or write)
+    v
+GitHub MCP Server (this repo, self-hosted)
+    |
+    |  GitHub REST / GraphQL / Search APIs
+    v
+GitHub (your repos, branches, PRs, and public code)
 
-## Deploying on Render
+Key properties:
 
-1. Create a Web Service pointing at this repo (branch `main`).
-2. Use the Python runtime.
-3. Configure commands:
+- The user owns and hosts the MCP server (for example on Render.com).
+- The user supplies their own GitHub token and configuration.
+- The controller in ChatGPT only orchestrates tool calls; it never stores secrets and has no direct network access to GitHub.
 
-Build command:
+---
 
-```text
-pip install -r requirements.txt
-```
+## Safety and write gating
 
-Start command:
+This server is designed around a strict safety model:
 
-```text
-uvicorn main:app --host 0.0.0.0 --port $PORT
-```
+- Tools are registered via a custom mcp_tool decorator that:
+  - Tags tools as read or write.
+  - Sets meta.write_action and meta.auto_approved.
+  - Sets ToolAnnotations.readOnlyHint appropriately.
 
-4. In the Environment tab, configure at least:
+- A global WRITE_ALLOWED flag gates all destructive operations:
+  - Controlled at runtime by the authorize_write_actions tool.
+  - When WRITE_ALLOWED is false, write-tagged tools raise WriteNotAuthorizedError.
 
-- `GITHUB_PAT` or `GITHUB_TOKEN` with `repo` and optionally `workflow` scopes.
-- Optional tuning variables such as `FETCH_FILES_CONCURRENCY`.
+- High-level orchestrations always follow this pattern:
+  1. Ensure you are on a safe branch (no direct writes to main).
+  2. Perform the write (commit, PR creation, deletion, and similar).
+  3. Verify the change via read-after-write and SHA comparison.
+  4. Only then proceed (for example open or merge a PR).
 
-5. After deploy, verify:
+Representative tools already implemented:
 
-```bash
-curl https://<service>.onrender.com/
-curl https://<service>.onrender.com/healthz
-curl -N https://<service>.onrender.com/sse
-```
+- Read and inspect
+  - get_file_contents, get_file_slice, fetch_files, list_repository_tree.
+  - Issue and PR readers: fetch_issue, fetch_pr, fetch_pr_comments, get_pr_diff, get_pr_info, reactions, and similar.
+  - Workflow readers: list_workflow_runs, get_workflow_run, list_workflow_run_jobs, get_job_logs.
+  - build_unified_diff for human and machine readable patches.
+  - Global search via GitHub Search API:
+    - search supports code search, repo search, issues or PR search, and commit search.
+    - It can operate across public GitHub repositories and private repositories that the token can access.
+    - This allows Adaptiv Controller to discover examples and patterns in public code, search your own orgs codebase, and cross-reference issues and PRs at scale.
 
-## Using with ChatGPT (MCP)
+- Write and orchestration
+  - apply_text_update_and_commit for single-file text edits with verification and diff.
+  - apply_patch_and_commit for patch-based edits via unified diffs.
+  - update_files_and_open_pr for multi-file commit plus verify plus PR.
+  - Branch and PR helpers: ensure_branch, create_branch, create_pull_request, merge_pull_request, close_pull_request, comment_on_pull_request.
+  - Extra tools in extra_tools.py: delete_file, delete_remote_branch, and similar.
 
-Configure a custom MCP connector in ChatGPT:
+All write tools are explicitly tagged as write actions and require WRITE_ALLOWED to be enabled.
 
-- URL  `https://<service>.onrender.com/sse`
-- Authentication  none at MCP layer; the server reads `GITHUB_PAT` or `GITHUB_TOKEN` from its environment.
+---
 
-If `GITHUB_MCP_AUTO_APPROVE` is `0`, call `authorize_write_actions` with `approved=true` at the start of a session to enable write tools. If you fully trust the server, set `GITHUB_MCP_AUTO_APPROVE=1` instead.
+## Workspace execution: run_command and run_tests
 
-### Assistant quickstart (optional)
+Beyond direct GitHub API operations, the server exposes powerful workspace tools that allow the controller (with the users permission) to run commands against a real checkout of the repository:
 
-These steps are an example of how tools can be combined; follow a different flow if it suits your workflow better.
+- run_command
+  - Clones the repo at a given ref into a temporary workspace.
+  - Optionally applies a unified diff patch before execution.
+  - Optionally creates a temporary virtual environment (use_temp_venv) so the assistant can install Python dependencies with pip install and run arbitrary commands such as linters, migrations, or scripts.
+  - Enforces a configurable timeout and returns stdout, stderr, exit code, and truncation flags once output truncation is wired in.
 
-1. `get_server_config` (and `list_write_tools` if you plan to write) can show whether writes are allowed and what limits apply.
-2. `list_repository_tree` helps browse the repository layout. Pass `path_prefix` to focus on a subdirectory when the top-level tree is large.
-3. Fetch live file contents with `get_file_contents` or `fetch_files` to have numbered lines for planning diffs.
-4. For tiny lint/doc fixes, call `update_file_and_open_pr` with the new file body to commit and open a PR in one shot without cloning. Use `update_files_and_open_pr` when multiple files change.
-5. Build and apply patches however you like, but prefer direct file update tools to avoid patch formatting pitfalls.
-6. Include any relevant test output or truncation notices in your report if they help downstream users.
+- run_tests
+  - A focused wrapper around run_command for running test commands.
+  - Same workspace and venv behavior, but with test-oriented defaults such as pytest and a longer timeout.
 
-Once connected, the client should expose tools such as:
+These tools enable extremely high-level workflows, for example:
 
-- `authorize_write_actions`
-- `get_server_config`, `list_write_tools`
-- `get_rate_limit`, `get_repository`, `list_branches`, `list_repository_tree`,
-  `list_repositories_by_installation`, `search`
-- `get_file_contents`, `fetch_files`, `download_user_content` (responses include
-  `numbered_lines` for easy referencing)
-- `build_unified_diff` to create unified diffs (optionally with visible
-  whitespace markers) against repository files without leaving the connector
-- Background read helpers: `start_background_read`, `get_background_read`,
-  `list_background_reads` (schedule long reads and poll later)
-- `graphql_query`, `fetch_url`
-- GitHub Actions tools  `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, `get_job_logs`, `wait_for_workflow_run`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`
-- PR tools  `list_pull_requests`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `compare_refs`
-- Branch and commit tools  `create_branch`, `ensure_branch`, `commit_file_async`,
-  `update_file_and_open_pr`, `create_pull_request`, `update_files_and_open_pr`
-- Workspace tools  `run_command`, `run_tests`
+- Create a feature branch, apply a patch, install missing dependencies, run tests, and open a PR only if tests pass.
+- Run type checking or linting on a proposed change, summarize failures, and suggest fixes.
 
-### Background reads
+Important points:
 
-Use `start_background_read` to launch any read-only tool without blocking the
-assistant. The response includes a `job_id` that you can poll with
-`get_background_read`; use `list_background_reads` to inspect all pending jobs.
-This is useful for large `fetch_files` batches or tree listings where you want
-to keep reasoning while data transfers are in flight.
+- These tools are write-tagged and gated by WRITE_ALLOWED.
+- They run in the users own Render-hosted environment using the users repository and tokens.
+- The controller should always ask explicit permission before running commands or installing dependencies, and prefer safe branches and smoke-test branches for invasive operations.
 
-## Troubleshooting
+---
 
-- If the MCP client reports errors talking to `/sse`, check Render logs for requests to `/sse` and confirm the Start Command uses `main:app`.
-- If GitHub calls fail with 401 or 403, verify the PAT value and scopes in the Render Environment tab.
-- If `fetch_files` or other tools hit timeouts, lower `FETCH_FILES_CONCURRENCY` or reduce the number of files requested per call.
-- Logs and patches are returned in full so assistants can read the complete context.
-- GitHub Actions job logs are automatically unzipped when GitHub serves them as archives, so copilots can read the text inline.
+## Custom flows and adaptivity
+
+The server is intentionally tool-centric. It provides a rich, well-documented tool surface that any assistant can use to build higher-level workflows.
+
+This enables the Adaptiv part of Adaptiv Controller:
+
+- Each user can define their own controllers or GPTs in ChatGPT, evolve their own prompts and instructions over time, and teach their assistants to favor certain workflows (for example always open a PR, never push to main, always run tests with run_tests before merging, and use search to consult public code patterns before making changes).
+
+- Regardless of the custom controller name they choose, if it connects to this MCP server, respects the documented safety model, and uses the provided tools and orchestrations, then it is effectively an Adaptiv Controller instance in terms of capabilities and behavior.
+
+Your commercial product is the controller design and workflows layered on top of this tool surface.
+
+---
+
+## Deployment model (self-hosted)
+
+Typical deployment for an end user:
+
+1. Host the MCP server
+   - Fork or clone this repository.
+   - Deploy to Render.com or another hosting platform as a Python web service.
+   - Configure environment variables, for example GitHub tokens, optional auto approval flags, concurrency limits, and HTTP timeouts.
+   - Start the app (for example via uvicorn) and confirm health.
+
+2. Connect ChatGPT to the MCP server
+   - Add a custom MCP integration in ChatGPT pointing at the deployed server.
+   - Sanity-check the connection using get_server_config, list_all_actions, and ping_extensions.
+
+3. Create a controller (Adaptiv Controller instance)
+   - In ChatGPT, create a new custom assistant or GPT.
+   - Paste or import the Adaptiv Controller system prompt and configuration you provide.
+   - Give it any display name they like.
+   - The controller then calls the tools exposed by this MCP server to operate on their GitHub repos and search across public GitHub when appropriate.
+
+You do not host or manage their deployment; you supply the controller logic and documentation that explains how to do this safely.
+
+---
+
+## Documentation and workflows
+
+This repository includes (or will include) a small docs set under `docs/` to keep behavior clear and assistant-friendly:
+
+- `docs/SELF_HOSTED_SETUP.md` – deployment and configuration guide for operators (see issue #128).
+- `docs/ARCHITECTURE_AND_SAFETY.md` – internal architecture and safety model (see issue #129).
+- `docs/WORKFLOWS.md` – recommended end-to-end workflows for assistants and advanced users.
+- `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md` – guidance for keeping prompts, snapshots, and docs aligned with reality.
+
+Assistants should use these docs together with the live tool list to design safe, repeatable flows for their own Adaptiv Controller instances.
+
+---
+
+## Status and roadmap (server-side)
+
+On main (after refactor merge):
+
+- Implemented:
+  - Patch-based write flow: apply_patch_and_commit.
+  - Text-based write flow: apply_text_update_and_commit.
+  - Multi-file PR orchestration: update_files_and_open_pr.
+  - Extra tools for file deletion and branch cleanup.
+  - list_all_actions with a global tool registry including extension tools.
+  - Strong write gating via authorize_write_actions and WRITE_ALLOWED.
+  - Workspace commands: run_command, run_tests.
+  - Search via GitHub Search API (search tool) across public and private repositories, subject to token permissions.
+
+- Planned or in progress:
+  - Output truncation in run_command and run_tests (stdout and stderr size limits with truncation flags).
+  - Stricter branch defaults for low-level write tools (avoiding implicit writes to main).
+  - Issue and project write tools (create or update issues, label management, and similar).
+  - Documentation set:
+    - Self-hosted setup guide for end users.
+    - Architecture and safety model for advanced users.
+    - Workflow guide for common Adaptiv Controller scenarios.
+    - Guidance for keeping assistant-facing documentation and snapshots up to date (for example how to maintain design docs, changelogs, and source-of-truth notes that the controller can reference).
+
+---
+
+## Licensing and brand notes
+
+- Adaptiv Controller is the name for your controller concept and product.
+- Controllers created by end users may have any display name in ChatGPT, but they are expected to respect your usage guidelines and license, and they are functionally instances of the Adaptiv Controller pattern when built against this MCP server.
+
+The specific license terms for this repository and the Adaptiv Controller configuration are determined by you and should be documented separately, for example in a LICENSE file and in commercial agreements.
+
+---

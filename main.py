@@ -49,6 +49,12 @@ FETCH_FILES_CONCURRENCY = int(
 )
 
 GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
+
+# Upper bounds for tool stdout/stderr payloads returned to the connector. These
+# can be tuned via environment variables; set to 0 or a negative value to disable
+# truncation if a deployment prefers full logs at the cost of larger responses.
+TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
+TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "6000"))
 GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
 GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
@@ -70,6 +76,23 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
+
+CONTROLLER_REPO = os.environ.get(
+    "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
+)
+CONTROLLER_DEFAULT_BRANCH = os.environ.get(
+    "GITHUB_MCP_CONTROLLER_BRANCH", "ally-mcp-github-refactor-fresh"
+)
+
+
+def _effective_ref_for_repo(full_name: str, ref: Optional[str]) -> str:
+    """Resolve the effective Git ref for a repository."""
+
+    if full_name == CONTROLLER_REPO:
+        if not ref or ref == "main":
+            return CONTROLLER_DEFAULT_BRANCH
+        return ref
+    return ref or "main"
 
 
 def _with_numbered_lines(text: str) -> List[Dict[str, Any]]:
@@ -253,16 +276,46 @@ async def _github_request(
 # GitHub helpers
 # ------------------------------------------------------------------------------
 
+async def _verify_file_on_branch(
+    full_name: str,
+    path: str,
+    branch: str,
+) -> Dict[str, Any]:
+    """Verify that a file exists on a specific branch after a write.
+
+    This helper is used by higher-level orchestration tools to insert an
+    explicit verification step between committing changes and opening a PR.
+
+    Returns a small JSON-friendly payload summarizing the verification result.
+    Raises GitHubAPIError if the file cannot be fetched.
+    """
+    try:
+        decoded = await _decode_github_content(full_name, path, branch)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise GitHubAPIError(
+            f"Post-commit verification failed for {full_name}/{path}@{branch}: {exc}"
+        ) from exc
+
+    text = decoded.get("text", "")
+    return {
+        "full_name": full_name,
+        "path": path,
+        "branch": branch,
+        "verified": True,
+        "size": len(text) if isinstance(text, str) else None,
+    }
+
 
 async def _decode_github_content(
     full_name: str,
     path: str,
-    ref: str = "main",
+    ref: Optional[str] = None,
 ) -> Dict[str, Any]:
+    effective_ref = _effective_ref_for_repo(full_name, ref)
     data = await _github_request(
         "GET",
         f"/repos/{full_name}/contents/{path}",
-        params={"ref": ref},
+        params={"ref": effective_ref},
     )
     if not isinstance(data.get("json"), dict):
         raise GitHubAPIError("Unexpected content response shape from GitHub")
@@ -290,7 +343,10 @@ async def _decode_github_content(
 
 
 async def _get_branch_sha(full_name: str, ref: str) -> str:
-    data = await _github_request("GET", f"/repos/{full_name}/git/ref/heads/{ref}")
+    effective_ref = _effective_ref_for_repo(full_name, ref)
+    data = await _github_request(
+        "GET", f"/repos/{full_name}/git/ref/heads/{effective_ref}"
+    )
     j = data["json"]
     if not isinstance(j, dict) or "object" not in j:
         raise GitHubAPIError("Unexpected branch ref response from GitHub")
@@ -499,23 +555,42 @@ async def _run_shell(
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
+    stdout = raw_stdout
+    stderr = raw_stderr
+    stdout_truncated = False
+    stderr_truncated = False
+
+    if (
+        TOOL_STDOUT_MAX_CHARS
+        and TOOL_STDOUT_MAX_CHARS > 0
+        and len(stdout) > TOOL_STDOUT_MAX_CHARS
+    ):
+        stdout = stdout[:TOOL_STDOUT_MAX_CHARS]
+        stdout_truncated = True
+
+    if (
+        TOOL_STDERR_MAX_CHARS
+        and TOOL_STDERR_MAX_CHARS > 0
+        and len(stderr) > TOOL_STDERR_MAX_CHARS
+    ):
+        stderr = stderr[:TOOL_STDERR_MAX_CHARS]
+        stderr_truncated = True
 
     return {
         "exit_code": proc.returncode,
         "timed_out": timed_out,
-        "stdout": raw_stdout,
-        "stderr": raw_stderr,
-        "stdout_truncated": False,
-        "stderr_truncated": False,
+        "stdout": stdout,
+        "stderr": stderr,
+        "stdout_truncated": stdout_truncated,
+        "stderr_truncated": stderr_truncated,
     }
-
-
-async def _clone_repo(full_name: str, ref: str = "main") -> str:
+async def _clone_repo(full_name: str, ref: Optional[str] = None) -> str:
     tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
     token = _get_github_token()
-    
+
+    effective_ref = _effective_ref_for_repo(full_name, ref)
     url = f"https://x-access-token:{token}@github.com/{full_name}.git"
-    cmd = f"git clone --depth 1 --branch {ref} {url} {tmpdir}"
+    cmd = f"git clone --depth 1 --branch {effective_ref} {url} {tmpdir}"
     result = await _run_shell(cmd, cwd=None, timeout_seconds=600)
     if result["exit_code"] != 0:
         stderr = result.get("stderr", "")
@@ -614,6 +689,10 @@ def _ensure_write_allowed(context: str) -> None:
             f"MCP write action is temporarily disabled (context: {context})"
         )
 
+# Global registry of MCP tools, populated by the mcp_tool decorator. This lets
+# us enumerate tools defined in other modules (for example extra_tools.py) as
+# long as they are decorated with the shared mcp_tool wrapper.
+_REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
 
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     """
@@ -677,11 +756,36 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
             def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
 
+        # Attach the underlying FastMCP tool object so other helpers can inspect
+        # metadata, and register the tool in the global registry so we can
+        # enumerate tools defined in other modules.
         wrapper._mcp_tool = tool  # type: ignore[attr-defined]
+        _REGISTERED_MCP_TOOLS.append((tool, wrapper))
         return wrapper
 
     return decorator
 
+
+# ------------------------------------------------------------------------------
+# Optional dynamic tool registration (extra_tools.py)
+# ------------------------------------------------------------------------------
+
+try:
+    # If extra_tools.py exists and exposes register_extra_tools, use it
+    # to register additional tools using the same mcp_tool decorator.
+    from extra_tools import register_extra_tools  # type: ignore[import]
+except Exception:
+    register_extra_tools = None  # type: ignore[assignment]
+
+if callable(register_extra_tools):
+    try:
+        # Pass the decorator so extra_tools.py can define new tools without
+        # importing main.py directly.
+        register_extra_tools(mcp_tool)
+    except Exception:
+        # Extension tools are strictly optional; never break the core server
+        # if extension registration fails for any reason.
+        pass
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
@@ -786,13 +890,6 @@ async def get_profile() -> Dict[str, Any]:
     """Retrieve the authenticated user's GitHub profile."""
 
     return await _github_request("GET", "/user")
-
-
-@mcp_tool(write_action=False)
-async def get_repo(full_name: str) -> Dict[str, Any]:
-    """Fetch repository metadata for ``owner/repo``."""
-
-    return await _github_request("GET", f"/repos/{full_name}")
 
 
 @mcp_tool(write_action=False)
@@ -1016,12 +1113,6 @@ def list_write_tools() -> Dict[str, Any]:
             "category": "branch",
             "description": "Ensure a branch exists, creating it from a base ref if needed.",
             "notes": "Safe default for preparing branches before commits or PRs.",
-        },
-        {
-            "name": "commit_file_async",
-            "category": "commit",
-            "description": "Commit a single file to a branch, optionally using content_url.",
-            "notes": "Use for small, targeted changes or external doc commits.",
         },
         {
             "name": "update_file_and_open_pr",
@@ -1552,19 +1643,24 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
     """
 
     tools: List[Dict[str, Any]] = []
-    for maybe_func in globals().values():
-        tool = getattr(maybe_func, "_mcp_tool", None)
-        if tool is None:
+    seen_names: set[str] = set()
+
+    for tool, func in _REGISTERED_MCP_TOOLS:
+        name = getattr(tool, "name", None) or getattr(func, "__name__", None)
+        if not name:
             continue
+        name_str = str(name)
+        if name_str in seen_names:
+            continue
+        seen_names.add(name_str)
 
         meta = getattr(tool, "meta", {}) or {}
         annotations = getattr(tool, "annotations", None)
 
-        name = getattr(tool, "name", None) or getattr(maybe_func, "__name__", None)
-        description = getattr(tool, "description", None) or (maybe_func.__doc__ or "")
+        description = getattr(tool, "description", None) or (func.__doc__ or "")
 
         tool_info: Dict[str, Any] = {
-            "name": str(name),
+            "name": name_str,
             "description": description.strip(),
             "tags": sorted(list(getattr(tool, "tags", []) or [])),
             "write_action": bool(meta.get("write_action")),
@@ -1596,6 +1692,7 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
         "write_actions_enabled": WRITE_ALLOWED,
         "tools": tools,
     }
+
 
 
 @mcp_tool(write_action=False)
@@ -1833,6 +1930,97 @@ async def comment_on_pull_request(
     )
 
 
+@mcp_tool(write_action=True)
+async def create_issue(
+    full_name: str,
+    title: str,
+    body: Optional[str] = None,
+    labels: Optional[List[str]] = None,
+    assignees: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    # Create a GitHub issue with optional body, labels, and assignees.
+
+    if '/' not in full_name:
+        raise ValueError('full_name must be in owner/repo format')
+
+    _ensure_write_allowed(f'create issue in {full_name}: {title!r}')
+
+    payload: Dict[str, Any] = {'title': title}
+    if body is not None:
+        payload['body'] = body
+    if labels is not None:
+        payload['labels'] = labels
+    if assignees is not None:
+        payload['assignees'] = assignees
+
+    return await _github_request(
+        'POST',
+        f'/repos/{full_name}/issues',
+        json_body=payload,
+    )
+
+
+@mcp_tool(write_action=True)
+async def update_issue(
+    full_name: str,
+    issue_number: int,
+    title: Optional[str] = None,
+    body: Optional[str] = None,
+    state: Optional[str] = None,
+    labels: Optional[List[str]] = None,
+    assignees: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    # Update fields on an existing GitHub issue.
+
+    if '/' not in full_name:
+        raise ValueError('full_name must be in owner/repo format')
+
+    _ensure_write_allowed(f'update issue #{issue_number} in {full_name}')
+
+    payload: Dict[str, Any] = {}
+    if title is not None:
+        payload['title'] = title
+    if body is not None:
+        payload['body'] = body
+    if state is not None:
+        allowed_states = {'open', 'closed'}
+        if state not in allowed_states:
+            raise ValueError('state must be ‘open’ or ‘closed’')
+        payload['state'] = state
+    if labels is not None:
+        payload['labels'] = labels
+    if assignees is not None:
+        payload['assignees'] = assignees
+
+    if not payload:
+        raise ValueError('At least one field must be provided to update_issue')
+
+    return await _github_request(
+        'PATCH',
+        f'/repos/{full_name}/issues/{issue_number}',
+        json_body=payload,
+    )
+
+
+@mcp_tool(write_action=True)
+async def comment_on_issue(
+    full_name: str,
+    issue_number: int,
+    body: str,
+) -> Dict[str, Any]:
+    # Post a comment on an issue.
+
+    if '/' not in full_name:
+        raise ValueError('full_name must be in owner/repo format')
+
+    _ensure_write_allowed(f'comment on issue #{issue_number} in {full_name}')
+
+    return await _github_request(
+        'POST',
+        f'/repos/{full_name}/issues/{issue_number}/comments',
+        json_body={'body': body},
+    )
+
 @mcp_tool(write_action=False)
 async def compare_refs(
     full_name: str,
@@ -1892,71 +2080,6 @@ async def ensure_branch(
             f"GitHub ensure_branch error {resp.status_code}: {resp.text}"
         )
     return {"status_code": resp.status_code, "json": resp.json()}
-
-
-@mcp_tool(write_action=True)
-async def commit_file_async(
-    full_name: str,
-    path: str,
-    message: str,
-    content: Optional[str] = None,
-    *,
-    content_url: Optional[str] = None,
-    branch: str = "main",
-    sha: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Schedule a single file commit in the background."""
-
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-
-    _ensure_write_allowed(f"commit file async {path}")
-
-    print(
-        "[commit_file_async] scheduling full_name=%r path=%r branch=%r "
-        "message=%r has_content=%s content_url=%r sha=%r"
-        % (full_name, path, branch, message, content is not None, content_url, sha)
-    )
-
-    if content is None and content_url is None:
-        raise ValueError("Either content or content_url must be provided")
-    if content is not None and content_url is not None:
-        raise ValueError("Provide content or content_url, but not both")
-
-    if content_url is not None:
-        body_bytes = await _load_body_from_content_url(
-            content_url, context="commit_file_async"
-        )
-    else:
-        body_bytes = content.encode("utf-8")
-
-    if sha is None:
-        sha = await _resolve_file_sha(full_name, path, branch)
-
-    async def _do_commit() -> None:
-        try:
-            await _perform_github_commit(
-                full_name=full_name,
-                path=path,
-                message=message,
-                body_bytes=body_bytes,
-                branch=branch,
-                sha=sha,
-            )
-            print(f"[commit_file_async] commit completed for {full_name}/{path}")
-        except Exception as e:
-            print(f"[commit_file_async] commit failed for {full_name}/{path}: {e}")
-
-    asyncio.create_task(_do_commit())
-
-    return {
-        "scheduled": True,
-        "path": path,
-        "branch": branch,
-        "message": message,
-    }
-
-
 @mcp_tool(write_action=True)
 async def create_pull_request(
     full_name: str,
@@ -1967,12 +2090,15 @@ async def create_pull_request(
     draft: bool = False,
 ) -> Dict[str, Any]:
     """Open a pull request from ``head`` into ``base``."""
+    effective_base = _effective_ref_for_repo(full_name, base)
 
-    _ensure_write_allowed(f"create PR from {head} to {base} in {full_name}")
+    _ensure_write_allowed(
+        f"create PR from {head} to {effective_base} in {full_name}"
+    )
     payload: Dict[str, Any] = {
         "title": title,
         "head": head,
-        "base": base,
+        "base": effective_base,
         "draft": draft,
     }
     if body is not None:
@@ -1985,6 +2111,7 @@ async def create_pull_request(
     )
 
 
+
 @mcp_tool(write_action=True)
 async def update_files_and_open_pr(
     full_name: str,
@@ -1995,51 +2122,74 @@ async def update_files_and_open_pr(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
-    """Commit multiple files then open a PR in one call."""
+    """Commit multiple files, verify each, then open a PR in one call."""
 
     current_path: Optional[str] = None
     try:
+        effective_base = _effective_ref_for_repo(full_name, base_branch)
         _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
 
+        if not files:
+            raise ValueError("files must contain at least one item")
+
+        # 1) Ensure a dedicated branch exists
         branch = new_branch or f"ally-{os.urandom(4).hex()}"
-        await ensure_branch(full_name, branch, from_ref=base_branch)
+        await ensure_branch(full_name, branch, from_ref=effective_base)
 
+        commit_results: List[Dict[str, Any]] = []
+        verifications: List[Dict[str, Any]] = []
+
+        # 2) Commit each file, with verification
         for f in files:
-            current_path = f["path"]
+            current_path = f.get("path")
+            if not current_path:
+                raise ValueError("Each file dict must include a 'path' key")
+
             file_message = f.get("message") or title
-            content = f.get("content")
-            content_url = f.get("content_url")
+            file_content = f.get("content")
+            file_content_url = f.get("content_url")
 
-            if content is None and content_url is None:
+            if file_content is None and file_content_url is None:
                 raise ValueError(
-                    f"File entry for {current_path} must have content or content_url"
+                    f"File entry for {current_path!r} must specify "
+                    "either 'content' or 'content_url'"
                 )
-            if content is not None and content_url is not None:
+            if file_content is not None and file_content_url is not None:
                 raise ValueError(
-                    f"File entry for {current_path} must not provide both content "
-                    "and content_url"
+                    f"File entry for {current_path!r} may not specify both "
+                    "'content' and 'content_url'"
                 )
 
-            try:
-                if content_url is not None:
+            # Load content
+            if file_content_url is not None:
+                try:
                     body_bytes = await _load_body_from_content_url(
-                        content_url, context="update_files_and_open_pr"
+                        file_content_url,
+                        context=(
+                            f"update_files_and_open_pr({full_name}/{current_path})"
+                        ),
                     )
-                else:
-                    body_bytes = content.encode("utf-8")
-            except Exception as exc:
-                return _structured_tool_error(
-                    exc, context="update_files_and_open_pr.load_content", path=current_path
-                )
+                except Exception as exc:
+                    return _structured_tool_error(
+                        exc,
+                        context="update_files_and_open_pr.load_content",
+                        path=current_path,
+                    )
+            else:
+                body_bytes = file_content.encode("utf-8")
 
+
+
+
+            # Resolve SHA and commit
             try:
                 sha = await _resolve_file_sha(full_name, current_path, branch)
-                await _perform_github_commit(
+                commit_result = await _perform_github_commit(
                     full_name=full_name,
                     path=current_path,
                     message=file_message,
-                    body_bytes=body_bytes,
                     branch=branch,
+                    body_bytes=body_bytes,
                     sha=sha,
                 )
             except Exception as exc:
@@ -2049,12 +2199,35 @@ async def update_files_and_open_pr(
                     path=current_path,
                 )
 
+            commit_results.append(
+                {
+                    "path": current_path,
+                    "message": file_message,
+                    "result": commit_result,
+                }
+            )
+
+            # Post-commit verification for this file
+            try:
+                verification = await _verify_file_on_branch(
+                    full_name, current_path, branch
+                )
+            except Exception as exc:
+                return _structured_tool_error(
+                    exc,
+                    context="update_files_and_open_pr.verify_file",
+                    path=current_path,
+                )
+
+            verifications.append(verification)
+
+        # 3) Open the PR
         try:
             pr = await create_pull_request(
                 full_name=full_name,
                 title=title,
                 head=branch,
-                base=base_branch,
+                base=effective_base,
                 body=body,
                 draft=draft,
             )
@@ -2062,86 +2235,316 @@ async def update_files_and_open_pr(
             return _structured_tool_error(
                 exc, context="update_files_and_open_pr.create_pr", path=current_path
             )
-        return {"branch": branch, "pull_request": pr}
+
+        return {
+            "branch": branch,
+            "pull_request": pr,
+            "commits": commit_results,
+            "verifications": verifications,
+        }
+
     except Exception as exc:
         return _structured_tool_error(
             exc, context="update_files_and_open_pr", path=current_path
         )
 
-
 @mcp_tool(write_action=True)
-async def update_file_and_open_pr(
+async def apply_text_update_and_commit(
     full_name: str,
     path: str,
-    content: Optional[str],
-    title: str,
-    base_branch: str = "main",
-    new_branch: Optional[str] = None,
-    body: Optional[str] = None,
+    updated_content: str,
+    *,
+    branch: str = "main",
     message: Optional[str] = None,
-    content_url: Optional[str] = None,
-    draft: bool = False,
+    return_diff: bool = True,
+    context_lines: int = 3,
 ) -> Dict[str, Any]:
-    """Fast path to commit a single file then open a PR without cloning."""
+    """Apply a text update to a single file on a branch, then verify it.
 
-    current_path: Optional[str] = path
+    This is a lower-level building block for "diff-first" flows:
+
+    1. Read the current file text from GitHub.
+    2. Commit the provided updated_content via the Contents API on the target branch.
+    3. Re-read the file to verify the new SHA and contents landed.
+    4. Optionally compute and return a unified diff between old and new text.
+
+    It does NOT create a PR; callers are expected to open a PR separately
+    (for example using create_pull_request or update_files_and_open_pr) if
+    they want reviewable changes.
+
+    Args:
+        full_name: "owner/repo" string.
+        path: Path of the file within the repository.
+        updated_content: New full text for the file (UTF-8).
+        branch: Branch to commit to (default "main").
+        message: Commit message; if omitted, a simple "Update <path>" is used.
+        return_diff: If true, include a unified diff in the response under "diff".
+        context_lines: Number of context lines for the unified diff.
+
+    Returns:
+        A dict with:
+            - status: "committed"
+            - full_name, path, branch
+            - message: commit message used
+            - commit: raw GitHub commit API response
+            - verification: {sha_before, sha_after, html_url}
+            - diff: unified diff text (if return_diff is true)
+    """
+
+    _ensure_write_allowed(f"apply_text_update_and_commit {full_name} {path}")
+
+    effective_branch = _effective_ref_for_repo(full_name, branch)
+
+    # 1) Read the current file state on the target branch, treating a 404 as a new file.
+    is_new_file = False
     try:
-        _ensure_write_allowed(f"update_file_and_open_pr {full_name} {path}")
+        decoded = await _decode_github_content(full_name, path, effective_branch)
+        old_text = decoded.get("text")
+        if not isinstance(old_text, str):
+            raise GitHubAPIError("Decoded content is not text")
+        sha_before = decoded.get("sha")
+    except GitHubAPIError as exc:
+        msg = str(exc)
+        if "404" in msg and "/contents/" in msg:
+            # The GitHub Contents API returns 404 when the file does not yet exist.
+            # In that case we treat this as a creation rather than an update.
+            is_new_file = True
+            old_text = ""
+            sha_before = None
+        else:
+            raise
 
-        if content is None and content_url is None:
-            raise ValueError("Provide either content or content_url for the file")
-        if content is not None and content_url is not None:
-            raise ValueError("Provide content or content_url, but not both")
+    body_bytes = updated_content.encode("utf-8")
+    if message is not None:
+        commit_message = message
+    elif is_new_file:
+        commit_message = f"Create {path}"
+    else:
+        commit_message = f"Update {path}"
 
-        branch = new_branch or f"ally-{os.urandom(4).hex()}"
-        await ensure_branch(full_name, branch, from_ref=base_branch)
+    # 2) Commit the new content via the GitHub Contents API.
+    commit_result = await _perform_github_commit(
+        full_name=full_name,
+        path=path,
+        message=commit_message,
+        body_bytes=body_bytes,
+        branch=effective_branch,
+        sha=sha_before,
+    )
 
-        try:
-            if content_url is not None:
-                body_bytes = await _load_body_from_content_url(
-                    content_url, context="update_file_and_open_pr"
-                )
-            else:
-                body_bytes = content.encode("utf-8")
-        except Exception as exc:
-            return _structured_tool_error(
-                exc, context="update_file_and_open_pr.load_content", path=current_path
-            )
+    # 3) Verify by reading the file again from the same branch.
+    verified = await _decode_github_content(full_name, path, effective_branch)
+    new_text = verified.get("text")
+    sha_after = verified.get("sha")
 
-        try:
-            sha = await _resolve_file_sha(full_name, current_path, branch)
-            await _perform_github_commit(
-                full_name=full_name,
-                path=current_path,
-                message=message or title,
-                body_bytes=body_bytes,
-                branch=branch,
-                sha=sha,
-            )
-        except Exception as exc:
-            return _structured_tool_error(
-                exc, context="update_file_and_open_pr.commit_file", path=current_path
-            )
+    result: Dict[str, Any] = {
+        "status": "committed",
+        "full_name": full_name,
+        "path": path,
+        "branch": effective_branch,
+        "message": commit_message,
+        "commit": commit_result,
+        "verification": {
+            "sha_before": sha_before,
+            "sha_after": sha_after,
+            "html_url": verified.get("html_url"),
+        },
+    }
 
-        try:
-            pr = await create_pull_request(
-                full_name=full_name,
-                title=title,
-                head=branch,
-                base=base_branch,
-                body=body,
-                draft=draft,
-            )
-        except Exception as exc:
-            return _structured_tool_error(
-                exc, context="update_file_and_open_pr.create_pr", path=current_path
-            )
+    # 4) Optionally compute a unified diff between the old and new text.
+    if return_diff:
+        import difflib
 
-        return {"branch": branch, "pull_request": pr}
-    except Exception as exc:
-        return _structured_tool_error(
-            exc, context="update_file_and_open_pr", path=current_path
+        diff_iter = difflib.unified_diff(
+            old_text.splitlines(keepends=True),
+            (new_text or "").splitlines(keepends=True),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            n=context_lines,
         )
+        result["diff"] = "".join(diff_iter)
+
+    return result
+@mcp_tool(write_action=True)
+async def apply_patch_and_commit(
+    full_name: str,
+    path: str,
+    patch: str,
+    *,
+    branch: str = "main",
+    message: Optional[str] = None,
+    return_diff: bool = True,
+) -> Dict[str, Any]:
+    """Apply a unified diff to a single file, commit it, then verify it.
+
+    This is a first-class patch-based flow for a single file:
+
+      1. Read the current file text from GitHub on the given branch.
+      2. Apply a unified diff (for that file) in memory.
+      3. Commit the resulting text via the GitHub Contents API.
+      4. Re-read the file on the branch to verify the new SHA and contents.
+
+    The patch is expected to be a standard unified diff for *this* path,
+    typically generated by `build_unified_diff` against the same branch.
+
+    Args:
+        full_name: "owner/repo" string.
+        path: Path of the file within the repository.
+        patch: Unified diff text affecting this path only.
+        branch: Branch to commit to (default "main").
+        message: Commit message; if omitted, "Update <path> via patch" is used.
+        return_diff: If true, include a recomputed unified diff between the
+            old and new text (not just echo the incoming patch).
+
+    Returns:
+        A dict with:
+            - status: "committed"
+            - full_name, path, branch
+            - message: commit message used
+            - commit: raw GitHub commit API response
+            - verification: {sha_before, sha_after, html_url}
+            - diff: unified diff text (if return_diff is true)
+    """
+
+    _ensure_write_allowed(f"apply_patch_and_commit {full_name} {path}")
+
+    effective_branch = _effective_ref_for_repo(full_name, branch)
+
+    import re
+    import difflib
+
+    def _apply_unified_diff_to_text(original_text: str, patch_text: str) -> str:
+        """Apply a unified diff to original_text and return the updated text.
+
+        This implementation supports patches for a single file with one or more
+        hunks, of the form typically produced by difflib.unified_diff. It
+        ignores "diff --git", "index", and file header lines, and processes
+        only hunk headers and +/-/space lines.
+        """
+        orig_lines = original_text.splitlines(keepends=True)
+        new_lines: list[str] = []
+
+        orig_idx = 0
+        in_hunk = False
+
+        hunk_header_re = re.compile(
+            r"^@@ -(?P<old_start>\d+)(?:,(?P<old_len>\d+))? "
+            r"\+(?P<new_start>\d+)(?:,(?P<new_len>\d+))? @@"
+        )
+
+        for line in patch_text.splitlines(keepends=True):
+            if line.startswith("diff --git") or line.startswith("index "):
+                # Ignore Git metadata lines.
+                continue
+            if line.startswith("--- ") or line.startswith("+++ "):
+                # Ignore file header lines; we assume the caller passes `path`.
+                continue
+
+            m = hunk_header_re.match(line)
+            if m:
+                # Start of a new hunk: flush unchanged lines up to old_start-1.
+                old_start = int(m.group("old_start"))
+                target_idx = old_start - 1  # convert 1-based to 0-based
+
+                if target_idx < orig_idx:
+                    raise GitHubAPIError(
+                        f"Patch is inconsistent with original text: "
+                        f"target_idx={target_idx} < orig_idx={orig_idx}"
+                    )
+
+                new_lines.extend(orig_lines[orig_idx:target_idx])
+                orig_idx = target_idx
+                in_hunk = True
+                continue
+
+            if not in_hunk:
+                # Skip any preamble before the first hunk.
+                continue
+
+            if line.startswith(" "):
+                # Context line: must match original; copy from original.
+                if orig_idx >= len(orig_lines):
+                    raise GitHubAPIError("Patch context extends beyond end of file")
+                # Optionally, we could assert that orig_lines[orig_idx] == line[1:].
+                new_lines.append(orig_lines[orig_idx])
+                orig_idx += 1
+            elif line.startswith("-"):
+                # Deletion line: skip the corresponding original line.
+                if orig_idx >= len(orig_lines):
+                    raise GitHubAPIError("Patch deletion extends beyond end of file")
+                # We could assert orig_lines[orig_idx] == line[1:].
+                orig_idx += 1
+            elif line.startswith("+"):
+                # Insertion line: add the new text (without the leading '+').
+                new_lines.append(line[1:])
+            elif line.startswith("\\"):
+                # e.g. "\ No newline at end of file" – ignore.
+                continue
+            else:
+                raise GitHubAPIError(f"Unexpected line in patch: {line!r}")
+
+        # Append any remaining original lines not touched by hunks.
+        new_lines.extend(orig_lines[orig_idx:])
+        return "".join(new_lines)
+
+    # 1) Read current file from GitHub on the target branch.
+    decoded = await _decode_github_content(full_name, path, effective_branch)
+    old_text = decoded.get("text")
+    if not isinstance(old_text, str):
+        raise GitHubAPIError("Decoded content is not text")
+
+    sha_before = decoded.get("sha")
+
+    # 2) Apply the patch to get the updated text.
+    try:
+        new_text = _apply_unified_diff_to_text(old_text, patch)
+    except Exception as exc:
+        raise GitHubAPIError(f"Failed to apply patch to {path}: {exc}") from exc
+
+    body_bytes = new_text.encode("utf-8")
+    commit_message = message or f"Update {path} via patch"
+
+    # 3) Commit the new content via the GitHub Contents API.
+    commit_result = await _perform_github_commit(
+        full_name=full_name,
+        path=path,
+        message=commit_message,
+        body_bytes=body_bytes,
+        branch=effective_branch,
+        sha=sha_before,
+    )
+
+    # 4) Verify by reading the file again from the same branch.
+    verified = await _decode_github_content(full_name, path, effective_branch)
+    new_text_verified = verified.get("text")
+    sha_after = verified.get("sha")
+
+    result: Dict[str, Any] = {
+        "status": "committed",
+        "full_name": full_name,
+        "path": path,
+        "branch": effective_branch,
+        "message": commit_message,
+        "commit": commit_result,
+        "verification": {
+            "sha_before": sha_before,
+            "sha_after": sha_after,
+            "html_url": verified.get("html_url"),
+        },
+    }
+
+    # Optional: recompute a unified diff between old and verified new text.
+    if return_diff:
+        diff_iter = difflib.unified_diff(
+            old_text.splitlines(keepends=True),
+            (new_text_verified or "").splitlines(keepends=True),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            n=3,
+        )
+        result["diff"] = "".join(diff_iter)
+
+    return result
 
 
 # ------------------------------------------------------------------------------
@@ -2182,8 +2585,11 @@ async def run_command(
     repo_dir: Optional[str] = None
     env: Optional[Dict[str, str]] = None
     try:
-        _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
-        repo_dir = await _clone_repo(full_name, ref=ref)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        _ensure_write_allowed(
+            f"run_command {command} in {full_name}@{effective_ref}"
+        )
+        repo_dir = await _clone_repo(full_name, ref=effective_ref)
 
         if patch:
             await _apply_patch_to_repo(repo_dir, patch)

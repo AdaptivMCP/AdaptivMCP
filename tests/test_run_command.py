@@ -143,3 +143,51 @@ async def test_run_command_allows_disabling_virtualenv(monkeypatch, tmp_path):
 
     assert not any("-m venv" in call["cmd"] for call in calls)
     assert calls[-1]["env"] is None
+
+
+@pytest.mark.asyncio
+async def test_run_shell_truncates_output_when_limits_exceeded(monkeypatch):
+    """When TOOL_STDOUT_MAX_CHARS / TOOL_STDERR_MAX_CHARS are small,
+    _run_shell should truncate output and set the truncation flags.
+    """
+
+    monkeypatch.setattr(main, "TOOL_STDOUT_MAX_CHARS", 10)
+    monkeypatch.setattr(main, "TOOL_STDERR_MAX_CHARS", 5)
+
+    cmd = (
+        "python - <<'PY'\n"
+        "import sys\n"
+        "sys.stdout.write('A' * 20)\n"
+        "sys.stderr.write('B' * 30)\n"
+        "PY"
+    )
+    result = await main._run_shell(cmd)
+
+    assert result["stdout_truncated"] is True
+    assert result["stderr_truncated"] is True
+    assert result["stdout"] == "A" * 10
+    assert result["stderr"] == "B" * 5
+
+
+@pytest.mark.asyncio
+async def test_run_shell_no_truncation_when_limits_disabled(monkeypatch):
+    """If the truncation limits are disabled (0 or negative), _run_shell
+    should return full output and leave truncation flags False.
+    """
+
+    monkeypatch.setattr(main, "TOOL_STDOUT_MAX_CHARS", 0)
+    monkeypatch.setattr(main, "TOOL_STDERR_MAX_CHARS", -1)
+
+    cmd = (
+        "python - <<'PY'\n"
+        "import sys\n"
+        "sys.stdout.write('A' * 20)\n"
+        "sys.stderr.write('B' * 30)\n"
+        "PY"
+    )
+    result = await main._run_shell(cmd)
+
+    assert result["stdout_truncated"] is False
+    assert result["stderr_truncated"] is False
+    assert result["stdout"] == "A" * 20
+    assert result["stderr"] == "B" * 30
