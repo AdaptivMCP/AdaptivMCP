@@ -132,7 +132,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "status": "deleted",
             "full_name": full_name,
             "branch": effective_branch,
-            "branch": branch,
             "commit": result,
         }
 
