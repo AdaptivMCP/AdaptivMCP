@@ -25,17 +25,17 @@ async def test_apply_text_update_and_commit_updates_existing_file(monkeypatch):
 
     commit_calls = []
 
-    async def fake_commit(full_name, path, branch, content_bytes, message, sha):
-        commit_calls.append(
-            {
-                "full_name": full_name,
-                "path": path,
-                "branch": branch,
-                "content_bytes": content_bytes,
-                "message": message,
-                "sha": sha,
-            }
-        )
+    async def fake_commit(**kwargs):
+        record = {
+            "full_name": kwargs["full_name"],
+            "path": kwargs["path"],
+            "branch": kwargs["branch"],
+            # Map internal body_bytes naming to the content_bytes key used in assertions.
+            "content_bytes": kwargs["body_bytes"],
+            "message": kwargs["message"],
+            "sha": kwargs["sha"],
+        }
+        commit_calls.append(record)
         return {"commit": {"sha": "after-sha"}}
 
     monkeypatch.setattr(main, "_decode_github_content", fake_decode)
@@ -88,17 +88,16 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
 
     commit_calls = []
 
-    async def fake_commit(full_name, path, branch, content_bytes, message, sha):
-        commit_calls.append(
-            {
-                "full_name": full_name,
-                "path": path,
-                "branch": branch,
-                "content_bytes": content_bytes,
-                "message": message,
-                "sha": sha,
-            }
-        )
+    async def fake_commit(**kwargs):
+        record = {
+            "full_name": kwargs["full_name"],
+            "path": kwargs["path"],
+            "branch": kwargs["branch"],
+            "content_bytes": kwargs["body_bytes"],
+            "message": kwargs["message"],
+            "sha": kwargs["sha"],
+        }
+        commit_calls.append(record)
         return {"commit": {"sha": "after-sha"}}
 
     monkeypatch.setattr(main, "_decode_github_content", fake_decode)
