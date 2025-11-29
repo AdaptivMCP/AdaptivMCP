@@ -2327,12 +2327,10 @@ async def apply_text_update_and_commit(
         commit_message,
         body_bytes,
         effective_branch,
+        body_bytes,
+        effective_branch,
         sha_before,
     )
-        sha_before,
-    )
-
-    # 3) Verify by reading the file again from the same branch.
     verified = await _decode_github_content(full_name, path, effective_branch)
     new_text = verified.get("text")
     sha_after = verified.get("sha")
