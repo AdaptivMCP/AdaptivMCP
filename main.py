@@ -2090,11 +2090,13 @@ async def create_pull_request(
     draft: bool = False,
 ) -> Dict[str, Any]:
     """Open a pull request from ``head`` into ``base``."""
+    effective_base = _effective_ref_for_repo(full_name, base)
 
+    _ensure_write_allowed(f"create PR from {head} to {effective_base} in {full_name}")
     _ensure_write_allowed(f"create PR from {head} to {base} in {full_name}")
     payload: Dict[str, Any] = {
         "title": title,
-        "head": head,
+        "base": effective_base,
         "base": base,
         "draft": draft,
     }
@@ -2123,6 +2125,7 @@ async def update_files_and_open_pr(
 
     current_path: Optional[str] = None
     try:
+        effective_base = _effective_ref_for_repo(full_name, base_branch)
         _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
 
         if not files:
@@ -2130,7 +2133,7 @@ async def update_files_and_open_pr(
 
         # 1) Ensure a dedicated branch exists
         branch = new_branch or f"ally-{os.urandom(4).hex()}"
-        await ensure_branch(full_name, branch, from_ref=base_branch)
+        await ensure_branch(full_name, branch, from_ref=effective_base)
 
         commit_results: List[Dict[str, Any]] = []
         verifications: List[Dict[str, Any]] = []
@@ -2223,7 +2226,7 @@ async def update_files_and_open_pr(
                 full_name=full_name,
                 title=title,
                 head=branch,
-                base=base_branch,
+                base=effective_base,
                 body=body,
                 draft=draft,
             )
@@ -2289,10 +2292,12 @@ async def apply_text_update_and_commit(
 
     _ensure_write_allowed(f"apply_text_update_and_commit {full_name} {path}")
 
+    effective_branch = _effective_ref_for_repo(full_name, branch)
+
     # 1) Read the current file state on the target branch, treating a 404 as a new file.
     is_new_file = False
     try:
-        decoded = await _decode_github_content(full_name, path, branch)
+        decoded = await _decode_github_content(full_name, path, effective_branch)
         old_text = decoded.get("text")
         if not isinstance(old_text, str):
             raise GitHubAPIError("Decoded content is not text")
@@ -2320,14 +2325,14 @@ async def apply_text_update_and_commit(
     commit_result = await _perform_github_commit(
         full_name,
         path,
-        branch,
+        effective_branch,
         body_bytes,
         commit_message,
         sha_before,
     )
 
     # 3) Verify by reading the file again from the same branch.
-    verified = await _decode_github_content(full_name, path, branch)
+    verified = await _decode_github_content(full_name, path, effective_branch)
     new_text = verified.get("text")
     sha_after = verified.get("sha")
 
@@ -2335,7 +2340,7 @@ async def apply_text_update_and_commit(
         "status": "committed",
         "full_name": full_name,
         "path": path,
-        "branch": branch,
+        "branch": effective_branch,
         "message": commit_message,
         "commit": commit_result,
         "verification": {
@@ -2401,6 +2406,8 @@ async def apply_patch_and_commit(
     """
 
     _ensure_write_allowed(f"apply_patch_and_commit {full_name} {path}")
+
+    effective_branch = _effective_ref_for_repo(full_name, branch)
 
     import re
     import difflib
@@ -2480,7 +2487,7 @@ async def apply_patch_and_commit(
         return "".join(new_lines)
 
     # 1) Read current file from GitHub on the target branch.
-    decoded = await _decode_github_content(full_name, path, branch)
+    decoded = await _decode_github_content(full_name, path, effective_branch)
     old_text = decoded.get("text")
     if not isinstance(old_text, str):
         raise GitHubAPIError("Decoded content is not text")
@@ -2503,19 +2510,19 @@ async def apply_patch_and_commit(
         message=commit_message,
         body_bytes=body_bytes,
         branch=branch,
-        sha=sha_before,
+        branch=effective_branch,
     )
 
     # 4) Verify by reading the file again from the same branch.
     verified = await _decode_github_content(full_name, path, branch)
-    new_text_verified = verified.get("text")
+    verified = await _decode_github_content(full_name, path, effective_branch)
     sha_after = verified.get("sha")
 
     result: Dict[str, Any] = {
         "status": "committed",
         "full_name": full_name,
         "path": path,
-        "branch": branch,
+        "branch": effective_branch,
         "message": commit_message,
         "commit": commit_result,
         "verification": {
