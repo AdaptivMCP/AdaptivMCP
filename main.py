@@ -2320,19 +2320,21 @@ async def apply_text_update_and_commit(
     elif is_new_file:
         commit_message = f"Create {path}"
     else:
+        commit_message = f"Update {path}"
+
     # 2) Commit the new content via the GitHub Contents API.
     commit_result = await _perform_github_commit(
-        full_name,
-        path,
-        commit_message,
-        body_bytes,
-        effective_branch,
         full_name=full_name,
         path=path,
         message=commit_message,
         body_bytes=body_bytes,
         branch=effective_branch,
         sha=sha_before,
+    )
+
+    # 3) Verify by reading the file again from the same branch.
+    verified = await _decode_github_content(full_name, path, effective_branch)
+    new_text = verified.get("text")
     sha_after = verified.get("sha")
 
     result: Dict[str, Any] = {
