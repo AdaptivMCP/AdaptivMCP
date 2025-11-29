@@ -300,11 +300,11 @@ async def _github_request(
             data = resp.json()
         except Exception:
             data = None
-        error_payload["error_message"] = (message or resp.text[:500])
+        message = data.get("message") if isinstance(data, dict) else None
         error_payload = dict(base_payload)
         error_payload["error"] = "http_error"
         # Truncate to avoid huge log records on large error bodies.
-        error_payload["message"] = (message or resp.text[:500])
+        error_payload["error_message"] = (message or resp.text[:500])
         GITHUB_LOGGER.warning("github_request_error", extra=error_payload)
         raise GitHubAPIError(
             f"GitHub API error {resp.status_code} for {method} {path}: "
