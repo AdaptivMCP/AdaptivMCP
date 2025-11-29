@@ -24,7 +24,7 @@ async def test_apply_patch_and_commit_logging_shape(
     """Verify that apply_patch_and_commit emits the expected logging fields.
 
     The test does not hit the real GitHub API. Instead it monkeypatches the
-    lower-level helpers used by apply_patch_and_commit so the tool completes
+    helpers used by apply_patch_and_commit so the tool completes
     successfully without network access.
     """
 
@@ -42,11 +42,6 @@ async def test_apply_patch_and_commit_logging_shape(
         assert full_name == "Proofgate-Revocations/chatgpt-mcp-github"
         assert path == "file.txt"
         return {"text": original_text, "sha": "sha-before"}
-
-    def fake_apply_diff(original: str, diff: str) -> str:  # type: ignore[override]
-        assert original == original_text
-        assert diff == patch
-        return patched_text
 
     async def fake_commit(
         full_name: str,
@@ -67,7 +62,6 @@ async def test_apply_patch_and_commit_logging_shape(
         return {"text": patched_text, "sha": "sha-after"}
 
     monkeypatch.setattr(main, "_decode_github_content", fake_decode)
-    monkeypatch.setattr(main, "_apply_unified_diff_to_text", fake_apply_diff)
     monkeypatch.setattr(main, "_perform_github_commit", fake_commit)
     monkeypatch.setattr(main, "get_file_contents", fake_get_file)
 
