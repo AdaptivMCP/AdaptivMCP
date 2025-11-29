@@ -1101,6 +1101,214 @@ async def get_server_config() -> Dict[str, Any]:
     }
 
 
+
+
+@mcp_tool(write_action=False)
+async def validate_environment() -> Dict[str, Any]:
+    """Validate environment configuration and report common misconfigurations.
+
+    This tool is safe to run at any time. It only inspects process environment
+    variables and performs lightweight GitHub API checks for the configured
+    controller repository and branch.
+    """
+
+    checks: List[Dict[str, Any]] = []
+    status = "ok"
+
+    def add_check(
+        name: str, level: str, message: str, details: Optional[Dict[str, Any]] = None
+    ) -> None:
+        nonlocal status
+        if details is None:
+            details = {}
+        checks.append(
+            {
+                "name": name,
+                "level": level,
+                "message": message,
+                "details": details,
+            }
+        )
+        if level == "error":
+            status = "error"
+        elif level == "warning" and status != "error":
+            status = "warning"
+
+    # GitHub token presence/shape
+    raw_token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
+    token_env_var = (
+        "GITHUB_PAT"
+        if os.environ.get("GITHUB_PAT") is not None
+        else ("GITHUB_TOKEN" if os.environ.get("GITHUB_TOKEN") is not None else None)
+    )
+    if raw_token is None:
+        add_check(
+            "github_token",
+            "error",
+            "GITHUB_PAT or GITHUB_TOKEN is not set",
+            {"env_vars": ["GITHUB_PAT", "GITHUB_TOKEN"]},
+        )
+        token_ok = False
+    elif not raw_token.strip():
+        add_check(
+            "github_token",
+            "error",
+            "GitHub token environment variable is empty or whitespace",
+            {"env_var": token_env_var},
+        )
+        token_ok = False
+    else:
+        add_check(
+            "github_token",
+            "ok",
+            "GitHub token is configured",
+            {"env_var": token_env_var},
+        )
+        token_ok = True
+
+    # Controller repo/branch config (string-level)
+    controller_repo = CONTROLLER_REPO
+    controller_branch = CONTROLLER_DEFAULT_BRANCH
+    add_check(
+        "controller_repo_config",
+        "ok",
+        "Controller repository is configured",
+        {
+            "value": controller_repo,
+            "env_var": (
+                "GITHUB_MCP_CONTROLLER_REPO"
+                if os.environ.get("GITHUB_MCP_CONTROLLER_REPO") is not None
+                else None
+            ),
+        },
+    )
+    add_check(
+        "controller_branch_config",
+        "ok",
+        "Controller branch is configured",
+        {
+            "value": controller_branch,
+            "env_var": (
+                "GITHUB_MCP_CONTROLLER_BRANCH"
+                if os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") is not None
+                else None
+            ),
+        },
+    )
+
+    # Git identity env vars (presence).
+    identity_envs = {
+        "GIT_AUTHOR_NAME": os.environ.get("GIT_AUTHOR_NAME"),
+        "GIT_AUTHOR_EMAIL": os.environ.get("GIT_AUTHOR_EMAIL"),
+        "GIT_COMMITTER_NAME": os.environ.get("GIT_COMMITTER_NAME"),
+        "GIT_COMMITTER_EMAIL": os.environ.get("GIT_COMMITTER_EMAIL"),
+    }
+    missing_identity = [name for name, value in identity_envs.items() if not value]
+    if missing_identity:
+        add_check(
+            "git_identity_env",
+            "warning",
+            "Git identity env vars are not fully configured; defaults may be used for commits",
+            {"missing": missing_identity},
+        )
+    else:
+        add_check(
+            "git_identity_env",
+            "ok",
+            "Git identity env vars are configured",
+            {},
+        )
+
+    # HTTP / concurrency config (always informational; defaults are fine).
+    add_check(
+        "http_config",
+        "ok",
+        "HTTP client configuration resolved",
+        {
+            "github_api_base": GITHUB_API_BASE,
+            "timeout": HTTPX_TIMEOUT,
+            "max_connections": HTTPX_MAX_CONNECTIONS,
+            "max_keepalive": HTTPX_MAX_KEEPALIVE,
+        },
+    )
+    add_check(
+        "concurrency_config",
+        "ok",
+        "Concurrency limits resolved",
+        {
+            "max_concurrency": MAX_CONCURRENCY,
+            "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
+        },
+    )
+
+    # Remote validation for controller repo/branch, only if token is usable.
+    if token_ok:
+        try:
+            await _github_request("GET", f"/repos/{controller_repo}")
+        except Exception as exc:  # pragma: no cover - defensive
+            add_check(
+                "controller_repo_remote",
+                "error",
+                "Controller repository does not exist or is not accessible",
+                {
+                    "full_name": controller_repo,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )
+        else:
+            add_check(
+                "controller_repo_remote",
+                "ok",
+                "Controller repository exists and is accessible",
+                {"full_name": controller_repo},
+            )
+
+        try:
+            await _github_request("GET", f"/repos/{controller_repo}/branches/{controller_branch}")
+        except Exception as exc:  # pragma: no cover - defensive
+            add_check(
+                "controller_branch_remote",
+                "error",
+                "Controller branch does not exist or is not accessible",
+                {
+                    "full_name": controller_repo,
+                    "branch": controller_branch,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )
+        else:
+            add_check(
+                "controller_branch_remote",
+                "ok",
+                "Controller branch exists and is accessible",
+                {"full_name": controller_repo, "branch": controller_branch},
+            )
+    else:
+        add_check(
+            "controller_remote_checks",
+            "warning",
+            "Skipped controller repo/branch remote validation because GitHub token is not configured",
+            {},
+        )
+
+    summary = {
+        "ok": sum(1 for c in checks if c["level"] == "ok"),
+        "warning": sum(1 for c in checks if c["level"] == "warning"),
+        "error": sum(1 for c in checks if c["level"] == "error"),
+    }
+
+    return {
+        "status": status,
+        "summary": summary,
+        "checks": checks,
+        "config": {
+            "controller_repo": controller_repo,
+            "controller_branch": controller_branch,
+            "github_api_base": GITHUB_API_BASE,
+        },
+    }
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
     """Return the authenticated token's GitHub rate-limit document."""
