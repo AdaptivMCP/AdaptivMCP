@@ -18,6 +18,8 @@ import io
 import zipfile
 import difflib
 import sys
+import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -59,6 +61,21 @@ GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
 GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
 
+
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+LOG_FORMAT = os.environ.get(
+    "LOG_FORMAT",
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format=LOG_FORMAT,
+)
+
+BASE_LOGGER = logging.getLogger("github_mcp")
+GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
+TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
 
 def _env_flag(name: str, default: bool = False) -> bool:
     """Parse a boolean-like environment variable.
@@ -236,16 +253,42 @@ async def _github_request(
     path: str,
     *,
     params: Optional[Dict[str, Any]] = None,
-    json_body: Optional[Dict[str, Any]] = None,
-    headers: Optional[Dict[str, str]] = None,
-    expect_json: bool = True,
-    text_max_chars: Optional[int] = None,
-) -> Dict[str, Any]:
     client = _github_client_instance()
-    async with _concurrency_semaphore:
-        resp = await client.request(
-            method, path, params=params, json=json_body, headers=headers
+    started_at = time.monotonic()
+    try:
+        async with _concurrency_semaphore:
+            resp = await client.request(
+                method, path, params=params, json=json_body, headers=headers
+            )
+    except Exception as exc:  # pragma: no cover - defensive
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        GITHUB_LOGGER.error(
+            "github_request_error",
+            extra={
+                "event": "github_request",
+                "method": method,
+                "path": path,
+                "status_code": None,
+                "duration_ms": duration_ms,
+                "error": type(exc).__name__,
+            },
+            exc_info=True,
         )
+        raise
+
+    duration_ms = int((time.monotonic() - started_at) * 1000)
+    base_payload = {
+        "event": "github_request",
+        "method": method,
+        "path": path,
+        "status_code": resp.status_code,
+        "duration_ms": duration_ms,
+        "rate_limit": {
+            "limit": resp.headers.get("X-RateLimit-Limit"),
+            "remaining": resp.headers.get("X-RateLimit-Remaining"),
+            "reset": resp.headers.get("X-RateLimit-Reset"),
+        },
+    }
 
     if resp.status_code >= 400:
         try:
@@ -253,10 +296,17 @@ async def _github_request(
         except Exception:
             data = None
         message = data.get("message") if isinstance(data, dict) else None
+        error_payload = dict(base_payload)
+        error_payload["error"] = "http_error"
+        # Truncate to avoid huge log records on large error bodies.
+        error_payload["message"] = (message or resp.text[:500])
+        GITHUB_LOGGER.warning("github_request_error", extra=error_payload)
         raise GitHubAPIError(
             f"GitHub API error {resp.status_code} for {method} {path}: "
             f"{message or resp.text}"
         )
+
+    GITHUB_LOGGER.info("github_request", extra=base_payload)
 
     if expect_json:
         try:
@@ -265,6 +315,11 @@ async def _github_request(
             return {"status_code": resp.status_code, "json": None}
 
     text = resp.text if text_max_chars is None else resp.text[:text_max_chars]
+    return {
+        "status_code": resp.status_code,
+        "text": text,
+        "headers": dict(resp.headers),
+    }
     return {
         "status_code": resp.status_code,
         "text": text,
