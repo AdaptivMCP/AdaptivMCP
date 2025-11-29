@@ -1,239 +1,523 @@
 # Adaptiv Controller Workflows
 
-This document describes recommended workflows for using the Adaptiv Controller (Joey’s GitHub MCP server) inside ChatGPT. It is written for advanced users and assistants who want to drive safe, repeatable GitHub workflows via the MCP tools exposed by this repository.
+This document describes **how to actually use** the Adaptiv Controller GitHub MCP server from ChatGPT at high power.
 
-The examples assume this repository is deployed as a self-hosted MCP server and wired into ChatGPT as a custom controller (for example "Joey’s GitHub").
+It is written for:
+
+- People running an Adaptiv Controller–style GPT (for example "Joey’s GitHub").
+- Advanced assistants that need precise, repeatable workflows over GitHub.
+- Engineers who want to understand how to keep the controller safe while still moving quickly.
+
+For internals and guarantees, see `docs/ARCHITECTURE_AND_SAFETY.md`.
+For prompt / snapshot guidance, see `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md`.
 
 ---
 
-## 1. Core principles
+## 1. Golden rules
 
-All workflows in this controller should follow a few simple rules:
+All workflows should respect these rules, especially when touching the controller repo itself (`Proofgate-Revocations/chatgpt-mcp-github`).
 
 1. **Never write directly to `main` for the controller repo.**
-   - Use feature branches or dedicated smoke-test branches.
-2. **Prefer patch-based edits for non-trivial changes.**
-   - Generate diffs with `build_unified_diff`, apply them with `apply_patch_and_commit`.
-3. **Verify every write.**
-   - Use the built-in verification in `apply_text_update_and_commit`, `apply_patch_and_commit`, and `update_files_and_open_pr`.
-4. **Keep changes small and reviewable.**
-   - Group related edits into a single PR.
-   - Avoid mixing large refactors with unrelated behavior changes.
-5. **Use issues to track work.**
-   - Open, update, and close GitHub issues so humans always have a high-level summary.
-6. **Treat branch deletion as human-only.**
-   - Assistants may create and use feature branches and open PRs.
-   - Deleting branches (for example refactor branches after merge) should be done by the user directly in GitHub (UI or CLI), even if a branch-deletion tool exists.
+   - All work happens on feature branches (for example `issue-146-health-and-metrics-v4`, `fix-branch-default-main`, `docs-update-workflows`).
+   - `main` is the canonical, production branch.
+
+2. **Assume read-only until proven otherwise.**
+   - The server may start with `WRITE_ALLOWED = False`.
+   - You must not assume you can write; always check.
+
+3. **Use branch-first, patch-first, PR-first.**
+   - Create a feature branch before writing.
+   - Use patch-based edits (`build_unified_diff` + `apply_patch_and_commit`) for code.
+   - Open a PR for any non-trivial change.
+
+4. **Verify every write.**
+   - Rely on the built-in verification in `apply_text_update_and_commit`, `apply_patch_and_commit`, and `update_files_and_open_pr`.
+   - Never assume a write succeeded without checking returned SHAs and file contents.
+
+5. **Keep changes small and reviewable.**
+   - Prefer multiple tight PRs over a single huge one.
+   - Do not mix unrelated refactors, behavior changes, and docs in one PR.
+
+6. **Use issues and PR descriptions as the source of truth.**
+   - Every meaningful piece of work should have an issue and/or PR that a human can read without looking at code.
+
+7. **Treat branch deletion as human-only.**
+   - Assistants can create and use branches and open PRs.
+   - Humans delete branches via GitHub UI/CLI, even though branch-delete tools exist.
 
 ---
 
-## 2. Inspecting a repository
+## 2. Safe session bootstrap
 
-When first connecting to a repo, assistants should use read tools to build context before proposing any writes. Typical sequence:
+At the start of a session, always establish a safe baseline.
+
+### 2.1 Discover server policy and tools
+
+1. Call **`get_server_config`**.
+   - Inspect:
+     - `write_allowed` – whether writes are currently permitted.
+     - `approval_policy.write_actions` – whether writes are auto-approved or require explicit toggling.
+     - `controller.repo` / `controller.default_branch` – which repo and branch the server considers canonical for itself.
+
+2. Call **`list_all_actions`**.
+   - Use this instead of hard-coding tool lists.
+   - Confirm key tools exist (for example `apply_patch_and_commit`, `update_files_and_open_pr`, `run_tests`, `create_issue`).
+
+3. Optionally call **`validate_environment`**.
+   - Useful for new deployments or when things look misconfigured.
+   - Returns a structured report of environment checks (tokens, controller repo/branch, HTTP settings, etc.).
+
+### 2.2 Decide write posture
+
+- If `write_allowed == False`:
+  - Stay in **read-only mode** until the human explicitly asks for writes.
+  - When they do, call `authorize_write_actions(approved=True)` and mention this in conversation.
+
+- If `write_allowed == True`:
+  - You are allowed to write, but must still:
+    - Use feature branches.
+    - Explain each destructive action.
+    - Prefer patch-based flows with clear diffs.
+
+### 2.3 Confirm the repo and branch
+
+For any workflow, be explicit about:
+
+- `full_name` (for example `Proofgate-Revocations/chatgpt-mcp-github`).
+- The branch you intend to use (for example `issue-146-health-and-metrics-v4`).
+
+`_effective_ref_for_repo` (see `ARCHITECTURE_AND_SAFETY.md`) ensures:
+
+- For the controller repo:
+  - Missing or `main` refs resolve to `CONTROLLER_DEFAULT_BRANCH` (which defaults to `main` but can be pointed at a long-lived feature branch).
+- For all other repos:
+  - Missing refs default to `main`.
+
+Even with this helper, you should **always** pass explicit `branch` / `ref` arguments when writing.
+
+---
+
+## 3. Inspecting a repository (read-only workflows)
+
+Before proposing any write, build a mental model of the repo.
+
+### 3.1 Basic layout
 
 1. **List the tree**
-   - Use `list_repository_tree` with a `path_prefix` (for example `docs/`, `src/`, `tests/`) to understand layout.
-2. **Read files incrementally**
-   - Use `get_file_slice` for large files (like `main.py`) to avoid pulling everything at once.
-   - Use `get_file_contents` or `fetch_files` for smaller files or multiple related files.
-3. **Search for patterns**
-   - Use `search` to find usages, patterns, and examples in the repo or across public GitHub.
-   - Example: "find usages of _effective_ref_for_repo" or "search public repos for a specific integration pattern".
-4. **Inspect issues and PRs**
-   - Use the issue/PR read tools (fetch_issue, fetch_pr, get_pr_diff, etc.) to understand ongoing work.
+   - Use `list_repository_tree` with a `path_prefix` such as:
+     - `docs/` – documentation, setup guides, and workflows.
+     - `src/` or `app/` – main application code.
+     - `tests/` – tests to consult or extend.
+   - Use pagination or limited depth if the repo is large.
 
-Guidance for assistants:
+2. **Read key files**
+   - Use `get_file_contents` for small/medium files.
+   - Use `get_file_slice` for large files (for example `main.py`):
+     - Start with top ~200 lines for imports, globals, key helpers.
+     - Jump to sections by line number if you already know where logic lives.
 
-- Always start in read-only mode.
-- Summarize what you found, then propose a plan that includes which files and branches you will touch.
+3. **Fetch multiple related files**
+   - Use `fetch_files` when you know the exact paths (for example `main.py`, `docs/WORKFLOWS.md`, relevant tests).
 
----
+### 3.2 Searching for patterns
 
-## 3. Branching strategy for assistants
+Use `search` to:
 
-For the controller repo (`Proofgate-Revocations/chatgpt-mcp-github`):
+- Find usages of specific helpers:
+  - Example: `search("_effective_ref_for_repo")` within the controller repo.
+- Discover patterns in your own org or across public GitHub:
+  - Example: `search` for a particular FastAPI + MCP integration pattern.
+- Locate tests or docs by keyword.
 
-- The server enforces controller-aware ref scoping:
-  - For this repo, missing or `main` refs are remapped to the configured controller default branch by `_effective_ref_for_repo`.
-- Assistants should still explicitly choose a branch name that describes the work.
+### 3.3 Inspecting issues and PRs
 
-Recommended pattern:
+Use the issue/PR read tools (names may evolve, but typically include):
 
-- For refactor or feature work: `ally-<feature>-<short-description>`
-- For testing experimental flows: `smoke/<short-description>`
-
-Workflow:
-
-1. Use `ensure_branch` to create a feature branch from a base branch (usually `main`).
-2. Perform changes and commits only on the feature branch.
-3. Use `update_files_and_open_pr` or branch-specific edit flows to open a PR back into the base branch.
-
-For end-user repos (not the controller repo):
-
-- Default ref behavior is simpler: missing refs fall back to `main`.
-- Encourage users to adopt a branch-first model (for example "never commit directly to main from the controller").
-
----
-
-## 4. Single-file text edits with verification
-
-Use `apply_text_update_and_commit` when you want to replace the contents of a single file with updated text (including creating new files).
-
-Typical workflow:
-
-1. Read the current file with `get_file_contents` (or note that it does not exist yet).
-2. Propose the full updated contents to the user.
-3. When approved:
-   - Call `apply_text_update_and_commit` with:
-     - `full_name`: repo name.
-     - `path`: file path.
-     - `branch`: feature branch.
-     - `updated_content`: full new file content.
-     - Optional `message`: commit message.
-4. Let the tool handle commit + verification.
-5. Optionally show the returned diff to the user.
-
-When to use this:
-
-- Creating new docs or config files.
-- Rewriting relatively small files where a full-text replacement is easier to reason about than a patch.
-
-When **not** to use this:
-
-- Large source files where preserving surrounding context is important. Prefer patch-based flows there.
-
----
-
-## 5. Patch-based edits (recommended default)
-
-For most code changes, the recommended pattern is:
-
-1. Read the file with `get_file_contents`.
-2. Propose a patch in natural language or with inline code blocks.
-3. Once the user approves, generate a unified diff via `build_unified_diff` by providing:
-   - `full_name`, `path`, `ref`, `new_content`.
-   - `context_lines` (usually 3).
-4. Inspect the diff returned by `build_unified_diff` and show it to the user for sign-off.
-5. Apply the patch using `apply_patch_and_commit` with:
-   - `full_name`, `path`, `branch`, `patch`, `message`.
-6. Rely on the tool’s verification to confirm the commit and updated file contents.
-
-Benefits:
-
-- Changes are localized and easy to review.
-- The diff clearly shows exactly what changed.
-- Patch application fails fast if the underlying file has changed unexpectedly (preventing accidental overwrites).
-
----
-
-## 6. Multi-file edits and PRs
-
-When touching multiple files, use `update_files_and_open_pr` to keep everything in a single, coherent PR.
-
-Workflow:
-
-1. For each file you want to update, generate updated contents (inline or from a temporary URL).
-2. Call `update_files_and_open_pr` with:
-   - `full_name`, `base_branch`, `feature_branch`.
-   - A list of file updates (paths + content or content URLs).
-   - PR metadata (title, body, labels, draft flag as appropriate).
-3. The tool will:
-   - Ensure the branch exists from the base.
-   - Commit each file, verifying after each commit.
-   - Open a PR only if all commits and verifications succeed.
-
-Assistant guidance:
-
-- Use this when multiple files must stay in sync (for example code + tests + docs).
-- Keep PRs scoped to a single logical change.
-- Reference any related issues in the PR description (for example "Fixes #130").
-
----
-
-## 7. Workspace commands: run_command and run_tests
-
-Use workspace tools when changes need to be validated by real commands in a cloned repo.
-
-### 7.1 Running tests
-
-1. After applying changes on a feature branch, call `run_tests` with:
-   - `full_name`: repo.
-   - `ref`: the feature branch.
-   - `test_command`: for example `pytest -q`.
-   - `use_temp_venv`: `true` when you may need to install dependencies.
-2. Examine the result:
-   - `exit_code`, `timed_out` flags.
-   - `stdout`, `stderr`, plus `stdout_truncated` / `stderr_truncated`.
-3. Summarize failures back to the user and propose fixes if tests fail.
-
-### 7.2 Running arbitrary commands
-
-Use `run_command` for tasks like:
-
-- Running type checkers or linters.
-- Running migration commands.
-- Building assets or running one-off scripts.
-
-Assistant guidance:
-
-- Always explain what you intend to run and why.
-- Prefer running commands on feature branches.
-- Respect truncation flags: if output is truncated, mention that your view is partial.
-
----
-
-## 8. Issues and lifecycle management
-
-Use the issue tools (`create_issue`, `update_issue`, `comment_on_issue`) to keep a human-readable log of what is happening.
+- `fetch_issue`, `fetch_issue_comments`.
+- `fetch_pr`, `get_pr_diff`, `list_pull_requests`, `fetch_pr_comments`.
 
 Typical pattern:
 
-1. **Create an issue** describing the work you plan to do.
-2. **Update the issue body** as the plan evolves or as scope changes.
-3. **Comment** with status updates as you complete concrete steps (tests added, docs written, PR merged).
-4. **Close the issue** when the work is complete and merged.
+1. Read the issue body and comments.
+2. Open any referenced PRs.
+3. Use this context to decide scope and expected behavior.
 
-Best practices for assistants:
+### 3.4 Read-only summary
 
-- Reference issue numbers in PR titles or descriptions (for example "Docs: workflows and assistant docs (Fixes #130)").
-- Avoid splitting a single logical change across multiple unrelated issues.
-- Use checklists in issue bodies when there are multiple steps.
+When you finish inspection, summarize:
+
+- Current behavior.
+- Files and modules that will likely change.
+- Whether tests/docs already exist for the target behavior.
+
+Only then propose a concrete plan.
 
 ---
 
-## 9. Example end-to-end workflow
+## 4. Branching strategy for assistants
 
-Here is a high-level example of how an assistant might implement and ship a feature using the Adaptiv Controller tools:
+### 4.1 Controller repo vs end-user repos
 
-1. **Understand the request**
-   - Read the relevant issue(s).
-   - Inspect code and docs using `list_repository_tree`, `get_file_contents`, and `get_file_slice`.
+**Controller repo (`Proofgate-Revocations/chatgpt-mcp-github`)**
 
-2. **Plan the work**
-   - Propose which files will change and how.
-   - Decide on a feature branch name and confirm with the user.
+- `main` is canonical and must not be written to directly by the assistant.
+- Workflows should:
+  - Create a feature branch from `main` using `ensure_branch`.
+  - Make all changes and run tests on that branch.
+  - Open a PR from the feature branch back into `main`.
+  - Let the human merge and delete the branch.
 
-3. **Create and prepare the branch**
-   - Use `ensure_branch` to create the feature branch from the base (for example `main`).
+**End-user repos**
 
-4. **Make code and doc changes**
-   - For small or new files, use `apply_text_update_and_commit`.
-   - For existing code, use `build_unified_diff` + `apply_patch_and_commit`.
-   - Keep commits focused and well-labeled.
+- Default behavior is simpler: missing refs default to `main`.
+- You should still **strongly prefer** branch-first workflows:
+  - Use `ensure_branch` to create branches like `feature/foo`, `bugfix/issue-123`, `docs/setup-guide`.
+  - Only write to `main` via PR merges.
 
-5. **Run tests**
-   - Use `run_tests` on the feature branch.
-   - Summarize any failures and iterate until tests pass.
+### 4.2 Recommended branch naming
 
-6. **Open a PR**
-   - Use `update_files_and_open_pr` if multiple files were changed, or direct branch/PR helpers if you have already committed.
-   - Reference relevant issues (for example `Fixes #130`).
+These are recommendations, not enforced rules, but they help humans understand context:
 
-7. **Finalize and merge**
-   - After human review and approval, use PR helpers to merge or close the PR as appropriate.
-   - Update and close related issues.
+- Issue-driven work: `issue-<number>-<slug>`
+  - Example: `issue-146-health-and-metrics`.
+- Bugfix or hotfix: `fix-<slug>`
+  - Example: `fix-controller-default-branch-main`.
+- Documentation: `docs-<area>`
+  - Example: `docs-workflows-and-safety`.
+- Experiment/spike: `spike-<slug>`.
 
-8. **Reflect and update docs**
-   - If the workflow or tools changed, update the relevant docs so future assistants have an accurate picture.
+Whatever you choose, always:
 
-By following these patterns, assistants and operators can build reliable, repeatable workflows that use the Adaptiv Controller safely and effectively across many different repositories.
+- Use a branch name that encodes **what** you are doing.
+- Mention the branch in conversation and in PR descriptions.
+
+### 4.3 Using `ensure_branch`
+
+Typical sequence:
+
+1. Decide base branch (usually `main`).
+2. Decide feature branch name.
+3. Call `ensure_branch` with:
+   - `full_name`: repository.
+   - `branch`: feature branch.
+   - `from_ref`: base branch.
+4. The tool will create the branch if it does not exist, or return the existing ref.
+
+From that point on, **all** subsequent write tools for this work should use that feature branch.
+
+---
+
+## 5. Single-file text edits (docs and small configs)
+
+Use `apply_text_update_and_commit` when you are replacing or creating a single file and a full-text representation is easier to reason about than a patch.
+
+### 5.1 When this is appropriate
+
+- New docs (for example adding `docs/NEW_FEATURE.md`).
+- Small config files.
+- Medium-sized docs where the entire file is under control and easy for a human to review in one diff.
+
+Avoid using it for:
+
+- Very large code files.
+- Shared modules with many unrelated call sites where localized patches are safer.
+
+### 5.2 Workflow
+
+1. **Read the file (if it exists)**
+   - Use `get_file_contents` to capture the current state.
+
+2. **Draft the new content**
+   - Prepare the full file content in ChatGPT, including headers, sections, and examples.
+   - Show the proposed file to the user.
+
+3. **Apply the update**
+   - Call `apply_text_update_and_commit` with:
+     - `full_name`: repo.
+     - `path`: file path (for example `docs/WORKFLOWS.md`).
+     - `branch`: feature branch (for example `update-workflows-doc`).
+     - `updated_content`: full new file text.
+     - Optional `message`: concise commit message (for example `Update workflows doc for controller usage`).
+
+4. **Review the result**
+   - Inspect the returned diff and SHA.
+   - Optionally re-read the file with `get_file_contents` from the feature branch.
+
+5. **Repeat for related docs**
+   - If other docs need updates (for example `SELF_HOSTED_SETUP`, `ASSISTANT_DOCS_AND_SNAPSHOTS`), repeat this process.
+
+---
+
+## 6. Patch-based edits (recommended default for code)
+
+For most code changes, prefer patch-based workflows:
+
+### 6.1 Why patches
+
+- Diffs are localized and easy to review.
+- The patch application will fail if the original file changes unexpectedly, preventing accidental full-file overwrites.
+- Tests in this repo assume patch-based flows for critical modules like `main.py`.
+
+### 6.2 Workflow using `build_unified_diff` + `apply_patch_and_commit`
+
+1. **Read the baseline**
+   - Use `get_file_contents` (or `get_file_slice` for large files) on the feature branch.
+
+2. **Propose the change**
+   - Describe in natural language **and** show the intended code blocks.
+   - Keep the change focused (for example "instrument `mcp_tool` with metrics" not "also refactor a bunch of unrelated helpers").
+
+3. **Generate a unified diff**
+   - Compute `new_content` by applying your changes to the baseline.
+   - Call `build_unified_diff` with:
+     - `full_name`, `path`, `ref` (feature branch), `new_content`.
+     - Optional `context_lines` (default is usually fine).
+   - Inspect the returned diff:
+     - Confirm only the intended lines changed.
+     - Check no unrelated sections are touched.
+
+4. **Apply the patch**
+   - Call `apply_patch_and_commit` with:
+     - `full_name`, `path`, `branch` (same feature branch).
+     - `patch`: the exact diff returned by `build_unified_diff`.
+     - `message`: precise commit message.
+   - Let the tool perform verification (read-after-write + SHA comparison).
+
+5. **Re-read and sanity-check**
+   - Optionally re-fetch the file.
+   - Confirm imports, globals, and function signatures are consistent.
+
+6. **Repeat** for additional files (tests, helpers, etc.), keeping each commit coherent.
+
+---
+
+## 7. Multi-file changes and PR orchestration
+
+When a change spans multiple files (for example code + tests + docs), use higher-level orchestration.
+
+### 7.1 `update_files_and_open_pr`
+
+This tool is ideal when you:
+
+- Know all the files that will change.
+- Have final versions of each file content.
+- Want to create a feature branch, commit each file, and open a PR in one flow.
+
+Typical sequence:
+
+1. **Prepare updated contents for each file**
+   - For each path, draft the updated content.
+   - Optionally host large contents at a temporary URL if supported by the tool.
+
+2. **Call `update_files_and_open_pr`** with:
+   - `full_name`.
+   - `base_branch` (for example `main`).
+   - `feature_branch` (for example `issue-146-health-and-metrics-v4`).
+   - File updates list (paths + contents/URLs).
+   - PR metadata:
+     - `title`.
+     - `body` (including references like `Fixes #146`).
+     - `draft` flag (useful when tests or review are still in progress).
+
+3. **Inspect results**
+   - Verify that each file was committed and verified.
+   - Review the PR URL.
+
+4. **Iterate via normal GitHub review**
+   - Humans review, comment, and ultimately merge.
+   - Assistant can respond to feedback by updating the branch.
+
+### 7.2 Manual PR flows
+
+For smaller or more iterative work you may:
+
+1. Use `ensure_branch`.
+2. Apply one or more changes via `apply_text_update_and_commit` / `apply_patch_and_commit`.
+3. Call `create_pull_request` directly with:
+   - `head`: feature branch.
+   - `base`: main.
+   - `title`, `body`.
+
+This is closer to how a human works with `git` and GitHub UI.
+
+---
+
+## 8. Workspace commands: tests and commands in a cloned repo
+
+`run_command` and `run_tests` allow you to run real commands against a temporary checkout of a branch.
+
+### 8.1 Running tests (`run_tests`)
+
+Use this to gate changes before opening or merging a PR.
+
+Typical pattern:
+
+1. After making code changes on a feature branch, call `run_tests` with:
+   - `full_name`.
+   - `ref`: feature branch.
+   - `test_command`: for example `pytest -q`.
+   - `use_temp_venv`: usually `true` if the environment needs `pip install`.
+
+2. Inspect the result:
+   - `exit_code`.
+   - `timed_out`.
+   - `stdout`, `stderr`.
+   - `stdout_truncated`, `stderr_truncated` flags.
+
+3. Summarize failures (if any) and propose fixes.
+
+4. Repeat: patch, commit, re-run tests until green.
+
+### 8.2 Arbitrary commands (`run_command`)
+
+Use this for:
+
+- Linters (`ruff`, `flake8`, `mypy`, etc.).
+- Code generators or migrations.
+- One-off inspection scripts.
+
+Guidelines:
+
+- Always explain what you intend to run and why.
+- Prefer running on a feature branch.
+- Emphasize truncation when outputs are large.
+- Avoid dangerous commands that could leak secrets; remember this is a user-owned environment.
+
+---
+
+## 9. Issues and PR lifecycle
+
+The controller provides tools for issue and PR management. Use them to keep a clean audit trail.
+
+### 9.1 Issues
+
+Typical flow:
+
+1. **Create an issue** (if one does not exist) using `create_issue`.
+   - Title: concise problem statement.
+   - Body: context, scope, constraints.
+
+2. **Update the issue** over time:
+   - Use `update_issue` to adjust scope or add checklists.
+   - Use `comment_on_issue` for progress updates and decisions.
+
+3. **Close the issue** when work is merged.
+
+Best practices:
+
+- Reference work in issue bodies and comments (branches, PRs, commits).
+- Use checklists for multi-step work (for example tests, docs, rollout).
+
+### 9.2 Pull requests
+
+Use PR tools (`create_pull_request`, `merge_pull_request`, `close_pull_request`, `comment_on_pull_request`) to manage change flow.
+
+Patterns:
+
+- PR titles should be descriptive and often include the issue number:
+  - Example: `Observability: health endpoint and metrics hooks (Fixes #146)`.
+
+- PR bodies should include:
+  - Motivation / problem statement.
+  - Summary of changes.
+  - Testing performed (`pytest -q`, manual testing, etc.).
+  - Any risks or follow-ups.
+
+- Comments should:
+  - Record design decisions.
+  - Link to additional context (issues, docs, discussions).
+
+Humans typically own merging and branch deletion; assistants can prepare everything up to that point.
+
+---
+
+## 10. Example end-to-end workflows
+
+This section gives concrete, high-usage patterns you can follow almost mechanically.
+
+### 10.1 Docs-only update (like this WORKFLOWS.md change)
+
+1. **Bootstrap**
+   - `get_server_config` → confirm write posture.
+   - `list_all_actions` → confirm tools.
+
+2. **Inspect**
+   - Read `docs/WORKFLOWS.md` and any related docs.
+
+3. **Branch**
+   - `ensure_branch` from `main` to `docs-workflows-update`.
+
+4. **Draft**
+   - Propose a full new version of `docs/WORKFLOWS.md` in conversation.
+
+5. **Write**
+   - Use `apply_text_update_and_commit` on `docs/WORKFLOWS.md` in the feature branch.
+
+6. **(Optional) Tests**
+   - Run `run_tests` with `pytest -q` on the branch to ensure nothing broke.
+
+7. **PR**
+   - Open a PR from `docs-workflows-update` to `main` with a clear summary.
+
+### 10.2 Small code change + tests
+
+1. Inspect the relevant code and tests.
+2. Create a feature branch (for example `issue-123-fix-timeout-handling`).
+3. Use `build_unified_diff` + `apply_patch_and_commit` for a focused change.
+4. Add or update tests using the same patch-based flow.
+5. Run `run_tests` on the branch.
+6. Open a PR with:
+   - Clear description.
+   - `Fixes #123` in the body.
+   - Testing summary.
+
+### 10.3 Multi-file feature with docs and tests
+
+1. Create an issue describing the feature.
+2. Create a feature branch.
+3. Update code, tests, and docs using patch-based and text-based tools.
+4. Run `run_tests`.
+5. Use `update_files_and_open_pr` or manual PR creation.
+6. Iterate based on review.
+7. Close the issue when merged.
+
+---
+
+## 11. Anti-patterns to avoid
+
+To keep the controller safe and predictable, **avoid** the following:
+
+1. **Full-file overwrites of large code modules without diffs.**
+   - Do not use `apply_text_update_and_commit` on large, critical files like `main.py` when only a subset of lines should change.
+   - Always prefer patch-based flows so humans can see exactly what changed.
+
+2. **Implicit writes to `main`.**
+   - Never rely on default branches for writes.
+   - Always specify a feature branch and confirm it in conversation.
+
+3. **Mixing unrelated changes.**
+   - Do not combine metrics changes, refactors, docs, and unrelated bug fixes in one PR.
+   - Keep each PR focused so diffs and failures are easy to reason about.
+
+4. **Running heavy commands without explanation.**
+   - Avoid `run_command` or `run_tests` without explaining what will run and why.
+   - Be especially careful with commands that install dependencies or modify the environment.
+
+5. **Ignoring truncation flags.**
+   - When `stdout_truncated` or `stderr_truncated` is true, mention that you only saw part of the output.
+
+6. **Assuming write access forever.**
+   - `WRITE_ALLOWED` can change during a session.
+   - Be prepared for write tools to fail with authorization errors and respond by explaining the situation to the user.
+
+---
+
+## 12. Using this document
+
+Use this document as the **operational playbook** for Adaptiv Controller workflows:
+
+- When in doubt, follow the patterns here.
+- When you add new tools or orchestrations, update this doc to include new workflows.
+- Keep `WORKFLOWS.md`, `ARCHITECTURE_AND_SAFETY.md`, and `ASSISTANT_DOCS_AND_SNAPSHOTS.md` in sync so humans and assistants share the same mental model.
+
+If you adhere to these workflows, the Adaptiv Controller will behave like a very disciplined senior engineer: branch-first, patch-first, test-first, and always ready to explain what it is about to do and why.
