@@ -2320,15 +2320,15 @@ async def apply_text_update_and_commit(
     elif is_new_file:
         commit_message = f"Create {path}"
     else:
-        commit_message = f"Update {path}"
-
     # 2) Commit the new content via the GitHub Contents API.
     commit_result = await _perform_github_commit(
         full_name,
         path,
-        effective_branch,
-        body_bytes,
         commit_message,
+        body_bytes,
+        effective_branch,
+        sha_before,
+    )
         sha_before,
     )
 
