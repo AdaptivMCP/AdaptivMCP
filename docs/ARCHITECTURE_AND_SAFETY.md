@@ -288,11 +288,10 @@ The behaviors described in this document are backed by a set of tests, including
 - `tests/test_apply_text_update_and_commit.py` for text-based commit flows and new file creation.
 - Workspace-related tests for `run_command` and truncation.
 - `tests/test_issue_tools.py` for issue-related behavior.
-When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time. Tool-level logging behavior is covered by `tests/test_tool_logging.py`.
+- `tests/test_tool_logging.py` and `tests/test_tool_logging_write_tools.py` for tool-level logging behavior (read and write tools).
 When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.
 
 ## 11. How to use this document
-## 10. How to use this document
 
 Use this document when you need to:
 
