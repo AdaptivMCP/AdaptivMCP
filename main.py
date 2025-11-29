@@ -811,7 +811,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         except (TypeError, ValueError):
             signature = None
 
-        def _extract_call_context(args, kwargs):
+        def _extract_call_context(args, **kwargs):
             """Return coarse, non-sensitive context for logging purposes."""
             all_args: Dict[str, Any] = {}
 
