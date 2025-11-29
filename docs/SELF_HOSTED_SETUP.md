@@ -83,6 +83,15 @@ The MCP server is configured primarily via environment variables. Common setting
 
 
 - `GITHUB_MCP_AUTO_APPROVE`
+The repository includes a small helper tool, `validate_environment`, that you can
+call from ChatGPT once the connector is wired up. This tool runs a series of
+non-destructive checks against the running process and your GitHub configuration,
+including:
+
+- Presence and basic shape of the GitHub token.
+- Configured controller repository/branch and their visibility on GitHub.
+- Git identity variables used for commits.
+
   - Controls the default write behavior for tools tagged as write actions.
   - When unset or set to a falsey value, the server starts in **manual approval**
     mode and `WRITE_ALLOWED` defaults to `False`. In this mode, controllers
