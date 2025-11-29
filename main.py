@@ -77,6 +77,23 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 
+CONTROLLER_REPO = os.environ.get(
+    "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
+)
+CONTROLLER_DEFAULT_BRANCH = os.environ.get(
+    "GITHUB_MCP_CONTROLLER_BRANCH", "ally-mcp-github-refactor-fresh"
+)
+
+
+def _effective_ref_for_repo(full_name: str, ref: Optional[str]) -> str:
+    """Resolve the effective Git ref for a repository."""
+
+    if full_name == CONTROLLER_REPO:
+        if not ref or ref == "main":
+            return CONTROLLER_DEFAULT_BRANCH
+        return ref
+    return ref or "main"
+
 
 def _with_numbered_lines(text: str) -> List[Dict[str, Any]]:
     """Return a list of dicts pairing 1-based line numbers with text."""
@@ -292,12 +309,13 @@ async def _verify_file_on_branch(
 async def _decode_github_content(
     full_name: str,
     path: str,
-    ref: str = "main",
+    ref: Optional[str] = None,
 ) -> Dict[str, Any]:
+    effective_ref = _effective_ref_for_repo(full_name, ref)
     data = await _github_request(
         "GET",
         f"/repos/{full_name}/contents/{path}",
-        params={"ref": ref},
+        params={"ref": effective_ref},
     )
     if not isinstance(data.get("json"), dict):
         raise GitHubAPIError("Unexpected content response shape from GitHub")
@@ -325,7 +343,10 @@ async def _decode_github_content(
 
 
 async def _get_branch_sha(full_name: str, ref: str) -> str:
-    data = await _github_request("GET", f"/repos/{full_name}/git/ref/heads/{ref}")
+    effective_ref = _effective_ref_for_repo(full_name, ref)
+    data = await _github_request(
+        "GET", f"/repos/{full_name}/git/ref/heads/{effective_ref}"
+    )
     j = data["json"]
     if not isinstance(j, dict) or "object" not in j:
         raise GitHubAPIError("Unexpected branch ref response from GitHub")
@@ -563,12 +584,13 @@ async def _run_shell(
         "stdout_truncated": stdout_truncated,
         "stderr_truncated": stderr_truncated,
     }
-async def _clone_repo(full_name: str, ref: str = "main") -> str:
+async def _clone_repo(full_name: str, ref: Optional[str] = None) -> str:
     tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
     token = _get_github_token()
-    
+
+    effective_ref = _effective_ref_for_repo(full_name, ref)
     url = f"https://x-access-token:{token}@github.com/{full_name}.git"
-    cmd = f"git clone --depth 1 --branch {ref} {url} {tmpdir}"
+    cmd = f"git clone --depth 1 --branch {effective_ref} {url} {tmpdir}"
     result = await _run_shell(cmd, cwd=None, timeout_seconds=600)
     if result["exit_code"] != 0:
         stderr = result.get("stderr", "")
@@ -2555,8 +2577,11 @@ async def run_command(
     repo_dir: Optional[str] = None
     env: Optional[Dict[str, str]] = None
     try:
-        _ensure_write_allowed(f"run_command {command} in {full_name}@{ref}")
-        repo_dir = await _clone_repo(full_name, ref=ref)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        _ensure_write_allowed(
+            f"run_command {command} in {full_name}@{effective_ref}"
+        )
+        repo_dir = await _clone_repo(full_name, ref=effective_ref)
 
         if patch:
             await _apply_patch_to_repo(repo_dir, patch)
