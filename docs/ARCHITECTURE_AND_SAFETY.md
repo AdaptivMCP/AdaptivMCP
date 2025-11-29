@@ -279,6 +279,24 @@ The server emits structured logs around every MCP tool call using a dedicated
 logger namespace:
 
 - Logger: `github_mcp.tools`.
+
+### Environment validation tool
+
+To make operations and debugging easier on new deployments, the controller
+exposes a small read-only tool, `validate_environment`. This tool does not
+perform any writes; instead it:
+
+- Inspects process environment variables related to GitHub authentication,
+  controller repository/branch selection, Git identity, and HTTP/concurrency
+  tuning.
+- Optionally performs lightweight GitHub API calls to confirm that the
+  configured controller repository and branch exist and are accessible with the
+  current token.
+- Returns a structured report containing individual checks (with `ok`,
+  `warning`, or `error` levels) and a summary count so assistants and operators
+  can quickly identify misconfigurations such as missing tokens or mismatched
+  branches.
+
 - Events: `tool_call_start`, `tool_call_success`, `tool_call_error`.
 
 The `mcp_tool` decorator wraps both read and write tools and records:
