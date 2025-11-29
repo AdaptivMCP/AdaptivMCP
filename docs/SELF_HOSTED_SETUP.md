@@ -100,8 +100,15 @@ The MCP server is configured primarily via environment variables. Common setting
 Additional optional variables may exist for:
 
 - HTTP timeouts and retry settings.
-- Output truncation limits (`TOOL_STDOUT_MAX_CHARS`, `TOOL_STDERR_MAX_CHARS`).
-- Debug logging flags.
+
+For a canonical, copy-pasteable list of supported variables, see the
+`.env.example` file in the repository root. It contains commented examples for
+all commonly used settings, along with brief descriptions and recommended
+defaults. When deploying on providers like Render, you can open `.env.example`
+side-by-side with your service's environment configuration and copy variable
+names directly, supplying values appropriate for your deployment.
+
+Check the repository README and configuration sections for any new variables added over time.
 
 Check the repository README and configuration sections for any new variables added over time.
 
