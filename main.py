@@ -2092,12 +2092,13 @@ async def create_pull_request(
     """Open a pull request from ``head`` into ``base``."""
     effective_base = _effective_ref_for_repo(full_name, base)
 
-    _ensure_write_allowed(f"create PR from {head} to {effective_base} in {full_name}")
-    _ensure_write_allowed(f"create PR from {head} to {base} in {full_name}")
+    _ensure_write_allowed(
+        f"create PR from {head} to {effective_base} in {full_name}"
+    )
     payload: Dict[str, Any] = {
         "title": title,
+        "head": head,
         "base": effective_base,
-        "base": base,
         "draft": draft,
     }
     if body is not None:
@@ -2509,13 +2510,13 @@ async def apply_patch_and_commit(
         path=path,
         message=commit_message,
         body_bytes=body_bytes,
-        branch=branch,
         branch=effective_branch,
+        sha=sha_before,
     )
 
     # 4) Verify by reading the file again from the same branch.
-    verified = await _decode_github_content(full_name, path, branch)
     verified = await _decode_github_content(full_name, path, effective_branch)
+    new_text_verified = verified.get("text")
     sha_after = verified.get("sha")
 
     result: Dict[str, Any] = {
