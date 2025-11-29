@@ -77,8 +77,8 @@ The MCP server is configured primarily via environment variables. Common setting
 
 - `GITHUB_MCP_CONTROLLER_BRANCH`
   - The default branch that the server should consider canonical for its own repo.
-  - During refactor phases this may be a feature branch (for example `ally-mcp-github-refactor-fresh`).
-  - Once the refactor is merged, this should typically be set to `main`.
+  - Defaults to `main` when unset.
+  - You can temporarily point this at a feature branch during long-running refactors (for example `feature/refactor-xyz`), then switch it back to `main` after the refactor is merged.
   - This value is used by the `_effective_ref_for_repo` helper to avoid accidental writes to the wrong branch.
 
 
