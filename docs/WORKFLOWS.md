@@ -393,15 +393,17 @@ The controller provides tools for issue and PR management. Use them to keep a cl
 
 Typical flow:
 
-1. **Create an issue** (if one does not exist) using `create_issue`.
+1. **Check for an existing issue**. Before calling `create_issue`, search for open issues that already describe the problem or feature. For example, use `search` against the repo with a query that includes key terms from the title/summary (or use any dedicated issue-listing tools exposed by the server). If you find a match, prefer updating or commenting on that issue instead of opening a new one.
+
+2. **Create an issue** (only if one does not exist) using `create_issue`.
    - Title: concise problem statement.
    - Body: context, scope, constraints.
 
-2. **Update the issue** over time:
+3. **Update the issue** over time:
    - Use `update_issue` to adjust scope or add checklists.
    - Use `comment_on_issue` for progress updates and decisions.
 
-3. **Close the issue** when work is merged.
+4. **Close the issue** when work is merged.
 
 Best practices:
 
