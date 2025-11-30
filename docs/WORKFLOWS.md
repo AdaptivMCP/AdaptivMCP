@@ -500,4 +500,35 @@ Use this document as the **operational playbook** for Adaptiv Controller workflo
 - When you add new tools or orchestrations, update this doc to include new workflows.
 - Keep `WORKFLOWS.md`, `ARCHITECTURE_AND_SAFETY.md`, and `ASSISTANT_DOCS_AND_SNAPSHOTS.md` in sync so humans and assistants share the same mental model.
 
-If you adhere to these workflows, the Adaptiv Controller will behave like a very disciplined senior engineer: branch-first, patch-first, test-first, and always ready to explain what it is about to do and why.
+
+## 13. Large-file edits and section-based orchestration
+
+For very large files (like main.py) assistants should avoid sending the entire file back and forth. Instead, use the section-based diff tools built into this controller.
+
+Recommended pattern:
+
+1. Use `get_file_slice` to inspect only the relevant region of a large file.
+2. Decide the exact line ranges that need to change.
+3. Prepare a `sections` payload: each section has `start_line`, `end_line`, and `new_text`.
+4. Call `build_section_based_diff` with `full_name`, `path`, `ref`, and `sections`.
+5. Take the returned `patch` and pass it to `apply_patch_and_commit` on the same branch.
+6. Re-read the updated region (via `get_file_slice`) and summarize the change.
+
+Notes:
+
+- `start_line` and `end_line` are 1-based and inclusive.
+- You can insert without deleting by using a section where `end_line == start_line - 1`.
+- Sections must not overlap and must be passed in ascending order by `start_line`.
+
+### Using `validate_json_string` for strict JSON flows
+
+When you construct JSON payloads in a prompt or tool call, you can use the `validate_json_string` tool before sending them back to a client or saving them in docs.
+
+Typical flow:
+
+1. Build the JSON string you intend to return.
+2. Call `validate_json_string` with that raw string.
+3. If `ok` is true, use `normalized` as the canonical JSON.
+4. If `ok` is false, fix the error reported by `error` and try again.
+
+This is especially useful for long `sections` arrays passed into `build_section_based_diff`, or any other tool where the controller expects strict JSON from the assistant.
