@@ -33,7 +33,7 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
 
-# ------------------------------------------------------------------------------
+from starlette.responses import JSONResponse, PlainTextResponse
 # Configuration and globals
 # ------------------------------------------------------------------------------
 
@@ -156,6 +156,30 @@ def _record_github_request(
         ) + 1
 
 
+
+
+def _metrics_snapshot() -> Dict[str, Any]:
+    """Return a shallow, JSON-safe snapshot of in-process metrics.
+
+    The metrics registry is intentionally small and numeric, but this helper
+    defensively normalizes missing buckets and coerces values to ``int`` where
+    possible so that the health payload remains stable even if future fields are
+    added.
+    """
+
+    tools = _METRICS.get("tools", {})
+    github = _METRICS.get("github", {})
+
+    def _as_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(value)
+        except Exception:  # pragma: no cover - defensive
+            return default
+
+    return {
+        "tools": tools,
+        "github": {k: _as_int(v) for k, v in github.items()},
+    }
 def _env_flag(name: str, default: bool = False) -> bool:
     """Parse a boolean-like environment variable.
 
@@ -3244,9 +3268,40 @@ async def homepage(request: Request) -> PlainTextResponse:
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
-async def healthz(request: Request) -> PlainTextResponse:
-    return PlainTextResponse("OK\n")
+def _build_health_payload() -> Dict[str, Any]:
+    """Construct a small JSON health payload for the HTTP endpoint.
 
+    This keeps the HTTP health check aligned with the controller configuration
+    and exposes a minimal view of in-process metrics without changing any of the
+    structured log shapes validated elsewhere.
+    """
+
+    now = time.time()
+    uptime_seconds = max(0.0, now - SERVER_START_TIME)
+
+    return {
+        "status": "ok",
+        "uptime_seconds": uptime_seconds,
+        "github_token_present": bool(GITHUB_PAT),
+        "controller": {
+            "repo": CONTROLLER_REPO,
+            "default_branch": CONTROLLER_DEFAULT_BRANCH,
+        },
+        "metrics": _metrics_snapshot(),
+    }
+
+
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(request: Request) -> JSONResponse:
+    """Lightweight JSON health endpoint with metrics summary.
+
+    The body is intentionally small: a status flag, uptime, basic controller
+    configuration, and a compact metrics snapshot suitable for logs or external
+    polling.
+    """
+
+    payload = _build_health_payload()
+    return JSONResponse(payload)
 
 async def _shutdown_clients() -> None:
     if _http_client_github is not None:
