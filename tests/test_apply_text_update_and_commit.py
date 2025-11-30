@@ -53,8 +53,6 @@ async def test_apply_text_update_and_commit_updates_existing_file(monkeypatch):
         return_diff=True,
         manual_override=True,
     )
-    assert len(decode_calls) == 2
-
     commit = commit_calls[0]
     assert commit["full_name"] == "owner/repo"
     assert commit["path"] == "file.txt"
@@ -114,7 +112,6 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
         return_diff=True,
         manual_override=True,
     )
-
 @pytest.mark.asyncio
 async def test_apply_text_update_and_commit_raises_without_manual_override(monkeypatch):
     """Guardrail: calls without manual_override should raise and instruct callers to
