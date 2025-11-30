@@ -430,9 +430,6 @@ This section gives concrete, high-usage patterns you can follow almost mechanica
       - Call `build_unified_diff` to generate a unified diff between the current file and `new_content` (or `build_unified_diff_from_strings` if you already hold both buffers).
       - Apply the diff with `apply_patch_and_commit`, using a concise commit message (for example `Update workflows doc for controller usage`).
 
-5. **Write**
-   - Use `apply_text_update_and_commit` on `docs/WORKFLOWS.md` in the feature branch.
-
 6. **(Optional) Tests**
    - Run `run_tests` with `pytest -q` on the branch to ensure nothing broke.
 
