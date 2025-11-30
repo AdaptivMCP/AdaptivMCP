@@ -206,50 +206,31 @@ Typical sequence:
 From that point on, **all** subsequent write tools for this work should use that feature branch.
 
 ---
-
 ## 5. Single-file text edits (docs and small configs)
 
-Use `apply_text_update_and_commit` when you are replacing or creating a single file and a full-text representation is easier to reason about than a patch.
+`apply_text_update_and_commit` still exists, but it is a **guarded, manual-only** escape hatch. It performs full-file replacement in a single commit, which is powerful but easy to misuse.
 
-### 5.1 When this is appropriate
+For assistants and automated workflows:
 
-- New docs (for example adding `docs/NEW_FEATURE.md`).
-- Small config files.
-- Medium-sized docs where the entire file is under control and easy for a human to review in one diff.
+- Do **not** plan around `apply_text_update_and_commit`.
+- Always use patch-based flows instead:
+  - `build_unified_diff` + `apply_patch_and_commit`, or
+  - `update_files_and_open_pr` for multi-file updates.
 
-Avoid using it for:
+The implementation enforces this policy. Calls to `apply_text_update_and_commit` that do not set `manual_override=True` raise a `RuntimeError` instructing callers to use patch-based flows instead.
 
-- Very large code files.
-- Shared modules with many unrelated call sites where localized patches are safer.
+If you are operating manually and fully understand the risks of full-file replacement, you may:
 
-### 5.2 Workflow
+- Call `apply_text_update_and_commit` with `manual_override=True` in a one-off, human-supervised context.
+- Review the resulting diff carefully in GitHub before merging.
 
-1. **Read the file (if it exists)**
-   - Use `get_file_contents` to capture the current state.
-
-2. **Draft the new content**
-   - Prepare the full file content in ChatGPT, including headers, sections, and examples.
-   - Show the proposed file to the user.
-
-3. **Apply the update**
-   - Call `apply_text_update_and_commit` with:
-     - `full_name`: repo.
-     - `path`: file path (for example `docs/WORKFLOWS.md`).
-     - `branch`: feature branch (for example `update-workflows-doc`).
-     - `updated_content`: full new file text.
-     - Optional `message`: concise commit message (for example `Update workflows doc for controller usage`).
-
-4. **Review the result**
-   - Inspect the returned diff and SHA.
-   - Optionally re-read the file with `get_file_contents` from the feature branch.
-
-5. **Repeat for related docs**
+In other words: treat `apply_text_update_and_commit` as a last-resort, human-only tool, not a normal part of day-to-day controller workflows.
    - If other docs need updates (for example `SELF_HOSTED_SETUP`, `ASSISTANT_DOCS_AND_SNAPSHOTS`), repeat this process.
 
 ---
+## 6. Patch-based edits (recommended default for code and docs)
 
-## 6. Patch-based edits (recommended default for code)
-
+For most code and documentation changes, prefer patch-based workflows:
 For most code changes, prefer patch-based workflows:
 
 ### 6.1 Why patches
@@ -331,7 +312,7 @@ Typical sequence:
 
 For smaller or more iterative work you may:
 
-1. Use `ensure_branch`.
+2. Apply one or more changes via `apply_patch_and_commit`. In rare, manual-only scenarios, a human operator may choose to use `apply_text_update_and_commit` with `manual_override=True`, but this is not part of the normal assistant workflow.
 2. Apply one or more changes via `apply_text_update_and_commit` / `apply_patch_and_commit`.
 3. Call `create_pull_request` directly with:
    - `head`: feature branch.
@@ -449,8 +430,12 @@ This section gives concrete, high-usage patterns you can follow almost mechanica
 3. **Branch**
    - `ensure_branch` from `main` to `docs-workflows-update`.
 
-4. **Draft**
-   - Propose a full new version of `docs/WORKFLOWS.md` in conversation.
+5. **Write**
+   - Use a patch-based flow on `docs/WORKFLOWS.md` in the feature branch:
+     - Fetch the current file with `get_file_contents`.
+     - Compute `new_content` based on the proposed edits.
+     - Call `build_unified_diff` to generate a unified diff between the current file and `new_content`.
+     - Apply the diff with `apply_patch_and_commit`, using a concise commit message (for example `Update workflows doc for controller usage`).
 
 5. **Write**
    - Use `apply_text_update_and_commit` on `docs/WORKFLOWS.md` in the feature branch.
@@ -463,7 +448,8 @@ This section gives concrete, high-usage patterns you can follow almost mechanica
 
 ### 10.2 Small code change + tests
 
-1. Inspect the relevant code and tests.
+3. Update code, tests, and docs using patch-based tools (`build_unified_diff` +
+   `apply_patch_and_commit`, or `update_files_and_open_pr`).
 2. Create a feature branch (for example `issue-123-fix-timeout-handling`).
 3. Use `build_unified_diff` + `apply_patch_and_commit` for a focused change.
 4. Add or update tests using the same patch-based flow.
