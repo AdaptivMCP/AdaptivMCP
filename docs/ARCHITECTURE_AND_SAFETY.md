@@ -168,6 +168,18 @@ Other helpers call this rather than constructing ad-hoc API requests.
 single commit. Because this is powerful and easy to misuse on code-heavy files,
 patch-based helpers remain the preferred default (`build_unified_diff` +
 `apply_patch_and_commit`, or `update_files_and_open_pr`).
+`apply_text_update_and_commit` performs full-file text updates and creation in a single commit. Because this is powerful and easy to misuse on code-heavy files, patch-based helpers remain the preferred default (`build_unified_diff` + `apply_patch_and_commit`, or `update_files_and_open_pr`).
+
+`build_unified_diff` builds a unified diff from an original and updated text buffer. It is a read-only helper that returns a patch string for use with `apply_patch_and_commit` when you already have both versions of a file in memory.
+
+`build_section_based_diff` is a higher-level, read-only orchestration helper for large files. It:
+
+- Reads the current file content from GitHub.
+- Accepts a list of line-based sections (`start_line`, `end_line`, `new_text`).
+- Applies those section replacements in memory.
+- Calls `build_unified_diff` internally to produce a unified diff patch.
+
+This lets assistants describe large-file changes as structured sections instead of shipping full file contents back and forth. The resulting patch is then applied and committed via `apply_patch_and_commit` just like any other diff.
 
 `apply_patch_and_commit` applies a unified diff patch:
 
@@ -178,7 +190,6 @@ patch-based helpers remain the preferred default (`build_unified_diff` +
 - Re-reads and verifies the new file.
 
 This helper is the default choice for localized code edits and is used heavily in the workflows described in `docs/WORKFLOWS.md`.
-
 ### 5.4 update_files_and_open_pr
 
 `update_files_and_open_pr` orchestrates multi-file changes and PR creation:
@@ -335,7 +346,8 @@ The behaviors described in this document are backed by a set of tests, including
 - Workspace-related tests for `run_command` and truncation.
 - `tests/test_issue_tools.py` for issue-related behavior.
 - `tests/test_tool_logging.py` and `tests/test_tool_logging_write_tools.py` for tool-level logging behavior (read and write tools).
-When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.
+- Tests for diff helpers (including `build_section_based_diff`) and large-file workflows.
+When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.
 
 ## 11. How to use this document
 
