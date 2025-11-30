@@ -175,4 +175,53 @@ To stay aligned:
 - When adding or changing tools, think through the implications for all three layers.
 - Treat inconsistencies as bugs and fix them via the usual issue + PR workflow.
 
+
+For very large files (especially `main.py` and other core modules), assistants should avoid shuttling whole-file contents back and forth. Instead, use the large-file orchestration and JSON helpers exposed by the controller.
+
+### 8.1 Inspecting large files safely
+
+- Use `get_file_slice` to read only the relevant region of a file:
+  - Provide `full_name`, `path`, `ref`, `start_line`, and `max_lines`.
+  - Use `has_more_above` / `has_more_below` and `total_lines` to navigate.
+- Prefer reading a few slices around the area you plan to edit rather than the entire file.
+
+### 8.2 Building section-based patches
+
+When you know the line ranges that need to change, construct a `sections` array and use `build_section_based_diff`:
+
+- Each section has:
+  - `start_line`: 1-based inclusive start.
+  - `end_line`: 1-based inclusive end (or `start_line - 1` for pure inserts).
+  - `new_text`: the replacement text for that region.
+- Sections must be:
+  - Sorted by `start_line`.
+  - Non-overlapping.
+- Call `build_section_based_diff(full_name, path, ref, sections, context_lines)` to get a unified diff patch.
+- Apply the returned `patch` using `apply_patch_and_commit` on the same branch.
+
+This pattern keeps diffs small and precise, even for very large files.
+
+### 8.3 Using `build_unified_diff` when you already have full content
+
+If you already have both the original and updated content for a file in memory (for example, for a smaller config or doc file), you can:
+
+1. Build the new content locally.
+2. Call `build_unified_diff(original, updated, path, context_lines)` to get a patch.
+3. Apply the patch with `apply_patch_and_commit`.
+
+This keeps the assistant in a patch-first workflow without having to hand-write unified diff strings.
+
+### 8.4 Validating JSON with `validate_json_string`
+
+When returning JSON to a client or passing JSON into other tools (such as long `sections` arrays), use `validate_json_string` to catch mistakes before they cause errors:
+
+1. Build the JSON string you intend to use (for example, the `sections` array for `build_section_based_diff`).
+2. Call `validate_json_string` with that raw string.
+3. If `ok` is true, use the `normalized` JSON string as your final output.
+4. If `ok` is false, examine `error`, fix the problem (missing quotes, trailing commas, etc.), and try again.
+
+By combining `get_file_slice`, `build_section_based_diff`, `build_unified_diff`, `apply_patch_and_commit`, and `validate_json_string`, assistants can safely edit large files and produce strict JSON outputs without falling into read-only loops or brittle manual diff construction.
+
+## 9. Summary
+
 By doing this, assistants help ensure that the Adaptiv Controller remains trustworthy, well-documented, and easy for both humans and AI to reason about over time.
