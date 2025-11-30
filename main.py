@@ -2892,7 +2892,7 @@ async def apply_text_update_and_commit(
         raise RuntimeError(
             "apply_text_update_and_commit is disabled for automated bulk edits; "
             "use patch-based flow (build_unified_diff + apply_patch_and_commit) instead. "
-            "Set manual_override=True only for explicit, human-supervised usage."
+            #"Set manual_override=True only for explicit, human-supervised usage."
         )
 
     effective_branch = _effective_ref_for_repo(full_name, branch)
