@@ -168,8 +168,6 @@ Other helpers call this rather than constructing ad-hoc API requests.
 single commit. Because this is powerful and easy to misuse on code-heavy files,
 patch-based helpers remain the preferred default (`build_unified_diff` +
 `apply_patch_and_commit`, or `update_files_and_open_pr`).
-`apply_text_update_and_commit` performs full-file text updates and creation in a single commit. Because this is powerful and easy to misuse on code-heavy files, patch-based helpers remain the preferred default (`build_unified_diff` + `apply_patch_and_commit`, or `update_files_and_open_pr`).
-
 `build_unified_diff` builds a unified diff from an original and updated text buffer. It is a read-only helper that returns a patch string for use with `apply_patch_and_commit` when you already have both versions of a file in memory.
 
 `build_section_based_diff` is a higher-level, read-only orchestration helper for large files. It:
@@ -347,8 +345,7 @@ The behaviors described in this document are backed by a set of tests, including
 - `tests/test_issue_tools.py` for issue-related behavior.
 - `tests/test_tool_logging.py` and `tests/test_tool_logging_write_tools.py` for tool-level logging behavior (read and write tools).
 - Tests for diff helpers (including `build_section_based_diff`) and large-file workflows.
-When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.
-
+When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.
 ## 11. How to use this document
 
 Use this document when you need to:
