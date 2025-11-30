@@ -76,6 +76,85 @@ logging.basicConfig(
 BASE_LOGGER = logging.getLogger("github_mcp")
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
+SERVER_START_TIME = time.time()
+
+
+def _new_metrics_state() -> Dict[str, Any]:
+    return {
+        "tools": {},
+        "github": {
+            "requests_total": 0,
+            "errors_total": 0,
+            "rate_limit_events_total": 0,
+            "timeouts_total": 0,
+        },
+    }
+
+
+_METRICS: Dict[str, Any] = _new_metrics_state()
+
+
+def _reset_metrics_for_tests() -> None:
+    """Reset in-process metrics; intended for tests."""
+
+    global _METRICS
+    _METRICS = _new_metrics_state()
+
+
+def _record_tool_call(
+    tool_name: str,
+    *,
+    write_action: bool,
+    duration_ms: int,
+    errored: bool,
+) -> None:
+    tools_bucket = _METRICS.setdefault("tools", {})
+    bucket = tools_bucket.setdefault(
+        tool_name,
+        {
+            "calls_total": 0,
+            "errors_total": 0,
+            "write_calls_total": 0,
+            "latency_ms_sum": 0,
+        },
+    )
+    bucket["calls_total"] += 1
+    if write_action:
+        bucket["write_calls_total"] += 1
+    bucket["latency_ms_sum"] += max(0, int(duration_ms))
+    if errored:
+        bucket["errors_total"] += 1
+
+
+def _record_github_request(
+    *,
+    status_code: Optional[int],
+    duration_ms: int,
+    error: bool,
+    resp: Optional[httpx.Response] = None,
+    exc: Optional[BaseException] = None,
+) -> None:
+    github_bucket = _METRICS.setdefault("github", {})
+    github_bucket["requests_total"] = github_bucket.get("requests_total", 0) + 1
+    if error:
+        github_bucket["errors_total"] = github_bucket.get("errors_total", 0) + 1
+
+    if resp is not None:
+        remaining = resp.headers.get("X-RateLimit-Remaining")
+        if remaining is not None:
+            try:
+                if int(remaining) <= 0:
+                    github_bucket["rate_limit_events_total"] = github_bucket.get(
+                        "rate_limit_events_total", 0
+                    ) + 1
+            except ValueError:
+                pass
+
+    if exc is not None and isinstance(exc, httpx.TimeoutException):
+        github_bucket["timeouts_total"] = github_bucket.get(
+            "timeouts_total", 0
+        ) + 1
+
 
 def _env_flag(name: str, default: bool = False) -> bool:
     """Parse a boolean-like environment variable.
