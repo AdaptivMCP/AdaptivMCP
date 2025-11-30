@@ -20,6 +20,7 @@ import difflib
 import sys
 import logging
 import time
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -1250,6 +1251,54 @@ async def get_server_config() -> Dict[str, Any]:
                 os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
             ),
         },
+    }
+
+
+@mcp_tool(
+    write_action=False,
+    description=(
+        "Validate and normalize JSON strings before returning them to clients. "
+        "Useful when controller prompts require strict JSON responses and the "
+        "assistant wants to double-check correctness before replying."
+    ),
+    tags=["meta", "json", "validation"],
+)
+def validate_json_string(raw: str) -> Dict[str, Any]:
+    """Validate a JSON string and return a canonicalized representation.
+
+    Returns a structured payload indicating whether the JSON parsed
+    successfully, an error description when parsing fails, and a
+    normalized string the assistant can copy verbatim when it needs to
+    emit strict JSON without risking client-side parse errors.
+    """
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        context_window = 20
+        start = max(0, exc.pos - context_window)
+        end = min(len(raw), exc.pos + context_window)
+        return {
+            "valid": False,
+            "error": exc.msg,
+            "line": exc.lineno,
+            "column": exc.colno,
+            "position": exc.pos,
+            "snippet": raw[start:end],
+        }
+
+    normalized = json.dumps(
+        parsed,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+    return {
+        "valid": True,
+        "parsed": parsed,
+        "parsed_type": type(parsed).__name__,
+        "normalized": normalized,
     }
 
 
