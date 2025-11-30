@@ -113,6 +113,8 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
 
     result = await main.apply_text_update_and_commit(
         updated_content="new text",
+        full_name="owner/repo",
+        path="new-file.txt",
         branch="feature-branch",
         message=None,
         return_diff=True,
