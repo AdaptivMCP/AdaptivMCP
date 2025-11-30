@@ -57,8 +57,6 @@ Destructive operations are gated by a global flag and explicit tagging.
 - `authorize_write_actions(approved: bool)` is the only tool that toggles this
   flag at runtime. Controllers call this tool when they need to enable or
   disable write actions for a session.
-- All tools created with `mcp_tool(write_action=True, ...)` call
-  `_ensure_write_allowed(context)` before doing any destructive work.
 - All tools created with `mcp_tool(write_action=True, ...)` call `_ensure_write_allowed(context)` before doing any destructive work.
 
 `_ensure_write_allowed`:
@@ -161,8 +159,6 @@ Other helpers call this rather than constructing ad-hoc API requests.
 - Calls `_perform_github_commit`.
 - Re-reads the file from GitHub and records `sha_after` and verified contents.
 - Optionally includes a unified diff between old and new text in the result.
-
-### 5.2 apply_text_update_and_commit (full-file helper)
 
 `apply_text_update_and_commit` performs full-file text updates and creation in a
 single commit. Because this is powerful and easy to misuse on code-heavy files,
