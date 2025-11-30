@@ -213,7 +213,7 @@ From that point on, **all** subsequent write tools for this work should use that
 For assistants and automated workflows:
 
 - Prefer patch-based flows:
-  - `build_unified_diff` + `apply_patch_and_commit`, or
+  - `build_unified_diff` (or `build_unified_diff_from_strings` when you already have both buffers) + `apply_patch_and_commit`, or
   - `update_files_and_open_pr` for multi-file updates.
 
 If you intentionally choose a full-file replace (for example a short doc or config), call `apply_text_update_and_commit` directly and review the resulting diff carefully in GitHub before merging.
@@ -245,6 +245,7 @@ For most code changes, prefer patch-based workflows:
    - Call `build_unified_diff` with:
      - `full_name`, `path`, `ref` (feature branch), `new_content`.
      - Optional `context_lines` (default is usually fine).
+   - If you already have both buffers locally (for example after `get_file_slice` calls), use `build_unified_diff_from_strings` instead.
    - Inspect the returned diff:
      - Confirm only the intended lines changed.
      - Check no unrelated sections are touched.
@@ -423,11 +424,11 @@ This section gives concrete, high-usage patterns you can follow almost mechanica
    - `ensure_branch` from `main` to `docs-workflows-update`.
 
 5. **Write**
-   - Use a patch-based flow on `docs/WORKFLOWS.md` in the feature branch:
-     - Fetch the current file with `get_file_contents`.
-     - Compute `new_content` based on the proposed edits.
-     - Call `build_unified_diff` to generate a unified diff between the current file and `new_content`.
-     - Apply the diff with `apply_patch_and_commit`, using a concise commit message (for example `Update workflows doc for controller usage`).
+    - Use a patch-based flow on `docs/WORKFLOWS.md` in the feature branch:
+      - Fetch the current file with `get_file_contents`.
+      - Compute `new_content` based on the proposed edits.
+      - Call `build_unified_diff` to generate a unified diff between the current file and `new_content` (or `build_unified_diff_from_strings` if you already hold both buffers).
+      - Apply the diff with `apply_patch_and_commit`, using a concise commit message (for example `Update workflows doc for controller usage`).
 
 5. **Write**
    - Use `apply_text_update_and_commit` on `docs/WORKFLOWS.md` in the feature branch.
@@ -440,10 +441,10 @@ This section gives concrete, high-usage patterns you can follow almost mechanica
 
 ### 10.2 Small code change + tests
 
-3. Update code, tests, and docs using patch-based tools (`build_unified_diff` +
+3. Update code, tests, and docs using patch-based tools (`build_unified_diff` or `build_unified_diff_from_strings` +
    `apply_patch_and_commit`, or `update_files_and_open_pr`).
 2. Create a feature branch (for example `issue-123-fix-timeout-handling`).
-3. Use `build_unified_diff` + `apply_patch_and_commit` for a focused change.
+3. Use `build_unified_diff` + `apply_patch_and_commit` (or `build_unified_diff_from_strings` when you already have the buffers) for a focused change.
 4. Add or update tests using the same patch-based flow.
 5. Run `run_tests` on the branch.
 6. Open a PR with:

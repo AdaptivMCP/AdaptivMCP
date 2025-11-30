@@ -1902,6 +1902,11 @@ async def build_unified_diff(
         show_whitespace: When ``True``, include a whitespace-visualized version
             of the base, proposed, and diff outputs so assistants can see tabs
             and trailing spaces that UI layers might hide.
+
+    Raises:
+        ValueError: If ``context_lines`` is negative.
+        GitHubAPIError: If the base file cannot be fetched (for example missing
+            file, ref, or permissions).
     """
 
     if context_lines < 0:

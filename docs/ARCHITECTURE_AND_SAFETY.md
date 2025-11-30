@@ -162,16 +162,22 @@ Other helpers call this rather than constructing ad-hoc API requests.
 
 `apply_text_update_and_commit` performs full-file text updates and creation in a
 single commit. Because this is powerful and easy to misuse on code-heavy files,
-patch-based helpers remain the preferred default (`build_unified_diff` +
-`apply_patch_and_commit`, or `update_files_and_open_pr`).
-`build_unified_diff` builds a unified diff from an original and updated text buffer. It is a read-only helper that returns a patch string for use with `apply_patch_and_commit` when you already have both versions of a file in memory.
+patch-based helpers remain the preferred default (`build_unified_diff` or
+`build_unified_diff_from_strings` + `apply_patch_and_commit`, or
+`update_files_and_open_pr`).
+`build_unified_diff` reads the current file from GitHub and builds a diff
+against caller-provided `new_content`; it rejects negative context sizes and
+surfaces GitHub fetch errors instead of guessing. `build_unified_diff_from_strings`
+builds a patch directly from caller-supplied `original` and `updated` buffers
+and also rejects negative context sizes.
 
 `build_section_based_diff` is a higher-level, read-only orchestration helper for large files. It:
 
 - Reads the current file content from GitHub.
 - Accepts a list of line-based sections (`start_line`, `end_line`, `new_text`).
+- Validates that sections are sorted, non-overlapping, and in range; otherwise it raises a `ValueError` to make the refusal explicit.
 - Applies those section replacements in memory.
-- Calls `build_unified_diff` internally to produce a unified diff patch.
+- Calls the string-based diff helper internally to produce a unified diff patch.
 
 This lets assistants describe large-file changes as structured sections instead of shipping full file contents back and forth. The resulting patch is then applied and committed via `apply_patch_and_commit` just like any other diff.
 

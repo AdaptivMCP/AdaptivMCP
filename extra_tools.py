@@ -135,40 +135,14 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "commit": result,
         }
 
-    @mcp_tool(
-        write_action=False,
-        description=(
-            "Build a unified diff from original and updated file content. "
-            "Useful for large files where sending only a patch to apply_patch_and_commit "
-            "is safer than sending full file contents."
-        ),
-        tags=["github", "read", "diff"],
-    )
-    def build_unified_diff(
+    def _build_unified_diff_from_strings(
         original: str,
         updated: str,
         path: str = "file.txt",
         context_lines: int = 3,
         show_whitespace: bool = False,
     ) -> Dict[str, Any]:
-        """Construct a unified diff for a single file.
-
-        Args:
-            original: The current file content.
-            updated: The desired new file content.
-            path: Path of the file in the repository (used for diff headers).
-            context_lines: Number of context lines in the diff (default 3).
-            show_whitespace: If true, also return a human-oriented preview with
-                visible whitespace characters. This preview is *not* meant to be
-                applied; use the `patch` value with apply_patch_and_commit.
-
-        Returns:
-            A dict containing at least:
-                - patch: unified diff as a string suitable for git apply /
-                  apply_patch_and_commit.
-                - preview (optional): a diff string with visible whitespace
-                  markers for debugging and human review.
-        """
+        """Internal helper to build a unified diff between two text buffers."""
 
         if context_lines < 0:
             raise ValueError("context_lines must be >= 0")
@@ -219,6 +193,31 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
     @mcp_tool(
         write_action=False,
         description=(
+            "Build a unified diff when you already have both the original and updated "
+            "file content. Useful for patch-first flows where fetching from GitHub "
+            "is unnecessary. This tool refuses negative context sizes so patches "
+            "stay well-formed."
+        ),
+        tags=["github", "read", "diff"],
+    )
+    def build_unified_diff_from_strings(
+        original: str,
+        updated: str,
+        path: str = "file.txt",
+        context_lines: int = 3,
+        show_whitespace: bool = False,
+    ) -> Dict[str, Any]:
+        return _build_unified_diff_from_strings(
+            original,
+            updated,
+            path=path,
+            context_lines=context_lines,
+            show_whitespace=show_whitespace,
+        )
+
+    @mcp_tool(
+        write_action=False,
+        description=(
             "Build a unified diff for a file by applying line-based section "
             "replacements. Useful for large files: you describe the sections "
             "to replace and then pass the resulting patch to apply_patch_and_commit."
@@ -228,29 +227,35 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
     async def build_section_based_diff(
         full_name: str,
         path: str,
+        sections: list[Dict[str, Any]],
         ref: str = "main",
-        sections: list[Dict[str, Any]] | None = None,
         context_lines: int = 3,
         show_whitespace: bool = False,
     ) -> Dict[str, Any]:
         """
         Build a unified diff for a file from line-based section replacements.
 
+        The tool refuses to run without explicit sections and validates them for
+        ordering, overlap, and bounds before constructing a patch. Invalid
+        ranges raise ``ValueError`` so assistants can surface the refusal mode
+        cleanly.
+
         Args:
             full_name:
                 "owner/repo" string.
             path:
                 Path to the file in the repository.
-            ref:
-                Git ref (branch, tag, or SHA). Defaults to "main".
             sections:
                 List of sections, each of which must be a dict with:
                   - "start_line": 1-based inclusive start line.
                   - "end_line": 1-based inclusive end line
                     (may be equal to start_line - 1 to represent an insertion).
                   - "new_text": replacement text for that range.
+            ref:
+                Git ref (branch, tag, or SHA). Defaults to "main".
             context_lines:
-                Number of context lines in the diff (default 3).
+                Number of context lines in the diff (default 3). Negative values
+                are rejected.
             show_whitespace:
                 Whether to include a human-oriented preview with visible
                 whitespace markers, like build_unified_diff.
@@ -266,6 +271,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         """
         if sections is None:
             raise ValueError("sections must be provided")
+        if context_lines < 0:
+            raise ValueError("context_lines must be >= 0")
 
         effective_ref = _effective_ref_for_repo(full_name, ref)
         decoded = await _decode_github_content(full_name, path, effective_ref)
@@ -330,7 +337,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
         updated_text = "".join(updated_lines)
 
-        diff_result = build_unified_diff(
+        diff_result = _build_unified_diff_from_strings(
             text,
             updated_text,
             path=path,
