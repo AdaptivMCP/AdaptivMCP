@@ -19,10 +19,10 @@ When reasoning about capabilities, assistants should prioritize:
    - Use `list_all_actions` to see the full list of MCP tools, their annotations, and their write/read status.
 
 2. **Repository docs**
-   - `README.md` for high-level product and architecture context.
-   - `docs/WORKFLOWS.md` for recommended end-to-end flows.
-   - `docs/ARCHITECTURE_AND_SAFETY.md` (once implemented) for deeper internals and guarantees.
-   - `docs/SELF_HOSTED_SETUP.md` (once implemented) for deployment and operator guidance.
+  - `README.md` for high-level product and architecture context.
+  - `docs/WORKFLOWS.md` for recommended end-to-end flows.
+  - `docs/ARCHITECTURE_AND_SAFETY.md` for deeper internals and guarantees.
+  - `docs/SELF_HOSTED_SETUP.md` for deployment and operator guidance.
 
 3. **Snapshots or controller prompts**
    - System prompts or saved snapshots in ChatGPT are helpful but can drift over time.

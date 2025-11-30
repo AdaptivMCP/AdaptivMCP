@@ -81,17 +81,7 @@ The MCP server is configured primarily via environment variables. Common setting
   - You can temporarily point this at a feature branch during long-running refactors (for example `feature/refactor-xyz`), then switch it back to `main` after the refactor is merged.
   - This value is used by the `_effective_ref_for_repo` helper to avoid accidental writes to the wrong branch.
 
-
 - `GITHUB_MCP_AUTO_APPROVE`
-The repository includes a small helper tool, `validate_environment`, that you can
-call from ChatGPT once the connector is wired up. This tool runs a series of
-non-destructive checks against the running process and your GitHub configuration,
-including:
-
-- Presence and basic shape of the GitHub token.
-- Configured controller repository/branch and their visibility on GitHub.
-- Git identity variables used for commits.
-
   - Controls the default write behavior for tools tagged as write actions.
   - When unset or set to a falsey value, the server starts in **manual approval**
     mode and `WRITE_ALLOWED` defaults to `False`. In this mode, controllers
@@ -106,9 +96,7 @@ including:
     destructive operations, leaving this variable unset (manual approval) is
     recommended.
 
-Additional optional variables may exist for:
-
-- HTTP timeouts and retry settings.
+Additional optional variables may exist for HTTP timeouts, retry settings, and logging.
 
 For a canonical, copy-pasteable list of supported variables, see the
 `.env.example` file in the repository root. It contains commented examples for
@@ -116,8 +104,6 @@ all commonly used settings, along with brief descriptions and recommended
 defaults. When deploying on providers like Render, you can open `.env.example`
 side-by-side with your service's environment configuration and copy variable
 names directly, supplying values appropriate for your deployment.
-
-Check the repository README and configuration sections for any new variables added over time.
 
 Check the repository README and configuration sections for any new variables added over time.
 
