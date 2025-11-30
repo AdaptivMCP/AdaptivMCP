@@ -346,6 +346,13 @@ async def _github_request(
             )
     except Exception as exc:  # pragma: no cover - defensive
         duration_ms = int((time.monotonic() - started_at) * 1000)
+        _record_github_request(
+            status_code=None,
+            duration_ms=duration_ms,
+            error=True,
+            resp=None,
+            exc=exc,
+        )
         GITHUB_LOGGER.error(
             "github_request_error",
             extra={
@@ -384,12 +391,26 @@ async def _github_request(
         error_payload["error"] = "http_error"
         # Truncate to avoid huge log records on large error bodies.
         error_payload["error_message"] = (message or resp.text[:500])
+        _record_github_request(
+            status_code=resp.status_code,
+            duration_ms=duration_ms,
+            error=True,
+            resp=resp,
+            exc=None,
+        )
         GITHUB_LOGGER.warning("github_request_error", extra=error_payload)
         raise GitHubAPIError(
             f"GitHub API error {resp.status_code} for {method} {path}: "
             f"{message or resp.text}"
         )
 
+    _record_github_request(
+        status_code=resp.status_code,
+        duration_ms=duration_ms,
+        error=False,
+        resp=resp,
+        exc=None,
+    )
     GITHUB_LOGGER.info("github_request", extra=base_payload)
 
     if expect_json:
