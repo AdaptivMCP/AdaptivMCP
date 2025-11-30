@@ -31,9 +31,6 @@ from fastmcp import FastMCP
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse
-
-
 from starlette.responses import JSONResponse, PlainTextResponse
 # Configuration and globals
 # ------------------------------------------------------------------------------
