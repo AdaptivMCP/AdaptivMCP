@@ -226,6 +226,22 @@ When returning JSON to a client or passing JSON into other tools (such as long `
 
 By combining `get_file_slice`, `build_section_based_diff`, `build_unified_diff` (or `build_unified_diff_from_strings` when you already have the buffers), `apply_patch_and_commit`, and `validate_json_string`, assistants can safely edit large files and produce strict JSON outputs without falling into read-only loops or brittle manual diff construction.
 
-## 9. Summary
+## 9. Execution environment for assistants
+
+When planning or describing workflows, assistants must treat `run_command` and `run_tests` as the canonical way to execute code and tests against this repository (and any other repo accessed through this controller).
+
+Key points:
+
+- These tools clone the target repo at the effective ref into a temporary workspace and optionally create a temporary virtual environment.
+- Commands and tests run **inside that workspace**, not in the long-lived MCP server process.
+- After the command finishes, the workspace is discarded; any project-level dependencies must be installed per-workspace as needed.
+
+Implications for prompts and snapshots:
+
+- Do not assume that packages are globally installed in the controller process; instead, assume that `run_command` / `run_tests` will handle any necessary setup in the cloned workspace.
+- When you design prompts or higher-level workflows, explicitly mention these tools as the default execution environment for running tests or CLI tools.
+- When new tools are added that rely on code execution, they should internally use this same workspace model.
+
+## 10. Summary
 
 By doing this, assistants help ensure that the Adaptiv Controller remains trustworthy, well-documented, and easy for both humans and AI to reason about over time.
