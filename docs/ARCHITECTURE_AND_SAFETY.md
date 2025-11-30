@@ -353,3 +353,34 @@ When introducing a new write tool, follow this checklist:
 7. Update `ARCHITECTURE_AND_SAFETY.md`, `WORKFLOWS.md`, and any assistant docs as needed.
 
 This keeps the Adaptiv Controller safe, predictable, and easy to reason about for both humans and AI assistants.
+---
+
+## In-process metrics and health endpoint
+
+In addition to structured logs, the server maintains a small in-process metrics
+registry and exposes a lightweight HTTP health endpoint.
+
+- Metrics registry (`_METRICS`):
+  - `tools`: per-tool counters maintained by `_record_tool_call`, including:
+    - `calls_total`: number of times the tool was invoked.
+    - `errors_total`: number of invocations that raised an exception.
+    - `write_calls_total`: number of invocations for tools tagged as write actions.
+    - `latency_ms_sum`: accumulated execution time across all calls.
+  - `github`: aggregate counters maintained by `_record_github_request`, including:
+    - `requests_total`: total GitHub client requests.
+    - `errors_total`: requests that resulted in errors.
+    - `rate_limit_events_total`: times where the reported remaining rate limit reached zero.
+    - `timeouts_total`: requests that raised `httpx.TimeoutException`.
+
+The helper `_metrics_snapshot()` returns a JSON-safe view of this registry and
+is used by the `/healthz` HTTP route:
+
+- `status`: string health flag.
+- `uptime_seconds`: process uptime based on `SERVER_START_TIME`.
+- `github_token_present`: boolean indicating whether a GitHub token is configured.
+- `controller.repo` / `controller.default_branch`: the controller repository and default branch in effect.
+- `metrics`: the snapshot from `_metrics_snapshot()`.
+
+Metrics are intentionally kept in memory only; they reset on process restart
+and never include request bodies, secrets, or other user content. The `/healthz`
+endpoint is safe to use for uptime checks, basic dashboards, and smoke tests.
