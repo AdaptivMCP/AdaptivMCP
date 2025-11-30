@@ -492,11 +492,16 @@ async def _decode_github_content(
     ref: Optional[str] = None,
 ) -> Dict[str, Any]:
     effective_ref = _effective_ref_for_repo(full_name, ref)
-    data = await _github_request(
-        "GET",
-        f"/repos/{full_name}/contents/{path}",
-        params={"ref": effective_ref},
-    )
+    try:
+        data = await _github_request(
+            "GET",
+            f"/repos/{full_name}/contents/{path}",
+            params={"ref": effective_ref},
+        )
+    except GitHubAPIError as exc:
+        raise GitHubAPIError(
+            f"Failed to fetch {full_name}/{path} at ref '{effective_ref}': {exc}"
+        ) from exc
     if not isinstance(data.get("json"), dict):
         raise GitHubAPIError("Unexpected content response shape from GitHub")
 
@@ -3326,7 +3331,6 @@ async def homepage(request: Request) -> PlainTextResponse:
     return PlainTextResponse(HOME_MESSAGE)
 
 
-@mcp.custom_route("/healthz", methods=["GET"])
 def _build_health_payload() -> Dict[str, Any]:
     """Construct a small JSON health payload for the HTTP endpoint.
 
