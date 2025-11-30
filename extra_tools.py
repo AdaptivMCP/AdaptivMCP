@@ -219,6 +219,131 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
     @mcp_tool(
         write_action=False,
         description=(
+            "Build a unified diff for a file by applying line-based section "
+            "replacements. Useful for large files: you describe the sections "
+            "to replace and then pass the resulting patch to apply_patch_and_commit."
+        ),
+        tags=["github", "read", "diff", "orchestration"],
+    )
+    async def build_section_based_diff(
+        full_name: str,
+        path: str,
+        ref: str = "main",
+        sections: list[Dict[str, Any]] | None = None,
+        context_lines: int = 3,
+        show_whitespace: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Build a unified diff for a file from line-based section replacements.
+
+        Args:
+            full_name:
+                "owner/repo" string.
+            path:
+                Path to the file in the repository.
+            ref:
+                Git ref (branch, tag, or SHA). Defaults to "main".
+            sections:
+                List of sections, each of which must be a dict with:
+                  - "start_line": 1-based inclusive start line.
+                  - "end_line": 1-based inclusive end line
+                    (may be equal to start_line - 1 to represent an insertion).
+                  - "new_text": replacement text for that range.
+            context_lines:
+                Number of context lines in the diff (default 3).
+            show_whitespace:
+                Whether to include a human-oriented preview with visible
+                whitespace markers, like build_unified_diff.
+
+        Returns:
+            A dict containing at least:
+              - patch: unified diff as a string.
+              - path: the file path.
+              - context_lines: the context size used.
+              - full_name: repo name.
+              - ref: effective ref used for the lookup.
+              - preview (optional): human-oriented diff if show_whitespace=True.
+        """
+        if sections is None:
+            raise ValueError("sections must be provided")
+
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        decoded = await _decode_github_content(full_name, path, effective_ref)
+        text = decoded.get("text", "")
+        original_lines = text.splitlines(keepends=True)
+        total_lines = len(original_lines)
+
+        # Normalize and validate sections.
+        normalized_sections: list[Dict[str, Any]] = sorted(
+            sections, key=lambda s: int(s.get("start_line", 0))
+        )
+
+        prev_end = 0
+        for section in normalized_sections:
+            try:
+                start_line = int(section["start_line"])
+                end_line = int(section["end_line"])
+            except KeyError as exc:
+                raise ValueError(
+                    "Each section must have 'start_line' and 'end_line'"
+                ) from exc
+
+            if start_line < 1:
+                raise ValueError("start_line must be >= 1")
+            # Allow end_line == start_line - 1 to represent a pure insertion.
+            if end_line < start_line - 1:
+                raise ValueError("end_line must be >= start_line - 1")
+            if total_lines > 0 and end_line > total_lines:
+                raise ValueError(
+                    f"end_line {end_line} is greater than total_lines {total_lines}"
+                )
+            if start_line <= prev_end:
+                raise ValueError("sections must not overlap or go backwards")
+            prev_end = end_line
+
+        updated_lines: list[str] = []
+        cursor = 1
+
+        for section in normalized_sections:
+            start_line = int(section["start_line"])
+            end_line = int(section["end_line"])
+            new_text = section.get("new_text", "")
+
+            # Copy unchanged lines before the section.
+            if cursor <= start_line - 1 and total_lines > 0:
+                updated_lines.extend(
+                    original_lines[cursor - 1 : min(start_line - 1, total_lines)]
+                )
+
+            # Apply replacement text (may be empty for pure deletion).
+            if new_text:
+                replacement_lines = new_text.splitlines(keepends=True)
+                updated_lines.extend(replacement_lines)
+
+            # Move cursor past the replaced range; for insertion (end_line == start_line - 1)
+            # this leaves cursor unchanged relative to original_lines.
+            cursor = max(cursor, end_line + 1)
+
+        # Copy the tail of the file.
+        if total_lines > 0 and cursor <= total_lines:
+            updated_lines.extend(original_lines[cursor - 1 :])
+
+        updated_text = "".join(updated_lines)
+
+        diff_result = build_unified_diff(
+            text,
+            updated_text,
+            path=path,
+            context_lines=context_lines,
+            show_whitespace=show_whitespace,
+        )
+        diff_result["full_name"] = full_name
+        diff_result["ref"] = effective_ref
+        return diff_result
+
+    @mcp_tool(
+        write_action=False,
+        description=(
             "Fetch a slice of a large text file by line range. "
             "Useful when the full file would be too large to return in a single tool call."
         ),
