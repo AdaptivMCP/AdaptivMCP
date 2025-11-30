@@ -196,20 +196,24 @@ When you know the line ranges that need to change, construct a `sections` array 
 - Sections must be:
   - Sorted by `start_line`.
   - Non-overlapping.
-- Call `build_section_based_diff(full_name, path, ref, sections, context_lines)` to get a unified diff patch.
+- Call `build_section_based_diff(full_name, path, sections, ref, context_lines)` to get a unified diff patch.
+- The tool will refuse to run if `sections` is missing, if ranges overlap, or if line numbers fall outside the file.
 - Apply the returned `patch` using `apply_patch_and_commit` on the same branch.
 
-This pattern keeps diffs small and precise, even for very large files.
+This pattern keeps diffs small and precise, even for very large files, and its refusal modes make it clear when the input is unsafe.
 
-### 8.3 Using `build_unified_diff` when you already have full content
+### 8.3 Choosing the right diff builder
 
-If you already have both the original and updated content for a file in memory (for example, for a smaller config or doc file), you can:
+You now have two diff builders with explicit safety behaviors:
 
-1. Build the new content locally.
-2. Call `build_unified_diff(original, updated, path, context_lines)` to get a patch.
-3. Apply the patch with `apply_patch_and_commit`.
+- `build_unified_diff(full_name, path, ref, new_content, context_lines)`
+  - Fetches the current file from GitHub and builds a diff against `new_content`.
+  - Rejects negative `context_lines` and bubbles GitHub errors (missing file, ref, or permissions) instead of guessing.
+- `build_unified_diff_from_strings(original, updated, path, context_lines)`
+  - Use this when you already have both buffers in memory.
+  - Rejects negative `context_lines` so patches stay well-formed.
 
-This keeps the assistant in a patch-first workflow without having to hand-write unified diff strings.
+Both tools keep the assistant in a patch-first workflow without having to hand-write unified diff strings.
 
 ### 8.4 Validating JSON with `validate_json_string`
 
@@ -220,7 +224,7 @@ When returning JSON to a client or passing JSON into other tools (such as long `
 3. If `ok` is true, use the `normalized` JSON string as your final output.
 4. If `ok` is false, examine `error`, fix the problem (missing quotes, trailing commas, etc.), and try again.
 
-By combining `get_file_slice`, `build_section_based_diff`, `build_unified_diff`, `apply_patch_and_commit`, and `validate_json_string`, assistants can safely edit large files and produce strict JSON outputs without falling into read-only loops or brittle manual diff construction.
+By combining `get_file_slice`, `build_section_based_diff`, `build_unified_diff` (or `build_unified_diff_from_strings` when you already have the buffers), `apply_patch_and_commit`, and `validate_json_string`, assistants can safely edit large files and produce strict JSON outputs without falling into read-only loops or brittle manual diff construction.
 
 ## 9. Summary
 
