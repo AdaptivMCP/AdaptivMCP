@@ -35,7 +35,7 @@ def _render_visible_whitespace(line: str) -> str:
 
     This is only used for human-oriented previews; the actual `patch` returned
     by build_unified_diff remains a valid unified diff suitable for
-    apply_patch_and_open_pr.
+    apply_patch_and_commit.
     """
     return (
         line.replace(" ", "·")
@@ -139,7 +139,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         write_action=False,
         description=(
             "Build a unified diff from original and updated file content. "
-            "Useful for large files where sending only a patch to apply_patch_and_open_pr "
+            "Useful for large files where sending only a patch to apply_patch_and_commit "
             "is safer than sending full file contents."
         ),
         tags=["github", "read", "diff"],
@@ -160,14 +160,14 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             context_lines: Number of context lines in the diff (default 3).
             show_whitespace: If true, also return a human-oriented preview with
                 visible whitespace characters. This preview is *not* meant to be
-                applied; use the `patch` value for apply_patch_and_open_pr.
+                applied; use the `patch` value with apply_patch_and_commit.
 
         Returns:
             A dict containing at least:
                 - patch: unified diff as a string suitable for git apply /
-                  apply_patch_and_open_pr.
+                  apply_patch_and_commit.
                 - preview (optional): a diff string with visible whitespace
-                  markers for debugging.
+                  markers for debugging and human review.
         """
 
         if context_lines < 0:
