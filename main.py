@@ -3046,7 +3046,7 @@ async def apply_patch_and_commit(
             if m:
                 # Start of a new hunk: flush unchanged lines up to old_start-1.
                 old_start = int(m.group("old_start"))
-                target_idx = old_start - 1  # convert 1-based to 0-based
+                target_idx = old_start - 1 if old_start > 0 else 0
 
                 if target_idx < orig_idx:
                     raise GitHubAPIError(
@@ -3089,13 +3089,22 @@ async def apply_patch_and_commit(
         new_lines.extend(orig_lines[orig_idx:])
         return "".join(new_lines)
 
-    # 1) Read current file from GitHub on the target branch.
-    decoded = await _decode_github_content(full_name, path, effective_branch)
-    old_text = decoded.get("text")
-    if not isinstance(old_text, str):
-        raise GitHubAPIError("Decoded content is not text")
-
-    sha_before = decoded.get("sha")
+    # 1) Read current file from GitHub on the target branch. Treat a 404 as a new file.
+    is_new_file = False
+    try:
+        decoded = await _decode_github_content(full_name, path, effective_branch)
+        old_text = decoded.get("text")
+        if not isinstance(old_text, str):
+            raise GitHubAPIError("Decoded content is not text")
+        sha_before = decoded.get("sha")
+    except GitHubAPIError as exc:
+        msg = str(exc)
+        if "404" in msg and "/contents/" in msg:
+            is_new_file = True
+            old_text = ""
+            sha_before = None
+        else:
+            raise
 
     # 2) Apply the patch to get the updated text.
     try:
@@ -3104,7 +3113,8 @@ async def apply_patch_and_commit(
         raise GitHubAPIError(f"Failed to apply patch to {path}: {exc}") from exc
 
     body_bytes = new_text.encode("utf-8")
-    commit_message = message or f"Update {path} via patch"
+    default_message = "Create" if is_new_file else "Update"
+    commit_message = message or f"{default_message} {path} via patch"
 
     # 3) Commit the new content via the GitHub Contents API.
     commit_result = await _perform_github_commit(
