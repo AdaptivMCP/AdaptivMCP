@@ -966,10 +966,18 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     },
                 )
 
+                errored = False
                 try:
                     result = await func(*args, **kwargs)
                 except Exception as exc:
+                    errored = True
                     duration_ms = int((time.perf_counter() - start) * 1000)
+                    _record_tool_call(
+                        tool_name=tool.name,
+                        write_action=write_action,
+                        duration_ms=duration_ms,
+                        errored=True,
+                    )
                     TOOLS_LOGGER.exception(
                         "tool_call_error",
                         extra={
@@ -989,6 +997,12 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
+                _record_tool_call(
+                    tool_name=tool.name,
+                    write_action=write_action,
+                    duration_ms=duration_ms,
+                    errored=errored,
+                )
                 TOOLS_LOGGER.info(
                     "tool_call_success",
                     extra={
@@ -1030,10 +1044,18 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     },
                 )
 
+                errored = False
                 try:
                     result = func(*args, **kwargs)
                 except Exception as exc:
+                    errored = True
                     duration_ms = int((time.perf_counter() - start) * 1000)
+                    _record_tool_call(
+                        tool_name=tool.name,
+                        write_action=write_action,
+                        duration_ms=duration_ms,
+                        errored=True,
+                    )
                     TOOLS_LOGGER.exception(
                         "tool_call_error",
                         extra={
@@ -1053,6 +1075,12 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
+                _record_tool_call(
+                    tool_name=tool.name,
+                    write_action=write_action,
+                    duration_ms=duration_ms,
+                    errored=errored,
+                )
                 TOOLS_LOGGER.info(
                     "tool_call_success",
                     extra={
