@@ -136,7 +136,9 @@ Representative tools already implemented:
   - apply_patch_and_commit for patch-based edits via unified diffs.
   - update_files_and_open_pr for multi-file commit plus verify plus PR.
   - Branch and PR helpers: ensure_branch, create_branch, create_pull_request, merge_pull_request, close_pull_request, comment_on_pull_request.
+  - Diff helpers: build_unified_diff and build_section_based_diff for building patches server-side from full content or line-based sections.
   - Extra tools in extra_tools.py: delete_file, delete_remote_branch, and similar.
+  - JSON helper: validate_json_string to sanity-check and normalize JSON strings before returning them to clients or feeding them into other tools.
 
 All write tools are explicitly tagged as write actions and require WRITE_ALLOWED to be enabled.
 
@@ -149,6 +151,8 @@ All write tools are explicitly tagged as write actions and require WRITE_ALLOWED
     `apply_patch_and_commit` or `update_files_and_open_pr`).
   - This helper stays available for simple docs/config edits when a full-file replace
     is acceptable and WRITE_ALLOWED is enabled.
+- `build_section_based_diff`: construct a patch for large files by specifying line-based sections to replace, then apply it with `apply_patch_and_commit`.
+- `validate_json_string`: validate and normalize JSON output, especially for long payloads such as sections arrays used with `build_section_based_diff`.
 
 - run_command
   - Clones the repo at a given ref into a temporary workspace.
