@@ -208,23 +208,15 @@ From that point on, **all** subsequent write tools for this work should use that
 ---
 ## 5. Single-file text edits (docs and small configs)
 
-`apply_text_update_and_commit` still exists, but it is a **guarded, manual-only** escape hatch. It performs full-file replacement in a single commit, which is powerful but easy to misuse.
+`apply_text_update_and_commit` remains available for single-file replacements. It performs full-file updates in a single commit, which is powerful but easy to misuse on code-heavy files.
 
 For assistants and automated workflows:
 
-- Do **not** plan around `apply_text_update_and_commit`.
-- Always use patch-based flows instead:
+- Prefer patch-based flows:
   - `build_unified_diff` + `apply_patch_and_commit`, or
   - `update_files_and_open_pr` for multi-file updates.
 
-The implementation enforces this policy. Calls to `apply_text_update_and_commit` that do not set `manual_override=True` raise a `RuntimeError` instructing callers to use patch-based flows instead.
-
-If you are operating manually and fully understand the risks of full-file replacement, you may:
-
-- Call `apply_text_update_and_commit` with `manual_override=True` in a one-off, human-supervised context.
-- Review the resulting diff carefully in GitHub before merging.
-
-In other words: treat `apply_text_update_and_commit` as a last-resort, human-only tool, not a normal part of day-to-day controller workflows.
+If you intentionally choose a full-file replace (for example a short doc or config), call `apply_text_update_and_commit` directly and review the resulting diff carefully in GitHub before merging.
    - If other docs need updates (for example `SELF_HOSTED_SETUP`, `ASSISTANT_DOCS_AND_SNAPSHOTS`), repeat this process.
 
 ---
@@ -312,7 +304,7 @@ Typical sequence:
 
 For smaller or more iterative work you may:
 
-2. Apply one or more changes via `apply_patch_and_commit`. In rare, manual-only scenarios, a human operator may choose to use `apply_text_update_and_commit` with `manual_override=True`, but this is not part of the normal assistant workflow.
+2. Apply one or more changes via `apply_patch_and_commit`. If you deliberately want a full-file replacement (for example a small doc), you can use `apply_text_update_and_commit`, but this should be the exception rather than the rule.
 2. Apply one or more changes via `apply_text_update_and_commit` / `apply_patch_and_commit`.
 3. Call `create_pull_request` directly with:
    - `head`: feature branch.
