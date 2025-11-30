@@ -33,7 +33,7 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
 
-# ------------------------------------------------------------------------------
+from starlette.responses import JSONResponse, PlainTextResponse
 # Configuration and globals
 # ------------------------------------------------------------------------------
 
@@ -76,7 +76,110 @@ logging.basicConfig(
 BASE_LOGGER = logging.getLogger("github_mcp")
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
+SERVER_START_TIME = time.time()
 
+
+def _new_metrics_state() -> Dict[str, Any]:
+    return {
+        "tools": {},
+        "github": {
+            "requests_total": 0,
+            "errors_total": 0,
+            "rate_limit_events_total": 0,
+            "timeouts_total": 0,
+        },
+    }
+
+
+_METRICS: Dict[str, Any] = _new_metrics_state()
+
+
+def _reset_metrics_for_tests() -> None:
+    """Reset in-process metrics; intended for tests."""
+
+    global _METRICS
+    _METRICS = _new_metrics_state()
+
+
+def _record_tool_call(
+    tool_name: str,
+    *,
+    write_action: bool,
+    duration_ms: int,
+    errored: bool,
+) -> None:
+    tools_bucket = _METRICS.setdefault("tools", {})
+    bucket = tools_bucket.setdefault(
+        tool_name,
+        {
+            "calls_total": 0,
+            "errors_total": 0,
+            "write_calls_total": 0,
+            "latency_ms_sum": 0,
+        },
+    )
+    bucket["calls_total"] += 1
+    if write_action:
+        bucket["write_calls_total"] += 1
+    bucket["latency_ms_sum"] += max(0, int(duration_ms))
+    if errored:
+        bucket["errors_total"] += 1
+
+
+def _record_github_request(
+    *,
+    status_code: Optional[int],
+    duration_ms: int,
+    error: bool,
+    resp: Optional[httpx.Response] = None,
+    exc: Optional[BaseException] = None,
+) -> None:
+    github_bucket = _METRICS.setdefault("github", {})
+    github_bucket["requests_total"] = github_bucket.get("requests_total", 0) + 1
+    if error:
+        github_bucket["errors_total"] = github_bucket.get("errors_total", 0) + 1
+
+    if resp is not None:
+        remaining = resp.headers.get("X-RateLimit-Remaining")
+        if remaining is not None:
+            try:
+                if int(remaining) <= 0:
+                    github_bucket["rate_limit_events_total"] = github_bucket.get(
+                        "rate_limit_events_total", 0
+                    ) + 1
+            except ValueError:
+                pass
+
+    if exc is not None and isinstance(exc, httpx.TimeoutException):
+        github_bucket["timeouts_total"] = github_bucket.get(
+            "timeouts_total", 0
+        ) + 1
+
+
+
+
+def _metrics_snapshot() -> Dict[str, Any]:
+    """Return a shallow, JSON-safe snapshot of in-process metrics.
+
+    The metrics registry is intentionally small and numeric, but this helper
+    defensively normalizes missing buckets and coerces values to ``int`` where
+    possible so that the health payload remains stable even if future fields are
+    added.
+    """
+
+    tools = _METRICS.get("tools", {})
+    github = _METRICS.get("github", {})
+
+    def _as_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(value)
+        except Exception:  # pragma: no cover - defensive
+            return default
+
+    return {
+        "tools": tools,
+        "github": {k: _as_int(v) for k, v in github.items()},
+    }
 def _env_flag(name: str, default: bool = False) -> bool:
     """Parse a boolean-like environment variable.
 
@@ -267,6 +370,13 @@ async def _github_request(
             )
     except Exception as exc:  # pragma: no cover - defensive
         duration_ms = int((time.monotonic() - started_at) * 1000)
+        _record_github_request(
+            status_code=None,
+            duration_ms=duration_ms,
+            error=True,
+            resp=None,
+            exc=exc,
+        )
         GITHUB_LOGGER.error(
             "github_request_error",
             extra={
@@ -305,12 +415,26 @@ async def _github_request(
         error_payload["error"] = "http_error"
         # Truncate to avoid huge log records on large error bodies.
         error_payload["error_message"] = (message or resp.text[:500])
+        _record_github_request(
+            status_code=resp.status_code,
+            duration_ms=duration_ms,
+            error=True,
+            resp=resp,
+            exc=None,
+        )
         GITHUB_LOGGER.warning("github_request_error", extra=error_payload)
         raise GitHubAPIError(
             f"GitHub API error {resp.status_code} for {method} {path}: "
             f"{message or resp.text}"
         )
 
+    _record_github_request(
+        status_code=resp.status_code,
+        duration_ms=duration_ms,
+        error=False,
+        resp=resp,
+        exc=None,
+    )
     GITHUB_LOGGER.info("github_request", extra=base_payload)
 
     if expect_json:
@@ -887,10 +1011,18 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     },
                 )
 
+                errored = False
                 try:
                     result = await func(*args, **kwargs)
                 except Exception as exc:
+                    errored = True
                     duration_ms = int((time.perf_counter() - start) * 1000)
+                    _record_tool_call(
+                        tool_name=tool.name,
+                        write_action=write_action,
+                        duration_ms=duration_ms,
+                        errored=True,
+                    )
                     TOOLS_LOGGER.exception(
                         "tool_call_error",
                         extra={
@@ -910,6 +1042,12 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
+                _record_tool_call(
+                    tool_name=tool.name,
+                    write_action=write_action,
+                    duration_ms=duration_ms,
+                    errored=errored,
+                )
                 TOOLS_LOGGER.info(
                     "tool_call_success",
                     extra={
@@ -951,10 +1089,18 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     },
                 )
 
+                errored = False
                 try:
                     result = func(*args, **kwargs)
                 except Exception as exc:
+                    errored = True
                     duration_ms = int((time.perf_counter() - start) * 1000)
+                    _record_tool_call(
+                        tool_name=tool.name,
+                        write_action=write_action,
+                        duration_ms=duration_ms,
+                        errored=True,
+                    )
                     TOOLS_LOGGER.exception(
                         "tool_call_error",
                         extra={
@@ -974,6 +1120,12 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
+                _record_tool_call(
+                    tool_name=tool.name,
+                    write_action=write_action,
+                    duration_ms=duration_ms,
+                    errored=errored,
+                )
                 TOOLS_LOGGER.info(
                     "tool_call_success",
                     extra={
@@ -3116,9 +3268,40 @@ async def homepage(request: Request) -> PlainTextResponse:
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
-async def healthz(request: Request) -> PlainTextResponse:
-    return PlainTextResponse("OK\n")
+def _build_health_payload() -> Dict[str, Any]:
+    """Construct a small JSON health payload for the HTTP endpoint.
 
+    This keeps the HTTP health check aligned with the controller configuration
+    and exposes a minimal view of in-process metrics without changing any of the
+    structured log shapes validated elsewhere.
+    """
+
+    now = time.time()
+    uptime_seconds = max(0.0, now - SERVER_START_TIME)
+
+    return {
+        "status": "ok",
+        "uptime_seconds": uptime_seconds,
+        "github_token_present": bool(GITHUB_PAT),
+        "controller": {
+            "repo": CONTROLLER_REPO,
+            "default_branch": CONTROLLER_DEFAULT_BRANCH,
+        },
+        "metrics": _metrics_snapshot(),
+    }
+
+
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(request: Request) -> JSONResponse:
+    """Lightweight JSON health endpoint with metrics summary.
+
+    The body is intentionally small: a status flag, uptime, basic controller
+    configuration, and a compact metrics snapshot suitable for logs or external
+    polling.
+    """
+
+    payload = _build_health_payload()
+    return JSONResponse(payload)
 
 async def _shutdown_clients() -> None:
     if _http_client_github is not None:

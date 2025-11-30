@@ -191,7 +191,9 @@ Typical deployment for an end user:
    - Fork or clone this repository.
    - Deploy to Render.com or another hosting platform as a Python web service.
    - Configure environment variables, for example GitHub tokens, optional auto approval flags, concurrency limits, and HTTP timeouts.
-   - Start the app (for example via uvicorn) and confirm health.
+   - Start the app (for example via uvicorn) and confirm health by:
+     - Hitting `GET /healthz` on your deployment URL to verify status, uptime, token presence, and a small metrics snapshot.
+     - Optionally calling `get_server_config` and `validate_environment` from ChatGPT to confirm configuration.
 
 2. Connect ChatGPT to the MCP server
    - Add a custom MCP integration in ChatGPT pointing at the deployed server.
@@ -204,6 +206,28 @@ Typical deployment for an end user:
    - The controller then calls the tools exposed by this MCP server to operate on their GitHub repos and search across public GitHub when appropriate.
 
 You do not host or manage their deployment; you supply the controller logic and documentation that explains how to do this safely.
+
+---
+
+## Observability and health checks
+
+The MCP HTTP server exposes a small set of HTTP endpoints:
+
+- `/` – plain-text home message that confirms the server is running and reminds you to connect ChatGPT to `/sse`.
+- `/sse` – SSE endpoint used by the MCP transport.
+- `/healthz` – JSON health check intended for uptime probes and lightweight diagnostics.
+
+The `/healthz` response is intentionally small and stable. It includes:
+
+- `status`: `"ok"` when the process is healthy.
+- `uptime_seconds`: seconds since the server process started.
+- `github_token_present`: boolean indicating whether a GitHub token is configured.
+- `controller.repo` and `controller.default_branch`: the controller repository and default branch currently in use.
+- `metrics`: an in-process metrics snapshot with:
+  - Per-tool counters (`calls_total`, `errors_total`, `write_calls_total`, `latency_ms_sum`).
+  - Aggregate GitHub client counters (`requests_total`, `errors_total`, `rate_limit_events_total`, `timeouts_total`).
+
+Metrics are kept in memory only; they reset on process restart and never include full payloads, secrets, or user content.
 
 ---
 
@@ -233,6 +257,8 @@ On main (after refactor merge):
   - Strong write gating via authorize_write_actions and WRITE_ALLOWED.
   - Workspace commands: run_command, run_tests.
   - Search via GitHub Search API (search tool) across public and private repositories, subject to token permissions.
+  - HTTP `/healthz` endpoint exposing a JSON health payload (status, uptime, token presence, controller configuration, and a metrics snapshot).
+  - In-process metrics registry for MCP tool calls and GitHub client requests (counters and latency sums surfaced via `/healthz`).
 
 - Planned or in progress:
   - Output truncation in run_command and run_tests (stdout and stderr size limits with truncation flags).

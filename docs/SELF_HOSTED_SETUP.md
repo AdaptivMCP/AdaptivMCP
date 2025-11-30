@@ -164,8 +164,7 @@ Adjust these commands if the repo uses a different entrypoint or packaging model
 ---
 
 ## 5. Sanity-checking the MCP server
-
-Once the service is running, it is important to verify that it is exposing the expected tools and configuration. The easiest way to do this is from ChatGPT after you connect the MCP controller, but you can also implement a basic health endpoint if needed.
+Once the service is running, it is important to verify that it is exposing the expected tools and configuration. The easiest way to do this is from ChatGPT after you connect the MCP controller.
 
 Within ChatGPT, after connecting the MCP server (see the next section), you can call:
 
@@ -180,6 +179,12 @@ These tools help verify that:
 - `extra_tools` are available.
 
 If any of these tools fail, check your Render logs and environment variable configuration.
+
+In addition, the HTTP server exposes a built-in JSON health endpoint at `/healthz`:
+
+- It returns a small payload containing status, uptime (in seconds since process start), whether a GitHub token is present, the configured controller repo/default branch, and a compact metrics snapshot.
+- It is safe to use for uptime probes and dashboards; the body stays small and numeric and never includes secrets or full request payloads.
+- On Render, you can point the health check at `GET /healthz` instead of implementing a separate endpoint.
 
 ---
 
