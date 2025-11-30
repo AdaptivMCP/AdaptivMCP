@@ -65,7 +65,9 @@ Steps:
 1. Read the file with `get_file_contents(full_name, path, ref=<default_branch>)`.
 2. Explain to Joey what you will change in plain language.
 3. Prepare the full updated file content (avoid patch juggling).
-4. Call `update_file_and_open_pr` with the new content, a short branch name (ally/<scope>-<summary>), and your PR title/body.
+4. Either:
+   - Use `apply_text_update_and_commit` on a dedicated branch, then `create_pull_request`, or
+   - Use `update_files_and_open_pr` with a single-file entry for a one-shot commit+PR.
 5. Confirm the PR response contains the branch and pull request details.
 6. Report the PR link, summary of changes, and test status to Joey.
 
@@ -85,8 +87,10 @@ Use this when Joey has created a blank file or minimal stub on main and you want
 
 1. Confirm the stub exists with `get_file_contents` or `fetch_files`.
 2. Draft the full document content in the conversation and get Joey's approval.
-3. Use `update_file_and_open_pr` (one file) or `update_files_and_open_pr` (multiple files) to publish the finished document.
-5. In the PR body, clearly state that this is a new document from a stub and explain how assistants should use it.
+3. Publish via either:
+   - `apply_text_update_and_commit` + `create_pull_request`, or
+   - `update_files_and_open_pr` if you prefer a single one-shot call.
+4. In the PR body, clearly state that this is a new document from a stub and explain how assistants should use it.
 
 ### 3.4 Flow D: running tests
 
@@ -179,10 +183,13 @@ When using write tools, assistants must:
 
 When deciding which tool to use:
 
-1. Prefer `update_file_and_open_pr` for single-file changes and `update_files_and_open_pr` for multi-file changes.
-2. Use `run_tests` or `run_command` when you need a full workspace for tests or custom commands.
-3. Use `commit_file_async` sparingly, typically when Joey explicitly asks for that pattern.
-4. Never push directly to main or use other connectors to modify the same repo in the same session.
+1. For single-file changes, prefer:
+   - `apply_text_update_and_commit` + `create_pull_request`, or
+   - `update_files_and_open_pr` with a one-file payload.
+2. Use `apply_patch_and_commit` when you have an explicit unified diff from `build_unified_diff` and want a patch-first workflow.
+3. Use `update_files_and_open_pr` for multi-file changes that should land together as one reviewable PR.
+4. Use `run_tests` or `run_command` when you need a full workspace for tests or custom commands.
+5. Never push directly to main or use other connectors to modify the same repo in the same session.
 
 ---
 
