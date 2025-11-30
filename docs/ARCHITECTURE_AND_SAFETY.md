@@ -162,9 +162,19 @@ Other helpers call this rather than constructing ad-hoc API requests.
 - Re-reads the file from GitHub and records `sha_after` and verified contents.
 - Optionally includes a unified diff between old and new text in the result.
 
-Tests in `tests/test_apply_text_update_and_commit.py` cover both the existing-file and new-file paths.
+### 5.2 apply_text_update_and_commit (guarded, manual-only)
 
-### 5.3 apply_patch_and_commit
+`apply_text_update_and_commit` performs full-file text updates and creation in a
+single commit. Because this is extremely powerful and easy to misuse, it is
+treated as a **manual-only** escape hatch rather than a normal assistant tool.
+
+In particular:
+
+- Automated flows must prefer patch-based helpers (`build_unified_diff` +
+  `apply_patch_and_commit`, or `update_files_and_open_pr`).
+- The implementation enforces this: calling `apply_text_update_and_commit`
+  without `manual_override=True` raises a `RuntimeError` instructing callers to
+  use patch-based flows instead.
 
 `apply_patch_and_commit` applies a unified diff patch:
 

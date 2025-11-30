@@ -140,11 +140,18 @@ Representative tools already implemented:
 
 All write tools are explicitly tagged as write actions and require WRITE_ALLOWED to be enabled.
 
----
+### Write tools
 
-## Workspace execution: run_command and run_tests
-
-Beyond direct GitHub API operations, the server exposes powerful workspace tools that allow the controller (with the users permission) to run commands against a real checkout of the repository:
+- `apply_patch_and_commit`: apply a unified diff to one or more files and commit.
+- `update_files_and_open_pr`: multi-file update + PR orchestration.
+- `apply_text_update_and_commit` (guarded, manual-only): full-file replacement helper.
+  - This tool is **not** part of the normal assistant workflow.
+  - Automated flows must use patch-based helpers instead (`build_unified_diff` +
+    `apply_patch_and_commit` or `update_files_and_open_pr`).
+  - The implementation enforces this: calls without `manual_override=True` raise a
+    `RuntimeError` with a message instructing callers to use patch-based flows.
+  - `manual_override=True` is reserved for explicit, human-supervised usage (for
+    example, a one-off fix in a small file).
 
 - run_command
   - Clones the repo at a given ref into a temporary workspace.

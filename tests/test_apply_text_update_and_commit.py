@@ -49,6 +49,7 @@ async def test_apply_text_update_and_commit_updates_existing_file(monkeypatch):
         branch="feature-branch",
         message="Custom message",
         return_diff=True,
+        manual_override=True,
     )
 
     # We expect one commit and two decodes (before and after).
@@ -82,9 +83,15 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
         decode_calls.append({"full_name": full_name, "path": path, "branch": branch})
         if call_index == 0:
             # First call simulates a 404 from the Contents API.
-            raise GitHubAPIError("GitHub content request failed with status 404 for /contents/new-file.txt")
+            raise GitHubAPIError(
+                "GitHub content request failed with status 404 for /contents/new-file.txt"
+            )
         # Second call represents the post-commit verification read.
-        return {"text": "new text", "sha": "after-sha", "html_url": "https://example.com/new-file.txt"}
+        return {
+            "text": "new text",
+            "sha": "after-sha",
+            "html_url": "https://example.com/new-file.txt",
+        }
 
     commit_calls = []
 
@@ -105,12 +112,13 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
     monkeypatch.setattr(main, "WRITE_ALLOWED", True)
 
     result = await main.apply_text_update_and_commit(
+        updated_content="new text",
         full_name="owner/repo",
         path="new-file.txt",
-        updated_content="new text",
         branch="feature-branch",
         message=None,
         return_diff=True,
+        manual_override=True,
     )
 
     # We expect one commit and two decode attempts (404, then success).
@@ -122,14 +130,61 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
     assert commit["path"] == "new-file.txt"
     assert commit["branch"] == "feature-branch"
     assert commit["content_bytes"] == b"new text"
-    # For a new file, sha should be None and the generated commit message
-    # should follow the "Create <path>" pattern.
+    # For a new file, sha should be None and the generated commit message should follow "Create <path>".
     assert commit["sha"] is None
     assert commit["message"] == "Create new-file.txt"
 
     assert result["status"] == "committed"
     assert result["verification"]["sha_before"] is None
     assert result["verification"]["sha_after"] == "after-sha"
-    # The diff is not validated in detail here, only that it is present
-    # when return_diff is True.
     assert "diff" in result
+
+
+@pytest.mark.asyncio
+async def test_apply_text_update_and_commit_raises_without_manual_override(monkeypatch):
+    """Guardrail: calls without manual_override should raise and instruct callers to
+    use patch-based flows instead of full-file replacement.
+    """
+
+    async def fake_decode(full_name, path, branch):
+        return {"text": "old", "sha": "before-sha", "html_url": "https://example.com/file"}
+
+    async def fake_commit(**kwargs):
+        return {"commit": {"sha": "after-sha"}}
+
+    monkeypatch.setattr(main, "_decode_github_content", fake_decode)
+    monkeypatch.setattr(main, "_perform_github_commit", fake_commit)
+    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        await main.apply_text_update_and_commit(
+            full_name="owner/repo",
+            path="file.txt",
+            updated_content="new text",
+            branch="feature-branch",
+            message="Custom message",
+            return_diff=True,
+        )
+
+    msg = str(excinfo.value)
+    assert "disabled for automated bulk edits" in msg
+    assert "build_unified_diff + apply_patch_and_commit" in msg
+
+    monkeypatch.setattr(main, "_decode_github_content", fake_decode)
+    monkeypatch.setattr(main, "_perform_github_commit", fake_commit)
+    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        await main.apply_text_update_and_commit(
+            full_name="owner/repo",
+            path="file.txt",
+            updated_content="new text",
+            branch="feature-branch",
+            message="Custom message",
+            return_diff=True,
+        )
+
+    msg = str(excinfo.value)
+    assert "disabled for automated bulk edits" in msg
+    assert "build_unified_diff + apply_patch_and_commit" in msg
+
