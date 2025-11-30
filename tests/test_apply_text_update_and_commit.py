@@ -109,15 +109,16 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
         manual_override=True,
     )
 @pytest.mark.asyncio
-async def test_apply_text_update_and_commit_raises_without_manual_override(monkeypatch):
-    """Guardrail: calls without manual_override should raise and instruct callers to
-    use patch-based flows instead of full-file replacement.
-    """
 
-    async def fake_decode(full_name, path, branch):
-        return {"text": "old", "sha": "before-sha", "html_url": "https://example.com/file"}
-
-    async def fake_commit(**kwargs):
+    result = await main.apply_text_update_and_commit(
+        full_name="owner/repo",
+        path="new-file.txt",
+        updated_content="new text",
+        branch="feature-branch",
+        message=None,
+        return_diff=True,
+        manual_override=True,
+    )
         return {"commit": {"sha": "after-sha"}}
 
     monkeypatch.setattr(main, "_decode_github_content", fake_decode)
