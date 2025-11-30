@@ -163,9 +163,8 @@ Adjust these commands if the repo uses a different entrypoint or packaging model
 
 ---
 
+## 5. Sanity-checking the MCP server
 Once the service is running, it is important to verify that it is exposing the expected tools and configuration. The easiest way to do this is from ChatGPT after you connect the MCP controller.
-
-Once the service is running, it is important to verify that it is exposing the expected tools and configuration. The easiest way to do this is from ChatGPT after you connect the MCP controller, but you can also implement a basic health endpoint if needed.
 
 Within ChatGPT, after connecting the MCP server (see the next section), you can call:
 
