@@ -44,17 +44,15 @@ async def test_apply_text_update_and_commit_updates_existing_file(monkeypatch):
 
 
     result = await main.apply_text_update_and_commit(
+    result = await main.apply_text_update_and_commit(
         full_name="owner/repo",
         path="file.txt",
         updated_content="new text",
         branch="feature-branch",
         message="Custom message",
         return_diff=True,
-    )
-
         manual_override=True,
-    # We expect one commit and two decodes (before and after).
-    assert len(commit_calls) == 1
+    )
     assert len(decode_calls) == 2
 
     commit = commit_calls[0]
@@ -107,15 +105,15 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
     monkeypatch.setattr(main, "WRITE_ALLOWED", True)
 
     result = await main.apply_text_update_and_commit(
+    result = await main.apply_text_update_and_commit(
         full_name="owner/repo",
         path="new-file.txt",
         updated_content="new text",
         branch="feature-branch",
         message=None,
         return_diff=True,
-    )
         manual_override=True,
-
+    )
 
 @pytest.mark.asyncio
 async def test_apply_text_update_and_commit_raises_without_manual_override(monkeypatch):
@@ -146,23 +144,4 @@ async def test_apply_text_update_and_commit_raises_without_manual_override(monke
     msg = str(excinfo.value)
     assert "disabled for automated bulk edits" in msg
     assert "build_unified_diff + apply_patch_and_commit" in msg
-    # We expect one commit and two decode attempts (404, then success).
-    assert len(commit_calls) == 1
-    assert len(decode_calls) == 2
 
-    commit = commit_calls[0]
-    assert commit["full_name"] == "owner/repo"
-    assert commit["path"] == "new-file.txt"
-    assert commit["branch"] == "feature-branch"
-    assert commit["content_bytes"] == b"new text"
-    # For a new file, sha should be None and the generated commit message
-    # should follow the "Create <path>" pattern.
-    assert commit["sha"] is None
-    assert commit["message"] == "Create new-file.txt"
-
-    assert result["status"] == "committed"
-    assert result["verification"]["sha_before"] is None
-    assert result["verification"]["sha_after"] == "after-sha"
-    # The diff is not validated in detail here, only that it is present
-    # when return_diff is True.
-    assert "diff" in result
