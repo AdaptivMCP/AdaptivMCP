@@ -2852,7 +2852,6 @@ async def apply_text_update_and_commit(
     message: Optional[str] = None,
     return_diff: bool = True,
     context_lines: int = 3,
-    manual_override: bool = False,
 ) -> Dict[str, Any]:
     """Apply a text update to a single file on a branch, then verify it.
 
