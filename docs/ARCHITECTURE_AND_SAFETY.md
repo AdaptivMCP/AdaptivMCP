@@ -398,3 +398,19 @@ is used by the `/healthz` HTTP route:
 Metrics are intentionally kept in memory only; they reset on process restart
 and never include request bodies, secrets, or other user content. The `/healthz`
 endpoint is safe to use for uptime checks, basic dashboards, and smoke tests.
+
+## 12. Execution environment: run_command and run_tests
+
+For all code execution and tests against this repository (or any other repo accessed through this controller), assistants must treat the workspace tools as the canonical execution environment, not the MCP server process itself.
+
+Specifically:
+
+- `run_command` and `run_tests` clone the target repository at the effective ref (as computed by `_effective_ref_for_repo`) into a temporary workspace.
+- They optionally create a temporary virtual environment and run the requested command or test suite inside that workspace.
+- After the command finishes, the workspace is discarded.
+
+This means:
+
+- Assistants should not assume any global packages or state in the MCP server process; all project-level dependencies must be managed via `run_command` / `run_tests` inside the cloned workspace.
+- When describing workflows in docs or prompts, assume that code execution and tests always happen through these tools, on a fresh checkout of the branch being worked on.
+- When new workflow tools are added that depend on executing code, they should internally use the same workspace model rather than relying on ambient process state.
