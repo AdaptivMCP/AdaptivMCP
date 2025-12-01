@@ -1941,9 +1941,9 @@ def controller_contract() -> Dict[str, Any]:
         },
         "expectations": {
             "assistant": [
-                "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, and running checks; do not assume packages are installed in the MCP server process.",
+                "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, running checks, and driving local workflows; do not assume packages are installed in the MCP server process.",
                 "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
-                "Treat run_command as the way to run any project-specific or shell-level commands you would normally ask a human (or yourself) to run locally (linters, formatters, build scripts, migrations, one-off diagnostics), subject to the same guardrails as other write tools.",
+                "Treat run_command as the way to run any project-specific or shell-level commands you would normally ask a human (or yourself) to run locally (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics), with no extra restrictions beyond the controller's normal write gating and approval.",
                 "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
                 "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
                 "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
@@ -1959,6 +1959,13 @@ def controller_contract() -> Dict[str, Any]:
                 "If a tool call returns a schema or validation error (for example an unexpected parameter), stop and re-read the tool definition via list_all_actions(include_parameters=true). Fix the arguments to match the schema instead of guessing or retrying with made-up parameters.",
                 "Do not switch between different search interfaces mid-task without reason. Once you have chosen a repo-scoped search strategy for a task in this controller repo, stick to it unless the user clearly requests a change.",
             ],
+            "server": [
+                "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
+                "Default to the configured controller branch when refs are missing for the controller repo to reduce accidental writes to main.",
+                "Expose minimal health and metrics data so controllers can debug without extra API calls.",
+            ],
+        },
+
             "controller_prompt": [
                 "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
                 "Encourage use of list_write_tools and validate_environment so the assistant knows available tools and common pitfalls.",
