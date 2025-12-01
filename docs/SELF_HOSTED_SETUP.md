@@ -251,6 +251,17 @@ If you get stuck, open a GitHub issue in your controller repo, describe your env
 
 ## 9. Next steps
 
+For installation, upgrades, and rollbacks specifically:
+
+- Use this document (`SELF_HOSTED_SETUP.md`) for initial deployment and high-level configuration.
+- Use `docs/UPGRADE_NOTES.md` for guidance on moving between versions (staging vs production, tagging, and rollback strategies).
+
+In short:
+
+- Treat staging and production as separate services.
+- Pin production to a known-good branch, tag, or commit.
+- Run smoke tests and workspace tests after every upgrade, and roll back quickly if something looks wrong.
+
 Once your self-hosted MCP server is running and wired into ChatGPT, you can:
 
 - Iterate on your controller prompt and workflows (see `docs/WORKFLOWS.md`).
