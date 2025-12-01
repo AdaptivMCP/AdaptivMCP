@@ -139,14 +139,21 @@ def _record_github_request(
 
     if resp is not None:
         remaining = resp.headers.get("X-RateLimit-Remaining")
+        incremented = False
         if remaining is not None:
             try:
                 if int(remaining) <= 0:
                     github_bucket["rate_limit_events_total"] = github_bucket.get(
                         "rate_limit_events_total", 0
                     ) + 1
+                    incremented = True
             except ValueError:
                 pass
+
+        if resp.status_code == 429 and not incremented:
+            github_bucket["rate_limit_events_total"] = github_bucket.get(
+                "rate_limit_events_total", 0
+            ) + 1
 
     if exc is not None and isinstance(exc, httpx.TimeoutException):
         github_bucket["timeouts_total"] = github_bucket.get(
@@ -434,27 +441,49 @@ async def _github_request(
             exc=None,
         )
 
-        def _is_rate_limit_error() -> bool:
+        def _is_rate_limit_error(status_code: int) -> bool:
             msg = (message or resp.text or "").lower()
             if "rate limit" in msg:
+                return True
+            if status_code == 429:
                 return True
             remaining = resp.headers.get("X-RateLimit-Remaining")
             return remaining is not None and remaining == "0"
 
-        if resp.status_code in {401, 403}:
+        def _parse_rate_limit_reset() -> tuple[Optional[str], Optional[int]]:
             reset_ts = resp.headers.get("X-RateLimit-Reset")
             reset_iso = None
             if reset_ts and reset_ts.isdigit():
                 reset_iso = datetime.fromtimestamp(int(reset_ts), tz=timezone.utc).isoformat()
 
-            if resp.status_code == 403 and _is_rate_limit_error():
+            retry_after_seconds = None
+            retry_after = resp.headers.get("Retry-After")
+            if retry_after and retry_after.strip().isdigit():
+                try:
+                    retry_after_seconds = int(retry_after.strip())
+                except ValueError:
+                    retry_after_seconds = None
+
+            return reset_iso, retry_after_seconds
+
+        if resp.status_code in {401, 403, 429}:
+            reset_iso, retry_after_seconds = _parse_rate_limit_reset()
+
+            if resp.status_code in {403, 429} and _is_rate_limit_error(resp.status_code):
                 error_payload["error"] = "github_rate_limit"
                 error_payload["rate_limit_reset"] = reset_iso
+                if retry_after_seconds is not None:
+                    error_payload["retry_after_seconds"] = retry_after_seconds
                 GITHUB_LOGGER.warning("github_rate_limit", extra=error_payload)
-                reset_hint = f" Rate limit resets at {reset_iso}." if reset_iso else ""
+                hints: List[str] = []
+                if reset_iso:
+                    hints.append(f"Rate limit resets at {reset_iso}.")
+                if retry_after_seconds is not None:
+                    hints.append(f"Retry after {retry_after_seconds} seconds.")
+                hint_text = " ".join(hints)
                 raise GitHubRateLimitError(
                     "GitHub API rate limit exceeded "
-                    f"for {method} {path}: {message or resp.text}.{reset_hint} "
+                    f"for {method} {path}: {message or resp.text}. {hint_text} "
                     "Reduce search frequency or wait for the limit to reset."
                 )
 
