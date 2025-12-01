@@ -3074,6 +3074,31 @@ async def create_pull_request(
     )
 
 
+@mcp_tool(write_action=True)
+async def open_pr_for_existing_branch(
+    full_name: str,
+    branch: str,
+    base: str = "main",
+    title: Optional[str] = None,
+    body: Optional[str] = None,
+    draft: bool = False,
+) -> Dict[str, Any]:
+    """Open a pull request for an existing branch into a base branch."""
+
+    # Resolve the effective base branch using the same logic as other helpers.
+    effective_base = _effective_ref_for_repo(full_name, base)
+    pr_title = title or f"{branch} -> {effective_base}"
+
+    return await create_pull_request(
+        full_name=full_name,
+        title=pr_title,
+        head=branch,
+        base=effective_base,
+        body=body,
+        draft=draft,
+    )
+
+
 
 @mcp_tool(write_action=True)
 async def update_files_and_open_pr(
