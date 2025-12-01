@@ -1,10 +1,10 @@
 # Adaptiv Controller – GitHub MCP Server
 
-> Self-hosted GitHub connector for ChatGPT, powering personal Adaptiv Controllers that you own and operate.
+> Self-hosted GitHub MCP server that lets ChatGPT act as a safe, policy-driven engineer on your repositories.
 
-This repository contains the GitHub MCP server that powers the Adaptiv Controller experience. It is designed to be self-hosted by each user (for example on Render.com) and connected to their own ChatGPT account and GitHub credentials. The server publishes a versioned controller contract (via the `controller_contract` tool) that should be treated as the single source of truth for expectations and guardrails; prompts should read it rather than redefining or overriding its contents, and documentation should not introduce competing or overlapping contract text.
+Adaptiv Controller uses this server to talk to GitHub. You deploy it yourself (for example on Render.com), provide your own GitHub token, and connect it to ChatGPT as an MCP server. The server publishes a versioned controller contract via the `controller_contract` tool; controllers should read that contract instead of hard-coding assumptions or duplicating it in prompts.
 
-The controller itself (Joeys GitHub, officially the Adaptiv Controller) is a separate ChatGPT-side configuration and workflow layer that you sell. This repo is the backend GitHub connector the controller talks to.
+Adaptiv Controller (for example "Joeys GitHub") lives entirely on the ChatGPT side as a custom assistant and workflow layer. This repository is the backend GitHub connector that controller instances use.
 
 ---
 
@@ -42,18 +42,18 @@ What it is not:
 
 ## For buyers (product view)
 
-If you are purchasing this as a product:
+If you are buying this as a product, you are buying the **controller**, not a hosted service.
 
-- You are buying the Adaptiv Controller:
+- You get the Adaptiv Controller:
   - The controller configuration, workflows, and usage model inside ChatGPT.
-  - The way the assistant uses the tools provided by this MCP server.
+  - The way the assistant uses the tools exposed by this MCP server.
 
-- You are not buying hosting or managed infrastructure:
-  - You will deploy and operate this MCP server yourself (for example on Render.com).
-  - You will supply and manage your own GitHub tokens and secrets.
-  - You will decide which repos, branches, and environments the controller is allowed to touch.
+- You are responsible for infrastructure:
+  - Deploying and operating this MCP server yourself (for example on Render.com or your own VM).
+  - Supplying and managing your own GitHub tokens and secrets.
+  - Deciding which repos, branches, and environments the controller is allowed to touch.
 
-In other words:
+In short:
 
 - You own the infrastructure and credentials.
 - Adaptiv Controller tells your assistant how to use the tools safely and effectively.
