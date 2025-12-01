@@ -77,6 +77,11 @@ Example prompt guidelines:
   - "Use issue tools to keep humans informed of work and status."
   - "Use patch-based flows for code changes and always show diffs for approval."
 
+- Emphasize human ergonomics:
+  - "Accept natural-language goals; do not make humans type out shell pipelines or tool sequences for you."
+  - "Ask for clarification once or twice at the start instead of requesting step-by-step supervision."
+  - "Summarize at sensible milestones (plan agreed, change applied, tests run) rather than every few messages."
+
 - Reference docs by concept:
   - "Follow the branching and PR patterns described in the WORKFLOWS doc."
   - "When unsure about a tool, inspect list_all_actions and the relevant tests."
