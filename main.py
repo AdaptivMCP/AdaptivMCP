@@ -2112,6 +2112,29 @@ async def list_branches(
 
 
 @mcp_tool(write_action=False)
+async def search_code_in_repo(
+    full_name: str,
+    query: str,
+    path: Optional[str] = None,
+    per_page: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """Search code within a single repository using GitHub code search."""
+
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+
+    # Scope the query to the given repo and optional path prefix.
+    qualifiers = [f"repo:{full_name}"]
+    if path:
+        qualifiers.append(f"path:{path}")
+
+    q = " ".join([query] + qualifiers)
+    params = {"q": q, "per_page": per_page, "page": page}
+    return await _github_request("GET", "/search/code", params=params)
+
+
+@mcp_tool(write_action=False)
 async def get_file_contents(
     full_name: str,
     path: str,
