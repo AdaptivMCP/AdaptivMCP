@@ -288,3 +288,91 @@ On main (after refactor merge):
 The specific license terms for this repository and the Adaptiv Controller configuration are determined by you and should be documented separately, for example in a LICENSE file and in commercial agreements.
 
 ---
+
+## Product: Adaptiv Controller GitHub Kit
+
+The Adaptiv Controller GitHub Kit is a self-hosted GitHub AI controller you run in your own infrastructure. It turns an LLM (for example ChatGPT with MCP) into a safe, policy-driven collaborator on your repositories, without giving any third-party hosted agent direct access to your code.
+
+### What this kit does
+
+- Exposes a high-level GitHub tool surface over MCP:
+  - Read: files, trees, issues, PRs, workflow runs, logs, search (code/issues/commits/repos).
+  - Write (gated): branches, commits, patches, PRs, comments, and selected workspace commands.
+- Implements opinionated safety controls:
+  - Branch-first workflows (no direct writes to `main`).
+  - Central write gate that must be explicitly enabled per session.
+  - Optional per-repo and per-branch write policies.
+  - Optional tool- and command-level allowlists/denylists.
+- Provides ops and observability hooks:
+  - `/healthz` endpoint with token presence, controller config, and metrics snapshot.
+  - Structured logging for tool calls and GitHub API usage.
+  - Workspace timeouts and concurrency controls.
+
+You connect this MCP server to a controller (prompt plus configuration) in ChatGPT or another MCP-capable host. The controller decides how to use the tools; this kit guarantees what is possible and how safely it can be done.
+
+### Who this is for
+
+This kit is designed for:
+
+- Developers and small teams who want an AI helper that can:
+  - Open real PRs.
+  - Run tests and linters.
+  - Work across multiple repos.
+  without handing full write access to a vendor-hosted agent.
+- Safety-conscious teams (fintech, infra, security, and similar) that:
+  - Need self-hosted infrastructure.
+  - Want explicit and auditable policies around what the AI can change.
+  - Prefer to own and evolve their own prompts/controllers over time.
+
+It is not a hosted SaaS. You deploy it, you configure it, and you control it.
+
+### What you get in this kit
+
+When you adopt the Adaptiv Controller GitHub Kit, you get:
+
+- A self-hosted MCP server implementation:
+  - Python web service (FastAPI/FastMCP) ready to run on Render, a VM, or a container platform.
+  - High-level tools for reading/writing repos, issues, PRs, and running workspace commands.
+- A versioned controller contract:
+  - Machine-readable description of the tool surface and safety expectations.
+  - Stable contract the controller can read instead of hard-coding assumptions.
+- Safety and configuration model:
+  - Global write gate (`WRITE_ALLOWED`) with an explicit authorization tool.
+  - Env- or config-driven policies for repos, branches, tools, and commands.
+  - Workspace limits (timeouts, concurrency) for `run_command` / `run_tests`.
+- Documentation:
+  - Self-hosted setup and upgrade guidance.
+  - Architecture and safety model.
+  - Recommended workflows for controllers and advanced users.
+  - Operations/runbook notes (health checks, common failure modes).
+
+This is a controller kit: a hardened base you can fork, extend, and adapt to your environment.
+
+### What you are responsible for
+
+As an operator or buyer:
+
+- You host and operate the MCP server:
+  - Choose a hosting platform (Render, your own VM, container stack, and similar).
+  - Configure environment variables and secrets (GitHub tokens, policies, timeouts).
+  - Monitor logs and `/healthz` according to your own standards.
+- You control the safety envelope:
+  - Decide which repos and branches the AI is allowed to touch.
+  - Decide which tools and commands are enabled in your deployment.
+- You own the controller behavior:
+  - Create and maintain your own controller(s) in ChatGPT or another MCP host.
+  - Decide how conservative or aggressive the assistant should be.
+  - Update prompts and policies over time as your team’s needs change.
+
+This kit deliberately avoids any phone-home or central control: after installation, you are in full control of both infrastructure and policy.
+
+### Licensing and plans
+
+Licensing for this kit is intended to be simple and self-service. A separate document, `licensing_plan.md`, outlines suggested tiers (for individuals, small teams, and larger organizations) and what is included in each. You can adapt those terms to your own pricing and commercial model.
+
+At a high level:
+
+- All plans are self-hosted: you run the MCP server and supply your own GitHub tokens and infrastructure.
+- You are free to customize and extend the kit internally, subject to the license terms you configure for your use.
+
+See [licensing_plan.md](./licensing_plan.md) for a customizable template of licensing tiers and options.
