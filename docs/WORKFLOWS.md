@@ -416,6 +416,8 @@ Humans typically own merging and branch deletion; assistants can prepare everyth
 
 This section gives concrete, high-usage patterns you can follow almost mechanically.
 
+For any workflow that touches code or configuration, treat `run_tests` on the active feature branch and appropriate `run_command` invocations (formatters, linters, project scripts) as required steps before you open a PR, not optional extras.
+
 ### 10.1 Docs-only update (like this WORKFLOWS.md change)
 
 1. **Bootstrap**
