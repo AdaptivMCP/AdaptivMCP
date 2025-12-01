@@ -297,6 +297,12 @@ class GitHubAPIError(Exception):
     pass
 
 
+class GitHubRateLimitError(GitHubAPIError):
+    """Raised when GitHub responds with a rate limit error."""
+
+    pass
+
+
 class WriteNotAuthorizedError(Exception):
     pass
 
@@ -428,7 +434,30 @@ async def _github_request(
             exc=None,
         )
 
+        def _is_rate_limit_error() -> bool:
+            msg = (message or resp.text or "").lower()
+            if "rate limit" in msg:
+                return True
+            remaining = resp.headers.get("X-RateLimit-Remaining")
+            return remaining is not None and remaining == "0"
+
         if resp.status_code in {401, 403}:
+            reset_ts = resp.headers.get("X-RateLimit-Reset")
+            reset_iso = None
+            if reset_ts and reset_ts.isdigit():
+                reset_iso = datetime.fromtimestamp(int(reset_ts), tz=timezone.utc).isoformat()
+
+            if resp.status_code == 403 and _is_rate_limit_error():
+                error_payload["error"] = "github_rate_limit"
+                error_payload["rate_limit_reset"] = reset_iso
+                GITHUB_LOGGER.warning("github_rate_limit", extra=error_payload)
+                reset_hint = f" Rate limit resets at {reset_iso}." if reset_iso else ""
+                raise GitHubRateLimitError(
+                    "GitHub API rate limit exceeded "
+                    f"for {method} {path}: {message or resp.text}.{reset_hint} "
+                    "Reduce search frequency or wait for the limit to reset."
+                )
+
             error_payload["error"] = "github_auth_error"
             GITHUB_LOGGER.warning("github_auth_error", extra=error_payload)
             raise GitHubAuthError(
