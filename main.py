@@ -2161,6 +2161,64 @@ async def search_code_in_repo(
     return await _github_request("GET", "/search/code", params=params)
 
 
+@mcp_tool(write_action=True)
+async def move_file(
+    full_name: str,
+    from_path: str,
+    to_path: str,
+    branch: str = "main",
+    message: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Move or rename a file within a repository on a single branch.
+
+    This helper reads the source path at the given branch, writes its contents
+    to the destination path, and then deletes the original path using the same
+    commit/contents APIs as other file helpers.
+    """
+
+    _ensure_write_allowed(f"move_file from {from_path} to {to_path} in {full_name}")
+
+    if from_path == to_path:
+        raise ValueError("from_path and to_path must be different")
+
+    # Read the source file text first.
+    source = await _decode_github_content(full_name, from_path, branch)
+    source_text = source.get("text")
+    if source_text is None:
+        raise GitHubAPIError("Source file contents missing or undecodable")
+
+    commit_message = message or f"Move {from_path} to {to_path}"
+
+    # 1) Write the destination file with the source contents.
+    write_result = await apply_text_update_and_commit(
+        full_name=full_name,
+        path=to_path,
+        updated_content=source_text,
+        branch=branch,
+        message=commit_message + " (add new path)",
+        return_diff=False,
+    )
+
+    # 2) Delete the original path now that the destination exists.
+    delete_result = await delete_file(
+        full_name=full_name,
+        path=from_path,
+        branch=branch,
+        message=commit_message + " (remove old path)",
+        if_missing="ignore",
+    )
+
+    return {
+        "status": "moved",
+        "full_name": full_name,
+        "branch": branch,
+        "from_path": from_path,
+        "to_path": to_path,
+        "write_result": write_result,
+        "delete_result": delete_result,
+    }
+
+
 @mcp_tool(write_action=False)
 async def get_file_contents(
     full_name: str,
