@@ -155,10 +155,15 @@ All write tools are explicitly tagged as write actions and require WRITE_ALLOWED
 - `validate_json_string`: validate and normalize JSON output, especially for long payloads such as sections arrays used with `build_section_based_diff`.
 
 - run_command
-  - Clones the repo at a given ref into a temporary workspace.
+  - Clones the repo at a given ref into a persistent workspace on disk.
   - Optionally applies a unified diff patch before execution.
-  - Optionally creates a temporary virtual environment (use_temp_venv) so the assistant can install Python dependencies with pip install and run arbitrary commands such as linters, migrations, or scripts.
+  - Optionally creates a persistent virtual environment (use_temp_venv) so the assistant can install Python dependencies with pip install and run arbitrary commands such as linters, migrations, or scripts.
   - Enforces a configurable timeout and returns stdout, stderr, exit code, and truncation flags once output truncation is wired in.
+  - Reuses the same workspace between calls so dependencies and edits stick around until explicitly reset.
+
+- commit_workspace
+  - Stages, commits, and optionally pushes changes from the persistent workspace to the effective branch.
+  - Useful when run_command or run_tests workflows make edits that need to be saved or published.
 
 - run_tests
   - A focused wrapper around run_command for running test commands.

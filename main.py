@@ -21,6 +21,7 @@ import sys
 import logging
 import time
 import json
+import shlex
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -38,6 +39,14 @@ from starlette.responses import JSONResponse, PlainTextResponse
 GITHUB_PAT = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
 
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
+
+# Base directory for persistent workspaces used by run_command and related tools.
+# This keeps cloned repositories stable across tool invocations so installations
+# and edits survive until explicitly reset or deleted.
+WORKSPACE_BASE_DIR = os.environ.get(
+    "MCP_WORKSPACE_BASE_DIR",
+    os.path.join(tempfile.gettempdir(), "mcp-github-workspaces"),
+)
 
 HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", 150))
 HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", 300))
@@ -842,31 +851,49 @@ async def _run_shell(
         "stdout_truncated": stdout_truncated,
         "stderr_truncated": stderr_truncated,
     }
+def _workspace_path(full_name: str, ref: str) -> str:
+    repo_key = full_name.replace("/", "__")
+    ref_key = ref.replace("/", "__")
+    return os.path.join(WORKSPACE_BASE_DIR, repo_key, ref_key)
+
+
 async def _clone_repo(full_name: str, ref: Optional[str] = None) -> str:
+    effective_ref = _effective_ref_for_repo(full_name, ref)
+    workspace_dir = _workspace_path(full_name, effective_ref)
+    os.makedirs(os.path.dirname(workspace_dir), exist_ok=True)
+
+    if os.path.isdir(os.path.join(workspace_dir, ".git")):
+        return workspace_dir
+
+    if os.path.exists(workspace_dir):
+        shutil.rmtree(workspace_dir)
+
     tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
     token = _get_github_token()
 
-    effective_ref = _effective_ref_for_repo(full_name, ref)
     url = f"https://x-access-token:{token}@github.com/{full_name}.git"
     cmd = f"git clone --depth 1 --branch {effective_ref} {url} {tmpdir}"
     result = await _run_shell(cmd, cwd=None, timeout_seconds=600)
     if result["exit_code"] != 0:
         stderr = result.get("stderr", "")
         raise GitHubAPIError(f"git clone failed: {stderr}")
-    return tmpdir
 
-
-def _cleanup_dir(path: str) -> None:
-    try:
-        shutil.rmtree(path)
-    except Exception:
-        pass
+    shutil.move(tmpdir, workspace_dir)
+    return workspace_dir
 
 
 async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
     """Create an isolated virtualenv and return env vars that activate it."""
 
     venv_dir = os.path.join(repo_dir, ".venv-mcp")
+    if os.path.isdir(venv_dir):
+        bin_dir = "Scripts" if os.name == "nt" else "bin"
+        bin_path = os.path.join(venv_dir, bin_dir)
+        return {
+            "VIRTUAL_ENV": venv_dir,
+            "PATH": f"{bin_path}{os.pathsep}" + os.environ.get("PATH", ""),
+        }
+
     result = await _run_shell(
         f"{sys.executable} -m venv {venv_dir}",
         cwd=repo_dir,
@@ -1859,14 +1886,20 @@ def list_write_tools() -> Dict[str, Any]:
         {
             "name": "run_command",
             "category": "workspace",
-            "description": "Clone the repo and run an arbitrary shell command in a temp workspace.",
-            "notes": "Use carefully; bound stdout/stderr is returned.",
+            "description": "Run an arbitrary shell command in a persistent workspace clone.",
+            "notes": "Workspace and virtualenv state persist across calls; bound stdout/stderr is returned.",
+        },
+        {
+            "name": "commit_workspace",
+            "category": "workspace",
+            "description": "Commit and optionally push changes from the persistent workspace.",
+            "notes": "Stages changes, commits with a provided message, and can push to the effective branch.",
         },
         {
             "name": "run_tests",
             "category": "workspace",
-            "description": "Clone the repo and run tests (default: pytest) in a temp workspace.",
-            "notes": "Preferred way to run tests from assistants.",
+            "description": "Run tests (default: pytest) inside the persistent workspace clone.",
+            "notes": "Preferred way to run tests from assistants; reuses workspace setup.",
         },
         {
             "name": "trigger_workflow_dispatch",
@@ -1959,6 +1992,10 @@ def controller_contract() -> Dict[str, Any]:
                 "If a tool call returns a schema or validation error (for example an unexpected parameter), stop and re-read the tool definition via list_all_actions(include_parameters=true). Fix the arguments to match the schema instead of guessing or retrying with made-up parameters.",
                 "Do not switch between different search interfaces mid-task without reason. Once you have chosen a repo-scoped search strategy for a task in this controller repo, stick to it unless the user clearly requests a change.",
             ],
+            "controller_prompt": [
+                "Remind assistants to respect branch defaults, keep writes gated until authorized, and use the persistent workspace tools (run_command, run_tests, commit_workspace) as the standard execution surface.",
+                "Keep safety, truncation, and large-file guidance visible so the controller prompt steers assistants toward slice-and-diff workflows instead of large payload retries.",
+            ],
             "server": [
                 "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
                 "Default to the configured controller branch when refs are missing for the controller repo to reduce accidental writes to main.",
@@ -1993,7 +2030,7 @@ def controller_contract() -> Dict[str, Any]:
                 "apply_text_update_and_commit",
                 "update_files_and_open_pr",
             ],
-            "execution": ["run_command", "run_tests"],
+            "execution": ["run_command", "run_tests", "commit_workspace"],
             "diffs": ["build_unified_diff", "build_section_based_diff"],
             "large_files": [
                 "get_file_slice",
@@ -3408,7 +3445,7 @@ async def run_command(
     patch: Optional[str] = None,
     use_temp_venv: bool = True,
 ) -> Dict[str, Any]:
-    """Clone the repository and run an arbitrary shell command in a temp dir.
+    """Run an arbitrary shell command in a persistent workspace clone.
 
     Args:
         full_name: GitHub repository in ``owner/name`` format.
@@ -3421,14 +3458,14 @@ async def run_command(
             command so assistants can run tests against in-flight edits.
         use_temp_venv: When true (default), commands run inside a temporary
             virtualenv rooted in the workspace so ``pip install`` steps do not
-            mutate the server-wide environment.
+            mutate the server-wide environment. The virtualenv is reused across
+            calls when the workspace persists on disk.
 
-    The temporary directory is cleaned up automatically after execution, so
-    callers should capture any artifacts they need from ``result.stdout`` or by
-    writing to remote destinations during the command itself.
+    The workspace directory is kept on disk so subsequent calls can reuse
+    installed dependencies and file changes. Callers should keep this in mind
+    when applying patches repeatedly.
     """
 
-    repo_dir: Optional[str] = None
     env: Optional[Dict[str, str]] = None
     try:
         effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -3459,9 +3496,82 @@ async def run_command(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="run_command")
-    finally:
-        if repo_dir:
-            _cleanup_dir(repo_dir)
+
+
+@mcp_tool(write_action=True)
+async def commit_workspace(
+    full_name: str,
+    ref: str = "main",
+    message: str = "Commit workspace changes",
+    add_all: bool = True,
+    push: bool = True,
+) -> Dict[str, Any]:
+    """Commit and optionally push changes from the persistent workspace.
+
+    Args:
+        full_name: GitHub repository in ``owner/name`` format.
+        ref: Branch to commit to. Defaults to ``main`` but will map to the
+            controller default branch when appropriate.
+        message: Commit message used when writing changes.
+        add_all: Stage all changes with ``git add -A`` before committing.
+        push: Whether to push the commit back to the remote branch.
+    """
+
+    try:
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        _ensure_write_allowed(
+            f"commit_workspace for {full_name}@{effective_ref}"
+        )
+        repo_dir = await _clone_repo(full_name, ref=effective_ref)
+
+        if add_all:
+            add_result = await _run_shell(
+                "git add -A", cwd=repo_dir, timeout_seconds=120
+            )
+            if add_result["exit_code"] != 0:
+                stderr = add_result.get("stderr", "") or add_result.get(
+                    "stdout", ""
+                )
+                raise GitHubAPIError(f"git add failed: {stderr}")
+
+        status_result = await _run_shell(
+            "git status --porcelain", cwd=repo_dir, timeout_seconds=60
+        )
+        status_lines = status_result.get("stdout", "").strip().splitlines()
+        if not status_lines:
+            raise GitHubAPIError("No changes to commit in workspace")
+
+        commit_cmd = f"git commit -m {shlex.quote(message)}"
+        commit_result = await _run_shell(
+            commit_cmd, cwd=repo_dir, timeout_seconds=300
+        )
+        if commit_result["exit_code"] != 0:
+            stderr = commit_result.get("stderr", "") or commit_result.get(
+                "stdout", ""
+            )
+            raise GitHubAPIError(f"git commit failed: {stderr}")
+
+        push_result = None
+        if push:
+            push_cmd = f"git push origin HEAD:{effective_ref}"
+            push_result = await _run_shell(
+                push_cmd, cwd=repo_dir, timeout_seconds=300
+            )
+            if push_result["exit_code"] != 0:
+                stderr = push_result.get("stderr", "") or push_result.get(
+                    "stdout", ""
+                )
+                raise GitHubAPIError(f"git push failed: {stderr}")
+
+        return {
+            "repo_dir": repo_dir,
+            "branch": effective_ref,
+            "status": status_lines,
+            "commit": commit_result,
+            "push": push_result,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="commit_workspace")
 
 
 @mcp_tool(write_action=True)
@@ -3474,7 +3584,7 @@ async def run_tests(
     patch: Optional[str] = None,
     use_temp_venv: bool = True,
 ) -> Dict[str, Any]:
-    """Run the project's test command after cloning into a temp workspace.
+    """Run the project's test command inside the persistent workspace.
 
     ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
     default timeout. Provide ``patch`` when running tests against pending edits

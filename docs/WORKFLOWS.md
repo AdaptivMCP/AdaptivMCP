@@ -323,7 +323,7 @@ This is closer to how a human works with `git` and GitHub UI.
 
 ## 8. Workspace commands: tests and commands in a cloned repo
 
-`run_command` and `run_tests` allow you to run real commands against a temporary checkout of a branch.
+`run_command` and `run_tests` allow you to run real commands against a persistent checkout of a branch.
 
 ### 8.1 Running tests (`run_tests`)
 

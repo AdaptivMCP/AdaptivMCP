@@ -27,7 +27,9 @@ def test_controller_contract_structure():
 
     tooling = payload["tooling"]
     assert set(tooling["discovery"]) >= {"get_server_config", "list_write_tools", "validate_environment"}
-    assert {"run_command", "run_tests"} <= set(tooling["execution"])
+    assert {"run_command", "run_tests", "commit_workspace"} <= set(
+        tooling["execution"]
+    )
     assert {
         "get_file_slice",
         "build_section_based_diff",

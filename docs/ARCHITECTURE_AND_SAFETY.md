@@ -405,7 +405,7 @@ For all code execution and tests against this repository (or any other repo acce
 
 Specifically:
 
-- `run_command` and `run_tests` clone the target repository at the effective ref (as computed by `_effective_ref_for_repo`) into a temporary workspace.
+- `run_command` and `run_tests` clone the target repository at the effective ref (as computed by `_effective_ref_for_repo`) into a persistent workspace so installs and edits are preserved across calls.
 - They optionally create a temporary virtual environment and run the requested command or test suite inside that workspace.
 - After the command finishes, the workspace is discarded.
 
