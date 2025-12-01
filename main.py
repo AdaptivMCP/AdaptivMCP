@@ -202,7 +202,7 @@ CONTROLLER_REPO = os.environ.get(
 # Machine-readable contract version for controllers and assistants. This helps
 # keep prompts, workflows, and server behavior aligned as they evolve.
 CONTROLLER_CONTRACT_VERSION = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-02-09"
+    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-03"
 )
 CONTROLLER_DEFAULT_BRANCH = os.environ.get(
     "GITHUB_MCP_CONTROLLER_BRANCH", "main"
@@ -1869,6 +1869,7 @@ def controller_contract() -> Dict[str, Any]:
                 "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
                 "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
                 "Summarize what changed and which tools ran so humans can audit actions easily.",
+                "Verify outputs and state before repeating actions so runs do not get stuck in loops; report blockers clearly.",
             ],
             "controller_prompt": [
                 "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
@@ -1897,6 +1898,7 @@ def controller_contract() -> Dict[str, Any]:
             "Always verify branch and ref inputs; missing refs for controller repos should fall back to the configured default branch.",
             "Do not bypass write gating by invoking GitHub APIs directly; use the provided tools so auditing stays consistent.",
             "When content drift is detected, refetch files and rebuild the change instead of retrying blindly.",
+            "Pause and summarize after repeated failures instead of looping on the same action; surface what has been checked so far.",
         ],
     }
 
