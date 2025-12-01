@@ -1977,6 +1977,7 @@ def controller_contract() -> Dict[str, Any]:
                 "Expose minimal health and metrics data so controllers can debug without extra API calls.",
             ],
         },
+        "tooling": {
             "discovery": ["get_server_config", "list_write_tools", "validate_environment"],
             "safety": [
                 "authorize_write_actions",
