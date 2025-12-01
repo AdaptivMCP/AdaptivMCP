@@ -198,6 +198,12 @@ WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
 )
+
+# Machine-readable contract version for controllers and assistants. This helps
+# keep prompts, workflows, and server behavior aligned as they evolve.
+CONTROLLER_CONTRACT_VERSION = os.environ.get(
+    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-02-09"
+)
 CONTROLLER_DEFAULT_BRANCH = os.environ.get(
     "GITHUB_MCP_CONTROLLER_BRANCH", "main"
 )
@@ -1837,6 +1843,62 @@ def list_write_tools() -> Dict[str, Any]:
     ]
 
     return {"tools": tools}
+
+
+@mcp_tool(write_action=False)
+def controller_contract() -> Dict[str, Any]:
+    """Return the controller/assistant contract in a structured format.
+
+    This payload is meant to reduce misunderstandings between controller
+    prompts, assistants, and the MCP server. Controllers can surface it to
+    ChatGPT to remind the assistant which workflows are expected and how writes
+    are gated.
+    """
+
+    return {
+        "version": CONTROLLER_CONTRACT_VERSION,
+        "summary": "Contract describing how controllers, assistants, and this GitHub MCP server work together.",
+        "controller": {
+            "repo": CONTROLLER_REPO,
+            "default_branch": CONTROLLER_DEFAULT_BRANCH,
+            "write_allowed_default": WRITE_ALLOWED,
+        },
+        "expectations": {
+            "assistant": [
+                "Treat run_command and run_tests as the canonical execution paths; do not assume packages are installed in the MCP server process.",
+                "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
+                "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
+                "Summarize what changed and which tools ran so humans can audit actions easily.",
+            ],
+            "controller_prompt": [
+                "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
+                "Encourage use of list_write_tools and validate_environment so the assistant knows available tools and common pitfalls.",
+                "Steer assistants toward update_files_and_open_pr or apply_patch_and_commit instead of low-level Git operations.",
+            ],
+            "server": [
+                "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
+                "Default to the configured controller branch when refs are missing for the controller repo to reduce accidental writes to main.",
+                "Expose minimal health and metrics data so controllers can debug without extra API calls.",
+            ],
+        },
+        "tooling": {
+            "discovery": ["get_server_config", "list_write_tools", "validate_environment"],
+            "safety": [
+                "authorize_write_actions",
+                "ensure_branch",
+                "apply_patch_and_commit",
+                "apply_text_update_and_commit",
+                "update_files_and_open_pr",
+            ],
+            "execution": ["run_command", "run_tests"],
+            "diffs": ["build_unified_diff", "build_section_based_diff"],
+        },
+        "guardrails": [
+            "Always verify branch and ref inputs; missing refs for controller repos should fall back to the configured default branch.",
+            "Do not bypass write gating by invoking GitHub APIs directly; use the provided tools so auditing stays consistent.",
+            "When content drift is detected, refetch files and rebuild the change instead of retrying blindly.",
+        ],
+    }
 
 
 @mcp_tool(write_action=False)
