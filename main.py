@@ -1881,6 +1881,24 @@ def list_write_tools() -> Dict[str, Any]:
             "notes": "Summarize the run result in your response.",
         },
         {
+            "name": "create_issue",
+            "category": "issue",
+            "description": "Open a GitHub issue with optional body, labels, and assignees.",
+            "notes": "Use to capture new work items or questions.",
+        },
+        {
+            "name": "update_issue",
+            "category": "issue",
+            "description": "Update fields on an existing GitHub issue.",
+            "notes": "Adjust scope, status, or ownership directly in the issue.",
+        },
+        {
+            "name": "comment_on_issue",
+            "category": "issue",
+            "description": "Post a comment on an existing GitHub issue.",
+            "notes": "Log progress updates and decisions.",
+        },
+        {
             "name": "merge_pull_request",
             "category": "pr",
             "description": "Merge an existing PR using the chosen method.",
@@ -1960,6 +1978,7 @@ def controller_contract() -> Dict[str, Any]:
                 "build_unified_diff_from_strings",
                 "validate_json_string",
             ],
+            "issues": ["create_issue", "update_issue", "comment_on_issue"],
         },
         "guardrails": [
             "Always verify branch and ref inputs; missing refs for controller repos should fall back to the configured default branch.",

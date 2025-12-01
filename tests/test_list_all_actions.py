@@ -14,6 +14,14 @@ def test_list_all_actions_includes_input_schema():
     assert "properties" in apply_tool["input_schema"]
 
 
+def test_list_write_tools_includes_issue_helpers():
+    tools = main.list_write_tools()["tools"]
+
+    tool_names = {tool["name"] for tool in tools}
+
+    assert {"create_issue", "update_issue", "comment_on_issue"} <= tool_names
+
+
 @pytest.mark.asyncio
 async def test_create_issue_builds_payload_and_calls_github_request(monkeypatch):
     calls = []

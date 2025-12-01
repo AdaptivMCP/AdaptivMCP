@@ -34,4 +34,7 @@ def test_controller_contract_structure():
         "build_unified_diff_from_strings",
         "validate_json_string",
     } <= set(tooling["large_files"])
+    assert {"create_issue", "update_issue", "comment_on_issue"} <= set(
+        tooling["issues"]
+    )
     assert "authorize_write_actions" in tooling["safety"]
