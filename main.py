@@ -1410,6 +1410,33 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
+async def get_repo_defaults(
+    full_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Return default configuration for a GitHub repository.
+
+    If `full_name` is omitted, this uses the controller repository configured
+    for this MCP server.
+    """
+
+    repo = full_name or CONTROLLER_REPO
+
+    # Ask GitHub for the repository metadata so we can resolve its default
+    # branch instead of relying only on local config.
+    data = await _github_request("GET", f"/repos/{repo}")
+    payload = data.get("json") or {}
+
+    default_branch = payload.get("default_branch") or CONTROLLER_DEFAULT_BRANCH
+
+    return {
+        "defaults": {
+            "full_name": repo,
+            "default_branch": default_branch,
+        }
+    }
+
+
+@mcp_tool(write_action=False)
 async def validate_environment() -> Dict[str, Any]:
     """Validate environment configuration and report common misconfigurations.
 
