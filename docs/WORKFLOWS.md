@@ -230,7 +230,6 @@ If you intentionally choose a full-file replace (for example a short doc or conf
 ## 6. Patch-based edits (recommended default for code and docs)
 
 For most code and documentation changes, prefer patch-based workflows:
-For most code changes, prefer patch-based workflows:
 
 ### 6.1 Why patches
 
@@ -313,7 +312,6 @@ Typical sequence:
 For smaller or more iterative work you may:
 
 2. Apply one or more changes via `apply_patch_and_commit`. If you deliberately want a full-file replacement (for example a small doc), you can use `apply_text_update_and_commit`, but this should be the exception rather than the rule.
-2. Apply one or more changes via `apply_text_update_and_commit` / `apply_patch_and_commit`.
 3. Call `create_pull_request` directly with:
    - `head`: feature branch.
    - `base`: main.
