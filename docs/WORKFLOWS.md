@@ -220,6 +220,8 @@ For assistants and automated workflows:
 - Prefer patch-based flows:
   - `build_unified_diff` (or `build_unified_diff_from_strings` when you already have both buffers) + `apply_patch_and_commit`, or
   - `update_files_and_open_pr` for multi-file updates.
+- For documentation touch-ups (typos, short clarifications), keep patches narrow instead of replacing the entire file so review
+  stays easy and unrelated sections remain untouched.
 
 If you intentionally choose a full-file replace (for example a short doc or config), call `apply_text_update_and_commit` directly and review the resulting diff carefully in GitHub before merging.
    - If other docs need updates (for example `SELF_HOSTED_SETUP`, `ASSISTANT_DOCS_AND_SNAPSHOTS`), repeat this process.
@@ -531,7 +533,8 @@ Typical flow:
 
 1. Build the JSON string you intend to return.
 2. Call `validate_json_string` with that raw string.
-3. If `ok` is true, use `normalized` as the canonical JSON.
-4. If `ok` is false, fix the error reported by `error` and try again.
+3. If `valid` is true, use `normalized` as the canonical JSON you return to clients or feed into other tools so whitespace
+   differences cannot reintroduce parse errors.
+4. If `valid` is false, fix the error reported by `error` and try again.
 
 This is especially useful for long `sections` arrays passed into `build_section_based_diff`, or any other tool where the controller expects strict JSON from the assistant.

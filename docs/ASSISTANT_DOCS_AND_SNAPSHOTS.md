@@ -227,8 +227,23 @@ When returning JSON to a client or passing JSON into other tools (such as long `
 
 1. Build the JSON string you intend to use (for example, the `sections` array for `build_section_based_diff`).
 2. Call `validate_json_string` with that raw string.
-3. If `ok` is true, use the `normalized` JSON string as your final output.
-4. If `ok` is false, examine `error`, fix the problem (missing quotes, trailing commas, etc.), and try again.
+3. If `valid` is true, use the `normalized` JSON string as your final output.
+4. If `valid` is false, examine `error`, fix the problem (missing quotes, trailing commas, etc.), and try again.
+
+Using the `normalized` field directly avoids whitespace differences and ensures that the JSON the assistant emits back to the
+client is exactly what was validated.
+
+### 8.5 Patching docs instead of rewriting entire files
+
+For small documentation fixes (typos, short clarifications, or link updates), avoid replacing the entire file. Keeping patches
+focused reduces the risk of drift and makes diffs easier for humans to review:
+
+1. Fetch the relevant slice with `get_file_slice` if the file is large.
+2. Prepare the updated text for just the section you need to change.
+3. Use `build_unified_diff_from_strings(original, updated, path)` or `build_unified_diff` to produce a small patch.
+4. Apply the patch with `apply_patch_and_commit` (or `update_files_and_open_pr` when bundling multiple files).
+
+This keeps doc changes reviewable and avoids the failure modes seen when assistants attempt whole-file rewrites for minor edits.
 
 By combining `get_file_slice`, `build_section_based_diff`, `build_unified_diff` (or `build_unified_diff_from_strings` when you already have the buffers), `apply_patch_and_commit`, and `validate_json_string`, assistants can safely edit large files and produce strict JSON outputs without falling into read-only loops or brittle manual diff construction.
 
