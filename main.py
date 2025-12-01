@@ -1686,6 +1686,26 @@ async def list_recent_issues(
 
 
 @mcp_tool(write_action=False)
+async def list_repository_issues(
+    full_name: str,
+    state: str = "open",
+    labels: Optional[List[str]] = None,
+    assignee: Optional[str] = None,
+    per_page: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """List issues for a specific repository (includes PRs)."""
+
+    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
+    if labels:
+        params["labels"] = ",".join(labels)
+    if assignee is not None:
+        params["assignee"] = assignee
+
+    return await _github_request("GET", f"/repos/{full_name}/issues", params=params)
+
+
+@mcp_tool(write_action=False)
 async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Fetch a GitHub issue."""
 
