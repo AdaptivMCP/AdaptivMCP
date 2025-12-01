@@ -65,7 +65,7 @@ At the start of a session, always establish a safe baseline.
 
 3. Optionally call **`controller_contract`**.
    - Provides a machine-readable contract between the controller prompt, assistants, and this server.
-   - Treat this contract as authoritative; do not override or rephrase its expectations in your prompt. Keep it in sync with the published version instead of maintaining a separate copy.
+   - Treat this contract as authoritative; do not override or rephrase its expectations in your prompt. Keep it in sync with the published version instead of maintaining a separate copy or inventing a parallel "doc contract" in this repo.
    - Useful when tuning prompts or debugging misunderstandings about branch defaults and write gating.
 
 4. Optionally call **`validate_environment`**.
