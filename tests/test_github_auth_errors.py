@@ -51,3 +51,23 @@ async def test_github_request_rate_limit_error(monkeypatch: pytest.MonkeyPatch):
     message = str(excinfo.value).lower()
     assert "rate limit" in message
     assert "resets" in message
+
+
+@pytest.mark.asyncio
+async def test_github_request_429_rate_limit(monkeypatch: pytest.MonkeyPatch):
+    main._reset_metrics_for_tests()
+    headers = {"Retry-After": "60"}
+    monkeypatch.setattr(
+        main,
+        "_github_client_instance",
+        lambda: _FakeClient(429, "secondary rate limit", headers=headers),
+    )
+
+    with pytest.raises(main.GitHubRateLimitError) as excinfo:
+        await main._github_request("GET", "/search/code")
+
+    message = str(excinfo.value).lower()
+    assert "rate limit" in message
+    assert "retry" in message
+    metrics = main._metrics_snapshot()["github"]
+    assert metrics.get("rate_limit_events_total") == 1
