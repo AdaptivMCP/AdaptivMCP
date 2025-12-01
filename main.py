@@ -202,7 +202,7 @@ CONTROLLER_REPO = os.environ.get(
 # Machine-readable contract version for controllers and assistants. This helps
 # keep prompts, workflows, and server behavior aligned as they evolve.
 CONTROLLER_CONTRACT_VERSION = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-03"
+    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-08"
 )
 CONTROLLER_DEFAULT_BRANCH = os.environ.get(
     "GITHUB_MCP_CONTROLLER_BRANCH", "main"
@@ -1870,11 +1870,13 @@ def controller_contract() -> Dict[str, Any]:
                 "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
                 "Summarize what changed and which tools ran so humans can audit actions easily.",
                 "Verify outputs and state before repeating actions so runs do not get stuck in loops; report blockers clearly.",
+                "Use get_file_slice and diff helpers for large files instead of shuttling entire files; validate long JSON payloads before sending.",
             ],
             "controller_prompt": [
                 "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
                 "Encourage use of list_write_tools and validate_environment so the assistant knows available tools and common pitfalls.",
                 "Steer assistants toward update_files_and_open_pr or apply_patch_and_commit instead of low-level Git operations.",
+                "Nudge assistants toward large-file helpers like get_file_slice, build_section_based_diff, and validate_json_string to avoid retries and token blowups.",
             ],
             "server": [
                 "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
@@ -1893,11 +1895,18 @@ def controller_contract() -> Dict[str, Any]:
             ],
             "execution": ["run_command", "run_tests"],
             "diffs": ["build_unified_diff", "build_section_based_diff"],
+            "large_files": [
+                "get_file_slice",
+                "build_section_based_diff",
+                "build_unified_diff_from_strings",
+                "validate_json_string",
+            ],
         },
         "guardrails": [
             "Always verify branch and ref inputs; missing refs for controller repos should fall back to the configured default branch.",
             "Do not bypass write gating by invoking GitHub APIs directly; use the provided tools so auditing stays consistent.",
             "When content drift is detected, refetch files and rebuild the change instead of retrying blindly.",
+            "Prefer slice-and-diff workflows for large files and avoid echoing entire buffers unless necessary.",
             "Pause and summarize after repeated failures instead of looping on the same action; surface what has been checked so far.",
         ],
     }
