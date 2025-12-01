@@ -253,7 +253,7 @@ When planning or describing workflows, assistants must treat `run_command` and `
 
 Key points:
 
-- These tools clone the target repo at the effective ref into a temporary workspace and optionally create a temporary virtual environment.
+- These tools clone the target repo at the effective ref into a persistent workspace and optionally create a persistent virtual environment.
 - Commands and tests run **inside that workspace**, not in the long-lived MCP server process.
 - After the command finishes, the workspace is discarded; any project-level dependencies must be installed per-workspace as needed.
 

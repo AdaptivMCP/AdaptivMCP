@@ -213,7 +213,7 @@ When you deploy this server, keep the following in mind:
   - Patch-based edits fail if the underlying file does not match the expected context.
 
 - **Workspace commands**
-  - `run_command` and `run_tests` operate in a temporary clone of your repo.
+  - `run_command` and `run_tests` operate in a persistent clone of your repo so installs and edits survive between calls.
   - Output is truncated according to configured limits, with explicit flags when truncation occurs.
 
 For more detail, see `docs/ARCHITECTURE_AND_SAFETY.md`.
