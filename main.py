@@ -1943,8 +1943,8 @@ def controller_contract() -> Dict[str, Any]:
             "assistant": [
                 "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, and running checks; do not assume packages are installed in the MCP server process.",
                 "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
-                "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
-                "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
+                "Treat run_command as the way to run any project-specific or shell-level commands you would normally ask a human (or yourself) to run locally (linters, formatters, build scripts, migrations, one-off diagnostics), subject to the same guardrails as other write tools.",
+                "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",                "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
                 "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
                 "Summarize what changed and which tools ran so humans can audit actions easily.",
                 "Return strict, valid JSON by validating payloads with validate_json_string before emitting them to clients.",
