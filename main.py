@@ -209,7 +209,7 @@ CONTROLLER_REPO = os.environ.get(
 # Machine-readable contract version for controllers and assistants. This helps
 # keep prompts, workflows, and server behavior aligned as they evolve.
 CONTROLLER_CONTRACT_VERSION = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-08"
+    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-13"
 )
 CONTROLLER_DEFAULT_BRANCH = os.environ.get(
     "GITHUB_MCP_CONTROLLER_BRANCH", "main"
@@ -1941,7 +1941,8 @@ def controller_contract() -> Dict[str, Any]:
         },
         "expectations": {
             "assistant": [
-                "Treat run_command and run_tests as the canonical execution paths; do not assume packages are installed in the MCP server process.",
+                "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, and running checks; do not assume packages are installed in the MCP server process.",
+                "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
                 "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
                 "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
                 "Summarize what changed and which tools ran so humans can audit actions easily.",
@@ -1954,6 +1955,7 @@ def controller_contract() -> Dict[str, Any]:
             "controller_prompt": [
                 "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
                 "Encourage use of list_write_tools and validate_environment so the assistant knows available tools and common pitfalls.",
+                "Remind assistants that run_command and run_tests are allowed by default and should be part of normal execution workflows when available.",
                 "Steer assistants toward update_files_and_open_pr or apply_patch_and_commit instead of low-level Git operations.",
                 "Nudge assistants toward large-file helpers like get_file_slice, build_section_based_diff, and validate_json_string to avoid retries and token blowups.",
             ],
