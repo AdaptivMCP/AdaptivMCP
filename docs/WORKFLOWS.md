@@ -63,7 +63,11 @@ At the start of a session, always establish a safe baseline.
    - Use this instead of hard-coding tool lists.
    - Confirm key tools exist (for example `apply_patch_and_commit`, `update_files_and_open_pr`, `run_tests`, `create_issue`).
 
-3. Optionally call **`validate_environment`**.
+3. Optionally call **`controller_contract`**.
+   - Provides a machine-readable contract between the controller prompt, assistants, and this server.
+   - Useful when tuning prompts or debugging misunderstandings about branch defaults and write gating.
+
+4. Optionally call **`validate_environment`**.
    - Useful for new deployments or when things look misconfigured.
    - Returns a structured report of environment checks (tokens, controller repo/branch, HTTP settings, etc.).
 
