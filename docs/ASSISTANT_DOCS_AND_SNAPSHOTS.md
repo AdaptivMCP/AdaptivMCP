@@ -17,6 +17,7 @@ When reasoning about capabilities, assistants should prioritize:
 1. **Live MCP server configuration**
    - Use `get_server_config` to understand what tools and settings are currently exposed.
    - Use `list_all_actions` to see the full list of MCP tools, their annotations, and their write/read status.
+   - Use `controller_contract` as the single contract between controllers and this server; do not maintain competing contracts in docs or prompts.
 
 2. **Repository docs**
   - `README.md` for high-level product and architecture context.

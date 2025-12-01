@@ -2,7 +2,7 @@
 
 > Self-hosted GitHub connector for ChatGPT, powering personal Adaptiv Controllers that you own and operate.
 
-This repository contains the GitHub MCP server that powers the Adaptiv Controller experience. It is designed to be self-hosted by each user (for example on Render.com) and connected to their own ChatGPT account and GitHub credentials.
+This repository contains the GitHub MCP server that powers the Adaptiv Controller experience. It is designed to be self-hosted by each user (for example on Render.com) and connected to their own ChatGPT account and GitHub credentials. The server publishes a versioned controller contract (via the `controller_contract` tool) that should be treated as the single source of truth for expectations and guardrails; prompts should read it rather than redefining or overriding its contents, and documentation should not introduce competing or overlapping contract text.
 
 The controller itself (Joeys GitHub, officially the Adaptiv Controller) is a separate ChatGPT-side configuration and workflow layer that you sell. This repo is the backend GitHub connector the controller talks to.
 
