@@ -413,6 +413,7 @@ async def _github_request(
         error_payload["error"] = "http_error"
         # Truncate to avoid huge log records on large error bodies.
         error_payload["error_message"] = (message or resp.text[:500])
+
         _record_github_request(
             status_code=resp.status_code,
             duration_ms=duration_ms,
@@ -420,6 +421,17 @@ async def _github_request(
             resp=resp,
             exc=None,
         )
+
+        if resp.status_code in {401, 403}:
+            error_payload["error"] = "github_auth_error"
+            GITHUB_LOGGER.warning("github_auth_error", extra=error_payload)
+            raise GitHubAuthError(
+                "GitHub authentication failed "
+                f"({resp.status_code}) for {method} {path}: "
+                f"{message or resp.text} -- ensure GITHUB_PAT or GITHUB_TOKEN is set "
+                "with the necessary scopes for search and repository access"
+            )
+
         GITHUB_LOGGER.warning("github_request_error", extra=error_payload)
         raise GitHubAPIError(
             f"GitHub API error {resp.status_code} for {method} {path}: "
