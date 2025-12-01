@@ -1729,6 +1729,26 @@ async def fetch_issue_comments(
 
 
 @mcp_tool(write_action=False)
+async def list_repository_pull_requests(
+    full_name: str,
+    state: str = "open",
+    head: Optional[str] = None,
+    base: Optional[str] = None,
+    per_page: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """List pull requests for a specific repository."""
+
+    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
+    if head is not None:
+        params["head"] = head
+    if base is not None:
+        params["base"] = base
+
+    return await _github_request("GET", f"/repos/{full_name}/pulls", params=params)
+
+
+@mcp_tool(write_action=False)
 async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
     """Fetch pull request details."""
 
