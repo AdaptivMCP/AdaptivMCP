@@ -1965,7 +1965,7 @@ def controller_contract() -> Dict[str, Any]:
                 "Expose minimal health and metrics data so controllers can debug without extra API calls.",
             ],
         },
-
+        "prompts": {
             "controller_prompt": [
                 "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
                 "Encourage use of list_write_tools and validate_environment so the assistant knows available tools and common pitfalls.",
