@@ -1945,9 +1945,10 @@ def controller_contract() -> Dict[str, Any]:
                 "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
                 "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
                 "Summarize what changed and which tools ran so humans can audit actions easily.",
+                "Return strict, valid JSON by validating payloads with validate_json_string before emitting them to clients.",
                 "Work from natural-language goals without demanding long lists of CLI commands; ask concise clarifying questions instead of offloading planning to humans.",
                 "Verify outputs and state before repeating actions so runs do not get stuck in loops; report blockers clearly.",
-                "Use get_file_slice and diff helpers for large files instead of shuttling entire files; validate long JSON payloads before sending.",
+                "Use get_file_slice and diff helpers for large files instead of shuttling entire files; keep patches minimal and avoid whole-file replacements for small doc or code tweaks.",
             ],
             "controller_prompt": [
                 "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
