@@ -1943,6 +1943,7 @@ def controller_contract() -> Dict[str, Any]:
             "assistant": [
                 "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, and running checks; do not assume packages are installed in the MCP server process.",
                 "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
+                "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
                 "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
                 "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
                 "Summarize what changed and which tools ran so humans can audit actions easily.",
@@ -1950,15 +1951,14 @@ def controller_contract() -> Dict[str, Any]:
                 "When updating code or docs, remove or rewrite outdated or conflicting content so the final state has no duplicates or obsolete paths.",
                 "Work from natural-language goals without demanding long lists of CLI commands; ask concise clarifying questions instead of offloading planning to humans.",
                 "Verify outputs and state before repeating actions so runs do not get stuck in loops; report blockers clearly.",
-                "Use get_file_slice and diff helpers for large files instead of shuttling entire files; keep patches minimal and avoid whole-file replacements for small doc or code tweaks.",
-            ],
+                "Use get_file_slice and diff helpers for large files instead of shuttling entire files; keep patches minimal and avoid whole-file replacements for small doc or code tweaks.",            ],
             "controller_prompt": [
                 "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
                 "Encourage use of list_write_tools and validate_environment so the assistant knows available tools and common pitfalls.",
                 "Remind assistants that run_command and run_tests are allowed by default and should be part of normal execution workflows when available.",
+                "Encourage assistants to add or adjust tests alongside code changes and to run run_tests on the relevant feature branch before opening PRs.",
                 "Steer assistants toward update_files_and_open_pr or apply_patch_and_commit instead of low-level Git operations.",
-                "Nudge assistants toward large-file helpers like get_file_slice, build_section_based_diff, and validate_json_string to avoid retries and token blowups.",
-            ],
+                "Nudge assistants toward large-file helpers like get_file_slice, build_section_based_diff, and validate_json_string to avoid retries and token blowups.",            ],
             "server": [
                 "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
                 "Default to the configured controller branch when refs are missing for the controller repo to reduce accidental writes to main.",
