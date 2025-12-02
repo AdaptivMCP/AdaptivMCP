@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo/adaptiv-logo.png" alt="Adaptiv Controller logo" width="200" />
+</p>
+
 # Adaptiv Controller – GitHub MCP Server
 
 > Self-hosted GitHub MCP server that lets ChatGPT act as a safe, policy-driven engineer on your repositories.
