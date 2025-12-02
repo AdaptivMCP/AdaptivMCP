@@ -2,10 +2,14 @@
 
 This document is for operators of the Adaptiv Controller GitHub MCP server. It describes how to triage and respond to common incidents, how to use the built-in tools and endpoints to debug problems, and how to adjust configuration safely during an incident.
 
-If you are buying or running the Adaptiv Controller product, this is the place to look when something goes wrong in production.
+If you are buying or running the Adaptiv Controller product, this is the place to look when something goes wrong in production. Read this together with:
+
+- `docs/SELF_HOSTED_SETUP.md` for initial deployment and configuration.
+- `docs/WORKFLOWS.md` for expected assistant behavior.
+- `docs/UPGRADE_NOTES.md` for versioning, install, upgrade, and rollback flows.
+- `CHANGELOG.md` and `pyproject.toml` for version numbers and release history.
 
 ---
-
 ## 1. High-level mental model
 
 At a high level, the system has three layers that are relevant during an incident:
