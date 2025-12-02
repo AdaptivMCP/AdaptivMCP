@@ -2,10 +2,14 @@
 
 This document is for operators of the Adaptiv Controller GitHub MCP server. It describes how to triage and respond to common incidents, how to use the built-in tools and endpoints to debug problems, and how to adjust configuration safely during an incident.
 
-If you are buying or running the Adaptiv Controller product, this is the place to look when something goes wrong in production.
+If you are buying or running the Adaptiv Controller product, this is the place to look when something goes wrong in production. Read this together with:
+
+- `docs/SELF_HOSTED_SETUP.md` for initial deployment and configuration.
+- `docs/WORKFLOWS.md` for expected assistant behavior.
+- `docs/UPGRADE_NOTES.md` for versioning, install, upgrade, and rollback flows.
+- `CHANGELOG.md` and `pyproject.toml` for version numbers and release history.
 
 ---
-
 ## 1. High-level mental model
 
 At a high level, the system has three layers that are relevant during an incident:
@@ -35,6 +39,7 @@ When someone reports "GitHub via Adaptiv Controller is broken":
 1. **Check /healthz**
    - Call `GET /healthz` on the MCP server.
    - Confirm:
+   - If you suspect a version mismatch (for example after an upgrade), use `run_command` to run `python cli.py --version` in the controller repo workspace and compare it with `docs/UPGRADE_NOTES.md` and `CHANGELOG.md`.
      - `status` is `ok` or similar.
      - `github_token_present` is `true`.
      - `controller.repo` and `controller.default_branch` match your expectations.
@@ -42,7 +47,6 @@ When someone reports "GitHub via Adaptiv Controller is broken":
 
 2. **Call validate_environment from the controller**
    - From ChatGPT, with the controller attached, call the `validate_environment` tool.
-   - Review the report for:
      - Missing or malformed `GITHUB_TOKEN`.
      - Mismatched `GITHUB_MCP_CONTROLLER_REPO` or `GITHUB_MCP_CONTROLLER_BRANCH`.
      - Suspicious HTTP timeout or concurrency settings.
