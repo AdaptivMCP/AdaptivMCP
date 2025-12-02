@@ -1,39 +1,37 @@
-# UPGRADE_NOTES: Installing, upgrading, and rolling back the Adaptiv Controller GitHub MCP Server
+# UPGRADE_NOTES: Installing, upgrading, and rolling back the Adaptiv Controller GitHub MCP server
 
-This document explains how to install new versions of the Adaptiv Controller GitHub MCP server, how to upgrade safely, and how to roll back if something goes wrong.
+This document explains how to install new versions of the Adaptiv Controller GitHub MCP server, how to upgrade safely, and how to roll back if something goes wrong. It is written for operators and power users who run the server on platforms like Render and connect it to one or more Adaptiv Controller instances in ChatGPT.
 
-It assumes you have already read and followed:
+You should read this together with:
 
-- `docs/SELF_HOSTED_SETUP.md` for initial deployment.
-- `docs/OPERATIONS.md` for incident handling and troubleshooting.
+- `docs/SELF_HOSTED_SETUP.md` – initial deployment and configuration.
+- `docs/WORKFLOWS.md` – how assistants are expected to behave when using this server.
+- `docs/ARCHITECTURE_AND_SAFETY.md` – the safety model, default branches, and write gating.
 
-This guide focuses specifically on **version changes** and deployment practices.
+This guide focuses specifically on **version changes** and deployment practices for the 1.0 line and beyond.
 
-> Note: Formal versioning metadata (for example, a `__version__` field and `CHANGELOG.md`) is tracked separately in issue #148. Until that is wired in, you can still follow these practices using Git tags, branches, or commit SHAs.
+## 1. Where version information lives (1.0 and later)
 
----
+For the 1.0 release, versioning is wired into the repo itself. Treat these as a single source of truth:
 
-## 1. How to think about versions
+- `pyproject.toml` – `project.version` (for example `1.0.0`).
+- `CHANGELOG.md` – human-readable notes for each released version (starting at `1.0.0`).
+- `cli.py` – a small CLI that reads the version from `pyproject.toml`.
+- Git tags – recommended tags follow the pattern `v1.0.0`, `v1.0.1`, `v1.1.0`, and so on.
 
-There are three common ways to identify a version of this server:
+To confirm the version in any environment where the repo is available (local dev, a Render shell, or the controller workspace), run:
 
-1. **Branch** (for example `main`, `release/x.y`, `staging`)
-2. **Tag** (for example `v0.9.0`)
-3. **Commit SHA** (for example `3dc2d3c8...`)
+```bash
+python cli.py --version
+```
 
-For most deployments, the recommended approach is:
+For the 1.0 release you should see `1.0.0`. If the reported version and `CHANGELOG.md` disagree with the tag or branch you believe is deployed, stop and resolve that mismatch before doing further work.
 
-- Use **tags** to represent released versions (for example `v0.9.0`).
-- Use **branches** to represent environments (for example `main` for ongoing development, `staging` for pre-production, `prod` for the currently deployed code).
-- Pin your hosting platform (Render) to a specific **branch** or **tag**, not to a moving target you cannot reproduce.
-
-When in doubt, prefer:
-
-- **Staging deployment** pinned to a candidate tag or branch.
-- **Production deployment** pinned to a known-good tag or commit SHA.
+> Assistants using this server must run `python cli.py --version` at the start of a new ChatGPT session (see `docs/WORKFLOWS.md`) and refresh key docs from `main` so they are aligned with the version you actually have deployed.
 
 ---
 
+## 2. How to think about versions
 ## 2. Installing a fresh deployment
 
 For a brand new deployment (no existing MCP service), follow `SELF_HOSTED_SETUP.md` and then adopt the upgrade/rollback practices in this document from day one.
