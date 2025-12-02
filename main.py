@@ -1410,6 +1410,33 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
+async def get_repo_defaults(
+    full_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Return default configuration for a GitHub repository.
+
+    If `full_name` is omitted, this uses the controller repository configured
+    for this MCP server.
+    """
+
+    repo = full_name or CONTROLLER_REPO
+
+    # Ask GitHub for the repository metadata so we can resolve its default
+    # branch instead of relying only on local config.
+    data = await _github_request("GET", f"/repos/{repo}")
+    payload = data.get("json") or {}
+
+    default_branch = payload.get("default_branch") or CONTROLLER_DEFAULT_BRANCH
+
+    return {
+        "defaults": {
+            "full_name": repo,
+            "default_branch": default_branch,
+        }
+    }
+
+
+@mcp_tool(write_action=False)
 async def validate_environment() -> Dict[str, Any]:
     """Validate environment configuration and report common misconfigurations.
 
@@ -1686,6 +1713,26 @@ async def list_recent_issues(
 
 
 @mcp_tool(write_action=False)
+async def list_repository_issues(
+    full_name: str,
+    state: str = "open",
+    labels: Optional[List[str]] = None,
+    assignee: Optional[str] = None,
+    per_page: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """List issues for a specific repository (includes PRs)."""
+
+    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
+    if labels:
+        params["labels"] = ",".join(labels)
+    if assignee is not None:
+        params["assignee"] = assignee
+
+    return await _github_request("GET", f"/repos/{full_name}/issues", params=params)
+
+
+@mcp_tool(write_action=False)
 async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Fetch a GitHub issue."""
 
@@ -1706,6 +1753,26 @@ async def fetch_issue_comments(
         f"/repos/{full_name}/issues/{issue_number}/comments",
         params=params,
     )
+
+
+@mcp_tool(write_action=False)
+async def list_repository_pull_requests(
+    full_name: str,
+    state: str = "open",
+    head: Optional[str] = None,
+    base: Optional[str] = None,
+    per_page: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """List pull requests for a specific repository."""
+
+    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
+    if head is not None:
+        params["head"] = head
+    if base is not None:
+        params["base"] = base
+
+    return await _github_request("GET", f"/repos/{full_name}/pulls", params=params)
 
 
 @mcp_tool(write_action=False)
@@ -2069,6 +2136,87 @@ async def list_branches(
 
     params = {"per_page": per_page, "page": page}
     return await _github_request("GET", f"/repos/{full_name}/branches", params=params)
+
+
+@mcp_tool(write_action=False)
+async def search_code_in_repo(
+    full_name: str,
+    query: str,
+    path: Optional[str] = None,
+    per_page: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """Search code within a single repository using GitHub code search."""
+
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+
+    # Scope the query to the given repo and optional path prefix.
+    qualifiers = [f"repo:{full_name}"]
+    if path:
+        qualifiers.append(f"path:{path}")
+
+    q = " ".join([query] + qualifiers)
+    params = {"q": q, "per_page": per_page, "page": page}
+    return await _github_request("GET", "/search/code", params=params)
+
+
+@mcp_tool(write_action=True)
+async def move_file(
+    full_name: str,
+    from_path: str,
+    to_path: str,
+    branch: str = "main",
+    message: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Move or rename a file within a repository on a single branch.
+
+    This helper reads the source path at the given branch, writes its contents
+    to the destination path, and then deletes the original path using the same
+    commit/contents APIs as other file helpers.
+    """
+
+    _ensure_write_allowed(f"move_file from {from_path} to {to_path} in {full_name}")
+
+    if from_path == to_path:
+        raise ValueError("from_path and to_path must be different")
+
+    # Read the source file text first.
+    source = await _decode_github_content(full_name, from_path, branch)
+    source_text = source.get("text")
+    if source_text is None:
+        raise GitHubAPIError("Source file contents missing or undecodable")
+
+    commit_message = message or f"Move {from_path} to {to_path}"
+
+    # 1) Write the destination file with the source contents.
+    write_result = await apply_text_update_and_commit(
+        full_name=full_name,
+        path=to_path,
+        updated_content=source_text,
+        branch=branch,
+        message=commit_message + " (add new path)",
+        return_diff=False,
+    )
+
+    # 2) Delete the original path now that the destination exists.
+    delete_result = await delete_file(
+        full_name=full_name,
+        path=from_path,
+        branch=branch,
+        message=commit_message + " (remove old path)",
+        if_missing="ignore",
+    )
+
+    return {
+        "status": "moved",
+        "full_name": full_name,
+        "branch": branch,
+        "from_path": from_path,
+        "to_path": to_path,
+        "write_result": write_result,
+        "delete_result": delete_result,
+    }
 
 
 @mcp_tool(write_action=False)
@@ -2981,6 +3129,31 @@ async def create_pull_request(
         "POST",
         f"/repos/{full_name}/pulls",
         json_body=payload,
+    )
+
+
+@mcp_tool(write_action=True)
+async def open_pr_for_existing_branch(
+    full_name: str,
+    branch: str,
+    base: str = "main",
+    title: Optional[str] = None,
+    body: Optional[str] = None,
+    draft: bool = False,
+) -> Dict[str, Any]:
+    """Open a pull request for an existing branch into a base branch."""
+
+    # Resolve the effective base branch using the same logic as other helpers.
+    effective_base = _effective_ref_for_repo(full_name, base)
+    pr_title = title or f"{branch} -> {effective_base}"
+
+    return await create_pull_request(
+        full_name=full_name,
+        title=pr_title,
+        head=branch,
+        base=effective_base,
+        body=body,
+        draft=draft,
     )
 
 
