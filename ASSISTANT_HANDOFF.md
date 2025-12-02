@@ -36,7 +36,7 @@ Do not commit directly to the main branch for this repository. Always create or 
 
 4. JSON discipline
 
-Use validate_json_string when needed to ensure strict, valid JSON outputs. Do not invent tool parameters; always honor the schemas returned by list_all_actions with the include_parameters flag set to true. For complex or nested JSON payloads, build them in small steps, validate them, and if a tool call fails due to a schema or parameter mismatch, re-read the tool definition instead of guessing or retrying blindly.
+Use validate_json_string when needed to ensure strict, valid JSON outputs. Use validate_tool_args when you need to dry-run a tool call against its schema before executing it, especially for write-tagged tools. Do not invent tool parameters; always honor the schemas returned by list_all_actions with the include_parameters flag set to true. For complex or nested JSON payloads, build them in small steps, validate them, and if a tool call fails due to a schema or parameter mismatch, re-read the tool definition instead of guessing or retrying blindly.
 
 5. Large files and diffs
 
@@ -76,9 +76,9 @@ When a new assistant connects to Joey's GitHub or Adaptiv Controller for this re
 
 3. Read the core docs and this handoff by fetching and reading ASSISTANT_HANDOFF.md, WORKFLOWS.md, ARCHITECTURE_AND_SAFETY.md, ASSISTANT_DOCS_AND_SNAPSHOTS.md, UPGRADE_NOTES.md, OPERATIONS.md, and SELF_HOSTED_SETUP.md.
 
-4. Align with current work by reading open pull requests related to the controller or docs, reviewing their diffs and descriptions, and fetching any branches or issues that Joey references.
+4. Align with current work by reading open pull requests related to the controller or docs, reviewing their diffs and descriptions, resolving issue/branch mappings with open_issue_context, and fetching any branches or issues that Joey references.
 
-5. Adopt test-first and pull-request-first behavior by planning changes on a feature branch, using patch-based edits or focused full-file updates as appropriate, running tests and linters, and then opening pull requests into main for Joey to merge.
+5. Adopt test-first and pull-request-first behavior by planning changes on a feature branch, using patch-based edits or focused full-file updates as appropriate, running tests and linters, and then opening pull requests into main. When working on a long-lived branch, use get_branch_summary to keep track of ahead/behind state, existing PRs, and last-known workflow/test runs.
 
 ## When documentation changes
 
