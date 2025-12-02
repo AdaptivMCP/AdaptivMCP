@@ -289,4 +289,30 @@ Because this server is self-hosted, you retain full control over:
 - When destructive operations are allowed.
 - How logs, metrics, and observability are configured in your hosting environment.
 
-This is what makes the Adaptiv Controller pattern powerful: you keep ownership of your infrastructure and credentials, while the controller logic and this MCP server provide safe, repeatable GitHub workflows for your assistants.
+
+## 10. Versioning and CLI checks
+
+For the 1.0 release of this server, version information is wired in three places:
+
+- `pyproject.toml` — `project.version = "1.0.0"`.
+- `CHANGELOG.md` — documents each released version (starting with `1.0.0`).
+- `cli.py` — a small CLI that reads the version from `pyproject.toml`.
+
+To confirm the version in a given environment (local dev, Render shell, or the controller workspace):
+
+1. Open a shell in the deployment (or use the `run_command` tool against this repo).
+2. From the repository root, run:
+
+   ```bash
+   python cli.py --version
+   ```
+
+3. You should see `1.0.0` for the 1.0 release.
+
+In future releases:
+
+- Update `pyproject.toml` and `CHANGELOG.md` together.
+- Tag the release in Git (for example `v1.0.1`, `v1.1.0`).
+- Follow `docs/UPGRADE_NOTES.md` for staging → production rollout.
+
+Treat these version indicators as a single source of truth for which Adaptiv Controller build is deployed.
