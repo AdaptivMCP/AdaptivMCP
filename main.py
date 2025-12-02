@@ -2083,7 +2083,6 @@ def controller_contract() -> Dict[str, Any]:
             "write_allowed_default": WRITE_ALLOWED,
         },
         "expectations": {
-            'assistant': [
                 'Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, running checks, and driving local workflows; do not assume packages are installed in the MCP server process.',
                 'Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.',
                 'Treat run_command as the way to run any project-specific or shell-level commands you would normally ask a human (or yourself) to run locally (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics), with no extra restrictions beyond the controller's normal write gating and approval.',
