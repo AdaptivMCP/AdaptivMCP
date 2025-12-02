@@ -30,6 +30,15 @@ At a high level, the system has three layers that are relevant during an inciden
 
 Most incidents can be narrowed down by checking these layers in order: hosting → MCP server → controller/assistant behavior.
 
+When you are unsure which layer is at fault, start by calling these meta tools from the controller:
+
+- `get_server_config`: Confirm controller repo, default branch, write gating, and HTTP settings.
+- `list_all_actions`: Confirm that the tools you expect (including any recently added ones) are actually exposed.
+- `validate_environment`: Check for missing tokens, misconfigured controller repo/branch, or suspicious timeout/concurrency values.
+- `ping_extensions`: Verify that optional extension modules have been loaded and their tools registered.
+
+These helpers quickly distinguish configuration problems from deeper bugs.
+
 ---
 
 ## 2. Quick triage checklist
