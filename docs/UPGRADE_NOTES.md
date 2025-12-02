@@ -32,7 +32,24 @@ For the 1.0 release you should see `1.0.0`. If the reported version and `CHANGEL
 ---
 
 ## 2. How to think about versions
-## 2. Installing a fresh deployment
+
+At a high level you should treat the MCP server like any other production service:
+
+- Keep a clear distinction between **staging** and **production**.
+- Pin production to a tag or stable branch, not to a constantly-moving `main`.
+- Use small, well-understood increments when upgrading.
+- Have a simple, well-practiced rollback plan.
+
+The rest of this document describes how to put those principles into practice.
+
+> Meta tools for upgrades: when validating a new version from ChatGPT, use:
+> - `get_server_config` to confirm effective configuration (write gating, branch defaults, timeouts).
+> - `list_all_actions` to ensure all tools are registered as expected.
+> - `ping_extensions` to verify `extra_tools.py` and other extensions are loaded.
+
+---
+
+## 3. Installing a fresh deployment
 
 For a brand new deployment (no existing MCP service), follow `SELF_HOSTED_SETUP.md` and then adopt the upgrade/rollback practices in this document from day one.
 
@@ -59,16 +76,16 @@ Working this way from the beginning will make upgrades and rollbacks straightfor
 
 ---
 
-## 3. Upgrading to a new version (staging first)
+## 4. Upgrading to a new version (staging first)
 
 When you want to upgrade the MCP server (for example after merging new tools or safety improvements), use a **staging-first** flow:
 
 1. **Tag or otherwise identify the new version**
-   - Create a Git tag (for example `v0.9.1`) at the commit you plan to deploy.
+   - Create a Git tag (for example `v1.0.1`) at the commit you plan to deploy.
    - Alternatively, use a dedicated `release/x.y` branch if you prefer branch-based deployments.
 
 2. **Update the staging service**
-   - In Render, edit the staging Web Service and change the deployed branch/tag to the new version (for example from `v0.9.0` to `v0.9.1`).
+   - In Render, edit the staging Web Service and change the deployed branch/tag to the new version (for example from `v1.0.0` to `v1.0.1`).
    - Redeploy or trigger a manual deploy.
 
 3. **Run smoke tests on staging**
@@ -91,24 +108,24 @@ If anything fails during these steps, stop and roll back (see the next section).
 
 ---
 
-## 4. Rolling back to a previous version
+## 5. Rolling back to a previous version
 
 If an upgrade causes problems, the rollback strategy should be as simple as possible. The exact steps depend on how you pinned versions originally.
 
-### 4.1 If you deploy from tags
+### 5.1 If you deploy from tags
 
 1. **Identify the last known-good tag**
-   - For example, if `v0.9.1` is broken and `v0.9.0` was stable, you want to go back to `v0.9.0`.
+   - For example, if `v1.0.1` is broken and `v1.0.0` was stable, you want to go back to `v1.0.0`.
 
 2. **Update the production service**
-   - In Render, change the deployed reference from `v0.9.1` back to `v0.9.0`.
+   - In Render, change the deployed reference from the new tag back to the last known-good tag.
    - Redeploy.
 
 3. **Verify after rollback**
    - Hit `/healthz`.
    - From ChatGPT, run a minimal smoke test to confirm the server is functional.
 
-### 4.2 If you deploy from a branch
+### 5.2 If you deploy from a branch
 
 If you are deploying from a branch such as `prod` or `main`:
 
@@ -126,7 +143,7 @@ In all cases, document the incident in your controller repo (for example using a
 
 ---
 
-## 5. Verifying upgrades with tests and health checks
+## 6. Verifying upgrades with tests and health checks
 
 Every upgrade should include at least three kinds of checks:
 
@@ -149,13 +166,13 @@ If any of these checks fail, treat the upgrade as incomplete and either fix the 
 
 ---
 
-## 6. Recommendations for Render and similar platforms
+## 7. Recommendations for Render and similar platforms
 
 When running on Render (or similar PaaS providers):
 
 1. **Pin to tags or stable branches**
    - Avoid deploying directly from a constantly moving `main` branch in production.
-   - Prefer tags (`v0.9.x`) or a dedicated `prod` branch that you update only after staging is green.
+   - Prefer tags (for example `v1.0.x`) or a dedicated `prod` branch that you update only after staging is green.
 
 2. **Use separate staging and production services**
    - This lets you test a new version in staging without risking production.
@@ -175,13 +192,13 @@ When running on Render (or similar PaaS providers):
 
 ---
 
-## 7. Keeping this document up to date
+## 8. Keeping this document up to date
 
-As you add versioning metadata (issue #148), change deployment patterns, or introduce new environments, make sure to update this file so it remains an accurate reflection of how you operate the MCP server.
+As you add versioning metadata, change deployment patterns, or introduce new environments, make sure to update this file so it remains an accurate reflection of how you operate the MCP server.
 
 In particular, revisit this document when you:
 
-- Introduce explicit version numbers or a `CHANGELOG`.
+- Introduce new release tags or a `CHANGELOG`.
 - Change how Render (or your hosting platform) is configured.
 - Add staging environments, canary deployments, or blue/green strategies.
 - Adjust write policies or workspace limits in ways that affect upgrades or rollbacks.
