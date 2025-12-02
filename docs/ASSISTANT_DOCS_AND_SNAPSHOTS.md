@@ -34,6 +34,19 @@ Whenever there is a conflict:
 - Prefer the current branch code and docs in this repo over older snapshots.
 - If something seems inconsistent, open or update a GitHub issue to clarify and then update the docs after the behavior is fixed.
 
+### 1.1 Meta tools when you are stuck
+
+When behavior feels surprising or tools appear to be missing, call these meta tools from the controller before assuming something is broken:
+
+- `get_server_config`: Inspect write gating, default branches, the configured controller repository, HTTP timeouts, and other high-level settings.
+- `list_all_actions`: See the full catalog of tools, annotations, and read/write flags that are currently exposed.
+- `list_write_tools`: Focus on the subset of tools that can modify state when write actions are approved.
+- `validate_environment`: Detect missing tokens, misconfigured controller repository/branch, or other environment-level problems.
+- `ping_extensions`: Confirm that extension modules (such as `extra_tools.py`) have been loaded and their tools are registered.
+- `controller_contract`: Retrieve the versioned contract that describes expectations between controllers, assistants, and this MCP server.
+
+Use these helpers to ground your reasoning in the live deployment and to avoid speculative debugging based only on old snapshots or assumptions.
+
 ---
 
 ## 2. Keeping docs in sync with code and tests
