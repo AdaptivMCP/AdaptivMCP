@@ -39,6 +39,7 @@ When someone reports "GitHub via Adaptiv Controller is broken":
 1. **Check /healthz**
    - Call `GET /healthz` on the MCP server.
    - Confirm:
+   - If you suspect a version mismatch (for example after an upgrade), use `run_command` to run `python cli.py --version` in the controller repo workspace and compare it with `docs/UPGRADE_NOTES.md` and `CHANGELOG.md`.
      - `status` is `ok` or similar.
      - `github_token_present` is `true`.
      - `controller.repo` and `controller.default_branch` match your expectations.
@@ -46,7 +47,6 @@ When someone reports "GitHub via Adaptiv Controller is broken":
 
 2. **Call validate_environment from the controller**
    - From ChatGPT, with the controller attached, call the `validate_environment` tool.
-   - Review the report for:
      - Missing or malformed `GITHUB_TOKEN`.
      - Mismatched `GITHUB_MCP_CONTROLLER_REPO` or `GITHUB_MCP_CONTROLLER_BRANCH`.
      - Suspicious HTTP timeout or concurrency settings.
