@@ -120,6 +120,11 @@ names directly, supplying values appropriate for your deployment.
 
 Check the repository README and configuration sections for any new variables added over time.
 
+> Meta tools for verification and troubleshooting:
+> - Use `get_server_config` to confirm the effective configuration (write gating, timeouts, limits).
+> - Use `list_all_actions` to see all registered tools and their write/read status.
+> - Use `ping_extensions` to verify that `extra_tools.py` and any other extensions loaded correctly.
+
 ---
 
 ## 4. Deploying on Render (example)
