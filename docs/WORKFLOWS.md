@@ -537,4 +537,22 @@ Typical flow:
    differences cannot reintroduce parse errors.
 4. If `valid` is false, fix the error reported by `error` and try again.
 
-This is especially useful for long `sections` arrays passed into `build_section_based_diff`, or any other tool where the controller expects strict JSON from the assistant.
+
+---
+
+## 14. PR creation smoke test for truncation and branch flow
+
+When you suspect problems with PR creation (for example, 422 errors or truncated titles/bodies), you can run a simple smoke test that mirrors the way this controller is used in practice:
+
+1. Create a throwaway docs branch (for example `docs-pr-flow-smoke-test`) from `main` using `ensure_branch`.
+2. Add a small markdown file under `docs/` (for example `docs/pr-flow-test-adaptiv-pr-check.md`) using `apply_text_update_and_commit` or a patch-based flow. Include a reasonably long but readable summary in the file so there is something meaningful to describe in the PR body.
+3. Open a PR back into `main` using `create_pull_request` with:
+   - A long, descriptive title (for example `Test PR: validate Adaptiv Controller PR flow and truncation handling`).
+   - A multi-paragraph body that lists the steps being validated (branch creation, commit on the feature branch, PR creation, and truncation behavior).
+4. Inspect the resulting PR in GitHub and confirm:
+   - The title is intact (not truncated unexpectedly).
+   - The full body is present, including the final sentences of the description.
+   - The `head` and `base` branches are correct and match the feature and `main` branches you expect.
+5. After you finish debugging, merge or close the smoke-test PR and delete the branch in the GitHub UI to keep the repository clean.
+
+This pattern doubles as both a diagnostics workflow and an example of how assistants should exercise PR flows using the controller itself without touching production code paths.
