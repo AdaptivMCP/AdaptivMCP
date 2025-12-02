@@ -135,6 +135,32 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "commit": result,
         }
 
+    @mcp_tool(
+        write_action=True,
+        description=(
+            "Update a single file in a GitHub repository from the persistent "
+            "workspace checkout. Use run_command to edit the workspace file "
+            "first, then call this tool to sync it back to the branch."
+        ),
+        tags=["github", "write", "files"],
+    )
+    async def update_file_from_workspace(
+        full_name: str,
+        branch: str,
+        workspace_path: str,
+        target_path: str,
+        message: str,
+    ) -> Dict[str, Any]:
+        """
+        Placeholder implementation for updating a file from the workspace.
+
+        In this initial stub, the function does not perform any GitHub writes.
+        The full behavior will be implemented in subsequent steps.
+        """
+        raise NotImplementedError(
+            "update_file_from_workspace is not yet implemented on this branch."
+        )
+
     def _build_unified_diff_from_strings(
         original: str,
         updated: str,
