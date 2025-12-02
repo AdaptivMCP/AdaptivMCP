@@ -46,6 +46,10 @@ For large files, such as main.py, prefer get_file_slice to inspect specific regi
 
 Avoid unqualified global GitHub search for routine work. Prefer repository-scoped search and helpers such as search_code_in_repo.
 
+7. Handling repeated tool failures
+
+Do not repeatedly call the same tool with identical arguments after a failure. Instead, summarize what happened, adjust based on the error (including re-reading the tool definition or relevant docs), or ask the human for guidance before trying again.
+
 ## Sources of truth for new assistants
 
 When a new assistant attaches to Joey's GitHub or Adaptiv Controller, they should treat the following as canonical truth.
