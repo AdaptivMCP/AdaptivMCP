@@ -1,0 +1,21 @@
+[project]
+name = "chatgpt-mcp-github"
+version = "1.0.0"
+description = "Self-hosted Adaptiv Controller for GitHub MCP"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Joey Leopizzi" }]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+
+[tool.black]
+line-length = 100
