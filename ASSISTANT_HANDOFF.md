@@ -30,13 +30,13 @@ Use run_command freely, subject to write gating, to run tests, run linters and f
 
 When behavior or code changes, add or update tests. Use run_tests, or run_command with pytest, on the relevant feature branch before opening pull requests.
 
-3. Branch-first, patch-first, pull-request-first
+3. Branch-first and pull-request-first
 
-Do not commit directly to the main branch for this repository. Always create or reuse a feature branch from main, make changes there using patch-based flows such as build_unified_diff, build_section_based_diff, and apply_patch_and_commit, run tests and linters on that branch, and then open a pull request into main. Joey reviews, merges, and deletes branches.
+Do not commit directly to the main branch for this repository. Always create or reuse a feature branch from main, make your changes there, run tests and linters on that branch, and then open a pull request into main. You can use patch-based diffs or full-file updates as appropriate for the change, but keep diffs reviewable and avoid accidentally overwriting large or critical files.
 
 4. JSON discipline
 
-Use validate_json_string when needed to ensure strict, valid JSON outputs. Do not invent tool parameters; always honor the schemas returned by list_all_actions with the include_parameters flag set to true.
+Use validate_json_string when needed to ensure strict, valid JSON outputs. Do not invent tool parameters; always honor the schemas returned by list_all_actions with the include_parameters flag set to true. For complex or nested JSON payloads, build them in small steps, validate them, and if a tool call fails due to a schema or parameter mismatch, re-read the tool definition instead of guessing or retrying blindly.
 
 5. Large files and diffs
 
@@ -60,7 +60,7 @@ Call get_server_config to understand write gating, default repository and branch
 
 3. Project documentation
 
-Read the core documentation in the docs directory, especially WORKFLOWS.md, ARCHITECTURE_AND_SAFETY.md, and ASSISTANT_DOCS_AND_SNAPSHOTS.md. Read this ASSISTANT_HANDOFF.md file in full as part of session bootstrap.
+Read the core documentation in the docs directory, especially WORKFLOWS.md, ARCHITECTURE_AND_SAFETY.md, ASSISTANT_DOCS_AND_SNAPSHOTS.md, UPGRADE_NOTES.md, and OPERATIONS.md. Read this ASSISTANT_HANDOFF.md file in full as part of session bootstrap.
 
 4. Main branch as truth
 
@@ -74,11 +74,11 @@ When a new assistant connects to Joey's GitHub or Adaptiv Controller for this re
 
 2. Confirm repository defaults by calling get_repo_defaults or inspecting repository metadata to confirm the effective default branch and other settings.
 
-3. Read the core docs and this handoff by fetching and reading ASSISTANT_HANDOFF.md, WORKFLOWS.md, ARCHITECTURE_AND_SAFETY.md, and ASSISTANT_DOCS_AND_SNAPSHOTS.md.
+3. Read the core docs and this handoff by fetching and reading ASSISTANT_HANDOFF.md, WORKFLOWS.md, ARCHITECTURE_AND_SAFETY.md, ASSISTANT_DOCS_AND_SNAPSHOTS.md, UPGRADE_NOTES.md, OPERATIONS.md, and SELF_HOSTED_SETUP.md.
 
 4. Align with current work by reading open pull requests related to the controller or docs, reviewing their diffs and descriptions, and fetching any branches or issues that Joey references.
 
-5. Adopt test-first and pull-request-first behavior by planning changes on a feature branch, using patch-based edits, running tests and linters, and then opening pull requests into main for Joey to merge.
+5. Adopt test-first and pull-request-first behavior by planning changes on a feature branch, using patch-based edits or focused full-file updates as appropriate, running tests and linters, and then opening pull requests into main for Joey to merge.
 
 ## When documentation changes
 
@@ -86,4 +86,4 @@ The controller contract and Joey's expectations include a specific rule: when do
 
 ## Evolving this handoff document
 
-This file is intentionally designed to be updated over time as the project, controller contract, and workflows evolve. When updating this document, use a feature branch, make patch-based edits to ASSISTANT_HANDOFF.md, update WORKFLOWS.md, ASSISTANT_DOCS_AND_SNAPSHOTS.md, or controller_contract in main.py if behavior or expectations change, run linters and tests as appropriate, and open a pull request into main. Future assistants should assume that the latest version of this file on main reflects the current truth about how to work on this repository, how to use the Adaptiv Controller, and how to stay in sync across sessions and chats.
+This file is intentionally designed to be updated over time as the project, controller contract, and workflows evolve. When updating this document, use a feature branch, make focused edits to ASSISTANT_HANDOFF.md (patch-based or full-file as appropriate), update WORKFLOWS.md, ASSISTANT_DOCS_AND_SNAPSHOTS.md, or controller_contract in main.py if behavior or expectations change, run linters and tests as appropriate, and open a pull request into main. Future assistants should assume that the latest version of this file on main reflects the current truth about how to work on this repository, how to use the Adaptiv Controller, and how to stay in sync across sessions and chats.
