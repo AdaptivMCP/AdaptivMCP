@@ -506,24 +506,39 @@ When you suspect problems with PR creation (for example, 422 errors or truncated
    - A multi-paragraph body that lists the steps being validated (branch creation, commit on the feature branch, PR creation, and truncation behavior).
 4. Inspect the resulting PR in GitHub and confirm:
    - The title is intact (not truncated unexpectedly).
-   - The full body is present, including the final sentences of the description.
+   - The full body is present, including the final sentences of the description).
    - The `head` and `base` branches are correct and match the feature and `main` branches you expect.
 5. After you finish debugging, merge or close the smoke-test PR and delete the branch in the GitHub UI to keep the repository clean.
 
 This pattern doubles as both a diagnostics workflow and an example of how assistants should exercise PR flows using the controller itself without touching production code paths.
 
-## Workspace-based file updates with update_file_from_workspace
+## 13. Troubleshooting when you feel stuck or in a loop
 
-For large or complex edits, use this flow instead of sending full file content through JSON write tools:
+When a workflow feels stuck, confusing, or at risk of looping, use this checklist instead of repeatedly calling the same tools with the same arguments:
 
-1. Use `run_command` on your feature branch to edit files in the persistent workspace.
-2. When you are satisfied with the workspace version of a file, call `update_file_from_workspace` with:
-   - `full_name`: owner/repo
-   - `branch`: your feature branch
-   - `workspace_path`: path in the workspace checkout
-   - `target_path`: path in the GitHub repository
-   - `message`: commit message
-3. Run tests on the branch, for example `pytest -q` or a `run_tests` call.
-4. Open a pull request into the main branch.
+1. **Stop repeating failing tool calls.**
+   - Do not keep calling the same tool with identical arguments after it fails.
+   - Summarize what happened, including error messages and any truncated output flags.
 
-This keeps large HTML, JavaScript, and documentation changes out of JSON arguments and uses the same workspace that `run_command` already uses.
+2. **Re-read the contract and docs.**
+   - Re-run `controller_contract` and re-open the relevant sections of `ASSISTANT_HANDOFF.md` and this `WORKFLOWS.md` file.
+   - Check whether you are violating any expectations (for example branch usage, write posture, or JSON discipline).
+
+3. **Validate arguments and JSON.**
+   - Use `validate_tool_args` for complex or write-tagged tools to confirm that your arguments match the schema.
+   - Use `validate_json_string` for any complex JSON payloads you intend to return or pass between tools.
+
+4. **Check the environment.**
+   - If failures look environmental (permissions, tokens, repo state), call `validate_environment` and summarize any warnings or errors.
+
+5. **Inspect recent changes and branch state.**
+   - Use `get_branch_summary` on the active feature branch to understand ahead/behind state, PR status, and last-known tests or workflow runs.
+   - If working off an issue, use `open_issue_context` to confirm you are on the correct branch/PR for that issue.
+
+6. **Scale back the next step.**
+   - Propose a smaller, more observable action (for example fetching a single file slice or running a narrow test command) instead of a broad, multi-step tool sequence.
+
+7. **Ask the human for guidance.**
+   - If the situation is still ambiguous after these steps, summarize what you tried, what failed, and what you think is happening, then ask the human which direction to take next instead of continuing to guess.
+
+These steps are meant to keep assistants from silently spinning in loops and to surface problems (contract mismatches, environment issues, schema drift) quickly so humans can intervene when needed.
