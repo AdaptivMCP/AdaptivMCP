@@ -11,7 +11,9 @@ from main import (
     GitHubAPIError,
     _decode_github_content,
     _effective_ref_for_repo,
+    _workspace_path,
 )
+
 
 
 class ToolDecorator(Protocol):
@@ -134,6 +136,64 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "branch": effective_branch,
             "commit": result,
         }
+
+    @mcp_tool(
+        write_action=True,
+        description=(
+            "Update a single file in a GitHub repository from the persistent "
+            "workspace checkout. Use run_command to edit the workspace file "
+            "first, then call this tool to sync it back to the branch."
+        ),
+        tags=["github", "write", "files"],
+    )
+    async def update_file_from_workspace(
+        full_name: str,
+        branch: str,
+        workspace_path: str,
+        target_path: str,
+        message: str,
+    ) -> Dict[str, Any]:
+        effective_ref = _effective_ref_for_repo(full_name, branch)
+        workspace_root = _workspace_path(full_name, effective_ref)
+
+        from pathlib import Path as _Path
+        import base64
+
+        workspace_file = _Path(workspace_root) / workspace_path
+
+        if not workspace_file.is_file():
+            raise FileNotFoundError(
+                f"Workspace file {workspace_path!r} not found in {workspace_root!r}"
+            )
+
+        content_bytes = workspace_file.read_bytes()
+        encoded = base64.b64encode(content_bytes).decode("ascii")
+
+        sha = await _resolve_file_sha(full_name, target_path, effective_ref)
+
+        payload: Dict[str, Any] = {
+            "message": message,
+            "content": encoded,
+            "branch": effective_ref,
+        }
+        if sha is not None:
+            payload["sha"] = sha
+
+        result = await _github_request(
+            "PUT",
+            f"/repos/{full_name}/contents/{target_path}",
+            json_body=payload,
+            expect_json=True,
+        )
+
+        return {
+            "full_name": full_name,
+            "branch": effective_ref,
+            "workspace_path": workspace_path,
+            "target_path": target_path,
+            "commit": result,
+        }
+
 
     def _build_unified_diff_from_strings(
         original: str,
