@@ -21,6 +21,7 @@ import sys
 import logging
 import time
 import json
+import jsonschema
 import shlex
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional
@@ -1065,6 +1066,51 @@ def _ensure_write_allowed(context: str) -> None:
 # long as they are decorated with the shared mcp_tool wrapper.
 _REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
 
+
+def _find_registered_tool(tool_name: str) -> Optional[tuple[Any, Any]]:
+    """Return the registered tool and original callable for ``tool_name``."""
+
+    for tool, func in _REGISTERED_MCP_TOOLS:
+        name = getattr(tool, "name", None) or getattr(func, "__name__", None)
+        if name == tool_name:
+            return tool, func
+    return None
+
+
+def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
+    """Extract a JSON-serializable input schema for a FastMCP tool."""
+
+    if tool is None:
+        return None
+
+    raw_schema = getattr(tool, "inputSchema", None)
+    if raw_schema is not None:
+        if hasattr(raw_schema, "model_dump"):
+            return raw_schema.model_dump()
+        if isinstance(raw_schema, dict):
+            return dict(raw_schema)
+        try:
+            return json.loads(raw_schema)
+        except Exception:
+            pass
+
+    try:
+        parameters = getattr(tool, "parameters", None)
+    except Exception:  # pragma: no cover - defensive
+        parameters = None
+
+    if parameters is not None:
+        if hasattr(parameters, "model_dump"):
+            return parameters.model_dump()
+        if isinstance(parameters, dict):
+            return dict(parameters)
+        try:  # pragma: no cover - defensive
+            return json.loads(parameters)
+        except Exception:
+            return None
+
+    return None
+
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     """Wrapper around FastMCP's @mcp.tool decorator.
 
@@ -2049,6 +2095,12 @@ def list_write_tools() -> Dict[str, Any]:
             "notes": "Stages changes, commits with a provided message, and can push to the effective branch.",
         },
         {
+            "name": "commit_workspace_files",
+            "category": "workspace",
+            "description": "Commit a specific list of files from the persistent workspace.",
+            "notes": "Use to avoid staging temporary artifacts while still pushing changes to the branch.",
+        },
+        {
             "name": "run_tests",
             "category": "workspace",
             "description": "Run tests (default: pytest) inside the persistent workspace clone.",
@@ -2150,7 +2202,7 @@ def controller_contract() -> Dict[str, Any]:
                 "Treat these expectations as guardrails rather than hard locks; do not get stuck over choices like patch versus full-file updates or which search helper to use—pick a reasonable option, explain it briefly, and keep the work moving.",
             ],
             "controller_prompt": [
-                "Remind assistants to respect branch defaults, keep writes gated until authorized, and use the persistent workspace tools (run_command, run_tests, commit_workspace) as the standard execution surface.",
+                "Remind assistants to respect branch defaults, keep writes gated until authorized, and use the persistent workspace tools (run_command, run_tests, commit_workspace, commit_workspace_files) as the standard execution surface.",
                 "Keep safety, truncation, and large-file guidance visible so the controller prompt steers assistants toward slice-and-diff workflows instead of large payload retries.",
             ],
             "server": [
@@ -2163,7 +2215,7 @@ def controller_contract() -> Dict[str, Any]:
         "prompts": {
             "controller_prompt": [
                 "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
-                "Encourage use of list_write_tools and validate_environment so the assistant knows available tools and common pitfalls.",
+                "Encourage use of list_write_tools, validate_tool_args, and validate_environment so the assistant knows available tools and common pitfalls.",
                 "Remind assistants that run_command and run_tests are allowed by default and should be part of normal execution workflows when available.",
                 "Push assistants to run repo-native linters and formatters early (especially autofixers) so trivial syntax or style errors are resolved before code review.",
                 "Encourage assistants to add or adjust tests alongside code changes and to run run_tests on the relevant feature branch before opening PRs.",
@@ -2181,7 +2233,7 @@ def controller_contract() -> Dict[str, Any]:
             ],
         },
         "tooling": {
-            "discovery": ["get_server_config", "list_write_tools", "validate_environment"],
+            "discovery": ["get_server_config", "list_write_tools", "validate_tool_args", "validate_environment"],
             "safety": [
                 "authorize_write_actions",
                 "ensure_branch",
@@ -2189,7 +2241,7 @@ def controller_contract() -> Dict[str, Any]:
                 "apply_text_update_and_commit",
                 "update_files_and_open_pr",
             ],
-            "execution": ["run_command", "run_tests", "commit_workspace"],
+            "execution": ["run_command", "run_tests", "commit_workspace", "commit_workspace_files"],
             "diffs": ["build_unified_diff", "build_section_based_diff"],
             "large_files": [
                 "get_file_slice",
@@ -2197,7 +2249,8 @@ def controller_contract() -> Dict[str, Any]:
                 "build_unified_diff_from_strings",
                 "validate_json_string",
             ],
-            "issues": ["create_issue", "update_issue", "comment_on_issue"],
+            "issues": ["create_issue", "update_issue", "comment_on_issue", "open_issue_context"],
+            "branches": ["compare_refs", "get_branch_summary"],
         },
         "guardrails": [
             "Always verify branch and ref inputs; missing refs for controller repos should fall back to the configured default branch.",
@@ -2784,20 +2837,7 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
         }
 
         if include_parameters:
-            input_schema = None
-            schema = getattr(tool, "inputSchema", None)
-            if schema is not None:
-                try:
-                    input_schema = schema.model_dump()
-                except Exception:
-                    input_schema = None
-            else:
-                try:
-                    input_schema = getattr(tool, "parameters", None)
-                except Exception:
-                    input_schema = None
-
-            tool_info["input_schema"] = input_schema
+            tool_info["input_schema"] = _normalize_input_schema(tool)
 
         tools.append(tool_info)
 
@@ -2806,6 +2846,57 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
     return {
         "write_actions_enabled": WRITE_ALLOWED,
         "tools": tools,
+    }
+
+
+@mcp_tool(write_action=False)
+async def validate_tool_args(tool_name: str, args: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    """Validate a candidate payload against a tool's input schema without running it."""
+
+    found = _find_registered_tool(tool_name)
+    if found is None:
+        available = sorted(
+            set(
+                getattr(tool, "name", None) or getattr(func, "__name__", None)
+                for tool, func in _REGISTERED_MCP_TOOLS
+                if getattr(tool, "name", None) or getattr(func, "__name__", None)
+            )
+        )
+        raise ValueError(
+            f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}"
+        )
+
+    tool, _ = found
+    schema = _normalize_input_schema(tool)
+    normalized_args = normalize_args(args or {})
+
+    if schema is None:
+        return {
+            "tool": tool_name,
+            "valid": True,
+            "warnings": [
+                "No input schema available for this tool; nothing to validate.",
+            ],
+            "schema": None,
+            "errors": [],
+        }
+
+    validator = jsonschema.Draft7Validator(schema)
+    errors = [
+        {
+            "message": error.message,
+            "path": list(error.absolute_path),
+            "validator": error.validator,
+            "validator_value": error.validator_value,
+        }
+        for error in sorted(validator.iter_errors(normalized_args), key=str)
+    ]
+
+    return {
+        "tool": tool_name,
+        "valid": len(errors) == 0,
+        "errors": errors,
+        "schema": schema,
     }
 
 
@@ -3136,6 +3227,53 @@ async def comment_on_issue(
         json_body={'body': body},
     )
 
+
+@mcp_tool(write_action=False)
+async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any]:
+    """Return an issue plus related branches and pull requests."""
+
+    issue_resp = await fetch_issue(full_name, issue_number)
+    issue_json = issue_resp.get("json") if isinstance(issue_resp, dict) else issue_resp
+
+    branches_resp = await list_branches(full_name, per_page=100)
+    branches_json = branches_resp.get("json") or []
+    branch_names = [b.get("name") for b in branches_json if isinstance(b, dict)]
+
+    pattern = re.compile(rf"(?i)(?:^|[-_/]){re.escape(str(issue_number))}(?:$|[-_/])")
+    candidate_branches = [
+        name for name in branch_names if isinstance(name, str) and pattern.search(name)
+    ]
+
+    prs_resp = await list_repository_pull_requests(full_name, state="all")
+    prs = prs_resp.get("json") or []
+
+    issue_str = str(issue_number)
+    open_prs: List[Dict[str, Any]] = []
+    closed_prs: List[Dict[str, Any]] = []
+    for pr in prs:
+        if not isinstance(pr, dict):
+            continue
+        branch_name = pr.get("head", {}).get("ref")
+        text = f"{pr.get('title', '')}\n{pr.get('body', '')}"
+        if issue_str in text or (isinstance(branch_name, str) and issue_str in branch_name):
+            target_list = open_prs if pr.get("state") == "open" else closed_prs
+            target_list.append({
+                "number": pr.get("number"),
+                "title": pr.get("title"),
+                "state": pr.get("state"),
+                "draft": pr.get("draft"),
+                "html_url": pr.get("html_url"),
+                "head": pr.get("head"),
+                "base": pr.get("base"),
+            })
+
+    return {
+        "issue": issue_json,
+        "candidate_branches": candidate_branches,
+        "open_prs": open_prs,
+        "closed_prs": closed_prs,
+    }
+
 @mcp_tool(write_action=False)
 async def compare_refs(
     full_name: str,
@@ -3195,6 +3333,67 @@ async def ensure_branch(
             f"GitHub ensure_branch error {resp.status_code}: {resp.text}"
         )
     return {"status_code": resp.status_code, "json": resp.json()}
+
+
+@mcp_tool(write_action=False)
+async def get_branch_summary(
+    full_name: str, branch: str, base: str = "main"
+) -> Dict[str, Any]:
+    """Return ahead/behind data, PRs, and latest workflow run for a branch."""
+
+    effective_branch = _effective_ref_for_repo(full_name, branch)
+    effective_base = _effective_ref_for_repo(full_name, base)
+
+    compare_result: Optional[Dict[str, Any]] = None
+    compare_error: Optional[str] = None
+    try:
+        compare_result = await compare_refs(full_name, effective_base, effective_branch)
+    except Exception as exc:
+        compare_error = str(exc)
+
+    owner: Optional[str] = None
+    if "/" in full_name:
+        owner = full_name.split("/", 1)[0]
+    head_param = f"{owner}:{effective_branch}" if owner else None
+
+    async def _safe_list_prs(state: str) -> Dict[str, Any]:
+        try:
+            return await list_repository_pull_requests(
+                full_name, state=state, head=head_param, base=effective_base
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            return {"error": str(exc), "json": []}
+
+    open_prs_resp = await _safe_list_prs("open")
+    closed_prs_resp = await _safe_list_prs("closed")
+
+    open_prs = open_prs_resp.get("json") or []
+    closed_prs = closed_prs_resp.get("json") or []
+
+    workflow_error: Optional[str] = None
+    latest_workflow_run: Optional[Dict[str, Any]] = None
+    try:
+        runs_resp = await list_workflow_runs(
+            full_name, branch=effective_branch, per_page=1
+        )
+        runs_json = runs_resp.get("json") or {}
+        runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
+        if runs:
+            latest_workflow_run = runs[0]
+    except Exception as exc:
+        workflow_error = str(exc)
+
+    return {
+        "full_name": full_name,
+        "branch": effective_branch,
+        "base": effective_base,
+        "compare": compare_result,
+        "compare_error": compare_error,
+        "open_prs": open_prs,
+        "closed_prs": closed_prs,
+        "latest_workflow_run": latest_workflow_run,
+        "workflow_error": workflow_error,
+    }
 @mcp_tool(write_action=True)
 async def create_pull_request(
     full_name: str,
@@ -3847,6 +4046,72 @@ async def commit_workspace(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace")
+
+
+@mcp_tool(write_action=True)
+async def commit_workspace_files(
+    full_name: str,
+    files: List[str],
+    ref: str = "main",
+    message: str = "Commit selected workspace changes",
+    push: bool = True,
+) -> Dict[str, Any]:
+    """Commit and optionally push specific files from the persistent workspace."""
+
+    if not files:
+        raise ValueError("files must be a non-empty list of paths")
+
+    try:
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        _ensure_write_allowed(
+            f"commit_workspace_files for {full_name}@{effective_ref}"
+        )
+        repo_dir = await _clone_repo(full_name, ref=effective_ref)
+
+        add_cmd = "git add -- " + " ".join(shlex.quote(path) for path in files)
+        add_result = await _run_shell(add_cmd, cwd=repo_dir, timeout_seconds=120)
+        if add_result["exit_code"] != 0:
+            stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
+            raise GitHubAPIError(f"git add failed: {stderr}")
+
+        staged_files_result = await _run_shell(
+            "git diff --cached --name-only", cwd=repo_dir, timeout_seconds=60
+        )
+        staged_files = staged_files_result.get("stdout", "").strip().splitlines()
+        if not staged_files:
+            raise GitHubAPIError("No staged changes to commit for provided files")
+
+        commit_cmd = f"git commit -m {shlex.quote(message)}"
+        commit_result = await _run_shell(
+            commit_cmd, cwd=repo_dir, timeout_seconds=300
+        )
+        if commit_result["exit_code"] != 0:
+            stderr = commit_result.get("stderr", "") or commit_result.get(
+                "stdout", ""
+            )
+            raise GitHubAPIError(f"git commit failed: {stderr}")
+
+        push_result = None
+        if push:
+            push_cmd = f"git push origin HEAD:{effective_ref}"
+            push_result = await _run_shell(
+                push_cmd, cwd=repo_dir, timeout_seconds=300
+            )
+            if push_result["exit_code"] != 0:
+                stderr = push_result.get("stderr", "") or push_result.get(
+                    "stdout", ""
+                )
+                raise GitHubAPIError(f"git push failed: {stderr}")
+
+        return {
+            "repo_dir": repo_dir,
+            "branch": effective_ref,
+            "staged_files": staged_files,
+            "commit": commit_result,
+            "push": push_result,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="commit_workspace_files")
 
 
 @mcp_tool(write_action=True)
