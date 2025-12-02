@@ -508,3 +508,19 @@ When you suspect problems with PR creation (for example, 422 errors or truncated
 5. After you finish debugging, merge or close the smoke-test PR and delete the branch in the GitHub UI to keep the repository clean.
 
 This pattern doubles as both a diagnostics workflow and an example of how assistants should exercise PR flows using the controller itself without touching production code paths.
+
+## Workspace-based file updates with update_file_from_workspace
+
+For large or complex edits, use this flow instead of sending full file content through JSON write tools:
+
+1. Use `run_command` on your feature branch to edit files in the persistent workspace.
+2. When you are satisfied with the workspace version of a file, call `update_file_from_workspace` with:
+   - `full_name`: owner/repo
+   - `branch`: your feature branch
+   - `workspace_path`: path in the workspace checkout
+   - `target_path`: path in the GitHub repository
+   - `message`: commit message
+3. Run tests on the branch, for example `pytest -q` or a `run_tests` call.
+4. Open a pull request into the main branch.
+
+This keeps large HTML, JavaScript, and documentation changes out of JSON arguments and uses the same workspace that `run_command` already uses.
