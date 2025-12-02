@@ -64,6 +64,9 @@ GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
 # truncation if a deployment prefers full logs at the cost of larger responses.
 TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
 TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "6000"))
+TOOL_STDIO_COMBINED_MAX_CHARS = int(
+    os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "18000")
+)
 GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
 GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
@@ -784,6 +787,8 @@ async def _run_shell(
     Git identity environment variables are injected automatically so Git commits
     made inside workspace commands are properly attributed. Outputs are returned
     in full to preserve complete context for downstream tools and assistants.
+    If stdout and stderr would exceed configured limits, they are truncated with
+    explicit flags so clients such as ChatGPT do not drop oversized payloads.
     """
 
     shell_executable = os.environ.get("SHELL")
@@ -842,6 +847,22 @@ async def _run_shell(
     ):
         stderr = stderr[:TOOL_STDERR_MAX_CHARS]
         stderr_truncated = True
+
+    if (
+        TOOL_STDIO_COMBINED_MAX_CHARS
+        and TOOL_STDIO_COMBINED_MAX_CHARS > 0
+        and len(stdout) + len(stderr) > TOOL_STDIO_COMBINED_MAX_CHARS
+    ):
+        allowed_stdout = max(0, TOOL_STDIO_COMBINED_MAX_CHARS - len(stderr))
+        if len(stdout) > allowed_stdout:
+            stdout = stdout[:allowed_stdout]
+            stdout_truncated = True
+
+        if len(stdout) + len(stderr) > TOOL_STDIO_COMBINED_MAX_CHARS:
+            allowed_stderr = max(0, TOOL_STDIO_COMBINED_MAX_CHARS - len(stdout))
+            if len(stderr) > allowed_stderr:
+                stderr = stderr[:allowed_stderr]
+                stderr_truncated = True
 
     return {
         "exit_code": proc.returncode,

@@ -98,6 +98,19 @@ The MCP server is configured primarily via environment variables. Common setting
 
 Additional optional variables may exist for HTTP timeouts, retry settings, and logging.
 
+### Output truncation and payload sizing
+
+Long `run_command` / `run_tests` outputs can cause the ChatGPT client to drop or
+replace a conversation thread. Deployments can clamp stdout/stderr with:
+
+- `TOOL_STDOUT_MAX_CHARS` and `TOOL_STDERR_MAX_CHARS`
+  - Hard caps for each stream. Defaults are `12000` and `6000` characters.
+  - Set lower values if Render or your MCP client struggles with large payloads.
+- `TOOL_STDIO_COMBINED_MAX_CHARS`
+  - Upper bound for stdout + stderr together (default `18000`).
+  - Useful on Render to keep responses safely under provider and client limits
+    without losing truncation signals (both streams include `*_truncated` flags).
+
 For a canonical, copy-pasteable list of supported variables, see the
 `.env.example` file in the repository root. It contains commented examples for
 all commonly used settings, along with brief descriptions and recommended
@@ -137,6 +150,8 @@ Adjust these commands if the repo uses a different entrypoint or packaging model
    - `GITHUB_TOKEN`: your token.
    - `GITHUB_MCP_CONTROLLER_REPO`: your controller repo full name (if different).
    - `GITHUB_MCP_CONTROLLER_BRANCH`: the default branch for the controller repo (`main` or a refactor branch).
+   - Output caps to protect the ChatGPT client from oversized responses:
+     - `TOOL_STDOUT_MAX_CHARS`, `TOOL_STDERR_MAX_CHARS`, and `TOOL_STDIO_COMBINED_MAX_CHARS`.
    - Any additional configuration keys required by this repo's README.
 
 5. **Deploy**
