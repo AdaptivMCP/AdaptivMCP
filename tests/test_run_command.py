@@ -204,10 +204,10 @@ async def test_clone_repo_reuses_persistent_workspace(monkeypatch, tmp_path):
     repo_dir.mkdir(parents=True)
     (repo_dir / ".git").mkdir()
 
-    calls: list[str] = []
+    calls: list[tuple[str, str | None]] = []
 
     async def fake_run_shell(cmd, cwd=None, timeout_seconds=300, env=None):
-        calls.append(cmd)
+        calls.append((cmd, cwd))
         return {
             "exit_code": 0,
             "timed_out": False,
@@ -227,8 +227,13 @@ async def test_clone_repo_reuses_persistent_workspace(monkeypatch, tmp_path):
     )
 
     assert result["repo_dir"] == str(repo_dir)
-    assert any(cmd == "echo ok" for cmd in calls)
-    assert not any(cmd.startswith("git clone") for cmd in calls)
+    assert calls[:3] == [
+        ("git fetch origin --prune", str(repo_dir)),
+        ("git reset --hard origin/main", str(repo_dir)),
+        ("git clean -fdx --exclude .venv-mcp", str(repo_dir)),
+    ]
+    assert any(cmd == ("echo ok", str(repo_dir)) for cmd in calls)
+    assert not any(cmd.startswith("git clone") for cmd, _ in calls)
 
 
 @pytest.mark.asyncio
