@@ -170,6 +170,30 @@ async def test_run_shell_truncates_output_when_limits_exceeded(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_run_shell_combined_truncation(monkeypatch):
+    """A combined cap keeps stdout+stderr under the configured budget."""
+
+    monkeypatch.setattr(main, "TOOL_STDOUT_MAX_CHARS", 100)
+    monkeypatch.setattr(main, "TOOL_STDERR_MAX_CHARS", 100)
+    monkeypatch.setattr(main, "TOOL_STDIO_COMBINED_MAX_CHARS", 50)
+
+    cmd = (
+        "python - <<'PY'\n"
+        "import sys\n"
+        "sys.stdout.write('A' * 40)\n"
+        "sys.stderr.write('B' * 40)\n"
+        "PY"
+    )
+    result = await main._run_shell(cmd)
+
+    assert len(result["stdout"]) + len(result["stderr"]) <= 50
+    assert result["stdout_truncated"] is True
+    assert result["stderr_truncated"] is True or len(result["stderr"]) == 40
+    assert result["stdout"].startswith("A")
+    assert result["stderr"].startswith("B")
+
+
+@pytest.mark.asyncio
 async def test_run_shell_no_truncation_when_limits_disabled(monkeypatch):
     """If the truncation limits are disabled (0 or negative), _run_shell
     should return full output and leave truncation flags False.
