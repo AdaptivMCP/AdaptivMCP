@@ -218,7 +218,7 @@ CONTROLLER_REPO = os.environ.get(
 # Machine-readable contract version for controllers and assistants. This helps
 # keep prompts, workflows, and server behavior aligned as they evolve.
 CONTROLLER_CONTRACT_VERSION = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-13"
+    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-16"
 )
 CONTROLLER_DEFAULT_BRANCH = os.environ.get(
     "GITHUB_MCP_CONTROLLER_BRANCH", "main"
@@ -2068,6 +2068,7 @@ def controller_contract() -> Dict[str, Any]:
                 "Treat run_command as the way to run any project-specific or shell-level commands you would normally ask a human (or yourself) to run locally (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics), with no extra restrictions beyond the controller's normal write gating and approval.",
                 "Run repo-defined linters and formatters (especially autofix variants) before proposing commits or PRs so style or syntax issues are caught early instead of left for humans to debug.",
                 "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
+                "When asked to open a pull request after finishing work, target the main branch (or the configured default branch) unless the user explicitly specifies a different base.",
                 "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
                 "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
                 "Summarize what changed and which tools ran so humans can audit actions easily.",
@@ -2089,6 +2090,7 @@ def controller_contract() -> Dict[str, Any]:
             "server": [
                 "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
                 "Default to the configured controller branch when refs are missing for the controller repo to reduce accidental writes to main.",
+                "Normalize PR base branches to the configured controller default when callers omit a base or use main so controllers reliably open PRs against the intended target.",
                 "Expose minimal health and metrics data so controllers can debug without extra API calls.",
             ],
         },
@@ -3136,14 +3138,22 @@ async def create_pull_request(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
-    """Open a pull request from ``head`` into ``base``."""
+    """Open a pull request from ``head`` into ``base``.
+
+    The base branch is normalized via ``_effective_ref_for_repo`` so that
+    controller repos honor the configured default branch when callers supply
+    ``main`` or omit the ref. This keeps PR targets consistent even when the
+    controller prompt tells assistants to open PRs against main.
+    """
+
+    effective_base = _effective_ref_for_repo(full_name, base)
     _ensure_write_allowed(
-        f"create PR from {head} to {base} in {full_name}"
+        f"create PR from {head} to {effective_base} in {full_name}"
     )
     payload: Dict[str, Any] = {
         "title": title,
         "head": head,
-        "base": base,
+        "base": effective_base,
         "draft": draft,
     }
     if body is not None:
