@@ -1,1 +1,65 @@
-import pytest\n\nimport main\n\n\n@pytest.mark.asyncio\nasync def test_move_file_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:\n    monkeypatch.setattr(main, 'WRITE_ALLOWED', True)\n\n    calls: dict[str, object] = {}\n\n    async def fake_decode(full_name: str, path: str, ref: str):\n        calls['decode_args'] = (full_name, path, ref)\n        return {'text': 'hello'}\n\n    async def fake_apply_text_update_and_commit(**kwargs):\n        calls['apply_args'] = kwargs\n        return {'commit': {'sha': 'abc123'}}\n\n    async def fake_delete_file(**kwargs):\n        calls['delete_args'] = kwargs\n        return {'commit': {'sha': 'def456'}}\n\n    def fake_ensure_write_allowed(context: str) -> None:\n        calls['write_context'] = context\n\n    monkeypatch.setattr(main, '_decode_github_content', fake_decode)\n    monkeypatch.setattr(main, 'apply_text_update_and_commit', fake_apply_text_update_and_commit)\n    monkeypatch.setattr(main, 'delete_file', fake_delete_file)\n    monkeypatch.setattr(main, '_ensure_write_allowed', fake_ensure_write_allowed)\n\n    result = await main.move_file(\n        full_name='owner/repo',\n        from_path='old/path.py',\n        to_path='new/path.py',\n        branch='feature',\n        message='Move file',\n    )\n\n    assert calls['decode_args'] == ('owner/repo', 'old/path.py', 'feature')\n    assert calls['apply_args']['full_name'] == 'owner/repo'\n    assert calls['apply_args']['path'] == 'new/path.py'\n    assert calls['apply_args']['branch'] == 'feature'\n    assert calls['delete_args']['path'] == 'old/path.py'\n    assert calls['delete_args']['branch'] == 'feature'\n    assert 'move_file from old/path.py to new/path.py in owner/repo' in calls['write_context']\n    assert result['status'] == 'moved'\n
+import json
+
+import pytest
+
+import main
+
+
+def test_validate_json_string_valid() -> None:
+    payload = {"a": 1, "b": ["x", "y"]}
+    raw = json.dumps(payload)
+
+    result = main.validate_json_string(raw)
+
+    assert result["valid"] is True
+    assert result["parsed"] == payload
+    assert result["parsed_type"] == "dict"
+
+    normalized = result["normalized"]
+    assert isinstance(normalized, str)
+    # Normalized JSON should parse back to the same structure.
+    assert json.loads(normalized) == payload
+
+
+def test_validate_json_string_invalid() -> None:
+    # Trailing comma makes this invalid JSON.
+    raw = '{"a": 1, }'
+
+    result = main.validate_json_string(raw)
+
+    assert result["valid"] is False
+    assert "error" in result
+    assert "position" in result
+    assert "snippet" in result
+    # Invalid payloads should not expose a normalized value.
+    assert "normalized" not in result
+
+
+@pytest.mark.asyncio
+async def test_get_repo_defaults_uses_github_default_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_github_request(method: str, path: str, **kwargs):
+        assert method == "GET"
+        assert path == "/repos/owner/repo"
+        return {"json": {"default_branch": "dev"}}
+
+    monkeypatch.setattr(main, "_github_request", fake_github_request)
+
+    result = await main.get_repo_defaults("owner/repo")
+
+    assert result["defaults"]["full_name"] == "owner/repo"
+    assert result["defaults"]["default_branch"] == "dev"
+
+
+@pytest.mark.asyncio
+async def test_get_repo_defaults_falls_back_to_controller_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_github_request(method: str, path: str, **kwargs):
+        # Simulate a response without a default_branch field.
+        return {"json": {}}
+
+    monkeypatch.setattr(main, "_github_request", fake_github_request)
+    monkeypatch.setattr(main, "CONTROLLER_DEFAULT_BRANCH", "fallback-branch")
+
+    result = await main.get_repo_defaults("owner/repo")
+
+    assert result["defaults"]["full_name"] == "owner/repo"
+    assert result["defaults"]["default_branch"] == "fallback-branch"
