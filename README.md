@@ -184,6 +184,15 @@ Important points:
 - They run in the users own Render-hosted environment using the users repository and tokens.
 - The controller should always ask explicit permission before running commands or installing dependencies, and prefer safe branches and smoke-test branches for invasive operations.
 
+When behavior feels surprising or tools appear to be missing, controllers and assistants should call meta tools before assuming a bug:
+
+- `get_server_config`: Inspect write gating, default branches, and controller repo configuration.
+- `list_all_actions`: Inspect the full set of tools currently exposed by this MCP server.
+- `list_write_tools`: Focus on the subset of tools that can modify state.
+- `validate_environment`: Check for missing tokens, misconfigured controller repo/branch, or unsafe timeout/concurrency settings.
+- `ping_extensions`: Confirm that extra_tools.py and any other extensions have been loaded.
+- `controller_contract`: Read the versioned contract that describes expectations between controllers, assistants, and this MCP server.
+
 ---
 
 ## Custom flows and adaptivity
