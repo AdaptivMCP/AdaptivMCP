@@ -863,6 +863,28 @@ async def _clone_repo(full_name: str, ref: Optional[str] = None) -> str:
     os.makedirs(os.path.dirname(workspace_dir), exist_ok=True)
 
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
+        # Refresh the existing checkout so stale, uncommitted changes do not
+        # leak between runs. Assistants frequently forget to reset the
+        # persistent workspace, which causes tests to pass locally but fail on
+        # GitHub because the remote branch does not include those stray
+        # changes.
+        refresh_steps = [
+            ("git fetch origin --prune", 300),
+            (f"git reset --hard origin/{effective_ref}", 120),
+            (
+                "git clean -fdx --exclude .venv-mcp",
+                120,
+            ),
+        ]
+
+        for cmd, timeout in refresh_steps:
+            result = await _run_shell(cmd, cwd=workspace_dir, timeout_seconds=timeout)
+            if result["exit_code"] != 0:
+                stderr = result.get("stderr", "") or result.get("stdout", "")
+                raise GitHubAPIError(
+                    f"Workspace refresh failed for {full_name}@{effective_ref}: {stderr}"
+                )
+
         return workspace_dir
 
     if os.path.exists(workspace_dir):
@@ -1954,7 +1976,7 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "run_command",
             "category": "workspace",
             "description": "Run an arbitrary shell command in a persistent workspace clone.",
-            "notes": "Workspace and virtualenv state persist across calls; bound stdout/stderr is returned.",
+            "notes": "Workspace is refreshed to the remote ref before each call so stale changes do not leak; virtualenv state persists across calls.",
         },
         {
             "name": "commit_workspace",
@@ -1966,7 +1988,7 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "run_tests",
             "category": "workspace",
             "description": "Run tests (default: pytest) inside the persistent workspace clone.",
-            "notes": "Preferred way to run tests from assistants; reuses workspace setup.",
+            "notes": "Preferred way to run tests; workspace is reset to the remote ref before execution and reuses the persistent virtualenv.",
         },
         {
             "name": "trigger_workflow_dispatch",
@@ -3635,8 +3657,10 @@ async def run_command(
             calls when the workspace persists on disk.
 
     The workspace directory is kept on disk so subsequent calls can reuse
-    installed dependencies and file changes. Callers should keep this in mind
-    when applying patches repeatedly.
+    installed dependencies. The checkout is refreshed (fetch + reset + clean)
+    before each command so stale, uncommitted changes do not leak between
+    runs. Callers should pass a patch when they need the workspace to mirror
+    in-flight edits.
     """
 
     env: Optional[Dict[str, str]] = None
