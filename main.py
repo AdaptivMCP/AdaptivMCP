@@ -23,7 +23,7 @@ import time
 import json
 import shlex
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 import httpx
 from anyio import ClosedResourceError
@@ -255,6 +255,49 @@ def _render_visible_whitespace(text: str) -> str:
         rendered_lines.append(f"{body}{newline_marker}")
 
     return "\n".join(rendered_lines)
+
+
+def normalize_args(raw_args: Any) -> Dict[str, Any]:
+    """Normalize tool args to a JSON-friendly mapping.
+
+    Controllers should pass structured args dictionaries all the way through
+    without double-parsing JSON strings. This helper keeps a narrow
+    compatibility path for callers that still provide JSON text while treating
+    arbitrary strings as a type error so free-form fields (like shell commands)
+    stay inside the args mapping rather than becoming the mapping itself.
+    """
+
+    if raw_args is None:
+        return {}
+
+    if isinstance(raw_args, Mapping):
+        return dict(raw_args)
+
+    if isinstance(raw_args, str):
+        stripped = raw_args.lstrip()
+
+        if stripped.startswith("{") or stripped.startswith("["):
+            try:
+                parsed = json.loads(raw_args)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"args must be a valid JSON object/array: {exc}"
+                ) from exc
+
+            if not isinstance(parsed, Mapping):
+                raise TypeError(
+                    f"args JSON must decode to an object, got {type(parsed).__name__}"
+                )
+
+            return dict(parsed)
+
+        raise TypeError(
+            "Adaptiv tools must receive args as a JSON object, not a raw string. "
+            "If a tool needs a free-form string, place it inside the args mapping "
+            "as a field instead of passing the string as the entire args payload."
+        )
+
+    raise TypeError(f"Unsupported args type: {type(raw_args).__name__}")
 
 
 def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
