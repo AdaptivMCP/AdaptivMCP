@@ -72,6 +72,8 @@ At the start of a session, always establish a safe baseline. This is true for bo
    - Useful for new deployments or when things look misconfigured.
    - Returns a structured report of environment checks (tokens, controller repo/branch, HTTP settings, etc.).
 
+5. Optionally call **`validate_tool_args`** before invoking complex tools, especially write-tagged ones, to catch schema mismatches (missing required fields, extra fields, or type errors) before they become live failures.
+
 ### 2.2 Decide write posture
 
 - If `write_allowed == False`:
@@ -170,11 +172,12 @@ Use the issue/PR read tools (names may evolve, but typically include):
 
 - `fetch_issue`, `fetch_issue_comments`.
 - `fetch_pr`, `get_pr_diff`, `list_pull_requests`, `fetch_pr_comments`.
+- `open_issue_context` to get a structured view of a given issue together with related branches and PRs.
 
 Typical pattern:
 
 1. Read the issue body and comments.
-2. Open any referenced PRs.
+2. Attach to the right work using `open_issue_context` to discover the correct branch and/or PR.
 3. Use this context to decide scope and expected behavior.
 
 ### 3.4 Read-only summary
