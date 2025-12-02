@@ -49,7 +49,7 @@ All workflows should respect these rules, especially when touching the controlle
 
 ## 2. Safe session bootstrap
 
-At the start of a session, always establish a safe baseline.
+At the start of a session, always establish a safe baseline. This is true for both humans and assistants and should be done in every new ChatGPT conversation before doing any real work.
 
 ### 2.1 Discover server policy and tools
 
@@ -63,10 +63,10 @@ At the start of a session, always establish a safe baseline.
    - Use this instead of hard-coding tool lists.
    - Confirm key tools exist (for example `apply_patch_and_commit`, `update_files_and_open_pr`, `run_tests`, `create_issue`).
 
-3. Optionally call **`controller_contract`**.
+3. Call **`controller_contract`**.
    - Provides a machine-readable contract between the controller prompt, assistants, and this server.
    - Treat this contract as authoritative; do not override or rephrase its expectations in your prompt. Keep it in sync with the published version instead of maintaining a separate copy or inventing a parallel "doc contract" in this repo.
-   - Useful when tuning prompts or debugging misunderstandings about branch defaults and write gating.
+-   - Use it together with the docs on `main` instead of trying to memorize everything in your own words.
 
 4. Optionally call **`validate_environment`**.
    - Useful for new deployments or when things look misconfigured.
@@ -100,8 +100,37 @@ For any workflow, be explicit about:
 
 Even with this helper, you should **always** pass explicit `branch` / `ref` arguments when writing.
 
----
+### 2.4 Confirm server version and docs
 
+After connecting to this server in a new ChatGPT conversation, assistants **must**:
+
+1. Confirm the server version:
+
+   - Use `run_command` against this repo (or any environment that has the repo checked out) to run:
+
+     ```bash
+     python cli.py --version
+     ```
+
+   - Expect `1.0.0` for the 1.0 release.
+   - If this does not match expectations (for example, docs mention a different version), stop and ask the human before proceeding.
+
+2. Refresh docs from `main` for this repo:
+
+   - Use `fetch_files` or `get_file_contents` on `main` to re-read at minimum:
+     - `ASSISTANT_HANDOFF.md`.
+     - `docs/WORKFLOWS.md`.
+     - `docs/ARCHITECTURE_AND_SAFETY.md`.
+     - `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md`.
+     - `SELF_HOSTED_SETUP.md`.
+   - Treat these docs on `main` as the **source of truth** for behavior. If the human says a PR was merged to update docs, assume those merged docs are correct even if a previous assistant said something different.
+
+3. Align behavior with the controller contract and docs:
+
+   - Use the controller contract plus these docs as your shared map of the system.
+   - Do not rely on memory from previous chats; always believe `main` (code + docs + contract) when there is a conflict.
+
+This section is intentionally redundant with the controller contract so that even if an assistant skips the contract tool, the workflows doc still forces them to check the version and re-read the docs after merges before doing serious work.
 ## 3. Inspecting a repository (read-only workflows)
 
 Before proposing any write, build a mental model of the repo.
