@@ -76,6 +76,8 @@ Example prompt guidelines:
   - "Never write to main for the controller repo; always use feature branches."
   - "Use issue tools to keep humans informed of work and status."
   - "Use patch-based flows for code changes and always show diffs for approval."
+- Keep quality guardrails visible:
+  - "Run repo-native linters and formatters (prefer autofix variants) before proposing commits or PRs to avoid avoidable syntax or style issues."
 
 - Emphasize human ergonomics:
   - "Accept natural-language goals; do not make humans type out shell pipelines or tool sequences for you."
