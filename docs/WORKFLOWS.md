@@ -68,6 +68,14 @@ Recommended sequence
 5. Read the core docs.
    - Fetch and read this file, `ASSISTANT_HANDOFF.md`, `docs/ARCHITECTURE_AND_SAFETY.md`, `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md`, `docs/UPGRADE_NOTES.md`, `docs/SELF_HOSTED_SETUP.md`, `docs/SELF_HOSTING_DOCKER.md`, and `docs/OPERATIONS.md`.
 
+### Handling tool argument JSON errors
+
+If the client or ChatGPT host returns `ToolInputError: Could not parse args as JSON`, the last tool call payload was not valid JSON. To recover quickly:
+
+- Keep tool arguments as a pure JSON object with double-quoted keys/strings and no Markdown or code fences.
+- Strip trailing comments or explanations from the arguments payload—only the JSON object should be passed to the tool.
+- When in doubt, run `validate_json_string` on the candidate arguments to confirm the host will accept them before retrying the tool call.
+
 ---
 
 ## 3. Branching and pull request discipline
