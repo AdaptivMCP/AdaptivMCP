@@ -25,7 +25,9 @@ async def test_commit_workspace_files_stages_selected(monkeypatch, tmp_path):
     (repo_dir / "file1.txt").write_text("one updated\n", encoding="utf-8")
     (repo_dir / "file2.txt").write_text("two updated\n", encoding="utf-8")
 
-    async def fake_clone(full_name: str, ref: str | None = None) -> str:
+    async def fake_clone(
+        full_name: str, ref: str | None = None, *, preserve_changes: bool = False
+    ) -> str:
         return str(repo_dir)
 
     monkeypatch.setattr(main, "_clone_repo", fake_clone)
