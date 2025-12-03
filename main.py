@@ -261,8 +261,8 @@ def _render_visible_whitespace(text: str) -> str:
 def normalize_args(raw_args: Any) -> Dict[str, Any]:
     """Normalize tool args to a JSON-friendly mapping.
 
-    Controllers should pass structured args dictionaries all the way through
-    without double-parsing JSON strings. This helper keeps a narrow
+    Controllers should pass structured (Python) args dictionaries all the way
+    through without double-parsing JSON strings. This helper keeps a narrow
     compatibility path for callers that still provide JSON text while treating
     arbitrary strings as a type error so free-form fields (like shell commands)
     stay inside the args mapping rather than becoming the mapping itself.
@@ -293,9 +293,10 @@ def normalize_args(raw_args: Any) -> Dict[str, Any]:
             return dict(parsed)
 
         raise TypeError(
-            "Adaptiv tools must receive args as a JSON object, not a raw string. "
+            "Adaptiv tools must receive args as a structured object (prefer a Python dict). "
             "If a tool needs a free-form string, place it inside the args mapping "
-            "as a field instead of passing the string as the entire args payload."
+            "as a field instead of passing the string as the entire args payload. "
+            "JSON text is supported only as a compatibility path when it decodes to an object."
         )
 
     raise TypeError(f"Unsupported args type: {type(raw_args).__name__}")
@@ -2122,7 +2123,7 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "run_command",
             "category": "workspace",
             "description": "Run an arbitrary shell command in a persistent workspace clone.",
-            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls; set installing_dependencies=true or use_temp_venv=false when a command will mutate server state so gating can kick in.",
+            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls; set mutating=true (or installing_dependencies=true/use_temp_venv=false) when a command will modify files or server state so gating applies only to those cases.",
         },
         {
             "name": "commit_workspace",
@@ -2140,7 +2141,7 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "run_tests",
             "category": "workspace",
             "description": "Run tests (default: pytest) inside the persistent workspace clone.",
-            "notes": "Preferred way to run tests; shares the persistent workspace with run_command and commit helpers.",
+            "notes": "Preferred way to run tests; shares the persistent workspace with run_command and commit helpers. Mark mutating=true only when the test command will edit files so read-only runs stay ungated.",
         },
         {
             "name": "trigger_workflow_dispatch",
@@ -3976,7 +3977,7 @@ async def ensure_workspace_clone(
         return _structured_tool_error(exc, context="ensure_workspace_clone")
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def run_command(
     full_name: str,
     ref: str = "main",
@@ -3986,6 +3987,7 @@ async def run_command(
     patch: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
+    mutating: bool = False,
 ) -> Dict[str, Any]:
     """Run an arbitrary shell command in a persistent workspace clone.
 
@@ -4006,18 +4008,25 @@ async def run_command(
             packages or otherwise mutates the server environment so write
             gating can apply to that call. Commands that only inspect or
             modify the workspace can leave this false for faster iteration.
+        mutating: Set to ``true`` when the command is expected to edit files
+            in the workspace so the write gate can apply only to those
+            calls. Read-only and test commands can leave this false so they
+            run without requiring write approval.
 
     The workspace directory is kept on disk so subsequent calls can reuse
     installed dependencies and edits. The same workspace is shared with
     ``commit_workspace`` so changes made via ``run_command`` remain available
     for commits and later commands. Callers should pass a patch when they need
-    the workspace to mirror in-flight edits.
+    the workspace to mirror in-flight edits. The tool is read-tagged by default;
+    set ``mutating=true`` (or the other gating flags) when a command will write
+    so approval applies only to those cases.
     """
 
     env: Optional[Dict[str, str]] = None
     try:
         effective_ref = _effective_ref_for_repo(full_name, ref)
-        if installing_dependencies or not use_temp_venv:
+        needs_write_gate = mutating or installing_dependencies or not use_temp_venv
+        if needs_write_gate:
             _ensure_write_allowed(
                 f"run_command {command} in {full_name}@{effective_ref}"
             )
@@ -4195,7 +4204,7 @@ async def commit_workspace_files(
         return _structured_tool_error(exc, context="commit_workspace_files")
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def run_tests(
     full_name: str,
     ref: str = "main",
@@ -4205,6 +4214,7 @@ async def run_tests(
     patch: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
+    mutating: bool = False,
 ) -> Dict[str, Any]:
     """Run the project's test command inside the persistent workspace.
 
@@ -4212,7 +4222,9 @@ async def run_tests(
     default timeout. Provide ``patch`` when running tests against pending edits
     so the checkout matches the assistant's current working diff.
     Set ``installing_dependencies`` to ``true`` only when the test command also
-    installs packages so gating can apply to that narrower use case.
+    installs packages so gating can apply to that narrower use case. Set
+    ``mutating=true`` only when the tests will rewrite files; read-only test
+    runs remain ungated by default.
     """
     return await run_command(
         full_name=full_name,
@@ -4223,6 +4235,7 @@ async def run_tests(
         patch=patch,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
+        mutating=mutating,
     )
 
 
