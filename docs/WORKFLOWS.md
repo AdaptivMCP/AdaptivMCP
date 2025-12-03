@@ -187,7 +187,22 @@ This section describes common workflows for this controller repo itself, `Proofg
 5. Use `commit_workspace` to commit changes to the docs branch.
 6. Open a PR into `main` and summarize the doc changes clearly.
 
-### 5.2 Updating the controller contract
+### 5.2 Medium sized file commits (token conscious)
+
+When you want to test or exercise medium sized documentation or code commits without flooding the client with huge payloads:
+
+1. Prefer branch scoped edits.
+   - Create a feature or docs branch dedicated to the experiment.
+2. Choose a medium sized target file (for example this file or `docs/ASSISTANT_HAPPY_PATHS.md`).
+3. Make structured but modest edits.
+   - Add or adjust a subsection.
+   - Avoid rewriting the entire file unless that is the purpose of the change.
+4. Use `apply_text_update_and_commit` or `apply_patch_and_commit` with:
+   - `return_diff` set to `false` when you only need verification metadata.
+   - Brief, descriptive commit messages.
+5. Open a PR from the experiment branch into `main` and verify that the diff and metadata look reasonable.
+
+### 5.3 Updating the controller contract
 
 1. Create a dedicated branch for contract changes.
 2. Update the contract source and related docs.
@@ -195,7 +210,7 @@ This section describes common workflows for this controller repo itself, `Proofg
 4. Run tests and schema validation as appropriate.
 5. Open a PR and flag it as a contract change.
 
-### 5.3 Adjusting server configuration or defaults
+### 5.4 Adjusting server configuration or defaults
 
 1. Create a branch for configuration changes.
 2. Update configuration files, `.env.example`, and relevant docs.
