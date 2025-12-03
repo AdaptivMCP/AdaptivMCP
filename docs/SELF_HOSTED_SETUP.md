@@ -4,8 +4,8 @@ This guide explains how to deploy this repository as a self-hosted GitHub MCP se
 
 The intended audience is:
 
-- Engineers and operators deploying the server (for example on Render).
-- Buyers of the Adaptiv Controller product who need to run their own backend.
+- People deploying the server for themselves (for example on Render).
+- Individuals and small groups who want to run their own backend.
 
 The Adaptiv Controller product is the controller configuration and workflows inside ChatGPT. This repository is the GitHub MCP server that those controllers talk to. You host it yourself and supply your own GitHub credentials; the controller never sees your token directly.
 
