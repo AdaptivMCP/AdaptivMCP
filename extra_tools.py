@@ -302,6 +302,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         )
 
         prev_end = 0
+        max_start = total_lines + 1
+
         for section in normalized_sections:
             try:
                 start_line = int(section["start_line"])
@@ -313,10 +315,21 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
             if start_line < 1:
                 raise ValueError("start_line must be >= 1")
+            if start_line > max_start:
+                raise ValueError(
+                    f"start_line {start_line} is beyond end of file ({total_lines} lines)"
+                )
+
             # Allow end_line == start_line - 1 to represent a pure insertion.
             if end_line < start_line - 1:
                 raise ValueError("end_line must be >= start_line - 1")
-            if total_lines > 0 and end_line > total_lines:
+
+            # The only valid case where end_line can exceed total_lines is when
+            # both start and end point one past the end, which represents an
+            # append-only insertion.
+            if end_line > total_lines and not (
+                end_line == start_line == max_start
+            ):
                 raise ValueError(
                     f"end_line {end_line} is greater than total_lines {total_lines}"
                 )

@@ -94,6 +94,38 @@ async def test_apply_line_edits_and_commit_minimal_payload(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_apply_line_edits_and_commit_appends(monkeypatch):
+    tools = _register_tools()
+    tool = tools["apply_line_edits_and_commit"]
+
+    def fake_effective_ref(full_name, branch):
+        return f"scoped/{branch}"
+
+    async def fake_decode(full_name, path, ref):
+        return {"text": "a\nb\nc\n", "sha": "oldsha"}
+
+    calls = {}
+
+    async def fake_apply_text_update_and_commit(**kwargs):
+        calls.update(kwargs)
+        return {"status": "committed", "commit": {"sha": "newsha"}}
+
+    monkeypatch.setattr(extra_tools, "_effective_ref_for_repo", fake_effective_ref)
+    monkeypatch.setattr(extra_tools, "_decode_github_content", fake_decode)
+    monkeypatch.setattr(main, "apply_text_update_and_commit", fake_apply_text_update_and_commit)
+
+    result = await tool(
+        full_name="owner/repo",
+        path="README.md",
+        sections=[{"start_line": 4, "end_line": 4, "new_text": "d\n"}],
+        branch="feature",
+    )
+
+    assert calls["updated_content"] == "a\nb\nc\nd\n"
+    assert result["status"] == "committed"
+
+
+@pytest.mark.asyncio
 async def test_apply_line_edits_and_commit_noop(monkeypatch):
     tools = _register_tools()
     tool = tools["apply_line_edits_and_commit"]
