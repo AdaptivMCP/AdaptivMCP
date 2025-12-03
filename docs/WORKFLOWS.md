@@ -250,3 +250,31 @@ When a workflow stalls or fails repeatedly
 7. Ask the human for input when ambiguity remains.
 
 Remember that this file is the engine side playbook. Personal controllers can adjust tone, verbosity, and other stylistic choices, but they should not contradict the safety and workflow rules documented here.
+
+---
+
+## 8. 1.0 proof-of-concept: exercised workflows
+
+This section records concrete workflows exercised by an assistant against this controller to validate the 1.0 release. It is not a how-to; it is a "we actually did this" log.
+
+### 8.1 Docs-only change using workspace + run_command + commit_workspace
+
+Workflow:
+
+1. Created branch `docs/workflow-poc-1-0b` from `main` using `ensure_branch`.
+2. Created or refreshed a workspace for that branch using `ensure_workspace_clone`.
+3. Ran `run_command` with:
+   - `command`: `ls && ls docs && pytest -q`
+   - `installing_dependencies`: `false`
+   This validated that the workspace contained the repo files and that the test suite passes on this branch.
+4. Fetched `docs/WORKFLOWS.md` for context using `get_file_contents` on the branch.
+5. Used `apply_line_edits_and_commit` (documented in `docs/ASSISTANT_HAPPY_PATHS.md`) to append this section as a proof-of-concept log.
+6. Opened a pull request from `docs/workflow-poc-1-0b` into `main` describing the exercised workflow and its purpose as a 1.0 proof-of-concept.
+
+Notes:
+
+- This flow demonstrates that:
+  - Branch-first, docs-only changes work end-to-end.
+  - `ensure_workspace_clone` + `run_command` is sufficient for running the full test suite.
+  - `apply_line_edits_and_commit` can be used for low-token, direct-to-GitHub doc updates without rewriting the whole file.
+- The PR associated with this workflow can be referenced as a concrete 1.0 validation artifact.
