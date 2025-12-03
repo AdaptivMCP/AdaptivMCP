@@ -190,3 +190,36 @@ async def test_apply_line_edits_and_commit_noop(monkeypatch):
     assert result["reason"] == "no_changes"
     assert result["branch"] == "scoped/main"
     assert apply_called is False
+
+
+@pytest.mark.asyncio
+async def test_apply_line_edits_and_commit_requires_new_text(monkeypatch):
+    tools = _register_tools()
+    tool = tools["apply_line_edits_and_commit"]
+
+    def fake_effective_ref(full_name, branch):
+        return f"scoped/{branch}"
+
+    async def fake_decode(full_name, path, ref):
+        return {"text": "same\n", "sha": "sha"}
+
+    async def fake_apply(*args, **kwargs):
+        raise AssertionError("apply_text_update_and_commit should not be called")
+
+    monkeypatch.setattr(extra_tools, "_effective_ref_for_repo", fake_effective_ref)
+    monkeypatch.setattr(extra_tools, "_decode_github_content", fake_decode)
+    monkeypatch.setattr(main, "apply_text_update_and_commit", fake_apply)
+
+    with pytest.raises(ValueError, match="new_text"):
+        await tool(
+            full_name="owner/repo",
+            path="file.txt",
+            sections=[{"start_line": 1, "end_line": 1}],
+        )
+
+    with pytest.raises(ValueError, match="new_text must not be None"):
+        await tool(
+            full_name="owner/repo",
+            path="file.txt",
+            sections=[{"start_line": 1, "end_line": 1, "new_text": None}],
+        )
