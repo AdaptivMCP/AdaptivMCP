@@ -126,6 +126,39 @@ async def test_apply_line_edits_and_commit_appends(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_apply_line_edits_and_commit_appends_missing_trailing_newline(monkeypatch):
+    tools = _register_tools()
+    tool = tools["apply_line_edits_and_commit"]
+
+    def fake_effective_ref(full_name, branch):
+        return f"scoped/{branch}"
+
+    async def fake_decode(full_name, path, ref):
+        # No trailing newline on purpose.
+        return {"text": "a\nb"}
+
+    calls = {}
+
+    async def fake_apply_text_update_and_commit(**kwargs):
+        calls.update(kwargs)
+        return {"status": "committed", "commit": {"sha": "newsha"}}
+
+    monkeypatch.setattr(extra_tools, "_effective_ref_for_repo", fake_effective_ref)
+    monkeypatch.setattr(extra_tools, "_decode_github_content", fake_decode)
+    monkeypatch.setattr(main, "apply_text_update_and_commit", fake_apply_text_update_and_commit)
+
+    result = await tool(
+        full_name="owner/repo",
+        path="README.md",
+        sections=[{"start_line": 3, "end_line": 3, "new_text": "c\n"}],
+        branch="feature",
+    )
+
+    assert calls["updated_content"] == "a\nb\nc\n"
+    assert result["status"] == "committed"
+
+
+@pytest.mark.asyncio
 async def test_apply_line_edits_and_commit_noop(monkeypatch):
     tools = _register_tools()
     tool = tools["apply_line_edits_and_commit"]
