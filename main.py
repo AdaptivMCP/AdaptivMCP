@@ -216,6 +216,7 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
+COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", False)
 
 CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
@@ -2199,16 +2200,131 @@ def list_write_tools() -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
-def controller_contract() -> Dict[str, Any]:
+def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
     """Return the controller/assistant contract in a structured format.
 
     This payload is meant to reduce misunderstandings between controller
     prompts, assistants, and the MCP server. Controllers can surface it to
     ChatGPT to remind the assistant which workflows are expected and how writes
     are gated.
+
+    When ``compact`` is ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
+    set), the response is shortened to reduce token usage while keeping counts
+    and summaries available.
     """
 
-    return {
+    compact_mode = COMPACT_METADATA_DEFAULT if compact is None else compact
+
+    assistant_expectations = [
+        "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, running checks, and driving local workflows; do not assume packages are installed in the MCP server process.",
+        "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
+        "Treat run_command as the way to run any project-specific or shell-level commands you would normally ask a human (or yourself) to run locally (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics), with no extra restrictions beyond the controller's normal write gating and approval.",
+        "Remember that only the assistant drives tool calls: do not ask humans to type commands, add blank lines, or re-run failed steps manually. Use diff-first tools and workspace helpers to handle quoting, newlines, and retries yourself.",
+        "Run repo-defined linters and formatters (especially autofix variants) before proposing commits or PRs so style or syntax issues are caught early instead of left for humans to debug.",
+        "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
+        "When asked to open a pull request after finishing work, target the main branch (or the configured default branch) unless the user explicitly specifies a different base.",
+        "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
+        "Keep GitHub state changes gated behind authorize_write_actions, but treat workspace setup, discovery, and non-mutating commands as auto-approved so flow is fast by default.",
+        "Call run_command with installing_dependencies=true (or use_temp_venv=false) when a command needs to install or mutate server-level state so gating can apply to that narrower slice of work.",
+        "Summarize what changed and which tools ran so humans can audit actions easily.",
+        "Return strict, valid JSON by validating payloads with validate_json_string before emitting them to clients.",
+        "When you generate non-trivial scripts, commands, or configuration (for example Python snippets, shell scripts, or large JSON payloads), run appropriate workspace tools via run_command to validate them (such as python -m py_compile for Python, bash -n or shellcheck for shell, validate_json_string and validate_tool_args for JSON and tool calls) before relying on them or committing.",
+        "When updating code or docs, remove or rewrite outdated or conflicting content so the final state has no duplicates or obsolete paths.",
+        "Whenever documentation in this controller repo has been updated and merged into the default branch, re-read the updated documents through the Adaptiv controller tools (for example get_file_contents, fetch_files, or list_repository_tree) and treat them as the new source of truth for the project; a merged PR on the default branch means the human has already reviewed and accepted the changes.",
+        "Work from natural-language goals without demanding long lists of CLI commands; ask concise clarifying questions instead of offloading planning to humans.",
+        "Verify outputs and state before repeating actions so runs do not get stuck in loops; report blockers clearly.",
+        "Use get_file_slice and diff helpers for large files when they make changes easier to see or safer to apply; for small, clear edits it is fine to update full files as long as the change stays focused and easy to review.",
+        "Treat routine multi-line edits as normal; use diff-first tools like apply_text_update_and_commit, apply_patch_and_commit, or update_file_sections_and_commit instead of calling them tricky or offloading them to humans.",
+        "Follow each tool's declared parameter schema exactly. Do not invent arguments such as full_name, owner, or repo unless they are explicitly defined in the tool signature.",
+        "When you need to search within the controller repo, prefer repo-scoped helpers or include an explicit repo:Proofgate-Revocations/chatgpt-mcp-github qualifier in search queries. Do not use unqualified global GitHub search for routine controller work.",
+        "Treat unscoped global code searches as exceptional: only use them when the user explicitly asks for cross-repo or ecosystem-wide context, and never to inspect or navigate this controller repo.",
+        "If a tool call returns a schema or validation error (for example an unexpected parameter), stop and re-read the tool definition via list_all_actions(include_parameters=true). Fix the arguments to match the schema instead of guessing or retrying with made-up parameters.",
+        "Do not switch between different search interfaces mid-task without reason. Once you have chosen a repo-scoped search strategy for a task in this controller repo, stick to it unless the user clearly requests a change.",
+        "Treat these expectations as guardrails rather than hard locks; do not get stuck over choices like patch versus full-file updates or which search helper to use—pick a reasonable option, explain it briefly, and keep the work moving.",
+    ]
+
+    controller_prompt_expectations = [
+        "Remind assistants to respect branch defaults, keep writes gated until authorized, and use the persistent workspace tools (run_command, run_tests, commit_workspace, commit_workspace_files) as the standard execution surface.",
+        "Keep safety, truncation, and large-file guidance visible so the controller prompt steers assistants toward slice-and-diff workflows instead of large payload retries.",
+    ]
+
+    server_expectations = [
+        "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
+        "Default to the configured controller branch when refs are missing for the controller repo to reduce accidental writes to main.",
+        "Normalize PR base branches to the configured controller default when callers omit a base or use main so controllers reliably open PRs against the intended target.",
+        "Expose minimal health and metrics data so controllers can debug without extra API calls.",
+    ]
+
+    controller_prompt_prompts = [
+        "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
+        "Encourage use of list_write_tools, validate_tool_args, and validate_environment so the assistant knows available tools and common pitfalls.",
+        "Remind assistants that run_command and run_tests are allowed by default and should be part of normal execution workflows when available.",
+        "Only gate commands that install dependencies or mutate server state; discovery and workspace setup should flow without extra approvals.",
+        "Push assistants to run repo-native linters and formatters early (especially autofixers) so trivial syntax or style errors are resolved before code review.",
+        "Encourage assistants to add or adjust tests alongside code changes and to run run_tests on the relevant feature branch before opening PRs.",
+        "Steer assistants toward update_files_and_open_pr or apply_patch_and_commit instead of low-level Git operations.",
+        "Nudge assistants toward large-file helpers like get_file_slice, build_section_based_diff, and validate_json_string to avoid retries and token blowups.",
+        "Remind assistants that search tools have strict schemas; they must use only the parameters documented in list_all_actions(include_parameters=true) and must not invent arguments like full_name unless explicitly supported.",
+        "Encourage assistants to treat repo-scoped search as the default for this controller repo by using dedicated repo helpers or including repo:Proofgate-Revocations/chatgpt-mcp-github in search queries.",
+        "Discourage unqualified global GitHub searches for normal controller tasks; global search should only be used when the user explicitly asks for cross-repo or ecosystem-wide context.",
+        "When a search or other tool call fails with a validation or schema error, instruct assistants to correct the call using the tool's declared parameters instead of repeatedly guessing new arguments.",
+    ]
+
+    server_prompts = [
+        "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
+        "Default to the configured controller branch when refs are missing for the controller repo to reduce accidental writes to main.",
+        "Expose minimal health and metrics data so controllers can debug without extra API calls.",
+    ]
+
+    editing_preferences = {
+        "summary": (
+            "Use diff-first tools for file changes; avoid large inline scripts in "
+            "run_command. run_command is primarily for tests, linters, and small "
+            "diagnostic commands."
+        ),
+        "recommended_tools": [
+            "build_unified_diff",
+            "build_section_based_diff",
+            "apply_text_update_and_commit",
+            "apply_patch_and_commit",
+            "update_files_and_open_pr",
+        ],
+        "anti_patterns": [
+            "Embedding large Python or shell scripts in run_command.command to "
+            "edit files.",
+        ],
+    }
+
+    tooling = {
+        "discovery": ["get_server_config", "list_write_tools", "validate_tool_args", "validate_environment"],
+        "safety": [
+            "authorize_write_actions",
+            "ensure_branch",
+            "apply_patch_and_commit",
+            "apply_text_update_and_commit",
+            "update_files_and_open_pr",
+        ],
+        "execution": ["run_command", "run_tests", "commit_workspace", "commit_workspace_files"],
+        "diffs": ["build_unified_diff", "build_section_based_diff"],
+        "large_files": [
+            "get_file_slice",
+            "build_section_based_diff",
+            "build_unified_diff_from_strings",
+            "validate_json_string",
+        ],
+        "issues": ["create_issue", "update_issue", "comment_on_issue", "open_issue_context"],
+        "branches": ["compare_refs", "get_branch_summary"],
+    }
+
+    guardrails = [
+        "Always verify branch and ref inputs; missing refs for controller repos should fall back to the configured default branch.",
+        "Do not bypass write gating by invoking GitHub APIs directly; use the provided tools so auditing stays consistent.",
+        "When content drift is detected, refetch files and rebuild the change instead of retrying blindly.",
+        "Prefer slice-and-diff workflows for large files and avoid echoing entire buffers unless necessary.",
+        "Pause and summarize after repeated failures instead of looping on the same action; surface what has been checked so far.",
+    ]
+
+    payload: Dict[str, Any] = {
         "version": CONTROLLER_CONTRACT_VERSION,
         "summary": "Contract describing how controllers, assistants, and this GitHub MCP server work together.",
         "controller": {
@@ -2217,111 +2333,38 @@ def controller_contract() -> Dict[str, Any]:
             "write_allowed_default": WRITE_ALLOWED,
         },
         "expectations": {
-            "assistant": [
-                "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, running checks, and driving local workflows; do not assume packages are installed in the MCP server process.",
-                "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
-                "Treat run_command as the way to run any project-specific or shell-level commands you would normally ask a human (or yourself) to run locally (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics), with no extra restrictions beyond the controller's normal write gating and approval.",
-                "Remember that only the assistant drives tool calls: do not ask humans to type commands, add blank lines, or re-run failed steps manually. Use diff-first tools and workspace helpers to handle quoting, newlines, and retries yourself.",
-                "Run repo-defined linters and formatters (especially autofix variants) before proposing commits or PRs so style or syntax issues are caught early instead of left for humans to debug.",
-                "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
-                "When asked to open a pull request after finishing work, target the main branch (or the configured default branch) unless the user explicitly specifies a different base.",
-                "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
-                "Keep GitHub state changes gated behind authorize_write_actions, but treat workspace setup, discovery, and non-mutating commands as auto-approved so flow is fast by default.",
-                "Call run_command with installing_dependencies=true (or use_temp_venv=false) when a command needs to install or mutate server-level state so gating can apply to that narrower slice of work.",
-                "Summarize what changed and which tools ran so humans can audit actions easily.",
-                "Return strict, valid JSON by validating payloads with validate_json_string before emitting them to clients.",
-                "When you generate non-trivial scripts, commands, or configuration (for example Python snippets, shell scripts, or large JSON payloads), run appropriate workspace tools via run_command to validate them (such as python -m py_compile for Python, bash -n or shellcheck for shell, validate_json_string and validate_tool_args for JSON and tool calls) before relying on them or committing.",
-                "When updating code or docs, remove or rewrite outdated or conflicting content so the final state has no duplicates or obsolete paths.",
-                "Whenever documentation in this controller repo has been updated and merged into the default branch, re-read the updated documents through the Adaptiv controller tools (for example get_file_contents, fetch_files, or list_repository_tree) and treat them as the new source of truth for the project; a merged PR on the default branch means the human has already reviewed and accepted the changes.",
-                "Work from natural-language goals without demanding long lists of CLI commands; ask concise clarifying questions instead of offloading planning to humans.",
-                "Verify outputs and state before repeating actions so runs do not get stuck in loops; report blockers clearly.",
-                "Use get_file_slice and diff helpers for large files when they make changes easier to see or safer to apply; for small, clear edits it is fine to update full files as long as the change stays focused and easy to review.",
-                "Treat routine multi-line edits as normal; use diff-first tools like apply_text_update_and_commit, apply_patch_and_commit, or update_file_sections_and_commit instead of calling them tricky or offloading them to humans.",
-                "Follow each tool's declared parameter schema exactly. Do not invent arguments such as full_name, owner, or repo unless they are explicitly defined in the tool signature.",
-                "When you need to search within the controller repo, prefer repo-scoped helpers or include an explicit repo:Proofgate-Revocations/chatgpt-mcp-github qualifier in search queries. Do not use unqualified global GitHub search for routine controller work.",
-                "Treat unscoped global code searches as exceptional: only use them when the user explicitly asks for cross-repo or ecosystem-wide context, and never to inspect or navigate this controller repo.",
-                "If a tool call returns a schema or validation error (for example an unexpected parameter), stop and re-read the tool definition via list_all_actions(include_parameters=true). Fix the arguments to match the schema instead of guessing or retrying with made-up parameters.",
-                "Do not switch between different search interfaces mid-task without reason. Once you have chosen a repo-scoped search strategy for a task in this controller repo, stick to it unless the user clearly requests a change.",
-                "Treat these expectations as guardrails rather than hard locks; do not get stuck over choices like patch versus full-file updates or which search helper to use—pick a reasonable option, explain it briefly, and keep the work moving.",
-            ],
-            "controller_prompt": [
-                "Remind assistants to respect branch defaults, keep writes gated until authorized, and use the persistent workspace tools (run_command, run_tests, commit_workspace, commit_workspace_files) as the standard execution surface.",
-                "Keep safety, truncation, and large-file guidance visible so the controller prompt steers assistants toward slice-and-diff workflows instead of large payload retries.",
-            ],
-            "server": [
-                "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
-                "Default to the configured controller branch when refs are missing for the controller repo to reduce accidental writes to main.",
-                "Normalize PR base branches to the configured controller default when callers omit a base or use main so controllers reliably open PRs against the intended target.",
-                "Expose minimal health and metrics data so controllers can debug without extra API calls.",
-            ],
+            "assistant": assistant_expectations,
+            "controller_prompt": controller_prompt_expectations,
+            "server": server_expectations,
         },
         "prompts": {
-            "controller_prompt": [
-                "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
-                "Encourage use of list_write_tools, validate_tool_args, and validate_environment so the assistant knows available tools and common pitfalls.",
-                "Remind assistants that run_command and run_tests are allowed by default and should be part of normal execution workflows when available.",
-                "Only gate commands that install dependencies or mutate server state; discovery and workspace setup should flow without extra approvals.",
-                "Push assistants to run repo-native linters and formatters early (especially autofixers) so trivial syntax or style errors are resolved before code review.",
-                "Encourage assistants to add or adjust tests alongside code changes and to run run_tests on the relevant feature branch before opening PRs.",
-                "Steer assistants toward update_files_and_open_pr or apply_patch_and_commit instead of low-level Git operations.",
-                "Nudge assistants toward large-file helpers like get_file_slice, build_section_based_diff, and validate_json_string to avoid retries and token blowups.",
-                "Remind assistants that search tools have strict schemas; they must use only the parameters documented in list_all_actions(include_parameters=true) and must not invent arguments like full_name unless explicitly supported.",
-                "Encourage assistants to treat repo-scoped search as the default for this controller repo by using dedicated repo helpers or including repo:Proofgate-Revocations/chatgpt-mcp-github in search queries.",
-                "Discourage unqualified global GitHub searches for normal controller tasks; global search should only be used when the user explicitly asks for cross-repo or ecosystem-wide context.",
-                "When a search or other tool call fails with a validation or schema error, instruct assistants to correct the call using the tool's declared parameters instead of repeatedly guessing new arguments.",
-            ],
-            "server": [
-                "Reject write tools when WRITE_ALLOWED is false and surface clear errors for controllers to relay.",
-                "Default to the configured controller branch when refs are missing for the controller repo to reduce accidental writes to main.",
-                "Expose minimal health and metrics data so controllers can debug without extra API calls.",
-            ],
+            "controller_prompt": controller_prompt_prompts,
+            "server": server_prompts,
         },
-        "editing_preferences": {
-            "summary": (
-                "Use diff-first tools for file changes; avoid large inline scripts in "
-                "run_command. run_command is primarily for tests, linters, and small "
-                "diagnostic commands."
-            ),
-            "recommended_tools": [
-                "build_unified_diff",
-                "build_section_based_diff",
-                "apply_text_update_and_commit",
-                "apply_patch_and_commit",
-                "update_files_and_open_pr",
-            ],
-            "anti_patterns": [
-                "Embedding large Python or shell scripts in run_command.command to "
-                "edit files.",
-            ],
-        },
-        "tooling": {
-            "discovery": ["get_server_config", "list_write_tools", "validate_tool_args", "validate_environment"],
-            "safety": [
-                "authorize_write_actions",
-                "ensure_branch",
-                "apply_patch_and_commit",
-                "apply_text_update_and_commit",
-                "update_files_and_open_pr",
-            ],
-            "execution": ["run_command", "run_tests", "commit_workspace", "commit_workspace_files"],
-            "diffs": ["build_unified_diff", "build_section_based_diff"],
-            "large_files": [
-                "get_file_slice",
-                "build_section_based_diff",
-                "build_unified_diff_from_strings",
-                "validate_json_string",
-            ],
-            "issues": ["create_issue", "update_issue", "comment_on_issue", "open_issue_context"],
-            "branches": ["compare_refs", "get_branch_summary"],
-        },
-        "guardrails": [
-            "Always verify branch and ref inputs; missing refs for controller repos should fall back to the configured default branch.",
-            "Do not bypass write gating by invoking GitHub APIs directly; use the provided tools so auditing stays consistent.",
-            "When content drift is detected, refetch files and rebuild the change instead of retrying blindly.",
-            "Prefer slice-and-diff workflows for large files and avoid echoing entire buffers unless necessary.",
-            "Pause and summarize after repeated failures instead of looping on the same action; surface what has been checked so far.",
-        ],
+        "editing_preferences": editing_preferences,
+        "tooling": tooling,
+        "guardrails": guardrails,
     }
+
+    if compact_mode:
+        payload["compact"] = True
+        payload["expectations"] = {
+            "assistant_count": len(assistant_expectations),
+            "controller_prompt_count": len(controller_prompt_expectations),
+            "server_count": len(server_expectations),
+            "note": "Set compact=false to receive the full expectation text.",
+        }
+        payload["prompts"] = {
+            "controller_prompt_count": len(controller_prompt_prompts),
+            "server_count": len(server_prompts),
+            "note": "Set compact=false to receive the full prompt guidance.",
+        }
+        payload["guardrails"] = {
+            "count": len(guardrails),
+            "examples": guardrails[:2],
+        }
+
+    return payload
 
 
 @mcp_tool(write_action=False)
@@ -2698,7 +2741,9 @@ async def list_workflow_runs(
 
 
 @mcp_tool(write_action=False)
-def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
+def list_all_actions(
+    include_parameters: bool = False, compact: Optional[bool] = None
+) -> Dict[str, Any]:
     """Enumerate every available MCP tool with read/write metadata.
 
     This helper exposes a structured catalog of all tools so assistants can see
@@ -2708,7 +2753,12 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
     Args:
         include_parameters: When ``True``, include the serialized input schema
             for each tool to clarify argument names and types.
+        compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
+            set), shorten descriptions and omit tag metadata to reduce token
+            usage.
     """
+
+    compact_mode = COMPACT_METADATA_DEFAULT if compact is None else compact
 
     tools: List[Dict[str, Any]] = []
     seen_names: set[str] = set()
@@ -2726,15 +2776,27 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
         annotations = getattr(tool, "annotations", None)
 
         description = getattr(tool, "description", None) or (func.__doc__ or "")
+        description = description.strip()
+
+        if compact_mode and description:
+            compact_description = description.splitlines()[0].strip() or description
+            max_length = 200
+            if len(compact_description) > max_length:
+                compact_description = f"{compact_description[:max_length-3].rstrip()}..."
+            description = compact_description
 
         tool_info: Dict[str, Any] = {
             "name": name_str,
-            "description": description.strip(),
-            "tags": sorted(list(getattr(tool, "tags", []) or [])),
             "write_action": bool(meta.get("write_action")),
             "auto_approved": bool(meta.get("auto_approved")),
             "read_only_hint": getattr(annotations, "readOnlyHint", None),
         }
+
+        if description:
+            tool_info["description"] = description
+
+        if not compact_mode:
+            tool_info["tags"] = sorted(list(getattr(tool, "tags", []) or []))
 
         if include_parameters:
             tool_info["input_schema"] = _normalize_input_schema(tool)
@@ -2745,6 +2807,7 @@ def list_all_actions(include_parameters: bool = False) -> Dict[str, Any]:
 
     return {
         "write_actions_enabled": WRITE_ALLOWED,
+        "compact": compact_mode,
         "tools": tools,
     }
 
