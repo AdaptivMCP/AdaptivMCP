@@ -86,24 +86,6 @@ If you are a solo developer or a small team, you can treat this kit as a **perso
 
 ---
 
-## Naming and branding
-
-There are three relevant names:
-
-1. Adaptiv Controller (official product name)
-   - This is your commercial controller concept and brand.
-   - It describes the way ChatGPT uses this MCP server to interact with GitHub safely.
-
-2. Custom controller name in ChatGPT
-   - Each user is free to name their ChatGPT controller anything they like (for example My GitHub Copilot, Studio GitHub, Joeys GitHub).
-   - Internally, any controller that uses this server and follows the documented workflows is considered an Adaptiv Controller under your license and brand, regardless of the display name in ChatGPT.
-
-3. This repository (Proofgate-Revocations/chatgpt-mcp-github)
-   - This is the GitHub MCP server implementation used by Adaptiv Controllers.
-   - It can also be used by other controllers or assistant prompts, as long as they respect the safety and write-gating model.
-
----
-
 ## High-level architecture
 
 At a high level, the flow looks like this:
@@ -162,8 +144,8 @@ Representative tools already implemented:
   - apply_patch_and_commit for patch-based edits via unified diffs.
   - update_files_and_open_pr for multi-file commit plus verify plus PR.
   - Branch and PR helpers: ensure_branch, create_branch, create_pull_request, merge_pull_request, close_pull_request, comment_on_pull_request.
-  - Diff helpers: build_unified_diff and build_section_based_diff for building patches server-side from full content or line-based sections.
-  - Extra tools in extra_tools.py: delete_file, delete_remote_branch, and similar.
+  - Diff helpers: build_unified_diff and build_section-based diff for building patches server-side from full content or line-based sections.
+  - Extra tools in extra_tools.py: delete_file, delete_remote branch, and similar.
   - JSON helper: validate_json_string to sanity-check and normalize JSON strings before returning them to clients or feeding them into other tools.
 
 All write tools are explicitly tagged as write actions and require WRITE_ALLOWED to be enabled.
