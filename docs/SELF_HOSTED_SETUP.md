@@ -67,8 +67,8 @@ You will point your hosting provider at this repo (or fork) when you configure t
 
 The MCP server is configured primarily via environment variables. Common settings include:
 
-- `GITHUB_TOKEN`
-  - Your GitHub personal access token. Required.
+- `GITHUB_TOKEN` / `GITHUB_PAT`
+  - Your GitHub personal access token. `GITHUB_PAT` takes precedence when both are set.
 
 - `GITHUB_MCP_CONTROLLER_REPO`
   - The full name of the controller repository.
