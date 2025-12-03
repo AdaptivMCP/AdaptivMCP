@@ -63,7 +63,7 @@ What it is not:
 
 ## For buyers (product view)
 
-If you are buying this as a product, you are buying the **controller**, not a hosted service.
+If you are buying this as a product, you are buying the **controller**, not a hosted service. Think of it as a **pocket Codex** you can carry across all of your repos.
 
 - You get the Adaptiv Controller:
   - The controller configuration, workflows, and usage model inside ChatGPT.
@@ -83,6 +83,13 @@ If you are a solo developer or a small team, you can treat this kit as a **perso
 
 - The MCP server stays conservative and safety-focused.
 - Your controller prompt is where you teach the assistant your own style (branch naming, how aggressively to refactor, how much explanation you want, and so on).
+- Over time, this effectively behaves like your own "pocket Codex": you describe an outcome (for example "do that docs pass for enterprise wording"), and the controller + tools handle branch creation, workspace setup, edits via run_command, commit_workspace, and PR creation for you.
+
+In practice, this flow can save a solo developer or small team a significant amount of time and money:
+
+- Fewer context switches between "thinking about the work" and "driving Git commands by hand".
+- Repeatable, auditable workflows encoded in tools and docs instead of living only in muscle memory.
+- The ability to reuse the same controller across all of your repos, with consistent safety checks and branch/PR discipline.
 
 ---
 
