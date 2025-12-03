@@ -313,6 +313,11 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
                     "Each section must have 'start_line' and 'end_line'"
                 ) from exc
 
+            if "new_text" not in section:
+                raise ValueError("Each section must include new_text (can be empty)")
+            if section.get("new_text") is None:
+                raise ValueError("new_text must not be None; use '' for deletions")
+
             if start_line < 1:
                 raise ValueError("start_line must be >= 1")
             if start_line > max_start:
