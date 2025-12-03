@@ -169,7 +169,6 @@ one (in a docs branch, via PR).
 
 ---
 
----
 
 ## 7. Workspace-first flows (local-style editing)
 
