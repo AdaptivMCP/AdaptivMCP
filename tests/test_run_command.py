@@ -148,6 +148,85 @@ async def test_run_command_allows_disabling_virtualenv(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_run_command_read_only_skips_write_gate(monkeypatch, tmp_path):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    async def fake_clone(*_, **__):
+        return str(repo_dir)
+
+    async def fake_prepare_temp_virtualenv(repo_path: str):  # type: ignore[override]
+        assert repo_path == str(repo_dir)
+        return {"VIRTUAL_ENV": "/tmp/venv", "PATH": "/tmp/venv/bin"}
+
+    calls: list[str] = []
+
+    async def fake_run_shell(cmd, cwd=None, timeout_seconds=300, env=None):
+        calls.append(cmd)
+        return {
+            "exit_code": 0,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+            "stdout_truncated": False,
+            "stderr_truncated": False,
+        }
+
+    def fail_write_gate(context: str) -> None:  # pragma: no cover - should not fire
+        raise AssertionError(f"write gate should not run for read commands: {context}")
+
+    monkeypatch.setattr(main, "_clone_repo", fake_clone)
+    monkeypatch.setattr(main, "_prepare_temp_virtualenv", fake_prepare_temp_virtualenv)
+    monkeypatch.setattr(main, "_run_shell", fake_run_shell)
+    monkeypatch.setattr(main, "_ensure_write_allowed", fail_write_gate)
+
+    result = await main.run_command(full_name="owner/repo", command="echo ok")
+
+    assert result["result"]["exit_code"] == 0
+    assert calls[-1] == "echo ok"
+
+
+@pytest.mark.asyncio
+async def test_run_command_mutating_triggers_write_gate(monkeypatch, tmp_path):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    async def fake_clone(*_, **__):
+        return str(repo_dir)
+
+    async def fake_prepare_temp_virtualenv(repo_path: str):  # type: ignore[override]
+        assert repo_path == str(repo_dir)
+        return {"VIRTUAL_ENV": "/tmp/venv", "PATH": "/tmp/venv/bin"}
+
+    write_contexts: list[str] = []
+
+    def record_write_gate(context: str) -> None:
+        write_contexts.append(context)
+
+    async def fake_run_shell(cmd, cwd=None, timeout_seconds=300, env=None):
+        return {
+            "exit_code": 0,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+            "stdout_truncated": False,
+            "stderr_truncated": False,
+        }
+
+    monkeypatch.setattr(main, "_clone_repo", fake_clone)
+    monkeypatch.setattr(main, "_prepare_temp_virtualenv", fake_prepare_temp_virtualenv)
+    monkeypatch.setattr(main, "_run_shell", fake_run_shell)
+    monkeypatch.setattr(main, "_ensure_write_allowed", record_write_gate)
+
+    result = await main.run_command(
+        full_name="owner/repo", command="echo ok", mutating=True
+    )
+
+    assert result["result"]["exit_code"] == 0
+    assert write_contexts and "run_command" in write_contexts[-1]
+
+
+@pytest.mark.asyncio
 async def test_run_shell_truncates_output_when_limits_exceeded(monkeypatch):
     """When TOOL_STDOUT_MAX_CHARS / TOOL_STDERR_MAX_CHARS are small,
     _run_shell should truncate output and set the truncation flags.
