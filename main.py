@@ -325,9 +325,6 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
 _concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
-_background_read_jobs: Dict[str, Dict[str, Any]] = {}
-_background_read_lock = asyncio.Lock()
-_background_read_tasks: Dict[str, asyncio.Task[Any]] = {}
 
 # json_response is configured per transport; do not pass it here.
 mcp = FastMCP("GitHub Fast MCP")
@@ -1859,13 +1856,6 @@ async def get_user_login() -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
-async def get_profile() -> Dict[str, Any]:
-    """Retrieve the authenticated user's GitHub profile."""
-
-    return await _github_request("GET", "/user")
-
-
-@mcp_tool(write_action=False)
 async def list_repositories(
     affiliation: Optional[str] = None,
     visibility: Optional[str] = None,
@@ -1948,26 +1938,6 @@ async def fetch_issue_comments(
         f"/repos/{full_name}/issues/{issue_number}/comments",
         params=params,
     )
-
-
-@mcp_tool(write_action=False)
-async def list_repository_pull_requests(
-    full_name: str,
-    state: str = "open",
-    head: Optional[str] = None,
-    base: Optional[str] = None,
-    per_page: int = 30,
-    page: int = 1,
-) -> Dict[str, Any]:
-    """List pull requests for a specific repository."""
-
-    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
-    if head is not None:
-        params["head"] = head
-    if base is not None:
-        params["base"] = base
-
-    return await _github_request("GET", f"/repos/{full_name}/pulls", params=params)
 
 
 @mcp_tool(write_action=False)
@@ -2374,29 +2344,6 @@ async def list_branches(
     return await _github_request("GET", f"/repos/{full_name}/branches", params=params)
 
 
-@mcp_tool(write_action=False)
-async def search_code_in_repo(
-    full_name: str,
-    query: str,
-    path: Optional[str] = None,
-    per_page: int = 30,
-    page: int = 1,
-) -> Dict[str, Any]:
-    """Search code within a single repository using GitHub code search."""
-
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-
-    # Scope the query to the given repo and optional path prefix.
-    qualifiers = [f"repo:{full_name}"]
-    if path:
-        qualifiers.append(f"path:{path}")
-
-    q = " ".join([query] + qualifiers)
-    params = {"q": q, "per_page": per_page, "page": page}
-    return await _github_request("GET", "/search/code", params=params)
-
-
 @mcp_tool(write_action=True)
 async def move_file(
     full_name: str,
@@ -2717,145 +2664,6 @@ async def download_user_content(content_url: str) -> Dict[str, Any]:
         "text": text,
         "numbered_lines": _with_numbered_lines(text) if text is not None else None,
     }
-
-
-# ------------------------------------------------------------------------------
-# Background read helpers
-# ------------------------------------------------------------------------------
-
-
-def _read_tool_registry() -> Dict[str, Any]:
-    """Return a mapping of read-only tool names to their callables.
-
-    The registry is rebuilt on demand so newly imported modules or tools defined
-    later in the file are automatically included. Tools tagged as write actions
-    are excluded to keep background jobs strictly read-only.
-    """
-
-    registry: Dict[str, Any] = {}
-    for maybe_func in globals().values():
-        tool = getattr(maybe_func, "_mcp_tool", None)
-        if tool is None:
-            continue
-        meta = getattr(tool, "meta", {}) or {}
-        if meta.get("write_action"):
-            continue
-        name = getattr(tool, "name", None) or getattr(maybe_func, "__name__", None)
-        if name and name not in {
-            "start_background_read",
-            "get_background_read",
-            "list_background_reads",
-        }:
-            registry[str(name)] = maybe_func
-    return registry
-
-
-async def _run_background_read(
-    job_id: str, tool_name: str, func: Any, arguments: Dict[str, Any]
-) -> None:
-    started_at = datetime.now(timezone.utc).isoformat()
-    try:
-        result = await func(**arguments)
-        status = "succeeded"
-        error: Optional[Dict[str, Any]] = None
-    except Exception as exc:  # noqa: BLE001
-        status = "failed"
-        result = None
-        error = _structured_tool_error(
-            exc, context=f"background_read:{tool_name}", path=arguments.get("path")
-        )
-
-    finished_at = datetime.now(timezone.utc).isoformat()
-    async with _background_read_lock:
-        job = _background_read_jobs.get(job_id)
-        if job is None:
-            return
-        recorded_start = job.get("started_at") or started_at
-        job.update(
-            {
-                "status": status,
-                "result": result,
-                "error": error,
-                "started_at": recorded_start,
-                "finished_at": finished_at,
-            }
-        )
-        _background_read_tasks.pop(job_id, None)
-
-
-def _format_background_job(job_id: str, include_result: bool) -> Dict[str, Any]:
-    job = _background_read_jobs.get(job_id)
-    if not job:
-        return {}
-    payload: Dict[str, Any] = {
-        k: v
-        for k, v in job.items()
-        if k not in {"task"} and (include_result or k not in {"result", "error"})
-    }
-    payload["job_id"] = job_id
-    return payload
-
-
-@mcp_tool(write_action=False)
-async def start_background_read(
-    tool: str, arguments: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """Run a read-only tool asynchronously and poll for its result later.
-
-    Background jobs let assistants continue reasoning while long-lived read
-    operations (for example large ``fetch_files`` batches) complete. Only tools
-    tagged as read actions are eligible; write-tagged tools remain gated.
-    """
-
-    registry = _read_tool_registry()
-    if tool not in registry:
-        raise ValueError(
-            f"Unknown or non-read tool '{tool}'. Pick from: {sorted(registry)}"
-        )
-
-    args = arguments or {}
-    job_id = str(uuid.uuid4())
-    job_record = {
-        "job_id": job_id,
-        "tool": tool,
-        "arguments": args,
-        "status": "running",
-        "started_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    async with _background_read_lock:
-        _background_read_jobs[job_id] = job_record
-
-    task = asyncio.create_task(_run_background_read(job_id, tool, registry[tool], args))
-    async with _background_read_lock:
-        _background_read_tasks[job_id] = task
-
-    return {"job_id": job_id, "status": "running"}
-
-
-@mcp_tool(write_action=False)
-async def get_background_read(job_id: str, include_result: bool = True) -> Dict[str, Any]:
-    """Return status (and optional result) for a background read job."""
-
-    async with _background_read_lock:
-        job = _format_background_job(job_id, include_result)
-
-    if not job:
-        raise ValueError(f"No background read job found for id {job_id}")
-    return job
-
-
-@mcp_tool(write_action=False)
-async def list_background_reads(include_result: bool = False) -> Dict[str, Any]:
-    """List tracked background read jobs with optional results."""
-
-    async with _background_read_lock:
-        jobs = [
-            _format_background_job(job_id, include_result)
-            for job_id in list(_background_read_jobs)
-        ]
-
-    return {"jobs": jobs}
 
 
 # ------------------------------------------------------------------------------
@@ -3335,7 +3143,7 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
         name for name in branch_names if isinstance(name, str) and pattern.search(name)
     ]
 
-    prs_resp = await list_repository_pull_requests(full_name, state="all")
+    prs_resp = await list_pull_requests(full_name, state="all")
     prs = prs_resp.get("json") or []
 
     issue_str = str(issue_number)
@@ -3449,7 +3257,7 @@ async def get_branch_summary(
 
     async def _safe_list_prs(state: str) -> Dict[str, Any]:
         try:
-            return await list_repository_pull_requests(
+            return await list_pull_requests(
                 full_name, state=state, head=head_param, base=effective_base
             )
         except Exception as exc:  # pragma: no cover - defensive

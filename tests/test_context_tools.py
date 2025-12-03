@@ -24,7 +24,7 @@ async def test_get_branch_summary_collects_data(monkeypatch):
         return {"json": {"workflow_runs": [{"id": 99, "head_branch": branch}]}}
 
     monkeypatch.setattr(main, "compare_refs", fake_compare)
-    monkeypatch.setattr(main, "list_repository_pull_requests", fake_list_prs)
+    monkeypatch.setattr(main, "list_pull_requests", fake_list_prs)
     monkeypatch.setattr(main, "list_workflow_runs", fake_list_runs)
 
     result = await main.get_branch_summary("owner/repo", branch="feature", base="main")
@@ -58,7 +58,7 @@ async def test_open_issue_context_collects_branches_and_prs(monkeypatch):
 
     monkeypatch.setattr(main, "fetch_issue", fake_fetch_issue)
     monkeypatch.setattr(main, "list_branches", fake_list_branches)
-    monkeypatch.setattr(main, "list_repository_pull_requests", fake_list_prs)
+    monkeypatch.setattr(main, "list_pull_requests", fake_list_prs)
 
     result = await main.open_issue_context("owner/repo", issue_number=5)
 

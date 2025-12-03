@@ -130,7 +130,6 @@ Actions:
    - If `rate_limit_events_total` is high, consider:
      - Reducing bursty operations in controller prompts.
      - Spreading heavy workflows out over time.
-     - Using `start_background_read` and `get_background_read` for long-running, read-only tasks instead of trying to do everything synchronously.
 
 4. **Investigate recurring 422 errors**
    - 422 from GitHub often indicates validation problems (for example invalid branches, duplicate PRs, or mismatched SHAs).
