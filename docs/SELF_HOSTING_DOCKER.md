@@ -51,9 +51,8 @@ cp .env.example .env
 Open `.env` in your editor and set at least:
 
 ```dotenv
-# REQUIRED: your GitHub token
+# REQUIRED: your GitHub token (PAT or GitHub App token)
 GITHUB_PAT=ghp_your_token_here
-
 # Controller repo (defaults are fine if you use this repo)
 GITHUB_MCP_CONTROLLER_REPO=Proofgate-Revocations/chatgpt-mcp-github
 GITHUB_MCP_CONTROLLER_CONTRACT_VERSION=2025-03-16
