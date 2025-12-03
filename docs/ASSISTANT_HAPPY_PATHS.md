@@ -169,29 +169,6 @@ one (in a docs branch, via PR).
 
 ---
 
-## 6. Large-file or partial-section edits
-
-**Goal:** Safely edit a small part of a large file without loading or rewriting the entire file.
-
-**When to use:** When dealing with long modules, config files, or docs where only a section needs changing.
-
-**Steps:**
-1. Identify the region:
-   - Use `get_file_slice` to retrieve only the lines relevant to the change.
-   - Optionally, use `search_code_in_repo` to find line ranges or markers.
-2. Plan the patch:
-   - Decide whether to use `build_section_based_diff` (preferred for line-based sections) or `build_unified_diff` (when you already have full original/updated content for the region).
-3. Build the diff:
-   - Call `build_section_based_diff` with: `full_name`, `path`, `sections`, and `ref` set to the branch you are editing.
-   - Verify the returned diff looks correct and only touches the intended lines.
-4. Apply and commit:
-   - Use `apply_patch_and_commit` with the diff for that file and your branch.
-5. Optionally run tests or linters via `run_tests` or `run_command` if the change affects behavior.
-
-**Validation:**
-- The diff returned by `apply_patch_and_commit` matches the intended section edits.
-- No unrelated parts of the large file were changed.
-
 ---
 
 ## 7. Workspace-first flows (local-style editing)
