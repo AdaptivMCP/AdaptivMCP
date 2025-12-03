@@ -68,6 +68,8 @@ TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "6000"))
 TOOL_STDIO_COMBINED_MAX_CHARS = int(
     os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "18000")
 )
+# Soft limit for run_command.command length to discourage huge inline scripts.
+RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "8000"))
 GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
 GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
@@ -2272,6 +2274,24 @@ def controller_contract() -> Dict[str, Any]:
                 "Expose minimal health and metrics data so controllers can debug without extra API calls.",
             ],
         },
+        "editing_preferences": {
+            "summary": (
+                "Use diff-first tools for file changes; avoid large inline scripts in "
+                "run_command. run_command is primarily for tests, linters, and small "
+                "diagnostic commands."
+            ),
+            "recommended_tools": [
+                "build_unified_diff",
+                "build_section_based_diff",
+                "apply_text_update_and_commit",
+                "apply_patch_and_commit",
+                "update_files_and_open_pr",
+            ],
+            "anti_patterns": [
+                "Embedding large Python or shell scripts in run_command.command to "
+                "edit files.",
+            ],
+        },
         "tooling": {
             "discovery": ["get_server_config", "list_write_tools", "validate_tool_args", "validate_environment"],
             "safety": [
@@ -4025,6 +4045,13 @@ async def run_command(
     env: Optional[Dict[str, str]] = None
     try:
         effective_ref = _effective_ref_for_repo(full_name, ref)
+        if len(command) > RUN_COMMAND_MAX_CHARS:
+            raise ValueError(
+                f"run_command.command is too long ({len(command)} chars); "
+                "use diff-first tools (apply_text_update_and_commit, "
+                "apply_patch_and_commit, update_file_sections_and_commit) "
+                "for large edits instead of embedding scripts in command."
+            )
         needs_write_gate = mutating or installing_dependencies or not use_temp_venv
         if needs_write_gate:
             _ensure_write_allowed(

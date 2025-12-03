@@ -119,3 +119,14 @@ Use `authorize_write_actions` when the write gate is enabled, and treat approval
 When you complete a workflow, summarize what you changed, which tools you used, and where the artifacts live (branches, pull requests, issues, or docs). This is especially important when operating across multiple repositories.
 
 These expectations are snapshots, not substitutes for reading `controller_contract` and docs/WORKFLOWS.md.
+
+- Do NOT use `run_command` as a patch engine (for example with large
+  heredoc Python scripts that rewrite files). This is brittle under
+  JSON encoding and will fail easily.
+- For file edits, prefer:
+  - `apply_text_update_and_commit` for full file replacements.
+  - `update_file_sections_and_commit` for structured section-level edits.
+  - `build_unified_diff` + `apply_patch_and_commit` when you want explicit diffs.
+- Do NOT embed large multi-line Python/shell scripts in `run_command.command`.
+  If your edit involves more than a couple of lines of shell, treat that as
+  a signal to use the diff-first tools instead.
