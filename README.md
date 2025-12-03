@@ -283,6 +283,15 @@ Assistants should use these docs together with the live tool list to design safe
 
 ---
 
+## Version and support
+
+- Current stable version: **1.0.0** (see `pyproject.toml` and `CHANGELOG.md`).
+- To check the running server version in production, run `python cli.py --version` via `run_command` or your CI.
+- All 1.x changes will be documented in `CHANGELOG.md`.
+
+---
+
+
 ## Status and roadmap (server-side)
 
 On main (after refactor merge):
