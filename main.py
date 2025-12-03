@@ -2235,6 +2235,7 @@ def controller_contract() -> Dict[str, Any]:
                 "Work from natural-language goals without demanding long lists of CLI commands; ask concise clarifying questions instead of offloading planning to humans.",
                 "Verify outputs and state before repeating actions so runs do not get stuck in loops; report blockers clearly.",
                 "Use get_file_slice and diff helpers for large files when they make changes easier to see or safer to apply; for small, clear edits it is fine to update full files as long as the change stays focused and easy to review.",
+                "Treat routine multi-line edits as normal; use diff-first tools like apply_text_update_and_commit, apply_patch_and_commit, or update_file_sections_and_commit instead of calling them tricky or offloading them to humans.",
                 "Follow each tool's declared parameter schema exactly. Do not invent arguments such as full_name, owner, or repo unless they are explicitly defined in the tool signature.",
                 "When you need to search within the controller repo, prefer repo-scoped helpers or include an explicit repo:Proofgate-Revocations/chatgpt-mcp-github qualifier in search queries. Do not use unqualified global GitHub search for routine controller work.",
                 "Treat unscoped global code searches as exceptional: only use them when the user explicitly asks for cross-repo or ecosystem-wide context, and never to inspect or navigate this controller repo.",
