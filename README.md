@@ -12,6 +12,23 @@ Adaptiv Controller (for example "Joeys GitHub") lives entirely on the ChatGPT si
 
 ---
 
+## Who this is for (personal controller view)
+
+Adaptiv Controller is designed first for **individual developers and very small teams** who want a personal, self-hosted GitHub controller instead of a vendor-hosted agent. Typical use cases:
+
+- You want ChatGPT (or another MCP host) to behave like **your** engineer over time, tuned to your repositories and habits.
+- You are comfortable deploying a small Python service (for example on Render.com, a VM, or a container platform).
+- You prefer to keep your GitHub tokens and repo access fully under your own control.
+
+In this model:
+
+- This repository is the **engine** – a stable, safety-focused GitHub MCP server you run yourself.
+- Your ChatGPT controller (for example "Joey’s GitHub") is the **personality and workflow layer** – where you express personal preferences, style, and working habits.
+
+You can absolutely use this kit in larger teams, but 1.0 is intentionally optimized so a single developer can fork the repo, deploy the server, and evolve their own controller prompt over time without needing enterprise-scale infrastructure.
+
+---
+
 ## Canonical branch and development model
 
 - main is the canonical, production branch.
@@ -61,6 +78,11 @@ In short:
 
 - You own the infrastructure and credentials.
 - Adaptiv Controller tells your assistant how to use the tools safely and effectively.
+
+If you are a solo developer or a small team, you can treat this kit as a **personal GitHub controller**:
+
+- The MCP server stays conservative and safety-focused.
+- Your controller prompt is where you teach the assistant your own style (branch naming, how aggressively to refactor, how much explanation you want, and so on).
 
 ---
 
@@ -245,7 +267,7 @@ The MCP HTTP server exposes a small set of HTTP endpoints:
 
 The `/healthz` response is intentionally small and stable. It includes:
 
-- `status`: `"ok"` when the process is healthy.
+- `status`: `\"ok\"` when the process is healthy.
 - `uptime_seconds`: seconds since the server process started.
 - `github_token_present`: boolean indicating whether a GitHub token is configured.
 - `controller.repo` and `controller.default_branch`: the controller repository and default branch currently in use.
