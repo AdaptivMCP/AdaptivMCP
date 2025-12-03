@@ -97,6 +97,7 @@ Actions:
 2. **Check scopes**
    - For typical usage you should have at least `repo` scope (or fine-grained equivalent).
    - If issue or PR tools are failing, confirm the token can create and update issues and pull requests in the target repos.
+   - Use `validate_environment` to confirm the token can push to the controller repository; a missing push permission will cause 403 errors when assistants try to commit or push changes.
 
 3. **Rotate the token safely**
    - Generate a new token.

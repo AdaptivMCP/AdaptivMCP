@@ -68,7 +68,7 @@ async def test_validate_environment_happy_path(monkeypatch: pytest.MonkeyPatch) 
         if path.endswith("/branches/" + module.CONTROLLER_DEFAULT_BRANCH):
             return {"status_code": 200, "json": {}}
         if path.startswith("/repos/") and "/branches/" not in path:
-            return {"status_code": 200, "json": {}}
+            return {"status_code": 200, "json": {"permissions": {"push": True}}}
         return {"status_code": 200, "json": {}}
 
     monkeypatch.setattr(module, "_github_request", fake_github_request)
@@ -84,6 +84,49 @@ async def test_validate_environment_happy_path(monkeypatch: pytest.MonkeyPatch) 
 
     repo_remote = next(c for c in result["checks"] if c["name"] == "controller_repo_remote")
     branch_remote = next(c for c in result["checks"] if c["name"] == "controller_branch_remote")
+    push_permission = next(
+        c
+        for c in result["checks"]
+        if c["name"] == "controller_repo_push_permission"
+    )
 
     assert repo_remote["level"] == "ok"
     assert branch_remote["level"] == "ok"
+    assert push_permission["level"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_validate_environment_missing_push_permission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _reload_main_with_env(
+        monkeypatch,
+        {
+            "GITHUB_PAT": "ghp_exampletoken",
+            "GIT_AUTHOR_NAME": "Ally",
+            "GIT_AUTHOR_EMAIL": "ally@example.com",
+            "GIT_COMMITTER_NAME": "Ally",
+            "GIT_COMMITTER_EMAIL": "ally@example.com",
+        },
+    )
+
+    async def fake_github_request(method: str, path: str, **kwargs: Any) -> Dict[str, Any]:  # type: ignore[override]
+        if path.endswith("/branches/" + module.CONTROLLER_DEFAULT_BRANCH):
+            return {"status_code": 200, "json": {}}
+        if path.startswith("/repos/") and "/branches/" not in path:
+            return {"status_code": 200, "json": {"permissions": {"push": False}}}
+        return {"status_code": 200, "json": {}}
+
+    monkeypatch.setattr(module, "_github_request", fake_github_request)
+
+    result = await module.validate_environment()
+
+    push_permission = next(
+        c
+        for c in result["checks"]
+        if c["name"] == "controller_repo_push_permission"
+    )
+
+    assert result["status"] == "error"
+    assert push_permission["level"] == "error"
+    assert "push permission" in push_permission["message"]

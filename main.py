@@ -1741,8 +1741,11 @@ async def validate_environment() -> Dict[str, Any]:
 
     # Remote validation for controller repo/branch, only if token is usable.
     if token_ok:
+        repo_payload: Dict[str, Any] = {}
         try:
-            await _github_request("GET", f"/repos/{controller_repo}")
+            repo_response = await _github_request("GET", f"/repos/{controller_repo}")
+            if isinstance(repo_response.get("json"), dict):
+                repo_payload = repo_response.get("json", {})
         except Exception as exc:  # pragma: no cover - defensive
             add_check(
                 "controller_repo_remote",
@@ -1761,6 +1764,33 @@ async def validate_environment() -> Dict[str, Any]:
                 "Controller repository exists and is accessible",
                 {"full_name": controller_repo},
             )
+
+            permissions = {}
+            if isinstance(repo_payload, dict):
+                permissions = repo_payload.get("permissions") or {}
+
+            push_allowed = permissions.get("push") if isinstance(permissions, dict) else None
+            if push_allowed is True:
+                add_check(
+                    "controller_repo_push_permission",
+                    "ok",
+                    "GitHub token can push to the controller repository",
+                    {"full_name": controller_repo},
+                )
+            elif push_allowed is False:
+                add_check(
+                    "controller_repo_push_permission",
+                    "error",
+                    "GitHub token lacks push permission to the controller repository; write tools will fail with 403 errors",
+                    {"full_name": controller_repo, "permissions": permissions},
+                )
+            else:
+                add_check(
+                    "controller_repo_push_permission",
+                    "warning",
+                    "Could not confirm push permission for the controller repository; ensure the token can push before using commit or push tools",
+                    {"full_name": controller_repo, "permissions": permissions},
+                )
 
         try:
             await _github_request("GET", f"/repos/{controller_repo}/branches/{controller_branch}")
