@@ -1494,9 +1494,11 @@ async def get_server_config() -> Dict[str, Any]:
                 "requires_authorization": not WRITE_ALLOWED,
                 "toggle_tool": "authorize_write_actions",
                 "notes": (
-                    "Write-tagged tools stay gated until explicitly enabled for a "
-                    "session; set GITHUB_MCP_AUTO_APPROVE to trust the server by "
-                    "default."
+                    "Most write-tagged tools stay gated until explicitly enabled "
+                    "for a session; set GITHUB_MCP_AUTO_APPROVE to trust the "
+                    "server by default. Workspace setup and non-mutating commands "
+                    "are allowed without flipping the gate unless they install "
+                    "dependencies or opt out of the temp venv."
                 ),
             },
         },
@@ -2114,13 +2116,13 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "ensure_workspace_clone",
             "category": "workspace",
             "description": "Ensure a persistent workspace exists for a repo/ref.",
-            "notes": "Clones if missing and can optionally reset to the remote ref.",
+            "notes": "Clones if missing and can optionally reset to the remote ref; now allowed without toggling write approval so assistants can set up quickly.",
         },
         {
             "name": "run_command",
             "category": "workspace",
             "description": "Run an arbitrary shell command in a persistent workspace clone.",
-            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls; virtualenv state persists across calls.",
+            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls; set installing_dependencies=true or use_temp_venv=false when a command will mutate server state so gating can kick in.",
         },
         {
             "name": "commit_workspace",
@@ -2220,7 +2222,8 @@ def controller_contract() -> Dict[str, Any]:
                 "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
                 "When asked to open a pull request after finishing work, target the main branch (or the configured default branch) unless the user explicitly specifies a different base.",
                 "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
-                "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
+                "Keep GitHub state changes gated behind authorize_write_actions, but treat workspace setup, discovery, and non-mutating commands as auto-approved so flow is fast by default.",
+                "Call run_command with installing_dependencies=true (or use_temp_venv=false) when a command needs to install or mutate server-level state so gating can apply to that narrower slice of work.",
                 "Summarize what changed and which tools ran so humans can audit actions easily.",
                 "Return strict, valid JSON by validating payloads with validate_json_string before emitting them to clients.",
                 "When you generate non-trivial scripts, commands, or configuration (for example Python snippets, shell scripts, or large JSON payloads), run appropriate workspace tools via run_command to validate them (such as python -m py_compile for Python, bash -n or shellcheck for shell, validate_json_string and validate_tool_args for JSON and tool calls) before relying on them or committing.",
@@ -2252,6 +2255,7 @@ def controller_contract() -> Dict[str, Any]:
                 "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
                 "Encourage use of list_write_tools, validate_tool_args, and validate_environment so the assistant knows available tools and common pitfalls.",
                 "Remind assistants that run_command and run_tests are allowed by default and should be part of normal execution workflows when available.",
+                "Only gate commands that install dependencies or mutate server state; discovery and workspace setup should flow without extra approvals.",
                 "Push assistants to run repo-native linters and formatters early (especially autofixers) so trivial syntax or style errors are resolved before code review.",
                 "Encourage assistants to add or adjust tests alongside code changes and to run run_tests on the relevant feature branch before opening PRs.",
                 "Steer assistants toward update_files_and_open_pr or apply_patch_and_commit instead of low-level Git operations.",
@@ -3955,10 +3959,6 @@ async def ensure_workspace_clone(
 
     try:
         effective_ref = _effective_ref_for_repo(full_name, ref)
-        _ensure_write_allowed(
-            f"ensure_workspace_clone for {full_name}@{effective_ref}"
-        )
-
         workspace_dir = _workspace_path(full_name, effective_ref)
         existed = os.path.isdir(os.path.join(workspace_dir, ".git"))
 
@@ -3985,6 +3985,7 @@ async def run_command(
     workdir: Optional[str] = None,
     patch: Optional[str] = None,
     use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
 ) -> Dict[str, Any]:
     """Run an arbitrary shell command in a persistent workspace clone.
 
@@ -4001,6 +4002,10 @@ async def run_command(
             virtualenv rooted in the workspace so ``pip install`` steps do not
             mutate the server-wide environment. The virtualenv is reused across
             calls when the workspace persists on disk.
+        installing_dependencies: Set to ``true`` when the command installs
+            packages or otherwise mutates the server environment so write
+            gating can apply to that call. Commands that only inspect or
+            modify the workspace can leave this false for faster iteration.
 
     The workspace directory is kept on disk so subsequent calls can reuse
     installed dependencies and edits. The same workspace is shared with
@@ -4012,9 +4017,10 @@ async def run_command(
     env: Optional[Dict[str, str]] = None
     try:
         effective_ref = _effective_ref_for_repo(full_name, ref)
-        _ensure_write_allowed(
-            f"run_command {command} in {full_name}@{effective_ref}"
-        )
+        if installing_dependencies or not use_temp_venv:
+            _ensure_write_allowed(
+                f"run_command {command} in {full_name}@{effective_ref}"
+            )
         repo_dir = await _clone_repo(
             full_name, ref=effective_ref, preserve_changes=True
         )
@@ -4198,12 +4204,15 @@ async def run_tests(
     workdir: Optional[str] = None,
     patch: Optional[str] = None,
     use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
 ) -> Dict[str, Any]:
     """Run the project's test command inside the persistent workspace.
 
     ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
     default timeout. Provide ``patch`` when running tests against pending edits
     so the checkout matches the assistant's current working diff.
+    Set ``installing_dependencies`` to ``true`` only when the test command also
+    installs packages so gating can apply to that narrower use case.
     """
     return await run_command(
         full_name=full_name,
@@ -4213,6 +4222,7 @@ async def run_tests(
         workdir=workdir,
         patch=patch,
         use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
     )
 
 

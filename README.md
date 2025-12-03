@@ -194,9 +194,9 @@ These tools enable extremely high-level workflows, for example:
 
 Important points:
 
-- These tools are write-tagged and gated by WRITE_ALLOWED.
+- Most write-tagged tools are gated by WRITE_ALLOWED, but workspace setup and non-mutating commands are allowed without a toggle; set ``installing_dependencies=true`` (or disable the temp venv) when you need gating to cover installs or other server mutations.
 - They run in the users own Render-hosted environment using the users repository and tokens.
-- The controller should always ask explicit permission before running commands or installing dependencies, and prefer safe branches and smoke-test branches for invasive operations.
+- The controller should always ask explicit permission before mutating GitHub state or installing dependencies, and prefer safe branches and smoke-test branches for invasive operations.
 
 When behavior feels surprising or tools appear to be missing, controllers and assistants should call meta tools before assuming a bug:
 
