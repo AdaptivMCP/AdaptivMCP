@@ -4,9 +4,9 @@ This document defines the **canonical workflow and schema** every assistant must
 
 The goal is:
 
-1. Consistent, predictable PRs.
-2. Minimal surprises or breakages for Joey.
-3. Clear traceability from assistant thought process to diff to tests to PR metadata.
+1. Consistent, predictable PRs that Joey can trust.
+2. Minimal surprises or breakages across Joey's repos.
+3. Clear traceability from assistant reasoning → diffs → tests → PR metadata.
 
 This doc assumes:
 
@@ -16,25 +16,22 @@ This doc assumes:
 
 ---
 
-## 1. Pre-flight: understanding the server and repo
+## 1. Pre-flight: understand the server and repo
 
 Before making any changes, assistants must:
 
-1. Call `get_server_config`
+1. Call `get_server_config`.
    - Purpose: understand server settings and whether writes are allowed.
-   - Read: `write_allowed`, http timeouts, concurrency limits, sandbox flags.
+   - Read at least: `write_allowed`, timeouts, concurrency limits, sandbox flags.
    - If `write_allowed` is false, do not attempt write tools until Joey explicitly approves enabling writes.
 
-2. Call `list_write_tools`
+2. Call `list_all_actions(include_parameters=true)` and `list_write_tools`.
    - Purpose: discover what write tools are available and how they are intended to be used.
    - Use this to confirm which tools exist and which are considered high-level vs low-level.
 
-3. Call `get_repository`
-   - Purpose: confirm repo metadata and default branch (usually `main`).
-
-4. Call `list_branches`
-   - Purpose: see what branches already exist and avoid name collisions.
-   - Recommended branch prefix: `ally/<scope>-<short-description>`, for example `ally/mcp-connector-docs`.
+3. Confirm repo metadata.
+   - Use `get_repository` (or equivalent) to confirm the default branch (usually `main`).
+   - Use branch/PR tools to see what branches and open PRs already exist to avoid collisions.
 
 ---
 
@@ -54,20 +51,20 @@ The server can gate writes with `authorize_write_actions` and internal `write_al
 
 ## 3. Canonical PR workflows
 
-This section defines the standard flows assistants must follow.
+These are the standard flows assistants should follow. They match the branch-first, PR-first, `run_command`-heavy workflows in `docs/WORKFLOWS.md`.
 
 ### 3.1 Flow A: small single-file change
 
 Use this when you are editing one file and the change is modest in size.
 
-Steps:
-
 1. Read the file with `get_file_contents(full_name, path, ref=<default_branch>)`.
 2. Explain to Joey what you will change in plain language.
-3. Prepare the full updated file content (avoid patch juggling).
-4. Either:
-   - Use `apply_text_update_and_commit` on a dedicated branch, then `create_pull_request`, or
-   - Use `update_files_and_open_pr` with a single-file entry for a one-shot commit+PR.
+3. Prepare the full updated file content.
+4. Use branch + commit tools, for example:
+   - `ensure_branch` from `main`.
+   - `run_command` in the workspace to edit and validate.
+   - `commit_workspace` to commit and push.
+   - A PR tool to open the pull request.
 5. Confirm the PR response contains the branch and pull request details.
 6. Report the PR link, summary of changes, and test status to Joey.
 
@@ -77,78 +74,169 @@ Use this when you are editing multiple files as part of one logical change.
 
 1. Read all affected files (via `fetch_files` or repeated `get_file_contents`).
 2. Plan per-file changes in bullets and share with Joey.
-3. Provide the updated content for each file.
-4. Call `update_files_and_open_pr` with the file list and PR metadata.
-5. Split changes into multiple PRs if the change is too large or touches unrelated concerns.
+3. Apply changes in the workspace via `run_command`.
+4. Use `commit_workspace` on a feature branch to commit and push.
+5. Open a PR and ensure the PR body follows the schema below.
+6. Split changes into multiple PRs if the change is too large or touches unrelated concerns.
 
 ### 3.3 Flow C: new document from a stub
 
-Use this when Joey has created a blank file or minimal stub on main and you want to fill in the content.
+Use this when Joey has created a blank file or minimal stub and you want to fill in the content.
 
 1. Confirm the stub exists with `get_file_contents` or `fetch_files`.
 2. Draft the full document content in the conversation and get Joey's approval.
-3. Publish via either:
-   - `apply_text_update_and_commit` + `create_pull_request`, or
-   - `update_files_and_open_pr` if you prefer a single one-shot call.
-4. In the PR body, clearly state that this is a new document from a stub and explain how assistants should use it.
+3. Apply the content via `run_command` in the workspace.
+4. Commit with `commit_workspace` on a feature branch.
+5. Open a PR; in the PR body, clearly state that this is a new document from a stub and explain how assistants should use it.
 
 ### 3.4 Flow D: running tests
 
 Use `run_tests` or `run_command` when you changed code or tests and need to validate the suite.
 
 1. Decide whether to run tests before or after opening the PR, based on Joey's guidance.
-2. Use `run_tests` or `run_command` with an optional `patch` that mirrors the change you are committing so the run matches the PR.
+2. Use `run_tests` or `run_command` with the relevant command so the run matches the changes you are committing.
 3. Inspect the command result for exit code and output.
 4. If tests fail, include failure details in your report and ask Joey how to proceed.
 
 ---
 
-## 4. PR body schema
+## 4. Machine-friendly PR body schema
 
-Every assistant-created PR must follow this schema in the PR body.
+Assistants should internally construct a JSON object matching this schema, then render it into a Markdown PR body.
 
-1. Summary
+### 4.1 JSON shape
 
-- 2 to 4 short bullets describing what the PR does.
-- Focus on behaviour, not low-level implementation detail.
+```jsonc
+{
+  "title": "Short PR title, ideally matching the GitHub PR title",
+  "summary": [
+    "Short bullet 1 describing the overall change",
+    "Short bullet 2",
+    "..."
+  ],
+  "motivation": "Why this change exists. Reference Joey's request or the underlying problem.",
+  "context": "Optional extra context, links, or background.",
+  "changes": [
+    {
+      "path": "docs/WORKFLOWS.md",
+      "kind": "docs",          // one of: "code", "docs", "tests", "config", "meta"
+      "summary": "Updated workflows to emphasize run_command usage.",
+      "details": [
+        "Clarified discovery/bootstrapping sequence.",
+        "Added explicit reference to SELF_HOSTING_DOCKER.md.",
+        "Tightened troubleshooting section."
+      ]
+    },
+    {
+      "path": "Dockerfile",
+      "kind": "config",
+      "summary": "Fix Docker RUN line so apt-get arguments are correct.",
+      "details": [
+        "Replaced stray literal \\\n characters with proper line continuations.",
+        "Ensured image builds cleanly on Docker Desktop."
+      ]
+    }
+  ],
+  "testing": {
+    "status": "passed",        // "not_run" | "passed" | "failed" | "not_applicable"
+    "commands": [
+      "pytest",
+      "python -m compileall ."
+    ],
+    "details": "pytest passed locally; no additional tests needed for docs-only changes."
+  },
+  "risks": [
+    "Low: docs-only changes.",
+    "Config risk if Dockerfile change is incorrect; mitigated by local build."
+  ],
+  "rollback_plan": "Revert this PR in GitHub if any issues arise.",
+  "follow_ups": [
+    "Add CI job to validate Docker build.",
+    "Extend tests for new workspace behavior."
+  ],
+  "breaking_changes": false,
+  "linked_issues": [
+    "#245",
+    "chore: align docs with Docker self-hosting"
+  ],
+  "extra_notes": "Anything Joey should know that does not fit elsewhere."
+}
+```
 
-2. Motivation / Context
+Guidelines:
 
-- Why this change is being made.
-- Link back to the request or scenario from the ChatGPT conversation.
+- `title` should usually match the GitHub PR title or be a close variant.
+- `summary` should be 2–4 bullets, focused on behaviour and user impact.
+- `changes` should group changes by file; keep `details` focused and concrete.
+- `testing.status` must honestly reflect what happened; do not mark `passed` if tests were not run.
+- `risks` and `rollback_plan` can be short, but they must be realistic.
+- `follow_ups` is optional; omit or use an empty array if there is nothing to follow up on.
+- `linked_issues` can include GitHub issue numbers or short labels if there is no formal issue.
 
-3. Changes by file
+### 4.2 Rendering to Markdown
 
-- `path/to/file.py`
-  - Bullet list of logical changes in that file.
-- `docs/how_to_use_connector.md`
-  - Bullet list of doc changes.
+When actually opening a PR, assistants should render the JSON schema into a Markdown body with this structure:
 
-4. Implementation notes (optional)
+```md
+## Summary
 
-- Important design decisions, trade-offs, or limitations.
+- <summary[0]>
+- <summary[1]>
+- ...
 
-5. Testing
+## Motivation / Context
 
-One of:
+<motivation>
 
-- `- [x] Tests run: <command>` with a short outcome.
-- `- [ ] Tests not run (reason: <short explanation>)`.
+<optional context section if `context` is non-empty>
 
-6. Risks and rollbacks
+## Changes by file
 
-- Risks: bullet list of realistic risks.
-- Rollback: how Joey can revert or disable the change (for example revert the PR).
+- `path/to/file.ext`
+  - <changes[i].summary>
+  - <each item in changes[i].details as a sub-bullet>
 
-7. Follow-ups (optional)
+## Implementation notes (optional)
 
-- Items that are out of scope for this PR but worth tracking as future work.
+Use this section for any design decisions, trade-offs, or constraints that Joey should know about.
+
+## Testing
+
+- Status: **<testing.status>**
+- Commands:
+  - `<testing.commands[0]>`
+  - `<testing.commands[1]>`
+- Details: <testing.details>
+
+## Risks and rollback
+
+- Risks:
+  - <risks[0]>
+  - <risks[1]>
+- Rollback plan: <rollback_plan>
+
+## Follow-ups (optional)
+
+- <follow_ups[0]>
+- <follow_ups[1]>
+
+## Linked issues / references
+
+- <linked_issues[0]>
+- <linked_issues[1]>
+
+## Extra notes
+
+<extra_notes>
+```
+
+Assistants should keep the Markdown body stable and predictable so Joey quickly recognizes the sections.
 
 ---
 
 ## 5. Error handling and guardrails
 
-When using write tools, assistants must:
+When using write tools and publishing PRs, assistants must:
 
 1. Handle empty edits
 
@@ -157,98 +245,32 @@ When using write tools, assistants must:
 
 2. Handle content drift
 
-- Common causes: file content on main changed since you fetched.
+- Common causes: file content on `main` changed since you fetched it.
 - Recovery steps:
   1. Re-fetch the current version of the affected files.
   2. Rebuild the updated content from the latest version.
-  3. Retry the commit/PR tool once.
+  3. Retry the commit/PR once.
   4. If it still fails, stop and describe the failure rather than brute-forcing.
 
-3. Handle failing tests from workspace runs
+3. Handle tool errors clearly
 
-- If tests fail, you must surface that to Joey.
-- Include failing test names when available and key lines from the traceback.
-- Ask whether to fix tests in the same PR or in a follow-up.
+- If a tool call fails (schema error, validation error, or API error):
+  - Quote the relevant part of the error message.
+  - Re-check the tool schema via `list_all_actions(include_parameters=true)`.
+  - Fix the payload instead of retrying blindly.
 
-4. Handle GitHub API errors
+4. Respect write gating
 
-- Examples: rate limits, permission issues, timeouts.
-- Report the error message and status code.
-- Do not retry aggressively; one or two retries at most.
-- Ask Joey before attempting large batches again.
+- If writes are disabled or `authorize_write_actions` is not approved, do not try to sneak in writes via other tools.
+- Always tell Joey when you are about to perform write actions and confirm that this matches their expectations.
 
----
+5. Provide a clear end-of-work summary
 
-## 6. Tool selection guide
+At the end of a workflow that results in a PR:
 
-When deciding which tool to use:
+- Restate the branch name and PR link.
+- Summarize what changed and which files were touched.
+- Summarize tests and their outcomes.
+- Call out any risks, follow-ups, or places where you deliberately left things for Joey to decide.
 
-1. For single-file changes, prefer:
-   - `apply_text_update_and_commit` + `create_pull_request`, or
-   - `update_files_and_open_pr` with a one-file payload.
-2. Use `apply_patch_and_commit` when you have an explicit unified diff from `build_unified_diff` and want a patch-first workflow.
-3. Use `update_files_and_open_pr` for multi-file changes that should land together as one reviewable PR.
-4. Use `run_tests` or `run_command` when you need a full workspace for tests or custom commands.
-5. Never push directly to main or use other connectors to modify the same repo in the same session.
-
----
-
-## 7. Example PR body template
-
-Assistants should use a PR body like this and adapt as needed:
-
-```markdown
-## Summary
-
-- Short bullet one
-- Short bullet two
-
-## Motivation / Context
-
-- Explain what Joey asked for and why this PR exists.
-
-## Changes by File
-
-- `main.py`
-  - Describe the logical changes in this file.
-- `docs/how_to_use_connector.md`
-  - Describe doc changes here.
-
-## Implementation Notes
-
-- Any notable design decisions, trade-offs, or caveats.
-
-## Testing
-
-- [x] Tests run: `pytest`
-  - All tests passed via run_tests.
-- [ ] Tests not run (reason: N/A)
-
-## Risks & Rollback
-
-- Risks:
-  - Bullet list of realistic risks.
-- Rollback:
-  - Revert this PR via the GitHub UI if issues occur.
-
-## Follow-ups
-
-- Optional bullets for future work that is out of scope for this PR.
-```
-
----
-
-## 8. Session discipline
-
-Every assistant using this connector should:
-
-1. Start each session by:
-   - Calling `get_server_config` and `list_write_tools`.
-   - Confirming they understand what the server can do in that session.
-2. Clearly narrate:
-   - What repo and branch they are targeting.
-   - What files they will touch.
-   - Which tools they plan to use.
-3. Use this schema for every PR:
-   - No ad-hoc PR formats.
-   - No quick fixes pushed directly without a PR.
+This schema is meant to be rich enough that assistants can follow it mechanically while still staying readable for a solo developer reviewing PRs quickly.
