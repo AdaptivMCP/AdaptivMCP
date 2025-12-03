@@ -1,283 +1,241 @@
-# Assistant Docs and Snapshots
+# Assistant docs and snapshots
 
-This document provides guidance for assistants (and advanced users) on how to keep documentation and mental models in sync with the actual behavior of the Adaptiv Controller GitHub MCP server.
+This document explains how assistants and advanced users should think about documentation, prompts, and snapshots when using the Adaptiv Controller GitHub MCP server as a personal controller engine.
 
-The goal is to ensure that assistants:
+The core idea:
 
-- Rely on the **live tool surface** (via `get_server_config` and `list_all_actions`) as the source of truth.
-- Keep written documentation up to date when tools, workflows, or safety rules change.
-- Avoid stale assumptions and avoid hard-coding outdated behavior into prompts or snapshots.
+- The GitHub MCP server in this repository is the stable engine.
+- Your ChatGPT side controller prompt is the personal layer where you express your own style and policies.
+- The controller contract and docs are the shared map between humans, assistants, and the engine.
 
----
-
-## 1. Source of truth: live server, then docs
-
-When reasoning about capabilities, assistants should prioritize:
-
-1. **Live MCP server configuration**
-   - Use `get_server_config` to understand what tools and settings are currently exposed.
-   - Use `list_all_actions` to see the full list of MCP tools, their annotations, and their write/read status.
-   - Use `controller_contract` as the single contract between controllers and this server; do not maintain competing contracts in docs or prompts.
-
-2. **Repository docs**
-  - `README.md` for high-level product and architecture context.
-  - `docs/WORKFLOWS.md` for recommended end-to-end flows.
-  - `docs/ARCHITECTURE_AND_SAFETY.md` for deeper internals and guarantees.
-  - `docs/SELF_HOSTED_SETUP.md` for deployment and operator guidance.
-
-3. **Snapshots or controller prompts**
-   - System prompts or saved snapshots in ChatGPT are helpful but can drift over time.
-   - Treat them as a **starting point**, not as an immutable spec.
-
-Whenever there is a conflict:
-
-- Prefer the current branch code and docs in this repo over older snapshots.
-- If something seems inconsistent, open or update a GitHub issue to clarify and then update the docs after the behavior is fixed.
-
-### 1.1 Meta tools when you are stuck
-
-When behavior feels surprising or tools appear to be missing, call these meta tools from the controller before assuming something is broken:
-
-- `get_server_config`: Inspect write gating, default branches, the configured controller repository, HTTP timeouts, and other high-level settings.
-- `list_all_actions`: See the full catalog of tools, annotations, and read/write flags that are currently exposed.
-- `list_write_tools`: Focus on the subset of tools that can modify state when write actions are approved.
-- `validate_environment`: Detect missing tokens, misconfigured controller repository/branch, or other environment-level problems.
-- `ping_extensions`: Confirm that extension modules (such as `extra_tools.py`) have been loaded and their tools are registered.
-- `controller_contract`: Retrieve the versioned contract that describes expectations between controllers, assistants, and this MCP server.
-
-Use these helpers to ground your reasoning in the live deployment and to avoid speculative debugging based only on old snapshots or assumptions.
+The goal is to keep assistants grounded in what the server can actually do, while still allowing each user to evolve their own personal controller over time.
 
 ---
 
-## 2. Keeping docs in sync with code and tests
+## 1. Sources of truth
 
-Assistants should treat documentation as first-class:
+When reasoning about capabilities, always start from live information and only then lean on prompts or memory.
 
-- When implementing new tools or changing behavior, ask: **"Do I also need to update docs/WORKFLOWS.md or related docs?"**
-- Use the same branch and PR flow for docs as for code:
-  - Create or update markdown files using `apply_text_update_and_commit` or patch-based flows.
-  - Include docs changes in the same PR as the code change when they are tightly related.
+1. Live MCP server configuration
+   - Call `get_server_config` to see which tools and settings are active, including write gating and the configured controller repository and branch.
+   - Call `list_all_actions` to see the full set of tools, annotations, and read or write status.
+   - Call `controller_contract` to retrieve the versioned contract that describes expectations between controllers, assistants, and this MCP server.
 
-Recommended practice:
+2. Repository docs
+   - `README.md` for high level product framing and the personal controller story.
+   - `docs/WORKFLOWS.md` for recommended end to end workflows.
+   - `docs/ARCHITECTURE_AND_SAFETY.md` for deeper internals and guarantees.
+   - `docs/SELF_HOSTED_SETUP.md` for deployment and operator guidance.
+   - This file for guidance on prompts and snapshots.
 
-1. **Before making changes**
-   - Read the relevant docs sections and tests that describe the behavior.
-   - Confirm that the planned change is consistent with the documented safety model and workflows.
+3. Controller prompts and snapshots
+   - System prompts and saved snapshots in ChatGPT are important, but they can drift.
+   - Treat them as a layer on top of the contract and docs, not as a replacement for them.
 
-2. **After making changes**
-   - Review docs and tests again:
-     - If tests were updated, make sure the docs mention any new constraints or behaviors.
-     - If new tools were added, link them from the appropriate docs and README.
+When there is a conflict, believe the current code, contract, and docs on the main branch of this repo, not old prompts or memories from prior chats.
 
-3. **When in doubt**
-   - Open a docs-focused issue (or use existing ones like #128, #129, #130) and propose edits.
-   - Explain in the issue or PR description why the doc change is needed.
+Meta tools when you are unsure:
+
+- `get_server_config` for configuration and write posture.
+- `list_all_actions` and `list_write_tools` for the live tool surface.
+- `validate_environment` when failures look like token or configuration problems.
+- `ping_extensions` to confirm that extension modules are loaded.
+- `controller_contract` when in doubt about expectations or requirements.
+
+---
+
+## 2. Engine versus personal controller
+
+Adaptiv Controller is designed so that you can treat the MCP server as a stable engine while you evolve your own controller prompts on the ChatGPT side.
+
+Think in two layers.
+
+1. Engine layer
+   - This repository and its MCP tools.
+   - The controller contract that describes how tools behave and how safety works.
+   - The docs in `docs/` and the main README.
+   - Owned and versioned by the person who installs and operates the controller.
+
+2. Personal controller layer
+   - One or more ChatGPT custom assistants or GPTs that use this server.
+   - System prompts, instructions, and example conversations.
+   - Per user preferences about tone, summarization, aggressiveness, and workflows.
+
+You can think of the engine as the part you ship as the product, and the personal controller prompts as the way each user turns that engine into their own assistant.
+
+### 2.1 What is safe to customize
+
+For a typical individual developer or small team, the safe customization area is all on the controller side. Examples:
+
+- Branch naming patterns and conventions.
+- Preferred languages, frameworks, and stacks.
+- How much explanation you want versus how terse the assistant should be.
+- How aggressively the assistant should refactor versus making minimal changes.
+- How often to summarize, how to structure plans, and how much to ask for clarification.
+
+These are all things that belong in your ChatGPT controller prompt and instructions, not in forks of the engine.
+
+### 2.2 Advanced customization
+
+Advanced users can optionally customize some engine behavior, but should do so deliberately and in a way that keeps the contract coherent. Examples:
+
+- Adding new tools or orchestrations that wrap existing tools.
+- Adjusting environment defaults, such as branch policies or workspace limits.
+- Extending `extra_tools.py` with narrowly scoped helpers.
+
+When doing this, always update tests and docs and consider whether the contract needs an explicit version bump.
+
+### 2.3 Things that should remain stable
+
+Some parts of the system should not be changed casually, especially if you plan to distribute this controller to others. For example:
+
+- The existence and semantics of core safety concepts such as the write gate.
+- The meaning of read versus write tool annotations.
+- The high level branching and PR expectations documented in the workflows doc.
+- The fact that `controller_contract` is the single contract between controllers and this server.
+
+If you do change these, treat it as a new major version and update all prompts and docs that depend on the old behavior.
 
 ---
 
 ## 3. Designing and evolving controller prompts
 
-The Adaptiv Controller product is largely defined by how the ChatGPT controller prompt orchestrates these GitHub tools. Assistants should:
+Controller prompts are where you express personal style and habits. They should be:
 
-- Keep prompts **descriptive** rather than brittle.
-- Refer to **behaviors and constraints** instead of spelling out every tool signature.
-- Lean on the live tool list and docs instead of duplicating them in the prompt.
+- Descriptive rather than brittle.
+- Grounded in the contract and docs instead of duplicating them word for word.
+- Explicit about safety, quality, and ergonomics.
 
-Example prompt guidelines:
+Practical guidelines for prompts:
 
-- Emphasize safety model:
-  - "Never write to main for the controller repo; always use feature branches."
-  - "Use issue tools to keep humans informed of work and status."
-  - "Use patch-based flows for code changes and always show diffs for approval."
-- Keep quality guardrails visible:
-  - "Run repo-native linters and formatters (prefer autofix variants) before proposing commits or PRs to avoid avoidable syntax or style issues."
+- Safety
+  - Never write directly to the main branch of the controller repo.
+  - Always use branch first and PR first patterns.
+  - Ask the human before enabling write actions or running heavy commands.
 
-- Emphasize human ergonomics:
-  - "Accept natural-language goals; do not make humans type out shell pipelines or tool sequences for you."
-  - "Ask for clarification once or twice at the start instead of requesting step-by-step supervision."
-  - "Summarize at sensible milestones (plan agreed, change applied, tests run) rather than every few messages."
+- Quality
+  - Prefer running tests and formatters on feature branches.
+  - Treat test failures as first class signals and summarize them clearly.
+  - Use patch based edits for large or critical files.
 
-- Reference docs by concept:
-  - "Follow the branching and PR patterns described in the WORKFLOWS doc."
-  - "When unsure about a tool, inspect list_all_actions and the relevant tests."
+- Human ergonomics
+  - Accept natural language goals and translate them into tool calls.
+  - Ask for clarification once or twice, not constantly.
+  - Summarize at important milestones, not after every tiny step.
 
-When tools or behaviors change:
-
-- Update the controller prompt **after** the code and docs have been updated and merged.
-- Clearly signal in the prompt (and possibly in a changelog) what version or commit of the controller it is aligned with.
+As the engine evolves, update controller prompts only after code, tests, and docs have been updated and merged. Include a short note in the prompt about which version or commit of the engine it targets.
 
 ---
 
-## 4. Using issues to coordinate work
+## 4. Keeping docs in sync with behavior
 
-Issues are the backbone of human-assistant coordination in this repository. Assistants should:
+Docs are part of the product. Assistants should treat them as part of every change, not an afterthought.
 
-- Use `create_issue` to capture new work, questions, or follow-ups.
-- Use `update_issue` to keep the main description in sync with the current plan.
-- Use `comment_on_issue` to log progress, design decisions, and links to PRs.
+Before making changes:
 
-Suggested structure for issues:
+- Read the relevant sections in `docs/` and tests.
+- Confirm that the planned change fits the documented safety and workflow model.
 
-- **Title**: concise but descriptive (for example "Docs: WORKFLOWS and ASSISTANT_DOCS_AND_SNAPSHOTS").
-- **Body**:
-  - Goal and scope.
-  - Checklist of subtasks.
-  - Links to relevant docs and tests.
+After making changes:
 
-Lifecycle pattern:
+- Revisit docs and tests and adjust them if behavior has changed.
+- When you introduce a new tool or workflow, link it from the appropriate docs.
 
-1. Open the issue at the start of the work.
-2. Keep it updated as tasks are completed.
-3. Reference the issue from related PRs (for example "Fixes #130").
+Use the usual branch and PR flow for docs:
+
+- Create or reuse a feature branch.
+- Use text or patch based tools to update markdown files.
+- Keep changes focused and reviewable.
+
+If you are not sure how to document something, open or update a docs focused issue and propose a structure there before modifying files.
+
+---
+
+## 5. Issues as the coordination backbone
+
+Issues are how humans and assistants coordinate work over time. For this repo and for controller repos more broadly, assistants should:
+
+- Use issue tools to capture new work and questions.
+- Keep issue bodies and checklists aligned with the current plan.
+- Comment with progress, design decisions, and links to branches and PRs.
+
+A simple pattern:
+
+1. Open an issue at the start of substantial work.
+2. Reference that issue from branches and PRs.
+3. Update the issue body and checklist as the plan evolves.
 4. Close the issue when all acceptance criteria are met and merged.
 
----
-
-## 5. Snapshots, versions, and drift
-
-Over time, controller prompts and ChatGPT snapshots can drift away from the actual code. To manage this:
-
-- Include a small **version or commit reference** in the controller prompt or snapshot description (for example "Aligned with commit d0c7d94 on main").
-- Periodically re-sync the prompt with the live tool list and docs:
-  - Re-run `list_all_actions`.
-  - Scan for new tools or changed behaviors.
-  - Update the prompt to reflect new capabilities or removed tools.
-
-If you discover drift:
-
-1. Note the mismatch in a GitHub issue.
-2. Decide whether to change code, docs, or the controller prompt.
-3. Implement the fix and close the loop by updating all three if needed.
+This pattern works just as well for solo developers as it does for teams, and it gives your personal controller a clear way to understand and search past work.
 
 ---
 
-## 6. Example assistant workflow for a docs change
+## 6. Snapshots, versions, and drift
 
-Here is a concrete example of how an assistant might update docs safely:
+Over time, prompts and snapshots can drift away from the code that actually runs. To keep things aligned:
 
-1. **Identify the need**
-   - Notice that a new tool (for example `create_issue`) is not yet documented in `docs/WORKFLOWS.md`.
+- Include a brief version or commit reference in the controller prompt or snapshot description.
+- Periodically re sync the prompt with the live tool list and docs by calling `list_all_actions` and revisiting the docs on the main branch.
+- When you find a mismatch, decide whether the code, docs, or prompt should change, and then update all affected layers.
 
-2. **Open or update an issue**
-   - If no issue exists, use `create_issue` to open one (for example "Docs: document issue tools").
-   - If an issue already tracks this (for example #130), add a comment describing the planned docs change.
-
-3. **Plan the edit**
-   - Read the existing docs and tests.
-   - Decide which sections need updating (for example the "Issues and lifecycle management" section in `WORKFLOWS.md`).
-
-4. **Apply the change on a feature branch**
-   - Use `ensure_branch` if necessary.
-   - Use `get_file_contents` to fetch the current doc content.
-   - Prepare an updated version of the doc section.
-   - Use `apply_text_update_and_commit` to write the new content to the branch.
-
-5. **Open a PR**
-   - Use `update_files_and_open_pr` or PR helpers to open a PR with the docs change.
-   - Reference the issue (for example "Docs: update workflows for issue tools (Fixes #130)").
-
-6. **Close the loop**
-   - After the PR is merged, close the issue.
-   - Optionally update the controller prompt if the docs change reflects a new recommended pattern.
+When drift is serious enough that behavior feels surprising, treat it as a bug and fix it through the usual issue and PR workflow.
 
 ---
 
-## 7. Mental model for assistants
+## 7. Large files and JSON helpers
 
-Assistants working with this repo should adopt the following mental model:
+Large files and structured payloads are common when you are driving a controller through GitHub. The engine provides helpers for both.
 
-- The **code and tests** define actual behavior.
-- The **docs** summarize and explain that behavior for humans.
-- The **controller prompts and snapshots** instruct ChatGPT how to use the tools based on those docs.
+For large files:
 
-To stay aligned:
+- Use `get_file_slice` to read only the region you care about instead of the entire file.
+- Use `build_section_based_diff` to construct diffs for the specific line ranges that need to change.
+- Apply the resulting patch with `apply_patch_and_commit` on the appropriate branch.
 
-- Regularly consult the tests and docs when you are unsure.
-- When adding or changing tools, think through the implications for all three layers.
-- Treat inconsistencies as bugs and fix them via the usual issue + PR workflow.
+For JSON payloads:
 
+- Use `validate_json_string` when you are building complex JSON, such as large `sections` arrays for section based diffs.
+- Use the normalized JSON returned by that tool so that whitespace differences do not cause surprises.
 
-For very large files (especially `main.py` and other core modules), assistants should avoid shuttling whole-file contents back and forth. Instead, use the large-file orchestration and JSON helpers exposed by the controller.
+The goal is to keep edits small, precise, and easy to review while still supporting big files and strict JSON contracts.
 
-### 8.1 Inspecting large files safely
+---
 
-- Use `get_file_slice` to read only the relevant region of a file:
-  - Provide `full_name`, `path`, `ref`, `start_line`, and `max_lines`.
-  - Use `has_more_above` / `has_more_below` and `total_lines` to navigate.
-- Prefer reading a few slices around the area you plan to edit rather than the entire file.
+## 8. Execution environment
 
-### 8.2 Building section-based patches
+When you need to run tests or commands, always think in terms of the workspace model exposed by this engine.
 
-When you know the line ranges that need to change, construct a `sections` array and use `build_section_based_diff`:
+- `run_command` clones the target repo at a given ref into a workspace and runs a command there.
+- `run_tests` is a focused wrapper around `run_command` for test commands.
+- Workspaces are per call or per branch and should be treated as disposable.
 
-- Each section has:
-  - `start_line`: 1-based inclusive start.
-  - `end_line`: 1-based inclusive end (or `start_line - 1` for pure inserts).
-  - `new_text`: the replacement text for that region.
-- Sections must be:
-  - Sorted by `start_line`.
-  - Non-overlapping.
-- Call `build_section_based_diff(full_name, path, sections, ref, context_lines)` to get a unified diff patch.
-- The tool will refuse to run if `sections` is missing, if ranges overlap, or if line numbers fall outside the file.
-- Apply the returned `patch` using `apply_patch_and_commit` on the same branch.
+Prompts and workflows should
 
-This pattern keeps diffs small and precise, even for very large files, and its refusal modes make it clear when the input is unsafe.
+- Avoid assuming that packages are globally installed in the controller process.
+- Treat `run_command` and `run_tests` as the canonical way to execute code and tests.
+- Explicitly describe what is being run and why when invoking these tools.
 
-### 8.3 Choosing the right diff builder
+---
 
-You now have two diff builders with explicit safety behaviors:
+## 9. Troubleshooting when things feel stuck
 
-- `build_unified_diff(full_name, path, ref, new_content, context_lines)`
-  - Fetches the current file from GitHub and builds a diff against `new_content`.
-  - Rejects negative `context_lines` and bubbles GitHub errors (missing file, ref, or permissions) instead of guessing.
-- `build_unified_diff_from_strings(original, updated, path, context_lines)`
-  - Use this when you already have both buffers in memory.
-  - Rejects negative `context_lines` so patches stay well-formed.
+When a workflow feels stuck or you see repeated failures, use this checklist instead of looping on the same tool call.
 
-Both tools keep the assistant in a patch-first workflow without having to hand-write unified diff strings.
+1. Stop repeating failing calls.
+2. Summarize what you tried, including errors and any truncation flags.
+3. Re run `controller_contract` and reopen the relevant docs.
+4. Use `validate_tool_args` for complex or write tagged tools.
+5. Use `validate_environment` if you suspect configuration or token problems.
+6. Use `get_branch_summary` and `open_issue_context` to understand branch and issue state.
+7. Propose a smaller, more observable next action.
+8. Ask the human which direction to take if ambiguity remains.
 
-### 8.4 Validating JSON with `validate_json_string`
+This keeps assistants from silently spinning in loops and surfaces problems quickly so humans can intervene.
 
-When returning JSON to a client or passing JSON into other tools (such as long `sections` arrays), use `validate_json_string` to catch mistakes before they cause errors:
-
-1. Build the JSON string you intend to use (for example, the `sections` array for `build_section_based_diff`).
-2. Call `validate_json_string` with that raw string.
-3. If `valid` is true, use the `normalized` JSON string as your final output.
-4. If `valid` is false, examine `error`, fix the problem (missing quotes, trailing commas, etc.), and try again.
-
-Using the `normalized` field directly avoids whitespace differences and ensures that the JSON the assistant emits back to the
-client is exactly what was validated.
-
-### 8.5 Patching docs instead of rewriting entire files
-
-For small documentation fixes (typos, short clarifications, or link updates), avoid replacing the entire file. Keeping patches
-focused reduces the risk of drift and makes diffs easier for humans to review:
-
-1. Fetch the relevant slice with `get_file_slice` if the file is large.
-2. Prepare the updated text for just the section you need to change.
-3. Use `build_unified_diff_from_strings(original, updated, path)` or `build_unified_diff` to produce a small patch.
-4. Apply the patch with `apply_patch_and_commit` (or `update_files_and_open_pr` when bundling multiple files).
-
-This keeps doc changes reviewable and avoids the failure modes seen when assistants attempt whole-file rewrites for minor edits.
-
-By combining `get_file_slice`, `build_section_based_diff`, `build_unified_diff` (or `build_unified_diff_from_strings` when you already have the buffers), `apply_patch_and_commit`, and `validate_json_string`, assistants can safely edit large files and produce strict JSON outputs without falling into read-only loops or brittle manual diff construction.
-
-## 9. Execution environment for assistants
-
-When planning or describing workflows, assistants must treat `run_command` and `run_tests` as the canonical way to execute code and tests against this repository (and any other repo accessed through this controller).
-
-Key points:
-
-- These tools clone the target repo at the effective ref into a persistent workspace and optionally create a persistent virtual environment.
-- Commands and tests run **inside that workspace**, not in the long-lived MCP server process.
-- After the command finishes, the workspace is discarded; any project-level dependencies must be installed per-workspace as needed.
-
-Implications for prompts and snapshots:
-
-- Do not assume that packages are globally installed in the controller process; instead, assume that `run_command` / `run_tests` will handle any necessary setup in the cloned workspace.
-- When you design prompts or higher-level workflows, explicitly mention these tools as the default execution environment for running tests or CLI tools.
-- When new tools are added that rely on code execution, they should internally use this same workspace model.
+---
 
 ## 10. Summary
 
-By doing this, assistants help ensure that the Adaptiv Controller remains trustworthy, well-documented, and easy for both humans and AI to reason about over time.
+For Adaptiv Controller, the contract, docs, and engine are the stable part of the system. Your controller prompts and personal workflows are the adaptive part.
+
+Use the meta tools and docs in this repo as your ground truth, keep prompts aligned with them, and treat issues and PRs as the way humans and assistants coordinate long running work. That way, your personal controller stays trustworthy and gets more helpful as you teach it your own way of building software.
