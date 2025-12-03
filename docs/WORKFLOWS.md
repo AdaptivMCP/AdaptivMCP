@@ -119,11 +119,52 @@ Humans typically review, merge, and delete branches.
 
 ---
 
-## 4. Repository specific workflows
+## 4. Diff-first editing (preferred for assistants)
+
+Assistants SHOULD avoid using `run_command` to embed large shell/Python
+scripts to modify files. This is brittle because those scripts must be
+embedded inside JSON strings and are easy to mis-escape.
+
+Instead, assistants SHOULD use these tools:
+
+- `build_unified_diff` – generate a unified diff from old/new file content.
+- `build_section_based_diff` – generate a diff by describing section-level
+  replacements, useful for large files.
+- `apply_text_update_and_commit` – commit full updated file content.
+- `apply_patch_and_commit` – commit a unified diff.
+- `update_files_and_open_pr` – commit multiple files and open a PR in one call.
+
+Typical pattern for a single file:
+
+1. Read the current file:
+   - `get_file_contents` (or `get_file_slice` for large files).
+2. Let the assistant generate the updated full content locally.
+3. Call `apply_text_update_and_commit` with:
+   - `full_name`
+   - `path`
+   - `updated_content`
+   - `branch`
+   - `message`
+4. Optionally use `create_pull_request` / `open_pr_for_existing_branch`.
+
+For complex edits to large files, use:
+
+1. `build_section_based_diff` to describe replacements by sections.
+2. `apply_patch_and_commit` with the resulting patch.
+
+`run_command` SHOULD be used primarily for:
+
+- Tests (`pytest`, linters, type checkers).
+- Small shell commands (`ls`, `grep`, diagnostics).
+- NOT for large inline patch scripts.
+
+---
+
+## 5. Repository specific workflows
 
 This section describes common workflows for this controller repo itself, `Proofgate-Revocations/chatgpt-mcp-github`.
 
-### 4.1 Updating docs
+### 5.1 Updating docs
 
 1. Create a docs branch from `main` (for example `docs/update-handoff-and-workflows`).
 2. Use `run_command` to inspect and edit `ASSISTANT_HANDOFF.md`, `docs/WORKFLOWS.md`, and related files.
@@ -132,7 +173,7 @@ This section describes common workflows for this controller repo itself, `Proofg
 5. Use `commit_workspace` to commit changes to the docs branch.
 6. Open a PR into `main` and summarize the doc changes clearly.
 
-### 4.2 Updating the controller contract
+### 5.2 Updating the controller contract
 
 1. Create a dedicated branch for contract changes.
 2. Update the contract source and related docs.
@@ -140,7 +181,7 @@ This section describes common workflows for this controller repo itself, `Proofg
 4. Run tests and schema validation as appropriate.
 5. Open a PR and flag it as a contract change.
 
-### 4.3 Adjusting server configuration or defaults
+### 5.3 Adjusting server configuration or defaults
 
 1. Create a branch for configuration changes.
 2. Update configuration files, `.env.example`, and relevant docs.
@@ -150,7 +191,7 @@ This section describes common workflows for this controller repo itself, `Proofg
 
 ---
 
-## 5. Multi repository workflows
+## 6. Multi repository workflows
 
 When using Adaptiv Controller against multiple repositories (for example personal projects and the controller repo itself)
 
@@ -167,7 +208,7 @@ Typical pattern
 
 ---
 
-## 6. Troubleshooting and stuck workflows
+## 7. Troubleshooting and stuck workflows
 
 When a workflow stalls or fails repeatedly
 

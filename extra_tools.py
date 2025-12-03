@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol
 import difflib
 
 # Reuse GitHub helpers from the core server implementation. These are defined
@@ -192,6 +192,99 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "workspace_path": workspace_path,
             "target_path": target_path,
             "commit": result,
+        }
+
+    @mcp_tool(
+        write_action=True,
+        description=(
+            "Update a file by applying simple section-based replacements and "
+            "commit the result to a branch."
+        ),
+        tags=["editing", "diff", "commit"],
+    )
+    async def update_file_sections_and_commit(
+        full_name: str,
+        path: str,
+        branch: str = "main",
+        message: str = "Update file via sections",
+        sections: List[Dict[str, str]] = [],
+    ) -> Dict[str, Any]:
+        """Apply simple section-based replacements to a file and commit.
+
+        sections: a list of objects with:
+          - match_text: exact substring to replace
+          - replacement_text: new content to insert in its place
+
+        This avoids embedding large patch scripts in run_command and lets the
+        assistant express edits as structured replacements.
+        """
+        if not sections:
+            raise ValueError("sections must be a non-empty list")
+
+        # Fetch current file content from GitHub.
+        owner_repo = full_name
+        ref = branch
+
+        # Use GitHub contents API via _github_request.
+        url = f"/repos/{owner_repo}/contents/{path}"
+        params = {"ref": ref}
+        content_response = await _github_request("GET", url, params=params)
+        if content_response.status_code != 200:
+            raise GitHubAPIError(
+                f"Failed to fetch {path} at {ref}: {content_response.status_code}"
+            )
+
+        data = content_response.json()
+        if data.get("encoding") != "base64":
+            raise GitHubAPIError("Expected base64-encoded content from GitHub")
+
+        import base64
+
+        current_bytes = base64.b64decode(data["content"])
+        current_text = current_bytes.decode("utf-8")
+
+        updated_text = current_text
+        for section in sections:
+            match_text = section.get("match_text")
+            replacement_text = section.get("replacement_text")
+            if not match_text:
+                raise ValueError("Each section must include match_text")
+            if replacement_text is None:
+                raise ValueError("Each section must include replacement_text")
+            if match_text not in updated_text:
+                raise ValueError(f"match_text not found in {path}")
+            updated_text = updated_text.replace(match_text, replacement_text, 1)
+
+        if updated_text == current_text:
+            return {
+                "status": "no-op",
+                "full_name": full_name,
+                "path": path,
+                "branch": branch,
+            }
+
+        # Commit via apply_text_update_and_commit helper.
+        from main import apply_text_update_and_commit
+
+        commit_result = await apply_text_update_and_commit(
+            full_name=full_name,
+            path=path,
+            updated_content=updated_text,
+            branch=branch,
+            message=message,
+            return_diff=True,
+            context_lines=3,
+        )
+
+        return {
+            "status": "committed",
+            "full_name": full_name,
+            "path": path,
+            "branch": branch,
+            "message": message,
+            "commit": commit_result.get("commit"),
+            "verification": commit_result.get("verification"),
+            "diff": commit_result.get("diff"),
         }
 
 
