@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  adaptiv-controller-github:
+    build: .
+    image: adaptiv-controller-github:local
+    container_name: adaptiv-controller-github
+    environment:
+      GITHUB_PAT: "${GITHUB_PAT}"
+      MCP_WORKSPACE_BASE_DIR: "/workspace"
+      LOG_LEVEL: "INFO"
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./workspace:/workspace
+    restart: unless-stopped
