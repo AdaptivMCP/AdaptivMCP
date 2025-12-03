@@ -3,8 +3,10 @@ FROM python:3.12-slim
 # Ensure Python logs are unbuffered (useful for container logs)
 ENV PYTHONUNBUFFERED=1
 
-# Install minimal system dependencies (git for workspace clones)
-RUN apt-get update \n    && apt-get install -y --no-install-recommends git \n    && rm -rf /var/lib/apt/lists/*
+# Install minimal system dependencies (git for workspace clones, plus tools for assistant workflows)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ripgrep shellcheck \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create and use the app directory
 WORKDIR /app
@@ -22,9 +24,6 @@ COPY . .
 ENV MCP_WORKSPACE_BASE_DIR=/workspace \
     LOG_LEVEL=INFO
 
-# Expose the default HTTP port (can be overridden with PORT env at runtime)
 EXPOSE 8000
 
-# Start the FastMCP / Starlette app via uvicorn.
-# PORT is provided by the host environment (Render, Docker, etc.).
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
