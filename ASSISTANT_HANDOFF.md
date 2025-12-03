@@ -75,6 +75,17 @@ If these change, treat it as a new major version and update docs and prompts acc
 
 ---
 
+## Deployment and hosting snapshot
+
+Adaptiv Controller is typically deployed in one of two ways:
+
+1. A managed platform (for example Render) with an HTTPS URL that controllers like Joeys GitHub connect to from ChatGPT.
+2. A self hosted Docker deployment using the Dockerfile, docker compose.yml, and .env example in this repo (see docs/SELF_HOSTING_DOCKER.md).
+
+In both cases, assistants should treat the MCP server as the engine layer and use the same branch first, PR first, run command heavy workflows described here and in docs/WORKFLOWS.md. The main difference is who operates the server and where it runs, not how assistants behave.
+
+---
+
 ## Core behavior expectations (snapshot)
 
 These are a condensed snapshot of the expectations encoded in `controller_contract` and docs/WORKFLOWS.md. New assistants must read those sources directly for details; this section is a quick reminder, not a replacement.
@@ -97,82 +108,14 @@ Use `validate_json_string` when needed to ensure strict, valid JSON outputs. Use
 
 5. Large files and diffs
 
-For large files, such as `main.py`, prefer `get_file_slice` to inspect specific regions, and use `build_unified_diff` or `build_section_based_diff` for patch based updates. Avoid shuttling full file contents back and forth when only a section needs to change.
+For large files, such as `main.py`, prefer `get_file_slice` to inspect specific regions, and use `build_unified_diff` or `build_section_based_diff` for patch based updates. Avoid shuttling full contents back and forth when a small section level diff will do.
 
-6. Search and scoping
+6. Respect write gating and approvals
 
-Avoid unqualified global GitHub search for routine work. Prefer repository scoped search and patterns such as searching within a repo for the relevant modules, tests, or docs. Use search tools to understand existing patterns before proposing new designs.
+Use `authorize_write_actions` when the write gate is enabled, and treat approval as a scoped, time boxed permission to perform concrete write actions. Do not silently escalate from read to write operations without informing the human.
 
-7. Handling repeated tool failures
+7. Summaries and auditability
 
-Do not repeatedly call the same tool with identical arguments after a failure. Instead, summarize what happened, adjust based on the error including re reading the tool definition or relevant docs, or ask the human for guidance before trying again.
+When you complete a workflow, summarize what you changed, which tools you used, and where the artifacts live (branches, pull requests, issues, or docs). This is especially important when operating across multiple repositories.
 
----
-
-## Sources of truth for new assistants
-
-When a new assistant attaches to Joeys GitHub or another Adaptiv Controller instance built from this repo, they should treat the following as canonical truth.
-
-1. Controller contract
-
-Call `controller_contract` via the MCP tools and read it carefully. It describes the expected workflows, safety and gating rules, and tool categories and when to use them. It is the single contract between controllers and this server.
-
-2. Server configuration and tools
-
-Call `get_server_config` to understand write gating, default repository and branch, timeouts, and the environment. Call `list_all_actions` with `include_parameters` set to true to see the full tool surface and parameter schemas. Call `list_write_tools` to understand which tools perform writes. Optionally call `validate_environment` to confirm GitHub and controller configuration.
-
-3. Project documentation
-
-Read the core documentation in the docs directory, especially
-
-- `README.md` for high level framing and the personal controller story.
-- `docs/WORKFLOWS.md` for recommended end to end workflows.
-- `docs/ARCHITECTURE_AND_SAFETY.md` for internals and guarantees.
-- `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md` for prompt and snapshot guidance.
-- `docs/UPGRADE_NOTES.md` and `docs/SELF_HOSTED_SETUP.md` for deployment and upgrade behavior.
-- `docs/OPERATIONS.md` for incident handling and `healthz` usage.
-- This ASSISTANT_HANDOFF.md file.
-
-4. Main branch as truth
-
-Any documentation or code that has been merged into the main branch, and whose pull request has been merged by Joey, is the source of truth. When Joey says a pull request has been merged and the branch deleted, assistants must treat the merged state as authoritative and refresh their knowledge accordingly.
-
----
-
-## How to start a new session checklist
-
-When a new assistant connects to Joeys GitHub or an Adaptiv Controller instance for this repository, they should do the following early in the session.
-
-1. Discover configuration and tools
-   - Call `get_server_config`, `list_all_actions` with `include_parameters` set to true, and `list_write_tools`.
-   - Optionally call `validate_environment` if anything looks misconfigured.
-
-2. Confirm repository defaults
-   - Confirm the effective default branch and other settings using the configuration tools and, when needed, repository metadata.
-
-3. Read the core docs and this handoff
-   - Fetch and read `ASSISTANT_HANDOFF.md`, `docs/WORKFLOWS.md`, `docs/ARCHITECTURE_AND_SAFETY.md`, `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md`, `docs/UPGRADE_NOTES.md`, `docs/OPERATIONS.md`, and `docs/SELF_HOSTED_SETUP.md`.
-
-4. Align with current work
-   - Read open pull requests related to the controller or docs, reviewing their diffs and descriptions.
-   - Use `open_issue_context` and `get_branch_summary` to understand issue branch mappings, PR status, and ahead behind state.
-   - Fetch any branches or issues that Joey references explicitly.
-
-5. Adopt test first and pull request first behavior
-   - Plan changes on a feature branch.
-   - Use patch based edits or focused full file updates as appropriate.
-   - Run tests and linters before opening pull requests into main.
-
----
-
-## When documentation changes
-
-The controller contract and Joeys expectations include a specific rule: when documentation for this project is updated and merged into the main branch, assistants must treat the new version as truth. After Joey says a pull request that updates docs has been merged into main and the branch deleted, assistants should re fetch the updated documents, including this file and any docs in the docs directory, re read them, and adjust their mental model accordingly. If there is any conflict between an older understanding and the newly merged docs, the merged docs win. This rule exists to avoid derailments where the human and assistant are talking past each other based on stale assumptions.
-
----
-
-## Evolving this handoff document
-
-This file is intentionally designed to be updated over time as the project, controller contract, and workflows evolve. When updating this document, use a feature branch, make focused edits to `ASSISTANT_HANDOFF.md` patch based or full file as appropriate, update `docs/WORKFLOWS.md`, `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md`, or the controller contract if behavior or expectations change, run linters and tests as appropriate, and open a pull request into main.
-
-Future assistants should assume that the latest version of this file on main reflects the current truth about how to work on this repository, how to use Adaptiv Controller as a personal or team controller, and how to stay in sync across sessions and chats.
+These expectations are snapshots, not substitutes for reading `controller_contract` and docs/WORKFLOWS.md.
