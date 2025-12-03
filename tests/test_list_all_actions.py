@@ -1,4 +1,5 @@
 import pytest
+
 import main
 
 
@@ -20,6 +21,19 @@ def test_list_write_tools_includes_issue_helpers():
     tool_names = {tool["name"] for tool in tools}
 
     assert {"create_issue", "update_issue", "comment_on_issue"} <= tool_names
+
+
+def test_list_all_actions_compact_mode_truncates_descriptions():
+    expanded = main.list_all_actions(include_parameters=False, compact=False)
+    compact = main.list_all_actions(include_parameters=False, compact=True)
+
+    expanded_tool = next(tool for tool in expanded["tools"] if tool["name"] == "run_command")
+    compact_tool = next(tool for tool in compact["tools"] if tool["name"] == "run_command")
+
+    assert compact["compact"] is True
+    assert "tags" not in compact_tool
+    assert len(compact_tool["description"]) < len(expanded_tool["description"])
+    assert len(compact_tool["description"]) <= 200
 
 
 @pytest.mark.asyncio

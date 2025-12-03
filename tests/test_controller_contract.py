@@ -40,3 +40,22 @@ def test_controller_contract_structure():
         tooling["issues"]
     )
     assert "authorize_write_actions" in tooling["safety"]
+
+
+def test_controller_contract_compact_mode():
+    payload = controller_contract(compact=True)
+
+    assert payload["version"] == CONTROLLER_CONTRACT_VERSION
+    assert payload["controller"]["repo"] == CONTROLLER_REPO
+    assert payload["controller"]["write_allowed_default"] == WRITE_ALLOWED
+    assert payload.get("compact") is True
+
+    expectations = payload["expectations"]
+    assert expectations["assistant_count"] > 0
+    assert expectations["controller_prompt_count"] > 0
+    assert expectations["server_count"] > 0
+    assert "note" in expectations
+
+    prompts = payload["prompts"]
+    assert prompts["controller_prompt_count"] > 0
+    assert prompts["server_count"] > 0
