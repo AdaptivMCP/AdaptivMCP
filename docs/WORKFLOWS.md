@@ -37,6 +37,8 @@ All workflows should respect these rules, especially when touching the controlle
 5. Use run_command for real work.
    - Treat `run_command` as your primary way to work inside repo workspaces.
    - Use it to inspect files, run tests and linters, apply patches, and install dependencies when necessary.
+   - Do not ask humans to type commands or fiddle with blank lines or quoting. Handle multi-line commands, patches, and retries
+     with the workspace tools yourself.
 
 6. Summarize and keep a paper trail.
    - Summarize plans, changes, and outcomes in issues and pull requests.

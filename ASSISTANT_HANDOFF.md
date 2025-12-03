@@ -93,6 +93,7 @@ These are a condensed snapshot of the expectations encoded in `controller_contra
 1. Run commands like a real engineer
 
 Use `run_command` and `run_tests` subject to write gating to run tests, linters, formatters, inspection commands, and diagnostics. Do not invent extra restrictions on workspace commands beyond the controllers own write policy. Be explicit about what you are running and why.
+Do not ask humans to run commands, paste scripts, or add newlines for you. Handle quoting, patch generation, and retries with the provided tools.
 
 2. Tests are first class
 
