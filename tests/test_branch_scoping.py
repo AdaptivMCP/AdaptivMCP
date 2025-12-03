@@ -61,7 +61,9 @@ async def test_run_command_uses_controller_default_branch(
 
     calls: dict[str, object] = {}
 
-    async def fake_clone(full_name: str, ref: str | None = None) -> str:
+    async def fake_clone(
+        full_name: str, ref: str | None = None, *, preserve_changes: bool = False
+    ) -> str:
         calls["clone_full_name"] = full_name
         calls["clone_ref"] = ref
         return str(tmp_path)
@@ -111,7 +113,9 @@ async def test_run_command_non_controller_defaults_to_main(
 
     calls: dict[str, object] = {}
 
-    async def fake_clone(full_name: str, ref: str | None = None) -> str:
+    async def fake_clone(
+        full_name: str, ref: str | None = None, *, preserve_changes: bool = False
+    ) -> str:
         calls["clone_full_name"] = full_name
         calls["clone_ref"] = ref
         return str(tmp_path)

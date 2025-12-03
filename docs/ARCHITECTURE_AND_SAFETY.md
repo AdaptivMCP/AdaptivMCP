@@ -407,10 +407,10 @@ Specifically:
 
 - `run_command` and `run_tests` clone the target repository at the effective ref (as computed by `_effective_ref_for_repo`) into a persistent workspace so installs and edits are preserved across calls.
 - They optionally create a temporary virtual environment and run the requested command or test suite inside that workspace.
-- After the command finishes, the workspace is discarded.
+- The same workspace is reused across calls and shared with commit helpers so edits and installs persist until explicitly reset.
 
 This means:
 
 - Assistants should not assume any global packages or state in the MCP server process; all project-level dependencies must be managed via `run_command` / `run_tests` inside the cloned workspace.
-- When describing workflows in docs or prompts, assume that code execution and tests always happen through these tools, on a fresh checkout of the branch being worked on.
+- When describing workflows in docs or prompts, assume that code execution and tests always happen through these tools, on a reusable checkout of the branch being worked on.
 - When new workflow tools are added that depend on executing code, they should internally use the same workspace model rather than relying on ambient process state.

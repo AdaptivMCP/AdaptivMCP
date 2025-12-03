@@ -205,9 +205,9 @@ The goal is to keep edits small, precise, and easy to review while still support
 
 When you need to run tests or commands, always think in terms of the workspace model exposed by this engine.
 
-- `run_command` clones the target repo at a given ref into a workspace and runs a command there.
+- `run_command` clones the target repo at a given ref into a persistent workspace and runs a command there.
 - `run_tests` is a focused wrapper around `run_command` for test commands.
-- Workspaces are per call or per branch and should be treated as disposable.
+- Workspaces are persistent per repo/ref and shared with `commit_workspace`, so edits and installs survive between calls until explicitly reset.
 
 Prompts and workflows should
 

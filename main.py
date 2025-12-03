@@ -922,12 +922,40 @@ def _workspace_path(full_name: str, ref: str) -> str:
     return os.path.join(WORKSPACE_BASE_DIR, repo_key, ref_key)
 
 
-async def _clone_repo(full_name: str, ref: Optional[str] = None) -> str:
+async def _clone_repo(
+    full_name: str, ref: Optional[str] = None, *, preserve_changes: bool = False
+) -> str:
+    """Clone or return a persistent workspace for ``full_name``/``ref``.
+
+    When ``preserve_changes`` is True, the workspace is returned without wiping
+    local edits so callers like ``run_command`` and ``commit_workspace`` can
+    share state. When False (the previous behavior), the workspace is refreshed
+    to the remote ref to avoid stale state.
+    """
+
     effective_ref = _effective_ref_for_repo(full_name, ref)
     workspace_dir = _workspace_path(full_name, effective_ref)
     os.makedirs(os.path.dirname(workspace_dir), exist_ok=True)
 
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
+        if preserve_changes:
+            # Optionally fetch to keep remotes up to date without disturbing
+            # local modifications.
+            fetch_result = await _run_shell(
+                "git fetch origin --prune",
+                cwd=workspace_dir,
+                timeout_seconds=300,
+            )
+            if fetch_result["exit_code"] != 0:
+                stderr = fetch_result.get("stderr", "") or fetch_result.get(
+                    "stdout", ""
+                )
+                raise GitHubAPIError(
+                    f"Workspace fetch failed for {full_name}@{effective_ref}: {stderr}"
+                )
+
+            return workspace_dir
+
         # Refresh the existing checkout so stale, uncommitted changes do not
         # leak between runs. Assistants frequently forget to reset the
         # persistent workspace, which causes tests to pass locally but fail on
@@ -2083,10 +2111,16 @@ def list_write_tools() -> Dict[str, Any]:
             "notes": "Use primarily for docs and multi-file updates.",
         },
         {
+            "name": "ensure_workspace_clone",
+            "category": "workspace",
+            "description": "Ensure a persistent workspace exists for a repo/ref.",
+            "notes": "Clones if missing and can optionally reset to the remote ref.",
+        },
+        {
             "name": "run_command",
             "category": "workspace",
             "description": "Run an arbitrary shell command in a persistent workspace clone.",
-            "notes": "Workspace is refreshed to the remote ref before each call so stale changes do not leak; virtualenv state persists across calls.",
+            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls; virtualenv state persists across calls.",
         },
         {
             "name": "commit_workspace",
@@ -2104,7 +2138,7 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "run_tests",
             "category": "workspace",
             "description": "Run tests (default: pytest) inside the persistent workspace clone.",
-            "notes": "Preferred way to run tests; workspace is reset to the remote ref before execution and reuses the persistent virtualenv.",
+            "notes": "Preferred way to run tests; shares the persistent workspace with run_command and commit helpers.",
         },
         {
             "name": "trigger_workflow_dispatch",
@@ -3908,6 +3942,40 @@ async def apply_patch_and_commit(
 
 
 @mcp_tool(write_action=True)
+async def ensure_workspace_clone(
+    full_name: str, ref: str = "main", reset: bool = False
+) -> Dict[str, Any]:
+    """Ensure a persistent workspace exists for ``full_name``/``ref``.
+
+    When ``reset`` is True, the workspace is refreshed to match the remote
+    branch, discarding local edits. Otherwise, the existing workspace (if any)
+    is kept intact so commands and commits share the same on-disk tree.
+    """
+
+    try:
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        _ensure_write_allowed(
+            f"ensure_workspace_clone for {full_name}@{effective_ref}"
+        )
+
+        workspace_dir = _workspace_path(full_name, effective_ref)
+        existed = os.path.isdir(os.path.join(workspace_dir, ".git"))
+
+        repo_dir = await _clone_repo(
+            full_name, ref=effective_ref, preserve_changes=not reset
+        )
+
+        return {
+            "repo_dir": repo_dir,
+            "branch": effective_ref,
+            "reset": reset,
+            "created": not existed,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="ensure_workspace_clone")
+
+
+@mcp_tool(write_action=True)
 async def run_command(
     full_name: str,
     ref: str = "main",
@@ -3934,10 +4002,10 @@ async def run_command(
             calls when the workspace persists on disk.
 
     The workspace directory is kept on disk so subsequent calls can reuse
-    installed dependencies. The checkout is refreshed (fetch + reset + clean)
-    before each command so stale, uncommitted changes do not leak between
-    runs. Callers should pass a patch when they need the workspace to mirror
-    in-flight edits.
+    installed dependencies and edits. The same workspace is shared with
+    ``commit_workspace`` so changes made via ``run_command`` remain available
+    for commits and later commands. Callers should pass a patch when they need
+    the workspace to mirror in-flight edits.
     """
 
     env: Optional[Dict[str, str]] = None
@@ -3946,7 +4014,9 @@ async def run_command(
         _ensure_write_allowed(
             f"run_command {command} in {full_name}@{effective_ref}"
         )
-        repo_dir = await _clone_repo(full_name, ref=effective_ref)
+        repo_dir = await _clone_repo(
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         if patch:
             await _apply_patch_to_repo(repo_dir, patch)
@@ -3996,7 +4066,9 @@ async def commit_workspace(
         _ensure_write_allowed(
             f"commit_workspace for {full_name}@{effective_ref}"
         )
-        repo_dir = await _clone_repo(full_name, ref=effective_ref)
+        repo_dir = await _clone_repo(
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         if add_all:
             add_result = await _run_shell(
@@ -4066,7 +4138,9 @@ async def commit_workspace_files(
         _ensure_write_allowed(
             f"commit_workspace_files for {full_name}@{effective_ref}"
         )
-        repo_dir = await _clone_repo(full_name, ref=effective_ref)
+        repo_dir = await _clone_repo(
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         add_cmd = "git add -- " + " ".join(shlex.quote(path) for path in files)
         add_result = await _run_shell(add_cmd, cwd=repo_dir, timeout_seconds=120)

@@ -34,7 +34,9 @@ async def test_run_command_applies_patch_before_command(monkeypatch, tmp_path):
         stderr=subprocess.DEVNULL,
     )
 
-    async def fake_clone(full_name: str, ref: str = "main") -> str:
+    async def fake_clone(
+        full_name: str, ref: str = "main", *, preserve_changes: bool = False
+    ) -> str:
         return str(repo_dir)
 
     monkeypatch.setattr(main, "_clone_repo", fake_clone)
@@ -251,13 +253,10 @@ async def test_clone_repo_reuses_persistent_workspace(monkeypatch, tmp_path):
     )
 
     assert result["repo_dir"] == str(repo_dir)
-    assert calls[:3] == [
-        ("git fetch origin --prune", str(repo_dir)),
-        ("git reset --hard origin/main", str(repo_dir)),
-        ("git clean -fdx --exclude .venv-mcp", str(repo_dir)),
-    ]
+    assert calls[0] == ("git fetch origin --prune", str(repo_dir))
     assert any(cmd == ("echo ok", str(repo_dir)) for cmd in calls)
-    assert not any(cmd.startswith("git clone") for cmd, _ in calls)
+    assert not any(cmd.startswith("git reset") for cmd, _ in calls)
+    assert not any(cmd.startswith("git clean") for cmd, _ in calls)
 
 
 @pytest.mark.asyncio
@@ -298,7 +297,9 @@ async def test_commit_workspace_creates_commit(monkeypatch, tmp_path):
 
     (repo_dir / "sample.txt").write_text("updated\n", encoding="utf-8")
 
-    async def fake_clone(full_name: str, ref: str | None = None) -> str:
+    async def fake_clone(
+        full_name: str, ref: str | None = None, *, preserve_changes: bool = False
+    ) -> str:
         return str(repo_dir)
 
     monkeypatch.setattr(main, "_clone_repo", fake_clone)
@@ -312,3 +313,66 @@ async def test_commit_workspace_creates_commit(monkeypatch, tmp_path):
         ["git", "log", "-1", "--pretty=%B"], cwd=repo_dir
     ).decode("utf-8")
     assert "test commit" in log_output
+
+
+@pytest.mark.asyncio
+async def test_run_command_and_commit_share_workspace(monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / ".git").mkdir()
+
+    clone_calls: list[bool] = []
+    async def fake_clone(
+        full_name: str, ref: str | None = None, *, preserve_changes: bool = False
+    ) -> str:
+        clone_calls.append(preserve_changes)
+        return str(repo_dir)
+
+    monkeypatch.setattr(main, "_clone_repo", fake_clone)
+
+    shell_commands: list[str] = []
+
+    async def fake_run_shell(cmd, cwd=None, timeout_seconds=300, env=None):
+        shell_commands.append(cmd)
+        if cmd.startswith("git status --porcelain"):
+            return {
+                "exit_code": 0,
+                "timed_out": False,
+                "stdout": " M sample.txt\n",
+                "stderr": "",
+                "stdout_truncated": False,
+                "stderr_truncated": False,
+            }
+
+        return {
+            "exit_code": 0,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+            "stdout_truncated": False,
+            "stderr_truncated": False,
+        }
+
+    monkeypatch.setattr(main, "_run_shell", fake_run_shell)
+
+    run_result = await main.run_command(
+        full_name="owner/repo",
+        ref="feature",
+        command="echo hi",
+        use_temp_venv=False,
+    )
+
+    commit_result = await main.commit_workspace(
+        full_name="owner/repo",
+        ref="feature",
+        message="msg",
+        push=False,
+    )
+
+    assert run_result["repo_dir"] == str(repo_dir)
+    assert commit_result["repo_dir"] == str(repo_dir)
+    assert clone_calls == [True, True]
+    assert "git add -A" in shell_commands
+    assert any(cmd.startswith("git commit") for cmd in shell_commands)

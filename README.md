@@ -162,6 +162,9 @@ All write tools are explicitly tagged as write actions and require WRITE_ALLOWED
 - `build_section_based_diff`: construct a patch for large files by specifying line-based sections to replace, then apply it with `apply_patch_and_commit`.
 - `validate_json_string`: validate and normalize JSON output, especially for long payloads such as sections arrays used with `build_section_based_diff`.
 
+- ensure_workspace_clone
+  - Ensure a repo/ref workspace exists on disk and optionally reset it to the remote branch.
+
 - run_command
   - Clones the repo at a given ref into a persistent workspace on disk.
   - Optionally applies a unified diff patch before execution.
