@@ -123,6 +123,9 @@ These expectations are snapshots, not substitutes for reading `controller_contra
 - Do NOT use `run_command` as a patch engine (for example with large
   heredoc Python scripts that rewrite files). This is brittle under
   JSON encoding and will fail easily.
+- Routine multi-line edits are normal. Use the diff-first tools to apply
+  them directly instead of calling them tricky or bouncing them back to
+  humans.
 - For file edits, prefer:
   - `apply_text_update_and_commit` for full file replacements.
   - `update_file_sections_and_commit` for structured section-level edits.

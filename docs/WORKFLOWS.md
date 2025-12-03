@@ -125,6 +125,10 @@ Assistants SHOULD avoid using `run_command` to embed large shell/Python
 scripts to modify files. This is brittle because those scripts must be
 embedded inside JSON strings and are easy to mis-escape.
 
+Multi-line edits are routine. Use the diff-first helpers below to apply
+them directly instead of treating them as tricky or deferring them to
+humans.
+
 Instead, assistants SHOULD use these tools:
 
 - `build_unified_diff` – generate a unified diff from old/new file content.
