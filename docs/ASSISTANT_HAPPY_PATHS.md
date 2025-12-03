@@ -284,3 +284,36 @@ one (in a docs branch, via PR).
 - Use large-file helpers (`get_file_slice`, `build_section_based_diff`, `build_unified_diff_from_strings`) instead of loading huge files.
 - Use `validate_json_string` and `validate_tool_args` when emitting structured payloads for other tools or controllers.
 - After docs in this repo are updated and merged into the default branch, treat them as the **source of truth** for future sessions and re-read them via `get_file_contents` or `fetch_files`.
+
+## 6. Large-file or partial-section edits (line-based)
+
+**Goal:** Safely edit a small part of a large file without loading or rewriting the entire file, using minimal line-based payloads.
+
+**When to use:** When dealing with long modules, config files, or docs where only a section needs changing and you know the relevant line ranges.
+
+**Steps:**
+1. Identify the region:
+   - Use `get_file_slice` to retrieve only the lines relevant to the change.
+   - Optionally, use `search_code_in_repo` to find line ranges or markers.
+2. Choose an edit strategy:
+   - For marker- or section-based edits, you can still use `build_section_based_diff` + `apply_patch_and_commit`.
+   - For direct, minimal line edits where line numbers are known, use `apply_line_edits_and_commit`.
+3. Using `apply_line_edits_and_commit` for line-based edits:
+   - Call `apply_line_edits_and_commit` with:
+     - `full_name`: controller repo (for example `Proofgate-Revocations/chatgpt-mcp-github`).
+     - `path`: file you are editing (for example `docs/ASSISTANT_HAPPY_PATHS.md`).
+     - `branch`: feature/docs branch (never `main` directly).
+     - `message`: clear commit message.
+     - `sections`: list of edits, each with:
+       - `start_line`: 1-based inclusive start line.
+       - `end_line`: 1-based inclusive end line (or equal to `start_line` for a single-line replace).
+       - `new_text`: new text for that range (may span multiple lines).
+   - The server fetches the base file from GitHub, applies the line edits in memory, and commits via the Contents API.
+   - Set `include_diff=false` (the default) to keep responses small; set it to `true` only when you explicitly need a diff.
+4. Optionally run tests or linters via `run_tests` or `run_command` if the change affects behavior.
+
+**Validation:**
+- `apply_line_edits_and_commit` returns `status` equal to `committed` with commit metadata.
+- If you set `include_diff=true`, the diff touches only the intended lines and no unrelated parts of the file.
+
+---
