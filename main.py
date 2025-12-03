@@ -2223,6 +2223,7 @@ def controller_contract() -> Dict[str, Any]:
                 "Keep writes disabled until authorize_write_actions approves them and explain when a write is blocked.",
                 "Summarize what changed and which tools ran so humans can audit actions easily.",
                 "Return strict, valid JSON by validating payloads with validate_json_string before emitting them to clients.",
+                "When you generate non-trivial scripts, commands, or configuration (for example Python snippets, shell scripts, or large JSON payloads), run appropriate workspace tools via run_command to validate them (such as python -m py_compile for Python, bash -n or shellcheck for shell, validate_json_string and validate_tool_args for JSON and tool calls) before relying on them or committing.",
                 "When updating code or docs, remove or rewrite outdated or conflicting content so the final state has no duplicates or obsolete paths.",
                 "Whenever documentation in this controller repo has been updated and merged into the default branch, re-read the updated documents through the Adaptiv controller tools (for example get_file_contents, fetch_files, or list_repository_tree) and treat them as the new source of truth for the project; a merged PR on the default branch means the human has already reviewed and accepted the changes.",
                 "Work from natural-language goals without demanding long lists of CLI commands; ask concise clarifying questions instead of offloading planning to humans.",
