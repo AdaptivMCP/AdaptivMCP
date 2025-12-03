@@ -1,8 +1,8 @@
 # OPERATIONS: Runbook for incidents and common failures
 
-This document is for operators of the Adaptiv Controller GitHub MCP server. It describes how to triage and respond to common incidents, how to use the built-in tools and endpoints to debug problems, and how to adjust configuration safely during an incident.
+This document is for people running the Adaptiv Controller GitHub MCP server for themselves. It describes how to triage and respond to common incidents, how to use the built-in tools and endpoints to debug problems, and how to adjust configuration safely during an incident.
 
-If you are buying or running the Adaptiv Controller product, this is the place to look when something goes wrong in production. Read this together with:
+If you are running the Adaptiv Controller server for yourself (for example on Render or another host), this is the place to look when something goes wrong. Read this together with:
 
 - `docs/SELF_HOSTED_SETUP.md` for initial deployment and configuration.
 - `docs/WORKFLOWS.md` for expected assistant behavior.
