@@ -353,7 +353,21 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
             # Apply replacement text (may be empty for pure deletion).
             if new_text:
-                replacement_lines = new_text.splitlines(keepends=True)
+                replacement_text = new_text
+
+                # If we're appending to a file that currently lacks a trailing
+                # newline, make sure the insertion starts on a new line rather
+                # than gluing the new content onto the final line.
+                if (
+                    start_line >= max_start
+                    and total_lines > 0
+                    and updated_lines
+                    and not updated_lines[-1].endswith("\n")
+                    and not replacement_text.startswith("\n")
+                ):
+                    replacement_text = "\n" + replacement_text
+
+                replacement_lines = replacement_text.splitlines(keepends=True)
                 updated_lines.extend(replacement_lines)
 
             # Move cursor past the replaced range; for insertion (end_line == start_line - 1)
