@@ -288,6 +288,78 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         }
 
 
+    def _apply_line_sections(text: str, sections: list[Dict[str, Any]]) -> Dict[str, Any]:
+        """Validate and apply line-based sections to text, returning the new text."""
+
+        if sections is None:
+            raise ValueError("sections must be provided")
+
+        original_lines = text.splitlines(keepends=True)
+        total_lines = len(original_lines)
+
+        normalized_sections: list[Dict[str, Any]] = sorted(
+            sections, key=lambda s: int(s.get("start_line", 0))
+        )
+
+        prev_end = 0
+        for section in normalized_sections:
+            try:
+                start_line = int(section["start_line"])
+                end_line = int(section["end_line"])
+            except KeyError as exc:
+                raise ValueError(
+                    "Each section must have 'start_line' and 'end_line'"
+                ) from exc
+
+            if start_line < 1:
+                raise ValueError("start_line must be >= 1")
+            # Allow end_line == start_line - 1 to represent a pure insertion.
+            if end_line < start_line - 1:
+                raise ValueError("end_line must be >= start_line - 1")
+            if total_lines > 0 and end_line > total_lines:
+                raise ValueError(
+                    f"end_line {end_line} is greater than total_lines {total_lines}"
+                )
+            if start_line <= prev_end:
+                raise ValueError("sections must not overlap or go backwards")
+            prev_end = end_line
+
+        updated_lines: list[str] = []
+        cursor = 1
+
+        for section in normalized_sections:
+            start_line = int(section["start_line"])
+            end_line = int(section["end_line"])
+            new_text = section.get("new_text", "")
+
+            # Copy unchanged lines before the section.
+            if cursor <= start_line - 1 and total_lines > 0:
+                updated_lines.extend(
+                    original_lines[cursor - 1 : min(start_line - 1, total_lines)]
+                )
+
+            # Apply replacement text (may be empty for pure deletion).
+            if new_text:
+                replacement_lines = new_text.splitlines(keepends=True)
+                updated_lines.extend(replacement_lines)
+
+            # Move cursor past the replaced range; for insertion (end_line == start_line - 1)
+            # this leaves cursor unchanged relative to original_lines.
+            cursor = max(cursor, end_line + 1)
+
+        # Copy the tail of the file.
+        if total_lines > 0 and cursor <= total_lines:
+            updated_lines.extend(original_lines[cursor - 1 :])
+
+        updated_text = "".join(updated_lines)
+
+        return {
+            "updated_text": updated_text,
+            "original_lines": original_lines,
+            "total_lines": total_lines,
+            "normalized_sections": normalized_sections,
+        }
+
     def _build_unified_diff_from_strings(
         original: str,
         updated: str,
@@ -422,73 +494,16 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
               - ref: effective ref used for the lookup.
               - preview (optional): human-oriented diff if show_whitespace=True.
         """
-        if sections is None:
-            raise ValueError("sections must be provided")
         if context_lines < 0:
             raise ValueError("context_lines must be >= 0")
 
         effective_ref = _effective_ref_for_repo(full_name, ref)
         decoded = await _decode_github_content(full_name, path, effective_ref)
         text = decoded.get("text", "")
-        original_lines = text.splitlines(keepends=True)
-        total_lines = len(original_lines)
 
-        # Normalize and validate sections.
-        normalized_sections: list[Dict[str, Any]] = sorted(
-            sections, key=lambda s: int(s.get("start_line", 0))
-        )
-
-        prev_end = 0
-        for section in normalized_sections:
-            try:
-                start_line = int(section["start_line"])
-                end_line = int(section["end_line"])
-            except KeyError as exc:
-                raise ValueError(
-                    "Each section must have 'start_line' and 'end_line'"
-                ) from exc
-
-            if start_line < 1:
-                raise ValueError("start_line must be >= 1")
-            # Allow end_line == start_line - 1 to represent a pure insertion.
-            if end_line < start_line - 1:
-                raise ValueError("end_line must be >= start_line - 1")
-            if total_lines > 0 and end_line > total_lines:
-                raise ValueError(
-                    f"end_line {end_line} is greater than total_lines {total_lines}"
-                )
-            if start_line <= prev_end:
-                raise ValueError("sections must not overlap or go backwards")
-            prev_end = end_line
-
-        updated_lines: list[str] = []
-        cursor = 1
-
-        for section in normalized_sections:
-            start_line = int(section["start_line"])
-            end_line = int(section["end_line"])
-            new_text = section.get("new_text", "")
-
-            # Copy unchanged lines before the section.
-            if cursor <= start_line - 1 and total_lines > 0:
-                updated_lines.extend(
-                    original_lines[cursor - 1 : min(start_line - 1, total_lines)]
-                )
-
-            # Apply replacement text (may be empty for pure deletion).
-            if new_text:
-                replacement_lines = new_text.splitlines(keepends=True)
-                updated_lines.extend(replacement_lines)
-
-            # Move cursor past the replaced range; for insertion (end_line == start_line - 1)
-            # this leaves cursor unchanged relative to original_lines.
-            cursor = max(cursor, end_line + 1)
-
-        # Copy the tail of the file.
-        if total_lines > 0 and cursor <= total_lines:
-            updated_lines.extend(original_lines[cursor - 1 :])
-
-        updated_text = "".join(updated_lines)
+        applied = _apply_line_sections(text, sections)
+        updated_text = applied["updated_text"]
+        normalized_sections = applied["normalized_sections"]
 
         diff_result = _build_unified_diff_from_strings(
             text,
@@ -499,6 +514,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         )
         diff_result["full_name"] = full_name
         diff_result["ref"] = effective_ref
+        diff_result["applied_sections"] = normalized_sections
         return diff_result
 
     @mcp_tool(
@@ -583,3 +599,63 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "has_more_below": has_more_below,
             "lines": slice_lines,
         }
+
+    @mcp_tool(
+        write_action=True,
+        description=(
+            "Apply minimal line-based edits to a file and commit them without "
+            "sending the entire file content. Provide start/end lines and the "
+            "replacement text for each section; the server fetches, patches, "
+            "and commits on your behalf."
+        ),
+        tags=["github", "write", "files", "diff", "bandwidth"],
+    )
+    async def apply_line_edits_and_commit(
+        full_name: str,
+        path: str,
+        sections: list[Dict[str, Any]],
+        branch: str = "main",
+        message: str = "Apply line edits",
+        include_diff: bool = False,
+        context_lines: int = 3,
+    ) -> Dict[str, Any]:
+        """Commit line-based edits while minimizing payload size.
+
+        This tool is designed for low-token workflows: callers only send the
+        line ranges they want to replace plus the replacement text, and can
+        opt-out of receiving diffs by default.
+        """
+
+        effective_branch = _effective_ref_for_repo(full_name, branch)
+        decoded = await _decode_github_content(full_name, path, effective_branch)
+        current_text = decoded.get("text", "")
+
+        applied = _apply_line_sections(current_text, sections)
+        updated_text = applied["updated_text"]
+        normalized_sections = applied["normalized_sections"]
+
+        if updated_text == current_text:
+            return {
+                "status": "no-op",
+                "reason": "no_changes",
+                "full_name": full_name,
+                "path": path,
+                "branch": effective_branch,
+                "applied_sections": normalized_sections,
+            }
+
+        from main import apply_text_update_and_commit
+
+        commit_result = await apply_text_update_and_commit(
+            full_name=full_name,
+            path=path,
+            updated_content=updated_text,
+            branch=effective_branch,
+            message=message,
+            return_diff=include_diff,
+            context_lines=context_lines,
+        )
+
+        commit_result["applied_sections"] = normalized_sections
+        commit_result["context_lines"] = context_lines
+        return commit_result
