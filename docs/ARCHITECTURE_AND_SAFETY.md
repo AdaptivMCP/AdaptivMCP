@@ -269,15 +269,7 @@ These tools work together with the commit orchestrations described above to supp
 
 ---
 
-## 8. Background reads and tool discovery
-
-For long-running read tasks, the server exposes background read helpers:
-
-- `start_background_read`.
-- `get_background_read`.
-- `list_background_reads`.
-
-Only tools that are tagged as read-only are eligible for background execution. This ensures background reads cannot bypass the write gating system.
+## 8. Tool discovery
 
 For discovering the current tool surface, use:
 
