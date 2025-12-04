@@ -189,6 +189,7 @@ Large files and structured payloads are common when you are driving a controller
 For large files:
 
 - Use `get_file_slice` to read only the region you care about instead of the entire file.
+- Use `get_file_with_line_numbers` when you need exact line references for citations or for line-based patch tools; copy the ranges directly instead of hand-numbering snippets.
 - Use `build_section_based_diff` to construct diffs for the specific line ranges that need to change.
 - Apply the resulting patch with `apply_patch_and_commit` on the appropriate branch.
 
@@ -208,6 +209,11 @@ Most tool call failures come from malformed JSON, stray escape sequences, or str
 - Start from structured JSON, not a quoted blob.
   - ✅ `{"path": "src/app.py", "replacement": "Line 1\nLine 2"}`
   - ❌ `"{\"path\": \"src/app.py\", \"replacement\": \"Line 1\\nLine 2\"}"`
+- Build arguments in this order to avoid over-escaping:
+  1. Write the JSON object with real newlines and double quotes only where JSON requires them.
+  2. Add escapes for double quotes *inside* string values, not around the whole payload.
+  3. Avoid `\n` escapes inside values unless the tool explicitly expects them; prefer literal newlines or arrays.
+  4. Run `validate_tool_args` (or `validate_json_string` for big blobs) before write-tagged tools to catch stray quotes.
 - Prefer real newlines or arrays of lines instead of `\n`-filled strings when the tool accepts them.
   - For patch tools, use multiline strings or `sections` arrays rather than sprinkling `\n` escapes.
 - Escape double quotes only inside JSON string values.
