@@ -6,11 +6,19 @@ import base64
 from typing import Any, Dict, Optional
 
 import httpx
+import os
+import re
+import sys
 
 from . import config
 from .exceptions import GitHubAPIError
-from .http_clients import _github_request
+from .http_clients import _external_client_instance, _github_request
 from .utils import _effective_ref_for_repo
+
+
+async def _request(*args, **kwargs):
+    request_fn = getattr(sys.modules.get("main"), "_github_request", _github_request)
+    return await request_fn(*args, **kwargs)
 
 
 async def _verify_file_on_branch(
@@ -42,9 +50,12 @@ async def _decode_github_content(
     path: str,
     ref: Optional[str] = None,
 ) -> Dict[str, Any]:
-    effective_ref = _effective_ref_for_repo(full_name, ref)
+    effective_ref_fn = getattr(
+        sys.modules.get("main"), "_effective_ref_for_repo", _effective_ref_for_repo
+    )
+    effective_ref = effective_ref_fn(full_name, ref)
     try:
-        data = await _github_request(
+        data = await _request(
             "GET",
             f"/repos/{full_name}/contents/{path}",
             params={"ref": effective_ref},
@@ -83,7 +94,7 @@ async def _decode_github_content(
 
 
 async def _get_branch_sha(full_name: str, branch: str) -> str:
-    data = await _github_request("GET", f"/repos/{full_name}/git/ref/heads/{branch}")
+    data = await _request("GET", f"/repos/{full_name}/git/ref/heads/{branch}")
     if not isinstance(data.get("json"), dict):
         raise GitHubAPIError("Unexpected ref response when fetching branch SHA")
     sha = data["json"].get("object", {}).get("sha")
@@ -122,7 +133,7 @@ async def _perform_github_commit(
     if author:
         payload["author"] = author
 
-    result = await _github_request(
+    result = await _request(
         "PUT",
         f"/repos/{full_name}/contents/{path}",
         json_body=payload,
@@ -132,19 +143,102 @@ async def _perform_github_commit(
     return result["json"]
 
 
-async def _load_body_from_content_url(url: str) -> bytes:
-    if not url.startswith(config.GITHUB_API_BASE):
-        raise GitHubAPIError(
-            "Content URL must start with the configured GitHub API base URL"
+async def _load_body_from_content_url(content_url: str, *, context: str) -> bytes:
+    """Read bytes from a sandbox path, absolute path, or HTTP(S) URL."""
+
+    if not isinstance(content_url, str) or not content_url.strip():
+        raise ValueError("content_url must be a non-empty string when provided")
+
+    content_url = content_url.strip()
+
+    def _read_local(local_path: str, missing_hint: str) -> bytes:
+        try:
+            with open(local_path, "rb") as f:
+                return f.read()
+        except FileNotFoundError:
+            raise GitHubAPIError(
+                f"{context} content_url path not found at {local_path}. {missing_hint}"
+            )
+        except OSError as e:
+            raise GitHubAPIError(
+                f"Failed to read content_url from {local_path}: {e}"
+            )
+
+    async def _fetch_rewritten_path(local_path: str, *, base_url: str) -> bytes:
+        rewritten_url = base_url.rstrip("/") + "/" + local_path.lstrip("/")
+        client = _external_client_instance()
+        response = await client.get(rewritten_url)
+        if response.status_code >= 400:
+            snippet = response.text[:500]
+            raise GitHubAPIError(
+                f"Failed to fetch content from rewritten sandbox URL {rewritten_url}: "
+                f"{response.status_code}. Response: {snippet}"
+            )
+        return response.content
+
+    sandbox_hint = (
+        "If you are running inside ChatGPT, ensure the file exists in the sandbox "
+        "and pass the full sandbox:/ path so the host can rewrite it to an "
+        "accessible URL."
+    )
+
+    def _is_windows_absolute_path(path: str) -> bool:
+        return bool(
+            re.match(r"^[a-zA-Z]:[\\/].*", path) or path.startswith("\\\\")
         )
 
-    client = httpx.AsyncClient(base_url=config.GITHUB_API_BASE)
-    try:
-        resp = await client.get(url.replace(config.GITHUB_API_BASE, ""))
-        resp.raise_for_status()
-        return resp.content
-    finally:
-        await client.aclose()
+    if content_url.startswith("sandbox:"):
+        local_path = content_url[len("sandbox:") :]
+        rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
+        try:
+            return _read_local(local_path, sandbox_hint)
+        except GitHubAPIError:
+            if rewrite_base and (
+                rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
+            ):
+                return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
+            raise GitHubAPIError(
+                f"{context} content_url path not found at {local_path}. "
+                "Provide an http(s) URL that already points to the sandbox file "
+                "or configure SANDBOX_CONTENT_BASE_URL so the server can fetch it "
+                "when direct filesystem access is unavailable."
+            )
+
+    if content_url.startswith("/") or _is_windows_absolute_path(content_url):
+        rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
+        missing_hint = (
+            "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
+            "hosts can rewrite it."
+        )
+        try:
+            return _read_local(content_url, missing_hint)
+        except GitHubAPIError:
+            if rewrite_base and (
+                rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
+            ):
+                return await _fetch_rewritten_path(content_url, base_url=rewrite_base)
+            raise GitHubAPIError(
+                f"{context} content_url path not found at {content_url}. "
+                f"{missing_hint} Configure SANDBOX_CONTENT_BASE_URL or provide an "
+                "absolute http(s) URL so the server can fetch the sandbox file when "
+                "it is not mounted locally."
+            )
+
+    if content_url.startswith("http://") or content_url.startswith("https://"):
+        client = _external_client_instance()
+        response = await client.get(content_url)
+        if response.status_code >= 400:
+            raise GitHubAPIError(
+                f"Failed to fetch content from {content_url}: {response.status_code}"
+            )
+        return response.content
+
+    raise GitHubAPIError(
+        f"{context} content_url must be an absolute http(s) URL, a sandbox:/ path, "
+        "or an absolute local file path. In ChatGPT, pass the sandbox file path "
+        "(e.g. sandbox:/mnt/data/file) and the host will rewrite it to a real URL "
+        "before it reaches this server."
+    )
 
 
 __all__ = [

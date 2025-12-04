@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import io
 import json
+import os  # noqa: E402  pylint: disable=wrong-import-position
 import re
+import sys
 import zipfile
 from typing import Any, Dict, Mapping
 
@@ -19,9 +21,17 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 
 def _effective_ref_for_repo(full_name: str, ref: str | None) -> str:
-    if full_name == CONTROLLER_REPO:
+    # Allow tests (and callers) to override controller settings by monkeypatching
+    # the main module without needing to import this helper directly.
+    main_module = sys.modules.get("main")
+    controller_repo = getattr(main_module, "CONTROLLER_REPO", CONTROLLER_REPO)
+    controller_default_branch = getattr(
+        main_module, "CONTROLLER_DEFAULT_BRANCH", CONTROLLER_DEFAULT_BRANCH
+    )
+
+    if full_name == controller_repo:
         if not ref or ref == "main":
-            return CONTROLLER_DEFAULT_BRANCH
+            return controller_default_branch
         return ref
 
     if ref:
@@ -106,7 +116,6 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
 
 
 # Lazy import to avoid cycles when config loads environment defaults.
-import os  # noqa: E402  pylint: disable=wrong-import-position
 from . import config  # noqa: E402  pylint: disable=wrong-import-position
 
 REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(

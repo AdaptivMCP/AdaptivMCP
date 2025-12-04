@@ -26,12 +26,19 @@ async def _run_shell(
     if os.name == "nt":
         shell_executable = shell_executable or shutil.which("bash")
 
+    main_module = sys.modules.get("main")
     proc_env = {
         **os.environ,
-        "GIT_AUTHOR_NAME": config.GIT_AUTHOR_NAME,
-        "GIT_AUTHOR_EMAIL": config.GIT_AUTHOR_EMAIL,
-        "GIT_COMMITTER_NAME": config.GIT_COMMITTER_NAME,
-        "GIT_COMMITTER_EMAIL": config.GIT_COMMITTER_EMAIL,
+        "GIT_AUTHOR_NAME": getattr(main_module, "GIT_AUTHOR_NAME", config.GIT_AUTHOR_NAME),
+        "GIT_AUTHOR_EMAIL": getattr(
+            main_module, "GIT_AUTHOR_EMAIL", config.GIT_AUTHOR_EMAIL
+        ),
+        "GIT_COMMITTER_NAME": getattr(
+            main_module, "GIT_COMMITTER_NAME", config.GIT_COMMITTER_NAME
+        ),
+        "GIT_COMMITTER_EMAIL": getattr(
+            main_module, "GIT_COMMITTER_EMAIL", config.GIT_COMMITTER_EMAIL
+        ),
     }
     if env is not None:
         proc_env.update(env)
@@ -61,26 +68,38 @@ async def _run_shell(
     stdout_truncated = False
     stderr_truncated = False
 
-    if config.TOOL_STDOUT_MAX_CHARS > 0 and len(stdout) > config.TOOL_STDOUT_MAX_CHARS:
-        stdout = stdout[: config.TOOL_STDOUT_MAX_CHARS]
+    stdout_limit = getattr(
+        main_module, "TOOL_STDOUT_MAX_CHARS", config.TOOL_STDOUT_MAX_CHARS
+    )
+    if stdout_limit and stdout_limit > 0 and len(stdout) > stdout_limit:
+        stdout = stdout[:stdout_limit]
         stdout_truncated = True
 
-    if config.TOOL_STDERR_MAX_CHARS > 0 and len(stderr) > config.TOOL_STDERR_MAX_CHARS:
-        stderr = stderr[: config.TOOL_STDERR_MAX_CHARS]
+    stderr_limit = getattr(
+        main_module, "TOOL_STDERR_MAX_CHARS", config.TOOL_STDERR_MAX_CHARS
+    )
+    if stderr_limit and stderr_limit > 0 and len(stderr) > stderr_limit:
+        stderr = stderr[:stderr_limit]
         stderr_truncated = True
 
-    if config.TOOL_STDIO_COMBINED_MAX_CHARS > 0:
-        if len(stdout) > 0:
-            allowed_stdout = max(0, config.TOOL_STDIO_COMBINED_MAX_CHARS - len(stderr))
-            if len(stdout) > allowed_stdout:
-                stdout = stdout[:allowed_stdout]
-                stdout_truncated = True
+    combined_limit = getattr(
+        main_module, "TOOL_STDIO_COMBINED_MAX_CHARS", config.TOOL_STDIO_COMBINED_MAX_CHARS
+    )
+    if (
+        combined_limit
+        and combined_limit > 0
+        and len(stdout) + len(stderr) > combined_limit
+    ):
+        allowed_stdout = max(0, combined_limit - len(stderr))
+        if len(stdout) > allowed_stdout:
+            stdout = stdout[:allowed_stdout]
+            stdout_truncated = True
 
-            if len(stdout) + len(stderr) > config.TOOL_STDIO_COMBINED_MAX_CHARS:
-                allowed_stderr = max(0, config.TOOL_STDIO_COMBINED_MAX_CHARS - len(stdout))
-                if len(stderr) > allowed_stderr:
-                    stderr = stderr[:allowed_stderr]
-                    stderr_truncated = True
+        if len(stdout) + len(stderr) > combined_limit:
+            allowed_stderr = max(0, combined_limit - len(stdout))
+            if len(stderr) > allowed_stderr:
+                stderr = stderr[:allowed_stderr]
+                stderr_truncated = True
 
     return {
         "exit_code": proc.returncode,
@@ -95,7 +114,9 @@ async def _run_shell(
 def _workspace_path(full_name: str, ref: str) -> str:
     repo_key = full_name.replace("/", "__")
     ref_key = ref.replace("/", "__")
-    return os.path.join(config.WORKSPACE_BASE_DIR, repo_key, ref_key)
+    main_module = sys.modules.get("main")
+    base_dir = getattr(main_module, "WORKSPACE_BASE_DIR", config.WORKSPACE_BASE_DIR)
+    return os.path.join(base_dir, repo_key, ref_key)
 
 
 async def _clone_repo(
@@ -109,9 +130,12 @@ async def _clone_repo(
     workspace_dir = _workspace_path(full_name, effective_ref)
     os.makedirs(os.path.dirname(workspace_dir), exist_ok=True)
 
+    main_module = sys.modules.get("main")
+    run_shell = getattr(main_module, "_run_shell", _run_shell)
+
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
         if preserve_changes:
-            fetch_result = await _run_shell(
+            fetch_result = await run_shell(
                 "git fetch origin --prune",
                 cwd=workspace_dir,
                 timeout_seconds=300,
@@ -134,7 +158,7 @@ async def _clone_repo(
         ]
 
         for cmd, timeout in refresh_steps:
-            result = await _run_shell(cmd, cwd=workspace_dir, timeout_seconds=timeout)
+            result = await run_shell(cmd, cwd=workspace_dir, timeout_seconds=timeout)
             if result["exit_code"] != 0:
                 stderr = result.get("stderr", "") or result.get("stdout", "")
                 raise GitHubAPIError(
@@ -151,7 +175,7 @@ async def _clone_repo(
 
     url = f"https://x-access-token:{token}@github.com/{full_name}.git"
     cmd = f"git clone --depth 1 --branch {effective_ref} {url} {tmpdir}"
-    result = await _run_shell(cmd, cwd=None, timeout_seconds=600)
+    result = await run_shell(cmd, cwd=None, timeout_seconds=600)
     if result["exit_code"] != 0:
         stderr = result.get("stderr", "")
         raise GitHubAPIError(f"git clone failed: {stderr}")
@@ -163,6 +187,9 @@ async def _clone_repo(
 async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
     """Create an isolated virtualenv and return env vars that activate it."""
 
+    main_module = sys.modules.get("main")
+    run_shell = getattr(main_module, "_run_shell", _run_shell)
+
     venv_dir = os.path.join(repo_dir, ".venv-mcp")
     if os.path.isdir(venv_dir):
         bin_dir = "Scripts" if os.name == "nt" else "bin"
@@ -172,7 +199,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
             "PATH": f"{bin_path}{os.pathsep}" + os.environ.get("PATH", ""),
         }
 
-    result = await _run_shell(
+    result = await run_shell(
         f"{sys.executable} -m venv {venv_dir}",
         cwd=repo_dir,
         timeout_seconds=300,

@@ -25,8 +25,8 @@ _METRICS: Dict[str, Any] = _new_metrics_state()
 def _reset_metrics_for_tests() -> None:
     """Reset in-process metrics; intended for tests."""
 
-    global _METRICS
-    _METRICS = _new_metrics_state()
+    _METRICS.clear()
+    _METRICS.update(_new_metrics_state())
 
 
 def _record_tool_call(

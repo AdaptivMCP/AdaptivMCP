@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import sys
 import time
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Callable, Dict, Mapping, Optional
 
 import httpx
 
@@ -19,20 +21,22 @@ _concurrency_semaphore = asyncio.Semaphore(config.MAX_CONCURRENCY)
 
 
 def _get_github_token() -> str:
-    raw_token = config.GITHUB_PAT
-    if not raw_token:
-        raise GitHubAuthError(
-            "GitHub token missing. Set GITHUB_PAT or GITHUB_TOKEN in the environment."
-        )
+    raw_token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
+    if raw_token is None:
+        raise GitHubAuthError("GITHUB_PAT or GITHUB_TOKEN must be set")
 
-    if not raw_token.startswith("github_"):
-        if len(raw_token) <= 4 or raw_token[:4].lower() != "ghp_":
-            raise GitHubAuthError("GitHub token missing 'github_' or 'ghp_' prefix")
+    token = raw_token.strip()
+    if not token:
+        raise GitHubAuthError("GITHUB_PAT or GITHUB_TOKEN is empty or whitespace")
 
-    return raw_token
+    return token
 
 
 def _github_client_instance() -> httpx.AsyncClient:
+    override = getattr(sys.modules.get("main"), "_http_client_github", None)
+    if override is not None:
+        return override
+
     global _http_client_github  # pylint: disable=global-statement
     if _http_client_github is None:
         _http_client_github = httpx.AsyncClient(
@@ -53,6 +57,10 @@ def _github_client_instance() -> httpx.AsyncClient:
 
 
 def _external_client_instance() -> httpx.AsyncClient:
+    override = getattr(sys.modules.get("main"), "_http_client_external", None)
+    if override is not None:
+        return override
+
     global _http_client_external  # pylint: disable=global-statement
     if _http_client_external is None:
         _http_client_external = httpx.AsyncClient(
@@ -75,11 +83,14 @@ async def _github_request(
     expect_json: bool = True,
     timeout: Optional[float] = None,
     raw_body: Optional[bytes] = None,
+    client_factory: Optional[Callable[[], Any]] = None,
 ) -> Dict[str, Any]:
     start = time.time()
 
+    client_factory = client_factory or _github_client_instance
+
     try:
-        client = _github_client_instance()
+        client = client_factory()
     except GitHubAuthError as exc:
         _record_github_request(
             status_code=None, duration_ms=int((time.time() - start) * 1000), error=True
@@ -87,19 +98,21 @@ async def _github_request(
         raise
 
     try:
+        request_kwargs: Dict[str, Any] = {
+            "params": params,
+            "json": json_body,
+        }
+        if raw_body is not None:
+            request_kwargs["content"] = raw_body
+        if timeout is not None:
+            request_kwargs["timeout"] = timeout
+
         async with _concurrency_semaphore:
-            resp = await client.request(
-                method,
-                path,
-                params=params,
-                json=json_body,
-                timeout=timeout,
-                content=raw_body,
-            )
+            resp = await client.request(method, path, **request_kwargs)
     except httpx.TimeoutException as exc:  # pragma: no cover - network/slow
         duration_ms = int((time.time() - start) * 1000)
         _record_github_request(status_code=None, duration_ms=duration_ms, error=True, exc=exc)
-        raise GitHubAPIError(f"GitHub {method} {path} timed out: {exc}")
+        raise
     except httpx.HTTPError as exc:  # pragma: no cover - network errors
         duration_ms = int((time.time() - start) * 1000)
         _record_github_request(status_code=None, duration_ms=duration_ms, error=True, exc=exc)
@@ -131,7 +144,33 @@ async def _github_request(
             resp=resp,
             exc=None,
         )
-        raise GitHubRateLimitError("GitHub rate limit exceeded")
+        reset_ts = resp.headers.get("X-RateLimit-Reset")
+        reset_hint = f" Resets at {reset_ts}." if reset_ts else ""
+        raise GitHubRateLimitError(f"GitHub rate limit exceeded.{reset_hint}")
+
+    if resp.status_code == 403 and "authentication" in resp.text.lower():
+        _record_github_request(
+            status_code=resp.status_code,
+            duration_ms=duration_ms,
+            error=True,
+            resp=resp,
+            exc=None,
+        )
+        raise GitHubAuthError("GitHub authentication failed with status 403")
+
+    if resp.status_code == 429:
+        _record_github_request(
+            status_code=resp.status_code,
+            duration_ms=duration_ms,
+            error=True,
+            resp=resp,
+            exc=None,
+        )
+        retry_after = resp.headers.get("Retry-After")
+        hint = f" Retry after {retry_after} seconds." if retry_after else ""
+        raise GitHubRateLimitError(
+            f"GitHub rate limit exceeded for {method} {path}.{hint}"
+        )
 
     if resp.status_code >= 400:
         _record_github_request(

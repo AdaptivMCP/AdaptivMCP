@@ -70,16 +70,17 @@ from github_mcp.github_content import (
     _resolve_file_sha,
     _verify_file_on_branch,
 )
+from github_mcp import http_clients as _http_clients
 from github_mcp.http_clients import (
     _concurrency_semaphore,
     _external_client_instance,
     _get_github_token,
     _github_client_instance,
-    _github_request,
     _http_client_external,
     _http_client_github,
 )
 from github_mcp.metrics import (
+    _METRICS,
     _metrics_snapshot,
     _record_github_request,
     _record_tool_call,
@@ -137,6 +138,11 @@ async def _quiet_send_response(self, request_id, response):
 
 
 mcp_shared_session.BaseSession._send_response = _quiet_send_response
+
+
+async def _github_request(*args, **kwargs):
+    kwargs.setdefault("client_factory", _github_client_instance)
+    return await _http_clients._github_request(*args, **kwargs)
 
 
 def _structured_tool_error(
