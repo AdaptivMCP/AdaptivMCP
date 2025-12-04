@@ -1308,6 +1308,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, running checks, and driving local workflows; do not assume packages are installed in the MCP server process.",
         "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
         "Treat run_command as the way to run any project-specific or shell-level commands you would normally ask a human (or yourself) to run locally (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics), with no extra restrictions beyond the controller's normal write gating and approval.",
+        "Approach tasks like a real developer: gather context from relevant files, usages, and tests before editing, and reference concrete modules, identifiers, and line numbers when summarizing findings or planning changes.",
         "Remember that only the assistant drives tool calls: do not ask humans to type commands, add blank lines, or re-run failed steps manually. Use diff-first tools and workspace helpers to handle quoting, newlines, and retries yourself.",
         "Run repo-defined linters and formatters (especially autofix variants) before proposing commits or PRs so style or syntax issues are caught early instead of left for humans to debug.",
         "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
@@ -1337,6 +1338,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
     controller_prompt_expectations = [
         "Remind assistants to respect branch defaults, keep writes gated until authorized, and use the persistent workspace tools (run_command, run_tests, commit_workspace, commit_workspace_files) as the standard execution surface.",
         "Keep safety, truncation, and large-file guidance visible so the controller prompt steers assistants toward slice-and-diff workflows instead of large payload retries.",
+        "Coach assistants to anchor their reasoning in concrete repo context: point them to the files, functions, and tests they should inspect, and ask for summaries with paths and line references instead of vague statements.",
     ]
 
     server_expectations = [
