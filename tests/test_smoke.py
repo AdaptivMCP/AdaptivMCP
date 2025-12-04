@@ -50,7 +50,7 @@ async def test_end_to_end_small_doc_edit_and_test_run():
 
     # 4) Build a unified diff for the change.
     diff_result = await main.build_unified_diff(
-        original_text, new_text, fromfile=target_path, tofile=target_path
+        full_name=full_name, path=target_path, new_content=new_text, ref=base_ref
     )
 
     assert 'diff' in diff_result
