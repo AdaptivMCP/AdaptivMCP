@@ -1307,7 +1307,8 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
     assistant_expectations = [
         "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, running checks, and driving local workflows; do not assume packages are installed in the MCP server process.",
         "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
-        "Treat run_command as the way to run any project-specific or shell-level commands you would normally ask a human (or yourself) to run locally (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics), with no extra restrictions beyond the controller's normal write gating and approval.",
+        "Treat run_command as your keyboard on a dedicated development machine: run project-specific or shell-level commands (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics) there instead of inventing inline workarounds.",
+        "Discourage token-heavy inline calls for data gathering or editing; prefer targeted run_command queries, slices, and diffs so outputs stay concise.",
         "Approach tasks like a real developer: gather context from relevant files, usages, and tests before editing, and reference concrete modules, identifiers, and line numbers when summarizing findings or planning changes.",
         "Remember that only the assistant drives tool calls: do not ask humans to type commands, add blank lines, or re-run failed steps manually. Use diff-first tools and workspace helpers to handle quoting, newlines, and retries yourself.",
         "Run repo-defined linters and formatters (especially autofix variants) before proposing commits or PRs so style or syntax issues are caught early instead of left for humans to debug.",
@@ -1371,9 +1372,10 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
 
     editing_preferences = {
         "summary": (
-            "Use diff-first tools for file changes; avoid large inline scripts in "
-            "run_command. run_command is primarily for tests, linters, and small "
-            "diagnostic commands."
+            "Use diff-first tools for file changes and treat run_command as your "
+            "interactive terminal for quick checks. Avoid token-heavy inline "
+            "payloads or heredocs when a focused command, slice, or diff keeps "
+            "context tight."
         ),
         "recommended_tools": [
             "build_unified_diff",

@@ -6,7 +6,7 @@
 
 > Self-hosted GitHub MCP server that lets ChatGPT act as a safe, policy-driven engineer on your repositories.
 
-Adaptiv Controller uses this server to talk to GitHub. You deploy it yourself (for example on Render.com), provide your own GitHub token, and connect it to ChatGPT as an MCP server. The server publishes a versioned controller contract via the `controller_contract` tool; controllers should read that contract instead of hard-coding assumptions or duplicating it in prompts.
+Adaptiv Controller uses this server to talk to GitHub. You deploy it yourself (for example on Render.com), provide your own GitHub token, and connect it to ChatGPT as an MCP server. The server publishes a versioned controller contract via the `controller_contract` tool; controllers should read that contract instead of hard-coding assumptions or duplicating it in prompts. Assistants are expected to treat this controller like their own development machine—lean on `run_command`/`run_tests` for execution, quick searches, and usage checks, and avoid token-heavy inline detours when a concise command, slice, or diff keeps context tight.
 
 Adaptiv Controller (for example "Joey's GitHub") lives entirely on the ChatGPT side as a custom assistant and workflow layer. This repository is the backend GitHub connector that controller instances use.
 
