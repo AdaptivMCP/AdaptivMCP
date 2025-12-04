@@ -19,7 +19,9 @@ async def test_end_to_end_small_doc_edit_and_test_run():
     '''
 
     # 1) Discover a small docs file via list_repository_tree.
-    defaults = await main.get_repo_defaults('Proofgate-Revocations/chatgpt-mcp-github')
+    # get_repo_defaults returns a wrapper object with a nested 'defaults' field.
+    defaults_result = await main.get_repo_defaults('Proofgate-Revocations/chatgpt-mcp-github')
+    defaults = defaults_result['defaults']
     full_name = defaults['full_name']
     base_ref = defaults['default_branch']
 
