@@ -104,7 +104,7 @@ from github_mcp.workspace import (
 )
 
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
-COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", False)
+COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", True)
 
 CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
