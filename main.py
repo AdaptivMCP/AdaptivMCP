@@ -1526,6 +1526,26 @@ def list_all_actions(
 
 
 @mcp_tool(write_action=False)
+async def describe_tool(name: str, include_parameters: bool = True) -> Dict[str, Any]:
+    """Return metadata and optional schema for a single tool.
+
+    This is a convenience wrapper around list_all_actions: it lets callers
+    inspect one tool by name without scanning the entire tool catalog.
+
+    Args:
+        name: The MCP tool name (for example, \"update_files_and_open_pr\").
+        include_parameters: When True, include the serialized input schema for
+            this tool (equivalent to list_all_actions(include_parameters=True)).
+    """
+
+    catalog = list_all_actions(include_parameters=include_parameters, compact=False)
+    for entry in catalog.get("tools", []):
+        if entry.get("name") == name:
+            return entry
+
+    raise ValueError(f"Unknown tool name: {name}")
+
+@mcp_tool(write_action=False)
 async def validate_tool_args(tool_name: str, args: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """Validate a candidate payload against a tool's input schema without running it."""
 
