@@ -7,213 +7,100 @@ being pushed toward a particular working style. See ``docs/WORKFLOWS.md`` and ``
 for optional, non-binding examples of how the tools can fit together.
 """
 
-import os
-import re
 import asyncio
 import base64
-import tempfile
-import shutil
-import uuid
-import io
-import zipfile
 import difflib
-import sys
-import logging
-import time
+import io
 import json
 import jsonschema
+import os
+import re
 import shlex
+import shutil
+import sys
+import tempfile
+import time
+import uuid
+import zipfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional
 
 import httpx
 from anyio import ClosedResourceError
-from mcp.types import ToolAnnotations
 from fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
-# Configuration and globals
-# ------------------------------------------------------------------------------
 
-GITHUB_PAT = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
-
-GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
-
-# Base directory for persistent workspaces used by run_command and related tools.
-# This keeps cloned repositories stable across tool invocations so installations
-# and edits survive until explicitly reset or deleted.
-WORKSPACE_BASE_DIR = os.environ.get(
-    "MCP_WORKSPACE_BASE_DIR",
-    os.path.join(tempfile.gettempdir(), "mcp-github-workspaces"),
+from github_mcp.config import (
+    BASE_LOGGER,
+    FETCH_FILES_CONCURRENCY,
+    GIT_AUTHOR_EMAIL,
+    GIT_AUTHOR_NAME,
+    GIT_COMMITTER_EMAIL,
+    GIT_COMMITTER_NAME,
+    GITHUB_API_BASE,
+    GITHUB_LOGGER,
+    GITHUB_PAT,
+    HTTPX_MAX_CONNECTIONS,
+    HTTPX_MAX_KEEPALIVE,
+    HTTPX_TIMEOUT,
+    MAX_CONCURRENCY,
+    RUN_COMMAND_MAX_CHARS,
+    SERVER_START_TIME,
+    TOOLS_LOGGER,
+    TOOL_STDERR_MAX_CHARS,
+    TOOL_STDIO_COMBINED_MAX_CHARS,
+    TOOL_STDOUT_MAX_CHARS,
+    WORKSPACE_BASE_DIR,
 )
-
-HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", 150))
-HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", 300))
-HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", 200))
-
-MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 80))
-FETCH_FILES_CONCURRENCY = int(
-    os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY)
+from github_mcp.exceptions import (
+    GitHubAPIError,
+    GitHubAuthError,
+    GitHubRateLimitError,
+    WriteNotAuthorizedError,
 )
-
-GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
-
-# Upper bounds for tool stdout/stderr payloads returned to the connector. These
-# can be tuned via environment variables; set to 0 or a negative value to disable
-# truncation if a deployment prefers full logs at the cost of larger responses.
-TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
-TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "6000"))
-TOOL_STDIO_COMBINED_MAX_CHARS = int(
-    os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "18000")
+from github_mcp.github_content import (
+    _decode_github_content,
+    _get_branch_sha,
+    _load_body_from_content_url,
+    _perform_github_commit,
+    _resolve_file_sha,
+    _verify_file_on_branch,
 )
-# Soft limit for run_command.command length to discourage huge inline scripts.
-RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "8000"))
-GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
-GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
-GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
-
-
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-LOG_FORMAT = os.environ.get(
-    "LOG_FORMAT",
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+from github_mcp.http_clients import (
+    _concurrency_semaphore,
+    _external_client_instance,
+    _get_github_token,
+    _github_client_instance,
+    _github_request,
+    _http_client_external,
+    _http_client_github,
 )
-
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format=LOG_FORMAT,
+from github_mcp.metrics import (
+    _metrics_snapshot,
+    _record_github_request,
+    _record_tool_call,
+    _reset_metrics_for_tests,
 )
-
-BASE_LOGGER = logging.getLogger("github_mcp")
-GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
-TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
-SERVER_START_TIME = time.time()
-
-
-def _new_metrics_state() -> Dict[str, Any]:
-    return {
-        "tools": {},
-        "github": {
-            "requests_total": 0,
-            "errors_total": 0,
-            "rate_limit_events_total": 0,
-            "timeouts_total": 0,
-        },
-    }
-
-
-_METRICS: Dict[str, Any] = _new_metrics_state()
-
-
-def _reset_metrics_for_tests() -> None:
-    """Reset in-process metrics; intended for tests."""
-
-    global _METRICS
-    _METRICS = _new_metrics_state()
-
-
-def _record_tool_call(
-    tool_name: str,
-    *,
-    write_action: bool,
-    duration_ms: int,
-    errored: bool,
-) -> None:
-    tools_bucket = _METRICS.setdefault("tools", {})
-    bucket = tools_bucket.setdefault(
-        tool_name,
-        {
-            "calls_total": 0,
-            "errors_total": 0,
-            "write_calls_total": 0,
-            "latency_ms_sum": 0,
-        },
-    )
-    bucket["calls_total"] += 1
-    if write_action:
-        bucket["write_calls_total"] += 1
-    bucket["latency_ms_sum"] += max(0, int(duration_ms))
-    if errored:
-        bucket["errors_total"] += 1
-
-
-def _record_github_request(
-    *,
-    status_code: Optional[int],
-    duration_ms: int,
-    error: bool,
-    resp: Optional[httpx.Response] = None,
-    exc: Optional[BaseException] = None,
-) -> None:
-    github_bucket = _METRICS.setdefault("github", {})
-    github_bucket["requests_total"] = github_bucket.get("requests_total", 0) + 1
-    if error:
-        github_bucket["errors_total"] = github_bucket.get("errors_total", 0) + 1
-
-    if resp is not None:
-        remaining = resp.headers.get("X-RateLimit-Remaining")
-        incremented = False
-        if remaining is not None:
-            try:
-                if int(remaining) <= 0:
-                    github_bucket["rate_limit_events_total"] = github_bucket.get(
-                        "rate_limit_events_total", 0
-                    ) + 1
-                    incremented = True
-            except ValueError:
-                pass
-
-        if resp.status_code == 429 and not incremented:
-            github_bucket["rate_limit_events_total"] = github_bucket.get(
-                "rate_limit_events_total", 0
-            ) + 1
-
-    if exc is not None and isinstance(exc, httpx.TimeoutException):
-        github_bucket["timeouts_total"] = github_bucket.get(
-            "timeouts_total", 0
-        ) + 1
-
-
-
-
-def _metrics_snapshot() -> Dict[str, Any]:
-    """Return a shallow, JSON-safe snapshot of in-process metrics.
-
-    The metrics registry is intentionally small and numeric, but this helper
-    defensively normalizes missing buckets and coerces values to ``int`` where
-    possible so that the health payload remains stable even if future fields are
-    added.
-    """
-
-    tools = _METRICS.get("tools", {})
-    github = _METRICS.get("github", {})
-
-    def _as_int(value: Any, default: int = 0) -> int:
-        try:
-            return int(value)
-        except Exception:  # pragma: no cover - defensive
-            return default
-
-    return {
-        "tools": tools,
-        "github": {k: _as_int(v) for k, v in github.items()},
-    }
-def _env_flag(name: str, default: bool = False) -> bool:
-    """Parse a boolean-like environment variable.
-
-    Accepts common truthy strings (``1``, ``true``, ``yes``, ``on``) in a
-    case-insensitive way and falls back to ``default`` when the variable is
-    unset. This keeps write gating predictable even when deployers set
-    ``GITHUB_MCP_AUTO_APPROVE`` to values other than ``1``.
-    """
-
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
-
+from github_mcp.utils import (
+    REPO_DEFAULTS,
+    _decode_zipped_job_logs,
+    _effective_ref_for_repo,
+    _env_flag,
+    _render_visible_whitespace,
+    _with_numbered_lines,
+    normalize_args,
+)
+from github_mcp.workspace import (
+    _apply_patch_to_repo,
+    _clone_repo,
+    _prepare_temp_virtualenv,
+    _run_shell,
+    _workspace_path,
+)
 
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", False)
@@ -230,102 +117,6 @@ CONTROLLER_CONTRACT_VERSION = os.environ.get(
 CONTROLLER_DEFAULT_BRANCH = os.environ.get(
     "GITHUB_MCP_CONTROLLER_BRANCH", "main"
 )
-
-
-def _effective_ref_for_repo(full_name: str, ref: Optional[str]) -> str:
-    """Resolve the effective Git ref for a repository."""
-
-    if full_name == CONTROLLER_REPO:
-        if not ref or ref == "main":
-            return CONTROLLER_DEFAULT_BRANCH
-        return ref
-    return ref or "main"
-
-
-def _with_numbered_lines(text: str) -> List[Dict[str, Any]]:
-    """Return a list of dicts pairing 1-based line numbers with text."""
-
-    return [{"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)]
-
-
-def _render_visible_whitespace(text: str) -> str:
-    """Surface whitespace characters for assistants that hide them by default."""
-
-    rendered_lines: List[str] = []
-    for line in text.splitlines(keepends=True):
-        body = line[:-1] if line.endswith("\n") else line
-        body = body.replace("\t", "→\t").replace(" ", "·")
-        newline_marker = "⏎" if line.endswith("\n") else "␄"
-        rendered_lines.append(f"{body}{newline_marker}")
-
-    return "\n".join(rendered_lines)
-
-
-def normalize_args(raw_args: Any) -> Dict[str, Any]:
-    """Normalize tool args to a JSON-friendly mapping.
-
-    Controllers should pass structured (Python) args dictionaries all the way
-    through without double-parsing JSON strings. This helper keeps a narrow
-    compatibility path for callers that still provide JSON text while treating
-    arbitrary strings as a type error so free-form fields (like shell commands)
-    stay inside the args mapping rather than becoming the mapping itself.
-    """
-
-    if raw_args is None:
-        return {}
-
-    if isinstance(raw_args, Mapping):
-        return dict(raw_args)
-
-    if isinstance(raw_args, str):
-        stripped = raw_args.lstrip()
-
-        if stripped.startswith("{") or stripped.startswith("["):
-            try:
-                parsed = json.loads(raw_args)
-            except json.JSONDecodeError as exc:
-                raise ValueError(
-                    f"args must be a valid JSON object/array: {exc}"
-                ) from exc
-
-            if not isinstance(parsed, Mapping):
-                raise TypeError(
-                    f"args JSON must decode to an object, got {type(parsed).__name__}"
-                )
-
-            return dict(parsed)
-
-        raise TypeError(
-            "Adaptiv tools must receive args as a structured object (prefer a Python dict). "
-            "If a tool needs a free-form string, place it inside the args mapping "
-            "as a field instead of passing the string as the entire args payload. "
-            "JSON text is supported only as a compatibility path when it decodes to an object."
-        )
-
-    raise TypeError(f"Unsupported args type: {type(raw_args).__name__}")
-
-
-def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
-    """Extract and concatenate text files from a zipped job log archive."""
-
-    try:
-        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zip_file:
-            parts: List[str] = []
-            for name in sorted(
-                entry
-                for entry in zip_file.namelist()
-                if not entry.endswith("/")
-            ):
-                with zip_file.open(name) as handle:
-                    content = handle.read().decode("utf-8", errors="replace")
-                parts.append(f"[{name}]\n{content}".rstrip())
-            return "\n\n".join(parts)
-    except Exception:
-        return ""
-
-_http_client_github: Optional[httpx.AsyncClient] = None
-_http_client_external: Optional[httpx.AsyncClient] = None
-_concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
 
 # json_response is configured per transport; do not pass it here.
 mcp = FastMCP("GitHub Fast MCP")
@@ -346,714 +137,6 @@ async def _quiet_send_response(self, request_id, response):
 
 
 mcp_shared_session.BaseSession._send_response = _quiet_send_response
-
-
-# ------------------------------------------------------------------------------
-# Exceptions
-# ------------------------------------------------------------------------------
-
-
-class GitHubAuthError(Exception):
-    pass
-
-
-class GitHubAPIError(Exception):
-    pass
-
-
-class GitHubRateLimitError(GitHubAPIError):
-    """Raised when GitHub responds with a rate limit error."""
-
-    pass
-
-
-class WriteNotAuthorizedError(Exception):
-    pass
-
-
-# ------------------------------------------------------------------------------
-# HTTP client helpers
-# ------------------------------------------------------------------------------
-
-
-def _get_github_token() -> str:
-    raw_token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
-    if raw_token is None:
-        raise GitHubAuthError("GITHUB_PAT or GITHUB_TOKEN must be set")
-
-    token = raw_token.strip()
-    if not token:
-        raise GitHubAuthError("GITHUB_PAT or GITHUB_TOKEN is empty or whitespace")
-
-    # Preserve the original value in the environment to avoid surprising callers
-    # while ensuring outbound requests use the cleaned token.
-    return token
-
-
-def _github_client_instance() -> httpx.AsyncClient:
-    global _http_client_github
-    if _http_client_github is None:
-        token = _get_github_token()
-        _http_client_github = httpx.AsyncClient(
-            base_url=GITHUB_API_BASE,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "chatgpt-mcp-github",
-            },
-            timeout=HTTPX_TIMEOUT,
-            limits=httpx.Limits(
-                max_connections=HTTPX_MAX_CONNECTIONS,
-                max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
-            ),
-            http2=bool(int(os.environ.get("HTTPX_HTTP2", "1"))),
-        )
-    return _http_client_github
-
-
-def _external_client_instance() -> httpx.AsyncClient:
-    global _http_client_external
-    if _http_client_external is None:
-        _http_client_external = httpx.AsyncClient(
-            timeout=HTTPX_TIMEOUT,
-            limits=httpx.Limits(
-                max_connections=HTTPX_MAX_CONNECTIONS,
-                max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
-            ),
-            http2=bool(int(os.environ.get("HTTPX_HTTP2", "1"))),
-        )
-    return _http_client_external
-
-
-async def _github_request(
-    method: str,
-    path: str,
-    *,
-    params: Optional[Dict[str, Any]] = None,
-    json_body: Optional[Dict[str, Any]] = None,
-    headers: Optional[Dict[str, str]] = None,
-    expect_json: bool = True,
-    text_max_chars: Optional[int] = None,
-) -> Dict[str, Any]:
-    client = _github_client_instance()
-    started_at = time.monotonic()
-    try:
-        async with _concurrency_semaphore:
-            resp = await client.request(
-                method, path, params=params, json=json_body, headers=headers
-            )
-    except Exception as exc:  # pragma: no cover - defensive
-        duration_ms = int((time.monotonic() - started_at) * 1000)
-        _record_github_request(
-            status_code=None,
-            duration_ms=duration_ms,
-            error=True,
-            resp=None,
-            exc=exc,
-        )
-        GITHUB_LOGGER.error(
-            "github_request_error",
-            extra={
-                "event": "github_request",
-                "method": method,
-                "path": path,
-                "status_code": None,
-                "duration_ms": duration_ms,
-                "error": type(exc).__name__,
-            },
-            exc_info=True,
-        )
-        raise
-
-    duration_ms = int((time.monotonic() - started_at) * 1000)
-    base_payload = {
-        "event": "github_request",
-        "method": method,
-        "path": path,
-        "status_code": resp.status_code,
-        "duration_ms": duration_ms,
-        "rate_limit": {
-            "limit": resp.headers.get("X-RateLimit-Limit"),
-            "remaining": resp.headers.get("X-RateLimit-Remaining"),
-            "reset": resp.headers.get("X-RateLimit-Reset"),
-        },
-    }
-
-    if resp.status_code >= 400:
-        try:
-            data = resp.json()
-        except Exception:
-            data = None
-        message = data.get("message") if isinstance(data, dict) else None
-        error_payload = dict(base_payload)
-        error_payload["error"] = "http_error"
-        # Truncate to avoid huge log records on large error bodies.
-        error_payload["error_message"] = (message or resp.text[:500])
-
-        _record_github_request(
-            status_code=resp.status_code,
-            duration_ms=duration_ms,
-            error=True,
-            resp=resp,
-            exc=None,
-        )
-
-        def _is_rate_limit_error(status_code: int) -> bool:
-            msg = (message or resp.text or "").lower()
-            if "rate limit" in msg:
-                return True
-            if status_code == 429:
-                return True
-            remaining = resp.headers.get("X-RateLimit-Remaining")
-            return remaining is not None and remaining == "0"
-
-        def _parse_rate_limit_reset() -> tuple[Optional[str], Optional[int]]:
-            reset_ts = resp.headers.get("X-RateLimit-Reset")
-            reset_iso = None
-            if reset_ts and reset_ts.isdigit():
-                reset_iso = datetime.fromtimestamp(int(reset_ts), tz=timezone.utc).isoformat()
-
-            retry_after_seconds = None
-            retry_after = resp.headers.get("Retry-After")
-            if retry_after and retry_after.strip().isdigit():
-                try:
-                    retry_after_seconds = int(retry_after.strip())
-                except ValueError:
-                    retry_after_seconds = None
-
-            return reset_iso, retry_after_seconds
-
-        if resp.status_code in {401, 403, 429}:
-            reset_iso, retry_after_seconds = _parse_rate_limit_reset()
-
-            if resp.status_code in {403, 429} and _is_rate_limit_error(resp.status_code):
-                error_payload["error"] = "github_rate_limit"
-                error_payload["rate_limit_reset"] = reset_iso
-                if retry_after_seconds is not None:
-                    error_payload["retry_after_seconds"] = retry_after_seconds
-                GITHUB_LOGGER.warning("github_rate_limit", extra=error_payload)
-                hints: List[str] = []
-                if reset_iso:
-                    hints.append(f"Rate limit resets at {reset_iso}.")
-                if retry_after_seconds is not None:
-                    hints.append(f"Retry after {retry_after_seconds} seconds.")
-                hint_text = " ".join(hints)
-                raise GitHubRateLimitError(
-                    "GitHub API rate limit exceeded "
-                    f"for {method} {path}: {message or resp.text}. {hint_text} "
-                    "Reduce search frequency or wait for the limit to reset."
-                )
-
-            error_payload["error"] = "github_auth_error"
-            GITHUB_LOGGER.warning("github_auth_error", extra=error_payload)
-            raise GitHubAuthError(
-                "GitHub authentication failed "
-                f"({resp.status_code}) for {method} {path}: "
-                f"{message or resp.text} -- ensure GITHUB_PAT or GITHUB_TOKEN is set "
-                "with the necessary scopes for search and repository access"
-            )
-
-        GITHUB_LOGGER.warning("github_request_error", extra=error_payload)
-        raise GitHubAPIError(
-            f"GitHub API error {resp.status_code} for {method} {path}: "
-            f"{message or resp.text}"
-        )
-
-    _record_github_request(
-        status_code=resp.status_code,
-        duration_ms=duration_ms,
-        error=False,
-        resp=resp,
-        exc=None,
-    )
-    GITHUB_LOGGER.info("github_request", extra=base_payload)
-
-    if expect_json:
-        try:
-            return {"status_code": resp.status_code, "json": resp.json()}
-        except Exception:
-            return {"status_code": resp.status_code, "json": None}
-
-    text = resp.text if text_max_chars is None else resp.text[:text_max_chars]
-    return {
-        "status_code": resp.status_code,
-        "text": text,
-        "headers": dict(resp.headers),
-    }
-
-
-# ------------------------------------------------------------------------------
-# GitHub helpers
-# ------------------------------------------------------------------------------
-
-async def _verify_file_on_branch(
-    full_name: str,
-    path: str,
-    branch: str,
-) -> Dict[str, Any]:
-    """Verify that a file exists on a specific branch after a write.
-
-    This helper is used by higher-level orchestration tools to insert an
-    explicit verification step between committing changes and opening a PR.
-
-    Returns a small JSON-friendly payload summarizing the verification result.
-    Raises GitHubAPIError if the file cannot be fetched.
-    """
-    try:
-        decoded = await _decode_github_content(full_name, path, branch)
-    except Exception as exc:  # pragma: no cover - defensive
-        raise GitHubAPIError(
-            f"Post-commit verification failed for {full_name}/{path}@{branch}: {exc}"
-        ) from exc
-
-    text = decoded.get("text", "")
-    return {
-        "full_name": full_name,
-        "path": path,
-        "branch": branch,
-        "verified": True,
-        "size": len(text) if isinstance(text, str) else None,
-    }
-
-
-async def _decode_github_content(
-    full_name: str,
-    path: str,
-    ref: Optional[str] = None,
-) -> Dict[str, Any]:
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    try:
-        data = await _github_request(
-            "GET",
-            f"/repos/{full_name}/contents/{path}",
-            params={"ref": effective_ref},
-        )
-    except GitHubAPIError as exc:
-        raise GitHubAPIError(
-            f"Failed to fetch {full_name}/{path} at ref '{effective_ref}': {exc}"
-        ) from exc
-    if not isinstance(data.get("json"), dict):
-        raise GitHubAPIError("Unexpected content response shape from GitHub")
-
-    j = data["json"]
-    content = j.get("content")
-    encoding = j.get("encoding")
-    if encoding == "base64" and isinstance(content, str):
-        try:
-            decoded_bytes = base64.b64decode(content)
-            text = decoded_bytes.decode("utf-8", errors="replace")
-        except Exception as e:
-            raise GitHubAPIError(f"Failed to decode file content: {e}")
-    else:
-        text = ""
-
-    return {
-        "status": data["status_code"],
-        "text": text,
-        "numbered_lines": _with_numbered_lines(text),
-        "sha": j.get("sha"),
-        "path": j.get("path"),
-        "html_url": j.get("html_url"),
-    }
-
-
-async def _get_branch_sha(full_name: str, ref: str) -> str:
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    data = await _github_request(
-        "GET", f"/repos/{full_name}/git/ref/heads/{effective_ref}"
-    )
-    j = data["json"]
-    if not isinstance(j, dict) or "object" not in j:
-        raise GitHubAPIError("Unexpected branch ref response from GitHub")
-    return j["object"]["sha"]
-
-
-async def _resolve_file_sha(full_name: str, path: str, branch: str) -> Optional[str]:
-    try:
-        decoded = await _decode_github_content(full_name, path, branch)
-        return decoded.get("sha")
-    except GitHubAPIError:
-        return None
-
-
-async def _perform_github_commit(
-    full_name: str,
-    path: str,
-    message: str,
-    body_bytes: bytes,
-    branch: str,
-    sha: Optional[str],
-) -> Dict[str, Any]:
-    b64_content = base64.b64encode(body_bytes).decode("ascii")
-    payload: Dict[str, Any] = {
-        "message": message,
-        "content": b64_content,
-        "branch": branch,
-    }
-    if sha:
-        payload["sha"] = sha
-
-    result = await _github_request(
-        "PUT",
-        f"/repos/{full_name}/contents/{path}",
-        json_body=payload,
-    )
-    return result
-
-
-async def _load_body_from_content_url(content_url: str, *, context: str) -> bytes:
-    """Read bytes from a sandbox path, absolute path, or HTTP(S) URL.
-
-    Args:
-        content_url: The location of the content to load. Supported formats:
-            - ``sandbox:/path`` (preferred when running inside ChatGPT)
-            - Absolute file paths (e.g. ``/mnt/data/file``)
-            - ``http(s)`` URLs
-        context: Name of the calling tool for error messaging.
-
-    Raises:
-        ValueError: If the URL is empty.
-        GitHubAPIError: If the path cannot be read or the HTTP request fails.
-    """
-
-    if not isinstance(content_url, str) or not content_url.strip():
-        raise ValueError("content_url must be a non-empty string when provided")
-
-    content_url = content_url.strip()
-
-    def _read_local(local_path: str, missing_hint: str) -> bytes:
-        try:
-            with open(local_path, "rb") as f:
-                return f.read()
-        except FileNotFoundError:
-            raise GitHubAPIError(
-                f"{context} content_url path not found at {local_path}. {missing_hint}"
-            )
-        except OSError as e:
-            raise GitHubAPIError(
-                f"Failed to read content_url from {local_path}: {e}"
-            )
-
-    async def _fetch_rewritten_path(local_path: str, *, base_url: str) -> bytes:
-        rewritten_url = base_url.rstrip("/") + "/" + local_path.lstrip("/")
-        client = _external_client_instance()
-        response = await client.get(rewritten_url)
-        if response.status_code >= 400:
-            snippet = response.text[:500]
-            raise GitHubAPIError(
-                f"Failed to fetch content from rewritten sandbox URL "
-                f"{rewritten_url}: {response.status_code}. Response: {snippet}"
-            )
-        return response.content
-
-    sandbox_hint = (
-        "If you are running inside ChatGPT, ensure the file exists in the sandbox "
-        "and pass the full sandbox:/ path so the host can rewrite it to an "
-        "accessible URL."
-    )
-
-    def _is_windows_absolute_path(path: str) -> bool:
-        # Match drive-letter paths like ``C:\foo`` or UNC paths like ``\\server``
-        return bool(
-            re.match(r"^[a-zA-Z]:[\\/].*", path)
-            or path.startswith("\\\\")
-        )
-
-    # sandbox:/path → local path or optional rewrite via SANDBOX_CONTENT_BASE_URL
-    if content_url.startswith("sandbox:"):
-        local_path = content_url[len("sandbox:") :]
-        rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
-        try:
-            return _read_local(local_path, sandbox_hint)
-        except GitHubAPIError:
-            if rewrite_base and (
-                rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
-            ):
-                return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
-            raise GitHubAPIError(
-                f"{context} content_url path not found at {local_path}. "
-                "Provide an http(s) URL that already points to the sandbox file "
-                "or configure SANDBOX_CONTENT_BASE_URL so the server can fetch it "
-                "when direct filesystem access is unavailable."
-            )
-
-    # Absolute local path (e.g. /mnt/data/file). If the file is missing, we may
-    # still be able to fetch it via a host-provided rewrite base (mirroring the
-    # sandbox:/ behavior) so that callers don't need to know whether the
-    # runtime supports direct filesystem access.
-    if content_url.startswith("/") or _is_windows_absolute_path(content_url):
-        rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
-        missing_hint = (
-            "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
-            "hosts can rewrite it."
-        )
-        try:
-            return _read_local(content_url, missing_hint)
-        except GitHubAPIError:
-            if rewrite_base and (
-                rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
-            ):
-                return await _fetch_rewritten_path(content_url, base_url=rewrite_base)
-            raise GitHubAPIError(
-                f"{context} content_url path not found at {content_url}. "
-                f"{missing_hint} Configure SANDBOX_CONTENT_BASE_URL or provide an "
-                "absolute http(s) URL so the server can fetch the sandbox file when "
-                "it is not mounted locally."
-            )
-
-    # Direct http(s) URL
-    if content_url.startswith("http://") or content_url.startswith("https://"):
-        client = _external_client_instance()
-        response = await client.get(content_url)
-        if response.status_code >= 400:
-            raise GitHubAPIError(
-                f"Failed to fetch content from {content_url}: "
-                f"{response.status_code}"
-            )
-        return response.content
-
-    # Anything else is unsupported
-    raise GitHubAPIError(
-        f"{context} content_url must be an absolute http(s) URL, a sandbox:/ path, "
-        "or an absolute local file path. In ChatGPT, pass the sandbox file path "
-        "(e.g. sandbox:/mnt/data/file) and the host will rewrite it to a real URL "
-        "before it reaches this server."
-    )
-
-
-async def _run_shell(
-    cmd: str,
-    cwd: Optional[str] = None,
-    timeout_seconds: int = 300,
-    env: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
-    """Execute a shell command with author/committer env vars injected.
-
-    Git identity environment variables are injected automatically so Git commits
-    made inside workspace commands are properly attributed. Outputs are returned
-    in full to preserve complete context for downstream tools and assistants.
-    If stdout and stderr would exceed configured limits, they are truncated with
-    explicit flags so clients such as ChatGPT do not drop oversized payloads.
-    """
-
-    shell_executable = os.environ.get("SHELL")
-    if os.name == "nt":
-        # Prefer bash when available (e.g., Git Bash) so multi-line commands and
-        # POSIX features like heredocs behave consistently across platforms.
-        shell_executable = shell_executable or shutil.which("bash")
-
-    proc_env = {
-        **os.environ,
-        "GIT_AUTHOR_NAME": GIT_AUTHOR_NAME,
-        "GIT_AUTHOR_EMAIL": GIT_AUTHOR_EMAIL,
-        "GIT_COMMITTER_NAME": GIT_COMMITTER_NAME,
-        "GIT_COMMITTER_EMAIL": GIT_COMMITTER_EMAIL,
-    }
-    if env is not None:
-        proc_env.update(env)
-
-    proc = await asyncio.create_subprocess_shell(
-        cmd,
-        cwd=cwd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        executable=shell_executable,
-        env=proc_env,
-    )
-    try:
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout_seconds
-        )
-        timed_out = False
-    except asyncio.TimeoutError:
-        proc.kill()
-        stdout_bytes, stderr_bytes = await proc.communicate()
-        timed_out = True
-
-    raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
-    raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
-    stdout = raw_stdout
-    stderr = raw_stderr
-    stdout_truncated = False
-    stderr_truncated = False
-
-    if (
-        TOOL_STDOUT_MAX_CHARS
-        and TOOL_STDOUT_MAX_CHARS > 0
-        and len(stdout) > TOOL_STDOUT_MAX_CHARS
-    ):
-        stdout = stdout[:TOOL_STDOUT_MAX_CHARS]
-        stdout_truncated = True
-
-    if (
-        TOOL_STDERR_MAX_CHARS
-        and TOOL_STDERR_MAX_CHARS > 0
-        and len(stderr) > TOOL_STDERR_MAX_CHARS
-    ):
-        stderr = stderr[:TOOL_STDERR_MAX_CHARS]
-        stderr_truncated = True
-
-    if (
-        TOOL_STDIO_COMBINED_MAX_CHARS
-        and TOOL_STDIO_COMBINED_MAX_CHARS > 0
-        and len(stdout) + len(stderr) > TOOL_STDIO_COMBINED_MAX_CHARS
-    ):
-        allowed_stdout = max(0, TOOL_STDIO_COMBINED_MAX_CHARS - len(stderr))
-        if len(stdout) > allowed_stdout:
-            stdout = stdout[:allowed_stdout]
-            stdout_truncated = True
-
-        if len(stdout) + len(stderr) > TOOL_STDIO_COMBINED_MAX_CHARS:
-            allowed_stderr = max(0, TOOL_STDIO_COMBINED_MAX_CHARS - len(stdout))
-            if len(stderr) > allowed_stderr:
-                stderr = stderr[:allowed_stderr]
-                stderr_truncated = True
-
-    return {
-        "exit_code": proc.returncode,
-        "timed_out": timed_out,
-        "stdout": stdout,
-        "stderr": stderr,
-        "stdout_truncated": stdout_truncated,
-        "stderr_truncated": stderr_truncated,
-    }
-def _workspace_path(full_name: str, ref: str) -> str:
-    repo_key = full_name.replace("/", "__")
-    ref_key = ref.replace("/", "__")
-    return os.path.join(WORKSPACE_BASE_DIR, repo_key, ref_key)
-
-
-async def _clone_repo(
-    full_name: str, ref: Optional[str] = None, *, preserve_changes: bool = False
-) -> str:
-    """Clone or return a persistent workspace for ``full_name``/``ref``.
-
-    When ``preserve_changes`` is True, the workspace is returned without wiping
-    local edits so callers like ``run_command`` and ``commit_workspace`` can
-    share state. When False (the previous behavior), the workspace is refreshed
-    to the remote ref to avoid stale state.
-    """
-
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    workspace_dir = _workspace_path(full_name, effective_ref)
-    os.makedirs(os.path.dirname(workspace_dir), exist_ok=True)
-
-    if os.path.isdir(os.path.join(workspace_dir, ".git")):
-        if preserve_changes:
-            # Optionally fetch to keep remotes up to date without disturbing
-            # local modifications.
-            fetch_result = await _run_shell(
-                "git fetch origin --prune",
-                cwd=workspace_dir,
-                timeout_seconds=300,
-            )
-            if fetch_result["exit_code"] != 0:
-                stderr = fetch_result.get("stderr", "") or fetch_result.get(
-                    "stdout", ""
-                )
-                raise GitHubAPIError(
-                    f"Workspace fetch failed for {full_name}@{effective_ref}: {stderr}"
-                )
-
-            return workspace_dir
-
-        # Refresh the existing checkout so stale, uncommitted changes do not
-        # leak between runs. Assistants frequently forget to reset the
-        # persistent workspace, which causes tests to pass locally but fail on
-        # GitHub because the remote branch does not include those stray
-        # changes.
-        refresh_steps = [
-            ("git fetch origin --prune", 300),
-            (f"git reset --hard origin/{effective_ref}", 120),
-            (
-                "git clean -fdx --exclude .venv-mcp",
-                120,
-            ),
-        ]
-
-        for cmd, timeout in refresh_steps:
-            result = await _run_shell(cmd, cwd=workspace_dir, timeout_seconds=timeout)
-            if result["exit_code"] != 0:
-                stderr = result.get("stderr", "") or result.get("stdout", "")
-                raise GitHubAPIError(
-                    f"Workspace refresh failed for {full_name}@{effective_ref}: {stderr}"
-                )
-
-        return workspace_dir
-
-    if os.path.exists(workspace_dir):
-        shutil.rmtree(workspace_dir)
-
-    tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
-    token = _get_github_token()
-
-    url = f"https://x-access-token:{token}@github.com/{full_name}.git"
-    cmd = f"git clone --depth 1 --branch {effective_ref} {url} {tmpdir}"
-    result = await _run_shell(cmd, cwd=None, timeout_seconds=600)
-    if result["exit_code"] != 0:
-        stderr = result.get("stderr", "")
-        raise GitHubAPIError(f"git clone failed: {stderr}")
-
-    shutil.move(tmpdir, workspace_dir)
-    return workspace_dir
-
-
-async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
-    """Create an isolated virtualenv and return env vars that activate it."""
-
-    venv_dir = os.path.join(repo_dir, ".venv-mcp")
-    if os.path.isdir(venv_dir):
-        bin_dir = "Scripts" if os.name == "nt" else "bin"
-        bin_path = os.path.join(venv_dir, bin_dir)
-        return {
-            "VIRTUAL_ENV": venv_dir,
-            "PATH": f"{bin_path}{os.pathsep}" + os.environ.get("PATH", ""),
-        }
-
-    result = await _run_shell(
-        f"{sys.executable} -m venv {venv_dir}",
-        cwd=repo_dir,
-        timeout_seconds=300,
-    )
-    if result["exit_code"] != 0:
-        stderr = result.get("stderr", "") or result.get("stdout", "")
-        raise GitHubAPIError(f"Failed to create temp virtualenv: {stderr}")
-
-    bin_dir = "Scripts" if os.name == "nt" else "bin"
-    bin_path = os.path.join(venv_dir, bin_dir)
-    return {
-        "VIRTUAL_ENV": venv_dir,
-        "PATH": f"{bin_path}{os.pathsep}" + os.environ.get("PATH", ""),
-    }
-
-
-async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
-    """Write a unified diff to disk and apply it with ``git apply``.
-
-    Assistants should pass the current workspace patch into ``run_command`` or
-    ``run_tests`` so the temporary clone mirrors the user's edits. Skipping this
-    step is a common cause of repeated test failures that appear unrelated to
-    the proposed changes because the command would otherwise execute against the
-    untouched remote branch.
-    """
-
-    if not patch or not patch.strip():
-        raise GitHubAPIError("Received empty patch to apply in workspace")
-
-    patch_path = os.path.join(repo_dir, "mcp_patch.diff")
-    with open(patch_path, "w", encoding="utf-8") as f:
-        f.write(patch)
-
-    apply_result = await _run_shell(
-        f"git apply --whitespace=nowarn {patch_path}",
-        cwd=repo_dir,
-        timeout_seconds=60,
-    )
-    if apply_result["exit_code"] != 0:
-        stderr = apply_result.get("stderr", "") or apply_result.get("stdout", "")
-        raise GitHubAPIError(
-            f"git apply failed while preparing workspace: {stderr}"
-        )
 
 
 def _structured_tool_error(
