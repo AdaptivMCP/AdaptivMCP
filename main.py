@@ -1173,7 +1173,12 @@ async def fetch_files(
                 decoded = await _decode_github_content(full_name, p, ref)
                 results[p] = decoded
             except Exception as e:
-                results[p] = {"error": str(e)}
+                # Use a consistent error envelope so controllers can rely on structure.
+                results[p] = _structured_tool_error(
+                    str(e),
+                    context="fetch_files",
+                    path=p,
+                )
 
     await asyncio.gather(*[_fetch_single(p) for p in paths])
     return {"files": results}
@@ -1358,7 +1363,15 @@ async def fetch_url(url: str) -> Dict[str, Any]:
 
     client = _external_client_instance()
     async with _concurrency_semaphore:
-        resp = await client.get(url)
+        try:
+            resp = await client.get(url)
+        except Exception as e:
+            return _structured_tool_error(
+                str(e),
+                context="fetch_url",
+                path=url,
+            )
+
     return {
         "status_code": resp.status_code,
         "headers": dict(resp.headers),
