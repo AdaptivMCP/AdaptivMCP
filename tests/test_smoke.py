@@ -58,15 +58,16 @@ async def test_end_to_end_small_doc_edit_and_test_run():
     assert marker in diff_text
 
     # 5) Apply the edit on a throwaway branch.
+    # 5) Apply the edit on a throwaway branch.
     branch_name = 'tests/long-workflow-smoke-temp'
 
     apply_result = await main.apply_text_update_and_commit(
         full_name=full_name,
-        branch=branch_name,
-        base=base_ref,
         path=target_path,
-        new_text=new_text,
-        commit_message='test: long workflow smoke edit',
+        updated_content=new_text,
+        branch=branch_name,
+        message='test: long workflow smoke edit',
+    )
     )
 
     assert apply_result.get('status') == 'committed'
