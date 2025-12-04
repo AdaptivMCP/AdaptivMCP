@@ -27,8 +27,8 @@ one (in a docs branch, via PR).
    - Expected workflows for assistants.
    - Which tools are intended for discovery, safety, execution, diffs, and large files.
 3. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan to:
-   - Call `authorize_write_actions` before the first write-capable tool.
-   - Use branch-first flows instead of writing to `main` directly.
+   - Call `authorize_write_actions` before using write-capable tools.
+   - Use feature branches instead of writing to `main` directly.
 
 **Validation:**
 - You can see `write_allowed` in `get_server_config` and confirm that write tools are either allowed by default or gated.
@@ -318,7 +318,7 @@ one (in a docs branch, via PR).
 ## 11. General guidance for staying on the happy path
 
 - Prefer repo-scoped search and controller-specific tools over global GitHub searches.
-- Use branch-first workflows for any change to this controller repo.
+- Use feature branches and pull requests for any change to this controller repo.
 - Keep changes small, focused, and backed by tests when behavior changes.
 - Use large-file helpers (`get_file_slice`, `build_section_based_diff`, `build_unified_diff_from_strings`) instead of loading huge files.
 - Use `validate_json_string` and `validate_tool_args` when emitting structured payloads for other tools or controllers.

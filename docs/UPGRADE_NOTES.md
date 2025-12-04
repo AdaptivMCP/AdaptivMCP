@@ -66,7 +66,7 @@ Recommended initial setup:
 
 3. **Verify both services**
    - Use `/healthz` on each service.
-   - From ChatGPT, connect the staging service first and run:
+   - From ChatGPT, connect to the staging service and run:
      - `get_server_config`
      - `list_all_actions`
      - A small `get_file_contents` call against a known repo.
@@ -76,9 +76,9 @@ Working this way from the beginning will make upgrades and rollbacks straightfor
 
 ---
 
-## 4. Upgrading to a new version (staging first)
+## 4. Upgrading to a new version (staging then production)
 
-When you want to upgrade the MCP server (for example after merging new tools or safety improvements), use a **staging-first** flow:
+When you want to upgrade the MCP server (for example after merging new tools or safety improvements), use a staged rollout flow:
 
 1. **Tag or otherwise identify the new version**
    - Create a Git tag (for example `v1.0.1`) at the commit you plan to deploy.

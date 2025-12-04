@@ -26,7 +26,7 @@ At a high level, the system has three layers that are relevant during an inciden
 
 3. **Controller and assistants** (ChatGPT side)
    - Is the controller using `get_server_config`, `validate_environment`, `run_command`, and `run_tests` correctly?
-   - Are prompts configured to follow branch-first, test-first workflows?
+   - Are prompts configured to follow safe branching and testing workflows?
 
 Most incidents can be narrowed down by checking these layers in order: hosting → MCP server → controller/assistant behavior.
 

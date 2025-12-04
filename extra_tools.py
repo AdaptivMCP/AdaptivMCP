@@ -66,7 +66,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         write_action=True,
         description=(
             "Delete a file from a GitHub repository using the Contents API."
-            " Call ensure_branch first if you want to delete on a dedicated branch."
+            " Use ensure_branch if you want to delete on a dedicated branch."
         ),
         tags=["github", "write", "files", "delete"],
     )

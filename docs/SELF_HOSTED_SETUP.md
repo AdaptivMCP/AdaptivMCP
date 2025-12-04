@@ -226,7 +226,7 @@ When you deploy this server, keep the following in mind:
 
 - **Branch defaults**
   - The controller repo uses `_effective_ref_for_repo` to avoid accidental writes to `main`.
-  - For other repos, missing refs default to `main`, but your controller prompt should still encourage branch-first workflows.
+  - For other repos, missing refs default to `main`; adjust your controller prompt to encourage safe branch-based workflows.
 
 - **Verification**
   - Write flows use read-after-write verification and compare SHAs.
