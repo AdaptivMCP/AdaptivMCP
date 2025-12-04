@@ -194,7 +194,14 @@ one (in a docs branch, via PR).
        - `new_text`: new text for that range (may span multiple lines).
    - The server fetches the base file from GitHub, applies the line edits in memory, and commits via the Contents API.
    - Set `include_diff=false` (the default) to keep responses small; set it to `true` only when you explicitly need a diff.
-4. Optionally run tests or linters via `run_tests` or `run_command` if the change affects behavior.
+4. Line-selection checklist to avoid duplicates and misplaced inserts:
+   - Always re-read a slightly larger slice than the exact range you plan to edit (5–10 lines of context before and after) so
+     you can see if the old text needs to be removed rather than appended.
+   - When replacing code, set `start_line`/`end_line` to cover the *existing* lines you are removing; do not add the new text as
+     a separate section unless both ranges must coexist.
+   - For multi-block edits, list the sections in file order and sanity-check that no two ranges overlap or leave the old block
+     intact.
+5. Optionally run tests or linters via `run_tests` or `run_command` if the change affects behavior.
 
 **Validation:**
 - `apply_line_edits_and_commit` returns `status` equal to `committed` with commit metadata.
