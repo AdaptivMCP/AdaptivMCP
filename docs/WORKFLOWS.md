@@ -303,7 +303,7 @@ Workflow:
 Notes:
 
 - This flow demonstrates that:
-  - Branch-first, docs-only changes work end-to-end.
+  - Docs-only changes on a dedicated branch work end-to-end.
   - `ensure_workspace_clone` + `run_command` is sufficient for running the full test suite.
   - `apply_line_edits_and_commit` can be used for low-token, direct-to-GitHub doc updates without rewriting the whole file.
 - The PR associated with this workflow can be referenced as a concrete 1.0 validation artifact.

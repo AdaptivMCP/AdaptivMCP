@@ -210,7 +210,7 @@ one (in a docs branch, via PR).
 
 ---
 
-## 7. Workspace-first flows (local-style editing)
+## 7. Workspace-centered flows (local-style editing)
 
 **Goal:** Use a persistent workspace clone for more complex or iterative work, then commit changes back.
 

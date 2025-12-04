@@ -122,7 +122,7 @@ async def run_command(
         if len(command) > RUN_COMMAND_MAX_CHARS:
             raise ValueError(
                 f"run_command.command is too long ({len(command)} chars); "
-                "use diff-first tools (apply_text_update_and_commit, "
+                "use diff-based tools (apply_text_update_and_commit, "
                 "apply_patch_and_commit, update_file_sections_and_commit) "
                 "for large edits instead of embedding scripts in command."
             )

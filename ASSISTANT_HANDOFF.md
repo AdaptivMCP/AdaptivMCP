@@ -82,7 +82,7 @@ Adaptiv Controller is typically deployed in one of two ways:
 1. A managed platform (for example Render) with an HTTPS URL that controllers like Joeys GitHub connect to from ChatGPT.
 2. A self-hosted Docker deployment using the `Dockerfile`, `docker-compose.yml`, and `.env.example` in this repo (see `docs/SELF_HOSTING_DOCKER.md` and `docs/SELF_HOSTED_SETUP.md`).
 
-In both cases, assistants should treat the MCP server as the engine layer and use the same branch-first, PR-first, `run_command`-heavy workflows described here and in `docs/WORKFLOWS.md`. The main difference is who operates the server and where it runs, not how assistants behave.
+In both cases, assistants should treat the MCP server as the engine layer and use the same branch-and-PR-oriented, `run_command`-heavy workflows described here and in `docs/WORKFLOWS.md`. The main difference is who operates the server and where it runs, not how assistants behave.
 
 ---
 
@@ -99,7 +99,7 @@ Do not ask humans to run commands, paste scripts, or add newlines for you. Handl
 
 When behavior or code changes, add or update tests. Use `run_tests`, or `run_command` with pytest or another test runner, on the relevant feature branch before opening pull requests. Treat test failures as first-class signals and summarize them clearly.
 
-3. Branch first and pull request first
+3. Work on branches and use pull requests
 
 Do not commit directly to the main branch for this repository. Always create or reuse a feature branch from `main`, make your changes there, run tests and linters on that branch, and then open a pull request into `main`. You can use patch-based diffs or full-file updates as appropriate for the change, but keep diffs reviewable and avoid accidentally overwriting large or critical files.
 
@@ -124,7 +124,7 @@ These expectations are snapshots, not substitutes for reading `controller_contra
 - Do NOT use `run_command` as a patch engine (for example with large
   heredoc Python scripts that rewrite files). This is brittle under
   JSON encoding and will fail easily.
-- Routine multi-line edits are normal. Use the diff-first tools to apply
+- Routine multi-line edits are normal. Use diff-based tools to apply
   them directly instead of calling them tricky or bouncing them back to
   humans.
 - For file edits, prefer:
@@ -133,4 +133,4 @@ These expectations are snapshots, not substitutes for reading `controller_contra
   - `build_unified_diff` + `apply_patch_and_commit` when you want explicit diffs.
 - Do NOT embed large multi-line Python/shell scripts in `run_command.command`.
   If your edit involves more than a couple of lines of shell, treat that as
-  a signal to use the diff-first tools instead.
+  a signal to use the diff-based tools instead.

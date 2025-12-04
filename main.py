@@ -913,11 +913,11 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Treat run_command as your keyboard on a dedicated development machine: run project-specific or shell-level commands (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics) there instead of inventing inline workarounds.",
         "Discourage token-heavy inline calls for data gathering or editing; prefer targeted run_command queries, slices, and diffs so outputs stay concise.",
         "Approach tasks like a real developer: gather context from relevant files, usages, and tests before editing, and reference concrete modules, identifiers, and line numbers when summarizing findings or planning changes.",
-        "Remember that only the assistant drives tool calls: do not ask humans to type commands, add blank lines, or re-run failed steps manually. Use diff-first tools and workspace helpers to handle quoting, newlines, and retries yourself.",
+        "Remember that only the assistant drives tool calls: do not ask humans to type commands, add blank lines, or re-run failed steps manually. Use diff-based tools and workspace helpers to handle quoting, newlines, and retries yourself.",
         "Run repo-defined linters and formatters (especially autofix variants) before proposing commits or PRs so style or syntax issues are caught early instead of left for humans to debug.",
         "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
         "When asked to open a pull request after finishing work, target the main branch (or the configured default branch) unless the user explicitly specifies a different base.",
-        "Favor branch-first workflows and avoid writing to main for the controller repo unless explicitly told otherwise.",
+        "Work on feature branches and avoid writing to main for the controller repo unless explicitly told otherwise.",
         "Keep GitHub state changes gated behind authorize_write_actions, but treat workspace setup, discovery, and non-mutating commands as auto-approved so flow is fast by default.",
         "Call run_command with installing_dependencies=true (or use_temp_venv=false) when a command needs to install or mutate server-level state so gating can apply to that narrower slice of work.",
         "Summarize what changed and which tools ran so humans can audit actions easily.",
@@ -929,7 +929,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Verify outputs and state before repeating actions so runs do not get stuck in loops; report blockers clearly.",
         "Use get_file_slice and diff helpers for large files when they make changes easier to see or safer to apply; for small, clear edits it is fine to update full files as long as the change stays focused and easy to review.",
         "When you need line references for edits or citations, call get_file_with_line_numbers instead of hand-numbering snippets; pair it with get_file_slice so your patches and summaries point at exact lines without rewriting the whole file.",
-        "Treat routine multi-line edits as normal; use diff-first tools like apply_text_update_and_commit, apply_patch_and_commit, or update_file_sections_and_commit instead of calling them tricky or offloading them to humans.",
+        "Treat routine multi-line edits as normal; rely on diff-based tools like apply_text_update_and_commit, apply_patch_and_commit, or update_file_sections_and_commit instead of calling them tricky or offloading them to humans.",
         "Follow each tool's declared parameter schema exactly. Do not invent arguments such as full_name, owner, or repo unless they are explicitly defined in the tool signature.",
         "Build tool arguments with literal JSON objects and real newlines: do not wrap payloads in extra quotes, avoid sprinkling \\n escapes inside values unless the tool expects them, escape double quotes only inside string values, and run validate_tool_args or validate_json_string when uncertain so controllers see clean, copyable examples instead of over-escaped blobs.",
         "When you need to search within the controller repo, prefer repo-scoped helpers or include an explicit repo:Proofgate-Revocations/chatgpt-mcp-github qualifier in search queries. Do not use unqualified global GitHub search for routine controller work.",
@@ -977,10 +977,10 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
 
     editing_preferences = {
         "summary": (
-            "Use diff-first tools for file changes and treat run_command as your "
-            "interactive terminal for quick checks. Avoid token-heavy inline "
-            "payloads or heredocs when a focused command, slice, or diff keeps "
-            "context tight."
+            "Use diff-oriented tools for file changes and treat run_command as "
+            "your interactive terminal for quick checks. Avoid token-heavy "
+            "inline payloads or heredocs when a focused command, slice, or diff "
+            "keeps context tight."
         ),
         "recommended_tools": [
             "build_unified_diff",
@@ -2269,7 +2269,7 @@ async def apply_text_update_and_commit(
 ) -> Dict[str, Any]:
     """Apply a text update to a single file on a branch, then verify it.
 
-    This is a lower-level building block for "diff-first" flows:
+    This is a lower-level building block for diff-based flows:
 
     1. Read the current file text from GitHub.
     2. Commit the provided updated_content via the Contents API on the target branch.

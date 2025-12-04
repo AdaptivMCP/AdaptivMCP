@@ -14,7 +14,7 @@ This project follows semantic versioning (MAJOR.MINOR.PATCH).
 ### Controller contract and assistant behavior
 - Evolve `controller_contract()` to document the full tool surface, safety model, and assistant expectations for Adaptiv Controller.
 - Require assistants to treat the controller contract as the authoritative source of truth and to avoid inventing parallel "doc contracts".
-- Encode expectations for branch-first, patch-first, PR-first workflows and strict JSON/tool schema usage.
+- Encode expectations for branch-based, patch-driven, PR-focused workflows and strict JSON/tool schema usage.
 
 ### Core tooling and safety model
 - Maintain strong write gating using `WRITE_ALLOWED` and the `authorize_write_actions` tool.

@@ -451,9 +451,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         write_action=False,
         description=(
             "Build a unified diff when you already have both the original and updated "
-            "file content. Useful for patch-first flows where fetching from GitHub "
-            "is unnecessary. This tool refuses negative context sizes so patches "
-            "stay well-formed."
+            "file content. Useful when fetching from GitHub is unnecessary. This tool "
+            "refuses negative context sizes so patches stay well-formed."
         ),
         tags=["github", "read", "diff"],
     )

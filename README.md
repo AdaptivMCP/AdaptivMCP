@@ -48,7 +48,7 @@ You can absolutely use this kit in larger teams, but 1.0 is intentionally optimi
 - A self-hosted GitHub connector: each user deploys this server with their own GitHub token and runs it in their own infrastructure.
 - A backend designed specifically to support the Adaptiv Controller pattern:
   - Strong write gating.
-  - Branch-first workflows (no blind writes to main).
+  - Changes flow through feature branches (no blind writes to main).
   - Patch-based edits for large files.
   - Clear verification after every write.
   - Optional workspace execution (run_command and run_tests) to run tests and commands from the controller.
@@ -350,7 +350,7 @@ The Adaptiv Controller GitHub Kit is a self-hosted GitHub AI controller you run 
   - Read: files, trees, issues, PRs, workflow runs, logs, search (code/issues/commits/repos).
   - Write (gated): branches, commits, patches, PRs, comments, and selected workspace commands.
 - Implements opinionated safety controls:
-  - Branch-first workflows (no direct writes to `main`).
+  - Changes flow through feature branches (no direct writes to `main`).
   - Central write gate that must be explicitly enabled per session.
   - Optional per-repo and per-branch write policies.
   - Optional tool- and command-level allowlists/denylists.
