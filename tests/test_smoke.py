@@ -7,7 +7,6 @@ from github_mcp.exceptions import GitHubAPIError, GitHubAuthError
 
 @pytest.mark.asyncio
 async def test_end_to_end_small_doc_edit_and_test_run():
-async def test_end_to_end_small_doc_edit_and_test_run():
     '''End-to-end workflow: list, read, diff, commit, and run tests.
 
     This test exercises a small but realistic workflow that an assistant or
