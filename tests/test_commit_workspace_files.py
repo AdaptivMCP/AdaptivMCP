@@ -7,7 +7,7 @@ import main
 
 @pytest.mark.asyncio
 async def test_commit_workspace_files_stages_selected(monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -53,7 +53,7 @@ async def test_commit_workspace_files_stages_selected(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_commit_workspace_files_requires_files(monkeypatch):
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     with pytest.raises(ValueError):
         await main.commit_workspace_files("owner/repo", files=[], push=False)

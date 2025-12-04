@@ -40,7 +40,7 @@ async def test_apply_patch_and_commit_creates_new_file(monkeypatch):
 
     monkeypatch.setattr(main, "_decode_github_content", fake_decode)
     monkeypatch.setattr(main, "_perform_github_commit", fake_commit)
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     patch = """--- /dev/null
 +++ b/new-file.txt

@@ -6,7 +6,7 @@ from main import GitHubAPIError
 
 @pytest.mark.asyncio
 async def test_create_issue_validates_full_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     with pytest.raises(ValueError):
         await main.create_issue(full_name="not-a-repo", title="Title")
@@ -14,7 +14,7 @@ async def test_create_issue_validates_full_name(monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.asyncio
 async def test_create_issue_sends_expected_payload(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     calls: dict[str, object] = {}
 
@@ -52,7 +52,7 @@ async def test_create_issue_sends_expected_payload(monkeypatch: pytest.MonkeyPat
 
 @pytest.mark.asyncio
 async def test_update_issue_requires_at_least_one_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     with pytest.raises(ValueError):
         await main.update_issue(full_name="owner/repo", issue_number=1)
@@ -60,7 +60,7 @@ async def test_update_issue_requires_at_least_one_field(monkeypatch: pytest.Monk
 
 @pytest.mark.asyncio
 async def test_update_issue_validates_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     with pytest.raises(ValueError):
         await main.update_issue(
@@ -70,7 +70,7 @@ async def test_update_issue_validates_state(monkeypatch: pytest.MonkeyPatch) -> 
 
 @pytest.mark.asyncio
 async def test_update_issue_sends_expected_payload(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     calls: dict[str, object] = {}
 
@@ -111,7 +111,7 @@ async def test_update_issue_sends_expected_payload(monkeypatch: pytest.MonkeyPat
 
 @pytest.mark.asyncio
 async def test_comment_on_issue_validates_full_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     with pytest.raises(ValueError):
         await main.comment_on_issue("not-a-repo", issue_number=1, body="hi")
@@ -119,7 +119,7 @@ async def test_comment_on_issue_validates_full_name(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_comment_on_issue_sends_expected_payload(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     calls: dict[str, object] = {}
 
@@ -148,7 +148,7 @@ async def test_comment_on_issue_sends_expected_payload(monkeypatch: pytest.Monke
 
 @pytest.mark.asyncio
 async def test_issue_tools_propagate_github_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     async def fake_github_request(method: str, url: str, json_body=None, **kwargs):
         raise GitHubAPIError("GitHub API error 500 for /issues")

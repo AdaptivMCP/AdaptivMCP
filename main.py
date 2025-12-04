@@ -26,9 +26,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional
 
 import httpx
-from anyio import ClosedResourceError
-from fastmcp import FastMCP
-from mcp.types import ToolAnnotations
+import github_mcp.tools_workspace as tools_workspace
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
@@ -90,7 +88,6 @@ from github_mcp.utils import (
     REPO_DEFAULTS,
     _decode_zipped_job_logs,
     _effective_ref_for_repo,
-    _env_flag,
     _render_visible_whitespace,
     _with_numbered_lines,
     normalize_args,
@@ -102,435 +99,42 @@ from github_mcp.workspace import (
     _run_shell,
     _workspace_path,
 )
-
-WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
-COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", True)
-
-CONTROLLER_REPO = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
+from github_mcp.tools_workspace import (
+    commit_workspace,
+    commit_workspace_files,
+    ensure_workspace_clone,
+    run_command,
+    run_tests,
+)
+import github_mcp.server as server
+from github_mcp.server import (
+    COMPACT_METADATA_DEFAULT,
+    CONTROLLER_CONTRACT_VERSION,
+    CONTROLLER_DEFAULT_BRANCH,
+    CONTROLLER_REPO,
+    _REGISTERED_MCP_TOOLS,
+    _ensure_write_allowed,
+    _find_registered_tool,
+    _github_request,
+    _normalize_input_schema,
+    _structured_tool_error,
+    mcp,
+    mcp_tool,
+    register_extra_tools_if_available,
 )
 
-# Machine-readable contract version for controllers and assistants. This helps
-# keep prompts, workflows, and server behavior aligned as they evolve.
-CONTROLLER_CONTRACT_VERSION = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-16"
-)
-CONTROLLER_DEFAULT_BRANCH = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_BRANCH", "main"
-)
 
-# json_response is configured per transport; do not pass it here.
-mcp = FastMCP("GitHub Fast MCP")
-
-# Suppress noisy tracebacks when SSE clients disconnect mid-response. The
-# underlying MemoryObjectSendStream raises ClosedResourceError when we attempt
-# to send on a closed stream; swallow it so disconnects are treated as routine.
-from mcp.shared import session as mcp_shared_session
-
-_orig_send_response = mcp_shared_session.BaseSession._send_response
+def __getattr__(name: str):
+    if name == "WRITE_ALLOWED":
+        return server.WRITE_ALLOWED
+    raise AttributeError(name)
 
 
-async def _quiet_send_response(self, request_id, response):
-    try:
-        return await _orig_send_response(self, request_id, response)
-    except ClosedResourceError:
-        return None
+# Recalculate write gate on import to honor updated environment variables when
+# ``main`` is reloaded in tests.
+server.WRITE_ALLOWED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 
-
-mcp_shared_session.BaseSession._send_response = _quiet_send_response
-
-
-async def _github_request(*args, **kwargs):
-    kwargs.setdefault("client_factory", _github_client_instance)
-    return await _http_clients._github_request(*args, **kwargs)
-
-
-def _structured_tool_error(
-    exc: BaseException, *, context: str, path: Optional[str] = None
-) -> Dict[str, Any]:
-    """Build a serializable error payload for MCP clients.
-
-    Returning this structure instead of letting exceptions bubble prevents the
-    MCP transport layer from wrapping the failure inside generic TaskGroup
-    errors, while still surfacing the root cause and traceback to callers.
-    """
-
-    import traceback
-
-    error: Dict[str, Any] = {
-        "error": exc.__class__.__name__,
-        "message": str(exc),
-        "context": context,
-        "traceback": traceback.format_exc(),
-    }
-    if path:
-        error["path"] = path
-    return {"error": error}
-
-
-# ------------------------------------------------------------------------------
-# Write gating and mcp_tool decorator
-# ------------------------------------------------------------------------------
-
-
-def _ensure_write_allowed(context: str) -> None:
-    if not WRITE_ALLOWED:
-        raise WriteNotAuthorizedError(
-            f"MCP write action is temporarily disabled (context: {context})"
-        )
-
-# Global registry of MCP tools, populated by the mcp_tool decorator. This lets
-# us enumerate tools defined in other modules (for example extra_tools.py) as
-# long as they are decorated with the shared mcp_tool wrapper.
-_REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
-
-
-def _find_registered_tool(tool_name: str) -> Optional[tuple[Any, Any]]:
-    """Return the registered tool and original callable for ``tool_name``."""
-
-    for tool, func in _REGISTERED_MCP_TOOLS:
-        name = getattr(tool, "name", None) or getattr(func, "__name__", None)
-        if name == tool_name:
-            return tool, func
-    return None
-
-
-def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
-    """Extract a JSON-serializable input schema for a FastMCP tool."""
-
-    if tool is None:
-        return None
-
-    raw_schema = getattr(tool, "inputSchema", None)
-    if raw_schema is not None:
-        if hasattr(raw_schema, "model_dump"):
-            return raw_schema.model_dump()
-        if isinstance(raw_schema, dict):
-            return dict(raw_schema)
-        try:
-            return json.loads(raw_schema)
-        except Exception:
-            pass
-
-    try:
-        parameters = getattr(tool, "parameters", None)
-    except Exception:  # pragma: no cover - defensive
-        parameters = None
-
-    if parameters is not None:
-        if hasattr(parameters, "model_dump"):
-            return parameters.model_dump()
-        if isinstance(parameters, dict):
-            return dict(parameters)
-        try:  # pragma: no cover - defensive
-            return json.loads(parameters)
-        except Exception:
-            return None
-
-    return None
-
-def mcp_tool(*, write_action: bool = False, **tool_kwargs):
-    """Wrapper around FastMCP's @mcp.tool decorator.
-
-    The decorator:
-    * Adds ``read``/``write`` tags and ToolAnnotations.readOnlyHint.
-    * Attaches a ``write_action`` flag and ``auto_approved`` hint to meta.
-    * Registers the tool in a global registry for discovery.
-    * Emits structured logs around tool execution so operators can trace
-      behavior without logging full argument or result payloads.
-    """
-
-    existing_tags = tool_kwargs.pop("tags", None)
-    tags: set[str] = set(existing_tags or [])
-    if write_action:
-        tags.add("write")
-    else:
-        tags.add("read")
-
-    existing_meta = tool_kwargs.pop("meta", None) or {}
-    existing_annotations = tool_kwargs.pop("annotations", None)
-
-    annotations: ToolAnnotations | None
-    if isinstance(existing_annotations, ToolAnnotations):
-        annotations = existing_annotations
-    elif isinstance(existing_annotations, dict):
-        annotations = ToolAnnotations(**existing_annotations)
-    else:
-        annotations = None
-
-    if annotations is None:
-        annotations = ToolAnnotations(readOnlyHint=not write_action)
-    elif annotations.readOnlyHint is None:
-        annotations = annotations.model_copy(update={"readOnlyHint": not write_action})
-    if not isinstance(existing_meta, dict):
-        existing_meta = {}
-    meta = {
-        **existing_meta,
-        "write_action": write_action,
-        # Read-only tools run without extra approval so agents can chain fetches
-        # and inspections automatically. Write-tagged tools still require an
-        # explicit opt-in via authorize_write_actions or the env flag.
-        "auto_approved": not write_action,
-    }
-
-    import functools as _functools
-    import inspect as _inspect
-
-    def decorator(func):
-        tool = mcp.tool(
-            tags=tags or None,
-            meta=meta or None,
-            annotations=annotations,
-            **tool_kwargs,
-        )(func)
-
-        # Resolve the function signature once so we can build a coarse argument
-        # map for logging without serializing full payloads.
-        try:
-            signature = _inspect.signature(func)
-        except (TypeError, ValueError):
-            signature = None
-
-        def _extract_call_context(args, **kwargs):
-            """Return coarse, non-sensitive context for logging purposes."""
-            all_args: Dict[str, Any] = {}
-
-            if signature is not None:
-                try:
-                    bound = signature.bind_partial(*args, **kwargs)
-                    all_args = dict(bound.arguments)
-                except Exception:
-                    # Fall back to kwargs-only mapping if binding fails.
-                    all_args = {}
-
-            if not all_args:
-                # Ignore positional arguments in the fallback path so we never
-                # accidentally log large payloads or opaque binary blobs.
-                all_args = dict(kwargs)
-
-            repo_full_name: Optional[str] = None
-            if isinstance(all_args.get("full_name"), str):
-                repo_full_name = all_args["full_name"]
-            elif isinstance(all_args.get("owner"), str) and isinstance(
-                all_args.get("repo"), str
-            ):
-                repo_full_name = f"{all_args['owner']}/{all_args['repo']}"
-
-            ref: Optional[str] = None
-            for key in ("ref", "branch", "base_ref", "head_ref"):
-                value = all_args.get(key)
-                if isinstance(value, str):
-                    ref = value
-                    break
-
-            path: Optional[str] = None
-            for key in ("path", "file_path"):
-                value = all_args.get(key)
-                if isinstance(value, str):
-                    path = value
-                    break
-
-            arg_keys = sorted(set(all_args.keys()))
-            return {
-                "repo": repo_full_name,
-                "ref": ref,
-                "path": path,
-                "arg_keys": arg_keys,
-            }
-
-        def _result_size_hint(result: Any) -> Optional[int]:
-            if isinstance(result, (list, tuple, str)):
-                return len(result)
-            if isinstance(result, dict):
-                return len(result)
-            return None
-
-        if asyncio.iscoroutinefunction(func):
-
-            @_functools.wraps(func)
-            async def wrapper(*args, **kwargs):
-                call_id = str(uuid.uuid4())
-                context = _extract_call_context(args, **kwargs)
-                start = time.perf_counter()
-
-                TOOLS_LOGGER.info(
-                    "tool_call_start",
-                    extra={
-                        "tool_name": tool.name,
-                        "write_action": write_action,
-                        "tags": sorted(tags) if tags else [],
-                        "call_id": call_id,
-                        "repo": context["repo"],
-                        "ref": context["ref"],
-                        "path": context["path"],
-                        "arg_keys": context["arg_keys"],
-                    },
-                )
-
-                errored = False
-                try:
-                    result = await func(*args, **kwargs)
-                except Exception as exc:
-                    errored = True
-                    duration_ms = int((time.perf_counter() - start) * 1000)
-                    _record_tool_call(
-                        tool_name=tool.name,
-                        write_action=write_action,
-                        duration_ms=duration_ms,
-                        errored=True,
-                    )
-                    TOOLS_LOGGER.exception(
-                        "tool_call_error",
-                        extra={
-                            "tool_name": tool.name,
-                            "write_action": write_action,
-                            "tags": sorted(tags) if tags else [],
-                            "call_id": call_id,
-                            "repo": context["repo"],
-                            "ref": context["ref"],
-                            "path": context["path"],
-                            "arg_keys": context["arg_keys"],
-                            "duration_ms": duration_ms,
-                            "status": "error",
-                            "error_type": exc.__class__.__name__,
-                        },
-                    )
-                    raise
-
-                duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(
-                    tool_name=tool.name,
-                    write_action=write_action,
-                    duration_ms=duration_ms,
-                    errored=errored,
-                )
-                TOOLS_LOGGER.info(
-                    "tool_call_success",
-                    extra={
-                        "tool_name": tool.name,
-                        "write_action": write_action,
-                        "tags": sorted(tags) if tags else [],
-                        "call_id": call_id,
-                        "repo": context["repo"],
-                        "ref": context["ref"],
-                        "path": context["path"],
-                        "arg_keys": context["arg_keys"],
-                        "duration_ms": duration_ms,
-                        "status": "ok",
-                        "result_type": type(result).__name__,
-                        "result_size_hint": _result_size_hint(result),
-                    },
-                )
-                return result
-
-        else:
-
-            @_functools.wraps(func)
-            def wrapper(*args, **kwargs):
-                call_id = str(uuid.uuid4())
-                context = _extract_call_context(args, **kwargs)
-                start = time.perf_counter()
-
-                TOOLS_LOGGER.info(
-                    "tool_call_start",
-                    extra={
-                        "tool_name": tool.name,
-                        "write_action": write_action,
-                        "tags": sorted(tags) if tags else [],
-                        "call_id": call_id,
-                        "repo": context["repo"],
-                        "ref": context["ref"],
-                        "path": context["path"],
-                        "arg_keys": context["arg_keys"],
-                    },
-                )
-
-                errored = False
-                try:
-                    result = func(*args, **kwargs)
-                except Exception as exc:
-                    errored = True
-                    duration_ms = int((time.perf_counter() - start) * 1000)
-                    _record_tool_call(
-                        tool_name=tool.name,
-                        write_action=write_action,
-                        duration_ms=duration_ms,
-                        errored=True,
-                    )
-                    TOOLS_LOGGER.exception(
-                        "tool_call_error",
-                        extra={
-                            "tool_name": tool.name,
-                            "write_action": write_action,
-                            "tags": sorted(tags) if tags else [],
-                            "call_id": call_id,
-                            "repo": context["repo"],
-                            "ref": context["ref"],
-                            "path": context["path"],
-                            "arg_keys": context["arg_keys"],
-                            "duration_ms": duration_ms,
-                            "status": "error",
-                            "error_type": exc.__class__.__name__,
-                        },
-                    )
-                    raise
-
-                duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(
-                    tool_name=tool.name,
-                    write_action=write_action,
-                    duration_ms=duration_ms,
-                    errored=errored,
-                )
-                TOOLS_LOGGER.info(
-                    "tool_call_success",
-                    extra={
-                        "tool_name": tool.name,
-                        "write_action": write_action,
-                        "tags": sorted(tags) if tags else [],
-                        "call_id": call_id,
-                        "repo": context["repo"],
-                        "ref": context["ref"],
-                        "path": context["path"],
-                        "arg_keys": context["arg_keys"],
-                        "duration_ms": duration_ms,
-                        "status": "ok",
-                        "result_type": type(result).__name__,
-                        "result_size_hint": _result_size_hint(result),
-                    },
-                )
-                return result
-
-        # Attach the underlying FastMCP tool object so other helpers can inspect
-        # metadata, and register the tool in the global registry so we can
-        # enumerate tools defined in other modules.
-        wrapper._mcp_tool = tool  # type: ignore[attr-defined]
-        _REGISTERED_MCP_TOOLS.append((tool, wrapper))
-        return wrapper
-
-    return decorator
-
-
-# ------------------------------------------------------------------------------
-# Optional dynamic tool registration (extra_tools.py)
-# ------------------------------------------------------------------------------
-
-try:
-    # If extra_tools.py exists and exposes register_extra_tools, use it
-    # to register additional tools using the same mcp_tool decorator.
-    from extra_tools import register_extra_tools  # type: ignore[import]
-except Exception:
-    register_extra_tools = None  # type: ignore[assignment]
-
-if callable(register_extra_tools):
-    try:
-        # Pass the decorator so extra_tools.py can define new tools without
-        # importing main.py directly.
-        register_extra_tools(mcp_tool)
-    except Exception:
-        # Extension tools are strictly optional; never break the core server
-        # if extension registration fails for any reason.
-        pass
+register_extra_tools_if_available()
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
@@ -544,9 +148,8 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
             writes for a session.
     """
 
-    global WRITE_ALLOWED
-    WRITE_ALLOWED = bool(approved)
-    return {"write_allowed": WRITE_ALLOWED}
+    server.WRITE_ALLOWED = bool(approved)
+    return {"write_allowed": server.WRITE_ALLOWED}
 
 
 # ------------------------------------------------------------------------------
@@ -563,7 +166,7 @@ async def get_server_config() -> Dict[str, Any]:
     """
 
     return {
-        "write_allowed": WRITE_ALLOWED,
+        "write_allowed": server.WRITE_ALLOWED,
         "github_api_base": GITHUB_API_BASE,
         "http": {
             "timeout": HTTPX_TIMEOUT,
@@ -580,8 +183,8 @@ async def get_server_config() -> Dict[str, Any]:
                 "notes": "Read-only tools never require additional approval.",
             },
             "write_actions": {
-                "auto_approved": WRITE_ALLOWED,
-                "requires_authorization": not WRITE_ALLOWED,
+                "auto_approved": server.WRITE_ALLOWED,
+                "requires_authorization": not server.WRITE_ALLOWED,
                 "toggle_tool": "authorize_write_actions",
                 "notes": (
                     "Most write-tagged tools stay gated until explicitly enabled "
@@ -1427,7 +1030,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "controller": {
             "repo": CONTROLLER_REPO,
             "default_branch": CONTROLLER_DEFAULT_BRANCH,
-            "write_allowed_default": WRITE_ALLOWED,
+            "write_allowed_default": server.WRITE_ALLOWED,
         },
         "expectations": {
             "assistant": assistant_expectations,
@@ -1903,7 +1506,7 @@ def list_all_actions(
     tools.sort(key=lambda entry: entry["name"])
 
     return {
-        "write_actions_enabled": WRITE_ALLOWED,
+        "write_actions_enabled": server.WRITE_ALLOWED,
         "compact": compact_mode,
         "tools": tools,
     }
@@ -2973,314 +2576,6 @@ async def apply_patch_and_commit(
 
     return result
 
-
-# ------------------------------------------------------------------------------
-# Workspace / full-environment tools
-# ------------------------------------------------------------------------------
-
-
-@mcp_tool(write_action=True)
-async def ensure_workspace_clone(
-    full_name: str, ref: str = "main", reset: bool = False
-) -> Dict[str, Any]:
-    """Ensure a persistent workspace exists for ``full_name``/``ref``.
-
-    When ``reset`` is True, the workspace is refreshed to match the remote
-    branch, discarding local edits. Otherwise, the existing workspace (if any)
-    is kept intact so commands and commits share the same on-disk tree.
-    """
-
-    try:
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        workspace_dir = _workspace_path(full_name, effective_ref)
-        existed = os.path.isdir(os.path.join(workspace_dir, ".git"))
-
-        repo_dir = await _clone_repo(
-            full_name, ref=effective_ref, preserve_changes=not reset
-        )
-
-        return {
-            "repo_dir": repo_dir,
-            "branch": effective_ref,
-            "reset": reset,
-            "created": not existed,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="ensure_workspace_clone")
-
-
-@mcp_tool(write_action=False)
-async def run_command(
-    full_name: str,
-    ref: str = "main",
-    command: str = "pytest",
-    timeout_seconds: int = 300,
-    workdir: Optional[str] = None,
-    patch: Optional[str] = None,
-    use_temp_venv: bool = True,
-    installing_dependencies: bool = False,
-    mutating: bool = False,
-) -> Dict[str, Any]:
-    """Run an arbitrary shell command in a persistent workspace clone.
-
-    Args:
-        full_name: GitHub repository in ``owner/name`` format.
-        ref: Branch, tag, or commit to check out. Defaults to ``main``.
-        command: Shell command to execute inside the clone.
-        timeout_seconds: Hard timeout applied to the command execution.
-        workdir: Optional path inside the repository to use as the working
-            directory.
-        patch: Optional unified diff that will be applied before running the
-            command so assistants can run tests against in-flight edits.
-        use_temp_venv: When true (default), commands run inside a temporary
-            virtualenv rooted in the workspace so ``pip install`` steps do not
-            mutate the server-wide environment. The virtualenv is reused across
-            calls when the workspace persists on disk.
-        installing_dependencies: Set to ``true`` when the command installs
-            packages or otherwise mutates the server environment so write
-            gating can apply to that call. Commands that only inspect or
-            modify the workspace can leave this false for faster iteration.
-        mutating: Set to ``true`` when the command is expected to edit files
-            in the workspace so the write gate can apply only to those
-            calls. Read-only and test commands can leave this false so they
-            run without requiring write approval.
-
-    The workspace directory is kept on disk so subsequent calls can reuse
-    installed dependencies and edits. The same workspace is shared with
-    ``commit_workspace`` so changes made via ``run_command`` remain available
-    for commits and later commands. Callers should pass a patch when they need
-    the workspace to mirror in-flight edits. The tool is read-tagged by default;
-    set ``mutating=true`` (or the other gating flags) when a command will write
-    so approval applies only to those cases.
-    """
-
-    env: Optional[Dict[str, str]] = None
-    try:
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        if len(command) > RUN_COMMAND_MAX_CHARS:
-            raise ValueError(
-                f"run_command.command is too long ({len(command)} chars); "
-                "use diff-first tools (apply_text_update_and_commit, "
-                "apply_patch_and_commit, update_file_sections_and_commit) "
-                "for large edits instead of embedding scripts in command."
-            )
-        needs_write_gate = mutating or installing_dependencies or not use_temp_venv
-        if needs_write_gate:
-            _ensure_write_allowed(
-                f"run_command {command} in {full_name}@{effective_ref}"
-            )
-        repo_dir = await _clone_repo(
-            full_name, ref=effective_ref, preserve_changes=True
-        )
-
-        if patch:
-            await _apply_patch_to_repo(repo_dir, patch)
-
-        if use_temp_venv:
-            env = await _prepare_temp_virtualenv(repo_dir)
-
-        cwd = repo_dir
-        if workdir:
-            cwd = os.path.join(repo_dir, workdir)
-        result = await _run_shell(
-            command,
-            cwd=cwd,
-            timeout_seconds=timeout_seconds,
-            env=env,
-        )
-        return {
-            "repo_dir": repo_dir,
-            "workdir": workdir,
-            "result": result,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="run_command")
-
-
-@mcp_tool(write_action=True)
-async def commit_workspace(
-    full_name: str,
-    ref: str = "main",
-    message: str = "Commit workspace changes",
-    add_all: bool = True,
-    push: bool = True,
-) -> Dict[str, Any]:
-    """Commit and optionally push changes from the persistent workspace.
-
-    Args:
-        full_name: GitHub repository in ``owner/name`` format.
-        ref: Branch to commit to. Defaults to ``main`` but will map to the
-            controller default branch when appropriate.
-        message: Commit message used when writing changes.
-        add_all: Stage all changes with ``git add -A`` before committing.
-        push: Whether to push the commit back to the remote branch.
-    """
-
-    try:
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        _ensure_write_allowed(
-            f"commit_workspace for {full_name}@{effective_ref}"
-        )
-        repo_dir = await _clone_repo(
-            full_name, ref=effective_ref, preserve_changes=True
-        )
-
-        if add_all:
-            add_result = await _run_shell(
-                "git add -A", cwd=repo_dir, timeout_seconds=120
-            )
-            if add_result["exit_code"] != 0:
-                stderr = add_result.get("stderr", "") or add_result.get(
-                    "stdout", ""
-                )
-                raise GitHubAPIError(f"git add failed: {stderr}")
-
-        status_result = await _run_shell(
-            "git status --porcelain", cwd=repo_dir, timeout_seconds=60
-        )
-        status_lines = status_result.get("stdout", "").strip().splitlines()
-        if not status_lines:
-            raise GitHubAPIError("No changes to commit in workspace")
-
-        commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await _run_shell(
-            commit_cmd, cwd=repo_dir, timeout_seconds=300
-        )
-        if commit_result["exit_code"] != 0:
-            stderr = commit_result.get("stderr", "") or commit_result.get(
-                "stdout", ""
-            )
-            raise GitHubAPIError(f"git commit failed: {stderr}")
-
-        push_result = None
-        if push:
-            push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await _run_shell(
-                push_cmd, cwd=repo_dir, timeout_seconds=300
-            )
-            if push_result["exit_code"] != 0:
-                stderr = push_result.get("stderr", "") or push_result.get(
-                    "stdout", ""
-                )
-                raise GitHubAPIError(f"git push failed: {stderr}")
-
-        return {
-            "repo_dir": repo_dir,
-            "branch": effective_ref,
-            "status": status_lines,
-            "commit": commit_result,
-            "push": push_result,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="commit_workspace")
-
-
-@mcp_tool(write_action=True)
-async def commit_workspace_files(
-    full_name: str,
-    files: List[str],
-    ref: str = "main",
-    message: str = "Commit selected workspace changes",
-    push: bool = True,
-) -> Dict[str, Any]:
-    """Commit and optionally push specific files from the persistent workspace."""
-
-    if not files:
-        raise ValueError("files must be a non-empty list of paths")
-
-    try:
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        _ensure_write_allowed(
-            f"commit_workspace_files for {full_name}@{effective_ref}"
-        )
-        repo_dir = await _clone_repo(
-            full_name, ref=effective_ref, preserve_changes=True
-        )
-
-        add_cmd = "git add -- " + " ".join(shlex.quote(path) for path in files)
-        add_result = await _run_shell(add_cmd, cwd=repo_dir, timeout_seconds=120)
-        if add_result["exit_code"] != 0:
-            stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
-            raise GitHubAPIError(f"git add failed: {stderr}")
-
-        staged_files_result = await _run_shell(
-            "git diff --cached --name-only", cwd=repo_dir, timeout_seconds=60
-        )
-        staged_files = staged_files_result.get("stdout", "").strip().splitlines()
-        if not staged_files:
-            raise GitHubAPIError("No staged changes to commit for provided files")
-
-        commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await _run_shell(
-            commit_cmd, cwd=repo_dir, timeout_seconds=300
-        )
-        if commit_result["exit_code"] != 0:
-            stderr = commit_result.get("stderr", "") or commit_result.get(
-                "stdout", ""
-            )
-            raise GitHubAPIError(f"git commit failed: {stderr}")
-
-        push_result = None
-        if push:
-            push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await _run_shell(
-                push_cmd, cwd=repo_dir, timeout_seconds=300
-            )
-            if push_result["exit_code"] != 0:
-                stderr = push_result.get("stderr", "") or push_result.get(
-                    "stdout", ""
-                )
-                raise GitHubAPIError(f"git push failed: {stderr}")
-
-        return {
-            "repo_dir": repo_dir,
-            "branch": effective_ref,
-            "staged_files": staged_files,
-            "commit": commit_result,
-            "push": push_result,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="commit_workspace_files")
-
-
-@mcp_tool(write_action=False)
-async def run_tests(
-    full_name: str,
-    ref: str = "main",
-    test_command: str = "pytest",
-    timeout_seconds: int = 600,
-    workdir: Optional[str] = None,
-    patch: Optional[str] = None,
-    use_temp_venv: bool = True,
-    installing_dependencies: bool = False,
-    mutating: bool = False,
-) -> Dict[str, Any]:
-    """Run the project's test command inside the persistent workspace.
-
-    ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
-    default timeout. Provide ``patch`` when running tests against pending edits
-    so the checkout matches the assistant's current working diff.
-    Set ``installing_dependencies`` to ``true`` only when the test command also
-    installs packages so gating can apply to that narrower use case. Set
-    ``mutating=true`` only when the tests will rewrite files; read-only test
-    runs remain ungated by default.
-    """
-    return await run_command(
-        full_name=full_name,
-        ref=ref,
-        command=test_command,
-        timeout_seconds=timeout_seconds,
-        workdir=workdir,
-        patch=patch,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        mutating=mutating,
-    )
-
-
-# ------------------------------------------------------------------------------
-# FastMCP HTTP/SSE app and health routes
-# ------------------------------------------------------------------------------
 
 middleware = [
     Middleware(

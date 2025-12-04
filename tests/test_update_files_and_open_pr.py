@@ -5,7 +5,7 @@ import main
 
 @pytest.mark.asyncio
 async def test_update_files_and_open_pr_returns_structured_error(monkeypatch):
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     async def fake_ensure_branch(*args, **kwargs):
         return None
