@@ -146,6 +146,6 @@ When you are using a controller like **Joey's GitHub**, the typical workflow aga
 4. **Open a pull request** from the feature branch into `main`.
 5. **Review and merge** the PR yourself, then delete the branch.
 
-This matches the same branch-first, PR-based workflow you use when the server is hosted on Render; the only difference is that the MCP HTTP server is running in your own Docker environment instead of a managed platform.
+This matches the same branch and PR workflow you use when the server is hosted on Render; the only difference is that the MCP HTTP server is running in your own Docker environment instead of a managed platform.
 
 Controllers like **Joey's GitHub** are designed to treat this Docker deployment as just another MCP server. Once it is running and reachable, no prompt or workflow changes are required on the controller side.

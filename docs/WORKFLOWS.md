@@ -25,7 +25,7 @@ All workflows should respect these rules, especially when touching the controlle
    - The server may start with `WRITE_ALLOWED` set to false.
    - Never assume you can write without checking.
 
-3. Branch first and pull request first.
+3. Keep work on feature branches and in pull requests.
    - Create a feature branch before any write.
    - Keep changes on that branch reviewable.
    - Open a PR for any non trivial change and let a human merge and delete branches.
@@ -129,13 +129,13 @@ Humans typically review, merge, and delete branches.
 
 ---
 
-## 4. Diff-first editing (preferred for assistants)
+## 4. Diff-based editing tools
 
 Assistants SHOULD avoid using `run_command` to embed large shell/Python
 scripts to modify files. This is brittle because those scripts must be
 embedded inside JSON strings and are easy to mis-escape.
 
-Multi-line edits are routine. Use the diff-first helpers below to apply
+Multi-line edits are routine. Use the diff helpers below to apply
 them directly instead of treating them as tricky or deferring them to
 humans.
 

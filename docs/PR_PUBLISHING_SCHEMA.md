@@ -51,7 +51,7 @@ The server can gate writes with `authorize_write_actions` and internal `write_al
 
 ## 3. Canonical PR workflows
 
-These are the standard flows assistants should follow. They match the branch-first, PR-first, `run_command`-heavy workflows in `docs/WORKFLOWS.md`.
+These are the standard flows assistants should follow. They align with the branch-and-PR oriented, `run_command`-heavy workflows in `docs/WORKFLOWS.md`.
 
 ### 3.1 Flow A: small single-file change
 

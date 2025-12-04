@@ -129,7 +129,7 @@ Practical guidelines for prompts:
 
 - Safety
   - Never write directly to the main branch of the controller repo.
-  - Always use branch first and PR first patterns.
+  - Use branches and pull requests for changes instead of writing directly to protected branches.
   - Ask the human before enabling write actions or running heavy commands.
 
 - Quality

@@ -265,7 +265,7 @@ They follow the same general approach:
 - Enforce `_ensure_write_allowed`.
 - Wrap the corresponding GitHub REST endpoints.
 
-These tools work together with the commit orchestrations described above to support branch-first workflows where every change is reviewed in a pull request.
+These tools work together with the commit orchestrations described above to support branch-based workflows where every change is reviewed in a pull request.
 
 ---
 
