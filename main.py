@@ -2893,7 +2893,8 @@ async def apply_patch_and_commit(
         old_text = decoded.get("text")
         if not isinstance(old_text, str):
             raise GitHubAPIError("Decoded content is not text")
-        sha_before = decoded.get("sha")
+        decoded_json = decoded.get("json", {}) if isinstance(decoded, dict) else {}
+        sha_before = decoded_json.get("sha") or decoded.get("sha")
     except GitHubAPIError as exc:
         msg = str(exc)
         if "404" in msg and "/contents/" in msg:
@@ -2925,8 +2926,9 @@ async def apply_patch_and_commit(
 
     # 4) Verify by reading the file again from the same branch.
     verified = await _decode_github_content(full_name, path, effective_branch)
+    verified_json = verified.get("json", {}) if isinstance(verified, dict) else {}
     new_text_verified = verified.get("text")
-    sha_after = verified.get("sha")
+    sha_after = verified_json.get("sha") or verified.get("sha")
 
     result: Dict[str, Any] = {
         "status": "committed",
