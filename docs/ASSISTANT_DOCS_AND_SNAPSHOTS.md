@@ -201,7 +201,27 @@ The goal is to keep edits small, precise, and easy to review while still support
 
 ---
 
-## 8. Execution environment
+## 8. Tool argument hygiene and escaping
+
+Most tool call failures come from malformed JSON, stray escape sequences, or strings wrapped in extra quotes. Use this checklist to keep arguments valid and readable.
+
+- Start from structured JSON, not a quoted blob.
+  - ✅ `{"path": "src/app.py", "replacement": "Line 1\nLine 2"}`
+  - ❌ `"{\"path\": \"src/app.py\", \"replacement\": \"Line 1\\nLine 2\"}"`
+- Prefer real newlines or arrays of lines instead of `\n`-filled strings when the tool accepts them.
+  - For patch tools, use multiline strings or `sections` arrays rather than sprinkling `\n` escapes.
+- Escape double quotes only inside JSON string values.
+  - ✅ `{ "text": "He said \"hello\" before leaving." }`
+  - ❌ `{ "text": "He said "hello" before leaving." }`
+- Avoid escaped newlines in argument *values* unless the tool expects them. A literal `\n` often indicates the string was over-escaped.
+- Run `validate_tool_args` before write-tagged calls when in doubt; it will confirm JSON structure and surface quoting problems early.
+- If a server or test harness shows `invalid arguments` errors, inspect the raw JSON payload. Remove any surrounding quotes and unescape until the JSON parses cleanly.
+
+Teach assistants these patterns directly in prompts and examples so they stop generating over-escaped payloads.
+
+---
+
+## 9. Execution environment
 
 When you need to run tests or commands, always think in terms of the workspace model exposed by this engine.
 
@@ -217,7 +237,7 @@ Prompts and workflows should
 
 ---
 
-## 9. Troubleshooting when things feel stuck
+## 10. Troubleshooting when things feel stuck
 
 When a workflow feels stuck or you see repeated failures, use this checklist instead of looping on the same tool call.
 
@@ -234,7 +254,7 @@ This keeps assistants from silently spinning in loops and surfaces problems quic
 
 ---
 
-## 10. Summary
+## 11. Summary
 
 For Adaptiv Controller, the contract, docs, and engine are the stable part of the system. Your controller prompts and personal workflows are the adaptive part.
 
