@@ -65,13 +65,19 @@ async def test_end_to_end_small_doc_edit_and_test_run():
     # 5) Apply the edit on a throwaway branch.
     branch_name = 'tests/long-workflow-smoke-temp'
 
-    apply_result = await main.apply_text_update_and_commit(
-        full_name=full_name,
-        path=target_path,
-        updated_content=new_text,
-        branch=branch_name,
-        message='test: long workflow smoke edit',
-    )
+    try:
+        apply_result = await main.apply_text_update_and_commit(
+            full_name=full_name,
+            path=target_path,
+            updated_content=new_text,
+            branch=branch_name,
+            message='test: long workflow smoke edit',
+        )
+    except GitHubAPIError as exc:
+        msg = str(exc)
+        if 'Resource not accessible by integration' in msg or 'returned 403' in msg:
+            pytest.skip('Skipping commit step: CI GITHUB_TOKEN has read-only contents permission.')
+        raise
 
     assert apply_result.get('status') == 'committed'
     assert apply_result.get('branch') == branch_name
