@@ -190,9 +190,9 @@ When drift is serious enough that behavior feels surprising, treat it as a bug a
 
 ---
 
-## 7. Large files and JSON helpers
+## 7. Large files, JSON helpers, and tool selection for edits
 
-Large files and structured payloads are common when you are driving a controller through GitHub. The engine provides helpers for both.
+Large files and structured payloads are common when you are driving a controller through GitHub. The engine provides helpers for both, and the choice of helper matters for safety and ergonomics.
 
 For large files:
 
@@ -200,6 +200,8 @@ For large files:
 - Use `get_file_with_line_numbers` when you need exact line references for citations or for line-based patch tools; copy the ranges directly instead of hand-numbering snippets.
 - Use `build_section_based_diff` to construct diffs for the specific line ranges that need to change.
 - Apply the resulting patch with `apply_patch_and_commit` on the appropriate branch.
+- Use `apply_line_edits_and_commit` for small, line-targeted updates when you know the exact line numbers.
+- Reserve `apply_text_update_and_commit` for cases where you intentionally regenerate the entire file from a fresh spec or prompt.
 
 For JSON payloads:
 

@@ -142,12 +142,41 @@ humans.
 Instead, assistants SHOULD use these tools:
 
 - `build_unified_diff` – generate a unified diff from old/new file content.
-- `build_section_based_diff` – generate a diff by describing section-level
-  replacements, useful for large files.
-- `apply_text_update_and_commit` – commit full updated file content.
-- `apply_patch_and_commit` – commit a unified diff.
+- `build_section_based_diff` – generate a diff by describing section-level replacements, useful for large files.
+- `apply_line_edits_and_commit` – small, line-targeted edits to existing files.
+- `apply_patch_and_commit` – apply a unified diff (usually from the two diff builders above).
+- `apply_text_update_and_commit` – full-file overwrite; use only when intentionally regenerating the entire file.
 - `update_files_and_open_pr` – commit multiple files and open a PR in one call.
 
+### 4.1 Tool selection for file edits
+
+Use this table to choose the right tool path when editing files:
+
+| Use case                      | Recommended tools                                                          |
+|-------------------------------|----------------------------------------------------------------------------|
+| Small/local edits             | `get_file_with_line_numbers` → `apply_line_edits_and_commit`             |
+| Multi-line edits in large file| `get_file_with_line_numbers` → `build_section_based_diff` → `apply_patch_and_commit` |
+| Regenerate whole doc from spec| `apply_text_update_and_commit` (full-file overwrite)                     |
+| Multiple files in one change  | `update_files_and_open_pr` (optionally preceded by diff builders)        |
+
+In general, prefer diff/section-based edits for existing files. Reserve `apply_text_update_and_commit` for cases where you truly own the whole file content and intend to replace it entirely.
+Typical pattern for a single file:
+
+1. Read the current file:
+   - `get_file_contents` (or `get_file_slice` for large files).
+2. Let the assistant generate the updated full content locally.
+3. Call `apply_text_update_and_commit` with:
+   - `full_name`
+   - `path`
+   - `updated_content`
+   - `branch`
+   - `message`
+4. Optionally use `create_pull_request` / `open_pr_for_existing_branch`.
+
+For complex edits to large files, use:
+
+1. `build_section_based_diff` to describe replacements by sections.
+2. `apply_patch_and_commit` with the resulting patch.
 Typical pattern for a single file:
 
 1. Read the current file:
