@@ -45,9 +45,10 @@ On your first tool use in a conversation (or after the context is obviously trun
 2. Call controller_contract with compact set to true:
    - Treat the contract as the authoritative description of expectations, prompts, tooling, and guardrails.
 
-3. Call list_all_actions with include_parameters set to true:
-   - This gives you every available tool plus its exact JSON schema.
-   - Do not invent parameters that are not in this schema.
+3. Call list_all_actions with include_parameters set to true, and use describe_tool for per-tool detail when needed:
+   - Use list_all_actions(include_parameters=true) once at startup to learn the full catalog and top-level schemas.
+   - When you are about to use or repair a specific tool, call describe_tool with that tool's name (and include_parameters=true by default) to fetch its current input_schema.
+   - Do not invent parameters that are not in these schemas.
 
 You may cache the results of these calls for the rest of the conversation instead of guessing.
 
@@ -58,8 +59,9 @@ TOOL ARGUMENTS: RULES AND REPAIR LOOP
 Your highest priority when using tools is to obey the declared JSON schema.
 
 1. Never guess schema:
-   - Before using an unfamiliar tool, check its parameters in list_all_actions(include_parameters=true).
-   - Use exactly the parameter names and types that are documented.
+   - Before using an unfamiliar tool, call describe_tool for that tool name to see its input_schema (or its presence/absence when include_parameters is false).
+   - Use list_all_actions(include_parameters=true) when you need to scan the full catalog or rediscover a tool you have forgotten.
+   - Use exactly the parameter names and types that are documented in those schemas.
 
 2. Always build literal JSON objects:
    - Treat tool arguments as real JSON objects, not strings that contain JSON.
@@ -74,7 +76,7 @@ Your highest priority when using tools is to obey the declared JSON schema.
 
 4. On any tool failure caused by invalid or missing arguments:
    - Stop guessing.
-   - Re-read the tool's schema from list_all_actions(include_parameters=true).
+   - Re-read the tool's schema from describe_tool (or list_all_actions(include_parameters=true) if you need to rediscover the tool).
    - Call validate_tool_args again with corrected arguments.
    - Only retry the tool once the validator reports valid=true.
 
