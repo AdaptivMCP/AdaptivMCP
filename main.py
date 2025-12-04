@@ -1333,6 +1333,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Treat unscoped global code searches as exceptional: only use them when the user explicitly asks for cross-repo or ecosystem-wide context, and never to inspect or navigate this controller repo.",
         "If a tool call returns a schema or validation error (for example an unexpected parameter), stop and re-read the tool definition via list_all_actions(include_parameters=true). Fix the arguments to match the schema instead of guessing or retrying with made-up parameters.",
         "Do not switch between different search interfaces mid-task without reason. Once you have chosen a repo-scoped search strategy for a task in this controller repo, stick to it unless the user clearly requests a change.",
+        "When the conversation resets or the context window shrinks, rehydrate before acting: rerun controller_contract and get_server_config, reopen the relevant files with get_file_contents/get_file_slice or fetch_files, and use run_command or search tools (with repo scoping) to rebuild the working set before proposing edits.",
         "Treat these expectations as guardrails rather than hard locks; do not get stuck over choices like patch versus full-file updates or which search helper to use—pick a reasonable option, explain it briefly, and keep the work moving.",
     ]
 
@@ -1340,6 +1341,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Remind assistants to respect branch defaults, keep writes gated until authorized, and use the persistent workspace tools (run_command, run_tests, commit_workspace, commit_workspace_files) as the standard execution surface.",
         "Keep safety, truncation, and large-file guidance visible so the controller prompt steers assistants toward slice-and-diff workflows instead of large payload retries.",
         "Coach assistants to anchor their reasoning in concrete repo context: point them to the files, functions, and tests they should inspect, and ask for summaries with paths and line references instead of vague statements.",
+        "Include a quick rehydration playbook for assistants to follow after disconnects or blank contexts: rerun controller_contract, refresh server and branch info, and reopen the specific files or slices tied to the task before resuming edits.",
     ]
 
     server_expectations = [

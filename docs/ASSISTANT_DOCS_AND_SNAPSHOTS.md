@@ -50,6 +50,17 @@ Meta tools when you are unsure:
 - `ping_extensions` to confirm that extension modules are loaded.
 - `controller_contract` when in doubt about expectations or requirements.
 
+### 1.1 Rehydrating after context loss
+
+Assistants sometimes lose history between turns. When that happens, rebuild context explicitly before acting:
+
+- Start with `controller_contract` to refresh expectations and verify the contract version.
+- Call `get_server_config` to confirm write posture, controller defaults, and uptime.
+- Reopen the task surface: use `get_branch_summary` for branch state, `open_issue_context` when work is tied to an issue, and `list_repository_tree` to reorient on the repo layout.
+- Pull the exact files you need again with `get_file_contents`, `get_file_slice`, or `fetch_files` instead of relying on hazy memory.
+- Run quick, scoped discovery commands through `run_command` (for example `ls`, `git status`, or `rg <pattern> . --max-count 50`) to rebuild a mental map of the workspace; keep searches repo-scoped instead of global when working on this controller.
+- Restate the goal and current findings in the chat so subsequent turns keep the refreshed context visible to both you and the user.
+
 ---
 
 ## 2. Engine versus personal controller
