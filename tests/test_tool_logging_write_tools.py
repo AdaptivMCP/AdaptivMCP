@@ -14,7 +14,7 @@ def _enable_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     still exercising the normal write-gated code paths.
     """
 
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
 
 @pytest.mark.asyncio

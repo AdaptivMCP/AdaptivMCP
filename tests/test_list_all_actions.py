@@ -46,7 +46,7 @@ async def test_create_issue_builds_payload_and_calls_github_request(monkeypatch)
         return {"status": "ok", "method": method, "path": path, **kwargs}
 
     monkeypatch.setattr(main, "_github_request", fake_github_request)
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     result = await main.create_issue(
         full_name="owner/repo",
@@ -75,7 +75,7 @@ async def test_create_issue_respects_write_gate(monkeypatch):
         raise AssertionError("_github_request should not be called when writes are disabled")
 
     monkeypatch.setattr(main, "_github_request", fake_github_request)
-    monkeypatch.setattr(main, "WRITE_ALLOWED", False)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", False)
 
     with pytest.raises(main.WriteNotAuthorizedError):
         await main.create_issue(full_name="owner/repo", title="Test issue")
@@ -90,7 +90,7 @@ async def test_update_issue_minimal_payload(monkeypatch):
         return {"status": "ok"}
 
     monkeypatch.setattr(main, "_github_request", fake_github_request)
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     await main.update_issue(
         full_name="owner/repo",
@@ -111,7 +111,7 @@ async def test_update_issue_invalid_state_raises(monkeypatch):
         raise AssertionError("_github_request should not be called for invalid state")
 
     monkeypatch.setattr(main, "_github_request", fake_github_request)
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     with pytest.raises(ValueError):
         await main.update_issue(
@@ -127,7 +127,7 @@ async def test_update_issue_requires_at_least_one_field(monkeypatch):
         raise AssertionError("_github_request should not be called when no fields are provided")
 
     monkeypatch.setattr(main, "_github_request", fake_github_request)
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     with pytest.raises(ValueError):
         await main.update_issue(full_name="owner/repo", issue_number=1)
@@ -142,7 +142,7 @@ async def test_comment_on_issue_calls_expected_endpoint(monkeypatch):
         return {"status": "ok"}
 
     monkeypatch.setattr(main, "_github_request", fake_github_request)
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     result = await main.comment_on_issue(
         full_name="owner/repo",

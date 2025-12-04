@@ -48,7 +48,7 @@ async def test_apply_text_update_and_commit_updates_existing_file(monkeypatch):
 
     monkeypatch.setattr(main, "_decode_github_content", fake_decode)
     monkeypatch.setattr(main, "_perform_github_commit", fake_commit)
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     result = await main.apply_text_update_and_commit(
         full_name="owner/repo",
@@ -116,7 +116,7 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
 
     monkeypatch.setattr(main, "_decode_github_content", fake_decode)
     monkeypatch.setattr(main, "_perform_github_commit", fake_commit)
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     result = await main.apply_text_update_and_commit(
         updated_content="new text",

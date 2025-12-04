@@ -55,7 +55,7 @@ async def test_run_command_uses_controller_default_branch(
     tmp_path,
 ) -> None:
     # Enable writes and configure controller defaults.
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
     monkeypatch.setattr(main, "CONTROLLER_REPO", "owner/controller")
     monkeypatch.setattr(main, "CONTROLLER_DEFAULT_BRANCH", "ally-refactor")
 
@@ -107,7 +107,7 @@ async def test_run_command_non_controller_defaults_to_main(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
     monkeypatch.setattr(main, "CONTROLLER_REPO", "owner/controller")
     monkeypatch.setattr(main, "CONTROLLER_DEFAULT_BRANCH", "ally-refactor")
 

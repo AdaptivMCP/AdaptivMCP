@@ -9,7 +9,7 @@ import main
 
 @pytest.mark.asyncio
 async def test_run_command_applies_patch_before_command(monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -75,7 +75,7 @@ async def test_run_shell_returns_full_output():
 
 @pytest.mark.asyncio
 async def test_run_command_uses_temp_virtualenv(monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -114,7 +114,7 @@ async def test_run_command_uses_temp_virtualenv(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_command_allows_disabling_virtualenv(monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -300,7 +300,7 @@ async def test_run_shell_no_truncation_when_limits_disabled(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_clone_repo_reuses_persistent_workspace(monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     workspace_root = tmp_path / "workspaces"
     monkeypatch.setattr(main, "WORKSPACE_BASE_DIR", str(workspace_root))
@@ -340,7 +340,7 @@ async def test_clone_repo_reuses_persistent_workspace(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_commit_workspace_creates_commit(monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -396,7 +396,7 @@ async def test_commit_workspace_creates_commit(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_run_command_and_commit_share_workspace(monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "WRITE_ALLOWED", True)
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
