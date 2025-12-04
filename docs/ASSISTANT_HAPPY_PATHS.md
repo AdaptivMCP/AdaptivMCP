@@ -324,3 +324,143 @@ one (in a docs branch, via PR).
 - Use `validate_json_string` and `validate_tool_args` when emitting structured payloads for other tools or controllers.
 - After docs in this repo are updated and merged into the default branch, treat them as the **source of truth** for future sessions and re-read them via `get_file_contents` or `fetch_files`.
 
+---
+
+## 12. PR review and revision loop
+
+**Goal:** Review an existing pull request like a human would, then iterate on code or docs in response to feedback.
+
+**When to use:** The user references an open PR, asks for a review summary, or wants you to push follow-up commits to the same branch.
+
+**Steps:**
+1. Load PR context:
+   - Use `fetch_pr` for title, body, base/head, and status.
+   - Call `list_pr_changed_filenames` for the file list and `fetch_pr_comments` for discussion threads.
+2. Summarize before editing:
+   - Capture the problem statement, proposed fix, and any blocking review comments.
+   - Note whether CI is passing by checking the PR status in `fetch_pr` or via workflow runs (Section 9).
+3. If edits are required on the PR branch:
+   - Use `ensure_branch` on the head branch from `fetch_pr.head.ref`.
+   - Fetch relevant files (`get_file_contents`, `get_file_slice`) and plan small, targeted changes.
+   - Apply changes with `apply_patch_and_commit`, `apply_text_update_and_commit`, or `commit_workspace_files` if you worked locally.
+4. Run validation the reviewer will expect:
+   - Use `run_tests` or targeted `run_command` invocations (for example `pytest -k <name>`) on the PR branch.
+5. Communicate back on the PR:
+   - Post a concise summary with `comment_on_pull_request`, linking to tests you ran and which comments are resolved.
+   - If you addressed a specific thread, reply in that thread via `comment_on_pull_request` with `in_reply_to` pointing at the comment ID.
+
+**Validation:**
+- New commits appear on the PR branch and show up in `fetch_pr`.
+- Your PR comment reflects the latest state and references the tests you ran.
+- CI status moves from failing to passing or at least shows progress toward green.
+
+---
+
+## 13. Keeping feature branches fresh and resolving conflicts
+
+**Goal:** Refresh a feature branch against the default branch (or PR base) and resolve merge conflicts predictably.
+
+**When to use:** The PR shows "out of date" or merge conflicts, or the user asks to rebase/merge the branch onto the latest base.
+
+**Steps:**
+1. Inspect the branch state:
+   - Use `fetch_pr` (if a PR exists) to see base/head and whether the branch is behind.
+   - Otherwise, call `get_repo_defaults` for the default branch and confirm the target base.
+2. Prepare a workspace for conflict resolution:
+   - Call `ensure_workspace_clone` with `ref` set to the feature branch.
+   - Run `run_command` with `git fetch origin` followed by `git merge origin/<base>` (or `git rebase origin/<base>` if rebase is desired).
+3. Resolve conflicts locally:
+   - Use `run_command` to open conflicted files with `sed -n`, `rg`, or editors like `apply_patch`-style commands.
+   - After fixing conflicts, run `git status` and `git add` via `run_command` to stage changes.
+4. Verify behavior:
+   - Run `run_tests` or targeted commands to ensure the conflict resolution did not break functionality.
+5. Commit and push:
+   - Use `commit_workspace` (or `commit_workspace_files` for a subset) with a message like "Merge main into <branch>".
+   - Confirm the branch is updated by re-running `fetch_pr` or checking the branch tip via `get_branch` if available.
+
+**Validation:**
+- `run_command` for `git status` shows a clean working tree after the merge/rebase.
+- Tests pass on the refreshed branch.
+- The PR no longer shows merge conflicts or "out of date" warnings.
+
+---
+
+## 14. Hotfixes and backports to release branches
+
+**Goal:** Apply a targeted fix to a release branch (for example `release/*` or `stable/*`) and open a PR against that branch rather than `main`.
+
+**When to use:** Security fixes, regression patches, or backports that must ship on an older line while mainline work continues.
+
+**Steps:**
+1. Identify the correct base:
+   - Use `list_repository_tree` or `get_repo_defaults` to confirm release branch names.
+   - If a PR triggered the request, read its body for target branches.
+2. Create a backport branch:
+   - Call `ensure_branch` with `from_ref` set to the release branch (for example `release/1.2`) and a head like `backport/<issue-id>`.
+3. Implement the minimal fix:
+   - Fetch only the files needed with `get_file_slice`/`get_file_contents`.
+   - Apply the change using the same single-file or line-edit tools described in Sections 4 and 6.
+4. Validate against release constraints:
+   - Run `run_tests` focusing on the release branch's expectations; avoid pulling in unrelated features.
+5. Open a PR targeting the release branch:
+   - Use `open_pr_for_existing_branch` with `base` set to the release branch and a PR body that references the original issue/PR.
+
+**Validation:**
+- The PR shows the release branch as `base` and the backport branch as `head`.
+- Tests or checks relevant to the release branch pass.
+- Scope of the diff is limited to the hotfix, with no forward-port features mixed in.
+
+---
+
+## 15. Repository hygiene: labels, milestones, and triage
+
+**Goal:** Keep issues and PRs organized using labels, milestones, and checklists while mirroring how human maintainers triage.
+
+**When to use:** Triage new issues, categorize incoming PRs, or update metadata after status changes.
+
+**Steps:**
+1. Read the current state:
+   - Use `fetch_issue`/`fetch_pr` for title, body, and existing labels or milestones.
+   - Call `fetch_issue_comments` or `fetch_pr_comments` to understand prior triage decisions.
+2. Apply or adjust labels and milestones:
+   - Use `update_issue` to add or replace labels, assignees, and milestones as requested.
+   - When closing an item, include a short summary comment via `comment_on_issue`/`comment_on_pull_request`.
+3. Track follow-ups:
+   - Add checklists or next steps in the issue body (via `update_issue`) so humans can see progress at a glance.
+   - If work is split across PRs, cross-link them in comments and the PR body.
+4. Confirm visibility:
+   - Re-fetch the issue or PR to ensure labels and milestones are set as expected.
+
+**Validation:**
+- Updated labels/milestones appear in subsequent `fetch_issue`/`fetch_pr` calls.
+- Comments clearly summarize state changes for human collaborators.
+- Closed items have an explicit resolution note rather than silent closure.
+
+---
+
+## 16. Contributing to non-controller repositories (fork-style flow)
+
+**Goal:** Work on repositories other than this controller as if you were contributing via a fork, staying explicit about branch selection and write permissions.
+
+**When to use:** The user asks for changes in an external repo, or the controller is configured with a different `controller.repo` than the repo you need to edit.
+
+**Steps:**
+1. Identify the target repo and branch:
+   - Call `get_repo_defaults` for the target repo to learn its default branch.
+   - Explicitly set `full_name` on every tool invocation to avoid defaulting back to the controller repo.
+2. Create a topic branch:
+   - Use `ensure_branch` with `full_name` set to the target repo and `from_ref` set to its default branch.
+   - Keep branch names descriptive (for example `feat/<short-summary>` or `bugfix/<issue-id>`).
+3. Apply changes using the same commit tools as in Sections 3–6, always passing `full_name` and the topic branch.
+4. Run validation commands in a workspace clone of that repo:
+   - Call `ensure_workspace_clone` with `full_name` and the topic branch.
+   - Use `run_tests`/`run_command` as needed.
+5. Open a PR against the target repo:
+   - Use `open_pr_for_existing_branch`, setting `full_name` and `base` explicitly.
+   - In the PR body, note any controller-specific constraints (for example limited token scopes).
+
+**Validation:**
+- Commits land on the correct repo/branch and appear in `fetch_pr` for that repo.
+- Tests run against the intended codebase rather than the controller repo.
+- PR metadata clearly shows the external repo and branch pair to avoid accidental controller edits.
+
