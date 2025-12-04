@@ -3,6 +3,7 @@
 import pytest
 
 import main
+from github_mcp.exceptions import GitHubAPIError, GitHubAuthError
 
 
 @pytest.mark.asyncio
