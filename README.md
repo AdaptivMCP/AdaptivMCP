@@ -152,7 +152,7 @@ Representative tools already implemented:
   - update_files_and_open_pr for multi-file commit plus verify plus PR.
   - Branch and PR helpers: ensure_branch, create_branch, create_pull_request, merge_pull_request, close_pull_request, comment_on_pull_request.
   - Diff helpers: build_unified_diff and build_section-based diff for building patches server-side from full content or line-based sections.
-  - Extra tools in `extra_tools.py`: delete_file, update_file_from_workspace, update_file_sections_and_commit, build_section_based_diff, get_file_slice, and apply_line_edits_and_commit for token-thrifty edits.
+  - Extra tools in `extra_tools.py`: delete_file, update_file_from_workspace, update_file_sections_and_commit, build_section_based_diff, get_file_slice, get_file_with_line_numbers, and apply_line_edits_and_commit for token-thrifty edits.
   - JSON helper: validate_json_string to sanity-check and normalize JSON strings before returning them to clients or feeding them into other tools.
 All write tools are explicitly tagged as write actions and require WRITE_ALLOWED to be enabled.
 

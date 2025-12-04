@@ -178,6 +178,7 @@ one (in a docs branch, via PR).
 **Steps:**
 1. Identify the region:
    - Use `get_file_slice` to retrieve only the lines relevant to the change.
+   - When you need a compact, numbered view to point at exact lines, use `get_file_with_line_numbers`.
    - Optionally, use `search_code_in_repo` to find line ranges or markers.
 2. Choose an edit strategy:
    - For marker- or section-based edits, you can still use `build_section_based_diff` + `apply_patch_and_commit`.
