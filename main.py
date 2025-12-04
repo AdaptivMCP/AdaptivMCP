@@ -2696,12 +2696,22 @@ async def apply_text_update_and_commit(
 
     # 1) Read the current file state on the target branch, treating a 404 as a new file.
     is_new_file = False
+
+    def _extract_sha(decoded: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(decoded, dict):
+            return None
+        json_blob = decoded.get("json")
+        if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
+            return json_blob.get("sha")
+        sha_value = decoded.get("sha")
+        return sha_value if isinstance(sha_value, str) else None
+
     try:
         decoded = await _decode_github_content(full_name, path, effective_branch)
         old_text = decoded.get("text")
         if not isinstance(old_text, str):
             raise GitHubAPIError("Decoded content is not text")
-        sha_before = decoded.get("sha")
+        sha_before = _extract_sha(decoded)
     except GitHubAPIError as exc:
         msg = str(exc)
         if "404" in msg and "/contents/" in msg:
@@ -2734,7 +2744,7 @@ async def apply_text_update_and_commit(
     # 3) Verify by reading the file again from the same branch.
     verified = await _decode_github_content(full_name, path, effective_branch)
     new_text = verified.get("text")
-    sha_after = verified.get("sha")
+    sha_after = _extract_sha(verified)
 
     result: Dict[str, Any] = {
         "status": "committed",

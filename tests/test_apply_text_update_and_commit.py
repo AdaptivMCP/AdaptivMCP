@@ -15,8 +15,16 @@ async def test_apply_text_update_and_commit_updates_existing_file(monkeypatch):
 
     decode_calls = []
     decode_results = [
-        {"text": "old text", "sha": "before-sha", "html_url": "https://example.com/file"},
-        {"text": "new text", "sha": "after-sha", "html_url": "https://example.com/file"},
+        {
+            "text": "old text",
+            "json": {"sha": "before-sha"},
+            "html_url": "https://example.com/file",
+        },
+        {
+            "text": "new text",
+            "json": {"sha": "after-sha"},
+            "html_url": "https://example.com/file",
+        },
     ]
 
     async def fake_decode(full_name, path, branch):
@@ -88,7 +96,7 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
         # Second call represents the post-commit verification read.
         return {
             "text": "new text",
-            "sha": "after-sha",
+            "json": {"sha": "after-sha"},
             "html_url": "https://example.com/new-file.txt",
         }
 
