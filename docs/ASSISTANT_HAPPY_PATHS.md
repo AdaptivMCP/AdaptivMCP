@@ -20,16 +20,15 @@ one (in a docs branch, via PR).
 
 **Steps:**
 1. Call `get_server_config` to learn:
-   - Whether `write_allowed_default` is true or false for this controller repo.
-   - The configured controller repository and default branch.
-   - HTTP and timeout limits that might affect large operations.
+   - Whether `write_allowed` is currently true for this server instance.
+   - HTTP, timeout, and concurrency limits that might affect large operations.
 2. Call `controller_contract` to refresh your mental model of:
-   - Expected workflows for assistants.
-   - Which tools are intended for discovery, safety, execution, diffs, and large files.
+   - The configured controller repository and its `default_branch`.
+   - Whether writes are enabled by default for that controller repo (`write_allowed_default`).
+   - Expected workflows for assistants and which tools are intended for discovery, safety, execution, diffs, and large files.
 3. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan to:
-   - Call `authorize_write_actions` before using write-capable tools.
+   - Call `authorize_write_actions` before using write-capable tools (even if `write_allowed_default` is true, some deployments may gate writes per session).
    - Use feature branches instead of writing to `main` directly.
-
 **Validation:**
 - You can see `write_allowed` in `get_server_config` and confirm that write tools are either allowed by default or gated.
 - After `authorize_write_actions`, write-capable tools stop returning gating errors.
@@ -43,7 +42,7 @@ one (in a docs branch, via PR).
 **When to use:** Any time you need to understand structure, key docs, or high-level behavior before editing.
 
 **Steps:**
-1. Use `get_repo_defaults` (or `get_server_config.controller.repo`) to confirm the `full_name` and default branch.
+1. Use `get_repo_defaults` to confirm the controller `full_name` and its default branch.
 2. Call `list_repository_tree` with:
    - `full_name` set to the controller repo.
    - `ref` set to the default branch (usually `main`).
@@ -51,10 +50,9 @@ one (in a docs branch, via PR).
 3. For specific files:
    - Use `get_file_contents` for small to medium files.
    - Use `get_file_slice` when you only need a portion of a large file (for example, a single section in `main.py` or a long test file).
-4. When you need to search:
-   - Prefer `search_code_in_repo` with a repo-scoped query (for example, a function name, test name, or filename).
+4. When you need to search within this repo:
+   - Prefer the GitHub search tool (for example `search` with a code query) using a repo-scoped query (function name, test name, or filename) rather than a global search.
    - Avoid unqualified global GitHub search unless the user explicitly wants cross-repo context.
-
 **Validation:**
 - You successfully retrieved and summarized the docs or code files you needed without triggering any write tools.
 - Tree listings reflect the expected layout (docs, tests, main code, workflows).
@@ -89,13 +87,12 @@ one (in a docs branch, via PR).
      - `base` left default or set to `main` (the MCP server normalizes this to the configured default).
      - A clear `title` and `body` summarizing the doc change.
 7. Optionally list the PR to confirm state:
-   - Call `list_pull_requests` or `list_repository_pull_requests` filtered by head branch.
+   - Call `list_pull_requests` filtered by head branch to confirm the new PR exists and is open.
 
 **Validation:**
 - `apply_text_update_and_commit` or similar returns `status` equal to `committed` with a verification block.
 - `open_pr_for_existing_branch` returns an open PR with the expected branch and base.
-- `list_repository_pull_requests` shows the new PR in the open list.
-
+- `list_pull_requests` shows the new PR in the open list.
 ---
 
 ## 4. Single-file code change with tests
@@ -106,9 +103,8 @@ one (in a docs branch, via PR).
 
 **Steps:**
 1. Discovery:
-   - Use `search_code_in_repo` and `list_repository_tree` to locate the main implementation file and its tests (for example, `tests/test_apply_text_update_and_commit.py`).
-   - Fetch the relevant files using `get_file_contents` or `get_file_slice`.
-2. Plan the change:
+   - Use repo-scoped search (for example the `search` tool with a `code` query) and `list_repository_tree` to locate the main implementation file and its tests (for example, `tests/test_apply_text_update_and_commit.py`).
+   - Fetch the relevant files using `get_file_contents` or `get_file_slice`.2. Plan the change:
    - Draft the code change and any test updates in your reasoning.
    - Keep the change set small and focused on one feature or bug.
 3. Create a feature branch:
@@ -179,8 +175,7 @@ one (in a docs branch, via PR).
 1. Identify the region:
    - Use `get_file_slice` to retrieve only the lines relevant to the change.
    - When you need a compact, numbered view to point at exact lines, use `get_file_with_line_numbers`.
-   - Optionally, use `search_code_in_repo` to find line ranges or markers.
-2. Choose an edit strategy:
+   - Optionally, use a repo-scoped code search (for example via the `search` tool) to find line ranges or markers before slicing.2. Choose an edit strategy:
    - For marker- or section-based edits, you can still use `build_section_based_diff` + `apply_patch_and_commit`.
    - For direct, minimal line edits where line numbers are known, use `apply_line_edits_and_commit`.
 3. Using `apply_line_edits_and_commit` for line-based edits:
@@ -294,25 +289,26 @@ one (in a docs branch, via PR).
 
 ---
 
-## 10. Background reads for expensive operations
+## 10. Handling expensive read operations safely
 
-**Goal:** Offload long-running or potentially slow read operations to background jobs while you continue reasoning.
+**Goal:** Keep large or potentially slow read operations predictable while avoiding timeouts and unnecessary data transfer.
 
-**When to use:** When fetching large sets of files or expensive searches via `fetch_files`, `list_repository_tree`, or similar tools tagged as read actions.
+**When to use:** When fetching large sets of files or performing broad repository scans via `fetch_files`, `list_repository_tree`, or similar tools tagged as read actions.
 
 **Steps:**
-1. Start a background job:
-   - Call `start_background_read` with the underlying read tool and arguments (for example, a large `fetch_files` batch).
-2. Poll for completion:
-   - Use `get_background_read` with `job_id` until it reports completion and optionally returns the result.
-   - Or use `list_background_reads` to see all tracked jobs and their statuses.
-3. Use results once ready:
-   - When a job completes, use its result to continue your workflow (for example summarizing many files or building a diff).
+1. Narrow the scope before reading:
+   - Use `list_repository_tree` with a `path_prefix` (for example `docs/` or `src/github_mcp/`) instead of listing the entire repo.
+   - Prefer repo-scoped search queries (via the `search` tool) to locate candidate files before fetching content.
+2. Fetch only what you need:
+   - Use `get_file_contents` for small files.
+   - Use `get_file_slice` when you only need a specific region of a large file (for example a single function or section).
+   - For multiple files, use `fetch_files` with a focused list of paths rather than the entire tree.
+3. Summarize and discard:
+   - After reading, summarize key findings in your own reasoning and avoid repeatedly re-fetching the same large content in a single session.
 
 **Validation:**
-- The `start_background_read` response returns a valid `job_id`.
-- `get_background_read` transitions from pending to completed, and the embedded result matches what a direct read call would have returned.
-
+- Read tools complete without hitting configured timeouts from `get_server_config`.
+- You only fetch the slices and files needed for the current task, not the entire repository or huge unused regions.
 ---
 
 ## 11. General guidance for staying on the happy path
@@ -370,14 +366,13 @@ one (in a docs branch, via PR).
    - Call `ensure_workspace_clone` with `ref` set to the feature branch.
    - Run `run_command` with `git fetch origin` followed by `git merge origin/<base>` (or `git rebase origin/<base>` if rebase is desired).
 3. Resolve conflicts locally:
-   - Use `run_command` to open conflicted files with `sed -n`, `rg`, or editors like `apply_patch`-style commands.
+   - Use `run_command` to inspect conflicted files with commands like `sed -n`, `rg`, or other CLI tools.
    - After fixing conflicts, run `git status` and `git add` via `run_command` to stage changes.
 4. Verify behavior:
    - Run `run_tests` or targeted commands to ensure the conflict resolution did not break functionality.
 5. Commit and push:
-   - Use `commit_workspace` (or `commit_workspace_files` for a subset) with a message like "Merge main into <branch>".
-   - Confirm the branch is updated by re-running `fetch_pr` or checking the branch tip via `get_branch` if available.
-
+   - Use `commit_workspace` (or `commit_workspace_files` for a subset) with a message like "Merge <base> into <branch>".
+   - Confirm the branch is updated by re-running `fetch_pr` and checking that GitHub no longer reports the branch as behind or conflicted.
 **Validation:**
 - `run_command` for `git status` shows a clean working tree after the merge/rebase.
 - Tests pass on the refreshed branch.
