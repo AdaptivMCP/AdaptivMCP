@@ -3,7 +3,7 @@
 import pytest
 
 import main
-
+from github_mcp.exceptions import GitHubAPIError, GitHubAuthError
 
 @pytest.mark.asyncio
 async def test_end_to_end_small_doc_edit_and_test_run():
@@ -17,6 +17,11 @@ async def test_end_to_end_small_doc_edit_and_test_run():
       - Apply the edit via apply_text_update_and_commit on a throwaway branch.
       - Run the project's tests through run_tests.
     '''
+
+    # Explicitly enable write tools for this smoke test so it can exercise
+    # the full long-workflow path end to end. In real usage, the controller
+    # or assistant should call authorize_write_actions before write tools.
+    main.authorize_write_actions(approved=True)
 
     # 1) Discover a small docs file via list_repository_tree.
     # get_repo_defaults returns a wrapper object with a nested 'defaults' field.
