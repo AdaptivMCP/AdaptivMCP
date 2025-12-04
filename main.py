@@ -112,6 +112,7 @@ from github_mcp.server import (
     CONTROLLER_CONTRACT_VERSION,
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
+    _REGISTERED_MCP_TOOLS,
     _ensure_write_allowed,
     _find_registered_tool,
     _github_request,
@@ -128,6 +129,10 @@ def __getattr__(name: str):
         return server.WRITE_ALLOWED
     raise AttributeError(name)
 
+
+# Recalculate write gate on import to honor updated environment variables when
+# ``main`` is reloaded in tests.
+server.WRITE_ALLOWED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 
 register_extra_tools_if_available()
 

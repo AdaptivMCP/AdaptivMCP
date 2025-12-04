@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 import time
 import traceback
 import uuid
@@ -58,7 +59,8 @@ mcp_shared_session.BaseSession._send_response = _quiet_send_response
 
 
 async def _github_request(*args, **kwargs):
-    kwargs.setdefault("client_factory", _github_client_instance)
+    client_factory = getattr(sys.modules.get("main"), "_github_client_instance", None)
+    kwargs.setdefault("client_factory", client_factory or _github_client_instance)
     return await _http_clients._github_request(*args, **kwargs)
 
 
