@@ -113,6 +113,17 @@ Key properties:
 - The user supplies their own GitHub token and configuration.
 - The controller in ChatGPT only orchestrates tool calls; it never stores secrets and has no direct network access to GitHub.
 
+## Code organization
+
+Shared infrastructure now lives in the `github_mcp/` package so the main entrypoint stays focused on tool definitions:
+
+- `config.py` centralizes environment-driven settings and logging setup.
+- `metrics.py` holds the in-process metrics registry used by tool logging and health checks.
+- `http_clients.py` and `github_content.py` contain HTTP client helpers and GitHub content utilities.
+- `workspace.py` wraps persistent workspace management and shell execution helpers.
+
+The `main.py` module imports these helpers and re-exports the existing tool surface so controllers and tests continue to use the same interface while the implementation is easier to maintain.
+
 ---
 
 ## Safety and write gating
