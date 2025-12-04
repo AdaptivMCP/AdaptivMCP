@@ -2,16 +2,24 @@
 
 This document explains how assistants and advanced users should think about documentation, prompts, and snapshots when using the Adaptiv Controller GitHub MCP server as a personal controller engine.
 
-The core idea:
+## How to think about this controller
+
+At a high level:
 
 - The GitHub MCP server in this repository is the stable engine.
 - Your ChatGPT side controller prompt is the personal layer where you express your own style and policies.
 - The controller contract and docs are the shared map between humans, assistants, and the engine.
 
+In practice, always remember:
+
+- The `main` branch of this repository is the source of truth for behavior and docs.
+- Any local workspace clone is a scratchpad; refresh it from the repository when in doubt.
+- Tools exposed by this MCP server are the only way you interact with the repository.
+- Use branches and pull requests for any edits; avoid writing directly to `main`.
+
 The goal is to keep assistants grounded in what the server can actually do, while still allowing each user to evolve their own personal controller over time.
 
 ---
-
 ## 1. Sources of truth
 
 When reasoning about capabilities, always start from live information and only then lean on prompts or memory.
