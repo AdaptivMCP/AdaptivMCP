@@ -160,6 +160,18 @@ Use this table to choose the right tool path when editing files:
 | Multiple files in one change  | `update_files_and_open_pr` (optionally preceded by diff builders)        |
 
 In general, prefer diff/section-based edits for existing files. Reserve `apply_text_update_and_commit` for cases where you truly own the whole file content and intend to replace it entirely.
+### 4.1 Tool selection for file edits
+
+Use this table to choose the right tool path when editing files:
+
+| Use case                      | Recommended tools                                                          |
+|-------------------------------|----------------------------------------------------------------------------|
+| Small/local edits             | `get_file_with_line_numbers` → `apply_line_edits_and_commit`             |
+| Multi-line edits in large file| `get_file_with_line_numbers` → `build_section_based_diff` → `apply_patch_and_commit` |
+| Regenerate whole doc from spec| `apply_text_update_and_commit` (full-file overwrite)                     |
+| Multiple files in one change  | `update_files_and_open_pr` (optionally preceded by diff builders)        |
+
+In general, prefer diff/section-based edits for existing files. Reserve `apply_text_update_and_commit` for cases where you truly own the whole file content and intend to replace it entirely.
 Typical pattern for a single file:
 
 1. Read the current file:
