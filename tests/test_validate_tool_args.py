@@ -4,6 +4,36 @@ import main
 
 
 @pytest.mark.asyncio
+async def test_validate_tool_args_reports_missing_fields_and_enables_repair_flow():
+    """Golden flow: invalid args for a known tool, then repaired using validate_tool_args.
+
+    This mirrors the controller/assistant contract: assistants should
+    (1) call the tool,
+    (2) inspect the error,
+    (3) read the schema via list_all_actions / controller metadata, then
+    (4) call validate_tool_args to repair the payload before retrying.
+    """
+
+    # 1) Start with an incomplete payload (missing required 'head' field).
+    invalid_args = {"full_name": "owner/repo", "base": "main"}
+
+    validation = await main.validate_tool_args(
+        "compare_refs", invalid_args
+    )
+
+    assert validation["valid"] is False
+    assert any("head" in error.get("message", "") for error in validation["errors"])
+
+    # 2) Repair the payload using the error message / schema.
+    repaired_args = {**invalid_args, "head": "feature"}
+
+    repaired_validation = await main.validate_tool_args("compare_refs", repaired_args)
+
+    assert repaired_validation["valid"] is True
+    assert repaired_validation["errors"] == []
+
+
+@pytest.mark.asyncio
 async def test_validate_tool_args_passes_for_known_tool():
     result = await main.validate_tool_args(
         "compare_refs", {"full_name": "owner/repo", "base": "main", "head": "feature"}
@@ -11,16 +41,6 @@ async def test_validate_tool_args_passes_for_known_tool():
 
     assert result["valid"] is True
     assert result["errors"] == []
-
-
-@pytest.mark.asyncio
-async def test_validate_tool_args_reports_missing_fields():
-    result = await main.validate_tool_args(
-        "compare_refs", {"full_name": "owner/repo", "base": "main"}
-    )
-
-    assert result["valid"] is False
-    assert any("head" in error.get("message", "") for error in result["errors"])
 
 
 @pytest.mark.asyncio
