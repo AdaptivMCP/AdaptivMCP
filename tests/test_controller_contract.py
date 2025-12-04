@@ -7,8 +7,8 @@ from main import (
 )
 
 
-def test_controller_contract_structure():
-    payload = controller_contract()
+def test_controller_contract_full_structure():
+    payload = controller_contract(compact=False)
 
     assert payload["version"] == CONTROLLER_CONTRACT_VERSION
     assert payload["controller"]["repo"] == CONTROLLER_REPO
@@ -43,7 +43,7 @@ def test_controller_contract_structure():
 
 
 def test_controller_contract_compact_mode():
-    payload = controller_contract(compact=True)
+    payload = controller_contract()
 
     assert payload["version"] == CONTROLLER_CONTRACT_VERSION
     assert payload["controller"]["repo"] == CONTROLLER_REPO
