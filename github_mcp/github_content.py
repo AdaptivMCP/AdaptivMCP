@@ -88,6 +88,7 @@ async def _decode_github_content(
         "json": j,
         "content": content,
         "encoding": encoding,
+        "sha": j.get("sha"),
         "text": text,
         "decoded_bytes": decoded,
     }
