@@ -136,6 +136,7 @@ server.WRITE_ALLOWED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 
 register_extra_tools_if_available()
 
+
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
     """Toggle write-tagged tools on or off for the running server instance.
@@ -202,9 +203,7 @@ async def get_server_config() -> Dict[str, Any]:
             "committer_email": GIT_COMMITTER_EMAIL,
         },
         "sandbox": {
-            "sandbox_content_base_url_configured": bool(
-                os.environ.get("SANDBOX_CONTENT_BASE_URL")
-            ),
+            "sandbox_content_base_url_configured": bool(os.environ.get("SANDBOX_CONTENT_BASE_URL")),
         },
         "environment": {
             "github_token_present": bool(
@@ -260,8 +259,6 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
         "parsed_type": type(parsed).__name__,
         "normalized": normalized,
     }
-
-
 
 
 @mcp_tool(write_action=False)
@@ -527,6 +524,8 @@ async def validate_environment() -> Dict[str, Any]:
             "github_api_base": GITHUB_API_BASE,
         },
     }
+
+
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
     """Return the authenticated token's GitHub rate-limit document."""
@@ -614,9 +613,7 @@ async def list_repository_issues(
 async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Fetch a GitHub issue."""
 
-    return await _github_request(
-        "GET", f"/repos/{full_name}/issues/{issue_number}"
-    )
+    return await _github_request("GET", f"/repos/{full_name}/issues/{issue_number}")
 
 
 @mcp_tool(write_action=False)
@@ -713,9 +710,7 @@ async def list_pr_changed_filenames(
 async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
     """Get combined status for a commit or ref."""
 
-    return await _github_request(
-        "GET", f"/repos/{full_name}/commits/{ref}/status"
-    )
+    return await _github_request("GET", f"/repos/{full_name}/commits/{ref}/status")
 
 
 @mcp_tool(write_action=False)
@@ -990,13 +985,17 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
             "update_files_and_open_pr",
         ],
         "anti_patterns": [
-            "Embedding large Python or shell scripts in run_command.command to "
-            "edit files.",
+            "Embedding large Python or shell scripts in run_command.command to " "edit files.",
         ],
     }
 
     tooling = {
-        "discovery": ["get_server_config", "list_write_tools", "validate_tool_args", "validate_environment"],
+        "discovery": [
+            "get_server_config",
+            "list_write_tools",
+            "validate_tool_args",
+            "validate_environment",
+        ],
         "safety": [
             "authorize_write_actions",
             "ensure_branch",
@@ -1285,9 +1284,7 @@ async def list_repository_tree(
         raise ValueError("max_entries must be a positive integer")
 
     params = {"recursive": 1 if recursive else 0}
-    data = await _github_request(
-        "GET", f"/repos/{full_name}/git/trees/{ref}", params=params
-    )
+    data = await _github_request("GET", f"/repos/{full_name}/git/trees/{ref}", params=params)
 
     payload = data.get("json") or {}
     tree = payload.get("tree")
@@ -1406,9 +1403,7 @@ async def search(
 async def download_user_content(content_url: str) -> Dict[str, Any]:
     """Download user-provided content (sandbox/local/http) with base64 encoding."""
 
-    body_bytes = await _load_body_from_content_url(
-        content_url, context="download_user_content"
-    )
+    body_bytes = await _load_body_from_content_url(content_url, context="download_user_content")
     text: Optional[str]
     try:
         text = body_bytes.decode("utf-8")
@@ -1525,9 +1520,15 @@ def list_all_actions(
     }
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(
+    write_action=False,
+    description=(
+        "Return metadata and optional schema for a single tool. "
+        "Prefer this over manually scanning list_all_actions in long sessions."
+    ),
+)
 async def describe_tool(name: str, include_parameters: bool = True) -> Dict[str, Any]:
-    """Return metadata and optional schema for a single tool.
+    """Inspect one registered MCP tool by name.
 
     This is a convenience wrapper around list_all_actions: it lets callers
     inspect one tool by name without scanning the entire tool catalog.
@@ -1545,8 +1546,11 @@ async def describe_tool(name: str, include_parameters: bool = True) -> Dict[str,
 
     raise ValueError(f"Unknown tool name: {name}")
 
+
 @mcp_tool(write_action=False)
-async def validate_tool_args(tool_name: str, args: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+async def validate_tool_args(
+    tool_name: str, args: Optional[Mapping[str, Any]] = None
+) -> Dict[str, Any]:
     """Validate a candidate payload against a tool's input schema without running it."""
 
     found = _find_registered_tool(tool_name)
@@ -1558,9 +1562,7 @@ async def validate_tool_args(tool_name: str, args: Optional[Mapping[str, Any]] =
                 if getattr(tool, "name", None) or getattr(func, "__name__", None)
             )
         )
-        raise ValueError(
-            f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}"
-        )
+        raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
 
     tool, _ = found
     schema = _normalize_input_schema(tool)
@@ -1594,7 +1596,6 @@ async def validate_tool_args(tool_name: str, args: Optional[Mapping[str, Any]] =
         "errors": errors,
         "schema": schema,
     }
-
 
 
 @mcp_tool(write_action=False)
@@ -1636,9 +1637,7 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     async with _concurrency_semaphore:
         resp = await client.send(request, follow_redirects=True)
     if resp.status_code >= 400:
-        raise GitHubAPIError(
-            f"GitHub job logs error {resp.status_code}: {resp.text}"
-        )
+        raise GitHubAPIError(f"GitHub job logs error {resp.status_code}: {resp.text}")
     content_type = resp.headers.get("Content-Type", "")
     if "zip" in content_type.lower():
         logs = _decode_zipped_job_logs(resp.content)
@@ -1670,9 +1669,7 @@ async def wait_for_workflow_run(
                 f"/repos/{full_name}/actions/runs/{run_id}",
             )
         if resp.status_code >= 400:
-            raise GitHubAPIError(
-                f"GitHub workflow run error {resp.status_code}: {resp.text}"
-            )
+            raise GitHubAPIError(f"GitHub workflow run error {resp.status_code}: {resp.text}")
 
         data = resp.json()
         status = data.get("status")
@@ -1716,9 +1713,7 @@ async def trigger_workflow_dispatch(
             json=payload,
         )
     if resp.status_code not in (204, 201):
-        raise GitHubAPIError(
-            f"GitHub workflow dispatch error {resp.status_code}: {resp.text}"
-        )
+        raise GitHubAPIError(f"GitHub workflow dispatch error {resp.status_code}: {resp.text}")
     return {"status_code": resp.status_code}
 
 
@@ -1747,9 +1742,7 @@ async def trigger_and_wait_for_workflow(
         raise GitHubAPIError("No workflow runs found after dispatch")
     run_id = workflow_runs[0]["id"]
 
-    result = await wait_for_workflow_run(
-        full_name, run_id, timeout_seconds, poll_interval_seconds
-    )
+    result = await wait_for_workflow_run(full_name, run_id, timeout_seconds, poll_interval_seconds)
     return {"run_id": run_id, "result": result}
 
 
@@ -1842,22 +1835,22 @@ async def create_issue(
 ) -> Dict[str, Any]:
     # Create a GitHub issue with optional body, labels, and assignees.
 
-    if '/' not in full_name:
-        raise ValueError('full_name must be in owner/repo format')
+    if "/" not in full_name:
+        raise ValueError("full_name must be in owner/repo format")
 
-    _ensure_write_allowed(f'create issue in {full_name}: {title!r}')
+    _ensure_write_allowed(f"create issue in {full_name}: {title!r}")
 
-    payload: Dict[str, Any] = {'title': title}
+    payload: Dict[str, Any] = {"title": title}
     if body is not None:
-        payload['body'] = body
+        payload["body"] = body
     if labels is not None:
-        payload['labels'] = labels
+        payload["labels"] = labels
     if assignees is not None:
-        payload['assignees'] = assignees
+        payload["assignees"] = assignees
 
     return await _github_request(
-        'POST',
-        f'/repos/{full_name}/issues',
+        "POST",
+        f"/repos/{full_name}/issues",
         json_body=payload,
     )
 
@@ -1874,32 +1867,32 @@ async def update_issue(
 ) -> Dict[str, Any]:
     # Update fields on an existing GitHub issue.
 
-    if '/' not in full_name:
-        raise ValueError('full_name must be in owner/repo format')
+    if "/" not in full_name:
+        raise ValueError("full_name must be in owner/repo format")
 
-    _ensure_write_allowed(f'update issue #{issue_number} in {full_name}')
+    _ensure_write_allowed(f"update issue #{issue_number} in {full_name}")
 
     payload: Dict[str, Any] = {}
     if title is not None:
-        payload['title'] = title
+        payload["title"] = title
     if body is not None:
-        payload['body'] = body
+        payload["body"] = body
     if state is not None:
-        allowed_states = {'open', 'closed'}
+        allowed_states = {"open", "closed"}
         if state not in allowed_states:
-            raise ValueError('state must be ‘open’ or ‘closed’')
-        payload['state'] = state
+            raise ValueError("state must be ‘open’ or ‘closed’")
+        payload["state"] = state
     if labels is not None:
-        payload['labels'] = labels
+        payload["labels"] = labels
     if assignees is not None:
-        payload['assignees'] = assignees
+        payload["assignees"] = assignees
 
     if not payload:
-        raise ValueError('At least one field must be provided to update_issue')
+        raise ValueError("At least one field must be provided to update_issue")
 
     return await _github_request(
-        'PATCH',
-        f'/repos/{full_name}/issues/{issue_number}',
+        "PATCH",
+        f"/repos/{full_name}/issues/{issue_number}",
         json_body=payload,
     )
 
@@ -1912,15 +1905,15 @@ async def comment_on_issue(
 ) -> Dict[str, Any]:
     # Post a comment on an issue.
 
-    if '/' not in full_name:
-        raise ValueError('full_name must be in owner/repo format')
+    if "/" not in full_name:
+        raise ValueError("full_name must be in owner/repo format")
 
-    _ensure_write_allowed(f'comment on issue #{issue_number} in {full_name}')
+    _ensure_write_allowed(f"comment on issue #{issue_number} in {full_name}")
 
     return await _github_request(
-        'POST',
-        f'/repos/{full_name}/issues/{issue_number}/comments',
-        json_body={'body': body},
+        "POST",
+        f"/repos/{full_name}/issues/{issue_number}/comments",
+        json_body={"body": body},
     )
 
 
@@ -1953,15 +1946,17 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
         text = f"{pr.get('title', '')}\n{pr.get('body', '')}"
         if issue_str in text or (isinstance(branch_name, str) and issue_str in branch_name):
             target_list = open_prs if pr.get("state") == "open" else closed_prs
-            target_list.append({
-                "number": pr.get("number"),
-                "title": pr.get("title"),
-                "state": pr.get("state"),
-                "draft": pr.get("draft"),
-                "html_url": pr.get("html_url"),
-                "head": pr.get("head"),
-                "base": pr.get("base"),
-            })
+            target_list.append(
+                {
+                    "number": pr.get("number"),
+                    "title": pr.get("title"),
+                    "state": pr.get("state"),
+                    "draft": pr.get("draft"),
+                    "html_url": pr.get("html_url"),
+                    "head": pr.get("head"),
+                    "base": pr.get("base"),
+                }
+            )
 
     return {
         "issue": issue_json,
@@ -1969,6 +1964,7 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
         "open_prs": open_prs,
         "closed_prs": closed_prs,
     }
+
 
 @mcp_tool(write_action=False)
 async def compare_refs(
@@ -2025,16 +2021,12 @@ async def ensure_branch(
     if resp.status_code == 404:
         return await create_branch(full_name, branch, from_ref)
     if resp.status_code >= 400:
-        raise GitHubAPIError(
-            f"GitHub ensure_branch error {resp.status_code}: {resp.text}"
-        )
+        raise GitHubAPIError(f"GitHub ensure_branch error {resp.status_code}: {resp.text}")
     return {"status_code": resp.status_code, "json": resp.json()}
 
 
 @mcp_tool(write_action=False)
-async def get_branch_summary(
-    full_name: str, branch: str, base: str = "main"
-) -> Dict[str, Any]:
+async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
     """Return ahead/behind data, PRs, and latest workflow run for a branch."""
 
     effective_branch = _effective_ref_for_repo(full_name, branch)
@@ -2069,9 +2061,7 @@ async def get_branch_summary(
     workflow_error: Optional[str] = None
     latest_workflow_run: Optional[Dict[str, Any]] = None
     try:
-        runs_resp = await list_workflow_runs(
-            full_name, branch=effective_branch, per_page=1
-        )
+        runs_resp = await list_workflow_runs(full_name, branch=effective_branch, per_page=1)
         runs_json = runs_resp.get("json") or {}
         runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
         if runs:
@@ -2090,6 +2080,8 @@ async def get_branch_summary(
         "latest_workflow_run": latest_workflow_run,
         "workflow_error": workflow_error,
     }
+
+
 @mcp_tool(write_action=True)
 async def create_pull_request(
     full_name: str,
@@ -2108,9 +2100,7 @@ async def create_pull_request(
     """
 
     effective_base = _effective_ref_for_repo(full_name, base)
-    _ensure_write_allowed(
-        f"create PR from {head} to {effective_base} in {full_name}"
-    )
+    _ensure_write_allowed(f"create PR from {head} to {effective_base} in {full_name}")
     payload: Dict[str, Any] = {
         "title": title,
         "head": head,
@@ -2150,7 +2140,6 @@ async def open_pr_for_existing_branch(
         body=body,
         draft=draft,
     )
-
 
 
 @mcp_tool(write_action=True)
@@ -2206,9 +2195,7 @@ async def update_files_and_open_pr(
                 try:
                     body_bytes = await _load_body_from_content_url(
                         file_content_url,
-                        context=(
-                            f"update_files_and_open_pr({full_name}/{current_path})"
-                        ),
+                        context=(f"update_files_and_open_pr({full_name}/{current_path})"),
                     )
                 except Exception as exc:
                     return _structured_tool_error(
@@ -2218,9 +2205,6 @@ async def update_files_and_open_pr(
                     )
             else:
                 body_bytes = file_content.encode("utf-8")
-
-
-
 
             # Resolve SHA and commit
             try:
@@ -2250,9 +2234,7 @@ async def update_files_and_open_pr(
 
             # Post-commit verification for this file
             try:
-                verification = await _verify_file_on_branch(
-                    full_name, current_path, branch
-                )
+                verification = await _verify_file_on_branch(full_name, current_path, branch)
             except Exception as exc:
                 return _structured_tool_error(
                     exc,
@@ -2285,9 +2267,8 @@ async def update_files_and_open_pr(
         }
 
     except Exception as exc:
-        return _structured_tool_error(
-            exc, context="update_files_and_open_pr", path=current_path
-        )
+        return _structured_tool_error(exc, context="update_files_and_open_pr", path=current_path)
+
 
 @mcp_tool(write_action=True)
 async def apply_text_update_and_commit(
@@ -2416,6 +2397,8 @@ async def apply_text_update_and_commit(
         result["diff"] = "".join(diff_iter)
 
     return result
+
+
 @mcp_tool(write_action=True)
 async def apply_patch_and_commit(
     full_name: str,
@@ -2668,6 +2651,7 @@ async def healthz(request: Request) -> JSONResponse:
 
     payload = _build_health_payload()
     return JSONResponse(payload)
+
 
 async def _shutdown_clients() -> None:
     if _http_client_github is not None:
