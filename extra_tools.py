@@ -633,6 +633,79 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         }
 
     @mcp_tool(
+        write_action=False,
+        description=(
+            "Render a compact, line-numbered view of a file to simplify manual edits. "
+            "Use start_line/max_lines to limit output size for very large files."
+        ),
+        tags=["github", "read", "files", "ergonomics"],
+    )
+    async def get_file_with_line_numbers(
+        full_name: str,
+        path: str,
+        ref: str = "main",
+        start_line: int = 1,
+        max_lines: int = 400,
+    ) -> Dict[str, Any]:
+        """Return a line-numbered string and structured lines for a file slice."""
+
+        if start_line < 1:
+            raise ValueError("start_line must be >= 1")
+        if max_lines <= 0:
+            raise ValueError("max_lines must be > 0")
+
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+
+        decoded = await _decode_github_content(full_name, path, effective_ref)
+        text = decoded.get("text", "")
+        all_lines = text.splitlines(keepends=False)
+        total_lines = len(all_lines)
+
+        if total_lines == 0:
+            return {
+                "full_name": full_name,
+                "path": path,
+                "ref": effective_ref,
+                "start_line": 1,
+                "end_line": 0,
+                "max_lines": max_lines,
+                "total_lines": 0,
+                "has_more_above": False,
+                "has_more_below": False,
+                "lines": [],
+                "numbered_text": "",
+            }
+
+        start_idx = min(max(start_line - 1, 0), total_lines - 1)
+        end_idx = min(start_idx + max_lines, total_lines)
+
+        slice_lines = [
+            {"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)
+        ]
+
+        width = len(str(total_lines))
+        numbered_text = "\n".join(
+            f"{entry['line']:>{width}}| {entry['text']}" for entry in slice_lines
+        )
+
+        has_more_above = start_idx > 0
+        has_more_below = end_idx < total_lines
+
+        return {
+            "full_name": full_name,
+            "path": path,
+            "ref": effective_ref,
+            "start_line": start_idx + 1,
+            "end_line": end_idx,
+            "max_lines": max_lines,
+            "total_lines": total_lines,
+            "has_more_above": has_more_above,
+            "has_more_below": has_more_below,
+            "lines": slice_lines,
+            "numbered_text": numbered_text,
+        }
+
+    @mcp_tool(
         write_action=True,
         description=(
             "Apply minimal line-based edits to a file and commit them without "
