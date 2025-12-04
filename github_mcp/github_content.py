@@ -120,11 +120,15 @@ async def _perform_github_commit(
     branch: str,
     path: str,
     message: str,
-    content_b64: str,
+    body_bytes: bytes,
     sha: Optional[str],
     committer: Optional[Dict[str, str]] = None,
     author: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
+    if not isinstance(body_bytes, (bytes, bytearray)):
+        raise TypeError("body_bytes must be bytes")
+
+    content_b64 = base64.b64encode(body_bytes).decode("ascii")
     payload: Dict[str, Any] = {"message": message, "content": content_b64, "branch": branch}
     if sha:
         payload["sha"] = sha
