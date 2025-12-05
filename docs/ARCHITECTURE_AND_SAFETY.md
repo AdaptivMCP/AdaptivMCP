@@ -95,7 +95,7 @@ write policy, including:
 
 Controllers can call `get_server_config` at the start of a session to decide
 whether they need to request user approval for writes.
----
+Controllers can call `get_server_config` at the start of a session to decide whether they need to request user approval for writes, and can use `get_latest_branch_status` to understand the current branch head's PR and workflow state before attempting CI fixes.
 
 ## 4. Controller-aware branch and ref scoping
 
