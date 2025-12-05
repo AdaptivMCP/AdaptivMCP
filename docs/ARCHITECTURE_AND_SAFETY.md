@@ -205,8 +205,16 @@ This helper is the default choice for localized code edits and is used heavily i
 
 Tests in `tests/test_update_files_and_open_pr.py` validate this behavior.
 
----
+### 5.5 Workspace commit helpers and branch-aware gating
 
+When I use workspace commit helpers like `commit_workspace` or `commit_workspace_files`, the server now passes the target feature branch name as `target_ref` into `_ensure_write_allowed`. This means:
+
+- Commits to non-default branches are allowed even when `WRITE_ALLOWED` is `False`, so I can iterate on feature branches without elevating global write permissions.
+- Direct writes to the controller default branch still require explicit approval, because `_ensure_write_allowed` treats the controller default branch as protected and enforces the global write flag there.
+
+By contrast, unscoped or potentially dangerous write tools call `_ensure_write_allowed` with `target_ref=None`, which treats `WRITE_ALLOWED` as a global kill switch. I should assume those tools are disabled unless the controller has explicitly authorized writes via `authorize_write_actions`.
+
+---
 ## 6. Workspace execution and truncation
 
 Two tools, `run_command` and `run_tests`, execute commands in a real cloned workspace. They are useful for running tests, linters, or migrations after a change.

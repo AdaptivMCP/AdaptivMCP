@@ -116,9 +116,9 @@ Assistants should
 When operating inside a workspace
 
 - Use `run_command` for inspection, edits, and tests.
-- Use `commit_workspace` to stage, commit, and push changes to the feature branch. Commits to non-default branches are allowed even when `WRITE_ALLOWED` is `False`; writes targeting the controller default branch still require explicit authorization via `authorize_write_actions`.
+- Use `commit_workspace` to stage, commit, and push changes to the feature branch. Commits to non-default branches are allowed even when `WRITE_ALLOWED` is `False` because the server passes the branch name as `target_ref` into `_ensure_write_allowed`. Writes targeting the controller default branch still require explicit authorization via `authorize_write_actions`.
 
-Best practices
+Best practicesBest practices
 
 - Keep commits focused and well described.
 - Reference issues or PRs in commit messages when relevant.
