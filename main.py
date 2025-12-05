@@ -2975,9 +2975,9 @@ async def apply_patch_and_commit(
             - diff: unified diff text (if return_diff is true)
     """
 
-    _ensure_write_allowed(f"apply_patch_and_commit {full_name} {path}")
-
     effective_branch = _effective_ref_for_repo(full_name, branch)
+
+    _ensure_write_allowed("apply_patch_and_commit %s %s" % (full_name, path), target_ref=effective_branch)
 
     import re
     import difflib
