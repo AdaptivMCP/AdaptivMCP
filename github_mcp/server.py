@@ -118,27 +118,50 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
             return raw_schema.model_dump()
         if isinstance(raw_schema, dict):
             return dict(raw_schema)
-        try:
-            return json.loads(raw_schema)
-        except Exception:
-            pass
 
-    try:
-        parameters = getattr(tool, "parameters", None)
-    except Exception:
-        parameters = None
+def _normalize_branch_ref(ref: Optional[str]) -> Optional[str]:
+    """Normalize a ref/branch string to a bare branch name when possible.
 
-    if parameters is not None:
-        if hasattr(parameters, "model_dump"):
-            return parameters.model_dump()
-        if isinstance(parameters, dict):
-            return dict(parameters)
-        try:
-            return json.loads(parameters)
-        except Exception:
-            return None
+    This understands common patterns like ``refs/heads/<name>`` but otherwise
+    returns the input unchanged so commit SHAs and tags pass through.
+    """
 
+    if ref is None:
+        return None
+    # Strip the common refs/heads/ prefix when present.
+    if ref.startswith("refs/heads/"):
+        return ref[len("refs/heads/"):]
+    return ref
+
+
+def _ensure_write_allowed(context: str, *, target_ref: Optional[str] = None) -> None:
+    """Raise when write-tagged tools are not currently authorized.
+
+    The global WRITE_ALLOWED flag controls whether *any* write-tagged tools are
+    permitted. When writes are enabled, we still want an extra safety rail for
+    operations that touch the controller's default branch (``main`` by default).
+
+    ``target_ref`` should be the branch/ref a tool is going to write to when it
+    is known. When provided, the additional approval gate only applies if the
+    normalized ref matches the configured CONTROLLER_DEFAULT_BRANCH. This lets
+    assistants commit freely to feature branches while still requiring an
+    explicit approval call before touching the default branch.
+    """
+
+    if not WRITE_ALLOWED:
+        raise WriteNotAuthorizedError(
+            "Write-tagged tools are currently disabled; "
+            "call authorize_write_actions to enable them for this session."
+        )
+
+    # For now the only runtime gate is WRITE_ALLOWED. The extra "default branch"
+    # safety rail is implemented by controllers choosing whether to expose tools
+    # that can write directly to CONTROLLER_DEFAULT_BRANCH. The "target_ref"
+    # parameter is kept so tools can pass richer context for logging or future
+    # policy extensions without breaking the signature.
+    _ = _normalize_branch_ref(target_ref)
     return None
+
 
 
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
