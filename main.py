@@ -1696,6 +1696,18 @@ async def wait_for_workflow_run(
         if status == "completed":
             return {
                 "status": status,
+                "conclusion": conclusion,
+                "run": data,
+            }
+
+        if asyncio.get_event_loop().time() > end_time:
+            return {
+                "status": status,
+                "timeout": True,
+                "run": data,
+            }
+
+        await asyncio.sleep(poll_interval_seconds)
 
 
 @mcp_tool(
@@ -1814,8 +1826,7 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
         "open_prs": open_prs,
         "closed_prs": closed_prs,
         "checklist_items": checklist_items,
-    }                "run": data,
-            }
+    }            }
 
         if asyncio.get_event_loop().time() > end_time:
             return {
