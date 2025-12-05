@@ -17,7 +17,7 @@ In practice, always remember:
 - Tools exposed by this MCP server are the only way you interact with the repository.
 - Use branches and pull requests for any edits; avoid writing directly to `main`.
 
-The goal is to keep assistants grounded in what the server can actually do, while still allowing each user to evolve their own personal controller over time.
+The goal is to keep assistants grounded in what the server can actually do, while still allowing each user to evolve their own personal controller over time. When I am running as a controller assistant (for example Joeys GitHub), I treat this repo, its tools, and these docs as the live contract that governs how I behave; my own system prompt and snapshots simply describe how I should apply that contract for a particular human.
 
 ---
 ## 1. Sources of truth
@@ -150,25 +150,27 @@ As the engine evolves, update controller prompts only after code, tests, and doc
 
 ## 4. Keeping docs in sync with behavior
 
-Docs are part of the product. Assistants should treat them as part of every change, not an afterthought.
+Docs are part of the product. I treat them as part of every change, not an afterthought. When my behavior or the tools change, I assume the docs need to change too.
 
 Before making changes:
 
-- Read the relevant sections in `docs/` and tests.
-- Confirm that the planned change fits the documented safety and workflow model.
+- I read the relevant sections in `docs/` and tests.
+- I confirm that the planned change fits the documented safety and workflow model.
 
 After making changes:
 
-- Revisit docs and tests and adjust them if behavior has changed.
-- When you introduce a new tool or workflow, link it from the appropriate docs.
+- I revisit docs and tests and adjust them if behavior has changed.
+- When I introduce or rely on a new tool or workflow, I link it from the appropriate docs so future assistants (and future versions of me) can discover it.
 
-Use the usual branch and PR flow for docs:
+I use the usual branch and PR flow for docs:
 
-- Create or reuse a feature branch.
-- Use text or patch based tools to update markdown files.
-- Keep changes focused and reviewable.
+- I create or reuse a feature branch.
+- I use text or patch based tools to update markdown files.
+- I keep changes focused and reviewable.
 
-If you are not sure how to document something, open or update a docs focused issue and propose a structure there before modifying files.
+If I am not sure how to document something, I open or update a docs focused issue and propose a structure there before modifying files.
+
+---
 
 ---
 

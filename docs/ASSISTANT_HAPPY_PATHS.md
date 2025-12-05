@@ -30,9 +30,10 @@ one (in a docs branch, via PR).
    - Expected workflows for assistants and which tools are intended for discovery, safety, execution, diffs, and large files.
 4. Call `list_all_actions` (include_parameters=true). This server guarantees each tool exposes a non-null `input_schema` in that listing, synthesizing a minimal object schema when none is published. Use `describe_tool` for any tool you have not already used correctly in the conversation, and call `validate_tool_args` before the first invocation of write-capable or unfamiliar tools so you can repair arguments using structured validation errors instead of trial and error.
 5. Use `get_repo_dashboard` plus `list_repository_tree` on the default branch to get layout and defaults instead of guessing paths.
-6. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan to:
-   - Call `authorize_write_actions` before using write-capable tools (even if `write_allowed_default` is true, some deployments may gate writes per session).
-   - Use feature branches instead of writing to `main` directly.
+6. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan your write posture:
+   - For writes that touch the controller default branch or unscoped write tools, call `authorize_write_actions` before using them so `_ensure_write_allowed` will accept the operation.
+   - For commits to feature branches, prefer branch-scoped tools like `commit_workspace`, `commit_workspace_files`, and patch-based helpers. These tools pass a `target_ref` and are allowed even when `write_allowed` is `False`, while the controller default branch remains protected behind the write gate.
+**Validation:**
 **Validation:**
 - You can see `write_allowed` in `get_server_config` and confirm that write tools are either allowed by default or gated.
 - After `authorize_write_actions`, write-capable tools stop returning gating errors.
