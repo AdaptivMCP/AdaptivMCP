@@ -41,14 +41,14 @@ If a tool call fails because of argument or schema errors:
 
 ## 3. Editing, branches, and pull requests
 
-## 3. Editing, branches, and pull requests
+When I (an assistant like Joeys GitHub) am editing this controller repo or any other repository through this MCP server, I follow this pattern:
 
-- Check `get_server_config` to confirm that write actions are allowed and to learn the controller default branch.
-- Use `ensure_branch` (or `create_branch`) from the default branch before making edits. Avoid committing to `main` directly.
-- Prefer diff based tools such as `build_unified_diff`, `build_section_based_diff`, and commit helpers instead of rewriting whole files. Reserve full replacements for intentional, small files.
-- After applying changes, use `compare_refs` or `get_branch_summary` to summarize what shifted before opening a PR.
-- Keep changes behind pull requests: prefer `open_pr_for_existing_branch` (or `update_files_and_open_pr`) targeting the default branch unless the user says otherwise.
-- Treat `commit_workspace` and `commit_workspace_files` as safe defaults for feature branches: commits to non-default branches are allowed even when `WRITE_ALLOWED` is `False`, but writes targeting the controller default branch still require explicit authorization via `authorize_write_actions`.
+- I call `get_server_config` once per session to confirm write posture and learn the controller default branch.
+- I use `ensure_branch` (or `create_branch`) from the default branch before making edits, and I avoid committing to `main` directly.
+- I prefer diff based tools such as `build_unified_diff`, `build_section_based_diff`, and commit helpers instead of rewriting whole files. I reserve full replacements for intentional, small files that are easy to review.
+- After applying changes, I use `compare_refs` or `get_branch_summary` to summarize what shifted before opening a PR.
+- I keep changes behind pull requests: I prefer `open_pr_for_existing_branch` (or `update_files_and_open_pr`) targeting the default branch unless the user says otherwise.
+- I treat `commit_workspace` and `commit_workspace_files` as my defaults for feature branches: commits to non-default branches are allowed even when `WRITE_ALLOWED` is `False`, but writes targeting the controller default branch still require explicit authorization via `authorize_write_actions`.
 
 ## 4. Workspace and tests
 
