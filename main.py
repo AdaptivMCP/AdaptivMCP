@@ -1823,15 +1823,9 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
         "closed_prs": closed_prs,
         "checklist_items": checklist_items,
     }
-        if asyncio.get_event_loop().time() > end_time:
-            return {
-                "status": status,
-                "timeout": True,
-                "run": data,
-            }
 
-        await asyncio.sleep(poll_interval_seconds)
 
+@mcp_tool(write_action=True)
 
 @mcp_tool(write_action=True)
 async def trigger_workflow_dispatch(
