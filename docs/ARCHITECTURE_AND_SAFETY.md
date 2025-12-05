@@ -59,22 +59,25 @@ Destructive operations are gated by a global flag and explicit tagging.
 - `authorize_write_actions(approved: bool)` is the only tool that toggles this
   flag at runtime. Controllers call this tool when they need to enable or
   disable write actions for a session.
-- All tools created with `mcp_tool(write_action=True, ...)` call `_ensure_write_allowed(context)` before doing any destructive work.
+- All tools created with `mcp_tool(write_action=True, ...)` call `_ensure_write_allowed(context, target_ref=...)` before doing any destructive work.
 
 `_ensure_write_allowed`:
 
 - Inspects `WRITE_ALLOWED`.
-- Raises a dedicated error if writes are not currently allowed.
 - Receives a human-readable context string that usually includes the repo and branch, for example `owner/repo@branch`.
+- Accepts an optional `target_ref` argument so it can distinguish between writes to the controller default branch and writes to feature branches.
+- For unscoped operations (no `target_ref`), enforces `WRITE_ALLOWED` as a global kill switch for dangerous tools.
+- For writes that target the controller default branch (`CONTROLLER_DEFAULT_BRANCH`, typically `main`), enforces `WRITE_ALLOWED` so direct writes to the default branch always require explicit approval.
+- For writes that target non-default branches, allows the operation even when `WRITE_ALLOWED` is `False`, so assistants can iterate on feature branches while leaving the default branch protected.
 
 ### 3.2 Read vs write tools
 
 - Read tools (for example `get_file_contents`, `get_file_slice`, `list_repository_tree`, `search`) do not consult `WRITE_ALLOWED` and are tagged read-only.
 - Write tools (for example `apply_text_update_and_commit`, `apply_patch_and_commit`, `update_files_and_open_pr`, `delete_file`, `run_command`, `run_tests`, issue helpers) are tagged with `write_action=True` and must pass through `_ensure_write_allowed`.
 
-This design lets a controller keep the server in a read-only posture by default and only enable writes when the user explicitly approves.
+This design lets a controller keep the server in a read-only posture by default and only enable writes when the user explicitly approves, while still allowing assistants to commit freely to feature branches and keeping the controller default branch protected.
 
-Tests for the write gate live in `tests/test_write_gate.py`.
+### 3.3 Server configuration snapshot
 
 
 ### 3.3 Server configuration snapshot
