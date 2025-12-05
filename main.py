@@ -2082,7 +2082,157 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
     }
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
+async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Dict[str, Any]:
+    """Return a compact, multi-signal dashboard for a repository.
+
+    This helper aggregates several lower-level tools into a single call so
+    assistants can quickly understand the current state of a repo and then
+    decide which focused tools to call next. It is intentionally read-only.
+
+    Args:
+        full_name:
+            "owner/repo" string.
+        branch:
+            Optional branch name. When omitted, the repository's default
+            branch is used via the same normalization logic as other tools.
+
+    Returns:
+        A dict with high-level fields such as:
+
+          - repo: core metadata about the repository (description, visibility,
+            default branch, topics, open issue count when available).
+          - branch: the effective branch used for lookups.
+          - pull_requests: a small window of open pull requests (up to 10).
+          - issues: a small window of open issues (up to 10, excluding PRs).
+          - workflows: recent GitHub Actions workflow runs on the branch
+            (up to 5).
+          - top_level_tree: compact listing of top-level files/directories
+            on the branch so assistants can see the project layout.
+
+        Individual sections degrade gracefully: if one underlying call fails,
+        its corresponding "*_error" field is populated instead of raising.
+    """
+
+    # Resolve the effective branch using the same helper as other tools.
+    if branch is None:
+        # Fall back to the default branch when available.
+        defaults = await get_repo_defaults(full_name)
+        repo_defaults = defaults.get("defaults") or {}
+        effective_branch = repo_defaults.get("default_branch") or _effective_ref_for_repo(
+            full_name,
+            "main",
+        )
+    else:
+        effective_branch = _effective_ref_for_repo(full_name, branch)
+
+    # --- Repository metadata ---
+    repo_info: Optional[Dict[str, Any]] = None
+    repo_error: Optional[str] = None
+    try:
+        repo_resp = await get_repository(full_name)
+        repo_info = repo_resp.get("json") or {}
+    except Exception as exc:  # pragma: no cover - defensive
+        repo_error = str(exc)
+
+    # --- Open pull requests (small window) ---
+    pr_error: Optional[str] = None
+    open_prs: list[Dict[str, Any]] = []
+    try:
+        pr_resp = await list_pull_requests(
+            full_name,
+            state="open",
+            per_page=10,
+            page=1,
+        )
+        open_prs = pr_resp.get("json") or []
+    except Exception as exc:  # pragma: no cover - defensive
+        pr_error = str(exc)
+
+    # --- Open issues (excluding PRs) ---
+    issues_error: Optional[str] = None
+    open_issues: list[Dict[str, Any]] = []
+    try:
+        issues_resp = await list_repository_issues(
+            full_name,
+            state="open",
+            per_page=10,
+            page=1,
+        )
+        raw_issues = issues_resp.get("json") or []
+        # Filter out pull requests that show up in the issues API.
+        for item in raw_issues:
+            if isinstance(item, dict) and "pull_request" not in item:
+                open_issues.append(item)
+    except Exception as exc:  # pragma: no cover - defensive
+        issues_error = str(exc)
+
+    # --- Recent workflow runs on this branch ---
+    workflows_error: Optional[str] = None
+    workflow_runs: list[Dict[str, Any]] = []
+    try:
+        runs_resp = await list_workflow_runs(
+            full_name,
+            branch=effective_branch,
+            per_page=5,
+            page=1,
+        )
+        runs_json = runs_resp.get("json") or {}
+        workflow_runs = (
+            runs_json.get("workflow_runs", [])
+            if isinstance(runs_json, dict)
+            else []
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        workflows_error = str(exc)
+
+    # --- Top-level tree entries on the branch ---
+    tree_error: Optional[str] = None
+    top_level_tree: list[Dict[str, Any]] = []
+    try:
+        tree_resp = await list_repository_tree(
+            full_name,
+            ref=effective_branch,
+            recursive=False,
+            max_entries=200,
+        )
+        entries = tree_resp.get("entries") or []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            path = entry.get("path")
+            if not isinstance(path, str):
+                continue
+            # Keep only top-level entries (no slashes) for a compact view.
+            if "/" in path:
+                continue
+            top_level_tree.append(
+                {
+                    "path": path,
+                    "type": entry.get("type"),
+                    "size": entry.get("size"),
+                }
+            )
+    except Exception as exc:  # pragma: no cover - defensive
+        tree_error = str(exc)
+
+    return {
+        "full_name": full_name,
+        "branch": effective_branch,
+        "repo": repo_info,
+        "repo_error": repo_error,
+        "pull_requests": open_prs,
+        "pull_requests_error": pr_error,
+        "issues": open_issues,
+        "issues_error": issues_error,
+        "workflows": workflow_runs,
+        "workflows_error": workflows_error,
+        "top_level_tree": top_level_tree,
+        "top_level_tree_error": tree_error,
+    }
+
+
+@ mcp_tool(write_action=True)
 async def create_pull_request(
     full_name: str,
     title: str,
@@ -2115,8 +2265,6 @@ async def create_pull_request(
         f"/repos/{full_name}/pulls",
         json_body=payload,
     )
-
-
 @mcp_tool(write_action=True)
 async def open_pr_for_existing_branch(
     full_name: str,
