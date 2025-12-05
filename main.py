@@ -2443,6 +2443,33 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
 
 
 @mcp_tool(write_action=False)
+async def get_latest_branch_status(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
+    """Return a normalized, assistant-friendly view of the latest status for a branch.
+
+    This wraps ``get_branch_summary`` and ``_normalize_branch_summary`` so controllers
+    and assistants can quickly answer questions like:
+
+      - "Is this branch ahead or behind the base?"
+      - "Is there an open PR for it?"
+      - "What was the latest workflow run and how did it finish?"
+    """
+
+    summary = await get_branch_summary(full_name, branch, base=base)
+    normalized = _normalize_branch_summary(summary)
+
+    # Always return a consistent shape so callers do not have to special-case
+    # "no data" situations; instead they can look at the ``normalized`` field
+    # and fall back to the raw summary if needed.
+    return {
+        "full_name": full_name,
+        "branch": summary.get("branch"),
+        "base": summary.get("base"),
+        "summary": summary,
+        "normalized": normalized,
+    }
+
+
+@mcp_tool(write_action=False)
 async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Dict[str, Any]:
     """Return a compact, multi-signal dashboard for a repository.
 
