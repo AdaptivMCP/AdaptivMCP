@@ -28,7 +28,7 @@ one (in a docs branch, via PR).
    - The configured controller repository and its `default_branch`.
    - Whether writes are enabled by default for that controller repo (`write_allowed_default`).
    - Expected workflows for assistants and which tools are intended for discovery, safety, execution, diffs, and large files.
-4. Call `list_all_actions` (include_parameters=true) and use `describe_tool` for any tool you have not already used correctly in the conversation. Use `validate_tool_args` before the first invocation of write-capable or unfamiliar tools.
+4. Call `list_all_actions` (include_parameters=true). This server guarantees each tool exposes a non-null `input_schema` in that listing, synthesizing a minimal object schema when none is published. Use `describe_tool` for any tool you have not already used correctly in the conversation, and call `validate_tool_args` before the first invocation of write-capable or unfamiliar tools so you can repair arguments using structured validation errors instead of trial and error.
 5. Use `get_repo_dashboard` plus `list_repository_tree` on the default branch to get layout and defaults instead of guessing paths.
 6. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan to:
    - Call `authorize_write_actions` before using write-capable tools (even if `write_allowed_default` is true, some deployments may gate writes per session).

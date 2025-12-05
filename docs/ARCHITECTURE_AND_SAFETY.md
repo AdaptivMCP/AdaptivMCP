@@ -38,7 +38,9 @@ This registry powers:
 - `list_all_actions`, which returns every registered tool (including those from `extra_tools.py`).
 - `list_write_tools`, which summarizes write-capable tools for controller prompts and safety docs.
 
-Because `extra_tools.register_extra_tools(mcp_tool)` uses the same decorator, extra tools participate in the same registry and safety model.
+In addition to the raw tool list, the server exposes a best-effort JSON schema for each tool's arguments when possible. When an MCP tool exports an explicit input schema, that schema is returned as-is. When no schema is available, the server synthesizes a minimal `{type: "object", properties: {}}` schema so controllers can still treat the presence of `input_schema` as a stable contract instead of a sometimes-`null` field.
+
+Controllers and assistants are expected to call `describe_tool` and `validate_tool_args` against these schemas before invoking unfamiliar or write-tagged tools. For certain helpers (for example `compare_refs`), the server provides a hand-authored JSON schema so validation can enforce required fields even when the upstream MCP layer has no schema configured.
 
 ---
 

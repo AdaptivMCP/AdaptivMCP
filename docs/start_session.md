@@ -15,8 +15,8 @@ At the start of a new conversation, or after context loss, do these tool calls i
 1. Call `get_server_config` and `validate_environment` to learn write_allowed, default branch, and limits, and to confirm the server is healthy.
 2. Call `list_write_tools` once so you know which tools are gated before you try to use them.
 3. Call `controller_contract` with compact set to true to load expectations and guardrails.
-4. Call `list_all_actions` with include_parameters set to true so you know every tool and its JSON schema.
-5. When you encounter a tool you have not already used correctly in this session, call `describe_tool` (and optionally `validate_tool_args`) before the first real invocation.
+4. Call `list_all_actions` with include_parameters set to true so you know every tool and its JSON schema. This controller guarantees that each returned tool exposes a non-null `input_schema` object; when an underlying MCP tool does not publish a schema, the server synthesizes a minimal {type: "object", properties: {}} schema so you can still reason about argument shapes.
+5. When you encounter a tool you have not already used correctly in this session, call `describe_tool` to inspect its `input_schema`, and use `validate_tool_args` on your planned `args` object before the first real invocation, especially for write-tagged or complex tools.
 6. Use `get_repo_dashboard` and `list_repository_tree` on the default branch to understand layout instead of guessing paths.
 
 Treat the results of these tools as the source of truth for the rest of the session.
