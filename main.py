@@ -237,6 +237,16 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
         context_window = 20
         start = max(0, exc.pos - context_window)
         end = min(len(raw), exc.pos + context_window)
+
+        line_start = raw.rfind("\n", 0, exc.pos) + 1
+        line_end = raw.find("\n", exc.pos)
+        if line_end == -1:
+            line_end = len(raw)
+
+        line_text = raw[line_start:line_end]
+        caret_prefix = " " * (exc.colno - 1)
+        pointer = f"{caret_prefix}^"
+
         return {
             "valid": False,
             "error": exc.msg,
@@ -244,6 +254,8 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
             "column": exc.colno,
             "position": exc.pos,
             "snippet": raw[start:end],
+            "line_snippet": line_text,
+            "pointer": pointer,
         }
 
     normalized = json.dumps(
@@ -258,6 +270,12 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
         "parsed": parsed,
         "parsed_type": type(parsed).__name__,
         "normalized": normalized,
+        "normalized_pretty": json.dumps(
+            parsed,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
     }
 
 

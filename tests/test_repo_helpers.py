@@ -19,6 +19,7 @@ def test_validate_json_string_valid() -> None:
     assert isinstance(normalized, str)
     # Normalized JSON should parse back to the same structure.
     assert json.loads(normalized) == payload
+    assert "normalized_pretty" in result
 
 
 def test_validate_json_string_invalid() -> None:
@@ -31,6 +32,8 @@ def test_validate_json_string_invalid() -> None:
     assert "error" in result
     assert "position" in result
     assert "snippet" in result
+    assert "line_snippet" in result
+    assert "pointer" in result
     # Invalid payloads should not expose a normalized value.
     assert "normalized" not in result
 
