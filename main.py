@@ -2692,13 +2692,13 @@ async def update_files_and_open_pr(
     current_path: Optional[str] = None
     try:
         effective_base = _effective_ref_for_repo(full_name, base_branch)
-        _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
 
         if not files:
             raise ValueError("files must contain at least one item")
 
         # 1) Ensure a dedicated branch exists
         branch = new_branch or f"ally-{os.urandom(4).hex()}"
+        _ensure_write_allowed("update_files_and_open_pr %s %s" % (full_name, branch), target_ref=branch)
         await ensure_branch(full_name, branch, from_ref=effective_base)
 
         commit_results: List[Dict[str, Any]] = []
