@@ -2848,9 +2848,9 @@ async def apply_text_update_and_commit(
             - diff: unified diff text (if return_diff is true)
     """
 
-    _ensure_write_allowed(f"apply_text_update_and_commit {full_name} {path}")
-
     effective_branch = _effective_ref_for_repo(full_name, branch)
+
+    _ensure_write_allowed("apply_text_update_and_commit %s %s" % (full_name, path), target_ref=effective_branch)
 
     # 1) Read the current file state on the target branch, treating a 404 as a new file.
     is_new_file = False
