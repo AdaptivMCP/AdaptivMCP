@@ -1830,12 +1830,11 @@ async def trigger_workflow_dispatch(
     full_name: str,
     workflow: str,
     ref: str,
-    inputs: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:    """Trigger a workflow dispatch event on the given ref."""
+) -> Dict[str, Any]:
+    """Trigger a workflow dispatch event on the given ref."""
 
     _ensure_write_allowed(f"trigger workflow {workflow} on {full_name}@{ref}")
-    payload = {"ref": ref}
-    if inputs:
+    payload = {"ref": ref}    if inputs:
         payload["inputs"] = inputs
 
     client = _github_client_instance()
