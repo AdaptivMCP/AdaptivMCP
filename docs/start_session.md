@@ -18,6 +18,7 @@ At the start of a new conversation, or after context loss, do these tool calls i
 4. Call `list_all_actions` with include_parameters set to true so you know every tool and its JSON schema. This controller guarantees that each returned tool exposes a non-null `input_schema` object; when an underlying MCP tool does not publish a schema, the server synthesizes a minimal {type: "object", properties: {}} schema so you can still reason about argument shapes.
 5. When you encounter a tool you have not already used correctly in this session, call `describe_tool` to inspect its `input_schema`, and use `validate_tool_args` on your planned `args` object before the first real invocation, especially for write-tagged or complex tools.
 6. Use `get_repo_dashboard` and `list_repository_tree` on the default branch to understand layout instead of guessing paths.
+7. Use `get_latest_branch_status` on the controller default branch (and any active feature branches) to understand ahead/behind state, open PRs, and the most recent workflow result before attempting to "fix" CI.
 
 Treat the results of these tools as the source of truth for the rest of the session.
 
