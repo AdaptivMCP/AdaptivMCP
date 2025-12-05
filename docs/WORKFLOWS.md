@@ -56,7 +56,7 @@ Recommended sequence
    - Understand defaults (controller repo, main branch, timeouts, feature flags, write gate).
    - Pay attention to the `write_allowed` and `auto_approve` configuration.
 
-2. Call `list_all_actions` with `include_parameters` set to true.
+2. Call `list_all_actions` with `include_parameters` set to true. This controller guarantees that each tool will expose a non-null `input_schema` object in that response. When the underlying MCP tool does not publish an explicit input schema, the server synthesizes a minimal `{type: "object", properties: {}}` JSON schema so assistants can still reason about argument shapes.
    - Discover the full tool surface, including MCP tools and any GitHub specific helpers.
    - Learn parameter shapes and required fields.
 
@@ -69,6 +69,17 @@ Recommended sequence
 
 5. Read the core docs.
    - Fetch and read this file, `ASSISTANT_HANDOFF.md`, `docs/ARCHITECTURE_AND_SAFETY.md`, `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md`, `docs/UPGRADE_NOTES.md`, `docs/SELF_HOSTED_SETUP.md`, `docs/SELF_HOSTING_DOCKER.md`, and `docs/OPERATIONS.md`.
+
+### Validating tool arguments before writes
+
+For tools that accept structured JSON arguments, especially write-tagged tools, assistants SHOULD validate payloads before calling them:
+
+- Use `describe_tool` or `list_all_actions(include_parameters=true)` to understand the expected JSON schema for a tool.
+- Call `validate_tool_args` with `tool_name` and the candidate `args` object to get structured validation feedback without executing the tool.
+- For tools like `compare_refs`, the controller provides a hand-authored JSON schema even when the underlying MCP tool does not publish one, so missing fields (for example `head`) will surface as explicit validation errors.
+- Treat `validate_tool_args` as part of the default workflow for complex tools and repair flows, not just a rescue tool after a failure.
+
+When validation succeeds (`valid: true` and `errors: []`), proceed to the actual tool call. When it fails, use the returned `errors` array to repair the payload before retrying.
 
 ### Handling tool argument JSON errors
 
