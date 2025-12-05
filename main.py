@@ -1525,7 +1525,16 @@ def list_all_actions(
             tool_info["tags"] = sorted(list(getattr(tool, "tags", []) or []))
 
         if include_parameters:
-            tool_info["input_schema"] = _normalize_input_schema(tool)
+            # Surface a best-effort JSON schema for each tool so callers can
+            # reason about argument names and types. When the underlying MCP
+            # tool does not expose an explicit inputSchema, we still return a
+            # minimal object schema instead of ``null`` so downstream
+            # assistants can treat the presence of input_schema as a stable
+            # contract.
+            schema = _normalize_input_schema(tool)
+            if schema is None:
+                schema = {"type": "object", "properties": {}}
+            tool_info["input_schema"] = schema
 
         tools.append(tool_info)
 
@@ -1584,6 +1593,22 @@ async def validate_tool_args(
 
     tool, _ = found
     schema = _normalize_input_schema(tool)
+
+    # For some tools we know the expected argument contract even when the MCP
+    # layer does not expose a concrete inputSchema. In those cases we build a
+    # small JSON schema by hand so callers can preflight their payloads.
+    if schema is None and tool_name == "compare_refs":
+        schema = {
+            "type": "object",
+            "properties": {
+                "full_name": {"type": "string"},
+                "base": {"type": "string"},
+                "head": {"type": "string"},
+            },
+            "required": ["full_name", "base", "head"],
+            "additionalProperties": True,
+        }
+
     normalized_args = normalize_args(args or {})
 
     if schema is None:
