@@ -1721,8 +1721,8 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
     It is designed for assistants to call before doing any write work so
     they understand the current state of an issue.
     """
-    # Reuse the richer context helper so we see branches / PRs / labels, etc.    context = await open_issue_context(full_name=full_name, issue_number=issue_number)
-
+    # Reuse the richer context helper so we see branches / PRs / labels, etc.
+    context = await open_issue_context(full_name=full_name, issue_number=issue_number)
     issue = context.get("issue") or {}
     if not isinstance(issue, dict):
         issue = {}
