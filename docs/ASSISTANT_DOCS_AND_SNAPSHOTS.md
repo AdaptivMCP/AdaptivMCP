@@ -216,7 +216,7 @@ For large files:
 
 For JSON payloads:
 
-- Use `validate_json_string` when you are building complex JSON, such as large `sections` arrays for section based diffs.
+- Treat `validate_json_string` as a default step, not an optional rescue tool. Run it automatically when you construct non-trivial JSON (large `sections` arrays, tool arguments, or raw JSON responses) so the host always receives strict, copy-ready payloads without additional prompting.
 - Use the normalized JSON returned by that tool so that whitespace differences do not cause surprises.
 
 The goal is to keep edits small, precise, and easy to review while still supporting big files and strict JSON contracts.
@@ -234,7 +234,7 @@ Most tool call failures come from malformed JSON, stray escape sequences, or str
   1. Write the JSON object with real newlines and double quotes only where JSON requires them.
   2. Add escapes for double quotes *inside* string values, not around the whole payload.
   3. Avoid `\n` escapes inside values unless the tool explicitly expects them; prefer literal newlines or arrays.
-  4. Run `validate_tool_args` (or `validate_json_string` for big blobs) before write-tagged tools to catch stray quotes.
+  4. Run `validate_tool_args` (or `validate_json_string` for big blobs) before write-tagged tools to catch stray quotes. Default to pre-validating JSON so assistants are never waiting for host-side parse errors to reveal malformed payloads.
 - Prefer real newlines or arrays of lines instead of `\n`-filled strings when the tool accepts them.
   - For patch tools, use multiline strings or `sections` arrays rather than sprinkling `\n` escapes.
 - Escape double quotes only inside JSON string values.

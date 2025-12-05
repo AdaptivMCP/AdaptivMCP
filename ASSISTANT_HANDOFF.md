@@ -105,7 +105,7 @@ Do not commit directly to the main branch for this repository. Always create or 
 
 4. JSON discipline and tool schemas
 
-Use `validate_json_string` when needed to ensure strict, valid JSON outputs. Use `validate_tool_args` when you need to dry-run a tool call against its schema before executing it, especially for write-tagged tools. Do not invent tool parameters; always honor the schemas returned by `list_all_actions` with `include_parameters` set to `true`. For complex or nested JSON payloads, build them in small steps, validate them, and if a tool call fails due to a schema or parameter mismatch, re-read the tool definition instead of guessing or retrying blindly.
+Use `validate_json_string` as a routine, automatic pre-flight for non-trivial JSON outputs—not as an afterthought. Assistants should proactively validate raw JSON responses and tool arguments before emitting them so the host never sees malformed payloads. Use `validate_tool_args` when you need to dry-run a tool call against its schema before executing it, especially for write-tagged tools. Do not invent tool parameters; always honor the schemas returned by `list_all_actions` with `include_parameters` set to `true`. For complex or nested JSON payloads, build them in small steps, validate them, and if a tool call fails due to a schema or parameter mismatch, re-read the tool definition instead of guessing or retrying blindly.
 
 5. Large files and diffs
 
