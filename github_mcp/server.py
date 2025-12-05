@@ -117,6 +117,8 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
         if hasattr(raw_schema, "model_dump"):
             return raw_schema.model_dump()
         if isinstance(raw_schema, dict):
+            return dict(raw_schema)
+
 def _normalize_branch_ref(ref: Optional[str]) -> Optional[str]:
     """Normalize a ref/branch string to a bare branch name when possible.
 
@@ -159,7 +161,7 @@ def _ensure_write_allowed(context: str, *, target_ref: Optional[str] = None) -> 
     # policy extensions without breaking the signature.
     _ = _normalize_branch_ref(target_ref)
     return None
-    return None
+
 
 
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
