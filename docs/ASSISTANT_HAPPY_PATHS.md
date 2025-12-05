@@ -244,15 +244,14 @@ one (in a docs branch, via PR).
 
 **When to use:** When the user references an existing issue/PR, or you want to open/update one as part of your work.
 
-**Steps:**
 1. Read context:
    - Use `open_issue_context` to load an issue along with related branches and pull requests.
+   - Use `get_issue_overview` when you want a normalized summary of the issue, checklists parsed from the body and comments, and candidate branches/PRs before acting.
    - Use `fetch_issue` and `fetch_issue_comments` for direct issue details and discussion.
    - Use `fetch_pr`, `fetch_pr_comments`, and `list_pr_changed_filenames` to understand a PR and its diff.
 2. Summarize before acting:
    - Summarize the current state of the issue or PR for the user.
    - Highlight linked branches, tests mentioned, and any follow-up tasks.
-3. Update issues or PRs:
    - Use `comment_on_issue` or `comment_on_pull_request` to add summaries or progress updates.
    - Use `update_issue` to adjust title, body, labels, or assignees as requested.
 4. React to review signals:

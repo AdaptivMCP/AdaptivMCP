@@ -273,7 +273,7 @@ When a workflow feels stuck or you see repeated failures, use this checklist ins
 3. Re run `controller_contract` and reopen the relevant docs.
 4. Use `validate_tool_args` for complex or write tagged tools.
 5. Use `validate_environment` if you suspect configuration or token problems.
-6. Use `get_branch_summary` and `open_issue_context` to understand branch and issue state.
+6. Use `get_branch_summary`, `open_issue_context`, and `get_issue_overview` to understand branch and issue state before taking further action.
 7. Propose a smaller, more observable next action.
 8. Ask the human which direction to take if ambiguity remains.
 

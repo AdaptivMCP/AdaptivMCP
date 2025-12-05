@@ -64,7 +64,8 @@ For more complex or test-sensitive work:
 
 ## 6. Issues, PRs, CI, and rate limits
 
-- For issue or PR tasks, start with `open_issue_context` or `fetch_pr`/`get_pr_info`, then inspect diffs via `list_pr_changed_filenames` and `get_pr_diff`.
+- For issue or PR tasks, start with `open_issue_context` or `fetch_pr`/`get_pr_info`.
+- When you need a normalized issue summary, checklists, and related branches/PRs, call `get_issue_overview` before planning work, then inspect diffs via `list_pr_changed_filenames` and `get_pr_diff`.
 - When diagnosing CI, use `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, and `get_job_logs` instead of guessing. Use `trigger_workflow_dispatch` or `trigger_and_wait_for_workflow` only when asked.
 - Check `get_rate_limit` before heavy searches or bulk operations. Use `resolve_handle` to expand shorthand references before acting on them.
 
