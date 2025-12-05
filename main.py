@@ -1826,8 +1826,7 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
         "open_prs": open_prs,
         "closed_prs": closed_prs,
         "checklist_items": checklist_items,
-    }            }
-
+    }
         if asyncio.get_event_loop().time() > end_time:
             return {
                 "status": status,
