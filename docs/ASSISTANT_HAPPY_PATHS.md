@@ -19,14 +19,18 @@ one (in a docs branch, via PR).
 **When to use:** At the start of a session, or any time you are unsure about write permissions or defaults.
 
 **Steps:**
-1. Call `get_server_config` to learn:
+1. Call `get_server_config` and `validate_environment` to learn:
    - Whether `write_allowed` is currently true for this server instance.
    - HTTP, timeout, and concurrency limits that might affect large operations.
-2. Call `controller_contract` to refresh your mental model of:
+   - That the server is healthy before proceeding.
+2. Call `list_write_tools` so you know which tools are gated before you attempt them.
+3. Call `controller_contract` to refresh your mental model of:
    - The configured controller repository and its `default_branch`.
    - Whether writes are enabled by default for that controller repo (`write_allowed_default`).
    - Expected workflows for assistants and which tools are intended for discovery, safety, execution, diffs, and large files.
-3. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan to:
+4. Call `list_all_actions` (include_parameters=true) and use `describe_tool` for any tool you have not already used correctly in the conversation. Use `validate_tool_args` before the first invocation of write-capable or unfamiliar tools.
+5. Use `get_repo_dashboard` plus `list_repository_tree` on the default branch to get layout and defaults instead of guessing paths.
+6. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan to:
    - Call `authorize_write_actions` before using write-capable tools (even if `write_allowed_default` is true, some deployments may gate writes per session).
    - Use feature branches instead of writing to `main` directly.
 **Validation:**
