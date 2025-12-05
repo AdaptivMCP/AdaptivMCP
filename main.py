@@ -1713,10 +1713,10 @@ async def wait_for_workflow_run(
 @mcp_tool(
     write_action=False,
     description=(
-        "Return a high-level overview of an issue, including related
-        branches, pull requests, and checklist items, so assistants can
-        decide what to do next."
-    ),
+        "Return a high-level overview of an issue, including related "
+        "branches, pull requests, and checklist items, so assistants can "
+        "decide what to do next."
+    ),    ),
 )
 async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Summarize a GitHub issue for navigation and planning.
