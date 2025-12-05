@@ -634,6 +634,79 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
     @mcp_tool(
         write_action=False,
         description=(
+            "Return a citation-friendly slice of a file with line numbers. "
+            "Wraps get_file_slice and normalizes the output for code review or referencing. "
+            "Defaults to the repo's default branch and will expand very small files when starting at line 1 so you can see the whole file."
+        ),
+        tags=["github", "read", "files", "context"],
+    )
+    async def open_file_context(
+        full_name: str,
+        path: str,
+        ref: str | None = None,
+        start_line: int | None = None,
+        max_lines: int = 200,
+    ) -> Dict[str, Any]:
+        """Fetch a bounded file slice with explicit line numbers."""
+
+        normalized_start_line = 1 if start_line is None else start_line
+        if normalized_start_line < 1:
+            raise ValueError("start_line must be >= 1")
+        if max_lines <= 0:
+            raise ValueError("max_lines must be > 0")
+
+        slice_result = await get_file_slice(
+            full_name=full_name,
+            path=path,
+            ref=ref,
+            start_line=normalized_start_line,
+            max_lines=max_lines,
+        )
+
+        total_lines = slice_result.get("total_lines")
+        should_expand_small_file = (
+            total_lines is not None
+            and total_lines <= 120
+            and slice_result.get("start_line", 1) == 1
+            and slice_result.get("end_line", 0) < total_lines
+        )
+
+        if should_expand_small_file:
+            slice_result = await get_file_slice(
+                full_name=full_name,
+                path=path,
+                ref=ref,
+                start_line=1,
+                max_lines=total_lines,
+            )
+
+        content_entries = [
+            {"line": entry["line"], "text": entry["text"]}
+            for entry in slice_result.get("lines", [])
+        ]
+
+        response: Dict[str, Any] = {
+            "full_name": slice_result.get("full_name", full_name),
+            "path": slice_result.get("path", path),
+            "ref": slice_result.get("ref", ref),
+            "start_line": slice_result.get("start_line"),
+            "end_line": slice_result.get("end_line"),
+            "total_lines": slice_result.get("total_lines"),
+            "content": content_entries,
+            "has_more_above": slice_result.get("has_more_above", False),
+            "has_more_below": slice_result.get("has_more_below", False),
+        }
+
+        if should_expand_small_file:
+            response[
+                "note"
+            ] = "File is small; returning full content instead of only max_lines."
+
+        return response
+
+    @mcp_tool(
+        write_action=False,
+        description=(
             "Render a compact, line-numbered view of a file to simplify manual edits. "
             "Use start_line/max_lines to limit output size for very large files."
         ),
