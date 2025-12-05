@@ -65,3 +65,58 @@ async def test_open_issue_context_collects_branches_and_prs(monkeypatch):
     assert result["issue"]["number"] == 5
     assert "feature/issue-5" in result["candidate_branches"]
     assert result["open_prs"][0]["number"] == 10
+
+
+@pytest.mark.asyncio
+async def test_get_issue_overview_normalizes_issue_and_checklists(monkeypatch):
+    async def fake_open_issue_context(full_name: str, issue_number: int):
+        return {
+            "issue": {
+                "number": issue_number,
+                "title": "Issue",
+                "state": "open",
+                "html_url": "https://example.test/issue/5",
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-02T00:00:00Z",
+                "closed_at": None,
+                "user": {"login": "author", "html_url": "https://example.test/author"},
+                "assignees": [
+                    {"login": "assignee1", "html_url": "https://example.test/assignee1"},
+                    {"login": "assignee2"},
+                ],
+                "labels": [
+                    {"name": "bug", "color": "ff0000"},
+                    "help wanted",
+                ],
+                "body": "- [ ] top level task\nSome text\n- [x] done task",
+            },
+            "comments": [
+                {"body": "- [ ] follow-up task in comment"},
+                {"body": "not a checklist line"},
+            ],
+            "candidate_branches": ["feature/issue-5"],
+            "open_prs": [{"number": 10}],
+            "closed_prs": [{"number": 11}],
+        }
+
+    monkeypatch.setattr(main, "open_issue_context", fake_open_issue_context)
+
+    result = await main.get_issue_overview("owner/repo", issue_number=5)
+
+    assert result["issue"]["number"] == 5
+    assert result["issue"]["title"] == "Issue"
+    assert result["issue"]["user"] == {"login": "author", "html_url": "https://example.test/author"}
+    # labels normalized to dicts
+    assert {"name": "bug", "color": "ff0000"} in result["issue"]["labels"]
+    assert {"name": "help wanted"} in result["issue"]["labels"]
+    # checklist items from body and comments
+    texts = {item["text"]: item["source"] for item in result["checklist_items"]}
+    assert "top level task" in texts
+    assert texts["top level task"] == "issue_body"
+    assert "done task" in texts
+    assert "follow-up task in comment" in texts
+    assert texts["follow-up task in comment"] == "comment"
+    # branches and PRs forwarded
+    assert result["candidate_branches"] == ["feature/issue-5"]
+    assert result["open_prs"][0]["number"] == 10
+    assert result["closed_prs"][0]["number"] == 11
