@@ -181,7 +181,8 @@ async def commit_workspace(
     try:
         effective_ref = _effective_ref_for_repo(full_name, ref)
         _ensure_write_allowed(
-            f"commit_workspace for {full_name}@{effective_ref}"
+            f"commit_workspace for {full_name}@{effective_ref}",
+            target_ref=effective_ref,
         )
         deps = _workspace_deps()
         repo_dir = await deps["clone_repo"](
@@ -254,7 +255,8 @@ async def commit_workspace_files(
     try:
         effective_ref = _effective_ref_for_repo(full_name, ref)
         _ensure_write_allowed(
-            f"commit_workspace_files for {full_name}@{effective_ref}"
+            f"commit_workspace_files for {full_name}@{effective_ref}",
+            target_ref=effective_ref,
         )
         deps = _workspace_deps()
         repo_dir = await deps["clone_repo"](

@@ -135,31 +135,41 @@ def _normalize_branch_ref(ref: Optional[str]) -> Optional[str]:
 
 
 def _ensure_write_allowed(context: str, *, target_ref: Optional[str] = None) -> None:
-    """Raise when write-tagged tools are not currently authorized.
+    """Enforce write gating with special handling for the default branch.
 
-    The global WRITE_ALLOWED flag controls whether *any* write-tagged tools are
-    permitted. When writes are enabled, we still want an extra safety rail for
-    operations that touch the controller's default branch (``main`` by default).
-
-    ``target_ref`` should be the branch/ref a tool is going to write to when it
-    is known. When provided, the additional approval gate only applies if the
-    normalized ref matches the configured CONTROLLER_DEFAULT_BRANCH. This lets
-    assistants commit freely to feature branches while still requiring an
-    explicit approval call before touching the default branch.
+    * Unscoped operations (no ``target_ref``) still honor the global
+      ``WRITE_ALLOWED`` flag so controllers can fully disable dangerous tools.
+    * Writes that explicitly target the controller default branch remain gated
+      on ``WRITE_ALLOWED`` so commits to ``main`` (or whatever
+      CONTROLLER_DEFAULT_BRANCH is set to) always require an approval call.
+    * Writes to non-default branches are allowed even when ``WRITE_ALLOWED`` is
+      false so assistants can iterate safely on feature branches.
     """
 
-    if not WRITE_ALLOWED:
+    # When we do not know which ref a tool will touch, fall back to the global
+    # kill switch so destructive tools remain opt-in.
+    if target_ref is None:
+        if not WRITE_ALLOWED:
+            raise WriteNotAuthorizedError(
+                "Write-tagged tools are currently disabled for unscoped operations; "
+                "call authorize_write_actions to enable them for this session."
+            )
+        return None
+
+    normalized = _normalize_branch_ref(target_ref)
+
+    # Writes aimed at the controller default branch still require explicit
+    # authorization via authorize_write_actions.
+    if normalized == CONTROLLER_DEFAULT_BRANCH and not WRITE_ALLOWED:
         raise WriteNotAuthorizedError(
-            "Write-tagged tools are currently disabled; "
-            "call authorize_write_actions to enable them for this session."
+            f"Writes to the controller default branch ({CONTROLLER_DEFAULT_BRANCH}) "
+            f"are not yet authorized (context: {context}); call "
+            "authorize_write_actions before committing directly to the default branch."
         )
 
-    # For now the only runtime gate is WRITE_ALLOWED. The extra "default branch"
-    # safety rail is implemented by controllers choosing whether to expose tools
-    # that can write directly to CONTROLLER_DEFAULT_BRANCH. The "target_ref"
-    # parameter is kept so tools can pass richer context for logging or future
-    # policy extensions without breaking the signature.
-    _ = _normalize_branch_ref(target_ref)
+    # Writes to any non-default branch are always allowed from the connector's
+    # perspective. Repository protection rules and GitHub permissions still
+    # apply server-side.
     return None
 
 
