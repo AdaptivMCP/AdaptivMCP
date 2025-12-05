@@ -164,7 +164,7 @@ Representative tools already implemented:
   - Branch and PR helpers: ensure_branch, create_branch, create_pull_request, merge_pull_request, close_pull_request, comment_on_pull_request.
   - Diff helpers: build_unified_diff and build_section-based diff for building patches server-side from full content or line-based sections.
   - Extra tools in `extra_tools.py`: delete_file, update_file_from_workspace, update_file_sections_and_commit, build_section_based_diff, get_file_slice, get_file_with_line_numbers, and apply_line_edits_and_commit for token-thrifty edits.
-  - JSON helper: validate_json_string to sanity-check and normalize JSON strings before returning them to clients or feeding them into other tools, including pretty-print output and line-aware error pointers for fast repairs.
+- JSON helper: validate_json_string to sanity-check and normalize JSON strings before returning them to clients or feeding them into other tools, including pretty-print output and line-aware error pointers for fast repairs. Controllers should treat this as an automatic pre-flight step for any non-trivial JSON they emit so assistants do not have to remember to call it manually.
 All write tools are explicitly tagged as write actions and require WRITE_ALLOWED to be enabled.
 
 ### Write tools
@@ -177,7 +177,7 @@ All write tools are explicitly tagged as write actions and require WRITE_ALLOWED
   - This helper stays available for simple docs/config edits when a full-file replace
     is acceptable and WRITE_ALLOWED is enabled.
 - `build_section_based_diff`: construct a patch for large files by specifying line-based sections to replace, then apply it with `apply_patch_and_commit`.
-- `validate_json_string`: validate and normalize JSON output, especially for long payloads such as sections arrays used with `build_section_based_diff`; includes a copy-ready pretty version plus line-level error snippets and pointers when parsing fails.
+- `validate_json_string`: validate and normalize JSON output, especially for long payloads such as sections arrays used with `build_section_based_diff`; includes a copy-ready pretty version plus line-level error snippets and pointers when parsing fails. Assistants should consider this a default part of their JSON hygiene routine so responses and tool payloads are validated before they leave the controller.
 
 - ensure_workspace_clone
   - Ensure a repo/ref workspace exists on disk and optionally reset it to the remote branch.

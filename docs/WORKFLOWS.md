@@ -77,6 +77,7 @@ If the client or ChatGPT host returns `ToolInputError: Could not parse args as J
 - Keep tool arguments as a pure JSON object with double-quoted keys/strings and no Markdown or code fences.
 - Strip trailing comments or explanations from the arguments payload—only the JSON object should be passed to the tool.
 - When in doubt, run `validate_json_string` on the candidate arguments to confirm the host will accept them before retrying the tool call.
+- Treat `validate_json_string` as part of the default JSON routine, not an optional repair tool. Assistants should automatically validate any non-trivial JSON payload (tool arguments, raw JSON responses, or config blobs) before emitting it so that hosts never see malformed payloads in the first place.
 
 ---
 
