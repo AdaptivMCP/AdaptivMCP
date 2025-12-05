@@ -1710,20 +1710,132 @@ async def wait_for_workflow_run(
         await asyncio.sleep(poll_interval_seconds)
 
 
+@mcp_tool(
+    write_action=False,
+    description="Return a high-level overview of an issue, including related branches, pull requests, and checklist items, so assistants can decide what to do next.",
+)
+async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any]:
+    """Summarize a GitHub issue for navigation and planning.
+
+    This helper is intentionally read-only.
+    It is designed for assistants to call before doing any write work so
+    they understand the current state of an issue.
+    """
+    # Reuse the richer context helper so we see branches / PRs / labels, etc.
+    context = await open_issue_context(full_name=full_name, issue_number=issue_number)
+    issue = context.get("issue") or {}
+    if not isinstance(issue, dict):
+        issue = {}
+
+    def _normalize_labels(raw: Any) -> List[Dict[str, Any]]:
+        labels: List[Dict[str, Any]] = []
+        if isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, dict):
+                    labels.append(
+                        {
+                            "name": str(item.get("name", "")),
+                            "color": item.get("color"),
+                        }
+                    )
+                elif isinstance(item, str):
+                    labels.append({"name": item})
+        return labels
+
+    def _normalize_user(raw: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(raw, dict):
+            return None
+        login = raw.get("login")
+        if not isinstance(login, str):
+            return None
+        return {"login": login, "html_url": raw.get("html_url")}
+
+    def _normalize_assignees(raw: Any) -> List[Dict[str, Any]]:
+        assignees: List[Dict[str, Any]] = []
+        if isinstance(raw, list):
+            for user in raw:
+                normalized = _normalize_user(user)
+                if normalized is not None:
+                    assignees.append(normalized)
+        return assignees
+
+    # Core issue fields
+    normalized_issue: Dict[str, Any] = {
+        "number": issue.get("number"),
+        "title": issue.get("title"),
+        "state": issue.get("state"),
+        "html_url": issue.get("html_url"),
+        "created_at": issue.get("created_at"),
+        "updated_at": issue.get("updated_at"),
+        "closed_at": issue.get("closed_at"),
+        "user": _normalize_user(issue.get("user")),
+        "assignees": _normalize_assignees(issue.get("assignees")),
+        "labels": _normalize_labels(issue.get("labels")),
+    }
+
+    body_text = issue.get("body") or ""
+
+    def _extract_checklist_items(text: str, source: str) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        for raw_line in text.splitlines():
+            line = raw_line.lstrip()
+            if line.startswith("- [ ") or line.startswith("- [") or line.startswith("* ["):
+                checked = "[x]" in line.lower() or "[X]" in line
+                # Strip the leading marker (e.g. "- [ ]" / "- [x]")
+                after = line.split("]", 1)
+                description = after[1].strip() if len(after) > 1 else raw_line.strip()
+                if description:
+                    items.append(
+                        {
+                            "text": description,
+                            "checked": bool(checked),
+                            "source": source,
+                        }
+                    )
+        return items
+
+    checklist_items: List[Dict[str, Any]] = []
+    if body_text:
+        checklist_items.extend(_extract_checklist_items(body_text, source="issue_body"))
+
+    # Pull checklist items from comments as well, if available.
+    comments = context.get("comments")
+    if isinstance(comments, list):
+        for comment in comments:
+            if not isinstance(comment, dict):
+                continue
+            body = comment.get("body")
+            if not isinstance(body, str) or not body.strip():
+                continue
+            checklist_items.extend(
+                _extract_checklist_items(body, source="comment")
+            )
+
+    # Related branches / PRs are already computed by open_issue_context.
+    candidate_branches = context.get("candidate_branches") or []
+    open_prs = context.get("open_prs") or []
+    closed_prs = context.get("closed_prs") or []
+
+    return {
+        "issue": normalized_issue,
+        "candidate_branches": candidate_branches,
+        "open_prs": open_prs,
+        "closed_prs": closed_prs,
+        "checklist_items": checklist_items,
+    }
+
+
 @mcp_tool(write_action=True)
 async def trigger_workflow_dispatch(
     full_name: str,
     workflow: str,
     ref: str,
-    inputs: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Trigger a workflow dispatch event on the given ref."""
-
     _ensure_write_allowed(f"trigger workflow {workflow} on {full_name}@{ref}")
     payload = {"ref": ref}
     if inputs:
         payload["inputs"] = inputs
-
     client = _github_client_instance()
     async with _concurrency_semaphore:
         resp = await client.post(
