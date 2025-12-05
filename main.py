@@ -1118,6 +1118,8 @@ async def move_file(
     This helper reads the source path at the given branch, writes its contents
     to the destination path, and then deletes the original path using the same
     commit/contents APIs as other file helpers.
+    """
+
     _ensure_write_allowed(
         f"move_file from {from_path} to {to_path} in {full_name}@{branch}",
         target_ref=branch,
