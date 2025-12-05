@@ -1713,17 +1713,18 @@ async def wait_for_workflow_run(
 @mcp_tool(
     write_action=False,
     description=(
-        "Return a high-level overview of an issue, including related branches,
-        pull requests, and checklist items, so assistants can decide what to do next."
+        "Return a high-level overview of an issue, including related
+        branches, pull requests, and checklist items, so assistants can
+        decide what to do next."
     ),
 )
 async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Summarize a GitHub issue for navigation and planning.
 
-    This helper is intentionally read-only. It is designed for assistants to call
-    before doing any write work so they understand the current state of an issue.
+    This helper is intentionally read-only.
+    It is designed for assistants to call before doing any write work so
+    they understand the current state of an issue.
     """
-
     # Reuse the richer context helper so we see branches / PRs / labels, etc.
     context = await open_issue_context(full_name=full_name, issue_number=issue_number)
 
