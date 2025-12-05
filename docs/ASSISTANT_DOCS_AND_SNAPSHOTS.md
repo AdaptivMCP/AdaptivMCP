@@ -46,6 +46,8 @@ Meta tools when you are unsure:
 
 - `get_server_config` for configuration and write posture.
 - `list_all_actions` and `list_write_tools` for the live tool surface.
+- `describe_tool` when you need a focused view of a single tool, including its `input_schema`.
+- `validate_tool_args` to preflight JSON payloads against a tool's schema (for example before calling `compare_refs` or diff/commit helpers).
 - `validate_environment` when failures look like token or configuration problems.
 - `ping_extensions` to confirm that extension modules are loaded.
 - `controller_contract` when in doubt about expectations or requirements.
