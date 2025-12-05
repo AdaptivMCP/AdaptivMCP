@@ -1966,6 +1966,208 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
     }
 
 
+def _normalize_issue_payload(raw_issue: Any) -> Optional[Dict[str, Any]]:
+    issue = raw_issue
+    if isinstance(raw_issue, dict) and "json" in raw_issue:
+        issue = raw_issue.get("json")
+    if not isinstance(issue, dict):
+        return None
+
+    user = issue.get("user") if isinstance(issue.get("user"), dict) else None
+    labels = issue.get("labels") if isinstance(issue.get("labels"), list) else []
+
+    return {
+        "number": issue.get("number"),
+        "title": issue.get("title"),
+        "state": issue.get("state"),
+        "html_url": issue.get("html_url"),
+        "user": user.get("login") if user else None,
+        "labels": [lbl.get("name") for lbl in labels if isinstance(lbl, dict)],
+    }
+
+
+def _normalize_pr_payload(raw_pr: Any) -> Optional[Dict[str, Any]]:
+    pr = raw_pr
+    if isinstance(raw_pr, dict) and "json" in raw_pr:
+        pr = raw_pr.get("json")
+    if not isinstance(pr, dict):
+        return None
+
+    user = pr.get("user") if isinstance(pr.get("user"), dict) else None
+    head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
+    base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
+
+    return {
+        "number": pr.get("number"),
+        "title": pr.get("title"),
+        "state": pr.get("state"),
+        "draft": pr.get("draft"),
+        "merged": pr.get("merged"),
+        "html_url": pr.get("html_url"),
+        "user": user.get("login") if user else None,
+        "head_ref": head.get("ref"),
+        "base_ref": base.get("ref"),
+    }
+
+
+def _normalize_branch_summary(summary: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(summary, dict):
+        return None
+
+    if summary.get("compare_error") and not summary.get("compare"):
+        return None
+
+    compare = summary.get("compare") if isinstance(summary.get("compare"), dict) else None
+    compare_normalized = None
+    if compare:
+        compare_normalized = {
+            "ahead_by": compare.get("ahead_by"),
+            "behind_by": compare.get("behind_by"),
+            "total_commits": compare.get("total_commits"),
+            "status": compare.get("status"),
+        }
+
+    def _simplify_prs(prs: Any) -> list[Dict[str, Any]]:
+        simplified: list[Dict[str, Any]] = []
+        if not isinstance(prs, list):
+            return simplified
+        for pr in prs:
+            if not isinstance(pr, dict):
+                continue
+            head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
+            base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
+            simplified.append(
+                {
+                    "number": pr.get("number"),
+                    "title": pr.get("title"),
+                    "state": pr.get("state"),
+                    "draft": pr.get("draft"),
+                    "html_url": pr.get("html_url"),
+                    "head_ref": head.get("ref"),
+                    "base_ref": base.get("ref"),
+                }
+            )
+        return simplified
+
+    latest_run = summary.get("latest_workflow_run")
+    latest_run_normalized = None
+    if isinstance(latest_run, dict):
+        latest_run_normalized = {
+            "id": latest_run.get("id"),
+            "status": latest_run.get("status"),
+            "conclusion": latest_run.get("conclusion"),
+            "html_url": latest_run.get("html_url"),
+            "head_branch": latest_run.get("head_branch"),
+        }
+
+    normalized = {
+        "branch": summary.get("branch"),
+        "base": summary.get("base"),
+        "compare": compare_normalized,
+        "open_prs": _simplify_prs(summary.get("open_prs")),
+        "closed_prs": _simplify_prs(summary.get("closed_prs")),
+        "latest_workflow_run": latest_run_normalized,
+    }
+
+    if all(value is None or value == [] for value in normalized.values()):
+        return None
+
+    return normalized
+
+
+@mcp_tool(write_action=False)
+async def resolve_handle(full_name: str, handle: str) -> Dict[str, Any]:
+    """Resolve a lightweight GitHub handle into issue, PR, or branch details.
+
+    Examples:
+        - ``resolve_handle(full_name="owner/repo", handle="123")``
+        - ``resolve_handle(full_name="owner/repo", handle="#456")``
+        - ``resolve_handle(full_name="owner/repo", handle="pr:789")``
+        - ``resolve_handle(full_name="owner/repo", handle="feature/awesome")``
+    """
+
+    original_handle = handle
+    handle = handle.strip()
+    lower_handle = handle.lower()
+
+    resolved_kinds: list[str] = []
+    issue: Optional[Dict[str, Any]] = None
+    pull_request: Optional[Dict[str, Any]] = None
+    branch: Optional[Dict[str, Any]] = None
+
+    def _append_kind(name: str, value: Optional[Dict[str, Any]]):
+        if value is not None:
+            resolved_kinds.append(name)
+
+    async def _try_fetch_issue(number: int) -> Optional[Dict[str, Any]]:
+        try:
+            result = await fetch_issue(full_name, number)
+        except Exception:
+            return None
+        return _normalize_issue_payload(result)
+
+    async def _try_fetch_pr(number: int) -> Optional[Dict[str, Any]]:
+        try:
+            result = await fetch_pr(full_name, number)
+        except Exception:
+            return None
+        return _normalize_pr_payload(result)
+
+    async def _try_fetch_branch(name: str) -> Optional[Dict[str, Any]]:
+        try:
+            result = await get_branch_summary(full_name, name)
+        except Exception:
+            return None
+        return _normalize_branch_summary(result)
+
+    def _parse_int(value: str) -> Optional[int]:
+        value = value.strip()
+        if not value.isdigit():
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            return None
+
+    number: Optional[int] = None
+
+    if lower_handle.startswith("issue:"):
+        number = _parse_int(handle.split(":", 1)[1])
+        if number is not None:
+            issue = await _try_fetch_issue(number)
+            _append_kind("issue", issue)
+    elif lower_handle.startswith("pr:"):
+        number = _parse_int(handle.split(":", 1)[1])
+        if number is not None:
+            pull_request = await _try_fetch_pr(number)
+            _append_kind("pull_request", pull_request)
+    else:
+        numeric_match = re.fullmatch(r"#?(\d+)", handle)
+        trailing_match = re.search(r"#(\d+)$", handle)
+        if numeric_match:
+            number = int(numeric_match.group(1))
+        elif trailing_match:
+            number = int(trailing_match.group(1))
+
+        if number is not None:
+            issue = await _try_fetch_issue(number)
+            _append_kind("issue", issue)
+
+            pull_request = await _try_fetch_pr(number)
+            _append_kind("pull_request", pull_request)
+        else:
+            branch = await _try_fetch_branch(handle)
+            _append_kind("branch", branch)
+
+    return {
+        "input": {"full_name": full_name, "handle": original_handle},
+        "issue": issue,
+        "pull_request": pull_request,
+        "branch": branch,
+        "resolved_kinds": resolved_kinds,
+    }
+
+
 @mcp_tool(write_action=False)
 async def compare_refs(
     full_name: str,
