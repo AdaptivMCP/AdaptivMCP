@@ -33,11 +33,12 @@ one (in a docs branch, via PR).
 6. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan your write posture:
    - For writes that touch the controller default branch or unscoped write tools, call `authorize_write_actions` before using them so `_ensure_write_allowed` will accept the operation.
    - For commits to feature branches, prefer branch-scoped tools like `commit_workspace`, `commit_workspace_files`, and patch-based helpers. These tools pass a `target_ref` and are allowed even when `write_allowed` is `False`, while the controller default branch remains protected behind the write gate.
-**Validation:**
+7. When you need to understand branch state or CI health, call `get_latest_branch_status` for the branch you care about (and the base, typically `main`) instead of guessing from old workflow logs. Use that to decide whether a failure is tied to the current HEAD or an older commit.
+
 **Validation:**
 - You can see `write_allowed` in `get_server_config` and confirm that write tools are either allowed by default or gated.
 - After `authorize_write_actions`, write-capable tools stop returning gating errors.
-
+- `get_latest_branch_status` shows ahead/behind information, PR status, and the most recent workflow run for the current branch HEAD, so you do not retry fixes for already-merged commits.
 ---
 
 ## 2. Read-only repo orientation
