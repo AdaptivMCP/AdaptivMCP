@@ -2692,13 +2692,13 @@ async def update_files_and_open_pr(
     current_path: Optional[str] = None
     try:
         effective_base = _effective_ref_for_repo(full_name, base_branch)
-        _ensure_write_allowed(f"update_files_and_open_pr {full_name} {title}")
 
         if not files:
             raise ValueError("files must contain at least one item")
 
         # 1) Ensure a dedicated branch exists
         branch = new_branch or f"ally-{os.urandom(4).hex()}"
+        _ensure_write_allowed("update_files_and_open_pr %s %s" % (full_name, branch), target_ref=branch)
         await ensure_branch(full_name, branch, from_ref=effective_base)
 
         commit_results: List[Dict[str, Any]] = []
@@ -2848,9 +2848,9 @@ async def apply_text_update_and_commit(
             - diff: unified diff text (if return_diff is true)
     """
 
-    _ensure_write_allowed(f"apply_text_update_and_commit {full_name} {path}")
-
     effective_branch = _effective_ref_for_repo(full_name, branch)
+
+    _ensure_write_allowed("apply_text_update_and_commit %s %s" % (full_name, path), target_ref=effective_branch)
 
     # 1) Read the current file state on the target branch, treating a 404 as a new file.
     is_new_file = False
@@ -2975,9 +2975,9 @@ async def apply_patch_and_commit(
             - diff: unified diff text (if return_diff is true)
     """
 
-    _ensure_write_allowed(f"apply_patch_and_commit {full_name} {path}")
-
     effective_branch = _effective_ref_for_repo(full_name, branch)
+
+    _ensure_write_allowed("apply_patch_and_commit %s %s" % (full_name, path), target_ref=effective_branch)
 
     import re
     import difflib
