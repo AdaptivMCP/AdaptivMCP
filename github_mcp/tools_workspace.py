@@ -405,9 +405,7 @@ async def get_workspace_changes_summary(
     }
 
 
-@mcp_tool(write_action=False)
-@mcp_tool(write_action=False)
-async def run_tests(
+@mcp_tool(write_action=False)async def run_tests(
     full_name: str,
     ref: str = "main",
     test_command: str = "pytest",
