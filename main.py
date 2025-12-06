@@ -1715,25 +1715,26 @@ def list_all_actions(
             tool_info["tags"] = sorted(list(getattr(tool, "tags", []) or []))
 
         if include_parameters:
+            # Surface a best-effort JSON schema for each tool so callers can
+            # reason about argument names and types. When the underlying MCP
+            # tool does not expose an explicit inputSchema, we still return a
+            # minimal object schema instead of ``null`` so downstream
+            # assistants can treat the presence of input_schema as a stable
+            # contract.
+            schema = _normalize_input_schema(tool)
             if schema is None:
                 schema = {"type": "object", "properties": {}}
             tool_info["input_schema"] = schema
 
         tools.append(tool_info)
 
-    tools.sort(key=lambda entry: entry["name"])            schema = _normalize_input_schema(tool)
-            if schema is None:
-                schema = {"type": "object", "properties": {}}
-            tool_info["input_schema"] = schema
-
-        tools.append(tool_info)    tools.sort(key=lambda entry: entry["name"])
+    tools.sort(key=lambda entry: entry["name"])
 
     return {
         "write_actions_enabled": server.WRITE_ALLOWED,
         "compact": compact_mode,
         "tools": tools,
     }
-
 
 @mcp_tool(
     write_action=False,
