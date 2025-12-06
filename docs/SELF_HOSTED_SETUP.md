@@ -50,16 +50,17 @@ Other platforms (Fly.io, Railway, ECS, Kubernetes, bare metal, etc.) are also fi
 
 ---
 
-## 2. Fork or clone the repository
+## 2. Get the code (repo or bundle)
 
 You can either:
 
 - Use this repository directly (`Proofgate-Revocations/chatgpt-mcp-github`).
-- Or fork it into your own GitHub account (recommended if you plan to customize tools or workflows).
+- Fork it into your own GitHub account (recommended if you plan to customize tools or workflows).
+- Or receive a versioned source bundle (for example `adaptiv-controller-v0.1.0.tar.gz`) from the author.
 
 If you fork the repo, your controller repo name will be something like `your-username/chatgpt-mcp-github`.
 
-You will point your hosting provider at this repo (or fork) when you configure the service.
+If you received a bundle, unpack it (for example into `adaptiv-controller-v0.1.0/`) and treat that directory as the repository root when configuring your hosting provider.
 
 ---
 
