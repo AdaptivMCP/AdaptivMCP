@@ -346,3 +346,32 @@ async def run_tests(
     )
 
 
+@mcp_tool(write_action=False)
+async def run_quality_suite(
+    full_name: str,
+    ref: str = "main",
+    test_command: str = "pytest",
+    timeout_seconds: int = 600,
+    workdir: Optional[str] = None,
+    patch: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+    mutating: bool = False,
+) -> Dict[str, Any]:
+    """Run the standard quality suite for a repo/branch.
+
+    Today this is a thin wrapper around ``run_tests`` so controllers can
+    standardize on a single "quality gate" tool. Future versions may extend
+    this helper to run linters or formatters alongside tests.
+    """
+    return await run_tests(
+        full_name=full_name,
+        ref=ref,
+        test_command=test_command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        patch=patch,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+        mutating=mutating,
+    )

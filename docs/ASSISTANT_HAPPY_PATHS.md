@@ -123,7 +123,7 @@ one (in a docs branch, via PR).
    - Update both implementation and tests in the same branch, with clear commit messages.
 6. Run tests in a workspace:
    - Call `ensure_workspace_clone` for the repo and branch.
-   - Use `run_tests` pointing at the branch, with `test_command` (for example `pytest`).
+   - Use `run_quality_suite` for full-suite or default quality gate runs, or `run_tests` / `run_command` for more targeted invocations.
    - If tests require dependencies, set `installing_dependencies=true` on the first run that installs packages.
 7. Handle failures:
    - If tests fail, use `run_command` (for example `pytest path/to/test -k failing_case -vv`) to iterate until passing.
@@ -203,8 +203,7 @@ one (in a docs branch, via PR).
      a separate section unless both ranges must coexist.
    - For multi-block edits, list the sections in file order and sanity-check that no two ranges overlap or leave the old block
      intact.
-5. Optionally run tests or linters via `run_tests` or `run_command` if the change affects behavior.
-
+5. Optionally run tests or linters via `run_quality_suite`, `run_tests`, or `run_command` if the change affects behavior.
 **Validation:**
 - `apply_line_edits_and_commit` returns `status` equal to `committed` with commit metadata.
 - If you set `include_diff=true`, the diff touches only the intended lines and no unrelated parts of the file.
@@ -225,7 +224,7 @@ one (in a docs branch, via PR).
    - Run formatters or generators (for example `ruff`, `black`, or project-specific scripts) as needed.
    - Keep `installing_dependencies` false unless the command installs packages.
 3. Run tests:
-   - Call `run_tests` for full suite runs or use `run_command` with more targeted test invocations.
+   - Call `run_quality_suite` for the default quality gate, or `run_tests` / `run_command` with more targeted test invocations.
 4. Commit workspace changes:
    - Use `commit_workspace` when you want to commit all changes in one commit, or
    - Use `commit_workspace_files` to commit a specific subset of files.

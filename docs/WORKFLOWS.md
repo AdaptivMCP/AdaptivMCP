@@ -34,9 +34,9 @@ All workflows should respect these rules, especially when touching the controlle
    - Rely on built in verification in write tools.
    - Never assume a write succeeded without checking.
 
-5. Use run_command for real work.
-   - Treat `run_command` as your primary way to work inside repo workspaces.
-   - Use it to inspect files, run tests and linters, apply patches, and install dependencies when necessary.
+5. Use run_quality_suite and run_command for real work.
+   - Treat `run_quality_suite` as your primary way to run the project's default quality gate (for example `pytest`) on a branch.
+   - Use `run_command` for additional inspection commands, focused test invocations, linters, and dependency installs when necessary.
    - Do not ask humans to type commands or fiddle with blank lines or quoting. Handle multi-line commands, patches, and retries
      with the workspace tools yourself.
 
@@ -115,8 +115,7 @@ Assistants should
 
 When operating inside a workspace
 
-- Use `run_command` for inspection, edits, and tests.
-- Use `commit_workspace` to stage, commit, and push changes to the feature branch. Commits to non-default branches are allowed even when `WRITE_ALLOWED` is `False` because the server passes the branch name as `target_ref` into `_ensure_write_allowed`. Writes targeting the controller default branch still require explicit authorization via `authorize_write_actions`.
+- Use `run_quality_suite` or `run_command` for inspection, edits, and tests.
 
 Best practicesBest practices
 
@@ -129,7 +128,7 @@ Best practicesBest practices
 Use the PR tools to open and update pull requests. A typical flow
 
 1. Complete changes on a feature branch.
-2. Run tests and any relevant CLI checks via `run_command` or `run_tests`.
+2. Run tests and any relevant CLI checks via `run_quality_suite` (the default quality gate) or `run_command` / `run_tests`.
 3. Use a pull request tool to open a PR into `main`.
 4. Include in the PR body
    - Summary of changes.
@@ -190,9 +189,9 @@ For complex edits to large files, use:
 1. `build_section_based_diff` to describe replacements by sections.
 2. `apply_patch_and_commit` with the resulting patch.
 
-`run_command` SHOULD be used primarily for:
+`run_command` and `run_quality_suite` SHOULD be used primarily for:
 
-- Tests (`pytest`, linters, type checkers).
+- Tests (`pytest`, linters, type checkers) via `run_quality_suite` for the default command, or `run_command` for custom/test-specific invocations.
 - Small shell commands (`ls`, `grep`, diagnostics).
 - NOT for large inline patch scripts.
 
