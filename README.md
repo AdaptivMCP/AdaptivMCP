@@ -238,9 +238,10 @@ Your commercial product is the controller design and workflows layered on top of
 Typical deployment for an end user:
 
 1. Host the MCP server
-   - Fork or clone this repository.
+   - Fork or clone this repository, or unpack a versioned bundle (for example `adaptiv-controller-v0.1.0.tar.gz`) as described in `docs/DISTRIBUTION.md`.
    - Deploy to Render.com or another hosting platform as a Python web service.
    - Configure environment variables, for example GitHub tokens, optional auto approval flags, concurrency limits, and HTTP timeouts.
+   - Start the app (for example via uvicorn) and confirm health by:
    - Start the app (for example via uvicorn) and confirm health by:
      - Hitting `GET /healthz` on your deployment URL to verify status, uptime, token presence, and a small metrics snapshot.
      - Optionally calling `get_server_config` and `validate_environment` from ChatGPT to confirm configuration.
