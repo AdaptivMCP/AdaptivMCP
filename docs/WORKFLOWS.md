@@ -189,23 +189,6 @@ For complex edits to large files, use:
 
 1. `build_section_based_diff` to describe replacements by sections.
 2. `apply_patch_and_commit` with the resulting patch.
-Typical pattern for a single file:
-
-1. Read the current file:
-   - `get_file_contents` (or `get_file_slice` for large files).
-2. Let the assistant generate the updated full content locally.
-3. Call `apply_text_update_and_commit` with:
-   - `full_name`
-   - `path`
-   - `updated_content`
-   - `branch`
-   - `message`
-4. Optionally use `create_pull_request` / `open_pr_for_existing_branch`.
-
-For complex edits to large files, use:
-
-1. `build_section_based_diff` to describe replacements by sections.
-2. `apply_patch_and_commit` with the resulting patch.
 
 `run_command` SHOULD be used primarily for:
 
