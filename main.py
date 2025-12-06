@@ -3387,3 +3387,70 @@ async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
         "status_checks": status_checks,
         "workflow_runs": workflow_runs,
     }
+
+
+@mcp_tool(
+    write_action=False,
+    description="Return recent pull requests associated with a branch, grouped by state.",
+    tags=["github", "read", "navigation", "prs"],
+)
+async def recent_prs_for_branch(
+    full_name: str,
+    branch: str,
+    include_closed: bool = False,
+    per_page_open: int = 20,
+    per_page_closed: int = 5,
+) -> Dict[str, Any]:
+    """Return recent pull requests whose head matches the given branch.
+
+    This is a composite navigation helper built on top of list_pull_requests.
+    It groups results into open and (optionally) closed sets so assistants can
+    find the PR(s) tied to a feature branch without guessing numbers.
+    """
+    if not full_name or "/" not in full_name:
+        raise ValueError("full_name must be of the form 'owner/repo'")
+    if not branch:
+        raise ValueError("branch must be a non-empty string")
+
+    owner, _repo = full_name.split("/", 1)
+    head_filter = f"{owner}:{branch}"
+
+    open_resp = await list_pull_requests(
+        full_name=full_name,
+        state="open",
+        head=head_filter,
+        per_page=per_page_open,
+        page=1,
+    )
+    open_raw = open_resp.get("json") or []
+    open_prs = [
+        _normalize_pr_payload(pr)
+        for pr in open_raw
+        if isinstance(pr, dict)
+    ]
+    open_prs = [pr for pr in open_prs if pr is not None]
+
+    closed_prs: List[Dict[str, Any]] = []
+    if include_closed:
+        closed_resp = await list_pull_requests(
+            full_name=full_name,
+            state="closed",
+            head=head_filter,
+            per_page=per_page_closed,
+            page=1,
+        )
+        closed_raw = closed_resp.get("json") or []
+        closed_prs = [
+            _normalize_pr_payload(pr)
+            for pr in closed_raw
+            if isinstance(pr, dict)
+        ]
+        closed_prs = [pr for pr in closed_prs if pr is not None]
+
+    return {
+        "full_name": full_name,
+        "branch": branch,
+        "head_filter": head_filter,
+        "open": open_prs,
+        "closed": closed_prs,
+    }
