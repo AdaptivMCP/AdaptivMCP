@@ -5,13 +5,11 @@ from __future__ import annotations
 import base64
 from typing import Any, Dict, Optional
 
-import httpx
-import os
-import re
 import sys
 
-from . import config
 from .exceptions import GitHubAPIError
+from .http_clients import _github_request
+from .utils import _effective_ref_for_repofrom .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
 from .utils import _effective_ref_for_repo
 
