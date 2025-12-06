@@ -51,14 +51,18 @@ When I (an assistant like Joeys GitHub) am editing this controller repo or any o
 - I keep changes behind pull requests: I prefer `open_pr_for_existing_branch` (or `update_files_and_open_pr`) targeting the default branch unless the user says otherwise.
 - I treat `commit_workspace` and `commit_workspace_files` as my defaults for feature branches: commits to non-default branches are allowed even when `WRITE_ALLOWED` is `False`, but writes targeting the controller default branch still require explicit authorization via `authorize_write_actions`.
 
-## 4. Workspace and tests
+## 4. Workspace, tests, and editing rules
 
-For more complex or test-sensitive work:
+For more complex or test-sensitive work, and especially when editing code or docs in this controller repo:
 
 - Use `ensure_workspace_clone` on the relevant branch to get a persistent workspace.
-- Run `run_command` for repo-specific tools (linters, formatters, utility scripts) and `run_tests` for the main test suite before opening a PR.
-- Sync edits back with `update_file_from_workspace`, `commit_workspace_files`, or `commit_workspace` rather than trying to rewrite files inline.
-- Keep all workspace actions scoped to the feature branch created via `ensure_branch`.
+- Treat `run_command` as your interactive terminal for *small, focused* commands (listing files, running tests, `grep`, formatters), not as a place to embed large multi-line Python or shell scripts that rewrite files.
+- Prefer diff- and section-based tools for file edits instead of hand-rolled inline scripts:
+  - Use `update_file_sections_and_commit` or `apply_line_edits_and_commit` for targeted updates to existing files.
+  - Use `build_unified_diff` or `build_section_based_diff` together with `apply_patch_and_commit` when you need to stage more complex patches.
+- Avoid constructing huge heredocs or multi-line code blobs inside tool arguments (for example `run_command.command`); those patterns are brittle under JSON encoding and often cause control-character errors or disconnections.
+- Sync edits back with `update_file_from_workspace`, `commit_workspace_files`, or `commit_workspace` on a feature branch rather than trying to rewrite controller files inline via ad-hoc scripts.
+- Keep all workspace actions scoped to the feature branch created via `ensure_branch`, then summarize changes and open a PR when ready.
 
 ## 5. Large files and context management
 
