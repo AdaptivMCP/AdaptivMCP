@@ -664,8 +664,7 @@ async def get_user_login() -> Dict[str, Any]:
     }
 
 
-@mcp_tool(write_action=False)
-async def list_repositories(
+@mcp_tool(write_action=False, assistant_visible=False)async def list_repositories(
     affiliation: Optional[str] = None,
     visibility: Optional[str] = None,
     per_page: int = 30,
@@ -681,8 +680,7 @@ async def list_repositories(
     return await _github_request("GET", "/user/repos", params=params)
 
 
-@mcp_tool(write_action=False)
-async def list_repositories_by_installation(
+@mcp_tool(write_action=False, assistant_visible=False)async def list_repositories_by_installation(
     installation_id: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     """List repositories accessible via a specific GitHub App installation."""
@@ -693,8 +691,7 @@ async def list_repositories_by_installation(
     )
 
 
-@mcp_tool(write_action=False)
-async def list_recent_issues(
+@mcp_tool(write_action=False, assistant_visible=False)async def list_recent_issues(
     filter: str = "assigned",
     state: str = "open",
     per_page: int = 30,
@@ -706,8 +703,7 @@ async def list_recent_issues(
     return await _github_request("GET", "/issues", params=params)
 
 
-@mcp_tool(write_action=False)
-async def list_repository_issues(
+@mcp_tool(write_action=False, assistant_visible=False)async def list_repository_issues(
     full_name: str,
     state: str = "open",
     labels: Optional[List[str]] = None,
@@ -726,15 +722,13 @@ async def list_repository_issues(
     return await _github_request("GET", f"/repos/{full_name}/issues", params=params)
 
 
-@mcp_tool(write_action=False)
-async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
+@mcp_tool(write_action=False, assistant_visible=False)async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Fetch a GitHub issue."""
 
     return await _github_request("GET", f"/repos/{full_name}/issues/{issue_number}")
 
 
-@mcp_tool(write_action=False)
-async def fetch_issue_comments(
+@mcp_tool(write_action=False, assistant_visible=False)async def fetch_issue_comments(
     full_name: str, issue_number: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     """Fetch comments for a GitHub issue."""
@@ -747,15 +741,13 @@ async def fetch_issue_comments(
     )
 
 
-@mcp_tool(write_action=False)
-async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
+@mcp_tool(write_action=False, assistant_visible=False)async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
     """Fetch pull request details."""
 
     return await _github_request("GET", f"/repos/{full_name}/pulls/{pull_number}")
 
 
-@mcp_tool(write_action=False)
-async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
+@mcp_tool(write_action=False, assistant_visible=False)async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
     """Get metadata for a pull request without downloading the diff."""
 
     data = await fetch_pr(full_name, pull_number)
@@ -775,8 +767,7 @@ async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
     return {"status_code": data.get("status_code"), "summary": summary, "pr": pr}
 
 
-@mcp_tool(write_action=False)
-async def fetch_pr_comments(
+@mcp_tool(write_action=False, assistant_visible=False)async def fetch_pr_comments(
     full_name: str, pull_number: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     """Fetch issue-style comments for a pull request."""
@@ -787,8 +778,7 @@ async def fetch_pr_comments(
     )
 
 
-@mcp_tool(write_action=False)
-async def get_pr_diff(full_name: str, pull_number: int) -> Dict[str, Any]:
+@mcp_tool(write_action=False, assistant_visible=False)async def get_pr_diff(full_name: str, pull_number: int) -> Dict[str, Any]:
     """Fetch the unified diff for a pull request."""
 
     return await _github_request(
@@ -799,8 +789,7 @@ async def get_pr_diff(full_name: str, pull_number: int) -> Dict[str, Any]:
     )
 
 
-@mcp_tool(write_action=False)
-async def fetch_pr_patch(full_name: str, pull_number: int) -> Dict[str, Any]:
+@mcp_tool(write_action=False, assistant_visible=False)async def fetch_pr_patch(full_name: str, pull_number: int) -> Dict[str, Any]:
     """Fetch the patch for a GitHub pull request."""
 
     return await _github_request(
@@ -811,8 +800,7 @@ async def fetch_pr_patch(full_name: str, pull_number: int) -> Dict[str, Any]:
     )
 
 
-@mcp_tool(write_action=False)
-async def list_pr_changed_filenames(
+@mcp_tool(write_action=False, assistant_visible=False)async def list_pr_changed_filenames(
     full_name: str, pull_number: int, per_page: int = 100, page: int = 1
 ) -> Dict[str, Any]:
     """List files changed in a pull request."""
@@ -823,15 +811,13 @@ async def list_pr_changed_filenames(
     )
 
 
-@mcp_tool(write_action=False)
-async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
+@mcp_tool(write_action=False, assistant_visible=False)async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
     """Get combined status for a commit or ref."""
 
     return await _github_request("GET", f"/repos/{full_name}/commits/{ref}/status")
 
 
-@mcp_tool(write_action=False)
-async def get_issue_comment_reactions(
+@mcp_tool(write_action=False, assistant_visible=False)async def get_issue_comment_reactions(
     full_name: str, comment_id: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     """Fetch reactions for an issue comment."""
@@ -845,8 +831,7 @@ async def get_issue_comment_reactions(
     )
 
 
-@mcp_tool(write_action=False)
-async def get_pr_reactions(
+@mcp_tool(write_action=False, assistant_visible=False)async def get_pr_reactions(
     full_name: str, pull_number: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     """Fetch reactions for a GitHub pull request."""
@@ -860,8 +845,7 @@ async def get_pr_reactions(
     )
 
 
-@mcp_tool(write_action=False)
-async def get_pr_review_comment_reactions(
+@mcp_tool(write_action=False, assistant_visible=False)async def get_pr_review_comment_reactions(
     full_name: str, comment_id: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     """Fetch reactions for a pull request review comment."""
