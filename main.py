@@ -476,7 +476,9 @@ async def validate_environment() -> Dict[str, Any]:
             if isinstance(repo_payload, dict):
                 permissions = repo_payload.get("permissions") or {}
 
-            push_allowed = permissions.get("push") if isinstance(permissions, dict) else None
+            push_allowed = (
+                permissions.get("push") if isinstance(permissions, dict) else None
+            )
             if push_allowed is True:
                 add_check(
                     "controller_repo_push_permission",
@@ -500,7 +502,10 @@ async def validate_environment() -> Dict[str, Any]:
                 )
 
         try:
-            await _github_request("GET", f"/repos/{controller_repo}/branches/{controller_branch}")
+            await _github_request(
+                "GET",
+                f"/repos/{controller_repo}/branches/{controller_branch}",
+            )
         except Exception as exc:  # pragma: no cover - defensive
             add_check(
                 "controller_branch_remote",
@@ -519,6 +524,38 @@ async def validate_environment() -> Dict[str, Any]:
                 "ok",
                 "Controller branch exists and is accessible",
                 {"full_name": controller_repo, "branch": controller_branch},
+            )
+
+        try:
+            pr_response = await _github_request(
+                "GET",
+                f"/repos/{controller_repo}/pulls",
+                params={"state": "open", "per_page": 1},
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            add_check(
+                "controller_pr_endpoint",
+                "warning",
+                "Pull request endpoint is not reachable; PR tools may fail with HTTP errors or timeouts",
+                {
+                    "full_name": controller_repo,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )
+        else:
+            pr_json = pr_response.get("json")
+            open_sample_count = None
+            if isinstance(pr_json, list):
+                open_sample_count = len(pr_json)
+            add_check(
+                "controller_pr_endpoint",
+                "ok",
+                "Pull request endpoint is reachable",
+                {
+                    "full_name": controller_repo,
+                    "sample_open_count": open_sample_count,
+                },
             )
     else:
         add_check(
@@ -544,6 +581,66 @@ async def validate_environment() -> Dict[str, Any]:
             "github_api_base": GITHUB_API_BASE,
         },
     }
+
+
+@mcp_tool(write_action=True)
+async def pr_smoke_test(
+    full_name: Optional[str] = None,
+    base_branch: Optional[str] = None,
+    draft: bool = True,
+) -> Dict[str, Any]:
+    """Create a trivial branch with a one-line change and open a draft PR.
+
+    This is intended for diagnostics of PR tooling in the live environment.
+    """
+
+    defaults = await get_repo_defaults(full_name=full_name)
+    defaults_payload = defaults.get("defaults") or {}
+    repo = defaults_payload.get("full_name") or full_name or CONTROLLER_REPO
+    base = (
+        base_branch
+        or defaults_payload.get("default_branch")
+        or CONTROLLER_DEFAULT_BRANCH
+    )
+
+    import uuid
+
+    branch = f"mcp-pr-smoke-{uuid.uuid4().hex[:8]}"
+
+    await ensure_branch(full_name=repo, branch=branch, from_ref=base)
+
+    path = "mcp_pr_smoke_test.txt"
+    content = f"MCP PR smoke test branch {branch}.\n"
+
+    await apply_text_update_and_commit(
+        full_name=repo,
+        path=path,
+        updated_content=content,
+        branch=branch,
+        message=f"MCP PR smoke test on {branch}",
+        return_diff=False,
+    )
+
+    pr = await create_pull_request(
+        full_name=repo,
+        title=f"MCP PR smoke test ({branch})",
+        head=branch,
+        base=base,
+        body="Automated MCP PR smoke test created by pr_smoke_test.",
+        draft=draft,
+    )
+
+    pr_json = pr.get("json") or {}
+
+    return {
+        "status": "ok",
+        "repository": repo,
+        "base": base,
+        "branch": branch,
+        "pr_number": pr_json.get("number"),
+        "pr_url": pr_json.get("html_url"),
+    }
+
 
 
 @mcp_tool(write_action=False)
