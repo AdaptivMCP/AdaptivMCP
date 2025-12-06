@@ -269,9 +269,11 @@ When a workflow stalls or fails repeatedly
 2. Summarize the errors and outputs you have seen.
 3. Re read relevant docs and the controller contract.
 4. Use `validate_tool_args` and `validate_environment` to rule out schema and configuration issues.
+   - For PR problems specifically, check the `controller_pr_endpoint` check in `validate_environment`.
 5. Check branch and issue state with `get_branch_summary` and `open_issue_context`.
-6. Propose smaller, more observable next steps.
-7. Ask the human for input when ambiguity remains.
+6. When PR tooling itself seems broken (for example repeated timeouts from `create_pull_request`), run `pr_smoke_test` to exercise the full branch + commit + PR path in the live environment.
+7. Propose smaller, more observable next steps.
+8. Ask the human for input when ambiguity remains.
 
 Remember that this file is the engine side playbook. Personal controllers can adjust tone, verbosity, and other stylistic choices, but they should not contradict the safety and workflow rules documented here.
 
