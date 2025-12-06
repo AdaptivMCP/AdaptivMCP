@@ -1470,6 +1470,86 @@ async def list_workflow_runs(
 
 
 @mcp_tool(write_action=False)
+async def list_recent_failures(
+    full_name: str,
+    branch: Optional[str] = None,
+    limit: int = 10,
+) -> Dict[str, Any]:
+    """List recent failed or cancelled GitHub Actions workflow runs.
+
+    This helper composes ``list_workflow_runs`` and filters to runs whose
+    conclusion indicates a non-successful outcome (for example failure,
+    cancelled, or timed out). It is intended as a navigation helper for CI
+    debugging flows.
+    """
+
+    if limit <= 0:
+        raise ValueError("limit must be > 0")
+
+    # Fetch a bounded page of recent runs; callers can tune ``limit`` but
+    # results are further filtered to non-successful conclusions.
+    per_page = min(max(limit, 10), 50)
+
+    runs_resp = await list_workflow_runs(
+        full_name=full_name,
+        branch=branch,
+        per_page=per_page,
+        page=1,
+    )
+
+    runs_json = runs_resp.get("json") or {}
+    raw_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
+
+    failure_conclusions = {
+        "failure",
+        "cancelled",
+        "timed_out",
+        "action_required",
+        "startup_failure",
+    }
+
+    failures: List[Dict[str, Any]] = []
+    for run in raw_runs:
+        status = run.get("status")
+        conclusion = run.get("conclusion")
+
+        if conclusion in failure_conclusions:
+            include = True
+        elif status == "completed" and conclusion not in (None, "success", "neutral", "skipped"):
+            include = True
+        else:
+            include = False
+
+        if not include:
+            continue
+
+        failures.append(
+            {
+                "id": run.get("id"),
+                "name": run.get("name"),
+                "event": run.get("event"),
+                "status": status,
+                "conclusion": conclusion,
+                "head_branch": run.get("head_branch"),
+                "head_sha": run.get("head_sha"),
+                "created_at": run.get("created_at"),
+                "updated_at": run.get("updated_at"),
+                "html_url": run.get("html_url"),
+            }
+        )
+
+        if len(failures) >= limit:
+            break
+
+    return {
+        "full_name": full_name,
+        "branch": branch,
+        "limit": limit,
+        "runs": failures,
+    }
+
+
+@mcp_tool(write_action=False)
 @mcp_tool(write_action=False)
 async def list_recent_failures(
     full_name: str,
