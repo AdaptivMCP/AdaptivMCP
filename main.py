@@ -1753,6 +1753,115 @@ async def list_workflow_run_jobs(
 
 
 @mcp_tool(write_action=False)
+async def get_workflow_run_overview(full_name: str, run_id: int) -> Dict[str, Any]:
+    """Summarize a GitHub Actions workflow run for CI triage.
+
+    This helper is read-only and safe to call before any write actions. It
+    aggregates run metadata, jobs, failed jobs, and the longest jobs by
+    duration so assistants can answer "what happened in this run?" with a
+    single tool call.
+    """
+
+    run_resp = await get_workflow_run(full_name, run_id)
+    run_json = run_resp.get("json") if isinstance(run_resp, dict) else run_resp
+    if not isinstance(run_json, dict):
+        run_json = {}
+
+    run_summary: Dict[str, Any] = {
+        "id": run_json.get("id"),
+        "name": run_json.get("name"),
+        "event": run_json.get("event"),
+        "status": run_json.get("status"),
+        "conclusion": run_json.get("conclusion"),
+        "head_branch": run_json.get("head_branch"),
+        "head_sha": run_json.get("head_sha"),
+        "run_attempt": run_json.get("run_attempt"),
+        "created_at": run_json.get("created_at"),
+        "updated_at": run_json.get("updated_at"),
+        "html_url": run_json.get("html_url"),
+    }
+
+    jobs_resp = await list_workflow_run_jobs(full_name, run_id, per_page=100, page=1)
+    jobs_json = jobs_resp.get("json") or {}
+    raw_jobs = jobs_json.get("jobs", []) if isinstance(jobs_json, dict) else []
+
+    def _parse_timestamp(value: Any) -> Optional[datetime]:
+        if not isinstance(value, str):
+            return None
+        try:
+            if value.endswith("Z"):
+                value = value[:-1] + "+00:00"
+            return datetime.fromisoformat(value)
+        except Exception:
+            return None
+
+    jobs: List[Dict[str, Any]] = []
+    failed_jobs: List[Dict[str, Any]] = []
+    jobs_with_duration: List[Dict[str, Any]] = []
+
+    failure_conclusions = {
+        "failure",
+        "cancelled",
+        "timed_out",
+        "action_required",
+        "startup_failure",
+    }
+
+    for job in raw_jobs:
+        if not isinstance(job, dict):
+            continue
+
+        status = job.get("status")
+        conclusion = job.get("conclusion")
+        started_at = job.get("started_at")
+        completed_at = job.get("completed_at")
+
+        start_dt = _parse_timestamp(started_at)
+        end_dt = _parse_timestamp(completed_at)
+        duration_seconds: Optional[float] = None
+        if start_dt and end_dt:
+            duration_seconds = max(0.0, (end_dt - start_dt).total_seconds())
+
+        normalized = {
+            "id": job.get("id"),
+            "name": job.get("name"),
+            "status": status,
+            "conclusion": conclusion,
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "duration_seconds": duration_seconds,
+            "html_url": job.get("html_url"),
+        }
+        jobs.append(normalized)
+
+        if duration_seconds is not None:
+            jobs_with_duration.append(normalized)
+
+        include_failure = False
+        if conclusion in failure_conclusions:
+            include_failure = True
+        elif status == "completed" and conclusion not in (None, "success", "neutral", "skipped"):
+            include_failure = True
+        if include_failure:
+            failed_jobs.append(normalized)
+
+    longest_jobs = sorted(
+        jobs_with_duration,
+        key=lambda j: j.get("duration_seconds") or 0.0,
+        reverse=True,
+    )[:5]
+
+    return {
+        "full_name": full_name,
+        "run_id": run_id,
+        "run": run_summary,
+        "jobs": jobs,
+        "failed_jobs": failed_jobs,
+        "longest_jobs": longest_jobs,
+    }
+
+
+@mcp_tool(write_action=False)
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     """Fetch raw logs for a GitHub Actions job without truncation."""
 
