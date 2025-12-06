@@ -438,8 +438,7 @@ async def run_tests(
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
-    )    )
-
+    )
 
 @mcp_tool(write_action=False)
 async def run_quality_suite(
