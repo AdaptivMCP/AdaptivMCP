@@ -406,7 +406,6 @@ async def get_workspace_changes_summary(
 
 
 
-
 @mcp_tool(write_action=False)
 async def run_tests(
     full_name: str,
@@ -428,7 +427,8 @@ async def run_tests(
     installs packages so gating can apply to that narrower use case. Set
     ``mutating=true`` only when the tests will rewrite files; read-only test
     runs remain ungated by default.
-    """    return await run_command(
+    """
+    return await run_command(
         full_name=full_name,
         ref=ref,
         command=test_command,
@@ -438,6 +438,7 @@ async def run_tests(
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
+    )        mutating=mutating,
     )
 
 
