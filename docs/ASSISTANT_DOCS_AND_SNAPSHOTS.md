@@ -216,8 +216,11 @@ For large files:
 - Use `build_section_based_diff` to construct diffs for the specific line ranges that need to change.
 - Apply the resulting patch with `apply_patch_and_commit` on the appropriate branch.
 - Use `apply_line_edits_and_commit` for small, line-targeted updates when you know the exact line numbers.
+- Use `download_user_content` when you need to pull bytes for an example or test fixture without writing a file back to the repo. It accepts:
+  - `sandbox:/` paths and absolute server paths.
+  - Absolute `http(s)` URLs.
+  - `github:` URLs of the form `github:owner/repo:path/to/file[@ref]`, which reuse the server's GitHub token and work with private repositories.
 - Reserve `apply_text_update_and_commit` for cases where you intentionally regenerate the entire file from a fresh spec or prompt.
-
 For JSON payloads:
 
 - Treat `validate_json_string` as a default step, not an optional rescue tool. Run it automatically when you construct non-trivial JSON (large `sections` arrays, tool arguments, or raw JSON responses) so the host always receives strict, copy-ready payloads without additional prompting.
