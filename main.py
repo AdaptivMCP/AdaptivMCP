@@ -2924,22 +2924,27 @@ async def create_pull_request(
     controller prompt tells assistants to open PRs against main.
     """
 
-    effective_base = _effective_ref_for_repo(full_name, base)
-    _ensure_write_allowed(f"create PR from {head} to {effective_base} in {full_name}")
-    payload: Dict[str, Any] = {
-        "title": title,
-        "head": head,
-        "base": effective_base,
-        "draft": draft,
-    }
-    if body is not None:
-        payload["body"] = body
+    try:
+        effective_base = _effective_ref_for_repo(full_name, base)
+        _ensure_write_allowed(
+            f"create PR from {head} to {effective_base} in {full_name}"
+        )
+        payload: Dict[str, Any] = {
+            "title": title,
+            "head": head,
+            "base": effective_base,
+            "draft": draft,
+        }
+        if body is not None:
+            payload["body"] = body
 
-    return await _github_request(
-        "POST",
-        f"/repos/{full_name}/pulls",
-        json_body=payload,
-    )
+        return await _github_request(
+            "POST",
+            f"/repos/{full_name}/pulls",
+            json_body=payload,
+        )
+    except Exception as exc:
+        return _structured_tool_error(exc, context="create_pull_request")
 @mcp_tool(write_action=True)
 async def open_pr_for_existing_branch(
     full_name: str,
