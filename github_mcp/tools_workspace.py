@@ -405,7 +405,7 @@ async def get_workspace_changes_summary(
     }
 
 
-@mcp_tool(write_action=False)
+
 @mcp_tool(write_action=False)
 async def run_tests(
     full_name: str,
@@ -439,7 +439,6 @@ async def run_tests(
         installing_dependencies=installing_dependencies,
         mutating=mutating,
     )
-
 
 @mcp_tool(write_action=False)
 async def run_quality_suite(
