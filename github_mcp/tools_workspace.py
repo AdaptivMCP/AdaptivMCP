@@ -418,9 +418,8 @@ async def run_tests(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
-) -> Dict[str, Any]:    """Run the project's test command inside the persistent workspace.
-
-    ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
+) -> Dict[str, Any]:
+    """Run the project's test command inside the persistent workspace.    ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
     default timeout. Provide ``patch`` when running tests against pending edits
     so the checkout matches the assistant's current working diff.
     Set ``installing_dependencies`` to ``true`` only when the test command also
