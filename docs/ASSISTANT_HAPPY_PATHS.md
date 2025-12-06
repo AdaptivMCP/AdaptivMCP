@@ -322,7 +322,7 @@ one (in a docs branch, via PR).
 - Use feature branches and pull requests for any change to this controller repo.
 - Keep changes small, focused, and backed by tests when behavior changes.
 - Use large-file helpers (`get_file_slice`, `build_section_based_diff`, `build_unified_diff_from_strings`) instead of loading huge files.
-- Use `describe_tool` to fetch the input schema for a specific tool before constructing or repairing arguments, then `validate_tool_args` to check your payloads. Use `validate_json_string` when you must emit raw JSON into other systems, and treat that validation as a standing pre-flight step rather than a one-off debug trick.
+- Use `describe_tool` to fetch the input schema for a specific tool before constructing or repairing arguments, then `validate_tool_args` to check your payloads. For CI navigation tools like `list_workflow_runs` and `list_recent_failures`, the server now exposes hand-authored input schemas so you can discover required fields (for example `full_name`) and optional filters (`branch`, `status`, `event`, or `limit`) without reading `main.py`. Use `validate_json_string` when you must emit raw JSON into other systems, and treat that validation as a standing pre-flight step rather than a one-off debug trick.
 - After docs in this repo are updated and merged into the default branch, treat them as the **source of truth** for future sessions and re-read them via `get_file_contents` or `fetch_files`.
 
 ---
