@@ -220,6 +220,7 @@ For large files:
   - `sandbox:/` paths and absolute server paths.
   - Absolute `http(s)` URLs.
   - `github:` URLs of the form `github:owner/repo:path/to/file[@ref]`, which reuse the server's GitHub token and work with private repositories.
+- When I need the full contents of a large GitHub file (for example `main.py` in this controller repo), I call `download_user_content` once with a `github:` URL and then reason over that local copy instead of repeatedly slicing the same path. This keeps heavy bytes in the hidden workspace, still treats the branch head as the source of truth for patches, and avoids a flood of small file API calls.
 - Reserve `apply_text_update_and_commit` for cases where you intentionally regenerate the entire file from a fresh spec or prompt.
 For JSON payloads:
 
