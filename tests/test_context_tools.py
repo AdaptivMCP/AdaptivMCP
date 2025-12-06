@@ -120,3 +120,78 @@ async def test_get_issue_overview_normalizes_issue_and_checklists(monkeypatch):
     assert result["candidate_branches"] == ["feature/issue-5"]
     assert result["open_prs"][0]["number"] == 10
     assert result["closed_prs"][0]["number"] == 11
+
+
+@pytest.mark.asyncio
+async def test_get_pr_overview_collects_pr_files_and_ci(monkeypatch):
+    async def fake_fetch_pr(full_name: str, pull_number: int):
+        return {"json": {
+            "number": pull_number,
+            "title": "Add feature",
+            "state": "open",
+            "draft": False,
+            "merged": False,
+            "html_url": "https://example.test/pr/123",
+            "user": {"login": "author", "html_url": "https://example.test/author"},
+            "head": {"ref": "feature/branch", "sha": "abc123"},
+            "base": {"ref": "main"},
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-02T00:00:00Z",
+            "closed_at": None,
+            "merged_at": None,
+        }}
+
+    async def fake_list_pr_changed_filenames(full_name: str, pull_number: int, per_page: int = 100, page: int = 1):
+        return {"json": [
+            {
+                "filename": "main.py",
+                "status": "modified",
+                "additions": 10,
+                "deletions": 2,
+                "changes": 12,
+            }
+        ]}
+
+    async def fake_get_commit_combined_status(full_name: str, ref: str):
+        return {"json": {"state": "success", "total_count": 1}}
+
+    async def fake_list_workflow_runs(
+        full_name: str,
+        branch=None,
+        status=None,
+        event=None,
+        per_page: int = 30,
+        page: int = 1,
+    ):
+        return {"json": {"workflow_runs": [
+            {
+                "id": 1,
+                "name": "CI",
+                "event": "push",
+                "status": "completed",
+                "conclusion": "success",
+                "head_branch": branch,
+                "head_sha": "abc123",
+                "html_url": "https://example.test/runs/1",
+                "created_at": "2025-01-02T00:00:00Z",
+                "updated_at": "2025-01-02T00:05:00Z",
+            }
+        ]}}
+
+    import main
+
+    monkeypatch.setattr(main, "fetch_pr", fake_fetch_pr)
+    monkeypatch.setattr(main, "list_pr_changed_filenames", fake_list_pr_changed_filenames)
+    monkeypatch.setattr(main, "get_commit_combined_status", fake_get_commit_combined_status)
+    monkeypatch.setattr(main, "list_workflow_runs", fake_list_workflow_runs)
+
+    result = await main.get_pr_overview("owner/repo", pull_number=123)
+
+    assert result["repository"] == "owner/repo"
+    assert result["pull_number"] == 123
+    assert result["pr"]["number"] == 123
+    assert result["pr"]["title"] == "Add feature"
+    assert result["pr"]["user"] == {"login": "author", "html_url": "https://example.test/author"}
+    assert result["files"][0]["filename"] == "main.py"
+    assert result["status_checks"]["state"] == "success"
+    assert result["workflow_runs"][0]["id"] == 1
