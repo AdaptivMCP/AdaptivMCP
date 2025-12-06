@@ -1176,8 +1176,7 @@ async def get_repository(full_name: str) -> Dict[str, Any]:
     return await _github_request("GET", f"/repos/{full_name}")
 
 
-@mcp_tool(write_action=False)
-async def list_branches(
+@mcp_tool(write_action=False, assistant_visible=False)async def list_branches(
     full_name: str,
     per_page: int = 100,
     page: int = 1,
@@ -2194,18 +2193,11 @@ async def list_pull_requests(
     state: str = "open",
     head: Optional[str] = None,
     base: Optional[str] = None,
-    per_page: int = 30,
-    page: int = 1,
+@mcp_tool(write_action=False, assistant_visible=False)
+async def list_pull_requests(
+    full_name: str, state: str = "open", per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
-    """List pull requests with optional head/base filters."""
-
-    params: Dict[str, Any] = {
-        "state": state,
-        "per_page": per_page,
-        "page": page,
-    }
-    if head:
-        params["head"] = head
+    """List pull requests for a repository."""        params["head"] = head
     if base:
         params["base"] = base
     return await _github_request("GET", f"/repos/{full_name}/pulls", params=params)
@@ -2217,8 +2209,7 @@ async def merge_pull_request(
     number: int,
     merge_method: str = "squash",
     commit_title: Optional[str] = None,
-    commit_message: Optional[str] = None,
-) -> Dict[str, Any]:
+@mcp_tool(write_action=True, assistant_visible=False)) -> Dict[str, Any]:
     """Merge a pull request using squash (default), merge, or rebase."""
 
     _ensure_write_allowed(f"merge PR #{number} in {full_name}")
@@ -2242,8 +2233,7 @@ async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
     return await _github_request(
         "PATCH",
         f"/repos/{full_name}/pulls/{number}",
-        json_body={"state": "closed"},
-    )
+@mcp_tool(write_action=True, assistant_visible=False)    )
 
 
 @mcp_tool(write_action=True)
@@ -2254,8 +2244,7 @@ async def comment_on_pull_request(
 ) -> Dict[str, Any]:
     """Post a comment on a pull request (issue API under the hood)."""
 
-    _ensure_write_allowed(f"comment on PR #{number} in {full_name}")
-    return await _github_request(
+@mcp_tool(write_action=True, assistant_visible=False)    return await _github_request(
         "POST",
         f"/repos/{full_name}/issues/{number}/comments",
         json_body={"body": body},
