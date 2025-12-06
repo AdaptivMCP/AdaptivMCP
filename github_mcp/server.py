@@ -112,12 +112,63 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     if tool is None:
         return None
 
+    # Prefer the underlying MCP tool's explicit inputSchema when available.
     raw_schema = getattr(tool, "inputSchema", None)
     if raw_schema is not None:
         if hasattr(raw_schema, "model_dump"):
             return raw_schema.model_dump()
         if isinstance(raw_schema, dict):
             return dict(raw_schema)
+
+    # Fall back to a small set of hand-authored schemas for important tools
+    # that do not currently expose an inputSchema via the MCP layer. This
+    # keeps describe_tool and validate_tool_args useful without requiring
+    # every tool to be fully annotated.
+    name = getattr(tool, "name", None)
+
+    if name == "compare_refs":
+        return {
+            "type": "object",
+            "properties": {
+                "full_name": {"type": "string"},
+                "base": {"type": "string"},
+                "head": {"type": "string"},
+            },
+            "required": ["full_name", "base", "head"],
+            "additionalProperties": True,
+        }
+
+    if name == "list_workflow_runs":
+        return {
+            "type": "object",
+            "properties": {
+                "full_name": {"type": "string"},
+                "branch": {"type": ["string", "null"]},
+                "status": {"type": ["string", "null"]},
+                "event": {"type": ["string", "null"]},
+                "per_page": {"type": "integer", "minimum": 1},
+                "page": {"type": "integer", "minimum": 1},
+            },
+            "required": ["full_name"],
+            "additionalProperties": True,
+        }
+
+    if name == "list_recent_failures":
+        return {
+            "type": "object",
+            "properties": {
+                "full_name": {"type": "string"},
+                "branch": {"type": ["string", "null"]},
+                "limit": {"type": "integer", "minimum": 1},
+            },
+            "required": ["full_name"],
+            "additionalProperties": True,
+        }
+
+    return None
+
+
+
 
 def _normalize_branch_ref(ref: Optional[str]) -> Optional[str]:
     """Normalize a ref/branch string to a bare branch name when possible.
