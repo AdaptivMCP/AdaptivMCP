@@ -56,7 +56,7 @@ Recommended sequence
    - Understand defaults (controller repo, main branch, timeouts, feature flags, write gate).
    - Pay attention to the `write_allowed` and `auto_approve` configuration.
 
-2. Call `list_all_actions` with `include_parameters` set to true. This controller guarantees that each tool will expose a non-null `input_schema` object in that response. When the underlying MCP tool does not publish an explicit input schema, the server synthesizes a minimal `{type: "object", properties: {}}` JSON schema so assistants can still reason about argument shapes.
+2. Call `list_all_actions` with `include_parameters` set to true. This controller guarantees that each tool will expose a non-null `input_schema` object in that response. When the underlying MCP tool does not publish an explicit input schema, the server either synthesizes a minimal `{type: "object", properties: {}}` schema or uses a hand-authored schema for key navigation tools like `compare_refs`, `list_workflow_runs`, and `list_recent_failures` so assistants can still reason about required fields and filters.
    - Discover the full tool surface, including MCP tools and any GitHub specific helpers.
    - Learn parameter shapes and required fields.
 
