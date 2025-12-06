@@ -149,12 +149,39 @@ async def _perform_github_commit(
 
 
 async def _load_body_from_content_url(content_url: str, *, context: str) -> bytes:
-    """Read bytes from a sandbox path, absolute path, or HTTP(S) URL."""
+    """Read bytes from a sandbox path, absolute path, HTTP(S) URL, or GitHub URL."""
 
     if not isinstance(content_url, str) or not content_url.strip():
         raise ValueError("content_url must be a non-empty string when provided")
 
     content_url = content_url.strip()
+
+    if content_url.startswith("github:"):
+        spec = content_url[len("github:") :].strip()
+        if not spec:
+            raise GitHubAPIError("github: content_url must include owner/repo:path[@ref]")
+
+        if "/" not in spec or ":" not in spec.split("/", 1)[1]:
+            raise GitHubAPIError("github: content_url must be owner/repo:path[@ref]")
+
+        owner_repo, path_ref = spec.split("/", 1)
+        if not owner_repo or ":" not in path_ref:
+            raise GitHubAPIError("github: content_url must be owner/repo:path[@ref]")
+
+        full_name = owner_repo
+        path_part, _, ref = path_ref.partition("@")
+        if not path_part:
+            raise GitHubAPIError("github: content_url must specify a file path after ':'")
+
+        decoded = await _decode_github_content(
+            full_name=full_name,
+            path=path_part,
+            ref=ref or None,
+        )
+        decoded_bytes = decoded.get("decoded_bytes")
+        if not isinstance(decoded_bytes, (bytes, bytearray)):
+            raise GitHubAPIError("github: decoded content did not return bytes")
+        return decoded_bytes
 
     def _read_local(local_path: str, missing_hint: str) -> bytes:
         try:
