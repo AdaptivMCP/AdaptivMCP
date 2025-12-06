@@ -2954,12 +2954,46 @@ async def open_pr_for_existing_branch(
     body: Optional[str] = None,
     draft: bool = False,
 ) -> Dict[str, Any]:
-    """Open a pull request for an existing branch into a base branch."""
+    """Open a pull request for an existing branch into a base branch.
+
+    This helper is intentionally idempotent: if there is already an open PR for
+    the same head/base pair, it will return that existing PR instead of failing
+    or creating a duplicate.
+    """
 
     # Resolve the effective base branch using the same logic as other helpers.
     effective_base = _effective_ref_for_repo(full_name, base)
     pr_title = title or f"{branch} -> {effective_base}"
 
+    # GitHub's API expects the head in the form "owner:branch" when used
+    # with the head filter on the pulls listing endpoint.
+    owner, _repo = full_name.split("/", 1)
+    head_ref = f"{owner}:{branch}"
+
+    # 1) Check for an existing open PR for this head/base pair.
+    existing_json: Any = []
+    try:
+        existing_resp = await list_pull_requests(
+            full_name,
+            state="open",
+            head=head_ref,
+            base=effective_base,
+            per_page=10,
+            page=1,
+        )
+        existing_json = existing_resp.get("json") or []
+    except Exception:
+        # If listing PRs fails for any reason, fall back to creating one.
+        existing_json = []
+
+    if isinstance(existing_json, list) and existing_json:
+        # Reuse the first matching PR.
+        return {
+            "reused_existing": True,
+            "pull_request": existing_json[0],
+        }
+
+    # 2) No existing PR found; create a new one via the lower-level helper.
     return await create_pull_request(
         full_name=full_name,
         title=pr_title,
