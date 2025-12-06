@@ -264,7 +264,6 @@ async def test_recent_prs_for_branch_groups_open_and_closed(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_workflow_run_overview_includes_failed_and_longest_jobs(monkeypatch):
     async def fake_get_workflow_run(full_name: str, run_id: int):
-    async def fake_get_workflow_run(full_name: str, run_id: int):
         return {"json": {
             "id": run_id,
             "name": "CI",
