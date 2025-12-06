@@ -161,11 +161,11 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         if not spec:
             raise GitHubAPIError("github: content_url must include owner/repo:path[@ref]")
 
-        if "/" not in spec or ":" not in spec.split("/", 1)[1]:
+        if "/" not in spec or ":" not in spec:
             raise GitHubAPIError("github: content_url must be owner/repo:path[@ref]")
 
-        owner_repo, path_ref = spec.split("/", 1)
-        if not owner_repo or ":" not in path_ref:
+        owner_repo, path_ref = spec.split(":", 1)
+        if "/" not in owner_repo or not path_ref:
             raise GitHubAPIError("github: content_url must be owner/repo:path[@ref]")
 
         full_name = owner_repo
