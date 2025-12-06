@@ -3276,3 +3276,114 @@ async def _shutdown_clients() -> None:
 
 
 app.add_event_handler("shutdown", _shutdown_clients)
+
+
+@mcp_tool(
+    write_action=False,
+    description=(
+        "Return a compact overview of a pull request, including files and CI status."
+    ),
+)
+async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
+    """Summarize a pull request so I can decide what to do next.
+
+    This helper is read-only and safe to call before any write actions.
+    """
+
+    pr_resp = await fetch_pr(full_name, pull_number)
+    pr_json = pr_resp.get("json") or {}
+    if not isinstance(pr_json, dict):
+        pr_json = {}
+
+    def _get_user(raw: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(raw, dict):
+            return None
+        login = raw.get("login")
+        if not isinstance(login, str):
+            return None
+        return {"login": login, "html_url": raw.get("html_url")}
+
+    pr_summary: Dict[str, Any] = {
+        "number": pr_json.get("number"),
+        "title": pr_json.get("title"),
+        "state": pr_json.get("state"),
+        "draft": pr_json.get("draft"),
+        "merged": pr_json.get("merged"),
+        "html_url": pr_json.get("html_url"),
+        "user": _get_user(pr_json.get("user")),
+        "created_at": pr_json.get("created_at"),
+        "updated_at": pr_json.get("updated_at"),
+        "closed_at": pr_json.get("closed_at"),
+        "merged_at": pr_json.get("merged_at"),
+    }
+
+    files: List[Dict[str, Any]] = []
+    try:
+        files_resp = await list_pr_changed_filenames(full_name, pull_number, per_page=100)
+        files_json = files_resp.get("json") or []
+        if isinstance(files_json, list):
+            for f in files_json:
+                if not isinstance(f, dict):
+                    continue
+                files.append(
+                    {
+                        "filename": f.get("filename"),
+                        "status": f.get("status"),
+                        "additions": f.get("additions"),
+                        "deletions": f.get("deletions"),
+                        "changes": f.get("changes"),
+                    }
+                )
+    except Exception:
+        files = []
+
+    status_checks: Optional[Dict[str, Any]] = None
+    head = pr_json.get("head")
+    head_sha = head.get("sha") if isinstance(head, dict) else None
+    if isinstance(head_sha, str):
+        try:
+            status_resp = await get_commit_combined_status(full_name, head_sha)
+            status_checks = status_resp.get("json") or {}
+        except Exception:
+            status_checks = None
+
+    workflow_runs: List[Dict[str, Any]] = []
+    head_ref = head.get("ref") if isinstance(head, dict) else None
+    if isinstance(head_ref, str):
+        try:
+            runs_resp = await list_workflow_runs(
+                full_name,
+                branch=head_ref,
+                per_page=5,
+                page=1,
+            )
+            runs_json = runs_resp.get("json") or {}
+            raw_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
+            for run in raw_runs:
+                if not isinstance(run, dict):
+                    continue
+                workflow_runs.append(
+                    {
+                        "id": run.get("id"),
+                        "name": run.get("name"),
+                        "event": run.get("event"),
+                        "status": run.get("status"),
+                        "conclusion": run.get("conclusion"),
+                        "head_branch": run.get("head_branch"),
+                        "head_sha": run.get("head_sha"),
+                        "html_url": run.get("html_url"),
+                        "created_at": run.get("created_at"),
+                        "updated_at": run.get("updated_at"),
+                    }
+                )
+        except Exception:
+            workflow_runs = []
+
+    return {
+        "repository": full_name,
+        "pull_number": pull_number,
+        "pr": pr_summary,
+        "files": files,
+        "status_checks": status_checks,
+        "workflow_runs": workflow_runs,
+    }
