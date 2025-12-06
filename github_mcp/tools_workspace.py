@@ -418,8 +418,7 @@ async def run_tests(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
-) -> Dict[str, Any]:) -> Dict[str, Any]:
-    """Run the project's test command inside the persistent workspace.
+) -> Dict[str, Any]:    """Run the project's test command inside the persistent workspace.
 
     ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
     default timeout. Provide ``patch`` when running tests against pending edits
