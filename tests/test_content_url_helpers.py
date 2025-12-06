@@ -93,7 +93,6 @@ def test_load_body_from_sandbox_missing_without_rewrite():
     assert "http(s) URL" in message
 
 
-
 def test_load_body_from_github_url_with_ref(monkeypatch):
     called = {}
 
@@ -103,7 +102,7 @@ def test_load_body_from_github_url_with_ref(monkeypatch):
         called['ref'] = ref
         return {'decoded_bytes': b'github-bytes', 'sha': 'sha'}
 
-    monkeypatch.setattr('main._decode_github_content', fake_decode)
+    monkeypatch.setattr('github_mcp.github_content._decode_github_content', fake_decode)
 
     result = asyncio.run(
         _load_body_from_content_url(
@@ -118,7 +117,6 @@ def test_load_body_from_github_url_with_ref(monkeypatch):
     assert called['ref'] == 'branch'
 
 
-
 def test_load_body_from_github_url_without_ref(monkeypatch):
     called = {}
 
@@ -128,7 +126,7 @@ def test_load_body_from_github_url_without_ref(monkeypatch):
         called['ref'] = ref
         return {'decoded_bytes': b'github-no-ref', 'sha': 'sha'}
 
-    monkeypatch.setattr('main._decode_github_content', fake_decode)
+    monkeypatch.setattr('github_mcp.github_content._decode_github_content', fake_decode)
 
     result = asyncio.run(
         _load_body_from_content_url(
@@ -141,7 +139,6 @@ def test_load_body_from_github_url_without_ref(monkeypatch):
     assert called['full_name'] == 'owner/repo'
     assert called['path'] == 'another/file.txt'
     assert called['ref'] is None
-
 
 
 def test_load_body_from_github_url_invalid_spec():
