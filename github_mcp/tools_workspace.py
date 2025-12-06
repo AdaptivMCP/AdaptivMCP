@@ -312,6 +312,101 @@ async def commit_workspace_files(
 
 
 @mcp_tool(write_action=False)
+async def get_workspace_changes_summary(
+    full_name: str,
+    ref: str = "main",
+    path_prefix: Optional[str] = None,
+    max_files: int = 200,
+) -> Dict[str, Any]:
+    """Summarize the current workspace changes for a repo/ref.
+
+    This helper inspects the persistent workspace for ``full_name``/``ref``
+    and returns a structured view of modified, added, deleted, renamed, and
+    untracked files. It is intended as a light-weight "what did I change?"
+    helper that assistants can call before committing or opening a PR.
+    """
+
+    deps = _workspace_deps()
+    effective_ref = _effective_ref_for_repo(full_name, ref)
+    repo_dir = await deps["clone_repo"](
+        full_name, ref=effective_ref, preserve_changes=True
+    )
+
+    status_result = await deps["run_shell"](
+        "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=60
+    )
+    raw_status = status_result.get("stdout", "")
+    lines = [line for line in raw_status.splitlines() if line.strip()]
+
+    def _within_prefix(path: str) -> bool:
+        if not path_prefix:
+            return True
+        prefix = path_prefix.rstrip("/")
+        return path == prefix or path.startswith(prefix + "/")
+
+    changes: List[Dict[str, Any]] = []
+    summary = {
+        "modified": 0,
+        "added": 0,
+        "deleted": 0,
+        "renamed": 0,
+        "untracked": 0,
+    }
+
+    for line in lines:
+        if len(line) < 3:
+            continue
+        x = line[0]
+        y = line[1]
+        rest = line[3:]
+
+        if " -> " in rest:
+            src, dst = rest.split(" -> ", 1)
+            path = dst
+            change_type = "R"
+        else:
+            src = rest
+            dst = None
+            path = src
+            change_type = "??" if x == "?" and y == "?" else "M"
+
+        if not _within_prefix(path):
+            continue
+
+        if x == "?" and y == "?":
+            summary["untracked"] += 1
+        elif x == "A" or y == "A":
+            change_type = "A"
+            summary["added"] += 1
+        elif x == "D" or y == "D":
+            change_type = "D"
+            summary["deleted"] += 1
+        elif x == "R" or y == "R":
+            change_type = "R"
+            summary["renamed"] += 1
+        else:
+            change_type = "M"
+            summary["modified"] += 1
+
+        if len(changes) < max_files:
+            changes.append({
+                "status": change_type,
+                "path": path,
+                "src": src,
+                "dst": dst,
+            })
+
+    has_changes = any(summary.values())
+    return {
+        "ref": effective_ref,
+        "has_changes": has_changes,
+        "summary": summary,
+        "changes": changes,
+    }
+
+
+@mcp_tool(write_action=False)
+@mcp_tool(write_action=False)
 async def run_tests(
     full_name: str,
     ref: str = "main",
