@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Protocolimport difflib
-
-# Reuse GitHub helpers from the core server implementation. These are defined
+from typing import Any, Callable, Dict, List, Protocol
+import difflib# Reuse GitHub helpers from the core server implementation. These are defined
 # in main.py before extra_tools is imported, so this import is safe.
 from main import (
     _github_request,
