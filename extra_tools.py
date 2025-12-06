@@ -221,27 +221,12 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         if not sections:
             raise ValueError("sections must be a non-empty list")
 
-        # Fetch current file content from GitHub.
-        owner_repo = full_name
-        ref = branch
-
-        # Use GitHub contents API via _github_request.
-        url = f"/repos/{owner_repo}/contents/{path}"
-        params = {"ref": ref}
-        content_response = await _github_request("GET", url, params=params)
-        if content_response.status_code != 200:
-            raise GitHubAPIError(
-                f"Failed to fetch {path} at {ref}: {content_response.status_code}"
-            )
-
-        data = content_response.json()
-        if data.get("encoding") != "base64":
-            raise GitHubAPIError("Expected base64-encoded content from GitHub")
-
-        import base64
-
-        current_bytes = base64.b64decode(data["content"])
-        current_text = current_bytes.decode("utf-8")
+        # Fetch current file content from GitHub using the shared decoder helper.
+        effective_branch = _effective_ref_for_repo(full_name, branch)
+        decoded = await _decode_github_content(full_name, path, effective_branch)
+        current_text = decoded.get("text")
+        if not isinstance(current_text, str):
+            raise GitHubAPIError("Decoded content is not text")
 
         updated_text = current_text
         for section in sections:
