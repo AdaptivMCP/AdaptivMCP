@@ -251,6 +251,7 @@ one (in a docs branch, via PR).
    - Use `get_issue_overview` when you want a normalized summary of the issue, checklists parsed from the body and comments, and candidate branches/PRs before acting.
    - Use `fetch_issue` and `fetch_issue_comments` for direct issue details and discussion.
    - Use `get_pr_overview` when you want a compact PR summary (metadata, changed files, and CI status) before touching any write tools.
+   - Use `recent_prs_for_branch` when you know a branch name and want to discover open (and optionally closed) pull requests whose head matches that branch.
    - Use `fetch_pr`, `fetch_pr_comments`, and `list_pr_changed_filenames` to understand a PR and its diff in more detail when needed.
 2. Summarize before acting:
    - Summarize the current state of the issue or PR for the user.

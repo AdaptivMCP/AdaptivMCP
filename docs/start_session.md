@@ -72,6 +72,7 @@ For more complex or test-sensitive work:
 - For issue or PR tasks, start with `open_issue_context` for issues or `get_pr_overview`/`get_pr_info` for pull requests.
 - When you need a normalized issue summary, checklists, and related branches/PRs, call `get_issue_overview` before planning work, then inspect diffs via `list_pr_changed_filenames` and `get_pr_diff`.
 - When you need a compact PR summary, changed files, and CI status for a pull request, call `get_pr_overview` before deciding which write tools to use.
+- When you know the branch name and want to discover PRs tied to it, call `recent_prs_for_branch` to list open (and optionally recent closed) pull requests for that branch.
 - When diagnosing CI, use `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, and `get_job_logs` instead of guessing. Use `trigger_workflow_dispatch` or `trigger_and_wait_for_workflow` only when asked.
 - Check `get_rate_limit` before heavy searches or bulk operations. Use `resolve_handle` to expand shorthand references before acting on them.
 

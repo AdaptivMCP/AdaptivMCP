@@ -195,3 +195,74 @@ async def test_get_pr_overview_collects_pr_files_and_ci(monkeypatch):
     assert result["files"][0]["filename"] == "main.py"
     assert result["status_checks"]["state"] == "success"
     assert result["workflow_runs"][0]["id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_recent_prs_for_branch_groups_open_and_closed(monkeypatch):
+    calls = []
+
+    async def fake_list_prs(
+        full_name: str,
+        state: str = "open",
+        head=None,
+        base=None,
+        per_page: int = 30,
+        page: int = 1,
+    ):
+        calls.append(
+            {
+                "full_name": full_name,
+                "state": state,
+                "head": head,
+                "per_page": per_page,
+                "page": page,
+            }
+        )
+        if state == "open":
+            return {
+                "json": [
+                    {
+                        "number": 1,
+                        "title": "Open PR",
+                        "state": "open",
+                        "html_url": "https://example.test/pr/1",
+                        "user": {"login": "author", "html_url": "https://example.test/author"},
+                        "head": {"ref": "feature/branch", "sha": "open-sha"},
+                        "base": {"ref": "main"},
+                    }
+                ]
+            }
+        else:
+            return {
+                "json": [
+                    {
+                        "number": 2,
+                        "title": "Closed PR",
+                        "state": "closed",
+                        "html_url": "https://example.test/pr/2",
+                        "user": {"login": "author", "html_url": "https://example.test/author"},
+                        "head": {"ref": "feature/branch", "sha": "closed-sha"},
+                        "base": {"ref": "main"},
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(main, "list_pull_requests", fake_list_prs)
+
+    result = await main.recent_prs_for_branch(
+        "owner/repo",
+        branch="feature/branch",
+        include_closed=True,
+    )
+
+    assert result["full_name"] == "owner/repo"
+    assert result["branch"] == "feature/branch"
+    assert result["open"][0]["number"] == 1
+    assert result["closed"][0]["number"] == 2
+
+    # head filter should include the owner prefix so we disambiguate forks
+    open_calls = [c for c in calls if c["state"] == "open"]
+    closed_calls = [c for c in calls if c["state"] == "closed"]
+    assert open_calls
+    assert closed_calls
+    assert all(c["head"] == "owner:feature/branch" for c in open_calls + closed_calls)
