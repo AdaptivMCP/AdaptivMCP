@@ -63,6 +63,7 @@ For more complex or test-sensitive work:
 ## 5. Large files and context management
 
 - Default to `open_file_context`, `get_file_slice`, or `get_file_with_line_numbers` when only part of a file is relevant.
+- When I know I need the entire contents of a single large GitHub file, I prefer `download_user_content` with a `github:` URL (for example `github:owner/repo:path/to/file[@ref]`) so I can fetch it once into the workspace instead of calling file-slice tools in a loop.
 - Use `build_section_based_diff` or `build_unified_diff` for targeted patches instead of full-file rewrites.
 - For large searches or cross-repo questions, prefer repo-scoped `search` calls before resorting to global queries.
 
