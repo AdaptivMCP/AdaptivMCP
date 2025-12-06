@@ -225,7 +225,12 @@ def _ensure_write_allowed(context: str, *, target_ref: Optional[str] = None) -> 
 
 
 
-def mcp_tool(*, write_action: bool = False, **tool_kwargs):
+def mcp_tool(
+    *,
+    write_action: bool = False,
+    assistant_visible: bool = True,
+    **tool_kwargs,
+):
     existing_tags = tool_kwargs.pop("tags", None)
     tags: set[str] = set(existing_tags or [])
     if write_action:
@@ -254,8 +259,11 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         **existing_meta,
         "write_action": write_action,
         "auto_approved": not write_action,
+        "assistant_visible": assistant_visible,
     }
 
+    import functools as _functools
+    import inspect as _inspect
     import functools as _functools
     import inspect as _inspect
 
