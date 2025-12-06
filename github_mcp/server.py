@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
-import time
-import traceback
-import uuid
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Optional
 
 import jsonschema
+from anyio import ClosedResourceError
+from fastmcp import FastMCP
+from mcp.types import ToolAnnotationsimport jsonschema
 from anyio import ClosedResourceError
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -19,12 +18,9 @@ from mcp.types import ToolAnnotations
 from github_mcp import http_clients as _http_clients
 from github_mcp.config import BASE_LOGGER, TOOLS_LOGGER
 from github_mcp.exceptions import WriteNotAuthorizedError
-from github_mcp.http_clients import (
-    _concurrency_semaphore,
-    _external_client_instance,
-    _github_client_instance,
-)
+from github_mcp.http_clients import _github_client_instance
 from github_mcp.metrics import _record_tool_call
+from github_mcp.utils import _env_flagfrom github_mcp.metrics import _record_tool_call
 from github_mcp.utils import _env_flag
 
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
