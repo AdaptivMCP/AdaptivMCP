@@ -260,6 +260,102 @@ async def test_recent_prs_for_branch_groups_open_and_closed(monkeypatch):
     assert result["open"][0]["number"] == 1
     assert result["closed"][0]["number"] == 2
 
+
+@pytest.mark.asyncio
+async def test_get_workflow_run_overview_includes_failed_and_longest_jobs(monkeypatch):
+    async def fake_get_workflow_run(full_name: str, run_id: int):
+        return {"json": {
+            "id": run_id,
+            "name": "CI",
+            "event": "push",
+            "status": "completed",
+            "conclusion": "failure",
+            "head_branch": "feature/test",
+            "head_sha": "abc123",
+            "run_attempt": 1,
+            "created_at": "2025-01-02T00:00:00Z",
+            "updated_at": "2025-01-02T00:10:00Z",
+            "html_url": "https://example.test/runs/1",
+        }}}
+
+    async def fake_list_workflow_run_jobs(full_name: str, run_id: int, per_page: int = 30, page: int = 1):
+        return {"json": {
+            "jobs": [
+                {
+                    "id": 10,
+                    "name": "tests",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "started_at": "2025-01-02T00:00:00Z",
+                    "completed_at": "2025-01-02T00:03:00Z",
+                    "html_url": "https://example.test/job/10",
+                },
+                {
+                    "id": 20,
+                    "name": "lint",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "started_at": "2025-01-02T00:03:00Z",
+                    "completed_at": "2025-01-02T00:09:00Z",
+                    "html_url": "https://example.test/job/20",
+                },
+            ]
+        }}
+
+    monkeypatch.setattr(main, "get_workflow_run", fake_get_workflow_run)
+    monkeypatch.setattr(main, "list_workflow_run_jobs", fake_list_workflow_run_jobs)
+
+    result = await main.get_workflow_run_overview("owner/repo", run_id=1)
+
+    assert result["full_name"] == "owner/repo"
+    assert result["run"]["id"] == 1
+    assert result["run"]["conclusion"] == "failure"
+
+    jobs = result["jobs"]
+    assert len(jobs) == 2
+    assert all("duration_seconds" in job for job in jobs)
+    assert jobs[0]["duration_seconds"] is not None
+
+    failed_ids = [job["id"] for job in result["failed_jobs"]]
+    assert failed_ids == [20]
+
+    longest_ids = [job["id"] for job in result["longest_jobs"]]
+    assert longest_ids[0] == 20
+    assert set(longest_ids) >= {10, 20}
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_run_overview_handles_missing_timestamps(monkeypatch):
+    async def fake_get_workflow_run(full_name: str, run_id: int):
+        return {"json": {"id": run_id}}
+
+    async def fake_list_workflow_run_jobs(full_name: str, run_id: int, per_page: int = 30, page: int = 1):
+        return {"json": {
+            "jobs": [
+                {
+                    "id": 30,
+                    "name": "no-timestamps",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "started_at": None,
+                    "completed_at": None,
+                    "html_url": "https://example.test/job/30",
+                }
+            ]
+        }}
+
+    monkeypatch.setattr(main, "get_workflow_run", fake_get_workflow_run)
+    monkeypatch.setattr(main, "list_workflow_run_jobs", fake_list_workflow_run_jobs)
+
+    result = await main.get_workflow_run_overview("owner/repo", run_id=2)
+
+    assert result["run"]["id"] == 2
+    assert len(result["jobs"]) == 1
+    assert result["jobs"][0]["duration_seconds"] is None
+    assert result["failed_jobs"] == []
+    assert result["longest_jobs"] == []
+    assert result["closed"][0]["number"] == 2
+
     # head filter should include the owner prefix so we disambiguate forks
     open_calls = [c for c in calls if c["state"] == "open"]
     closed_calls = [c for c in calls if c["state"] == "closed"]
