@@ -242,7 +242,6 @@ Typical deployment for an end user:
    - Deploy to Render.com or another hosting platform as a Python web service.
    - Configure environment variables, for example GitHub tokens, optional auto approval flags, concurrency limits, and HTTP timeouts.
    - Start the app (for example via uvicorn) and confirm health by:
-   - Start the app (for example via uvicorn) and confirm health by:
      - Hitting `GET /healthz` on your deployment URL to verify status, uptime, token presence, and a small metrics snapshot.
      - Optionally calling `get_server_config` and `validate_environment` from ChatGPT to confirm configuration.
 
