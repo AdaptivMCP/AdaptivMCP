@@ -406,15 +406,19 @@ async def get_workspace_changes_summary(
 
 
 
+
 @mcp_tool(write_action=False)
-async def run_tests(    test_command: str = "pytest",
+async def run_tests(
+    full_name: str,
+    ref: str = "main",
+    test_command: str = "pytest",
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
     patch: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
-) -> Dict[str, Any]:
+) -> Dict[str, Any]:) -> Dict[str, Any]:
     """Run the project's test command inside the persistent workspace.
 
     ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
