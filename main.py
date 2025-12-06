@@ -5,6 +5,8 @@ used by ChatGPT connectors. It lists the tools, arguments, and behaviors in a
 single place so an assistant can decide how to interact with the server without
 being pushed toward a particular working style. See ``docs/WORKFLOWS.md`` and ``docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md``
 for optional, non-binding examples of how the tools can fit together.
+
+Controller contract last updated: 2025-12-06.
 """
 
 import asyncio
