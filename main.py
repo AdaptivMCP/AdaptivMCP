@@ -3173,6 +3173,26 @@ async def apply_patch_and_commit(
     import re
     import difflib
 
+    def _extract_paths_from_patch(patch_text: str) -> set[str]:
+        '''Return the set of file paths mentioned in ---/+++ headers (normalized).
+
+        Paths are normalized by stripping leading a/ or b/ prefixes.
+        /dev/null entries are ignored.
+        '''
+        paths: set[str] = set()
+        for line in patch_text.splitlines():
+            if not (line.startswith('--- ') or line.startswith('+++ ')):
+                continue
+            _, raw = line.split(' ', 1)
+            raw = raw.strip()
+            if raw == '/dev/null':
+                continue
+            if raw.startswith('a/') or raw.startswith('b/'):
+                raw = raw[2:]
+            if raw:
+                paths.add(raw)
+        return paths
+
     def _apply_unified_diff_to_text(original_text: str, patch_text: str) -> str:
         """Apply a unified diff to original_text and return the updated text.
 
