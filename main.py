@@ -1683,6 +1683,13 @@ def list_all_actions(
         meta = getattr(tool, "meta", {}) or {}
         annotations = getattr(tool, "annotations", None)
 
+        # Hide internal/low-level tools whose metadata explicitly marks them
+        # as not assistant-visible. This lets the controller keep thin REST
+        # shims and building-block helpers available for composition without
+        # exposing them directly to assistants.
+        if meta.get("assistant_visible") is False:
+            continue
+
         description = getattr(tool, "description", None) or (func.__doc__ or "")
         description = description.strip()
 
@@ -1698,6 +1705,7 @@ def list_all_actions(
             "write_action": bool(meta.get("write_action")),
             "auto_approved": bool(meta.get("auto_approved")),
             "read_only_hint": getattr(annotations, "readOnlyHint", None),
+            "assistant_visible": meta.get("assistant_visible", True),
         }
 
         if description:
@@ -1718,9 +1726,7 @@ def list_all_actions(
                 schema = {"type": "object", "properties": {}}
             tool_info["input_schema"] = schema
 
-        tools.append(tool_info)
-
-    tools.sort(key=lambda entry: entry["name"])
+        tools.append(tool_info)    tools.sort(key=lambda entry: entry["name"])
 
     return {
         "write_actions_enabled": server.WRITE_ALLOWED,
