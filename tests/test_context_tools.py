@@ -276,7 +276,7 @@ async def test_get_workflow_run_overview_includes_failed_and_longest_jobs(monkey
             "created_at": "2025-01-02T00:00:00Z",
             "updated_at": "2025-01-02T00:10:00Z",
             "html_url": "https://example.test/runs/1",
-        }}}
+        }}
 
     async def fake_list_workflow_run_jobs(full_name: str, run_id: int, per_page: int = 30, page: int = 1):
         return {"json": {
@@ -354,11 +354,3 @@ async def test_get_workflow_run_overview_handles_missing_timestamps(monkeypatch)
     assert result["jobs"][0]["duration_seconds"] is None
     assert result["failed_jobs"] == []
     assert result["longest_jobs"] == []
-    assert result["closed"][0]["number"] == 2
-
-    # head filter should include the owner prefix so we disambiguate forks
-    open_calls = [c for c in calls if c["state"] == "open"]
-    closed_calls = [c for c in calls if c["state"] == "closed"]
-    assert open_calls
-    assert closed_calls
-    assert all(c["head"] == "owner:feature/branch" for c in open_calls + closed_calls)
