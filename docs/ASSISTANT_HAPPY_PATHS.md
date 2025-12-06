@@ -121,13 +121,13 @@ one (in a docs branch, via PR).
    - For small files: use `build_unified_diff` with your proposed new content and then `apply_patch_and_commit`, or use `apply_text_update_and_commit` directly.
    - For large or sectioned files: use `build_section_based_diff` and then `apply_patch_and_commit`.
    - Update both implementation and tests in the same branch, with clear commit messages.
-6. Run tests in a workspace:
+6. Run tests and lint in a workspace:
    - Call `ensure_workspace_clone` for the repo and branch.
-   - Use `run_quality_suite` for full-suite or default quality gate runs, or `run_tests` / `run_command` for more targeted invocations.
-   - If tests require dependencies, set `installing_dependencies=true` on the first run that installs packages.
+   - Use `run_quality_suite` for full-suite or default quality gate runs, `run_lint_suite` for lint/static analysis, or `run_tests` / `run_command` for more targeted invocations.
+   - If tests or linters require dependencies, set `installing_dependencies=true` on the first run that installs packages.
 7. Handle failures:
-   - If tests fail, use `run_command` (for example `pytest path/to/test -k failing_case -vv`) to iterate until passing.
-   - Update code and tests via patch-based tools, commit again, and re-run tests.
+   - If tests or linters fail, use `run_command` (for example `pytest path/to/test -k failing_case -vv` or `ruff check path/to/module.py`) to iterate until passing.
+   - Update code and tests via patch-based tools, commit again, and re-run tests and lint.
 8. Open a PR:
    - Use `open_pr_for_existing_branch` targeting `main`.
    - In the PR body, summarize behavior changes and explicitly mention tests run (for example `pytest` passing on the feature branch via `run_tests`).
@@ -203,8 +203,7 @@ one (in a docs branch, via PR).
      a separate section unless both ranges must coexist.
    - For multi-block edits, list the sections in file order and sanity-check that no two ranges overlap or leave the old block
      intact.
-5. Optionally run tests or linters via `run_quality_suite`, `run_tests`, or `run_command` if the change affects behavior.
-**Validation:**
+5. Optionally run tests or linters via `run_quality_suite`, `run_lint_suite`, `run_tests`, or `run_command` if the change affects behavior.
 - `apply_line_edits_and_commit` returns `status` equal to `committed` with commit metadata.
 - If you set `include_diff=true`, the diff touches only the intended lines and no unrelated parts of the file.
 
@@ -224,8 +223,8 @@ one (in a docs branch, via PR).
    - Run formatters or generators (for example `ruff`, `black`, or project-specific scripts) as needed.
    - Keep `installing_dependencies` false unless the command installs packages.
 3. Run tests:
-   - Call `run_quality_suite` for the default quality gate, or `run_tests` / `run_command` with more targeted test invocations.
-4. Commit workspace changes:
+3. Run tests and lint:
+   - Call `run_quality_suite` for the default quality gate, `run_lint_suite` for lint/static analysis, or `run_tests` / `run_command` with more targeted test or lint invocations.
    - Use `commit_workspace` when you want to commit all changes in one commit, or
    - Use `commit_workspace_files` to commit a specific subset of files.
    - Ensure `ref` matches your feature branch.
