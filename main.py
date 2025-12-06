@@ -3221,19 +3221,23 @@ async def apply_patch_and_commit(
                 continue
 
             m = hunk_header_re.match(line)
-            if m:
-                # Start of a new hunk: flush unchanged lines up to old_start-1.
-                old_start = int(m.group("old_start"))
-                target_idx = old_start - 1 if old_start > 0 else 0
-
-                if target_idx < orig_idx:
-                    raise GitHubAPIError(
-                        f"Patch is inconsistent with original text: "
-                        f"target_idx={target_idx} < orig_idx={orig_idx}"
-                    )
-
-                new_lines.extend(orig_lines[orig_idx:target_idx])
-                orig_idx = target_idx
+            if line.startswith(" "):
+                # Context line: must match original; copy from original.
+                if orig_idx >= len(orig_lines):
+                    raise GitHubAPIError("Patch context extends beyond end of file")
+                expected = line[1:]
+                if orig_lines[orig_idx] != expected:
+                    raise GitHubAPIError("Patch context does not match original text")
+                new_lines.append(orig_lines[orig_idx])
+                orig_idx += 1
+            elif line.startswith("-"):
+                # Deletion line: skip the corresponding original line.
+                if orig_idx >= len(orig_lines):
+                    raise GitHubAPIError("Patch deletion extends beyond end of file")
+                expected = line[1:]
+                if orig_lines[orig_idx] != expected:
+                    raise GitHubAPIError("Patch deletion does not match original text")
+                orig_idx += 1
                 in_hunk = True
                 continue
 
@@ -3247,24 +3251,32 @@ async def apply_patch_and_commit(
                     raise GitHubAPIError("Patch context extends beyond end of file")
                 # Optionally, we could assert that orig_lines[orig_idx] == line[1:].
                 new_lines.append(orig_lines[orig_idx])
-                orig_idx += 1
-            elif line.startswith("-"):
-                # Deletion line: skip the corresponding original line.
-                if orig_idx >= len(orig_lines):
-                    raise GitHubAPIError("Patch deletion extends beyond end of file")
-                # We could assert orig_lines[orig_idx] == line[1:].
-                orig_idx += 1
-            elif line.startswith("+"):
-                # Insertion line: add the new text (without the leading '+').
-                new_lines.append(line[1:])
-            elif line.startswith("\\"):
-                # e.g. "\ No newline at end of file" – ignore.
-                continue
-            else:
-                raise GitHubAPIError(f"Unexpected line in patch: {line!r}")
+    # Validate that the patch only touches this path.
+    header_paths = _extract_paths_from_patch(patch)
+    if header_paths:
+        if len(header_paths) > 1:
+            raise GitHubAPIError("apply_patch_and_commit only supports patches for a single path; found: " f"{sorted(header_paths)}")
+        header_path = next(iter(header_paths))
+        if header_path != path:
+            raise GitHubAPIError("Patch path mismatch: tool was called with path=" f"{path!r} but patch headers refer to {header_path!r}")
 
-        # Append any remaining original lines not touched by hunks.
-        new_lines.extend(orig_lines[orig_idx:])
+    # 1) Read current file from GitHub on the target branch. Treat a 404 as a new file.
+    is_new_file = False
+    try:
+        decoded = await _decode_github_content(full_name, path, effective_branch)
+        old_text = decoded.get("text")
+        if not isinstance(old_text, str):
+            raise GitHubAPIError("Decoded content is not text")
+        decoded_json = decoded.get("json", {}) if isinstance(decoded, dict) else {}
+        sha_before = decoded_json.get("sha") or decoded.get("sha")
+    except GitHubAPIError as exc:
+        msg = str(exc)
+        if "404" in msg and "/contents/" in msg:
+            is_new_file = True
+            old_text = ""
+            sha_before = None
+        else:
+            raise
         return "".join(new_lines)
 
     # 1) Read current file from GitHub on the target branch. Treat a 404 as a new file.
