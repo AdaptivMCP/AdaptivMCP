@@ -375,3 +375,37 @@ async def run_quality_suite(
         installing_dependencies=installing_dependencies,
         mutating=mutating,
     )
+
+
+@mcp_tool(write_action=False)
+async def run_lint_suite(
+    full_name: str,
+    ref: str = "main",
+    lint_command: str = "ruff check .",
+    timeout_seconds: int = 600,
+    workdir: Optional[str] = None,
+    patch: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+    mutating: bool = False,
+) -> Dict[str, Any]:
+    """Run the lint/static-analysis suite for a repo/branch.
+
+    By default this runs ``ruff check .`` inside the workspace for the given
+    repo/ref. Callers can override ``lint_command`` to run different or
+    additional tools (for example ``mypy`` or project-specific scripts).
+
+    This helper is parallel to ``run_quality_suite`` but focused on style and
+    static analysis rather than tests.
+    """
+    return await run_command(
+        full_name=full_name,
+        ref=ref,
+        command=lint_command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        patch=patch,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+        mutating=mutating,
+    )
