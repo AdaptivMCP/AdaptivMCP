@@ -250,7 +250,8 @@ one (in a docs branch, via PR).
    - Use `open_issue_context` to load an issue along with related branches and pull requests.
    - Use `get_issue_overview` when you want a normalized summary of the issue, checklists parsed from the body and comments, and candidate branches/PRs before acting.
    - Use `fetch_issue` and `fetch_issue_comments` for direct issue details and discussion.
-   - Use `fetch_pr`, `fetch_pr_comments`, and `list_pr_changed_filenames` to understand a PR and its diff.
+   - Use `get_pr_overview` when you want a compact PR summary (metadata, changed files, and CI status) before touching any write tools.
+   - Use `fetch_pr`, `fetch_pr_comments`, and `list_pr_changed_filenames` to understand a PR and its diff in more detail when needed.
 2. Summarize before acting:
    - Summarize the current state of the issue or PR for the user.
    - Highlight linked branches, tests mentioned, and any follow-up tasks.
