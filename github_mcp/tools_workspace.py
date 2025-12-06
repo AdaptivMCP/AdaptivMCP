@@ -419,15 +419,16 @@ async def run_tests(
     installing_dependencies: bool = False,
     mutating: bool = False,
 ) -> Dict[str, Any]:
-    """Run the project's test command inside the persistent workspace.    ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
+    """Run the project's test command inside the persistent workspace.
+
+    ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
     default timeout. Provide ``patch`` when running tests against pending edits
     so the checkout matches the assistant's current working diff.
     Set ``installing_dependencies`` to ``true`` only when the test command also
     installs packages so gating can apply to that narrower use case. Set
     ``mutating=true`` only when the tests will rewrite files; read-only test
     runs remain ungated by default.
-    """
-    return await run_command(
+    """    return await run_command(
         full_name=full_name,
         ref=ref,
         command=test_command,
