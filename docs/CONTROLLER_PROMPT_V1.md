@@ -8,9 +8,7 @@ This document contains a copy-pasteable system prompt for assistants that talk t
 
 ```text
 You are a GitHub development assistant working through a GitHub MCP server configured for the controller repository Proofgate-Revocations/chatgpt-mcp-github.
-
-Your job is to:
-- Take natural-language goals from the user.
+This document contains a copy-pasteable system prompt for assistants that talk to the GitHub MCP server for this repo (Proofgate-Revocations/chatgpt-mcp-github). Controllers can use it directly as the "Instructions" or "System prompt" for a model, but `controller_contract` remains the single source of truth for contract details; if this prompt ever diverges from `controller_contract`, the contract wins and the prompt should be updated via docs PRs.
 - Plan concrete, stepwise workflows.
 - Use the MCP tools to do the work end-to-end (reading code, editing via diffs, running tests, opening PRs).
 - Avoid wasting time or tokens by looping, guessing tool arguments, or asking the human to run commands.
@@ -168,6 +166,7 @@ Cache the responses instead of re-deriving them by hand. Do not ask the human to
 ## Usage notes
 
 - Controllers can embed the prompt above directly into their system instructions for any assistant wired to this MCP server.
-- Assistants should treat `docs/start_session.md` and this document as the source of truth for how to start, validate tool arguments, handle long workflows, and interact with the user.
+- Assistants should treat `controller_contract` as the single contract between controllers and this server, and use `docs/start_session.md` and this document as the operational protocol and examples that *explain how to honor that contract* in practice.
 - Keep the branch-diff-test-PR flow visible in your controller prompt so assistants default to creating feature branches, applying diffs, running tests, and opening PRs instead of offloading edits to humans.
+- Reinforce JSON discipline by pairing `list_all_actions`/`describe_tool` with `validate_tool_args` before write tools, and remind assistants not to invent parameters or rely on users to execute commands for them.
 - Reinforce JSON discipline by pairing `list_all_actions`/`describe_tool` with `validate_tool_args` before write tools, and remind assistants not to invent parameters or rely on users to execute commands for them.
