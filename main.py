@@ -3344,15 +3344,6 @@ async def create_file(
             "html_url": verified.get("html_url"),
         },
     }
-            "branch": effective_branch,
-            "message": commit_message,
-            "commit": commit_result,
-            "verification": {
-                "sha_before": sha_before,
-                "sha_after": sha_after,
-                "html_url": verified.get("html_url"),
-            },
-        }
 
 
 @mcp_tool(write_action=True)
