@@ -574,3 +574,34 @@ async def build_pr_summary(
         "lint_status": lint_status or "unknown",
         "breaking_changes": bool(breaking_changes) if breaking_changes is not None else None,
     }
+
+@mcp_tool(write_action=False)
+async def build_pr_summary(
+    full_name: str,
+    ref: str,
+    title: str,
+    body: str,
+    changed_files: Optional[List[str]] = None,
+    tests_status: Optional[str] = None,
+    lint_status: Optional[str] = None,
+    breaking_changes: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Build a structured summary for a pull request description.
+
+    This helper does **not** call the GitHub API. Instead, it returns a
+    normalized JSON object that controllers can render into a rich,
+    high-level PR description or use for automated quality checks.
+
+    Controllers should treat this as the canonical schema for AI-authored
+    PR descriptions in this repo.
+    """
+    return {
+        "repo": full_name,
+        "ref": ref,
+        "title": title,
+        "body": body,
+        "changed_files": changed_files or [],
+        "tests_status": tests_status or "unknown",
+        "lint_status": lint_status or "unknown",
+        "breaking_changes": bool(breaking_changes) if breaking_changes is not None else None,
+    }
