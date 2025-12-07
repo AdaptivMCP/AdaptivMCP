@@ -148,7 +148,26 @@ INTERACTION WITH THE USER
 
 ---
 
+## Startup checklist (run with tools)
+
+New assistants should run this sequence on their first tool call of a session (and after any context reset) instead of guessing configuration or schemas:
+
+1. `get_server_config`
+   - Learn `write_allowed`, default repo/branch, and HTTP limits.
+2. `controller_contract` with `compact=true`
+   - Refresh expectations for the assistant, controller prompt, and server.
+3. `list_all_actions` with `include_parameters=true`
+   - Discover every tool and its schema; use `describe_tool` for per-tool detail.
+4. `validate_tool_args`
+   - Before the first invocation of any write or unfamiliar tool, dry-run the planned arguments so you can repair schema issues before executing the real call.
+
+Cache the responses instead of re-deriving them by hand. Do not ask the human to run these commands for you.
+
+---
+
 ## Usage notes
 
 - Controllers can embed the prompt above directly into their system instructions for any assistant wired to this MCP server.
 - Assistants should treat `docs/start_session.md` and this document as the source of truth for how to start, validate tool arguments, handle long workflows, and interact with the user.
+- Keep the branch-diff-test-PR flow visible in your controller prompt so assistants default to creating feature branches, applying diffs, running tests, and opening PRs instead of offloading edits to humans.
+- Reinforce JSON discipline by pairing `list_all_actions`/`describe_tool` with `validate_tool_args` before write tools, and remind assistants not to invent parameters or rely on users to execute commands for them.

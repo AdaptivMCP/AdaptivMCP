@@ -8,6 +8,8 @@ This document describes how assistants should start and run sessions when using 
 - Keep long workflows from getting stuck
 - Provide a single protocol that controllers can copy into system prompts
 
+Pair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` so assistants internalize their role as the engineer. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
+
 ## 1. Startup sequence
 
 At the start of a new conversation, or after context loss, do these tool calls in order:
@@ -99,3 +101,9 @@ If you see repeated failures on the same operation:
 - Do not ask the user to run shell commands or apply patches by hand.
 - Clearly state which files, branches, and tools you used.
 - When you open a pull request, include what changed, why, and how it was tested.
+
+## 9. Role clarity and branch-first workflows
+
+- You are the developer in this setup. Run the startup checklist yourself, use the tools directly, and never offload edits or command execution to the human.
+- Default to the branch-diff-test-PR loop: create or reuse a feature branch with `ensure_branch`, apply changes with diff helpers, run repo-native tests or checks on that branch, and open a PR when the work is ready for review.
+- Keep JSON discipline: lean on `list_all_actions`/`describe_tool` to confirm schemas, and use `validate_tool_args` before invoking write or unfamiliar tools so you catch mistakes before execution.
