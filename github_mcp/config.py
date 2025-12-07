@@ -12,6 +12,7 @@ import time
 
 GITHUB_PAT = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
+GITHUB_API_BASE_URL = GITHUB_API_BASE
 
 # Base directory for persistent workspaces used by run_command and related tools.
 # This keeps cloned repositories stable across tool invocations so installations
@@ -22,6 +23,7 @@ WORKSPACE_BASE_DIR = os.environ.get(
 )
 
 HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", 150))
+GITHUB_REQUEST_TIMEOUT_SECONDS = HTTPX_TIMEOUT
 HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", 300))
 HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", 200))
 
