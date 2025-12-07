@@ -1222,6 +1222,13 @@ async def list_branches(
 ) -> Dict[str, Any]:
     """Enumerate branches for a repository with GitHub-style pagination."""
 
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    if per_page <= 0:
+        raise ValueError("per_page must be > 0")
+    if page <= 0:
+        raise ValueError("page must be > 0")
+
     params = {"per_page": per_page, "page": page}
     return await _github_request("GET", f"/repos/{full_name}/branches", params=params)
 
@@ -1241,16 +1248,21 @@ async def move_file(
     commit/contents APIs as other file helpers.
     """
 
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+
+    effective_branch = _effective_ref_for_repo(full_name, branch)
+
     _ensure_write_allowed(
-        f"move_file from {from_path} to {to_path} in {full_name}@{branch}",
-        target_ref=branch,
+        f"move_file from {from_path} to {to_path} in {full_name}@{effective_branch}",
+        target_ref=effective_branch,
     )
 
     if from_path == to_path:
         raise ValueError("from_path and to_path must be different")
 
     # Read the source file text first.
-    source = await _decode_github_content(full_name, from_path, branch)
+    source = await _decode_github_content(full_name, from_path, effective_branch)
     source_text = source.get("text")
     if source_text is None:
         raise GitHubAPIError("Source file contents missing or undecodable")
@@ -1262,7 +1274,7 @@ async def move_file(
         full_name=full_name,
         path=to_path,
         updated_content=source_text,
-        branch=branch,
+        branch=effective_branch,
         message=commit_message + " (add new path)",
         return_diff=False,
     )
@@ -1271,15 +1283,15 @@ async def move_file(
     delete_result = await delete_file(
         full_name=full_name,
         path=from_path,
-        branch=branch,
+        branch=effective_branch,
         message=commit_message + " (remove old path)",
-        if_missing="ignore",
+        if_missing="noop",
     )
 
     return {
         "status": "moved",
         "full_name": full_name,
-        "branch": branch,
+        "branch": effective_branch,
         "from_path": from_path,
         "to_path": to_path,
         "write_result": write_result,
@@ -1527,16 +1539,23 @@ async def search(
     sort: Optional[str] = None,
     order: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Perform GitHub search queries (code, repos, issues, or commits)."""
+    """Perform GitHub search queries (code, repos, issues, commits, or users)."""
 
-    allowed_types = {"code", "repositories", "issues", "commits"}
+    allowed_types = {"code", "repositories", "issues", "commits", "users"}
     if search_type not in allowed_types:
-        raise ValueError(f"type must be one of {sorted(allowed_types)}")
+        raise ValueError(f"search_type must be one of {sorted(allowed_types)}")
+    if per_page <= 0:
+        raise ValueError("per_page must be > 0")
+    if page <= 0:
+        raise ValueError("page must be > 0")
 
     params: Dict[str, Any] = {"q": query, "per_page": per_page, "page": page}
     if sort:
         params["sort"] = sort
-    if order:
+    if order is not None:
+        allowed_order = {"asc", "desc"}
+        if order not in allowed_order:
+            raise ValueError("order must be 'asc' or 'desc'")
         params["order"] = order
     return await _github_request("GET", f"/search/{search_type}", params=params)
 
@@ -1575,6 +1594,13 @@ async def list_workflow_runs(
     page: int = 1,
 ) -> Dict[str, Any]:
     """List recent GitHub Actions workflow runs with optional filters."""
+
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    if per_page <= 0:
+        raise ValueError("per_page must be > 0")
+    if page <= 0:
+        raise ValueError("page must be > 0")
 
     params: Dict[str, Any] = {"per_page": per_page, "page": page}
     if branch:
@@ -1862,6 +1888,13 @@ async def list_workflow_run_jobs(
     page: int = 1,
 ) -> Dict[str, Any]:
     """List jobs within a workflow run, useful for troubleshooting failures."""
+
+    if "/" not in full_name:
+        raise ValueError("full_name must be in 'owner/repo' format")
+    if per_page <= 0:
+        raise ValueError("per_page must be > 0")
+    if page <= 0:
+        raise ValueError("page must be > 0")
 
     params = {"per_page": per_page, "page": page}
     return await _github_request(
@@ -2379,7 +2412,7 @@ async def update_issue(
     if state is not None:
         allowed_states = {"open", "closed"}
         if state not in allowed_states:
-            raise ValueError("state must be ‘open’ or ‘closed’")
+            raise ValueError("state must be 'open' or 'closed'")
         payload["state"] = state
     if labels is not None:
         payload["labels"] = labels
@@ -3217,6 +3250,7 @@ async def update_files_and_open_pr(
 
 
 @mcp_tool(write_action=True)
+@mcp_tool(write_action=True)
 async def apply_text_update_and_commit(
     full_name: str,
     path: str,
@@ -3248,6 +3282,23 @@ async def apply_text_update_and_commit(
         message: Commit message; if omitted, a simple "Update <path>" is used.
         return_diff: If true, include a unified diff in the response under "diff".
         context_lines: Number of context lines for the unified diff.
+
+    Returns:
+        A dict with:
+            - status: "committed"
+            - full_name, path, branch
+            - message: commit message used
+            - commit: raw GitHub commit API response
+            - verification: {sha_before, sha_after, html_url}
+            - diff: unified diff text (if return_diff is true)
+    """
+
+    if context_lines < 0:
+        raise ValueError("context_lines must be non-negative")
+
+    effective_branch = _effective_ref_for_repo(full_name, branch)
+
+    _ensure_write_allowed("apply_text_update_and_commit %s %s" % (full_name, path), target_ref=effective_branch)
 
     Returns:
         A dict with:
