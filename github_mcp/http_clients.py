@@ -239,7 +239,8 @@ async def _github_request(
                 else "GitHub rate limit exceeded"
             )
         )
-        )
+
+    if resp.status_code in (401, 403):
 
     if resp.status_code in (401, 403):
         if "Proofgate-Revocations/chatgpt-mcp-github" in path:
