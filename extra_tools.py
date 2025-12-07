@@ -302,7 +302,10 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
 
 
-    def _apply_line_sections(text: str, sections: list[Dict[str, Any]]) -> Dict[str, Any]:
+    def _apply_line_sections(
+        text: str,
+        sections: Optional[List[LineEditSection]],
+    ) -> Dict[str, Any]:
         """Validate and apply line-based sections to text, returning the new text."""
 
         if sections is None:
@@ -311,8 +314,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         original_lines = text.splitlines(keepends=True)
         total_lines = len(original_lines)
 
-        normalized_sections: list[Dict[str, Any]] = sorted(
-            sections, key=lambda s: int(s.get("start_line", 0))
+        normalized_sections: List[LineEditSection] = sorted(
+            sections, key=lambda s: int(s.get("start_line", 0))  # type: ignore[arg-type]
         )
 
         prev_end = 0
@@ -356,7 +359,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
                 raise ValueError("sections must not overlap or go backwards")
             prev_end = end_line
 
-        updated_lines: list[str] = []
+        updated_lines: List[str] = []
         cursor = 1
 
         for section in normalized_sections:
@@ -375,8 +378,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
                 replacement_text = new_text
 
                 # If we're appending to a file that currently lacks a trailing
-                # newline, make sure the insertion starts on a new line rather
-                # than gluing the new content onto the final line.
+                # newline, make sure the insertion starts on a new line.
                 if (
                     start_line >= max_start
                     and total_lines > 0
@@ -405,6 +407,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "total_lines": total_lines,
             "normalized_sections": normalized_sections,
         }
+
 
     def _build_unified_diff_from_strings(
         original: str,
