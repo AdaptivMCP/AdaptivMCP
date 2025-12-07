@@ -216,7 +216,14 @@ async def _github_request(
         resp=resp,
     )
 
-    message = resp.json().get("message", "") if hasattr(resp, "json") else ""
+    body: Any | None = None
+    if hasattr(resp, "json"):
+        try:
+            body = resp.json()
+        except Exception:
+            body = None
+
+    message = body.get("message", "") if isinstance(body, dict) else ""
 
     message_lower = message.lower() if isinstance(message, str) else ""
     if error_flag and (
@@ -231,6 +238,7 @@ async def _github_request(
                 if reset_hint
                 else "GitHub rate limit exceeded"
             )
+        )
         )
 
     if resp.status_code in (401, 403):
