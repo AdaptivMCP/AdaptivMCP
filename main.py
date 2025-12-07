@@ -1155,11 +1155,15 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
     }
 
     guardrails = [
-        "Always verify branch and ref inputs; missing refs for controller repos should fall back to the configured default branch.",
-        "Do not bypass write gating by invoking GitHub APIs directly; use the provided tools so auditing stays consistent.",
-        "When content drift is detected, refetch files and rebuild the change instead of retrying blindly.",
-        "Prefer slice-and-diff workflows for large files and avoid echoing entire buffers unless necessary.",
-        "Pause and summarize after repeated failures instead of looping on the same action; surface what has been checked so far.",
+        "Always verify branch and ref inputs when using git-aware tools; prefer explicit branch names or commit SHAs over defaults when modifying code or opening pull requests.",
+        "Do not bypass write gating or auto-approval flows; if a write is denied, stop and surface the reason instead of attempting alternate write paths.",
+        "When content drift is detected between your working copy and GitHub, re-fetch or re-clone before applying large changes so patches are computed against the current remote state.",
+        "Prefer slice-and-diff workflows for large files or risky edits; avoid overwriting entire files when a small, well-scoped patch is sufficient.",
+        "Pause and summarize after repeated failures with the same tool; show recent inputs and outputs and propose a revised plan instead of blindly retrying.",
+        "When responding with tool calls for this controller repo, begin by listing the concrete actions you will take in that turn so humans can confirm the sequence before you execute them.",
+        "For this controller repo, once you have created or ensured a feature branch for a task, treat that branch as the single source of truth and do not treat main as the reference while you are fixing issues that exist on main; rely on the feature branch plus its tests and linters.",
+        "After you commit changes from the persistent workspace, re-clone the same branch with ensure_workspace_clone(reset=true) before running run_tests or repo-defined lint suites so verification runs in a fresh workspace that matches GitHub state.",
+        "Treat validate_environment and other deployment checks as dependent on Joey merging and restarting the service; use them sparingly, do not loop on them, and never claim you merged or restarted anything yourself.",
     ]
 
     payload: Dict[str, Any] = {
