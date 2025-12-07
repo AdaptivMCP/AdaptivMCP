@@ -1283,14 +1283,25 @@ async def move_file(
         path=from_path,
         branch=effective_branch,
         message=commit_message + " (remove old path)",
-        if_missing="noop",
-    )
-
-    return {
-        "status": "moved",
-        "full_name": full_name,
+    # 2) Delete the original path now that the destination exists.
+    delete_body = {
+        "message": commit_message + " (remove old path)",
         "branch": effective_branch,
-        "from_path": from_path,
+    }
+    try:
+        delete_body["sha"] = await _resolve_file_sha(full_name, from_path, effective_branch)
+    except GitHubAPIError as exc:
+        msg = str(exc)
+        if "404" in msg and "/contents/" in msg:
+            delete_result = {"status": "noop", "reason": "source path missing"}
+        else:
+            raise
+    else:
+        delete_result = await _github_request(
+            "DELETE",
+            f"/repos/{full_name}/contents/{from_path}",
+            json=delete_body,
+        )
         "to_path": to_path,
         "write_result": write_result,
         "delete_result": delete_result,
@@ -3284,9 +3295,9 @@ async def create_file(
         effective_branch = _effective_ref_for_repo(full_name, branch)
 
         _ensure_write_allowed(
-            "create_file %s %s" % (full_name, path),
-            target_ref=effective_branch,
-        )
+    # Metrics/logging handled at higher layers; focus on GitHub behavior here.
+
+    effective_branch = _effective_ref_for_repo(full_name, branch)
 
         # Ensure the file does not already exist.
         try:
