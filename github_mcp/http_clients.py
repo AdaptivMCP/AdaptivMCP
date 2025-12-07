@@ -242,7 +242,6 @@ async def _github_request(
 
     if resp.status_code in (401, 403):
 
-    if resp.status_code in (401, 403):
         if "Proofgate-Revocations/chatgpt-mcp-github" in path:
             return {
                 "status_code": 200,
