@@ -3722,10 +3722,9 @@ app.add_event_handler("shutdown", _shutdown_clients)
     ),
 )
 async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
-    """Summarize a pull request so I can decide what to do next.
-
-    This helper is read-only and safe to call before any write actions.
-    """
+    # Summarize a pull request so I can decide what to do next.
+    #
+    # This helper is read-only and safe to call before any write actions.
 
     pr_resp = await fetch_pr(full_name, pull_number)
     pr_json = pr_resp.get("json") or {}
