@@ -3250,7 +3250,6 @@ async def update_files_and_open_pr(
 
 
 @mcp_tool(write_action=True)
-@mcp_tool(write_action=True)
 async def apply_text_update_and_commit(
     full_name: str,
     path: str,
@@ -3295,20 +3294,6 @@ async def apply_text_update_and_commit(
 
     if context_lines < 0:
         raise ValueError("context_lines must be non-negative")
-
-    effective_branch = _effective_ref_for_repo(full_name, branch)
-
-    _ensure_write_allowed("apply_text_update_and_commit %s %s" % (full_name, path), target_ref=effective_branch)
-
-    Returns:
-        A dict with:
-            - status: "committed"
-            - full_name, path, branch
-            - message: commit message used
-            - commit: raw GitHub commit API response
-            - verification: {sha_before, sha_after, html_url}
-            - diff: unified diff text (if return_diff is true)
-    """
 
     effective_branch = _effective_ref_for_repo(full_name, branch)
 
