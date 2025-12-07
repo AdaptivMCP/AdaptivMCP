@@ -427,6 +427,11 @@ async def run_tests(
     installs packages so gating can apply to that narrower use case. Set
     ``mutating=true`` only when the tests will rewrite files; read-only test
     runs remain ungated by default.
+
+    The returned object always includes a top-level "status" field summarizing
+    the outcome ("passed" or "failed") and echoes the test command so callers
+    and smoke tests can reason about the run without digging into the raw
+    command result.
     """
     result = await run_command(
         full_name=full_name,
@@ -439,9 +444,41 @@ async def run_tests(
         installing_dependencies=installing_dependencies,
         mutating=mutating,
     )
-    if isinstance(result, dict) and result.get("error", {}).get("error") == "GitHubAuthError":
-        return {"status": "failed", "command": test_command, "error": result["error"]}
-    return result
+
+    # If run_command surfaced a structured error (for example an auth or clone
+    # failure), treat that as a failed test run but keep the error payload.
+    if isinstance(result, dict) and "error" in result:
+        return {
+            "status": "failed",
+            "command": test_command,
+            "error": result["error"],
+        }
+
+    # Normal shape: run_command returned repo/workdir plus a nested result
+    # object containing the exit code and streams.
+    if not isinstance(result, dict) or "result" not in result:
+        return {
+            "status": "failed",
+            "command": test_command,
+            "error": {
+                "error": "UnexpectedResultShape",
+                "message": "run_command returned an unexpected result structure",
+                "raw_result": result,
+            },
+        }
+
+    cmd_result = result.get("result") or {}
+    exit_code = cmd_result.get("exit_code")
+    status = "passed" if exit_code == 0 else "failed"
+
+    return {
+        "status": status,
+        "command": test_command,
+        "exit_code": exit_code,
+        "repo_dir": result.get("repo_dir"),
+        "workdir": result.get("workdir"),
+        "result": cmd_result,
+    }
 
 @mcp_tool(write_action=False)
 async def run_quality_suite(
