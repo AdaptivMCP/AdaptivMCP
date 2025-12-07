@@ -3838,12 +3838,11 @@ async def recent_prs_for_branch(
     per_page_open: int = 20,
     per_page_closed: int = 5,
 ) -> Dict[str, Any]:
-    """Return recent pull requests whose head matches the given branch.
-
-    This is a composite navigation helper built on top of list_pull_requests.
-    It groups results into open and (optionally) closed sets so assistants can
-    find the PR(s) tied to a feature branch without guessing numbers.
-    """
+    # Return recent pull requests whose head matches the given branch.
+    #
+    # This is a composite navigation helper built on top of list_pull_requests.
+    # It groups results into open and (optionally) closed sets so assistants can
+    # find the PR(s) tied to a feature branch without guessing numbers.
     if not full_name or "/" not in full_name:
         raise ValueError("full_name must be of the form 'owner/repo'")
     if not branch:
