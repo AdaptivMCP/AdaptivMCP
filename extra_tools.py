@@ -89,7 +89,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         path: str,
         message: str = "Delete file via MCP GitHub connector",
         branch: str = "main",
-        if_missing: str = "error",
+        if_missing: Literal["error", "noop"] = "error",
     ) -> Dict[str, Any]:
         """Delete a single file in a repository using the GitHub Contents API.
 
@@ -111,9 +111,14 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
         effective_branch = _effective_ref_for_repo(full_name, branch)
 
+        # Enforce write gating using the same helper as core tools.
+        _ensure_write_allowed(
+            f"delete_file {full_name} {path}",
+            target_ref=effective_branch,
+        )
+
         # Resolve the current file SHA so we can issue a DELETE via the
-        # Contents API. We piggyback on the existing _resolve_file_sha helper
-        # rather than re-implementing the logic here.
+        # Contents API.
         sha = await _resolve_file_sha(full_name, path, effective_branch)
         if sha is None:
             if if_missing == "noop":
@@ -124,7 +129,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
                     "path": path,
                     "branch": effective_branch,
                     "message": (
-                        f"File {path!r} not found in {full_name}@{effective_branch}; nothing to delete."
+                        f"File {path!r} not found in {full_name}@{effective_branch}; "
+                        "nothing to delete."
                     ),
                 }
             raise GitHubAPIError(
