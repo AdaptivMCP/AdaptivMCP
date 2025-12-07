@@ -8,8 +8,7 @@ This document describes how assistants should start and run sessions when using 
 - Keep long workflows from getting stuck
 - Provide a single protocol that controllers can copy into system prompts
 
-Pair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` so assistants internalize their role as the engineer. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
-
+Pair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` and the live `controller_contract` tool so assistants internalize their role as the engineer. `controller_contract` is the single source of truth for contract details; this document and the controller prompt simply describe how to execute that contract in practice. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
 ## 1. Startup sequence
 
 At the start of a new conversation, or after context loss, do these tool calls in order:
@@ -22,9 +21,7 @@ At the start of a new conversation, or after context loss, do these tool calls i
 6. Use `get_repo_dashboard` and `list_repository_tree` on the default branch to understand layout instead of guessing paths.
 7. Use `get_latest_branch_status` on the controller default branch (and any active feature branches) to understand ahead/behind state, open PRs, and the most recent workflow result before attempting to "fix" CI.
 
-Treat the results of these tools as the source of truth for the rest of the session.
-
-## 2. Tool arguments and validation
+Treat the results of these tools as the source of truth for the rest of the session, with `controller_contract` as the canonical contract and this document as the execution playbook that must remain consistent with it.## 2. Tool arguments and validation
 
 - Follow each tool's declared parameter schema exactly.
 - Build arguments as literal JSON objects, not strings containing JSON.
