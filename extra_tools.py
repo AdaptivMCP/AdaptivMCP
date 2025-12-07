@@ -500,11 +500,13 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
     async def build_section_based_diff(
         full_name: str,
         path: str,
-        sections: list[Dict[str, Any]],
+        sections: List[LineEditSection],
         ref: str = "main",
         context_lines: int = 3,
         show_whitespace: bool = False,
     ) -> Dict[str, Any]:
+        ...
+
         """
         Build a unified diff for a file from line-based section replacements.
 
@@ -807,7 +809,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
     async def apply_line_edits_and_commit(
         full_name: str,
         path: str,
-        sections: list[Dict[str, Any]],
+        sections: List[LineEditSection],
         branch: str = "main",
         message: str = "Apply line edits",
         include_diff: bool = False,
@@ -819,6 +821,9 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         line ranges they want to replace plus the replacement text, and can
         opt-out of receiving diffs by default.
         """
+
+        if context_lines < 0:
+            raise ValueError("context_lines must be >= 0")
 
         effective_branch = _effective_ref_for_repo(full_name, branch)
         decoded = await _decode_github_content(full_name, path, effective_branch)
@@ -853,3 +858,4 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         commit_result["applied_sections"] = normalized_sections
         commit_result["context_lines"] = context_lines
         return commit_result
+
