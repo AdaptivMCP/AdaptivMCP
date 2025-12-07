@@ -235,7 +235,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         path: str,
         branch: str = "main",
         message: str = "Update file via sections",
-        sections: List[Dict[str, str]] = [],
+        sections: Optional[List[SectionReplacement]] = None,
     ) -> Dict[str, Any]:
         """Apply simple section-based replacements to a file and commit.
 
@@ -299,6 +299,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "verification": commit_result.get("verification"),
             "diff": commit_result.get("diff"),
         }
+
 
 
     def _apply_line_sections(text: str, sections: list[Dict[str, Any]]) -> Dict[str, Any]:
