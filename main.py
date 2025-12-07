@@ -2948,7 +2948,6 @@ async def create_pull_request(
         }
         if body is not None:
             payload["body"] = body
-    try:
         return await _github_request(
             "POST",
             f"/repos/{full_name}/pulls",
