@@ -27,14 +27,14 @@ import zipfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional
 
-import httpx
-import github_mcp.tools_workspace as tools_workspace
+import httpx  # noqa: F401
+import github_mcp.tools_workspace as tools_workspace  # noqa: F401
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 
-from github_mcp.config import (
+from github_mcp.config import (  # noqa: F401
     BASE_LOGGER,
     FETCH_FILES_CONCURRENCY,
     GIT_AUTHOR_EMAIL,
@@ -56,7 +56,7 @@ from github_mcp.config import (
     TOOL_STDOUT_MAX_CHARS,
     WORKSPACE_BASE_DIR,
 )
-from github_mcp.exceptions import (
+from github_mcp.exceptions import (  # noqa: F401
     GitHubAPIError,
     GitHubAuthError,
     GitHubRateLimitError,
@@ -70,8 +70,8 @@ from github_mcp.github_content import (
     _resolve_file_sha,
     _verify_file_on_branch,
 )
-from github_mcp import http_clients as _http_clients
-from github_mcp.http_clients import (
+from github_mcp import http_clients as _http_clients  # noqa: F401
+from github_mcp.http_clients import (  # noqa: F401
     _concurrency_semaphore,
     _external_client_instance,
     _get_github_token,
@@ -79,7 +79,7 @@ from github_mcp.http_clients import (
     _http_client_external,
     _http_client_github,
 )
-from github_mcp.metrics import (
+from github_mcp.metrics import (  # noqa: F401
     _METRICS,
     _metrics_snapshot,
     _record_github_request,
@@ -94,22 +94,22 @@ from github_mcp.utils import (
     _with_numbered_lines,
     normalize_args,
 )
-from github_mcp.workspace import (
+from github_mcp.workspace import (  # noqa: F401
     _apply_patch_to_repo,
     _clone_repo,
     _prepare_temp_virtualenv,
     _run_shell,
     _workspace_path,
 )
-from github_mcp.tools_workspace import (
+from github_mcp.tools_workspace import (  # noqa: F401
     commit_workspace,
     commit_workspace_files,
     ensure_workspace_clone,
     run_command,
     run_tests,
 )
-import github_mcp.server as server
-from github_mcp.server import (
+import github_mcp.server as server  # noqa: F401
+from github_mcp.server import (  # noqa: F401
     COMPACT_METADATA_DEFAULT,
     CONTROLLER_CONTRACT_VERSION,
     CONTROLLER_DEFAULT_BRANCH,
