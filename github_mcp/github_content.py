@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import base64
+import os
+import re
 from typing import Any, Dict, Optional
 
 import sys
-
 from .exceptions import GitHubAPIError
-from .http_clients import _github_request
-from .utils import _effective_ref_for_repofrom .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
 from .utils import _effective_ref_for_repo
-
 
 async def _request(*args, **kwargs):
     request_fn = getattr(sys.modules.get("main"), "_github_request", _github_request)
