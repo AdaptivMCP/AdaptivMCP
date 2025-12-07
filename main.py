@@ -3344,27 +3344,6 @@ async def create_file(
             "html_url": verified.get("html_url"),
         },
     }
-        "branch": effective_branch,
-        "message": commit_message,
-        "commit": commit_result,
-        "verification": {
-            "sha_before": sha_before,
-            "sha_after": sha_after,
-            "html_url": verified.get("html_url"),
-        },
-    }
-        "branch": effective_branch,
-        "message": commit_message,
-        "commit": commit_result,
-        "verification": {
-            "sha_before": sha_before,
-            "sha_after": sha_after,
-            "html_url": verified.get("html_url"),
-        },
-    }
-            "status": "created",
-            "full_name": full_name,
-            "path": path,
             "branch": effective_branch,
             "message": commit_message,
             "commit": commit_result,
