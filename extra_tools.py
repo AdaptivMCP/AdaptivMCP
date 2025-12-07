@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Protocol
+from typing import Any, Callable, Dict, List, Protocol, TypedDict, Optional, Literal
 import difflib
 
 from main import (
@@ -10,8 +10,8 @@ from main import (
     _decode_github_content,
     _effective_ref_for_repo,
     _workspace_path,
+    _ensure_write_allowed,
 )
-
 
 
 class ToolDecorator(Protocol):
@@ -28,6 +28,22 @@ class ToolDecorator(Protocol):
         **tool_kwargs: Any,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         ...
+
+
+class SectionReplacement(TypedDict):
+    """Simple substring replacement used by update_file_sections_and_commit."""
+
+    match_text: str
+    replacement_text: str
+
+
+class LineEditSection(TypedDict):
+    """Line-based edit used by build_section_based_diff/apply_line_edits_and_commit."""
+
+    start_line: int
+    end_line: int
+    new_text: str
+
 
 
 def _render_visible_whitespace(line: str) -> str:
