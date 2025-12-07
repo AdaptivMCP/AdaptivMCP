@@ -3694,12 +3694,11 @@ def _build_health_payload() -> Dict[str, Any]:
 
 @mcp.custom_route("/healthz", methods=["GET"])
 async def healthz(request: Request) -> JSONResponse:
-    """Lightweight JSON health endpoint with metrics summary.
-
-    The body is intentionally small: a status flag, uptime, basic controller
-    configuration, and a compact metrics snapshot suitable for logs or external
-    polling.
-    """
+    # Lightweight JSON health endpoint with metrics summary.
+    #
+    # The body is intentionally small: a status flag, uptime, basic controller
+    # configuration, and a compact metrics snapshot suitable for logs or external
+    # polling.
 
     payload = _build_health_payload()
     return JSONResponse(payload)
