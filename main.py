@@ -6,7 +6,7 @@ single place so an assistant can decide how to interact with the server without
 being pushed toward a particular working style. See ``docs/WORKFLOWS.md`` and ``docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md``
 for optional, non-binding examples of how the tools can fit together.
 
-Controller contract last updated: 2025-12-06.
+Controller contract last updated: 2025-03-17.
 """
 
 import asyncio
@@ -1031,12 +1031,14 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
     compact_mode = COMPACT_METADATA_DEFAULT if compact is None else compact
 
     assistant_expectations = [
+        "On the first tool use of a session (or after context loss), run the startup checklist: get_server_config, controller_contract with compact=true, list_all_actions with include_parameters=true, and describe_tool plus validate_tool_args before you invoke unfamiliar or write tools; cache these results instead of guessing schemas.",
         "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, running checks, and driving local workflows; do not assume packages are installed in the MCP server process.",
         "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
         "Treat run_command as your keyboard on a dedicated development machine: run project-specific or shell-level commands (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics) there instead of inventing inline workarounds.",
         "Discourage token-heavy inline calls for data gathering or editing; prefer targeted run_command queries, slices, and diffs so outputs stay concise.",
         "Approach tasks like a real developer: gather context from relevant files, usages, and tests before editing, and reference concrete modules, identifiers, and line numbers when summarizing findings or planning changes.",
         "Remember that only the assistant drives tool calls: do not ask humans to type commands, add blank lines, or re-run failed steps manually. Use diff-based tools and workspace helpers to handle quoting, newlines, and retries yourself.",
+        "Default to the branch-diff-test-PR flow: create or ensure a feature branch before edits, apply diffs with patch helpers instead of ad-hoc inline scripts, run tests or repo-native checks on that branch, and open a pull request with a concise summary when work is done.",
         "Run repo-defined linters and formatters (especially autofix variants) before proposing commits or PRs so style or syntax issues are caught early instead of left for humans to debug.",
         "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
         "When asked to open a pull request after finishing work, target the main branch (or the configured default branch) unless the user explicitly specifies a different base.",
@@ -1045,6 +1047,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Call run_command with installing_dependencies=true (or use_temp_venv=false) when a command needs to install or mutate server-level state so gating can apply to that narrower slice of work.",
         "Summarize what changed and which tools ran so humans can audit actions easily.",
         "Return strict, valid JSON by validating payloads with validate_json_string before emitting them to clients.",
+        "Treat validate_tool_args as the default pre-flight for new or write tools; if validation fails, stop and repair the payload based on the published schema instead of retrying blindly.",
         "When you generate non-trivial scripts, commands, or configuration (for example Python snippets, shell scripts, or large JSON payloads), run appropriate workspace tools via run_command to validate them (such as python -m py_compile for Python, bash -n or shellcheck for shell, validate_json_string and validate_tool_args for JSON and tool calls) before relying on them or committing.",
         "When updating code or docs, remove or rewrite outdated or conflicting content so the final state has no duplicates or obsolete paths.",
         "Whenever documentation in this controller repo has been updated and merged into the default branch, re-read the updated documents through the Adaptiv controller tools (for example get_file_contents, fetch_files, or list_repository_tree) and treat them as the new source of truth for the project; a merged PR on the default branch means the human has already reviewed and accepted the changes.",
@@ -1064,6 +1067,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
     ]
 
     controller_prompt_expectations = [
+        "Adopt the official system prompt from docs/CONTROLLER_PROMPT_V1.md (or its current version) so assistants internalize their role, startup checklist, and no-offloading stance before issuing any tool calls.",
         "Remind assistants to respect branch defaults, keep writes gated until authorized, and use the persistent workspace tools (run_command, run_tests, commit_workspace, commit_workspace_files) as the standard execution surface.",
         "Keep safety, truncation, and large-file guidance visible so the controller prompt steers assistants toward slice-and-diff workflows instead of large payload retries.",
         "Coach assistants to anchor their reasoning in concrete repo context: point them to the files, functions, and tests they should inspect, and ask for summaries with paths and line references instead of vague statements.",
@@ -1079,6 +1083,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
 
     controller_prompt_prompts = [
         "Call get_server_config early to learn write_allowed, HTTP limits, and controller defaults.",
+        "Point assistants to docs/start_session.md so they actually run the startup sequence (get_server_config, controller_contract with compact=true, list_all_actions with include_parameters=true, describe_tool, validate_tool_args) before guessing any schema or issuing writes.",
         "Encourage use of list_write_tools, validate_tool_args, and validate_environment so the assistant knows available tools and common pitfalls.",
         "Remind assistants that run_command and run_tests are allowed by default and should be part of normal execution workflows when available.",
         "Only gate commands that install dependencies or mutate server state; discovery and workspace setup should flow without extra approvals.",
@@ -1090,6 +1095,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Encourage assistants to treat repo-scoped search as the default for this controller repo by using dedicated repo helpers or including repo:Proofgate-Revocations/chatgpt-mcp-github in search queries.",
         "Discourage unqualified global GitHub searches for normal controller tasks; global search should only be used when the user explicitly asks for cross-repo or ecosystem-wide context.",
         "When a search or other tool call fails with a validation or schema error, instruct assistants to correct the call using the tool's declared parameters instead of repeatedly guessing new arguments.",
+        "Model the branch-diff-test-PR flow in the prompt so assistants remember to create feature branches, use diff-based edit tools, run tests, and open PRs instead of offloading work to humans.",
     ]
 
     server_prompts = [

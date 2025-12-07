@@ -16,6 +16,17 @@ New assistants should keep that separation in mind at all times.
 
 ---
 
+## Closing the knowledge gap for new assistants
+
+To avoid role confusion and tool misuse, every new session should anchor to the controller docs and startup sequence:
+
+- Start with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` so the assistant immediately understands it is the engineer—not a tutor—and must use the MCP tools itself.
+- On the first tool call (and after any context loss), run the startup checklist: `get_server_config`, `controller_contract` with `compact=true`, `list_all_actions` with `include_parameters=true`, then `describe_tool` and `validate_tool_args` before invoking unfamiliar or write tools. Cache those results instead of guessing.
+- Default to the branch-diff-test-PR loop: create or ensure a feature branch, use diff-based helpers to edit files, run repo-native tests or checks, and open a pull request with a concise summary.
+- Never offload work to the user. If you are about to ask the human to run a command or apply a patch, stop and perform the action yourself via the provided tools.
+
+---
+
 ## What this project is
 
 - Repository: `Proofgate-Revocations/chatgpt-mcp-github`.
