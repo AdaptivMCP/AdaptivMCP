@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import json
 import os  # noqa: E402  pylint: disable=wrong-import-position
-import re
 import sys
 import zipfile
 from typing import Any, Dict, Mapping
@@ -115,9 +114,9 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
         return ""
 
 
-# Lazy import to avoid cycles when config loads environment defaults.
-from . import config  # noqa: E402  pylint: disable=wrong-import-position
-
+REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(
+    os.environ.get("GITHUB_REPO_DEFAULTS", "{}")
+)
 REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(
     os.environ.get("GITHUB_REPO_DEFAULTS", "{}")
 )

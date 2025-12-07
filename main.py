@@ -12,29 +12,22 @@ Controller contract last updated: 2025-03-17.
 import asyncio
 import base64
 import difflib
-import io
 import json
 import jsonschema
 import os
 import re
-import shlex
-import shutil
-import sys
-import tempfile
 import time
-import uuid
-import zipfile
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional
 
-import httpx
-import github_mcp.tools_workspace as tools_workspace
+import httpx  # noqa: F401
+import github_mcp.tools_workspace as tools_workspace  # noqa: F401
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 
-from github_mcp.config import (
+from github_mcp.config import (  # noqa: F401
     BASE_LOGGER,
     FETCH_FILES_CONCURRENCY,
     GIT_AUTHOR_EMAIL,
@@ -56,7 +49,7 @@ from github_mcp.config import (
     TOOL_STDOUT_MAX_CHARS,
     WORKSPACE_BASE_DIR,
 )
-from github_mcp.exceptions import (
+from github_mcp.exceptions import (  # noqa: F401
     GitHubAPIError,
     GitHubAuthError,
     GitHubRateLimitError,
@@ -70,8 +63,8 @@ from github_mcp.github_content import (
     _resolve_file_sha,
     _verify_file_on_branch,
 )
-from github_mcp import http_clients as _http_clients
-from github_mcp.http_clients import (
+from github_mcp import http_clients as _http_clients  # noqa: F401
+from github_mcp.http_clients import (  # noqa: F401
     _concurrency_semaphore,
     _external_client_instance,
     _get_github_token,
@@ -79,7 +72,7 @@ from github_mcp.http_clients import (
     _http_client_external,
     _http_client_github,
 )
-from github_mcp.metrics import (
+from github_mcp.metrics import (  # noqa: F401
     _METRICS,
     _metrics_snapshot,
     _record_github_request,
@@ -94,22 +87,22 @@ from github_mcp.utils import (
     _with_numbered_lines,
     normalize_args,
 )
-from github_mcp.workspace import (
+from github_mcp.workspace import (  # noqa: F401
     _apply_patch_to_repo,
     _clone_repo,
     _prepare_temp_virtualenv,
     _run_shell,
     _workspace_path,
 )
-from github_mcp.tools_workspace import (
+from github_mcp.tools_workspace import (  # noqa: F401
     commit_workspace,
     commit_workspace_files,
     ensure_workspace_clone,
     run_command,
     run_tests,
 )
-import github_mcp.server as server
-from github_mcp.server import (
+import github_mcp.server as server  # noqa: F401
+from github_mcp.server import (  # noqa: F401
     COMPACT_METADATA_DEFAULT,
     CONTROLLER_CONTRACT_VERSION,
     CONTROLLER_DEFAULT_BRANCH,
@@ -1284,13 +1277,24 @@ async def move_file(
     )
 
     # 2) Delete the original path now that the destination exists.
-    delete_result = await delete_file(
-        full_name=full_name,
-        path=from_path,
-        branch=effective_branch,
-        message=commit_message + " (remove old path)",
-        if_missing="noop",
-    )
+    delete_body = {
+        "message": commit_message + " (remove old path)",
+        "branch": effective_branch,
+    }
+    try:
+        delete_body["sha"] = await _resolve_file_sha(full_name, from_path, effective_branch)
+    except GitHubAPIError as exc:
+        msg = str(exc)
+        if "404" in msg and "/contents/" in msg:
+            delete_result = {"status": "noop", "reason": "source path missing"}
+        else:
+            raise
+    else:
+        delete_result = await _github_request(
+            "DELETE",
+            f"/repos/{full_name}/contents/{from_path}",
+            json=delete_body,
+        )
 
     return {
         "status": "moved",
@@ -3284,64 +3288,61 @@ async def create_file(
               sha_after and html_url from a fresh read of the file.
     """
 
-    log_tool_call("create_file", full_name=full_name, path=path, branch=branch)
+    effective_branch = _effective_ref_for_repo(full_name, branch)
 
-    async with _with_api_metrics("create_file"):
-        effective_branch = _effective_ref_for_repo(full_name, branch)
+    _ensure_write_allowed(
+        "create_file %s %s" % (full_name, path),
+        target_ref=effective_branch,
+    )
 
-        _ensure_write_allowed(
-            "create_file %s %s" % (full_name, path),
-            target_ref=effective_branch,
+    # Ensure the file does not already exist.
+    try:
+        await _decode_github_content(full_name, path, effective_branch)
+    except GitHubAPIError as exc:
+        msg = str(exc)
+        if "404" in msg and "/contents/" in msg:
+            sha_before: Optional[str] = None
+        else:
+            raise
+    else:
+        raise GitHubAPIError(
+            f"File already exists at {path} on branch {effective_branch}"
         )
 
-        # Ensure the file does not already exist.
-        try:
-            await _decode_github_content(full_name, path, effective_branch)
-        except GitHubAPIError as exc:
-            msg = str(exc)
-            if "404" in msg and "/contents/" in msg:
-                sha_before: Optional[str] = None
-            else:
-                raise
-        else:
-            raise GitHubAPIError(
-                f"File already exists at {path} on branch {effective_branch}"
-            )
+    body_bytes = content.encode("utf-8")
+    commit_message = message or f"Create {path}"
 
-        body_bytes = content.encode("utf-8")
-        commit_message = message or f"Create {path}"
+    commit_result = await _perform_github_commit(
+        full_name=full_name,
+        path=path,
+        message=commit_message,
+        body_bytes=body_bytes,
+        branch=effective_branch,
+        sha=sha_before,
+    )
 
-        commit_result = await _perform_github_commit(
-            full_name=full_name,
-            path=path,
-            message=commit_message,
-            body_bytes=body_bytes,
-            branch=effective_branch,
-            sha=sha_before,
-        )
+    verified = await _decode_github_content(full_name, path, effective_branch)
+    json_blob = verified.get("json")
+    sha_after: Optional[str]
+    if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
+        sha_after = json_blob["sha"]
+    else:
+        sha_value = verified.get("sha")
+        sha_after = sha_value if isinstance(sha_value, str) else None
 
-        verified = await _decode_github_content(full_name, path, effective_branch)
-        json_blob = verified.get("json")
-        sha_after: Optional[str]
-        if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
-            sha_after = json_blob["sha"]
-        else:
-            sha_value = verified.get("sha")
-            sha_after = sha_value if isinstance(sha_value, str) else None
-
-        return {
-            "status": "created",
-            "full_name": full_name,
-            "path": path,
-            "branch": effective_branch,
-            "message": commit_message,
-            "commit": commit_result,
-            "verification": {
-                "sha_before": sha_before,
-                "sha_after": sha_after,
-                "html_url": verified.get("html_url"),
-            },
-        }
+    return {
+        "status": "created",
+        "full_name": full_name,
+        "path": path,
+        "branch": effective_branch,
+        "message": commit_message,
+        "commit": commit_result,
+        "verification": {
+            "sha_before": sha_before,
+            "sha_after": sha_after,
+            "html_url": verified.get("html_url"),
+        },
+    }
 
 
 @mcp_tool(write_action=True)

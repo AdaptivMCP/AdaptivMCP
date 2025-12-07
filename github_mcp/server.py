@@ -35,7 +35,7 @@ CONTROLLER_DEFAULT_BRANCH = os.environ.get(
 mcp = FastMCP("GitHub Fast MCP")
 
 # Suppress noisy tracebacks when SSE clients disconnect mid-response.
-from mcp.shared import session as mcp_shared_session
+from mcp.shared import session as mcp_shared_session  # noqa: E402
 
 _orig_send_response = mcp_shared_session.BaseSession._send_response
 

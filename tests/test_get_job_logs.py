@@ -43,8 +43,6 @@ async def test_get_job_logs_follows_redirects(monkeypatch):
 
     dummy = DummyClient()
 
-    from main import _http_client_github
-
     monkeypatch.setattr("main._http_client_github", dummy, raising=False)
 
     result = await get_job_logs("octo/demo", 123)
