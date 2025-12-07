@@ -542,7 +542,7 @@ async def run_lint_suite(
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
-
+    )
 
 @mcp_tool(write_action=False)
 async def build_pr_summary(
