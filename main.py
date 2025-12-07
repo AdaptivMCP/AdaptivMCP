@@ -630,7 +630,19 @@ async def pr_smoke_test(
         draft=draft,
     )
 
+    # Normalize the result so smoke-test callers can reliably see whether a PR
+    # was actually created and, if so, which URL/number to look at.
     pr_json = pr.get("json") or {}
+    if not isinstance(pr_json, dict) or not pr_json.get("number"):
+        # Bubble through the structured error shape produced by
+        # ``create_pull_request`` so the caller can see status/message details.
+        return {
+            "status": "error",
+            "repository": repo,
+            "base": base,
+            "branch": branch,
+            "raw_response": pr,
+        }
 
     return {
         "status": "ok",
@@ -640,7 +652,6 @@ async def pr_smoke_test(
         "pr_number": pr_json.get("number"),
         "pr_url": pr_json.get("html_url"),
     }
-
 
 
 @mcp_tool(write_action=False)
@@ -2937,7 +2948,7 @@ async def create_pull_request(
         }
         if body is not None:
             payload["body"] = body
-
+    try:
         return await _github_request(
             "POST",
             f"/repos/{full_name}/pulls",
@@ -2945,6 +2956,8 @@ async def create_pull_request(
         )
     except Exception as exc:
         return _structured_tool_error(exc, context="create_pull_request")
+
+
 @mcp_tool(write_action=True)
 async def open_pr_for_existing_branch(
     full_name: str,
@@ -2982,19 +2995,31 @@ async def open_pr_for_existing_branch(
             page=1,
         )
         existing_json = existing_resp.get("json") or []
-    except Exception:
-        # If listing PRs fails for any reason, fall back to creating one.
-        existing_json = []
+    except Exception as exc:
+        # If listing PRs fails for any reason, surface the structured error
+        # details back to the caller instead of silently claiming success.
+        return _structured_tool_error(exc, context="open_pr_for_existing_branch:list_pull_requests")
 
     if isinstance(existing_json, list) and existing_json:
-        # Reuse the first matching PR.
+        # Reuse the first matching PR, and normalize the shape so assistants can
+        # consistently see the PR number/URL.
+        pr_obj = existing_json[0]
+        if isinstance(pr_obj, dict):
+            return {
+                "status": "ok",
+                "reused_existing": True,
+                "pull_request": pr_obj,
+                "pr_number": pr_obj.get("number"),
+                "pr_url": pr_obj.get("html_url"),
+            }
         return {
-            "reused_existing": True,
-            "pull_request": existing_json[0],
+            "status": "error",
+            "message": "Existing PR listing returned a non-dict entry",
+            "raw_entry": pr_obj,
         }
 
     # 2) No existing PR found; create a new one via the lower-level helper.
-    return await create_pull_request(
+    pr = await create_pull_request(
         full_name=full_name,
         title=pr_title,
         head=branch,
@@ -3003,6 +3028,22 @@ async def open_pr_for_existing_branch(
         draft=draft,
     )
 
+    pr_json = pr.get("json") or {}
+    if not isinstance(pr_json, dict) or not pr_json.get("number"):
+        # Bubble through the structured error shape so the caller can inspect
+        # status/message and decide how to recover.
+        return {
+            "status": "error",
+            "raw_response": pr,
+            "message": "create_pull_request did not return a PR document with a number",
+        }
+
+    return {
+        "status": "ok",
+        "pull_request": pr_json,
+        "pr_number": pr_json.get("number"),
+        "pr_url": pr_json.get("html_url"),
+    }
 
 @mcp_tool(write_action=True)
 async def update_files_and_open_pr(
