@@ -1036,7 +1036,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Discourage token-heavy inline calls for data gathering or editing; prefer targeted run_command queries, slices, and diffs so outputs stay concise.",
         "Approach tasks like a real developer: gather context from relevant files, usages, and tests before editing, and reference concrete modules, identifiers, and line numbers when summarizing findings or planning changes.",
         "Remember that only the assistant drives tool calls: do not ask humans to type commands, add blank lines, or re-run failed steps manually. Use diff-based tools and workspace helpers to handle quoting, newlines, and retries yourself.",
-        "Default to the branch-diff-test-PR flow: create or ensure a feature branch before edits, apply diffs with patch helpers instead of ad-hoc inline scripts, run tests or repo-native checks on that branch, and open a pull request with a concise summary when work is done.",
+        "Default to the branch-diff-test-PR flow: create or ensure a feature branch before edits, apply diffs with patch helpers instead of ad-hoc inline scripts, run tests or repo-native checks on that branch, and open a pull request with a concise summary when work is done. When opening a PR, you must use the build_pr_summary tool to construct the PR title and body instead of writing freeform descriptions.",
         "Run repo-defined linters and formatters (especially autofix variants) before proposing commits or PRs so style or syntax issues are caught early instead of left for humans to debug.",
         "Whenever you change code or behavior, create or update tests so that run_tests on the active branch actually verifies the new behavior; do not treat tests as optional.",
         "When asked to open a pull request after finishing work, target the main branch (or the configured default branch) unless the user explicitly specifies a different base.",
@@ -1127,6 +1127,10 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
             "list_write_tools",
             "validate_tool_args",
             "validate_environment",
+        ],
+        "pull_requests": [
+            "build_pr_summary",
+        ],
         ],
         "safety": [
             "authorize_write_actions",
