@@ -174,6 +174,13 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         message: str,
     ) -> Dict[str, Any]:
         effective_ref = _effective_ref_for_repo(full_name, branch)
+
+        # Respect the same write gating semantics as core tools.
+        _ensure_write_allowed(
+            f"update_file_from_workspace {full_name} {target_path}",
+            target_ref=effective_ref,
+        )
+
         workspace_root = _workspace_path(full_name, effective_ref)
 
         from pathlib import Path as _Path
@@ -213,6 +220,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "target_path": target_path,
             "commit": result,
         }
+
 
     @mcp_tool(
         write_action=True,
