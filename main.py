@@ -2918,7 +2918,7 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
     }
 
 
-@ mcp_tool(write_action=True)
+@mcp_tool(write_action=True)
 async def create_pull_request(
     full_name: str,
     title: str,
@@ -2935,19 +2935,20 @@ async def create_pull_request(
     controller prompt tells assistants to open PRs against main.
     """
 
-    try:
-        effective_base = _effective_ref_for_repo(full_name, base)
-        _ensure_write_allowed(
-            f"create PR from {head} to {effective_base} in {full_name}"
-        )
-        payload: Dict[str, Any] = {
-            "title": title,
-            "head": head,
-            "base": effective_base,
-            "draft": draft,
-        }
-        if body is not None:
-            payload["body"] = body
+    effective_base = _effective_ref_for_repo(full_name, base)
+    _ensure_write_allowed(
+        f"create PR from {head} to {effective_base} in {full_name}"
+    )
+
+    payload: Dict[str, Any] = {
+        "title": title,
+        "head": head,
+        "base": effective_base,
+        "draft": draft,
+    }
+    if body is not None:
+        payload["body"] = body
+
     try:
         return await _github_request(
             "POST",
