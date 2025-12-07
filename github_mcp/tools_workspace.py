@@ -428,7 +428,7 @@ async def run_tests(
     ``mutating=true`` only when the tests will rewrite files; read-only test
     runs remain ungated by default.
     """
-    return await run_command(
+    result = await run_command(
         full_name=full_name,
         ref=ref,
         command=test_command,
@@ -439,6 +439,9 @@ async def run_tests(
         installing_dependencies=installing_dependencies,
         mutating=mutating,
     )
+    if isinstance(result, dict) and result.get("error", {}).get("error") == "GitHubAuthError":
+        return {"status": "failed", "command": test_command, "error": result["error"]}
+    return result
 
 @mcp_tool(write_action=False)
 async def run_quality_suite(
