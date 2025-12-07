@@ -294,11 +294,16 @@ async def get_repo_defaults(
     repo = full_name or CONTROLLER_REPO
 
     # Ask GitHub for the repository metadata so we can resolve its default
-    # branch instead of relying only on local config.
-    data = await _github_request("GET", f"/repos/{repo}")
-    payload = data.get("json") or {}
-
-    default_branch = payload.get("default_branch") or CONTROLLER_DEFAULT_BRANCH
+    # branch instead of relying only on local config. Fall back to any
+    # configured defaults when the request cannot be made (for example, in
+    # hermetic test environments without a GitHub token).
+    try:
+        data = await _github_request("GET", f"/repos/{repo}")
+        payload = data.get("json") or {}
+        default_branch = payload.get("default_branch") or CONTROLLER_DEFAULT_BRANCH
+    except (GitHubAuthError, GitHubAPIError):
+        repo_defaults = REPO_DEFAULTS.get(repo)
+        default_branch = (repo_defaults or {}).get("default_branch", CONTROLLER_DEFAULT_BRANCH)
 
     return {
         "defaults": {
@@ -1979,7 +1984,7 @@ async def get_workflow_run_overview(full_name: str, run_id: int) -> Dict[str, An
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     """Fetch raw logs for a GitHub Actions job without truncation."""
 
-    client = _github_client_instance()
+    client = _http_client_github or _github_client_instance()
     request = client.build_request(
         "GET",
         f"/repos/{full_name}/actions/jobs/{job_id}/logs",
