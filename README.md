@@ -12,34 +12,20 @@ Adaptiv Controller (for example "Joey's GitHub") lives entirely on the ChatGPT s
 
 ---
 
-## Who this is for (personal controller view)
+## Who this is for
 
-Adaptiv Controller is designed first for **individual developers and very small teams** who want a personal, self-hosted GitHub controller instead of a vendor-hosted agent. Typical use cases:
+Adaptiv Controller is designed for **customers who want a safe, self-hosted GitHub AI controller** rather than a hosted black box. Typical buyers and users include:
 
-- You want ChatGPT (or another MCP host) to behave like **your** engineer over time, tuned to your repositories and habits.
-- You are comfortable deploying a small Python service (for example on Render.com, a VM, or a container platform).
-- You prefer to keep your GitHub tokens and repo access fully under your own control.
+- Solo developers and very small teams who want an AI engineer that works the way they do, across all of their repositories.
+- Engineering leaders who want a repeatable, auditable way for AI to open PRs, run tests, and refactor code without bypassing existing review and branch policies.
+- Safety-conscious teams (fintech, infra, security, regulated industries) who need tight control over credentials, infrastructure, and change policies.
 
 In this model:
 
-- This repository is the **engine** – a stable, safety-focused GitHub MCP server you run yourself.
-- Your ChatGPT controller (for example "Joey’s GitHub") is the **personality and workflow layer** – where you express personal preferences, style, and working habits.
+- This repository is the **engine** – a hardened GitHub MCP server you run in your own infrastructure.
+- Your Adaptiv Controller configuration (for example a custom GPT like "Joey's GitHub") is the **product** you sell: the prompts, policies, and workflows that teach the AI how to use this engine safely.
 
-You can absolutely use this kit in larger teams, but 1.0 is intentionally optimized so a single developer can fork the repo, deploy the server, and evolve their own controller prompt over time without needing enterprise-scale infrastructure.
-
----
-
-## Canonical branch and development model
-
-- main is the canonical, production branch.
-  - All refactors, behavioral changes, and new tools are developed on feature branches.
-  - Once changes are fully tested (including end-to-end smoke tests and documentation review), they are merged into main.
-  - Temporary or refactor branches are deleted after merge.
-
-- As a user of this project:
-  - You should treat main as the source of truth.
-  - Any feature branches are internal development branches and may be short-lived or experimental.
-
+You can deploy one instance per customer, or share a hardened deployment across multiple internal teams, depending on your licensing and operational model.
 ---
 
 ## What this project is
@@ -61,36 +47,26 @@ What it is not:
 
 ---
 
-## For buyers (product view)
+## Product overview (for customers)
 
-If you are buying this as a product, you are buying the **controller**, not a hosted service. Think of it as a **pocket Codex** you can carry across all of your repos.
+If you are buying this as a product, you are buying the **Adaptiv Controller GitHub Kit** – a self-hosted controller, not a hosted SaaS. Think of it as a controllable AI teammate that lives inside your own GitHub and infrastructure.
 
-- You get the Adaptiv Controller:
-  - The controller configuration, workflows, and usage model inside ChatGPT.
-  - The way the assistant uses the tools exposed by this MCP server.
+With this kit you get:
 
-- You are responsible for infrastructure:
-  - Deploying and operating this MCP server yourself (for example on Render.com or your own VM).
-  - Supplying and managing your own GitHub tokens and secrets.
-  - Deciding which repos, branches, and environments the controller is allowed to touch.
+- A self-hosted GitHub MCP server (this repo):
+  - Runs in your own environment (Render, VM, Kubernetes, etc.).
+  - Uses your GitHub token(s) and respects your repo and branch protections.
+  - Exposes a curated set of GitHub tools (read/write) over MCP.
 
-In short:
+- A controller contract and workflows (your product layer):
+  - A versioned `controller_contract` tool that describes the tool surface and safety expectations.
+  - Recommended controller prompts and workflows that teach the AI to always work on feature branches, run tests, and open PRs instead of pushing directly to `main`.
 
-- You own the infrastructure and credentials.
-- Adaptiv Controller tells your assistant how to use the tools safely and effectively.
+- Clear separation of responsibilities:
+  - **You** own and evolve the controller prompts, policies, and workflows you sell to customers.
+  - **Your customers** own hosting, credentials, and which repositories/branches the controller is allowed to use.
 
-If you are a solo developer or a small team, you can treat this kit as a **personal GitHub controller**:
-
-- The MCP server stays conservative and safety-focused.
-- Your controller prompt is where you teach the assistant your own style (branch naming, how aggressively to refactor, how much explanation you want, and so on).
-- Over time, this effectively behaves like your own "pocket Codex": you describe an outcome (for example "do that docs pass for enterprise wording"), and the controller + tools handle branch creation, workspace setup, edits via run_command, commit_workspace, and PR creation for you.
-
-In practice, this flow can save a solo developer or small team a significant amount of time and money:
-
-- Fewer context switches between "thinking about the work" and "driving Git commands by hand".
-- Repeatable, auditable workflows encoded in tools and docs instead of living only in muscle memory.
-- The ability to reuse the same controller across all of your repos, with consistent safety checks and branch/PR discipline.
-
+This design keeps credentials and source code access entirely under the customer’s control while still giving them a powerful AI collaborator on their GitHub activity.
 ---
 
 ## High-level architecture
@@ -283,52 +259,25 @@ Metrics are kept in memory only; they reset on process restart and never include
 
 ## Documentation and workflows
 
-This repository includes (or will include) a small docs set under `docs/` to keep behavior clear and assistant-friendly:
+This repository includes a documentation set under `docs/`:
 
-- `docs/SELF_HOSTED_SETUP.md` – deployment and configuration guide for operators (see issue #128).
-- `docs/ARCHITECTURE_AND_SAFETY.md` – internal architecture and safety model (see issue #129).
-- `docs/WORKFLOWS.md` – recommended end-to-end workflows for assistants and advanced users.
-- `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md` – guidance for keeping prompts, snapshots, and docs aligned with reality.
+- `docs/human/` – operator and buyer docs:
+  - `ARCHITECTURE_AND_SAFETY.md` – internal architecture and safety model.
+  - `SELF_HOSTED_SETUP.md` and `SELF_HOSTING_DOCKER.md` – deployment and configuration guides for customer environments.
+  - `OPERATIONS.md` – runbook for incidents and common failures.
+  - `WORKFLOWS.md` – recommended operational workflows for humans running the kit.
+  - `UPGRADE_NOTES.md` – versioning, upgrade, and rollback guidance.
+  - `DISTRIBUTION.md` and `BRANDING.md` – how you package, brand, and ship the kit to customers.
+  - `pr-flow-test-adaptiv-pr-check.md` – example CI configuration for PR flows.
 
-Assistants should use these docs together with the live tool list to design safe, repeatable flows for their own Adaptiv Controller instances.
+- `docs/assistant/` – controller/assistant docs:
+  - `ASSISTANT_HANDOFF.md` – high-level expectations for assistants attaching to this controller.
+  - `ASSISTANT_DOCS_AND_SNAPSHOTS.md` – guidance for keeping prompts, snapshots, and docs aligned with reality.
+  - `ASSISTANT_HAPPY_PATHS.md` – concrete routines for branch, diff, test, and PR flows.
+  - `CONTROLLER_PROMPT_V1.md` – copy-pasteable system prompt for controllers built on this kit.
+  - `start_session.md` – startup sequence and bootstrapping protocol for new assistant sessions.
 
----
-
-## Version and support
-
-- Current stable version: **1.0.0** (see `pyproject.toml` and `CHANGELOG.md`).
-- To check the running server version in production, run `python cli.py --version` via `run_command` or your CI.
-- All 1.x changes will be documented in `CHANGELOG.md`.
-
----
-
-
-## Status and roadmap (server-side)
-
-On main (after refactor merge):
-
-- Implemented:
-  - Patch-based write flow: apply_patch_and_commit.
-  - Text-based write flow: apply_text_update_and_commit.
-  - Multi-file PR orchestration: update_files_and_open_pr.
-  - Extra tools for file deletion and branch cleanup.
-  - list_all_actions with a global tool registry including extension tools.
-  - Strong write gating via authorize_write_actions and WRITE_ALLOWED.
-  - Workspace commands: run_command, run_tests.
-  - Search via GitHub Search API (search tool) across public and private repositories, subject to token permissions.
-  - HTTP `/healthz` endpoint exposing a JSON health payload (status, uptime, token presence, controller configuration, and a metrics snapshot).
-  - In-process metrics registry for MCP tool calls and GitHub client requests (counters and latency sums surfaced via `/healthz`).
-
-- Planned or in progress:
-  - Output truncation in run_command and run_tests (stdout and stderr size limits with truncation flags).
-  - Stricter branch defaults for low-level write tools (avoiding implicit writes to main).
-  - Issue and project write tools (create or update issues, label management, and similar).
-  - Documentation set:
-    - Self-hosted setup guide for end users.
-    - Architecture and safety model for advanced users.
-    - Workflow guide for common Adaptiv Controller scenarios.
-    - Guidance for keeping assistant-facing documentation and snapshots up to date (for example how to maintain design docs, changelogs, and source-of-truth notes that the controller can reference).
-
+The **single source of truth for the contract** between controllers, assistants, and this server is the `controller_contract` tool. All docs are written to stay consistent with that contract and to make it easy for both humans and assistants to work within it.
 ---
 
 ## Licensing and brand notes
