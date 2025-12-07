@@ -2168,10 +2168,18 @@ async def trigger_workflow_dispatch(
     full_name: str,
     workflow: str,
     ref: str,
+    inputs: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Trigger a workflow dispatch event on the given ref."""
+    """Trigger a workflow dispatch event on the given ref.
+
+    Args:
+        full_name: "owner/repo" string.
+        workflow: Workflow file name or ID (e.g. "ci.yml" or a numeric ID).
+        ref: Git ref (branch, tag, or SHA) to run the workflow on.
+        inputs: Optional input payload for workflows that declare inputs.
+    """
     _ensure_write_allowed(f"trigger workflow {workflow} on {full_name}@{ref}")
-    payload = {"ref": ref}
+    payload: Dict[str, Any] = {"ref": ref}
     if inputs:
         payload["inputs"] = inputs
     client = _github_client_instance()
@@ -2181,7 +2189,9 @@ async def trigger_workflow_dispatch(
             json=payload,
         )
     if resp.status_code not in (204, 201):
-        raise GitHubAPIError(f"GitHub workflow dispatch error {resp.status_code}: {resp.text}")
+        raise GitHubAPIError(
+            f"GitHub workflow dispatch error {resp.status_code}: {resp.text}"
+        )
     return {"status_code": resp.status_code}
 
 
@@ -2228,13 +2238,26 @@ async def list_pull_requests(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List pull requests with optional head/base filters."""
+    """List pull requests with optional head/base filters.
 
-    params: Dict[str, Any] = {
-        "state": state,
-        "per_page": per_page,
-        "page": page,
-    }
+    Args:
+        full_name: "owner/repo" string.
+        state: One of 'open', 'closed', or 'all'.
+        head: Optional head filter of the form 'user:branch'.
+        base: Optional base branch filter.
+        per_page: Number of results per page (must be > 0).
+        page: Page number for pagination (must be > 0).
+    """
+
+    allowed_states = {"open", "closed", "all"}
+    if state not in allowed_states:
+        raise ValueError("state must be 'open', 'closed', or 'all'")
+    if per_page <= 0:
+        raise ValueError("per_page must be > 0")
+    if page <= 0:
+        raise ValueError("page must be > 0")
+
+    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
     if head:
         params["head"] = head
     if base:
@@ -2250,7 +2273,19 @@ async def merge_pull_request(
     commit_title: Optional[str] = None,
     commit_message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Merge a pull request using squash (default), merge, or rebase."""
+    """Merge a pull request using squash (default), merge, or rebase.
+
+    Args:
+        full_name: "owner/repo" string.
+        number: Pull request number.
+        merge_method: One of 'merge', 'squash', or 'rebase'.
+        commit_title: Optional custom commit title.
+        commit_message: Optional custom commit message.
+    """
+
+    allowed_methods = {"merge", "squash", "rebase"}
+    if merge_method not in allowed_methods:
+        raise ValueError("merge_method must be 'merge', 'squash', or 'rebase'")
 
     _ensure_write_allowed(f"merge PR #{number} in {full_name}")
     payload: Dict[str, Any] = {"merge_method": merge_method}
@@ -2258,11 +2293,7 @@ async def merge_pull_request(
         payload["commit_title"] = commit_title
     if commit_message is not None:
         payload["commit_message"] = commit_message
-    return await _github_request(
-        "PUT",
-        f"/repos/{full_name}/pulls/{number}/merge",
-        json_body=payload,
-    )
+    return await _github_request("PUT", f"/repos/{full_name}/pulls/{number}/merge", json_body=payload)
 
 
 @mcp_tool(write_action=True)
