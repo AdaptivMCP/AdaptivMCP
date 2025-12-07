@@ -3670,12 +3670,11 @@ async def homepage(request: Request) -> PlainTextResponse:
 
 
 def _build_health_payload() -> Dict[str, Any]:
-    """Construct a small JSON health payload for the HTTP endpoint.
-
-    This keeps the HTTP health check aligned with the controller configuration
-    and exposes a minimal view of in-process metrics without changing any of the
-    structured log shapes validated elsewhere.
-    """
+    # Construct a small JSON health payload for the HTTP health check endpoint.
+    #
+    # Keeping this logic in a helper keeps /healthz aligned with the controller
+    # configuration and exposes a minimal view of in-process metrics without
+    # changing any structured log shapes validated elsewhere.
 
     now = time.time()
     uptime_seconds = max(0.0, now - SERVER_START_TIME)
