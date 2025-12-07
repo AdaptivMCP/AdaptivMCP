@@ -1278,12 +1278,6 @@ async def move_file(
     )
 
     # 2) Delete the original path now that the destination exists.
-    delete_result = await delete_file(
-        full_name=full_name,
-        path=from_path,
-        branch=effective_branch,
-        message=commit_message + " (remove old path)",
-    # 2) Delete the original path now that the destination exists.
     delete_body = {
         "message": commit_message + " (remove old path)",
         "branch": effective_branch,
@@ -1302,6 +1296,12 @@ async def move_file(
             f"/repos/{full_name}/contents/{from_path}",
             json=delete_body,
         )
+
+    return {
+        "status": "moved",
+        "full_name": full_name,
+        "branch": effective_branch,
+        "from_path": from_path,
         "to_path": to_path,
         "write_result": write_result,
         "delete_result": delete_result,
@@ -3289,52 +3289,61 @@ async def create_file(
               sha_after and html_url from a fresh read of the file.
     """
 
-    log_tool_call("create_file", full_name=full_name, path=path, branch=branch)
-
-    async with _with_api_metrics("create_file"):
-        effective_branch = _effective_ref_for_repo(full_name, branch)
-
-        _ensure_write_allowed(
-    # Metrics/logging handled at higher layers; focus on GitHub behavior here.
-
     effective_branch = _effective_ref_for_repo(full_name, branch)
 
-        # Ensure the file does not already exist.
-        try:
-            await _decode_github_content(full_name, path, effective_branch)
-        except GitHubAPIError as exc:
-            msg = str(exc)
-            if "404" in msg and "/contents/" in msg:
-                sha_before: Optional[str] = None
-            else:
-                raise
+    _ensure_write_allowed(
+        "create_file %s %s" % (full_name, path),
+        target_ref=effective_branch,
+    )
+
+    # Ensure the file does not already exist.
+    try:
+        await _decode_github_content(full_name, path, effective_branch)
+    except GitHubAPIError as exc:
+        msg = str(exc)
+        if "404" in msg and "/contents/" in msg:
+            sha_before: Optional[str] = None
         else:
-            raise GitHubAPIError(
-                f"File already exists at {path} on branch {effective_branch}"
-            )
-
-        body_bytes = content.encode("utf-8")
-        commit_message = message or f"Create {path}"
-
-        commit_result = await _perform_github_commit(
-            full_name=full_name,
-            path=path,
-            message=commit_message,
-            body_bytes=body_bytes,
-            branch=effective_branch,
-            sha=sha_before,
+            raise
+    else:
+        raise GitHubAPIError(
+            f"File already exists at {path} on branch {effective_branch}"
         )
 
-        verified = await _decode_github_content(full_name, path, effective_branch)
-        json_blob = verified.get("json")
-        sha_after: Optional[str]
-        if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
-            sha_after = json_blob["sha"]
-        else:
-            sha_value = verified.get("sha")
-            sha_after = sha_value if isinstance(sha_value, str) else None
+    body_bytes = content.encode("utf-8")
+    commit_message = message or f"Create {path}"
 
-        return {
+    commit_result = await _perform_github_commit(
+        full_name=full_name,
+        path=path,
+        message=commit_message,
+        body_bytes=body_bytes,
+        branch=effective_branch,
+        sha=sha_before,
+    )
+
+    verified = await _decode_github_content(full_name, path, effective_branch)
+    json_blob = verified.get("json")
+    sha_after: Optional[str]
+    if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
+        sha_after = json_blob["sha"]
+    else:
+        sha_value = verified.get("sha")
+        sha_after = sha_value if isinstance(sha_value, str) else None
+
+    return {
+        "status": "created",
+        "full_name": full_name,
+        "path": path,
+        "branch": effective_branch,
+        "message": commit_message,
+        "commit": commit_result,
+        "verification": {
+            "sha_before": sha_before,
+            "sha_after": sha_after,
+            "html_url": verified.get("html_url"),
+        },
+    }
             "status": "created",
             "full_name": full_name,
             "path": path,
