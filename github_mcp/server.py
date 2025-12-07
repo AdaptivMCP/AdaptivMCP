@@ -7,11 +7,12 @@ import os
 import sys
 import time
 import uuid
-from typing import Any, Dict, Optionalimport jsonschema
+from typing import Any, Dict, Optional
+
+import jsonschema
 from anyio import ClosedResourceError
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
-
 from github_mcp import http_clients as _http_clients
 from github_mcp.config import BASE_LOGGER, TOOLS_LOGGER
 from github_mcp.exceptions import WriteNotAuthorizedError
