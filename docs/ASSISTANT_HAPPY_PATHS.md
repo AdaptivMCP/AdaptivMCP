@@ -1,14 +1,8 @@
 # Assistant happy paths playbook
 
-This document is a **playbook for assistants** (such as Joeys GitHub) using the Adaptiv Controller GitHub MCP server.
+This document is a **playbook for assistants** (such as Joeys GitHub) using the Adaptiv Controller GitHub MCP server. It is not the contract itself. `controller_contract` is the single, authoritative contract between controllers, assistants, and this server; this playbook provides concrete, repeatable **happy paths** that illustrate how to honor that contract in common workflows. If there is ever a conflict, `controller_contract` wins and this file must be updated via docs PRs.
 
-It does **not** describe every tool in detail. Instead, it provides concrete, repeatable **happy paths**
-for the most common workflows. If you are doing X, follow the matching
-section below.
-
-If you ever find yourself guessing or improvising a new flow, check this file
-first. If there is no good happy path, *that* is a signal to add or improve
-one (in a docs branch, via PR).
+If you ever find yourself guessing or improvising a new flow, check this file and `controller_contract` together first. If there is no good happy path, *that* is a signal to add or improve one (in a docs branch, via PR) so that the docs stay aligned with the contract.
 
 ---
 

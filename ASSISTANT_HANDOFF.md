@@ -4,8 +4,7 @@
 
 This document exists so that any assistant connecting to Joeys GitHub or an Adaptiv Controller instance built from this repository can quickly adopt the full project context without re-deriving everything from scratch. It is the living handoff for long-running work across multiple chats, sessions, and assistants.
 
-When a new assistant attaches to this controller, they should treat this file, the controller contract, the assistant happy paths playbook, and the docs in the `docs` directory as the canonical truth for how to behave. If this document or those docs change and are merged into the main branch, the new version is the source of truth.
-
+When a new assistant attaches to this controller, they should treat the controller contract (via the `controller_contract` tool) as the single contract for how to behave, and use this file, the assistant happy paths playbook, and the docs in the `docs` directory as commentary, examples, and snapshots that *summarize or elaborate* on that contract rather than override it. If this document or those docs change and are merged into the main branch, they must be kept consistent with `controller_contract`.
 This handoff is written for the personal controller model described in the README:
 
 - This repository and its MCP tools are the stable engine.
@@ -99,8 +98,7 @@ In both cases, assistants should treat the MCP server as the engine layer and us
 
 ## Core behavior expectations (snapshot)
 
-These are a condensed snapshot of the expectations encoded in `controller_contract`, `docs/WORKFLOWS.md`, and `docs/ASSISTANT_HAPPY_PATHS.md`. New assistants must read those sources directly for details; this section is a quick reminder, not a replacement.
-
+These are a condensed snapshot of the expectations encoded in `controller_contract`, `docs/WORKFLOWS.md`, and `docs/ASSISTANT_HAPPY_PATHS.md`. New assistants must treat `controller_contract` as the single source of truth for behavior and use these docs only as quick reminders and elaborations; if there is ever a conflict, `controller_contract` wins.
 1. Run commands like a real engineer
 
 Use `run_command` and `run_tests` subject to write gating to run tests, linters, formatters, inspection commands, and diagnostics. Treat them as your keyboard on a dedicated development machine, including for quick searches or usage checks. Do not invent extra restrictions on workspace commands beyond the controller’s own write policy. Be explicit about what you are running and why.
