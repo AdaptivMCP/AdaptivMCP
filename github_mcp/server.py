@@ -107,6 +107,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     # Prefer the underlying MCP tool's explicit inputSchema when available.
     raw_schema = getattr(tool, "inputSchema", None)
     if raw_schema is not None:
+        # FastMCP tools typically expose a Pydantic model here.
         if hasattr(raw_schema, "model_dump"):
             return raw_schema.model_dump()
         if isinstance(raw_schema, dict):
@@ -157,7 +158,96 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
             "additionalProperties": True,
         }
 
+    # As a final fallback, derive a best-effort JSON schema from the
+    # registered function's Python signature so that describe_tool and
+    # list_all_actions can still surface argument names and a reasonable
+    # required/optional split even when the MCP layer does not publish an
+    # explicit inputSchema.
+    try:
+        import inspect as _inspect
+    except Exception:  # extremely defensive
+        return None
+
+    try:
+        # Find the Python function associated with this tool so we can inspect
+        # its signature.
+        for registered_tool, func in _REGISTERED_MCP_TOOLS:
+            if registered_tool is not tool:
+                continue
+
+            try:
+                sig = _inspect.signature(func)
+            except (TypeError, ValueError):
+                return None
+
+            properties: Dict[str, Any] = {}
+            required: list[str] = []
+
+            def _annotation_to_json_type(ann: Any) -> Optional[str]:
+                # Handle typing.Optional / Union[...] by unwrapping None.
+                origin = getattr(ann, "__origin__", None)
+                args = getattr(ann, "__args__", ()) or ()
+                if origin is not None and args:
+                    non_none = [a for a in args if a is not type(None)]  # noqa: E721
+                    if len(non_none) == 1:
+                        return _annotation_to_json_type(non_none[0])
+                    # Multiple concrete types -> no single JSON type.
+                    return None
+
+                if ann in (str, bytes):
+                    return "string"
+                if ann is int:
+                    return "integer"
+                if ann is float:
+                    return "number"
+                if ann is bool:
+                    return "boolean"
+                if ann in (list, tuple, set):
+                    return "array"
+                if ann is dict:
+                    return "object"
+                return None
+
+            for param_name, param in sig.parameters.items():
+                if param.kind in (
+                    _inspect.Parameter.VAR_POSITIONAL,
+                    _inspect.Parameter.VAR_KEYWORD,
+                ):
+                    # *args / **kwargs do not map cleanly to JSON object
+                    # properties; skip them for the best-effort schema.
+                    continue
+                if param_name in ("self", "cls"):
+                    continue
+
+                prop: Dict[str, Any] = {}
+
+                if param.annotation is not _inspect._empty:
+                    json_type = _annotation_to_json_type(param.annotation)
+                    if json_type is not None:
+                        prop["type"] = json_type
+
+                if param.default is _inspect._empty:
+                    required.append(param_name)
+                else:
+                    # Defaults are helpful hints but may not always be
+                    # JSON-serializable; they are included on a best-effort
+                    # basis only.
+                    prop["default"] = param.default
+
+                properties[param_name] = prop
+
+            schema: Dict[str, Any] = {"type": "object", "properties": properties}
+            if required:
+                schema["required"] = required
+            schema["additionalProperties"] = True
+            return schema
+    except Exception:
+        # Extremely defensive: if anything goes wrong during introspection,
+        # fall back to having no schema rather than throwing.
+        return None
+
     return None
+
 
 
 
