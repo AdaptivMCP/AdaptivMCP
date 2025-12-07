@@ -1131,7 +1131,6 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "pull_requests": [
             "build_pr_summary",
         ],
-        ],
         "safety": [
             "authorize_write_actions",
             "ensure_branch",
