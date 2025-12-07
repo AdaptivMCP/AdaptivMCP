@@ -144,3 +144,19 @@ async def test_apply_text_update_and_commit_creates_new_file_on_404(monkeypatch)
     assert result["verification"]["sha_before"] is None
     assert result["verification"]["sha_after"] == "after-sha"
     assert "diff" in result
+
+
+@pytest.mark.asyncio
+async def test_apply_text_update_and_commit_rejects_negative_context_lines(monkeypatch):
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
+
+    with pytest.raises(ValueError):
+        await main.apply_text_update_and_commit(
+            full_name="owner/repo",
+            path="file.txt",
+            updated_content="new text",
+            branch="feature-branch",
+            message="Custom message",
+            return_diff=True,
+            context_lines=-1,
+        )
