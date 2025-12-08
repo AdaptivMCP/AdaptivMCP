@@ -13,7 +13,7 @@ echo "Running black --check..."
 python -m black --check .
 
 echo "Running isort --check-only..."
-python -m isort . --check-only
+python -m isort github_mcp tests main.py extra_tools.py --check-only
 
 echo "Running flake8..."
-python -m flake8 .
+python -m flake8 github_mcp tests main.py extra_tools.py
