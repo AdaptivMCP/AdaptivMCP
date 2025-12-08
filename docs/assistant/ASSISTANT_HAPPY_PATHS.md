@@ -22,12 +22,12 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - The configured controller repository and its `default_branch`.
    - Whether writes are enabled by default for that controller repo (`write_allowed_default`).
    - Expected workflows for assistants and which tools are intended for discovery, safety, execution, diffs, and large files.
-4. Call `list_all_actions` (include_parameters=true). This server guarantees each tool exposes a non-null `input_schema` in that listing, synthesizing a minimal object schema when none is published. Use `describe_tool` for any tool you have not already used correctly in the conversation, and call `validate_tool_args` before the first invocation of write-capable or unfamiliar tools so you can repair arguments using structured validation errors instead of trial and error.
-5. Use `get_repo_dashboard` plus `list_repository_tree` on the default branch to get layout and defaults instead of guessing paths.
+4. Call `list_all_actions` (include_parameters=true). This server guarantees each tool exposes a non-null `input_schema` in that listing, synthesizing a minimal object schema when none is published. Before you invoke any MCP tool in this session (including tools you think you already understand), call `describe_tool` for that tool and, when applicable, use `validate_tool_args` on your planned `args` object before the first real invocation—especially for write-capable or complex tools. Treat this as mandatory, not optional.
+5. Once you know the controller `default_branch`, immediately create or ensure a dedicated feature branch for this task with `ensure_branch` (or `create_branch`), and run discovery tools like `get_repo_dashboard`, `list_repository_tree`, and `get_latest_branch_status` against that feature branch instead of the real default branch. Do not run MCP tools directly against `main`.
 6. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan your write posture:
    - For writes that touch the controller default branch or unscoped write tools, call `authorize_write_actions` before using them so `_ensure_write_allowed` will accept the operation.
    - For commits to feature branches, prefer branch-scoped tools like `commit_workspace`, `commit_workspace_files`, and patch-based helpers. These tools pass a `target_ref` and are allowed even when `write_allowed` is `False`, while the controller default branch remains protected behind the write gate.
-7. When you need to understand branch state or CI health, call `get_latest_branch_status` for the branch you care about (and the base, typically `main`) instead of guessing from old workflow logs. Use that to decide whether a failure is tied to the current HEAD or an older commit.
+7. When you need to understand branch state or CI health, call `get_latest_branch_status` for the feature branch you care about (and the base, typically `main`) instead of guessing from old workflow logs. Use that to decide whether a failure is tied to the current HEAD or an older commit.
 
 **Validation:**
 - You can see `write_allowed` in `get_server_config` and confirm that write tools are either allowed by default or gated.
@@ -43,10 +43,17 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 
 **Steps:**
 1. Use `get_repo_defaults` to confirm the controller `full_name` and its default branch.
-2. Call `list_repository_tree` with:
+2. Ensure you are working from a feature branch created from the default branch via `ensure_branch` (or `create_branch`), and avoid using MCP tools that target the real default branch (for example `main`) while doing work.
+3. Call `list_repository_tree` with:
    - `full_name` set to the controller repo.
-   - `ref` set to the default branch (usually `main`).
+   - `ref` set to your feature branch.
    - Optionally, a `path_prefix` such as `docs/`, `tests/`, or `src/` to narrow the view.
+4. For specific files:
+   - Use `get_file_contents` for small to medium files.
+   - Use `get_file_slice` when you only need a portion of a large file (for example, a single section in `main.py` or a long test file).
+5. When you need to search within this repo:
+   - Prefer the GitHub search tool (for example `search` with a `code` query) using a repo-scoped query (function name, test name, or filename) rather than a global search.
+   - Avoid unqualified global GitHub search unless the user explicitly wants cross-repo context.
 3. For specific files:
    - Use `get_file_contents` for small to medium files.
    - Use `get_file_slice` when you only need a portion of a large file (for example, a single section in `main.py` or a long test file).

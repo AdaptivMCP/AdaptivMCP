@@ -17,9 +17,10 @@ At the start of a new conversation, or after context loss, do these tool calls i
 2. Call `list_write_tools` once so you know which tools are gated before you try to use them.
 3. Call `controller_contract` with compact set to true to load expectations and guardrails.
 4. Call `list_all_actions` with include_parameters set to true so you know every tool and its JSON schema. This controller guarantees that each returned tool exposes a non-null `input_schema` object; when an underlying MCP tool does not publish a schema, the server synthesizes a minimal {type: "object", properties: {}} schema so you can still reason about argument shapes.
-5. When you encounter a tool you have not already used correctly in this session, call `describe_tool` to inspect its `input_schema`, and use `validate_tool_args` on your planned `args` object before the first real invocation, especially for write-tagged or complex tools.
-6. Use `get_repo_dashboard` and `list_repository_tree` on the default branch to understand layout instead of guessing paths.
-7. Use `get_latest_branch_status` on the controller default branch (and any active feature branches) to understand ahead/behind state, open PRs, and the most recent workflow result before attempting to "fix" CI.
+5. Before you invoke any MCP tool in this session (including tools you think you already understand), call `describe_tool` for that tool and, when applicable, use `validate_tool_args` on your planned `args` object before the first real invocation—especially for write-tagged or complex tools. Treat this as mandatory, not optional.
+6. As soon as you know the controller default branch, use `ensure_branch` (or an equivalent helper) to create or ensure a dedicated feature branch for this task, and then run discovery tools like `get_repo_dashboard`, `list_repository_tree`, and `get_latest_branch_status` against that feature branch instead of the real default branch. Do not run MCP tools directly against `main`.
+
+Treat the results of these tools as the source of truth for the rest of the session, with `controller_contract` as the canonical contract and this document as the execution playbook that must remain consistent with it.
 
 Treat the results of these tools as the source of truth for the rest of the session, with `controller_contract` as the canonical contract and this document as the execution playbook that must remain consistent with it.## 2. Tool arguments and validation
 
@@ -27,24 +28,25 @@ Treat the results of these tools as the source of truth for the rest of the sess
 - Build arguments as literal JSON objects, not strings containing JSON.
 - Do not invent parameters that are not documented in `list_all_actions`.
 
-Before using a write tool, or a tool you have not called yet in this conversation:
+Before using a write tool, or any tool you have not yet called in this conversation, follow this pattern:
 
-1. Prepare the arguments you plan to use.
-2. Call `validate_tool_args` with the tool name and those arguments.
+1. Prepare the arguments you plan to use. You are responsible for constructing the JSON payload yourself; do not ask the user to supply raw arguments or schemas.
+2. Call `describe_tool` (if you have not already done so in this session) and `validate_tool_args` with the tool name and those arguments.
 3. Only call the real tool when validation reports valid is true.
 
 If a tool call fails because of argument or schema errors:
 
 - Stop guessing.
-- Re-read the tool definition from `list_all_actions`.
+- Re-read the tool definition from `list_all_actions` and `describe_tool`.
 - Fix the payload and re-run `validate_tool_args` before trying again.
+- Never claim to have successfully called a tool that actually failed, and never describe tool runs that did not occur.
 
 ## 3. Editing, branches, and pull requests
 
 When I (an assistant like Joeys GitHub) am editing this controller repo or any other repository through this MCP server, I follow this pattern:
 
 - I call `get_server_config` once per session to confirm write posture and learn the controller default branch.
-- I use `ensure_branch` (or `create_branch`) from the default branch before making edits, and I avoid committing to `main` directly.
+- I immediately create or ensure a dedicated feature branch from the default branch with `ensure_branch` (or `create_branch`), and I never use MCP tools that target the real default branch (for example `main`) while doing work. All subsequent repo/ref arguments for reading, editing, testing, linting, and PR helpers are routed through that feature branch.
 - I prefer diff based tools such as `build_unified_diff`, `build_section_based_diff`, and commit helpers instead of rewriting whole files. I reserve full replacements for intentional, small files that are easy to review.
 - After applying changes, I use `compare_refs` or `get_branch_summary` to summarize what shifted before opening a PR.
 - I keep changes behind pull requests: I prefer `open_pr_for_existing_branch` (or `update_files_and_open_pr`) targeting the default branch unless the user says otherwise.
@@ -59,7 +61,7 @@ For more complex or test-sensitive work, and especially when editing code or doc
   - Use `update_file_sections_and_commit` or `apply_line_edits_and_commit` for targeted updates to existing files.
   - Use `build_unified_diff` or `build_section_based_diff` together with `apply_patch_and_commit` when you need to stage more complex patches.
 - Avoid constructing huge heredocs or multi-line code blobs inside tool arguments (for example `run_command.command`); those patterns are brittle under JSON encoding and often cause control-character errors or disconnections.
-- After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation. Before running `run_tests`, `run_lint_suite`, or any other forward-moving action (including additional edits), call `ensure_workspace_clone` again with `reset=true` on the same branch and continue from that fresh clone.
+- After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation. Before running `run_tests`, `run_lint_suite`, or any other forward-moving action (including additional edits, PR helpers, or deployment-related checks), call `ensure_workspace_clone` again with `reset=true` on the same branch and continue from that fresh clone. This reclone step is mandatory and not skippable.
 - When your changes cause failing tests, linters, or obvious runtime errors, you are responsible for fixing them: use `run_tests`, `run_lint_suite`, and focused `run_command` calls to debug and update code, tests, and docs until they pass. Do not hide failures or leave broken work for the human to repair.
 - When failures are due to missing dependencies, prefer installing them in the workspace environment via `run_command` (using the controller-provided virtualenv and dependency flags) instead of editing project configuration files solely to make a one-off test run succeed.
 - Sync edits back with `update_file_from_workspace`, `commit_workspace_files`, or `commit_workspace` on a feature branch rather than trying to rewrite controller files inline via ad-hoc scripts.
@@ -98,7 +100,7 @@ If you see repeated failures on the same operation:
 ## 8. Interaction with the user
 
 - Do not ask the user to run shell commands or apply patches by hand.
-- Clearly state which files, branches, and tools you used.
+- Clearly state which files, branches, and tools you used, and only describe real tool calls that actually occurred.
 - When you open a pull request, include what changed, why, and how it was tested.
 
 ## 9. Role clarity and branch-first workflows

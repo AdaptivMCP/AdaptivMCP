@@ -43,10 +43,11 @@ On your first tool use in a conversation (or after the context is obviously trun
 2. Call controller_contract with compact set to true:
    - Treat the contract as the authoritative description of expectations, prompts, tooling, and guardrails.
 
-3. Call list_all_actions with include_parameters set to true, and use describe_tool for per-tool detail when needed:
+3. Call list_all_actions with include_parameters set to true, and use describe_tool for per-tool detail and validation before use:
    - Use list_all_actions(include_parameters=true) once at startup to learn the full catalog and top-level schemas.
-   - When you are about to use or repair a specific tool, call describe_tool with that tool's name (and include_parameters=true by default) to fetch its current input_schema.
-   - Do not invent parameters that are not in these schemas.
+   - Before you invoke any MCP tool in this session (including tools you think you already understand), call describe_tool with that tool's name (and include_parameters=true by default) to fetch its current input_schema.
+   - For each tool's first real invocation in this conversation, call validate_tool_args with your planned args object; only call the real tool after validation reports valid=true.
+   - Do not invent parameters that are not in these schemas, and do not claim to have run tools that did not actually execute through this server.
 
 You may cache the results of these calls for the rest of the conversation instead of guessing.
 
@@ -84,8 +85,9 @@ If you still cannot make progress with a tool after repair, explain the blocker 
 EDITING, BRANCHES, AND PULL REQUESTS
 ------------------------------------------------------------
 
-1. Respect write gating:
+1. Respect write gating and branches:
    - Check write_allowed from get_server_config before using write-tagged tools.
+   - Do not run MCP tools directly against the real default branch (for example `main`) while doing work. For each task, create or ensure a dedicated feature branch from the default branch, treat that feature branch as your effective main for the duration of the task, and route all refs for reads, edits, tests, lint, and PR helpers through that feature branch until a human has reviewed, merged, and closed it.
    - If a write call is rejected due to permissions or environment, explain the limitation and do not try to bypass gating.
 
 2. Prefer diff-based edits:
@@ -97,7 +99,6 @@ EDITING, BRANCHES, AND PULL REQUESTS
    - Treat run_command as your interactive terminal in a persistent workspace.
    - Use run_tests (and repo-native test commands) before you claim the work is complete.
    - Use commit_workspace or commit_workspace_files when that flow is configured.
-
 4. Branches and PRs:
    - Prefer working on a feature branch for non-trivial changes.
    - Use ensure_branch or create_branch when you need a new branch.
@@ -121,13 +122,12 @@ LONG WORKFLOWS AND NOT GETTING STUCK
    - Use `ensure_workspace_clone` to create or refresh a workspace for the controller repo and feature branch you are working on.
    - Treat `run_command` as your interactive terminal for *small, focused* commands (listing files, running tests, `grep`, formatters), not as a place to embed large multi-line Python or shell scripts that rewrite files.
    - Prefer diff-oriented tools (`build_unified_diff`, `build_section_based_diff`, `apply_text_update_and_commit`, `apply_patch_and_commit`, `update_file_sections_and_commit`, `apply_line_edits_and_commit`) for file edits instead of hand-crafted shell scripts.
-   - After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation: before running `run_tests`, `run_lint_suite`, `run_quality_suite`, or any other forward-moving action, call `ensure_workspace_clone` again with `ref` set to the same branch and `reset=true` and continue from that fresh clone.
-
+   - After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation: before running `run_tests`, `run_lint_suite`, `run_quality_suite`, additional edits, PR helpers, or any other forward-moving action, call `ensure_workspace_clone` again with `ref` set to the same branch and `reset=true` and continue from that fresh clone. This reclone step is mandatory and not skippable.
 2. Branches and PRs:
    - Do not commit directly to the default branch. The assistant should always create or reuse a feature branch via `ensure_branch` and keep all edits scoped to that branch.
    - For small changes, it is fine to use direct commit helpers (for example `apply_text_update_and_commit`) targeting the feature branch. For larger changes, encourage patch-based workflows and clear commit messages.
    - Before opening a PR, the assistant should run appropriate tests and linters from a fresh workspace clone of the feature branch. Failures are the assistant’s responsibility to diagnose and fix by updating code, tests, and docs until they pass.
-   - When it is time to open or update a PR, the assistant should call `build_pr_summary` with the controller repo `full_name`, the feature branch `ref`, a concise human-written title/body, and, when available, short summaries of changed files plus `tests_status` and `lint_status`. The resulting structured `title` and `body` should be rendered into PR creation tools such as `open_pr_for_existing_branch` or `update_files_and_open_pr`, so PR descriptions stay consistent across assistants.
+   - When it is time to open or update a PR, the assistant should call `build_pr_summary` with the controller repo `full_name`, the feature branch `ref`, a concise human-written title/body, and, when available, short summaries of changed files plus `tests_status` and `lint_status`. The resulting structured `title` and `body` should be rendered into PR creation tools such as `open_pr_for_existing_branch` or `update_files_and_open_pr`, so PR descriptions stay consistent across assistants. Do not describe PRs, commits, or tool runs that did not actually occur.
 
 3. Responsibility for quality and fixes:
    - Assistants are expected to treat failing tests, linters, or obvious runtime errors as their responsibility to fix. They must not hide failures, omit key test output, or leave the repository in a broken state once they have started a change.
@@ -145,9 +145,10 @@ New assistants should run this sequence on their first tool call of a session (a
 2. `controller_contract` with `compact=true`
    - Refresh expectations for the assistant, controller prompt, and server.
 3. `list_all_actions` with `include_parameters=true`
-   - Discover every tool and its schema; use `describe_tool` for per-tool detail.
-4. `validate_tool_args`
-   - Before the first invocation of any write or unfamiliar tool, dry-run the planned arguments so you can repair schema issues before executing the real call.
+   - Discover every tool and its schema.
+4. For each tool you plan to use, especially write-tagged or complex ones, call `describe_tool` and then `validate_tool_args` with your planned `args` before the first real invocation. Only call the real tool after validation reports `valid=true`.
+
+Cache the responses instead of re-deriving them by hand. Do not ask the human to run these commands for you, and do not claim to have run tools or commands that did not actually execute through this MCP server.
 
 Cache the responses instead of re-deriving them by hand. Do not ask the human to run these commands for you.
 
@@ -158,5 +159,4 @@ Cache the responses instead of re-deriving them by hand. Do not ask the human to
 - Controllers can embed the prompt above directly into their system instructions for any assistant wired to this MCP server.
 - Assistants should treat `controller_contract` as the single contract between controllers and this server, and use `docs/start_session.md` and this document as the operational protocol and examples that *explain how to honor that contract* in practice.
 - Keep the branch-diff-test-PR flow visible in your controller prompt so assistants default to creating feature branches, applying diffs, running tests, and opening PRs instead of offloading edits to humans.
-- Reinforce JSON discipline by pairing `list_all_actions`/`describe_tool` with `validate_tool_args` before write tools, and remind assistants not to invent parameters or rely on users to execute commands for them.
-- Reinforce JSON discipline by pairing `list_all_actions`/`describe_tool` with `validate_tool_args` before write tools, and remind assistants not to invent parameters or rely on users to execute commands for them.
+- Reinforce JSON discipline by pairing `list_all_actions`/`describe_tool` with `validate_tool_args` before tools (especially write tools), and remind assistants not to invent parameters, not to rely on users to execute commands for them, and not to describe tool calls that never actually occurred.
