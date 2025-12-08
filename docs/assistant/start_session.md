@@ -2,13 +2,13 @@
 
 This document describes how assistants should start and run sessions when using the GitHub MCP server for this controller repo (Proofgate-Revocations/chatgpt-mcp-github).
 
+This protocol applies to assistants using this MCP server. Humans and repository owners are not bound by it; they enforce or override behavior via normal GitHub configuration, code review, and merges.
+
 ## Goals
 
 - Reduce invalid tool calls
 - Keep long workflows from getting stuck
-- Provide a single protocol that controllers can copy into system prompts
-
-Pair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` and the live `controller_contract` tool so assistants internalize their role as the engineer. `controller_contract` is the single source of truth for contract details; this document and the controller prompt simply describe how to execute that contract in practice. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
+- Provide a single protocol that controllers can copy into system promptsPair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` and the live `controller_contract` tool so assistants internalize their role as the engineer. `controller_contract` is the single source of truth for contract details; this document and the controller prompt simply describe how to execute that contract in practice. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
 ## 1. Startup sequence
 
 At the start of a new conversation, or after context loss, do these tool calls in order:
@@ -22,17 +22,19 @@ At the start of a new conversation, or after context loss, do these tool calls i
 
 Treat the results of these tools as the source of truth for the rest of the session, with `controller_contract` as the canonical contract and this document as the execution playbook that must remain consistent with it.
 
-Treat the results of these tools as the source of truth for the rest of the session, with `controller_contract` as the canonical contract and this document as the execution playbook that must remain consistent with it.## 2. Tool arguments and validation
+## 2. Tool arguments and validation
 
 - Follow each tool's declared parameter schema exactly.
 - Build arguments as literal JSON objects, not strings containing JSON.
-- Do not invent parameters that are not documented in `list_all_actions`.
+- Do not invent parameters that are not documented in `list_all_actions` or `describe_tool`.
+- When you need metadata for multiple tools, prefer a single `describe_tool` call with `names` set to a list of up to 10 tool names instead of many separate calls.
+- For non-trivial JSON payloads (nested objects, large `sections` arrays, or raw JSON responses you plan to emit), treat `validate_json_string` as a default preflight step so the host only sees strict, parseable JSON.
 
 Before using a write tool, or any tool you have not yet called in this conversation, follow this pattern:
 
 1. Prepare the arguments you plan to use. You are responsible for constructing the JSON payload yourself; do not ask the user to supply raw arguments or schemas.
 2. Call `describe_tool` (if you have not already done so in this session) and `validate_tool_args` with the tool name and those arguments.
-3. Only call the real tool when validation reports valid is true.
+3. Only call the real tool when validation reports `valid` is true.
 
 If a tool call fails because of argument or schema errors:
 
