@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Protocol, TypedDict, Optional, Literal
 import difflib
+from typing import (Any, Callable, Dict, List, Literal, Optional, Protocol,
+                    TypedDict)
 
-from main import (
-    _github_request,
-    _resolve_file_sha,
-    GitHubAPIError,
-    _decode_github_content,
-    _effective_ref_for_repo,
-    _workspace_path,
-    _ensure_write_allowed,
-)
+from main import (GitHubAPIError, _decode_github_content,
+                  _effective_ref_for_repo, _ensure_write_allowed,
+                  _github_request, _resolve_file_sha, _workspace_path)
 
 
 class ToolDecorator(Protocol):
@@ -181,8 +176,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
         workspace_root = _workspace_path(full_name, effective_ref)
 
-        from pathlib import Path as _Path
         import base64
+        from pathlib import Path as _Path
 
         workspace_file = _Path(workspace_root) / workspace_path
 

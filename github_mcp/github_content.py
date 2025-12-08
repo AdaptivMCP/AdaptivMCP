@@ -5,9 +5,9 @@ from __future__ import annotations
 import base64
 import os
 import re
+import sys
 from typing import Any, Dict, Optional
 
-import sys
 from .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
 from .utils import _effective_ref_for_repo

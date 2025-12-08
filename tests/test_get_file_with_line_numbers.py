@@ -1,5 +1,6 @@
-import extra_tools
 import pytest
+
+import extra_tools
 
 # Local registry to capture tools registered via register_extra_tools
 _TOOL_REGISTRY: dict[str, object] = {}

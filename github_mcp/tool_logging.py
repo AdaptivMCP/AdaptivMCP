@@ -13,7 +13,8 @@ from typing import Optional
 import httpx
 
 from github_mcp.config import GITHUB_LOGGER
-from github_mcp.metrics import _record_github_request as _record_github_request_metrics
+from github_mcp.metrics import \
+    _record_github_request as _record_github_request_metrics
 
 
 def _record_github_request(

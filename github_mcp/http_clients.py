@@ -11,15 +11,9 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from .config import (
-    GITHUB_API_BASE,
-    GITHUB_API_BASE_URL,
-    GITHUB_REQUEST_TIMEOUT_SECONDS,
-    HTTPX_MAX_CONNECTIONS,
-    HTTPX_MAX_KEEPALIVE,
-    HTTPX_TIMEOUT,
-    MAX_CONCURRENCY,
-)
+from .config import (GITHUB_API_BASE, GITHUB_API_BASE_URL,
+                     GITHUB_REQUEST_TIMEOUT_SECONDS, HTTPX_MAX_CONNECTIONS,
+                     HTTPX_MAX_KEEPALIVE, HTTPX_TIMEOUT, MAX_CONCURRENCY)
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError
 from .tool_logging import _record_github_request
 
