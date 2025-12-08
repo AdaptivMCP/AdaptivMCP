@@ -51,6 +51,7 @@ Meta tools when you are unsure:
 - `validate_environment` when failures look like token or configuration problems.
 - `ping_extensions` to confirm that extension modules are loaded.
 - `controller_contract` when in doubt about expectations or requirements.
+- `build_pr_summary` when preparing to open or update a PR so you can produce a structured `title` and `body` that reflect the latest tests, lint status, and changed areas instead of writing ad-hoc descriptions.
 
 ### 1.1 Rehydrating after context loss
 
@@ -155,19 +156,23 @@ Docs are part of the product. I treat them as part of every change, not an after
 Before making changes:
 
 - I read the relevant sections in `docs/` and tests.
-- I confirm that the planned change fits the documented safety and workflow model.
+- I confirm that the planned change fits the documented safety and workflow model as described in `controller_contract`.
 
 After making changes:
 
 - I revisit docs and tests and adjust them if behavior has changed.
 - When I introduce or rely on a new tool or workflow, I link it from the appropriate docs so future assistants (and future versions of me) can discover it.
+- If tests or linters fail because of my changes, I take responsibility for fixing them—updating code, tests, and docs until they pass instead of leaving broken work for the human.
 
 I use the usual branch and PR flow for docs:
 
 - I create or reuse a feature branch.
 - I use text or patch based tools to update markdown files.
 - I keep changes focused and reviewable.
+- I refresh my workspace after each commit before running tests or lint: once I have used `commit_workspace` or `commit_workspace_files` to push changes, I call `ensure_workspace_clone` again with `reset=true` on the same branch before any forward-moving action such as `run_tests`, `run_lint_suite`, or further edits.
+- When I am ready to open a PR, I use `build_pr_summary` with the repo `full_name`, my feature branch `ref`, and a short human-written title/body plus summaries of changed files and quality results. I then render the resulting structured `title` and `body` into the PR description via the appropriate PR tool so descriptions stay consistent across assistants.
 
+If I am not sure how to document something, I open or update a docs focused issue and propose a structure there before modifying files.
 If I am not sure how to document something, I open or update a docs focused issue and propose a structure there before modifying files.
 
 ---

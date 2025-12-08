@@ -21,8 +21,10 @@ To avoid role confusion and tool misuse, every new session should anchor to the 
 
 - Start with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` so the assistant immediately understands it is the engineer—not a tutor—and must use the MCP tools itself.
 - On the first tool call (and after any context loss), run the startup checklist: `get_server_config`, `controller_contract` with `compact=true`, `list_all_actions` with `include_parameters=true`, then `describe_tool` and `validate_tool_args` before invoking unfamiliar or write tools. Cache those results instead of guessing.
-- Default to the branch-diff-test-PR loop: create or ensure a feature branch, use diff-based helpers to edit files, run repo-native tests or checks, and open a pull request with a concise summary.
+- Default to the branch-diff-test-PR loop: create or ensure a feature branch, use diff-based helpers to edit files, run repo-native tests or checks from a fresh workspace clone, and open a pull request with a concise summary. After you use `commit_workspace` or `commit_workspace_files` to push changes, always refresh the workspace with `ensure_workspace_clone` (with `reset=true`) on the same branch before running tests, linters, or taking any other forward-moving action.
 - Never offload work to the user. If you are about to ask the human to run a command or apply a patch, stop and perform the action yourself via the provided tools.
+- When tests, linters, or runtime checks fail due to your changes, you are responsible for fixing them: update code, tests, and docs until they pass instead of hiding failures or leaving broken work for the human.
+- When you open or update a PR, use `build_pr_summary` to generate a structured PR `title` and `body` that capture what changed and the latest test/lint status, and feed that structured result into the PR creation tools instead of hand-writing ad-hoc descriptions.
 
 ---
 
@@ -104,13 +106,14 @@ These are a condensed snapshot of the expectations encoded in `controller_contra
 Use `run_command` and `run_tests` subject to write gating to run tests, linters, formatters, inspection commands, and diagnostics. Treat them as your keyboard on a dedicated development machine, including for quick searches or usage checks. Do not invent extra restrictions on workspace commands beyond the controller’s own write policy. Be explicit about what you are running and why.
 Do not ask humans to run commands, paste scripts, or add newlines for you. Handle quoting, patch generation, and retries with the provided tools. Avoid token-heavy inline payloads or massive tool responses when a focused command, slice, or diff will do.
 
-2. Tests are first class
+2. Tests and linters are first class, and failures are your responsibility
 
-When behavior or code changes, add or update tests. Use `run_tests`, or `run_command` with pytest or another test runner, on the relevant feature branch before opening pull requests. Treat test failures as first-class signals and summarize them clearly.
+When behavior or code changes, add or update tests. Use `run_tests`, `run_lint_suite`, `run_quality_suite`, or `run_command` with project-native test and lint commands on the relevant feature branch before opening pull requests. Treat failures as first-class signals: investigate them, update code, tests, and docs as needed, and re-run checks until they pass. Do not hide failing output or leave broken work for the human to repair.
 
 3. Work on branches and use pull requests
 
-Do not commit directly to the main branch for this repository. Always create or reuse a feature branch from `main`, make your changes there, run tests and linters on that branch, and then open a pull request into `main`. You can use patch-based diffs or full-file updates as appropriate for the change, but keep diffs reviewable and avoid accidentally overwriting large or critical files.
+Do not commit directly to the main branch for this repository. Always create or reuse a feature branch from the default branch, make your changes there, run tests and linters on that branch from a fresh workspace clone, and then open a pull request into the default branch. You can use patch-based diffs or full-file updates as appropriate for the change, but keep diffs reviewable and avoid accidentally overwriting large or critical files.
+When you open or update a PR, call `build_pr_summary` with the controller repo `full_name`, your feature branch `ref`, a concise human-written title/body, and (when available) short summaries of changed files plus `tests_status` and `lint_status`. Render the structured `title` and `body` from that helper into the PR so descriptions stay consistent across assistants.
 
 4. JSON discipline and tool schemas
 
@@ -124,11 +127,26 @@ For large files, such as `main.py`, prefer `get_file_slice` to inspect specific 
 
 Use `authorize_write_actions` when the write gate is enabled, and treat approval as a scoped, time-boxed permission to perform concrete write actions. Do not silently escalate from read to write operations without informing the human.
 
-7. Summaries and auditability
+7. Summaries, auditability, and workspace hygiene
 
 When you complete a workflow, summarize what you changed, which tools you used, and where the artifacts live (branches, pull requests, issues, or docs). This is especially important when operating across multiple repositories.
+After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, always refresh the workspace with `ensure_workspace_clone` using the same branch and `reset=true` before running tests, linters, or further edits. Treat stale workspaces as unsafe for validation.
 
 These expectations are snapshots, not substitutes for reading `controller_contract` and `docs/WORKFLOWS.md`.
+
+- Do NOT use `run_command` as a patch engine (for example with large
+  heredoc Python scripts that rewrite files). This is brittle under
+  JSON encoding and will fail easily.
+- Routine multi-line edits are normal. Use diff-based tools to apply
+  them directly instead of calling them tricky or bouncing them back to
+  humans.
+- For file edits, prefer:
+  - `apply_text_update_and_commit` for full-file replacements.
+  - `update_file_sections_and_commit` for structured section-level edits.
+  - `build_unified_diff` + `apply_patch_and_commit` when you want explicit diffs.
+- Do NOT embed large multi-line Python/shell scripts in `run_command.command`.
+  If your edit involves more than a couple of lines of shell, treat that as
+  a signal to use the diff-based tools instead.
 
 - Do NOT use `run_command` as a patch engine (for example with large
   heredoc Python scripts that rewrite files). This is brittle under

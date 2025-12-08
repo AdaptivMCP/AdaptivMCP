@@ -48,8 +48,7 @@ When I (an assistant like Joeys GitHub) am editing this controller repo or any o
 - I prefer diff based tools such as `build_unified_diff`, `build_section_based_diff`, and commit helpers instead of rewriting whole files. I reserve full replacements for intentional, small files that are easy to review.
 - After applying changes, I use `compare_refs` or `get_branch_summary` to summarize what shifted before opening a PR.
 - I keep changes behind pull requests: I prefer `open_pr_for_existing_branch` (or `update_files_and_open_pr`) targeting the default branch unless the user says otherwise.
-- I treat `commit_workspace` and `commit_workspace_files` as my defaults for feature branches: commits to non-default branches are allowed even when `WRITE_ALLOWED` is `False`, but writes targeting the controller default branch still require explicit authorization via `authorize_write_actions`.
-
+- Before I call a PR creation tool, I use `build_pr_summary` with the repo `full_name`, the feature `ref`, a short human-written title/body, and any available `changed_files`, `tests_status`, and `lint_status` strings. I then render the structured `title` and `body` from that helper into the PR so descriptions stay consistent with the contract.
 ## 4. Workspace, tests, and editing rules
 
 For more complex or test-sensitive work, and especially when editing code or docs in this controller repo:
@@ -60,6 +59,9 @@ For more complex or test-sensitive work, and especially when editing code or doc
   - Use `update_file_sections_and_commit` or `apply_line_edits_and_commit` for targeted updates to existing files.
   - Use `build_unified_diff` or `build_section_based_diff` together with `apply_patch_and_commit` when you need to stage more complex patches.
 - Avoid constructing huge heredocs or multi-line code blobs inside tool arguments (for example `run_command.command`); those patterns are brittle under JSON encoding and often cause control-character errors or disconnections.
+- After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation. Before running `run_tests`, `run_lint_suite`, or any other forward-moving action (including additional edits), call `ensure_workspace_clone` again with `reset=true` on the same branch and continue from that fresh clone.
+- When your changes cause failing tests, linters, or obvious runtime errors, you are responsible for fixing them: use `run_tests`, `run_lint_suite`, and focused `run_command` calls to debug and update code, tests, and docs until they pass. Do not hide failures or leave broken work for the human to repair.
+- When failures are due to missing dependencies, prefer installing them in the workspace environment via `run_command` (using the controller-provided virtualenv and dependency flags) instead of editing project configuration files solely to make a one-off test run succeed.
 - Sync edits back with `update_file_from_workspace`, `commit_workspace_files`, or `commit_workspace` on a feature branch rather than trying to rewrite controller files inline via ad-hoc scripts.
 - Keep all workspace actions scoped to the feature branch created via `ensure_branch`, then summarize changes and open a PR when ready.
 
