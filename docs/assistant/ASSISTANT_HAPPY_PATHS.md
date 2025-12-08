@@ -82,10 +82,13 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - `update_file_sections_and_commit` when you have clear section markers.
    In all cases, set `branch` to your docs branch and provide a descriptive commit message.
 6. Open a pull request:
-   - Use `open_pr_for_existing_branch` with:
+   - First, call `build_pr_summary` with the repo `full_name`, your docs branch `ref`, a concise human-written `title`/`body`, and (optionally) a short `changed_files` summary and any `tests_status` or `lint_status` strings if checks were run.
+   - Then, use `open_pr_for_existing_branch` with:
      - `branch` set to your docs branch.
      - `base` left default or set to `main` (the MCP server normalizes this to the configured default).
-     - A clear `title` and `body` summarizing the doc change.
+     - The `title` and `body` rendered from the `build_pr_summary` result so PR descriptions stay consistent with the contract.
+7. Optionally list the PR to confirm state:
+   - Call `list_pull_requests` filtered by head branch to confirm the new PR exists and is open.
 7. Optionally list the PR to confirm state:
    - Call `list_pull_requests` filtered by head branch to confirm the new PR exists and is open.
 
@@ -116,15 +119,15 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - For large or sectioned files: use `build_section_based_diff` and then `apply_patch_and_commit`.
    - Update both implementation and tests in the same branch, with clear commit messages.
 6. Run tests and lint in a workspace:
-   - Call `ensure_workspace_clone` for the repo and branch.
+   - Call `ensure_workspace_clone` for the repo and branch to create or refresh a workspace before running tests or linters.
    - Use `run_quality_suite` for full-suite or default quality gate runs, `run_lint_suite` for lint/static analysis, or `run_tests` / `run_command` for more targeted invocations.
-   - If tests or linters require dependencies, set `installing_dependencies=true` on the first run that installs packages.
-7. Handle failures:
-   - If tests or linters fail, use `run_command` (for example `pytest path/to/test -k failing_case -vv` or `ruff check path/to/module.py`) to iterate until passing.
-   - Update code and tests via patch-based tools, commit again, and re-run tests and lint.
+   - If tests or linters require dependencies, set `installing_dependencies=true` on the first run that installs packages and use `run_command` inside the workspace to install what is needed instead of editing project config only to satisfy local runs.
+7. Handle failures and refresh the workspace after each commit:
+   - When tests or linters fail, you are responsible for fixing them. Use `run_command` (for example `pytest path/to/test -k failing_case -vv` or `ruff check path/to/module.py`) together with small, focused code and test edits until everything passes.
+   - After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation. Before running `run_tests`, `run_lint_suite`, `run_quality_suite`, or any other forward-moving action, call `ensure_workspace_clone` again with `ref` set to the same feature branch and `reset=true`, then continue from that fresh clone.
 8. Open a PR:
-   - Use `open_pr_for_existing_branch` targeting `main`.
-   - In the PR body, summarize behavior changes and explicitly mention tests run (for example `pytest` passing on the feature branch via `run_tests`).
+   - Use `build_pr_summary` first with the controller repo `full_name`, your feature `ref`, a short title/body, and a summary of `changed_files`, `tests_status`, and `lint_status` based on the most recent runs.
+   - Then call `open_pr_for_existing_branch` targeting `main`, passing the `title` and `body` from `build_pr_summary`. In the PR, explicitly mention which tests and lint suites you ran and that they passed on the feature branch.
 
 **Validation:**
 - The last `run_tests` call returns a successful outcome.
@@ -215,13 +218,19 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 2. Explore and modify in the workspace:
    - Use `run_command` with commands like `ls`, `tree`, or `grep` to understand the layout.
    - Run formatters or generators (for example `ruff`, `black`, or project-specific scripts) as needed.
-   - Keep `installing_dependencies` false unless the command installs packages.
-3. Run tests:
-3. Run tests and lint:
-   - Call `run_quality_suite` for the default quality gate, `run_lint_suite` for lint/static analysis, or `run_tests` / `run_command` with more targeted test or lint invocations.
+   - Keep `installing_dependencies` false unless the command installs packages. When dependencies are required for tests or linters, install them via `run_command` in the workspace environment rather than editing project config solely to satisfy one-off runs.
+3. Run tests and lint from a fresh clone after commits:
+   - Before running `run_quality_suite`, `run_lint_suite`, `run_tests`, or other test commands, ensure you are working from a fresh workspace clone for the current feature branch. After you commit via `commit_workspace` or `commit_workspace_files`, call `ensure_workspace_clone` again with `ref` set to that branch and `reset=true` before continuing.
+   - Use `run_quality_suite` for the default quality gate, `run_lint_suite` for lint/static analysis, or `run_tests` / `run_command` with targeted invocations as needed.
+   - Treat any failing tests or lint checks as your responsibility to fix; iterate with small edits and re-runs until they pass.
+4. Commit from the workspace:
    - Use `commit_workspace` when you want to commit all changes in one commit, or
    - Use `commit_workspace_files` to commit a specific subset of files.
    - Ensure `ref` matches your feature branch.
+5. Open or update a PR:
+   - Use `build_pr_summary` to construct a structured PR summary for the current branch, including a succinct title, body, list of changed areas, and the latest tests/lint status.
+   - Open a new PR using `open_pr_for_existing_branch` and render the `title` and `body` from `build_pr_summary`, or
+   - Let `update_files_and_open_pr` manage both updates and PR creation if that tool fits the current flow, still using `build_pr_summary` to shape the description.
 5. Open or update a PR:
    - Open a new PR using `open_pr_for_existing_branch`, or
    - Let `update_files_and_open_pr` manage both updates and PR creation if that tool fits the current flow.
