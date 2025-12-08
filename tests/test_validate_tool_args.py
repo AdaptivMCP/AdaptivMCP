@@ -64,7 +64,6 @@ async def test_validate_tool_args_batch_two_tools():
 
 @pytest.mark.asyncio
 async def test_validate_tool_args_batch_too_many_tools_raises():
-    tool_names = ["compare_refs"] * 11
-
+    tool_names = ["t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10"]
     with pytest.raises(ValueError):
         await main.validate_tool_args(tool_names=tool_names, payload={})
