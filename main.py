@@ -1838,29 +1838,84 @@ def list_all_actions(
 @mcp_tool(
     write_action=False,
     description=(
-        "Return metadata and optional schema for a single tool. "
+        "Return metadata and optional schema for one or more tools. "
         "Prefer this over manually scanning list_all_actions in long sessions."
     ),
 )
-async def describe_tool(name: str, include_parameters: bool = True) -> Dict[str, Any]:
-    """Inspect one registered MCP tool by name.
+async def describe_tool(
+    name: Optional[str] = None,
+    names: Optional[List[str]] = None,
+    include_parameters: bool = True,
+) -> Dict[str, Any]:
+    """Inspect one or more registered MCP tools by name.
 
     This is a convenience wrapper around list_all_actions: it lets callers
-    inspect one tool by name without scanning the entire tool catalog.
+    inspect specific tools by name without scanning the entire tool catalog.
 
     Args:
-        name: The MCP tool name (for example, \"update_files_and_open_pr\").
+        name: The MCP tool name (for example, "update_files_and_open_pr").
+            For backwards compatibility, this behaves like the legacy
+            single-tool describe_tool API.
+        names: Optional list of tool names to inspect. When provided, up to
+            10 tools are returned in a single call. Duplicates are ignored
+            while preserving order.
         include_parameters: When True, include the serialized input schema for
-            this tool (equivalent to list_all_actions(include_parameters=True)).
+            each tool (equivalent to list_all_actions(include_parameters=True)).
     """
 
+    if names is None or len(names) == 0:
+        if not name:
+            raise ValueError("describe_tool requires 'name' or 'names'.")
+        names = [name]
+    else:
+        # Normalize and deduplicate while preserving order.
+        seen = set()
+        normalized: List[str] = []
+        for candidate in names:
+            if not isinstance(candidate, str):
+                raise TypeError("names must be a list of strings.")
+            if candidate not in seen:
+                seen.add(candidate)
+                normalized.append(candidate)
+        if name and name not in seen:
+            normalized.insert(0, name)
+        names = normalized
+
+    if len(names) == 0:
+        raise ValueError("describe_tool requires at least one tool name.")
+    if len(names) > 10:
+        raise ValueError("describe_tool can return at most 10 tools per call.")
+
     catalog = list_all_actions(include_parameters=include_parameters, compact=False)
-    for entry in catalog.get("tools", []):
-        if entry.get("name") == name:
-            return entry
+    tools_index = {entry.get("name"): entry for entry in catalog.get("tools", [])}
 
-    raise ValueError(f"Unknown tool name: {name}")
+    found: List[Dict[str, Any]] = []
+    missing: List[str] = []
 
+    for tool_name in names:
+        entry = tools_index.get(tool_name)
+        if entry is None:
+            missing.append(tool_name)
+        else:
+            found.append(entry)
+
+    if not found:
+        raise ValueError(
+            f"Unknown tool name(s): {', '.join(sorted(set(missing)))}"
+        )
+
+    result: Dict[str, Any] = {"tools": found}
+
+    # Preserve the legacy single-tool shape for backwards compatibility by
+    # mirroring the first tool's metadata at the top level.
+    first = found[0]
+    for key, value in first.items():
+        result.setdefault(key, value)
+
+    if missing:
+        result["missing_tools"] = sorted(set(missing))
+
+    return result
 
 @mcp_tool(write_action=False)
 async def validate_tool_args(
