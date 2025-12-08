@@ -1212,6 +1212,14 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "version": CONTROLLER_CONTRACT_VERSION,
         "summary": "Contract describing how controllers, assistants, and this GitHub MCP server work together.",
+        "audience": {
+            "applies_to": "assistants_only",
+            "note": (
+                "This contract governs AI assistants using this MCP server. "
+                "Humans, repo owners, and reviewers are not bound by these "
+                "rules and may override them via normal GitHub review and configuration."
+            ),
+        },
         "controller": {
             "repo": CONTROLLER_REPO,
             "default_branch": CONTROLLER_DEFAULT_BRANCH,
