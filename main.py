@@ -43,10 +43,16 @@ from github_mcp.config import (
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
     SERVER_START_TIME,
+    TOOL_STDERR_MAX_CHARS,  # noqa: F401
+    TOOL_STDIO_COMBINED_MAX_CHARS,  # noqa: F401
+    TOOL_STDOUT_MAX_CHARS,  # noqa: F401
+    WORKSPACE_BASE_DIR,  # noqa: F401
 )
 from github_mcp.exceptions import (
     GitHubAPIError,  # noqa: F401
     GitHubAuthError,
+    GitHubRateLimitError,  # noqa: F401
+    WriteNotAuthorizedError,  # noqa: F401
 )
 from github_mcp.github_content import (
     _decode_github_content,
@@ -64,8 +70,8 @@ from github_mcp.http_clients import (
     _http_client_github,
 )
 from github_mcp.metrics import (
-    _METRICS,
     _metrics_snapshot,  # noqa: F401
+    _reset_metrics_for_tests,  # noqa: F401
 )
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
@@ -93,7 +99,6 @@ from github_mcp.utils import (
 )
 from github_mcp.workspace import (
     _apply_patch_to_repo,  # noqa: F401
-    _workspace_path,
 )
 
 
@@ -108,6 +113,58 @@ def __getattr__(name: str):
 server.WRITE_ALLOWED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 
 register_extra_tools_if_available()
+
+
+async def run_command(
+    full_name: str,
+    ref: str = "main",
+    command: str = "pytest",
+    timeout_seconds: int = 300,
+    workdir: Optional[str] = None,
+    patch: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+    mutating: bool = False,
+) -> Dict[str, Any]:
+    """Thin wrapper around github_mcp.tools_workspace.run_command.
+
+    Tests import run_command from main so this helper forwards to the
+    workspace tool while still allowing monkeypatching of internal
+    dependencies like _clone_repo and _run_shell on the main module.
+    """
+    return await tools_workspace.run_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        patch=patch,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+        mutating=mutating,
+    )
+
+
+async def commit_workspace_files(
+    full_name: str,
+    files: List[str],
+    ref: str = "main",
+    message: str = "Commit selected workspace changes",
+    push: bool = True,
+) -> Dict[str, Any]:
+    """Forward commit_workspace_files calls to the workspace tool.
+
+    Keeping this shim in main preserves the test-oriented API surface
+    without duplicating implementation details.
+    """
+    return await tools_workspace.commit_workspace_files(
+        full_name=full_name,
+        files=files,
+        ref=ref,
+        message=message,
+        push=push,
+    )
+
 
 
 @mcp_tool(write_action=False)
