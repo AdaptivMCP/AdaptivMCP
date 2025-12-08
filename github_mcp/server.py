@@ -68,11 +68,31 @@ def _summarize_exception(exc: BaseException) -> str:
 def _structured_tool_error(
     exc: BaseException, *, context: str, path: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Build a concise serializable error payload for MCP clients."""
+    """Build a concise serializable error payload for MCP clients.
+
+    This helper also centralizes logging for tool failures so that every
+    exception is captured once with enough context for humans to debug,
+    without requiring individual tools to sprinkle their own logging.
+    """
+
+    message = _summarize_exception(exc)
+
+    # Always log the error once with structured context but without
+    # re-raising here. The MCP layer will surface the returned payload
+    # to the client.
+    BASE_LOGGER.exception(
+        "Tool error",
+        extra={
+            "tool_context": context,
+            "tool_error_type": exc.__class__.__name__,
+            "tool_error_message": message,
+            "tool_error_path": path,
+        },
+    )
 
     error: Dict[str, Any] = {
         "error": exc.__class__.__name__,
-        "message": _summarize_exception(exc),
+        "message": message,
         "context": context,
     }
     if path:
