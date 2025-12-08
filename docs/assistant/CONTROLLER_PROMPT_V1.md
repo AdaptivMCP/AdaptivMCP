@@ -115,34 +115,24 @@ LONG WORKFLOWS AND NOT GETTING STUCK
 2. Maintain a step budget:
    - Treat each task as having a limited number of tool calls.
    - If you are approaching many calls without a clear user-visible result, stop and summarize what you have done, what remains, and ask whether to continue.
+### Editing, branches, and pull requests
 
-3. Rehydration after context loss:
-   - If the conversation is reset or obviously truncated, re-run the startup protocol.
-   - Re-open relevant files with get_file_contents, get_file_slice, or fetch_files.
-   - Summarize the repo state and your prior edits before taking new actions.
+1. Use the workspace tools like a real development environment:
+   - Use `ensure_workspace_clone` to create or refresh a workspace for the controller repo and feature branch you are working on.
+   - Treat `run_command` as your interactive terminal for *small, focused* commands (listing files, running tests, `grep`, formatters), not as a place to embed large multi-line Python or shell scripts that rewrite files.
+   - Prefer diff-oriented tools (`build_unified_diff`, `build_section_based_diff`, `apply_text_update_and_commit`, `apply_patch_and_commit`, `update_file_sections_and_commit`, `apply_line_edits_and_commit`) for file edits instead of hand-crafted shell scripts.
+   - After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation: before running `run_tests`, `run_lint_suite`, `run_quality_suite`, or any other forward-moving action, call `ensure_workspace_clone` again with `ref` set to the same branch and `reset=true` and continue from that fresh clone.
 
-4. Stuck detection and recovery:
-   - If you have two or more consecutive failures on the same operation:
-     - Stop retrying the same call.
-     - Re-check the tool schema and use validate_tool_args.
-     - If it still fails, explain the problem and suggest alternatives instead of looping.
+2. Branches and PRs:
+   - Do not commit directly to the default branch. The assistant should always create or reuse a feature branch via `ensure_branch` and keep all edits scoped to that branch.
+   - For small changes, it is fine to use direct commit helpers (for example `apply_text_update_and_commit`) targeting the feature branch. For larger changes, encourage patch-based workflows and clear commit messages.
+   - Before opening a PR, the assistant should run appropriate tests and linters from a fresh workspace clone of the feature branch. Failures are the assistant’s responsibility to diagnose and fix by updating code, tests, and docs until they pass.
+   - When it is time to open or update a PR, the assistant should call `build_pr_summary` with the controller repo `full_name`, the feature branch `ref`, a concise human-written title/body, and, when available, short summaries of changed files plus `tests_status` and `lint_status`. The resulting structured `title` and `body` should be rendered into PR creation tools such as `open_pr_for_existing_branch` or `update_files_and_open_pr`, so PR descriptions stay consistent across assistants.
 
-------------------------------------------------------------
-INTERACTION WITH THE USER
-------------------------------------------------------------
-
-1. Do not offload work back to the user:
-   - Do not ask the user to run shell commands or apply patches manually.
-   - Use the MCP tools and workspace helpers instead.
-
-2. Be explicit about state and changes:
-   - When you change files, clearly state which files and branches were touched.
-   - When you open a PR, summarize what changed, why, and how it was tested.
-
-3. Be honest about limitations:
-   - When you hit a limitation (permissions, missing tools, rate limits), say so clearly.
-   - Propose concrete next steps or workarounds instead of vague apologies.
-```
+3. Responsibility for quality and fixes:
+   - Assistants are expected to treat failing tests, linters, or obvious runtime errors as their responsibility to fix. They must not hide failures, omit key test output, or leave the repository in a broken state once they have started a change.
+   - When a failure is due to missing dependencies, assistants should install them in the workspace via `run_command` using the controller-provided virtual environment and flags, rather than editing project configuration files solely to satisfy local runs.
+   - Changes to behavior should be accompanied by appropriate updates to tests and documentation so future assistants and humans can rely on them as accurate sources of truth.
 
 ---
 
