@@ -1925,11 +1925,10 @@ async def describe_tool(
 
     return result
 
-@mcp_tool(write_action=False)
-async def validate_tool_args(
-    tool_name: str, args: Optional[Mapping[str, Any]] = None
+def _validate_single_tool_args(
+    tool_name: str, args: Optional[Mapping[str, Any]]
 ) -> Dict[str, Any]:
-    """Validate a candidate payload against a tool's input schema without running it."""
+    """Validate a single candidate payload against a tool's input schema."""
 
     found = _find_registered_tool(tool_name)
     if found is None:
@@ -1940,7 +1939,9 @@ async def validate_tool_args(
                 if getattr(tool, "name", None) or getattr(func, "__name__", None)
             )
         )
-        raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
+        raise ValueError(
+            f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}"
+        )
 
     tool, _ = found
     schema = _normalize_input_schema(tool)
@@ -1990,6 +1991,98 @@ async def validate_tool_args(
         "errors": errors,
         "schema": schema,
     }
+
+
+@mcp_tool(write_action=False)
+async def validate_tool_args(
+    tool_name: Optional[str] = None,
+    args: Optional[Mapping[str, Any]] = None,
+    tool_names: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Validate candidate payload(s) against tool input schemas without running them.
+
+    Args:
+        tool_name: Name of a single MCP tool to validate. This preserves the
+            legacy single-tool validate_tool_args API.
+        args: Candidate arguments object to validate. In batch mode this payload
+            is applied to each tool in tool_names.
+        tool_names: Optional list of MCP tool names to validate in one call.
+            When provided, up to 10 tools are validated using the same args.
+            Duplicates are ignored while preserving order.
+
+    Returns:
+        For single-tool calls, returns the legacy shape:
+
+            {"tool": ..., "valid": bool, "errors": [...], "schema": ...}
+
+        For batch calls (tool_names present), returns a dict with:
+
+            - results: list of per-tool validation results in call order
+            - missing_tools: optional list of unknown tool names
+
+        The first entry in results is mirrored at the top level (tool, valid,
+        errors, schema) for backwards compatibility with existing callers.
+    """
+
+    # Legacy single-tool behavior when no batch list is provided.
+    if not tool_names:
+        if not tool_name:
+            raise ValueError("validate_tool_args requires 'tool_name' or 'tool_names'.")
+        return _validate_single_tool_args(tool_name, args)
+
+    # Normalize and deduplicate the batch list while preserving order and
+    # ensuring an explicit tool_name (when provided) is included.
+    seen = set()
+    normalized: List[str] = []
+
+    for candidate in tool_names:
+        if not isinstance(candidate, str):
+            raise TypeError("tool_names must be a list of strings.")
+        if candidate not in seen:
+            seen.add(candidate)
+            normalized.append(candidate)
+
+    if tool_name and tool_name not in seen:
+        normalized.insert(0, tool_name)
+
+    if len(normalized) == 0:
+        raise ValueError("validate_tool_args requires at least one tool name.")
+    if len(normalized) > 10:
+        raise ValueError("validate_tool_args can validate at most 10 tools per call.")
+
+    results: List[Dict[str, Any]] = []
+    missing: List[str] = []
+
+    for name in normalized:
+        try:
+            result = _validate_single_tool_args(name, args)
+        except ValueError as exc:
+            msg = str(exc)
+            if msg.startswith("Unknown tool ") and "Available tools:" in msg:
+                missing.append(name)
+                continue
+            raise
+        else:
+            results.append(result)
+
+    if not results:
+        raise ValueError(
+            f"Unknown tool name(s): {', '.join(sorted(set(missing)))}"
+        )
+
+    response: Dict[str, Any] = {"results": results}
+
+    # Preserve the legacy single-tool shape for backwards compatibility by
+    # mirroring the first result's metadata at the top level.
+    first = results[0]
+    for key, value in first.items():
+        response.setdefault(key, value)
+
+    if missing:
+        response["missing_tools"] = sorted(set(missing))
+
+    return response
+
 
 
 @mcp_tool(write_action=False)
