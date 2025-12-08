@@ -1044,6 +1044,8 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Keep safety, truncation, and large-file guidance visible so the controller prompt steers assistants toward slice-and-diff workflows instead of large payload retries.",
         "Coach assistants to anchor their reasoning in concrete repo context: point them to the files, functions, and tests they should inspect, and ask for summaries with paths and line references instead of vague statements.",
         "Include a quick rehydration playbook for assistants to follow after disconnects or blank contexts: rerun controller_contract, refresh server and branch info, and reopen the specific files or slices tied to the task before resuming edits.",
+        "Make explicit that discovery tools (get_server_config, controller_contract, list_all_actions, get_file_slice, fetch_files, list_repository_tree, and similar) are for initial orientation and targeted lookups, not for repeated full-file reads or log dumps. Once the assistant has the context it needs for a task, it should stop re-calling discovery tools and instead work from the workspace and diffs.",
+        "Discourage repeated use of get_file_contents, get_file_slice, or large log readers solely to re-stream code or logs into the client. After the first read, assistants should rely on workspace commands (run_command with sed/grep, run_tests, run_lint_suite) and diff tools (build_unified_diff, build_section_based_diff, apply_patch_and_commit, update_file_sections_and_commit) to act, not to browse.",
     ]
 
     server_expectations = [
@@ -1083,6 +1085,11 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
             "inline payloads or heredocs when a focused command, slice, or diff "
             "keeps context tight."
         ),
+        "details": [
+            "Once you have read the relevant files or logs for a task, avoid re-calling discovery helpers just to see the same content again. Use workspace commands and diffs to drive the work from that point forward.",
+            "Avoid streaming large files, entire modules, or long logs repeatedly into the client. If you need to reference a specific region again, use small slices (for example sed -n with a tight line range via run_command) or get_file_slice with a narrow window instead of re-reading whole files.",
+            "When you notice that repeated discovery calls or large payloads are making the session heavy, treat that as a bug in your workflow: stop, summarize what you already know, and continue from the workspace and diffs instead of issuing more discovery calls.",
+        ],
         "recommended_tools": [
             "build_unified_diff",
             "build_section_based_diff",
