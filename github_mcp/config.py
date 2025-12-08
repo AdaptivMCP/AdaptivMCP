@@ -38,9 +38,13 @@ GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
 # Upper bounds for tool stdout/stderr payloads returned to the connector. These
 # can be tuned via environment variables; set to 0 or a negative value to disable
 # truncation if a deployment prefers full logs at the cost of larger responses.
-TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
-TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "6000"))
-TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "18000"))
+#
+# For this controller we default to *no* machine-side truncation and let the host
+# environment enforce any transport limits. Deployments that want smaller payloads
+# can still override these via environment variables.
+TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "0"))
+TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "0"))
+TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "0"))
 
 # Soft limit for run_command.command length to discourage huge inline scripts.
 RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "8000"))
