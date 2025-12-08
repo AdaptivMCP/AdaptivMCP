@@ -99,6 +99,7 @@ from github_mcp.utils import (
 )
 from github_mcp.workspace import (
     _apply_patch_to_repo,  # noqa: F401
+    _workspace_path,  # noqa: F401
 )
 
 
