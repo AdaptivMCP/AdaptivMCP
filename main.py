@@ -122,6 +122,58 @@ server.WRITE_ALLOWED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 register_extra_tools_if_available()
 
 
+async def run_command(
+    full_name: str,
+    ref: str = "main",
+    command: str = "pytest",
+    timeout_seconds: int = 300,
+    workdir: Optional[str] = None,
+    patch: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+    mutating: bool = False,
+) -> Dict[str, Any]:
+    """Thin wrapper around github_mcp.tools_workspace.run_command.
+
+    Tests import run_command from main so this helper forwards to the
+    workspace tool while still allowing monkeypatching of internal
+    dependencies like _clone_repo and _run_shell on the main module.
+    """
+    return await tools_workspace.run_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        patch=patch,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+        mutating=mutating,
+    )
+
+
+async def commit_workspace_files(
+    full_name: str,
+    files: List[str],
+    ref: str = "main",
+    message: str = "Commit selected workspace changes",
+    push: bool = True,
+) -> Dict[str, Any]:
+    """Forward commit_workspace_files calls to the workspace tool.
+
+    Keeping this shim in main preserves the test-oriented API surface
+    without duplicating implementation details.
+    """
+    return await tools_workspace.commit_workspace_files(
+        full_name=full_name,
+        files=files,
+        ref=ref,
+        message=message,
+        push=push,
+    )
+
+
+
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
     """Toggle write-tagged tools on or off for the running server instance.
