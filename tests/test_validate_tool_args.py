@@ -52,7 +52,7 @@ async def test_validate_tool_args_batch_two_tools():
 
     result = await main.validate_tool_args(
         tool_names=["compare_refs", "create_branch"],
-        args=args,
+        payload=args,
     )
 
     assert "results" in result
@@ -67,4 +67,4 @@ async def test_validate_tool_args_batch_too_many_tools_raises():
     tool_names = ["compare_refs"] * 11
 
     with pytest.raises(ValueError):
-        await main.validate_tool_args(tool_names=tool_names, args={})
+        await main.validate_tool_args(tool_names=tool_names, payload={})
