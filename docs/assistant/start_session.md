@@ -22,17 +22,19 @@ At the start of a new conversation, or after context loss, do these tool calls i
 
 Treat the results of these tools as the source of truth for the rest of the session, with `controller_contract` as the canonical contract and this document as the execution playbook that must remain consistent with it.
 
-Treat the results of these tools as the source of truth for the rest of the session, with `controller_contract` as the canonical contract and this document as the execution playbook that must remain consistent with it.## 2. Tool arguments and validation
+## 2. Tool arguments and validation
 
 - Follow each tool's declared parameter schema exactly.
 - Build arguments as literal JSON objects, not strings containing JSON.
-- Do not invent parameters that are not documented in `list_all_actions`.
+- Do not invent parameters that are not documented in `list_all_actions` or `describe_tool`.
+- When you need metadata for multiple tools, prefer a single `describe_tool` call with `names` set to a list of up to 10 tool names instead of many separate calls.
+- For non-trivial JSON payloads (nested objects, large `sections` arrays, or raw JSON responses you plan to emit), treat `validate_json_string` as a default preflight step so the host only sees strict, parseable JSON.
 
 Before using a write tool, or any tool you have not yet called in this conversation, follow this pattern:
 
 1. Prepare the arguments you plan to use. You are responsible for constructing the JSON payload yourself; do not ask the user to supply raw arguments or schemas.
 2. Call `describe_tool` (if you have not already done so in this session) and `validate_tool_args` with the tool name and those arguments.
-3. Only call the real tool when validation reports valid is true.
+3. Only call the real tool when validation reports `valid` is true.
 
 If a tool call fails because of argument or schema errors:
 
