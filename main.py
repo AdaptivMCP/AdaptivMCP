@@ -42,7 +42,6 @@ from github_mcp.config import (
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
-    RUN_COMMAND_MAX_CHARS,
     SERVER_START_TIME,
     TOOL_STDERR_MAX_CHARS,  # noqa: F401
     TOOL_STDIO_COMBINED_MAX_CHARS,  # noqa: F401
@@ -69,10 +68,8 @@ from github_mcp.http_clients import (
     _github_client_instance,
     _http_client_external,
     _http_client_github,
-    _get_github_token,
 )
 from github_mcp.metrics import (
-    _METRICS,
     _metrics_snapshot,  # noqa: F401
     _reset_metrics_for_tests,  # noqa: F401
 )
@@ -102,10 +99,6 @@ from github_mcp.utils import (
 )
 from github_mcp.workspace import (
     _apply_patch_to_repo,  # noqa: F401
-    _clone_repo,
-    _prepare_temp_virtualenv,
-    _run_shell,
-    _workspace_path,
 )
 
 
