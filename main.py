@@ -68,8 +68,10 @@ from github_mcp.http_clients import (
     _github_client_instance,
     _http_client_external,
     _http_client_github,
+    _get_github_token,  # noqa: F401
 )
 from github_mcp.metrics import (
+    _METRICS,  # noqa: F401
     _metrics_snapshot,  # noqa: F401
     _reset_metrics_for_tests,  # noqa: F401
 )
@@ -99,6 +101,10 @@ from github_mcp.utils import (
 )
 from github_mcp.workspace import (
     _apply_patch_to_repo,  # noqa: F401
+    _clone_repo,  # noqa: F401
+    _prepare_temp_virtualenv,  # noqa: F401
+    _run_shell,  # noqa: F401
+    _workspace_path,  # noqa: F401
 )
 
 
