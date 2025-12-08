@@ -69,6 +69,37 @@ With this kit you get:
 This design keeps credentials and source code access entirely under the customer’s control while still giving them a powerful AI collaborator on their GitHub activity.
 ---
 
+## Quickstart
+
+Here is a minimal end-to-end flow for running Adaptiv Controller as your personal AI developer:
+
+1. **Deploy the MCP server on Render.com**
+   - Fork or clone this repository, or unpack a versioned bundle (for example `adaptiv-controller-v0.1.0.tar.gz`).
+   - Create a new Render web service and point it at this repository or bundle.
+   - Configure required environment variables (GitHub token, controller repo, default branch, timeouts, and similar) using `docs/human/SELF_HOSTED_SETUP.md`.
+   - Wait for Render to deploy and confirm `/healthz` reports status ok.
+
+2. **Connect ChatGPT to the server**
+   - In ChatGPT, add an MCP integration pointing at your Render deployment.
+   - In a fresh session, ask the assistant to call `validate_environment`, `get_server_config`, and `controller_contract` so it understands the live configuration and contract.
+
+3. **Create or update your Adaptiv Controller assistant**
+   - Create a custom GPT or assistant that uses this MCP server.
+   - Seed it with the current controller prompt from `docs/assistant/CONTROLLER_PROMPT_V1.md`.
+   - Optionally create or update `docs/adaptiv/preferences.md` to capture your personal coding and workflow preferences; teach the assistant to read and respect those preferences at startup.
+
+4. **Run a smoke-test workflow**
+   - Ask the assistant to follow the documented branch / diff / test / PR flow on a small, low-risk change.
+   - Verify that it:
+     - Creates a feature branch (never writes directly to `main`).
+     - Uses patch-based edits where appropriate.
+     - Runs tests or a quality suite before opening a PR.
+     - Opens a PR for you to review instead of merging on its own.
+
+5. **Iterate and adapt**
+   - As you see how the assistant behaves, update your controller prompt and `docs/adaptiv/preferences.md` to better reflect your style.
+   - The MCP server stays stable; your controller logic and preferences evolve over time.
+
 ## High-level architecture
 
 At a high level, the flow looks like this:
@@ -276,6 +307,9 @@ This repository includes a documentation set under `docs/`:
   - `ASSISTANT_HAPPY_PATHS.md` – concrete routines for branch, diff, test, and PR flows.
   - `CONTROLLER_PROMPT_V1.md` – copy-pasteable system prompt for controllers built on this kit.
   - `start_session.md` – startup sequence and bootstrapping protocol for new assistant sessions.
+
+- `docs/adaptiv/` – optional per-install preferences and product flavoring:
+  - `preferences.md` – structured but flexible document where each user or customer can record coding style, branch and PR habits, testing expectations, and communication preferences for their Adaptiv Controller assistant.
 
 The **single source of truth for the contract** between controllers, assistants, and this server is the `controller_contract` tool. All docs are written to stay consistent with that contract and to make it easy for both humans and assistants to work within it.
 ---
