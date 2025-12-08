@@ -1,6 +1,8 @@
-# Adaptiv Controller Branding
+# Adaptiv AI Controller Branding (Internal)
 
-This document describes the current branding choices for the Adaptiv Controller GitHub MCP server. It is intentionally lightweight and focused on the single-operator, self-hosted use case.
+> Internal-only branding notes for Adaptiv AI Controller. This file is **not** intended to be shipped to customers in product bundles; treat it as a personal reference for your own brand assets.
+
+This document describes the current branding choices for the Adaptiv AI Controller GitHub MCP server. It is intentionally lightweight and focused on the single-operator, self-hosted use case.
 
 ---
 
@@ -39,7 +41,7 @@ Neutrals:
 When you need a logotype with text next to the mark, the recommended form is:
 
 ```text
-[ A/V logo ]  Adaptiv Controller
+[ A/V logo ]  Adaptiv AI Controller
 ```
 
 Guidance:
@@ -52,5 +54,5 @@ Guidance:
 
 ## Scope
 
-These branding notes are intentionally minimal and focused on your personal use of Adaptiv Controller.
-If you later turn this into a multi-team or commercial product with a broader brand system, you can replace or extend this document with more detailed guidelines (type system, spacing rules, additional color palette, etc.).
+These branding notes are intentionally minimal and focused on your personal use of Adaptiv AI Controller.
+If you later turn this into a multi-team or broader commercial product with an expanded brand system, you can replace or extend this document with more detailed guidelines (type system, spacing rules, additional color palette, etc.).
