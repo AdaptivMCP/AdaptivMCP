@@ -1995,8 +1995,10 @@ def _validate_single_tool_args(
 
 @mcp_tool(write_action=False)
 async def validate_tool_args(
+@mcp_tool(write_action=False)
+async def validate_tool_args(
     tool_name: Optional[str] = None,
-    args: Optional[Mapping[str, Any]] = None,
+    payload: Optional[Mapping[str, Any]] = None,
     tool_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Validate candidate payload(s) against tool input schemas without running them.
@@ -2004,10 +2006,10 @@ async def validate_tool_args(
     Args:
         tool_name: Name of a single MCP tool to validate. This preserves the
             legacy single-tool validate_tool_args API.
-        args: Candidate arguments object to validate. In batch mode this payload
-            is applied to each tool in tool_names.
+        payload: Candidate arguments object to validate. In batch mode this
+            payload is applied to each tool in tool_names.
         tool_names: Optional list of MCP tool names to validate in one call.
-            When provided, up to 10 tools are validated using the same args.
+            When provided, up to 10 tools are validated using the same payload.
             Duplicates are ignored while preserving order.
 
     Returns:
@@ -2028,7 +2030,7 @@ async def validate_tool_args(
     if not tool_names:
         if not tool_name:
             raise ValueError("validate_tool_args requires 'tool_name' or 'tool_names'.")
-        return _validate_single_tool_args(tool_name, args)
+        return _validate_single_tool_args(tool_name, payload)
 
     # Normalize and deduplicate the batch list while preserving order and
     # ensuring an explicit tool_name (when provided) is included.
@@ -2048,6 +2050,40 @@ async def validate_tool_args(
     if len(normalized) == 0:
         raise ValueError("validate_tool_args requires at least one tool name.")
     if len(normalized) > 10:
+        raise ValueError("validate_tool_args can validate at most 10 tools per call.")
+
+    results: List[Dict[str, Any]] = []
+    missing: List[str] = []
+
+    for name in normalized:
+        try:
+            result = _validate_single_tool_args(name, payload)
+        except ValueError as exc:
+            msg = str(exc)
+            if msg.startswith("Unknown tool ") and "Available tools:" in msg:
+                missing.append(name)
+                continue
+            raise
+        else:
+            results.append(result)
+
+    if not results:
+        raise ValueError(
+            f"Unknown tool name(s): {', '.join(sorted(set(missing)))}"
+        )
+
+    response: Dict[str, Any] = {"results": results}
+
+    # Preserve the legacy single-tool shape for backwards compatibility by
+    # mirroring the first result's metadata at the top level.
+    first = results[0]
+    for key, value in first.items():
+        response.setdefault(key, value)
+
+    if missing:
+        response["missing_tools"] = sorted(set(missing))
+
+    return response
         raise ValueError("validate_tool_args can validate at most 10 tools per call.")
 
     results: List[Dict[str, Any]] = []
