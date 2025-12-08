@@ -2,13 +2,13 @@
 
 This document describes how assistants should start and run sessions when using the GitHub MCP server for this controller repo (Proofgate-Revocations/chatgpt-mcp-github).
 
+This protocol applies to assistants using this MCP server. Humans and repository owners are not bound by it; they enforce or override behavior via normal GitHub configuration, code review, and merges.
+
 ## Goals
 
 - Reduce invalid tool calls
 - Keep long workflows from getting stuck
-- Provide a single protocol that controllers can copy into system prompts
-
-Pair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` and the live `controller_contract` tool so assistants internalize their role as the engineer. `controller_contract` is the single source of truth for contract details; this document and the controller prompt simply describe how to execute that contract in practice. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
+- Provide a single protocol that controllers can copy into system promptsPair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` and the live `controller_contract` tool so assistants internalize their role as the engineer. `controller_contract` is the single source of truth for contract details; this document and the controller prompt simply describe how to execute that contract in practice. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
 ## 1. Startup sequence
 
 At the start of a new conversation, or after context loss, do these tool calls in order:
