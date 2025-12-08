@@ -30,12 +30,8 @@ async def _run_shell(
     proc_env = {
         **os.environ,
         "GIT_AUTHOR_NAME": getattr(main_module, "GIT_AUTHOR_NAME", config.GIT_AUTHOR_NAME),
-        "GIT_AUTHOR_EMAIL": getattr(
-            main_module, "GIT_AUTHOR_EMAIL", config.GIT_AUTHOR_EMAIL
-        ),
-        "GIT_COMMITTER_NAME": getattr(
-            main_module, "GIT_COMMITTER_NAME", config.GIT_COMMITTER_NAME
-        ),
+        "GIT_AUTHOR_EMAIL": getattr(main_module, "GIT_AUTHOR_EMAIL", config.GIT_AUTHOR_EMAIL),
+        "GIT_COMMITTER_NAME": getattr(main_module, "GIT_COMMITTER_NAME", config.GIT_COMMITTER_NAME),
         "GIT_COMMITTER_EMAIL": getattr(
             main_module, "GIT_COMMITTER_EMAIL", config.GIT_COMMITTER_EMAIL
         ),
@@ -68,16 +64,12 @@ async def _run_shell(
     stdout_truncated = False
     stderr_truncated = False
 
-    stdout_limit = getattr(
-        main_module, "TOOL_STDOUT_MAX_CHARS", config.TOOL_STDOUT_MAX_CHARS
-    )
+    stdout_limit = getattr(main_module, "TOOL_STDOUT_MAX_CHARS", config.TOOL_STDOUT_MAX_CHARS)
     if stdout_limit and stdout_limit > 0 and len(stdout) > stdout_limit:
         stdout = stdout[:stdout_limit]
         stdout_truncated = True
 
-    stderr_limit = getattr(
-        main_module, "TOOL_STDERR_MAX_CHARS", config.TOOL_STDERR_MAX_CHARS
-    )
+    stderr_limit = getattr(main_module, "TOOL_STDERR_MAX_CHARS", config.TOOL_STDERR_MAX_CHARS)
     if stderr_limit and stderr_limit > 0 and len(stderr) > stderr_limit:
         stderr = stderr[:stderr_limit]
         stderr_truncated = True
@@ -85,11 +77,7 @@ async def _run_shell(
     combined_limit = getattr(
         main_module, "TOOL_STDIO_COMBINED_MAX_CHARS", config.TOOL_STDIO_COMBINED_MAX_CHARS
     )
-    if (
-        combined_limit
-        and combined_limit > 0
-        and len(stdout) + len(stderr) > combined_limit
-    ):
+    if combined_limit and combined_limit > 0 and len(stdout) + len(stderr) > combined_limit:
         allowed_stdout = max(0, combined_limit - len(stderr))
         if len(stdout) > allowed_stdout:
             stdout = stdout[:allowed_stdout]
@@ -233,9 +221,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     )
     if apply_result["exit_code"] != 0:
         stderr = apply_result.get("stderr", "") or apply_result.get("stdout", "")
-        raise GitHubAPIError(
-            f"git apply failed while preparing workspace: {stderr}"
-        )
+        raise GitHubAPIError(f"git apply failed while preparing workspace: {stderr}")
 
 
 __all__ = [

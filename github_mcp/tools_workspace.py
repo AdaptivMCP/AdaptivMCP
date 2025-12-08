@@ -30,9 +30,7 @@ def _workspace_deps() -> Dict[str, Any]:
         "prepare_temp_virtualenv": getattr(
             main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv
         ),
-        "apply_patch_to_repo": getattr(
-            main_module, "_apply_patch_to_repo", _apply_patch_to_repo
-        ),
+        "apply_patch_to_repo": getattr(main_module, "_apply_patch_to_repo", _apply_patch_to_repo),
         "ensure_write_allowed": getattr(
             main_module, "_ensure_write_allowed", _ensure_write_allowed
         ),
@@ -128,12 +126,8 @@ async def run_command(
             )
         needs_write_gate = mutating or installing_dependencies or not use_temp_venv
         if needs_write_gate:
-            deps["ensure_write_allowed"](
-                f"run_command {command} in {full_name}@{effective_ref}"
-            )
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+            deps["ensure_write_allowed"](f"run_command {command} in {full_name}@{effective_ref}")
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         if patch:
             await deps["apply_patch_to_repo"](repo_dir, patch)
@@ -185,18 +179,12 @@ async def commit_workspace(
             target_ref=effective_ref,
         )
         deps = _workspace_deps()
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         if add_all:
-            add_result = await deps["run_shell"](
-                "git add -A", cwd=repo_dir, timeout_seconds=120
-            )
+            add_result = await deps["run_shell"]("git add -A", cwd=repo_dir, timeout_seconds=120)
             if add_result["exit_code"] != 0:
-                stderr = add_result.get("stderr", "") or add_result.get(
-                    "stdout", ""
-                )
+                stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
                 raise GitHubAPIError(f"git add failed: {stderr}")
 
         status_result = await deps["run_shell"](
@@ -207,25 +195,17 @@ async def commit_workspace(
             raise GitHubAPIError("No changes to commit in workspace")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](
-            commit_cmd, cwd=repo_dir, timeout_seconds=300
-        )
+        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
         if commit_result["exit_code"] != 0:
-            stderr = commit_result.get("stderr", "") or commit_result.get(
-                "stdout", ""
-            )
+            stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
 
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](
-                push_cmd, cwd=repo_dir, timeout_seconds=300
-            )
+            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
             if push_result["exit_code"] != 0:
-                stderr = push_result.get("stderr", "") or push_result.get(
-                    "stdout", ""
-                )
+                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         return {
@@ -259,14 +239,10 @@ async def commit_workspace_files(
             target_ref=effective_ref,
         )
         deps = _workspace_deps()
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         add_cmd = "git add -- " + " ".join(shlex.quote(path) for path in files)
-        add_result = await deps["run_shell"](
-            add_cmd, cwd=repo_dir, timeout_seconds=120
-        )
+        add_result = await deps["run_shell"](add_cmd, cwd=repo_dir, timeout_seconds=120)
         if add_result["exit_code"] != 0:
             stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
             raise GitHubAPIError(f"git add failed: {stderr}")
@@ -279,25 +255,17 @@ async def commit_workspace_files(
             raise GitHubAPIError("No staged changes to commit for provided files")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](
-            commit_cmd, cwd=repo_dir, timeout_seconds=300
-        )
+        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
         if commit_result["exit_code"] != 0:
-            stderr = commit_result.get("stderr", "") or commit_result.get(
-                "stdout", ""
-            )
+            stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
 
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](
-                push_cmd, cwd=repo_dir, timeout_seconds=300
-            )
+            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
             if push_result["exit_code"] != 0:
-                stderr = push_result.get("stderr", "") or push_result.get(
-                    "stdout", ""
-                )
+                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         return {
@@ -328,9 +296,7 @@ async def get_workspace_changes_summary(
 
     deps = _workspace_deps()
     effective_ref = _effective_ref_for_repo(full_name, ref)
-    repo_dir = await deps["clone_repo"](
-        full_name, ref=effective_ref, preserve_changes=True
-    )
+    repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
     status_result = await deps["run_shell"](
         "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=60
@@ -389,12 +355,14 @@ async def get_workspace_changes_summary(
             summary["modified"] += 1
 
         if len(changes) < max_files:
-            changes.append({
-                "status": change_type,
-                "path": path,
-                "src": src,
-                "dst": dst,
-            })
+            changes.append(
+                {
+                    "status": change_type,
+                    "path": path,
+                    "src": src,
+                    "dst": dst,
+                }
+            )
 
     has_changes = any(summary.values())
     return {
@@ -403,7 +371,6 @@ async def get_workspace_changes_summary(
         "summary": summary,
         "changes": changes,
     }
-
 
 
 @mcp_tool(write_action=False)
@@ -480,6 +447,7 @@ async def run_tests(
         "result": cmd_result,
     }
 
+
 @mcp_tool(write_action=False)
 async def run_quality_suite(
     full_name: str,
@@ -543,6 +511,7 @@ async def run_lint_suite(
         installing_dependencies=installing_dependencies,
         mutating=mutating,
     )
+
 
 @mcp_tool(write_action=False)
 async def build_pr_summary(

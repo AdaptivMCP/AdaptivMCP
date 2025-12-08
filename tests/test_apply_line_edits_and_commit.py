@@ -64,9 +64,7 @@ async def test_apply_line_edits_and_commit_minimal_payload(monkeypatch):
 
     monkeypatch.setattr(extra_tools, "_effective_ref_for_repo", fake_effective_ref)
     monkeypatch.setattr(extra_tools, "_decode_github_content", fake_decode)
-    monkeypatch.setattr(
-        main, "apply_text_update_and_commit", fake_apply_text_update_and_commit
-    )
+    monkeypatch.setattr(main, "apply_text_update_and_commit", fake_apply_text_update_and_commit)
 
     result = await tool(
         full_name="owner/repo",

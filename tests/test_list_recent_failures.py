@@ -5,7 +5,9 @@ import main
 
 @pytest.mark.asyncio
 async def test_list_recent_failures_filters_conclusions(monkeypatch):
-    async def fake_list_workflow_runs(full_name, branch=None, status=None, event=None, per_page=30, page=1):
+    async def fake_list_workflow_runs(
+        full_name, branch=None, status=None, event=None, per_page=30, page=1
+    ):
         return {
             "json": {
                 "workflow_runs": [
@@ -29,7 +31,9 @@ async def test_list_recent_failures_filters_conclusions(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_list_recent_failures_enforces_limit(monkeypatch):
-    async def fake_list_workflow_runs(full_name, branch=None, status=None, event=None, per_page=30, page=1):
+    async def fake_list_workflow_runs(
+        full_name, branch=None, status=None, event=None, per_page=30, page=1
+    ):
         runs = []
         for i in range(1, 6):
             runs.append({"id": i, "conclusion": "failure", "status": "completed"})

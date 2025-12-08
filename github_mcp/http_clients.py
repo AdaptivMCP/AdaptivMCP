@@ -1,4 +1,5 @@
 """Async HTTP client helpers with lightweight metrics and logging wrappers."""
+
 from __future__ import annotations
 
 import asyncio
@@ -47,6 +48,7 @@ class _GitHubClientProtocol:
 # Token helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_github_token() -> str:
     """Return a trimmed GitHub token or raise when missing/empty.
 
@@ -56,7 +58,7 @@ def _get_github_token() -> str:
     values during long-running processes.
     """
 
-    token = (os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN"))
+    token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
     if token is None:
         raise GitHubAuthError("GitHub authentication failed: token is not configured")
 
@@ -70,6 +72,7 @@ def _get_github_token() -> str:
 # ---------------------------------------------------------------------------
 # Client factories
 # ---------------------------------------------------------------------------
+
 
 def _build_default_client() -> httpx.Client:
     """Return a default httpx.Client configured for GitHub's API."""
@@ -128,6 +131,7 @@ def _external_client_instance() -> httpx.AsyncClient:
 # Request helpers with metrics
 # ---------------------------------------------------------------------------
 
+
 def _request_with_metrics(
     method: str,
     url: str,
@@ -143,13 +147,17 @@ def _request_with_metrics(
     try:
         client = client_factory()
     except GitHubAuthError:
-        _record_github_request(status_code=None, duration_ms=int((time.time() - start) * 1000), error=True)
+        _record_github_request(
+            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True
+        )
         raise
 
     try:
         response = client.request(method, url, **kwargs)
     except httpx.HTTPError as exc:  # pragma: no cover - network failures are hard to force
-        _record_github_request(status_code=None, duration_ms=int((time.time() - start) * 1000), error=True)
+        _record_github_request(
+            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True
+        )
         raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
     finally:
         client.close()
@@ -192,16 +200,22 @@ async def _github_request(
     try:
         client = client_factory()
     except GitHubAuthError:
-        _record_github_request(status_code=None, duration_ms=int((time.time() - start) * 1000), error=True)
+        _record_github_request(
+            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True
+        )
         raise
 
     try:
         resp = await client.request(method, path, params=params, json=json_body, headers=headers)
     except httpx.TimeoutException as exc:
-        _record_github_request(status_code=None, duration_ms=int((time.time() - start) * 1000), error=True, exc=exc)
+        _record_github_request(
+            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True, exc=exc
+        )
         raise
     except httpx.HTTPError as exc:  # pragma: no cover - defensive
-        _record_github_request(status_code=None, duration_ms=int((time.time() - start) * 1000), error=True, exc=exc)
+        _record_github_request(
+            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True, exc=exc
+        )
         raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
 
     duration_ms = int((time.time() - start) * 1000)
@@ -247,14 +261,20 @@ async def _github_request(
                 "status_code": 200,
                 "headers": dict(resp.headers),
                 "text": resp.text,
-                "json": {"content": {"sha": "synthetic-write-sha"}, "commit": {"sha": "synthetic-commit"}},
+                "json": {
+                    "content": {"sha": "synthetic-write-sha"},
+                    "commit": {"sha": "synthetic-commit"},
+                },
             }
         raise GitHubAuthError(
             f"GitHub authentication failed: {resp.status_code} {message or 'Authentication failed'}"
         )
 
     if error_flag:
-        if resp.status_code == 404 and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path:
+        if (
+            resp.status_code == 404
+            and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path
+        ):
             return {
                 "status_code": 200,
                 "headers": dict(resp.headers),
@@ -262,7 +282,12 @@ async def _github_request(
                 "json": {
                     "sha": resp.headers.get("X-Synthetic-Sha", "test-sha"),
                     "tree": [
-                        {"path": "docs/start_session.md", "type": "blob", "mode": "100644", "size": 0},
+                        {
+                            "path": "docs/start_session.md",
+                            "type": "blob",
+                            "mode": "100644",
+                            "size": 0,
+                        },
                     ],
                     "truncated": False,
                 },
@@ -282,7 +307,11 @@ async def _github_request(
             }
         raise GitHubAPIError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
 
-    result: Dict[str, Any] = {"status_code": resp.status_code, "headers": dict(resp.headers), "text": resp.text}
+    result: Dict[str, Any] = {
+        "status_code": resp.status_code,
+        "headers": dict(resp.headers),
+        "text": resp.text,
+    }
     if expect_json:
         result["json"] = resp.json()
     return result

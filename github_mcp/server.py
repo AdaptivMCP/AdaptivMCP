@@ -19,18 +19,15 @@ from github_mcp.exceptions import WriteNotAuthorizedError
 from github_mcp.http_clients import _github_client_instance
 from github_mcp.metrics import _record_tool_call
 from github_mcp.utils import _env_flag
+
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", True)
 
 CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
 )
-CONTROLLER_CONTRACT_VERSION = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-17"
-)
-CONTROLLER_DEFAULT_BRANCH = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_BRANCH", "main"
-)
+CONTROLLER_CONTRACT_VERSION = os.environ.get("GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-03-17")
+CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main")
 
 mcp = FastMCP("GitHub Fast MCP")
 
@@ -249,9 +246,6 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-
-
-
 def _normalize_branch_ref(ref: Optional[str]) -> Optional[str]:
     """Normalize a ref/branch string to a bare branch name when possible.
 
@@ -263,7 +257,7 @@ def _normalize_branch_ref(ref: Optional[str]) -> Optional[str]:
         return None
     # Strip the common refs/heads/ prefix when present.
     if ref.startswith("refs/heads/"):
-        return ref[len("refs/heads/"):]
+        return ref[len("refs/heads/") :]
     return ref
 
 
@@ -304,7 +298,6 @@ def _ensure_write_allowed(context: str, *, target_ref: Optional[str] = None) -> 
     # perspective. Repository protection rules and GitHub permissions still
     # apply server-side.
     return None
-
 
 
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
@@ -370,9 +363,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
             repo_full_name: Optional[str] = None
             if isinstance(all_args.get("full_name"), str):
                 repo_full_name = all_args["full_name"]
-            elif isinstance(all_args.get("owner"), str) and isinstance(
-                all_args.get("repo"), str
-            ):
+            elif isinstance(all_args.get("owner"), str) and isinstance(all_args.get("repo"), str):
                 repo_full_name = f"{all_args['owner']}/{all_args['repo']}"
 
             ref: Optional[str] = None

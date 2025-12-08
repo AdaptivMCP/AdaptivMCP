@@ -20,9 +20,7 @@ def test_write_allowed_defaults_false(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.parametrize("value", ["1", "true", "TRUE", "Yes", "on", "y"])
-def test_write_allowed_accepts_truthy_strings(
-    monkeypatch: pytest.MonkeyPatch, value: str
-):
+def test_write_allowed_accepts_truthy_strings(monkeypatch: pytest.MonkeyPatch, value: str):
     module = _reload_main(monkeypatch, value)
     assert module.WRITE_ALLOWED is True
 

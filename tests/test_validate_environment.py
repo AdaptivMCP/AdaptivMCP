@@ -85,9 +85,7 @@ async def test_validate_environment_happy_path(monkeypatch: pytest.MonkeyPatch) 
     repo_remote = next(c for c in result["checks"] if c["name"] == "controller_repo_remote")
     branch_remote = next(c for c in result["checks"] if c["name"] == "controller_branch_remote")
     push_permission = next(
-        c
-        for c in result["checks"]
-        if c["name"] == "controller_repo_push_permission"
+        c for c in result["checks"] if c["name"] == "controller_repo_push_permission"
     )
 
     assert repo_remote["level"] == "ok"
@@ -122,9 +120,7 @@ async def test_validate_environment_missing_push_permission(
     result = await module.validate_environment()
 
     push_permission = next(
-        c
-        for c in result["checks"]
-        if c["name"] == "controller_repo_push_permission"
+        c for c in result["checks"] if c["name"] == "controller_repo_push_permission"
     )
 
     assert result["status"] == "error"

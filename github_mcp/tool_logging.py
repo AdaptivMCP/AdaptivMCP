@@ -5,6 +5,7 @@ re-exporting the metrics hook used throughout the codebase. Keeping the logic
 here avoids circular imports between http client helpers and the broader server
 module.
 """
+
 from __future__ import annotations
 
 from typing import Optional

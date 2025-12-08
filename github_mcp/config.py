@@ -40,9 +40,7 @@ GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
 # truncation if a deployment prefers full logs at the cost of larger responses.
 TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
 TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "6000"))
-TOOL_STDIO_COMBINED_MAX_CHARS = int(
-    os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "18000")
-)
+TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "18000"))
 
 # Soft limit for run_command.command length to discourage huge inline scripts.
 RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "8000"))

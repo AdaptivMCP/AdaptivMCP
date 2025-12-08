@@ -139,9 +139,7 @@ async def test_run_command_allows_disabling_virtualenv(monkeypatch, tmp_path):
 
     monkeypatch.setattr(main, "_run_shell", fake_run_shell)
 
-    await main.run_command(
-        full_name="owner/repo", command="echo ok", use_temp_venv=False
-    )
+    await main.run_command(full_name="owner/repo", command="echo ok", use_temp_venv=False)
 
     assert not any("-m venv" in call["cmd"] for call in calls)
     assert calls[-1]["env"] is None
@@ -218,9 +216,7 @@ async def test_run_command_mutating_triggers_write_gate(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "_run_shell", fake_run_shell)
     monkeypatch.setattr(main, "_ensure_write_allowed", record_write_gate)
 
-    result = await main.run_command(
-        full_name="owner/repo", command="echo ok", mutating=True
-    )
+    result = await main.run_command(full_name="owner/repo", command="echo ok", mutating=True)
 
     assert result["result"]["exit_code"] == 0
     assert write_contexts and "run_command" in write_contexts[-1]
@@ -388,9 +384,9 @@ async def test_commit_workspace_creates_commit(monkeypatch, tmp_path):
     )
 
     assert "error" not in result
-    log_output = subprocess.check_output(
-        ["git", "log", "-1", "--pretty=%B"], cwd=repo_dir
-    ).decode("utf-8")
+    log_output = subprocess.check_output(["git", "log", "-1", "--pretty=%B"], cwd=repo_dir).decode(
+        "utf-8"
+    )
     assert "test commit" in log_output
 
 
@@ -403,6 +399,7 @@ async def test_run_command_and_commit_share_workspace(monkeypatch, tmp_path):
     (repo_dir / ".git").mkdir()
 
     clone_calls: list[bool] = []
+
     async def fake_clone(
         full_name: str, ref: str | None = None, *, preserve_changes: bool = False
     ) -> str:

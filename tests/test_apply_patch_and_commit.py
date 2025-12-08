@@ -28,14 +28,16 @@ async def test_apply_patch_and_commit_creates_new_file(monkeypatch):
     commit_calls = []
 
     async def fake_commit(**kwargs):
-        commit_calls.append({
-            "full_name": kwargs["full_name"],
-            "path": kwargs["path"],
-            "branch": kwargs["branch"],
-            "content_bytes": kwargs["body_bytes"],
-            "message": kwargs["message"],
-            "sha": kwargs["sha"],
-        })
+        commit_calls.append(
+            {
+                "full_name": kwargs["full_name"],
+                "path": kwargs["path"],
+                "branch": kwargs["branch"],
+                "content_bytes": kwargs["body_bytes"],
+                "message": kwargs["message"],
+                "sha": kwargs["sha"],
+            }
+        )
         return {"commit": {"sha": "after-sha"}}
 
     monkeypatch.setattr(main, "_decode_github_content", fake_decode)
