@@ -30,7 +30,6 @@ async def test_validate_tool_args_reports_missing_fields_and_enables_repair_flow
     assert repaired_validation["valid"] is True
     assert repaired_validation["errors"] == []
 
-
 @pytest.mark.asyncio
 async def test_validate_tool_args_passes_for_known_tool():
     result = await main.validate_tool_args(
@@ -45,3 +44,27 @@ async def test_validate_tool_args_passes_for_known_tool():
 async def test_validate_tool_args_unknown_tool_raises():
     with pytest.raises(ValueError):
         await main.validate_tool_args("missing_tool", {})
+
+
+@pytest.mark.asyncio
+async def test_validate_tool_args_batch_two_tools():
+    args = {"full_name": "owner/repo", "base": "main", "head": "feature"}
+
+    result = await main.validate_tool_args(
+        tool_names=["compare_refs", "create_branch"],
+        args=args,
+    )
+
+    assert "results" in result
+    assert isinstance(result["results"], list)
+    assert len(result["results"]) == 2
+    tools = {entry["tool"] for entry in result["results"]}
+    assert {"compare_refs", "create_branch"} <= tools
+
+
+@pytest.mark.asyncio
+async def test_validate_tool_args_batch_too_many_tools_raises():
+    tool_names = ["compare_refs"] * 11
+
+    with pytest.raises(ValueError):
+        await main.validate_tool_args(tool_names=tool_names, args={})
