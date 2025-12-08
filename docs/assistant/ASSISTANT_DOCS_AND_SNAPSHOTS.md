@@ -12,11 +12,10 @@ At a high level:
 
 In practice, always remember:
 
-- The `main` branch of this repository is the source of truth for behavior and docs.
-- Any local workspace clone is a scratchpad; refresh it from the repository when in doubt.
-- Tools exposed by this MCP server are the only way you interact with the repository.
-- Use branches and pull requests for any edits; avoid writing directly to `main`.
-
+- The default branch of this repository (for example `main`) is the long-term source of truth for behavior and docs **after** humans have reviewed and merged pull requests. While you are doing work, you must not target that branch directly with MCP tools; instead, create or ensure a feature branch from the default branch and treat that feature branch as your effective main until the PR is merged and the branch is closed.
+- Any local workspace clone is a scratchpad; after you use `commit_workspace` or `commit_workspace_files` to push changes from it, refresh that workspace with `ensure_workspace_clone(reset=true)` on the same branch before running tests, linters, PR helpers, or further edits.
+- Tools exposed by this MCP server are the only way you interact with the repository. Before using any tool in a session, call `describe_tool` for that tool and, when applicable, `validate_tool_args` on your planned `args` so you work from the live schema instead of guesses.
+- Use branches and pull requests for any edits; avoid writing directly to the default branch, and never claim to have run a tool unless it actually executed through this server.
 The goal is to keep assistants grounded in what the server can actually do, while still allowing each user to evolve their own personal controller over time. When I am running as a controller assistant (for example Joeys GitHub), I treat this repo, its tools, and these docs as the live contract that governs how I behave; my own system prompt and snapshots simply describe how I should apply that contract for a particular human.
 
 ---
@@ -40,7 +39,7 @@ When reasoning about capabilities, always start from live information and only t
    - System prompts and saved snapshots in ChatGPT are important, but they can drift.
    - Treat them as a layer on top of the contract and docs, not as a replacement for them.
 
-When there is a conflict, believe the current code, contract, and docs on the main branch of this repo, not old prompts or memories from prior chats.
+When there is a conflict, believe the current code, contract, and docs on the default branch of this repo after merges, not old prompts or memories from prior chats, and never override the contract or docs just because a snapshot suggests older behavior.
 
 Meta tools when you are unsure:
 
@@ -131,14 +130,19 @@ Controller prompts are where you express personal style and habits. They should 
 Practical guidelines for prompts:
 
 - Safety
-  - Never write directly to the main branch of the controller repo.
-  - Use branches and pull requests for changes instead of writing directly to protected branches.
+  - Never write directly to the default branch of the controller repo.
+  - Use branches and pull requests for changes instead of writing directly to protected branches, and always run tests and linters on the feature branch from a fresh workspace clone (recloned with `ensure_workspace_clone(reset=true)` after any workspace commit) before opening or updating PRs.
   - Ask the human before enabling write actions or running heavy commands.
 
 - Quality
-  - Prefer running tests and formatters on feature branches.
-  - Treat test failures as first class signals and summarize them clearly.
-  - Use patch based edits for large or critical files.
+  - Prefer running tests and formatters on feature branches, and treat test failures as first class signals.
+  - Use patch based edits for large or critical files, and keep diffs reviewable.
+  - Build JSON payloads yourself and run `validate_tool_args` or `validate_json_string` before write-tagged or complex calls.
+
+- Human ergonomics
+  - Accept natural language goals and translate them into tool calls; do not ask the user to provide raw JSON payloads or schemas.
+  - Ask for clarification once or twice, not constantly.
+  - Summarize at important milestones, and be explicit about which tools you actually ran and what they returned.
 
 - Human ergonomics
   - Accept natural language goals and translate them into tool calls.
