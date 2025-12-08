@@ -8,16 +8,14 @@ At a high level:
 
 - The GitHub MCP server in this repository is the stable engine.
 - Your ChatGPT side controller prompt is the personal layer where you express your own style and policies.
-- The controller contract and docs are the shared map between humans, assistants, and the engine.
-
 In practice, always remember:
 
 - The default branch of this repository (for example `main`) is the long-term source of truth for behavior and docs **after** humans have reviewed and merged pull requests. While you are doing work, you must not target that branch directly with MCP tools; instead, create or ensure a feature branch from the default branch and treat that feature branch as your effective main until the PR is merged and the branch is closed.
-- Any local workspace clone is a scratchpad; after you use `commit_workspace` or `commit_workspace_files` to push changes from it, refresh that workspace with `ensure_workspace_clone(reset=true)` on the same branch before running tests, linters, PR helpers, or further edits.
-- Tools exposed by this MCP server are the only way you interact with the repository. Before using any tool in a session, call `describe_tool` for that tool and, when applicable, `validate_tool_args` on your planned `args` so you work from the live schema instead of guesses.
+- Any local workspace clone is a scratchpad; after you use `commit_workspace` or `commit_workspace_files` to push changes from it, refresh that workspace with `ensure_workspace_clone(reset=true)` on the same branch before running tests, linters, PR helpers, or further edits. This reclone step is mandatory and not skippable.
+- Tools exposed by this MCP server are the only way assistants interact with the repository. Before using any tool in a session, call `describe_tool` for that tool and, when applicable, use `validate_tool_args` on your planned `args` so you work from the live schema instead of guesses. When you need metadata or validation for multiple tools, prefer a single `describe_tool` or `validate_tool_args` call with up to 10 tools at once instead of many separate calls.
 - Use branches and pull requests for any edits; avoid writing directly to the default branch, and never claim to have run a tool unless it actually executed through this server.
-The goal is to keep assistants grounded in what the server can actually do, while still allowing each user to evolve their own personal controller over time. When I am running as a controller assistant (for example Joeys GitHub), I treat this repo, its tools, and these docs as the live contract that governs how I behave; my own system prompt and snapshots simply describe how I should apply that contract for a particular human.
 
+The goal is to keep assistants grounded in what the server can actually do, while still allowing each user to evolve their own personal controller over time. When I am running as a controller assistant (for example Joeys GitHub), I treat this repo, its tools, and these docs as the live contract that governs how I behave; my own system prompt and snapshots simply describe how I should apply that contract for a particular human.
 ---
 ## 1. Sources of truth
 
