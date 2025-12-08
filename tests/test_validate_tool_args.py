@@ -17,9 +17,7 @@ async def test_validate_tool_args_reports_missing_fields_and_enables_repair_flow
     # 1) Start with an incomplete payload (missing required 'head' field).
     invalid_args = {"full_name": "owner/repo", "base": "main"}
 
-    validation = await main.validate_tool_args(
-        "compare_refs", invalid_args
-    )
+    validation = await main.validate_tool_args("compare_refs", invalid_args)
 
     assert validation["valid"] is False
     assert any("head" in error.get("message", "") for error in validation["errors"])

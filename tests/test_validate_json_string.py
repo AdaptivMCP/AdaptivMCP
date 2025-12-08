@@ -10,7 +10,10 @@ def test_validate_json_string_success():
     assert result["parsed"] == {"a": [1, 2], "name": "ally", "z": 2}
     # normalized output should be compact and sorted for predictable reuse
     assert result["normalized"] == '{"a":[1,2],"name":"ally","z":2}'
-    assert result["normalized_pretty"] == '{\n  "a": [\n    1,\n    2\n  ],\n  "name": "ally",\n  "z": 2\n}'
+    assert (
+        result["normalized_pretty"]
+        == '{\n  "a": [\n    1,\n    2\n  ],\n  "name": "ally",\n  "z": 2\n}'
+    )
     assert result["parsed_type"] == "dict"
 
 

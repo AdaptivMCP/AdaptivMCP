@@ -63,9 +63,7 @@ async def test_update_issue_validates_state(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     with pytest.raises(ValueError):
-        await main.update_issue(
-            full_name="owner/repo", issue_number=1, state="invalid"
-        )
+        await main.update_issue(full_name="owner/repo", issue_number=1, state="invalid")
 
 
 @pytest.mark.asyncio
@@ -135,9 +133,7 @@ async def test_comment_on_issue_sends_expected_payload(monkeypatch: pytest.Monke
     monkeypatch.setattr(main, "_github_request", fake_github_request)
     monkeypatch.setattr(main, "_ensure_write_allowed", fake_ensure_write_allowed)
 
-    result = await main.comment_on_issue(
-        full_name="owner/repo", issue_number=42, body="Hello"
-    )
+    result = await main.comment_on_issue(full_name="owner/repo", issue_number=42, body="Hello")
 
     assert calls["method"] == "POST"
     assert calls["url"] == "/repos/owner/repo/issues/42/comments"

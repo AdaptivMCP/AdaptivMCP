@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Protocol, TypedDict, Optional, Literal
 import difflib
+from typing import Any, Callable, Dict, List, Literal, Optional, Protocol, TypedDict
 
 from main import (
-    _github_request,
-    _resolve_file_sha,
     GitHubAPIError,
     _decode_github_content,
     _effective_ref_for_repo,
-    _workspace_path,
     _ensure_write_allowed,
+    _github_request,
+    _resolve_file_sha,
+    _workspace_path,
 )
 
 
@@ -26,8 +26,7 @@ class ToolDecorator(Protocol):
         *,
         write_action: bool = False,
         **tool_kwargs: Any,
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-        ...
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
 class SectionReplacement(TypedDict):
@@ -43,7 +42,6 @@ class LineEditSection(TypedDict):
     start_line: int
     end_line: int
     new_text: str
-
 
 
 def _render_visible_whitespace(line: str) -> str:
@@ -183,8 +181,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
         workspace_root = _workspace_path(full_name, effective_ref)
 
-        from pathlib import Path as _Path
         import base64
+        from pathlib import Path as _Path
 
         workspace_file = _Path(workspace_root) / workspace_path
 
@@ -220,7 +218,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "target_path": target_path,
             "commit": result,
         }
-
 
     @mcp_tool(
         write_action=True,
@@ -300,8 +297,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "diff": commit_result.get("diff"),
         }
 
-
-
     def _apply_line_sections(
         text: str,
         sections: Optional[List[LineEditSection]],
@@ -326,9 +321,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
                 start_line = int(section["start_line"])
                 end_line = int(section["end_line"])
             except KeyError as exc:
-                raise ValueError(
-                    "Each section must have 'start_line' and 'end_line'"
-                ) from exc
+                raise ValueError("Each section must have 'start_line' and 'end_line'") from exc
 
             if "new_text" not in section:
                 raise ValueError("Each section must include new_text (can be empty)")
@@ -349,12 +342,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             # The only valid case where end_line can exceed total_lines is when
             # both start and end point one past the end, which represents an
             # append-only insertion.
-            if end_line > total_lines and not (
-                end_line == start_line == max_start
-            ):
-                raise ValueError(
-                    f"end_line {end_line} is greater than total_lines {total_lines}"
-                )
+            if end_line > total_lines and not (end_line == start_line == max_start):
+                raise ValueError(f"end_line {end_line} is greater than total_lines {total_lines}")
             if start_line <= prev_end:
                 raise ValueError("sections must not overlap or go backwards")
             prev_end = end_line
@@ -369,9 +358,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
             # Copy unchanged lines before the section.
             if cursor <= start_line - 1 and total_lines > 0:
-                updated_lines.extend(
-                    original_lines[cursor - 1 : min(start_line - 1, total_lines)]
-                )
+                updated_lines.extend(original_lines[cursor - 1 : min(start_line - 1, total_lines)])
 
             # Apply replacement text (may be empty for pure deletion).
             if new_text:
@@ -407,7 +394,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "total_lines": total_lines,
             "normalized_sections": normalized_sections,
         }
-
 
     def _build_unified_diff_from_strings(
         original: str,
@@ -455,9 +441,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
                     and not line.startswith("---")
                 ):
                     prefix, payload = line[0], line[1:]
-                    preview_lines.append(
-                        prefix + _render_visible_whitespace(payload) + "\n"
-                    )
+                    preview_lines.append(prefix + _render_visible_whitespace(payload) + "\n")
                 else:
                     preview_lines.append(line)
             result["preview"] = "".join(preview_lines)
@@ -629,10 +613,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         start_idx = min(max(start_line - 1, 0), total_lines - 1)
         end_idx = min(start_idx + max_lines, total_lines)
 
-        slice_lines = [
-            {"line": i + 1, "text": all_lines[i]}
-            for i in range(start_idx, end_idx)
-        ]
+        slice_lines = [{"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)]
 
         has_more_above = start_idx > 0
         has_more_below = end_idx < total_lines
@@ -717,9 +698,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         }
 
         if should_expand_small_file:
-            response[
-                "note"
-            ] = "File is small; returning full content instead of only max_lines."
+            response["note"] = "File is small; returning full content instead of only max_lines."
 
         return response
 
@@ -770,9 +749,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         start_idx = min(max(start_line - 1, 0), total_lines - 1)
         end_idx = min(start_idx + max_lines, total_lines)
 
-        slice_lines = [
-            {"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)
-        ]
+        slice_lines = [{"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)]
 
         width = len(str(total_lines))
         numbered_text = "\n".join(
@@ -858,4 +835,3 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         commit_result["applied_sections"] = normalized_sections
         commit_result["context_lines"] = context_lines
         return commit_result
-

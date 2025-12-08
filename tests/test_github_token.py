@@ -22,9 +22,7 @@ def test_get_github_token_strips_whitespace(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.parametrize("value", ["", " ", "\t\n  \t"])
-def test_get_github_token_rejects_empty_or_space_only(
-    monkeypatch: pytest.MonkeyPatch, value: str
-):
+def test_get_github_token_rejects_empty_or_space_only(monkeypatch: pytest.MonkeyPatch, value: str):
     module = _reload_main_with_token(monkeypatch, value)
 
     with pytest.raises(module.GitHubAuthError):

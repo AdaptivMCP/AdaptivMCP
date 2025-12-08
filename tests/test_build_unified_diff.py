@@ -39,8 +39,5 @@ def test_build_unified_diff_rejects_negative_context(monkeypatch):
 
     with pytest.raises(ValueError):
         asyncio.run(
-            main.build_unified_diff(
-                "owner/repo", "path.txt", new_content="alpha", context_lines=-1
-            )
+            main.build_unified_diff("owner/repo", "path.txt", new_content="alpha", context_lines=-1)
         )
-

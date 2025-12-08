@@ -74,14 +74,10 @@ def normalize_args(raw_args: Any) -> Mapping[str, Any]:
             try:
                 parsed = json.loads(raw_args)
             except json.JSONDecodeError as exc:
-                raise ValueError(
-                    f"args must be a valid JSON object/array: {exc}"
-                ) from exc
+                raise ValueError(f"args must be a valid JSON object/array: {exc}") from exc
 
             if not isinstance(parsed, Mapping):
-                raise TypeError(
-                    f"args JSON must decode to an object, got {type(parsed).__name__}"
-                )
+                raise TypeError(f"args JSON must decode to an object, got {type(parsed).__name__}")
 
             return dict(parsed)
 
@@ -101,11 +97,7 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
     try:
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zip_file:
             parts: list[str] = []
-            for name in sorted(
-                entry
-                for entry in zip_file.namelist()
-                if not entry.endswith("/")
-            ):
+            for name in sorted(entry for entry in zip_file.namelist() if not entry.endswith("/")):
                 with zip_file.open(name) as handle:
                     content = handle.read().decode("utf-8", errors="replace")
                 parts.append(f"[{name}]\n{content}".rstrip())
@@ -114,18 +106,12 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
         return ""
 
 
-REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(
-    os.environ.get("GITHUB_REPO_DEFAULTS", "{}")
-)
-REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(
-    os.environ.get("GITHUB_REPO_DEFAULTS", "{}")
-)
+REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(os.environ.get("GITHUB_REPO_DEFAULTS", "{}"))
+REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(os.environ.get("GITHUB_REPO_DEFAULTS", "{}"))
 CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
 )
-CONTROLLER_DEFAULT_BRANCH = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_BRANCH", "main"
-)
+CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main")
 
 __all__ = [
     "REPO_DEFAULTS",

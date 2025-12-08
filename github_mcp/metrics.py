@@ -73,22 +73,20 @@ def _record_github_request(
         if remaining is not None:
             try:
                 if int(remaining) <= 0:
-                    github_bucket["rate_limit_events_total"] = github_bucket.get(
-                        "rate_limit_events_total", 0
-                    ) + 1
+                    github_bucket["rate_limit_events_total"] = (
+                        github_bucket.get("rate_limit_events_total", 0) + 1
+                    )
                     incremented = True
             except ValueError:
                 pass
 
         if resp.status_code == 429 and not incremented:
-            github_bucket["rate_limit_events_total"] = github_bucket.get(
-                "rate_limit_events_total", 0
-            ) + 1
+            github_bucket["rate_limit_events_total"] = (
+                github_bucket.get("rate_limit_events_total", 0) + 1
+            )
 
     if exc is not None and isinstance(exc, httpx.TimeoutException):
-        github_bucket["timeouts_total"] = github_bucket.get(
-            "timeouts_total", 0
-        ) + 1
+        github_bucket["timeouts_total"] = github_bucket.get("timeouts_total", 0) + 1
 
 
 def _metrics_snapshot() -> Dict[str, Any]:
@@ -114,9 +112,7 @@ def _metrics_snapshot() -> Dict[str, Any]:
         "github": {
             "requests_total": _as_int(github.get("requests_total", 0)),
             "errors_total": _as_int(github.get("errors_total", 0)),
-            "rate_limit_events_total": _as_int(
-                github.get("rate_limit_events_total", 0)
-            ),
+            "rate_limit_events_total": _as_int(github.get("rate_limit_events_total", 0)),
             "timeouts_total": _as_int(github.get("timeouts_total", 0)),
         },
     }

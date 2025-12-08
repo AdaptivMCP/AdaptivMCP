@@ -48,7 +48,9 @@ async def test_commit_workspace_files_stages_selected(monkeypatch, tmp_path):
     assert "file2.txt" not in last_commit_files
 
     status_output = subprocess.check_output(["git", "status", "--porcelain"], cwd=repo_dir)
-    assert any(line.startswith(" M file2.txt") for line in status_output.decode("utf-8").splitlines())
+    assert any(
+        line.startswith(" M file2.txt") for line in status_output.decode("utf-8").splitlines()
+    )
 
 
 @pytest.mark.asyncio

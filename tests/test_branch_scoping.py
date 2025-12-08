@@ -1,8 +1,7 @@
 import pytest
 
-import main
 import extra_tools
-
+import main
 
 # Capture extra_tools MCP functions that are defined via register_extra_tools
 # so we can unit-test their behavior without depending on the MCP runtime.

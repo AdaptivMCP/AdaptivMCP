@@ -39,7 +39,9 @@ def test_validate_json_string_invalid() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_repo_defaults_uses_github_default_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_repo_defaults_uses_github_default_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def fake_github_request(method: str, path: str, **kwargs):
         assert method == "GET"
         assert path == "/repos/owner/repo"
@@ -54,7 +56,9 @@ async def test_get_repo_defaults_uses_github_default_branch(monkeypatch: pytest.
 
 
 @pytest.mark.asyncio
-async def test_get_repo_defaults_falls_back_to_controller_default(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_repo_defaults_falls_back_to_controller_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def fake_github_request(method: str, path: str, **kwargs):
         # Simulate a response without a default_branch field.
         return {"json": {}}

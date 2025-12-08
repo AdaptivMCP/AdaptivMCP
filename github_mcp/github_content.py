@@ -5,12 +5,13 @@ from __future__ import annotations
 import base64
 import os
 import re
+import sys
 from typing import Any, Dict, Optional
 
-import sys
 from .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
 from .utils import _effective_ref_for_repo
+
 
 async def _request(*args, **kwargs):
     request_fn = getattr(sys.modules.get("main"), "_github_request", _github_request)
@@ -188,9 +189,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
                 f"{context} content_url path not found at {local_path}. {missing_hint}"
             )
         except OSError as e:
-            raise GitHubAPIError(
-                f"Failed to read content_url from {local_path}: {e}"
-            )
+            raise GitHubAPIError(f"Failed to read content_url from {local_path}: {e}")
 
     async def _fetch_rewritten_path(local_path: str, *, base_url: str) -> bytes:
         rewritten_url = base_url.rstrip("/") + "/" + local_path.lstrip("/")
@@ -211,9 +210,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
     )
 
     def _is_windows_absolute_path(path: str) -> bool:
-        return bool(
-            re.match(r"^[a-zA-Z]:[\\/].*", path) or path.startswith("\\\\")
-        )
+        return bool(re.match(r"^[a-zA-Z]:[\\/].*", path) or path.startswith("\\\\"))
 
     if content_url.startswith("sandbox:"):
         local_path = content_url[len("sandbox:") :]

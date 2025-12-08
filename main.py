@@ -13,7 +13,6 @@ import asyncio
 import base64
 import difflib
 import json
-import jsonschema
 import os
 import re
 import time
@@ -21,39 +20,33 @@ from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional
 
 import httpx  # noqa: F401
-import github_mcp.tools_workspace as tools_workspace  # noqa: F401
+import jsonschema
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 
-from github_mcp.config import (  # noqa: F401
-    BASE_LOGGER,
+import github_mcp.server as server  # noqa: F401
+import github_mcp.tools_workspace as tools_workspace  # noqa: F401
+from github_mcp import http_clients as _http_clients  # noqa: F401
+from github_mcp.config import (
+    BASE_LOGGER,  # noqa: F401
     FETCH_FILES_CONCURRENCY,
     GIT_AUTHOR_EMAIL,
     GIT_AUTHOR_NAME,
     GIT_COMMITTER_EMAIL,
     GIT_COMMITTER_NAME,
     GITHUB_API_BASE,
-    GITHUB_LOGGER,
     GITHUB_PAT,
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
-    RUN_COMMAND_MAX_CHARS,
     SERVER_START_TIME,
-    TOOLS_LOGGER,
-    TOOL_STDERR_MAX_CHARS,
-    TOOL_STDIO_COMBINED_MAX_CHARS,
-    TOOL_STDOUT_MAX_CHARS,
-    WORKSPACE_BASE_DIR,
 )
-from github_mcp.exceptions import (  # noqa: F401
-    GitHubAPIError,
+from github_mcp.exceptions import (
+    GitHubAPIError,  # noqa: F401
     GitHubAuthError,
-    GitHubRateLimitError,
-    WriteNotAuthorizedError,
 )
 from github_mcp.github_content import (
     _decode_github_content,
@@ -63,51 +56,23 @@ from github_mcp.github_content import (
     _resolve_file_sha,
     _verify_file_on_branch,
 )
-from github_mcp import http_clients as _http_clients  # noqa: F401
-from github_mcp.http_clients import (  # noqa: F401
-    _concurrency_semaphore,
+from github_mcp.http_clients import (
+    _concurrency_semaphore,  # noqa: F401
     _external_client_instance,
-    _get_github_token,
     _github_client_instance,
     _http_client_external,
     _http_client_github,
 )
-from github_mcp.metrics import (  # noqa: F401
+from github_mcp.metrics import (
     _METRICS,
-    _metrics_snapshot,
-    _record_github_request,
-    _record_tool_call,
-    _reset_metrics_for_tests,
+    _metrics_snapshot,  # noqa: F401
 )
-from github_mcp.utils import (
-    REPO_DEFAULTS,
-    _decode_zipped_job_logs,
-    _effective_ref_for_repo,
-    _render_visible_whitespace,
-    _with_numbered_lines,
-    normalize_args,
-)
-from github_mcp.workspace import (  # noqa: F401
-    _apply_patch_to_repo,
-    _clone_repo,
-    _prepare_temp_virtualenv,
-    _run_shell,
-    _workspace_path,
-)
-from github_mcp.tools_workspace import (  # noqa: F401
-    commit_workspace,
-    commit_workspace_files,
-    ensure_workspace_clone,
-    run_command,
-    run_tests,
-)
-import github_mcp.server as server  # noqa: F401
-from github_mcp.server import (  # noqa: F401
+from github_mcp.server import (
+    _REGISTERED_MCP_TOOLS,  # noqa: F401
     COMPACT_METADATA_DEFAULT,
     CONTROLLER_CONTRACT_VERSION,
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
-    _REGISTERED_MCP_TOOLS,
     _ensure_write_allowed,
     _find_registered_tool,
     _github_request,
@@ -116,6 +81,19 @@ from github_mcp.server import (  # noqa: F401
     mcp,
     mcp_tool,
     register_extra_tools_if_available,
+)
+from github_mcp.tools_workspace import commit_workspace  # noqa: F401
+from github_mcp.utils import (
+    REPO_DEFAULTS,
+    _decode_zipped_job_logs,
+    _effective_ref_for_repo,
+    _render_visible_whitespace,
+    _with_numbered_lines,
+    normalize_args,
+)
+from github_mcp.workspace import (
+    _apply_patch_to_repo,  # noqa: F401
+    _workspace_path,
 )
 
 
@@ -474,9 +452,7 @@ async def validate_environment() -> Dict[str, Any]:
             if isinstance(repo_payload, dict):
                 permissions = repo_payload.get("permissions") or {}
 
-            push_allowed = (
-                permissions.get("push") if isinstance(permissions, dict) else None
-            )
+            push_allowed = permissions.get("push") if isinstance(permissions, dict) else None
             if push_allowed is True:
                 add_check(
                     "controller_repo_push_permission",
@@ -595,11 +571,7 @@ async def pr_smoke_test(
     defaults = await get_repo_defaults(full_name=full_name)
     defaults_payload = defaults.get("defaults") or {}
     repo = defaults_payload.get("full_name") or full_name or CONTROLLER_REPO
-    base = (
-        base_branch
-        or defaults_payload.get("default_branch")
-        or CONTROLLER_DEFAULT_BRANCH
-    )
+    base = base_branch or defaults_payload.get("default_branch") or CONTROLLER_DEFAULT_BRANCH
 
     import uuid
 
@@ -2191,9 +2163,7 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
             body = comment.get("body")
             if not isinstance(body, str) or not body.strip():
                 continue
-            checklist_items.extend(
-                _extract_checklist_items(body, source="comment")
-            )
+            checklist_items.extend(_extract_checklist_items(body, source="comment"))
 
     # Related branches / PRs are already computed by open_issue_context.
     candidate_branches = context.get("candidate_branches") or []
@@ -2235,9 +2205,7 @@ async def trigger_workflow_dispatch(
             json=payload,
         )
     if resp.status_code not in (204, 201):
-        raise GitHubAPIError(
-            f"GitHub workflow dispatch error {resp.status_code}: {resp.text}"
-        )
+        raise GitHubAPIError(f"GitHub workflow dispatch error {resp.status_code}: {resp.text}")
     return {"status_code": resp.status_code}
 
 
@@ -2339,7 +2307,9 @@ async def merge_pull_request(
         payload["commit_title"] = commit_title
     if commit_message is not None:
         payload["commit_message"] = commit_message
-    return await _github_request("PUT", f"/repos/{full_name}/pulls/{number}/merge", json_body=payload)
+    return await _github_request(
+        "PUT", f"/repos/{full_name}/pulls/{number}/merge", json_body=payload
+    )
 
 
 @mcp_tool(write_action=True)
@@ -2830,7 +2800,9 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
 
 
 @mcp_tool(write_action=False)
-async def get_latest_branch_status(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
+async def get_latest_branch_status(
+    full_name: str, branch: str, base: str = "main"
+) -> Dict[str, Any]:
     """Return a normalized, assistant-friendly view of the latest status for a branch.
 
     This wraps ``get_branch_summary`` and ``_normalize_branch_summary`` so controllers
@@ -2952,11 +2924,7 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
             page=1,
         )
         runs_json = runs_resp.get("json") or {}
-        workflow_runs = (
-            runs_json.get("workflow_runs", [])
-            if isinstance(runs_json, dict)
-            else []
-        )
+        workflow_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
     except Exception as exc:  # pragma: no cover - defensive
         workflows_error = str(exc)
 
@@ -3024,9 +2992,7 @@ async def create_pull_request(
     """
 
     effective_base = _effective_ref_for_repo(full_name, base)
-    _ensure_write_allowed(
-        f"create PR from {head} to {effective_base} in {full_name}"
-    )
+    _ensure_write_allowed(f"create PR from {head} to {effective_base} in {full_name}")
 
     payload: Dict[str, Any] = {
         "title": title,
@@ -3134,6 +3100,7 @@ async def open_pr_for_existing_branch(
         "pr_url": pr_json.get("html_url"),
     }
 
+
 @mcp_tool(write_action=True)
 async def update_files_and_open_pr(
     full_name: str,
@@ -3155,7 +3122,9 @@ async def update_files_and_open_pr(
 
         # 1) Ensure a dedicated branch exists
         branch = new_branch or f"ally-{os.urandom(4).hex()}"
-        _ensure_write_allowed("update_files_and_open_pr %s %s" % (full_name, branch), target_ref=branch)
+        _ensure_write_allowed(
+            "update_files_and_open_pr %s %s" % (full_name, branch), target_ref=branch
+        )
         await ensure_branch(full_name, branch, from_ref=effective_base)
 
         commit_results: List[Dict[str, Any]] = []
@@ -3262,7 +3231,6 @@ async def update_files_and_open_pr(
         return _structured_tool_error(exc, context="update_files_and_open_pr", path=current_path)
 
 
-
 @mcp_tool(write_action=True)
 async def create_file(
     full_name: str,
@@ -3310,9 +3278,7 @@ async def create_file(
         else:
             raise
     else:
-        raise GitHubAPIError(
-            f"File already exists at {path} on branch {effective_branch}"
-        )
+        raise GitHubAPIError(f"File already exists at {path} on branch {effective_branch}")
 
     body_bytes = content.encode("utf-8")
     commit_message = message or f"Create {path}"
@@ -3398,7 +3364,9 @@ async def apply_text_update_and_commit(
 
     effective_branch = _effective_ref_for_repo(full_name, branch)
 
-    _ensure_write_allowed("apply_text_update_and_commit %s %s" % (full_name, path), target_ref=effective_branch)
+    _ensure_write_allowed(
+        "apply_text_update_and_commit %s %s" % (full_name, path), target_ref=effective_branch
+    )
 
     # 1) Read the current file state on the target branch, treating a 404 as a new file.
     is_new_file = False
@@ -3488,11 +3456,11 @@ async def apply_patch_and_commit(
     path: str,
     patch: str,
     *,
-    branch: str = 'main',
+    branch: str = "main",
     message: Optional[str] = None,
     return_diff: bool = True,
 ) -> Dict[str, Any]:
-    '''Apply a unified diff to a single file, commit it, then verify it.
+    """Apply a unified diff to a single file, commit it, then verify it.
 
     This is a first-class patch-based flow for a single file:
 
@@ -3521,33 +3489,33 @@ async def apply_patch_and_commit(
             - commit: raw GitHub commit API response
             - verification: {sha_before, sha_after, html_url}
             - diff: unified diff text (if return_diff is true)
-    '''
+    """
 
     effective_branch = _effective_ref_for_repo(full_name, branch)
 
     _ensure_write_allowed(
-        'apply_patch_and_commit %s %s' % (full_name, path),
+        "apply_patch_and_commit %s %s" % (full_name, path),
         target_ref=effective_branch,
     )
 
-    import re
     import difflib
+    import re
 
     def _extract_paths_from_patch(patch_text: str) -> set[str]:
-        '''Return the set of file paths mentioned in ---/+++ headers (normalized).
+        """Return the set of file paths mentioned in ---/+++ headers (normalized).
 
         Paths are normalized by stripping leading a/ or b/ prefixes.
         /dev/null entries are ignored.
-        '''
+        """
         paths: set[str] = set()
         for line in patch_text.splitlines():
-            if not (line.startswith('--- ') or line.startswith('+++ ')):
+            if not (line.startswith("--- ") or line.startswith("+++ ")):
                 continue
-            _, raw = line.split(' ', 1)
+            _, raw = line.split(" ", 1)
             raw = raw.strip()
-            if raw == '/dev/null':
+            if raw == "/dev/null":
                 continue
-            if raw.startswith('a/') or raw.startswith('b/'):
+            if raw.startswith("a/") or raw.startswith("b/"):
                 raw = raw[2:]
             if raw:
                 paths.add(raw)
@@ -3556,48 +3524,48 @@ async def apply_patch_and_commit(
     def _extract_sha(decoded: Dict[str, Any]) -> Optional[str]:
         if not isinstance(decoded, dict):
             return None
-        json_blob = decoded.get('json')
-        if isinstance(json_blob, dict) and isinstance(json_blob.get('sha'), str):
-            return json_blob.get('sha')
-        sha_value = decoded.get('sha')
+        json_blob = decoded.get("json")
+        if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
+            return json_blob.get("sha")
+        sha_value = decoded.get("sha")
         return sha_value if isinstance(sha_value, str) else None
 
     def _apply_unified_diff_to_text(original_text: str, patch_text: str) -> str:
-        '''Apply a unified diff to original_text and return the updated text.
+        """Apply a unified diff to original_text and return the updated text.
 
         This implementation supports patches for a single file with one or more
         hunks, of the form typically produced by difflib.unified_diff. It
         ignores 'diff --git', 'index', and file header lines, and processes
         only hunk headers and +/-/space lines.
-        '''
+        """
         orig_lines = original_text.splitlines(keepends=True)
         new_lines: list[str] = []
 
         orig_idx = 0
 
         hunk_header_re = re.compile(
-            r'^@@ -(?P<old_start>\d+)(?:,(?P<old_len>\d+))? ' 
-            r'\+(?P<new_start>\d+)(?:,(?P<new_len>\d+))? @@'
+            r"^@@ -(?P<old_start>\d+)(?:,(?P<old_len>\d+))? "
+            r"\+(?P<new_start>\d+)(?:,(?P<new_len>\d+))? @@"
         )
 
         in_hunk = False
 
         for line in patch_text.splitlines(keepends=True):
-            if line.startswith('diff --git') or line.startswith('index '):
+            if line.startswith("diff --git") or line.startswith("index "):
                 # Ignore Git metadata lines.
                 continue
-            if line.startswith('--- ') or line.startswith('+++ '):
+            if line.startswith("--- ") or line.startswith("+++ "):
                 # Ignore file header lines; we assume the caller passes `path`.
                 continue
 
             m = hunk_header_re.match(line)
             if m:
                 in_hunk = True
-                old_start = int(m.group('old_start'))
+                old_start = int(m.group("old_start"))
                 # Copy any untouched lines before this hunk.
                 target_idx = max(0, old_start - 1)
                 if target_idx < orig_idx:
-                    raise GitHubAPIError('Patch hunk moves backwards in the file')
+                    raise GitHubAPIError("Patch hunk moves backwards in the file")
                 while orig_idx < target_idx and orig_idx < len(orig_lines):
                     new_lines.append(orig_lines[orig_idx])
                     orig_idx += 1
@@ -3610,65 +3578,65 @@ async def apply_patch_and_commit(
             prefix = line[:1]
             content = line[1:]
 
-            if prefix == ' ':
+            if prefix == " ":
                 # Context line: must match original; copy from original.
                 if orig_idx >= len(orig_lines):
-                    raise GitHubAPIError('Patch context extends beyond end of file')
+                    raise GitHubAPIError("Patch context extends beyond end of file")
                 if orig_lines[orig_idx] != content:
-                    raise GitHubAPIError('Patch context does not match original text')
+                    raise GitHubAPIError("Patch context does not match original text")
                 new_lines.append(orig_lines[orig_idx])
                 orig_idx += 1
-            elif prefix == '-':
+            elif prefix == "-":
                 # Deletion line: skip the corresponding original line.
                 if orig_idx >= len(orig_lines):
-                    raise GitHubAPIError('Patch deletion extends beyond end of file')
+                    raise GitHubAPIError("Patch deletion extends beyond end of file")
                 if orig_lines[orig_idx] != content:
-                    raise GitHubAPIError('Patch deletion does not match original text')
+                    raise GitHubAPIError("Patch deletion does not match original text")
                 orig_idx += 1
-            elif prefix == '+':
+            elif prefix == "+":
                 # Addition line: insert new content.
                 new_lines.append(content)
-            elif prefix in {'@', '#'}:
+            elif prefix in {"@", "#"}:
                 # Unexpected hunk or comment-style line inside a hunk.
-                raise GitHubAPIError(f'Unsupported patch line inside hunk: {line!r}')
+                raise GitHubAPIError(f"Unsupported patch line inside hunk: {line!r}")
             else:
-                raise GitHubAPIError(f'Unsupported patch line prefix: {prefix!r}')
+                raise GitHubAPIError(f"Unsupported patch line prefix: {prefix!r}")
 
         # Append any remaining original lines that were not part of a hunk.
         while orig_idx < len(orig_lines):
             new_lines.append(orig_lines[orig_idx])
             orig_idx += 1
 
-        return ''.join(new_lines)
+        return "".join(new_lines)
 
     # Validate that the patch only touches this path.
     header_paths = _extract_paths_from_patch(patch)
     if header_paths:
         if len(header_paths) > 1:
             raise GitHubAPIError(
-                'apply_patch_and_commit only supports patches for a single path; '
-                f'found: {sorted(header_paths)}'
+                "apply_patch_and_commit only supports patches for a single path; "
+                f"found: {sorted(header_paths)}"
             )
         header_path = next(iter(header_paths))
         if header_path != path:
             raise GitHubAPIError(
-                'Patch path mismatch: tool was called with path='
-                f'{path!r} but patch headers refer to {header_path!r}'
+                "Patch path mismatch: tool was called with path="
+                f"{path!r} but patch headers refer to {header_path!r}"
             )
 
     # 1) Read current file from GitHub on the target branch. Treat a 404 as a new file.
     is_new_file = False
     try:
         decoded = await _decode_github_content(full_name, path, effective_branch)
-        old_text = decoded.get('text')
+        old_text = decoded.get("text")
         if not isinstance(old_text, str):
-            raise GitHubAPIError('Decoded content is not text')
+            raise GitHubAPIError("Decoded content is not text")
         sha_before = _extract_sha(decoded)
     except GitHubAPIError as exc:
         msg = str(exc)
-        if '404' in msg and '/contents/' in msg:
+        if "404" in msg and "/contents/" in msg:
             is_new_file = True
-            old_text = ''
+            old_text = ""
             sha_before = None
         else:
             raise
@@ -3679,14 +3647,14 @@ async def apply_patch_and_commit(
     except GitHubAPIError:
         raise
     except Exception as exc:  # pragma: no cover - defensive wrapper
-        raise GitHubAPIError(f'Failed to apply patch to {path}: {exc}') from exc
+        raise GitHubAPIError(f"Failed to apply patch to {path}: {exc}") from exc
 
-    body_bytes = new_text.encode('utf-8')
+    body_bytes = new_text.encode("utf-8")
     if message is not None:
         commit_message = message
     else:
-        default_action = 'Create' if is_new_file else 'Update'
-        commit_message = f'{default_action} {path} via patch'
+        default_action = "Create" if is_new_file else "Update"
+        commit_message = f"{default_action} {path} via patch"
 
     # 3) Commit the new content via the GitHub Contents API.
     commit_result = await _perform_github_commit(
@@ -3700,20 +3668,20 @@ async def apply_patch_and_commit(
 
     # 4) Verify by reading the file again from the same branch.
     verified = await _decode_github_content(full_name, path, effective_branch)
-    new_text_verified = verified.get('text')
+    new_text_verified = verified.get("text")
     sha_after = _extract_sha(verified)
 
     result: Dict[str, Any] = {
-        'status': 'committed',
-        'full_name': full_name,
-        'path': path,
-        'branch': effective_branch,
-        'message': commit_message,
-        'commit': commit_result,
-        'verification': {
-            'sha_before': sha_before,
-            'sha_after': sha_after,
-            'html_url': verified.get('html_url'),
+        "status": "committed",
+        "full_name": full_name,
+        "path": path,
+        "branch": effective_branch,
+        "message": commit_message,
+        "commit": commit_result,
+        "verification": {
+            "sha_before": sha_before,
+            "sha_after": sha_after,
+            "html_url": verified.get("html_url"),
         },
     }
 
@@ -3721,12 +3689,12 @@ async def apply_patch_and_commit(
     if return_diff:
         diff_iter = difflib.unified_diff(
             old_text.splitlines(keepends=True),
-            (new_text_verified or '').splitlines(keepends=True),
-            fromfile=f'a/{path}',
-            tofile=f'b/{path}',
+            (new_text_verified or "").splitlines(keepends=True),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
             n=3,
         )
-        result['diff'] = ''.join(diff_iter)
+        result["diff"] = "".join(diff_iter)
 
     return result
 
@@ -3801,9 +3769,7 @@ app.add_event_handler("shutdown", _shutdown_clients)
 
 @mcp_tool(
     write_action=False,
-    description=(
-        "Return a compact overview of a pull request, including files and CI status."
-    ),
+    description=("Return a compact overview of a pull request, including files and CI status."),
 )
 async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
     # Summarize a pull request so I can decide what to do next.
@@ -3942,11 +3908,7 @@ async def recent_prs_for_branch(
         page=1,
     )
     open_raw = open_resp.get("json") or []
-    open_prs = [
-        _normalize_pr_payload(pr)
-        for pr in open_raw
-        if isinstance(pr, dict)
-    ]
+    open_prs = [_normalize_pr_payload(pr) for pr in open_raw if isinstance(pr, dict)]
     open_prs = [pr for pr in open_prs if pr is not None]
 
     closed_prs: List[Dict[str, Any]] = []
@@ -3959,11 +3921,7 @@ async def recent_prs_for_branch(
             page=1,
         )
         closed_raw = closed_resp.get("json") or []
-        closed_prs = [
-            _normalize_pr_payload(pr)
-            for pr in closed_raw
-            if isinstance(pr, dict)
-        ]
+        closed_prs = [_normalize_pr_payload(pr) for pr in closed_raw if isinstance(pr, dict)]
         closed_prs = [pr for pr in closed_prs if pr is not None]
 
     return {

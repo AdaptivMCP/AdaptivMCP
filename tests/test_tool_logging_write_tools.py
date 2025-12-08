@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
 import pytest
 
@@ -31,11 +31,7 @@ async def test_apply_patch_and_commit_logging_shape(
     # Minimal original and patched content.
     original_text = "line1\n"
     patched_text = "line1-updated\n"
-    patch = ("--- a/file.txt\n"
-             "+++ b/file.txt\n"
-             "@@ -1 +1 @@\n"
-             "-line1\n"
-             "+line1-updated\n")
+    patch = "--- a/file.txt\n" "+++ b/file.txt\n" "@@ -1 +1 @@\n" "-line1\n" "+line1-updated\n"
 
     # Stub helpers to avoid GitHub network calls.
     async def fake_decode(full_name: str, path: str, ref: str) -> Dict[str, Any]:  # type: ignore[override]

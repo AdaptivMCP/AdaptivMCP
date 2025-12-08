@@ -8,7 +8,9 @@ async def test_get_branch_summary_collects_data(monkeypatch):
     async def fake_compare(full_name: str, base: str, head: str):
         return {"ahead_by": 2, "behind_by": 1, "base": base, "head": head}
 
-    async def fake_list_prs(full_name: str, state: str = "open", head=None, base=None, per_page: int = 30, page: int = 1):
+    async def fake_list_prs(
+        full_name: str, state: str = "open", head=None, base=None, per_page: int = 30, page: int = 1
+    ):
         return {
             "json": [
                 {
@@ -20,7 +22,9 @@ async def test_get_branch_summary_collects_data(monkeypatch):
             ]
         }
 
-    async def fake_list_runs(full_name: str, branch=None, status=None, event=None, per_page: int = 30, page: int = 1):
+    async def fake_list_runs(
+        full_name: str, branch=None, status=None, event=None, per_page: int = 30, page: int = 1
+    ):
         return {"json": {"workflow_runs": [{"id": 99, "head_branch": branch}]}}
 
     monkeypatch.setattr(main, "compare_refs", fake_compare)
@@ -43,7 +47,9 @@ async def test_open_issue_context_collects_branches_and_prs(monkeypatch):
     async def fake_list_branches(full_name: str, per_page: int = 100, page: int = 1):
         return {"json": [{"name": "feature/issue-5"}, {"name": "main"}]}
 
-    async def fake_list_prs(full_name: str, state: str = "open", head=None, base=None, per_page: int = 30, page: int = 1):
+    async def fake_list_prs(
+        full_name: str, state: str = "open", head=None, base=None, per_page: int = 30, page: int = 1
+    ):
         return {
             "json": [
                 {
@@ -125,32 +131,38 @@ async def test_get_issue_overview_normalizes_issue_and_checklists(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_pr_overview_collects_pr_files_and_ci(monkeypatch):
     async def fake_fetch_pr(full_name: str, pull_number: int):
-        return {"json": {
-            "number": pull_number,
-            "title": "Add feature",
-            "state": "open",
-            "draft": False,
-            "merged": False,
-            "html_url": "https://example.test/pr/123",
-            "user": {"login": "author", "html_url": "https://example.test/author"},
-            "head": {"ref": "feature/branch", "sha": "abc123"},
-            "base": {"ref": "main"},
-            "created_at": "2025-01-01T00:00:00Z",
-            "updated_at": "2025-01-02T00:00:00Z",
-            "closed_at": None,
-            "merged_at": None,
-        }}
-
-    async def fake_list_pr_changed_filenames(full_name: str, pull_number: int, per_page: int = 100, page: int = 1):
-        return {"json": [
-            {
-                "filename": "main.py",
-                "status": "modified",
-                "additions": 10,
-                "deletions": 2,
-                "changes": 12,
+        return {
+            "json": {
+                "number": pull_number,
+                "title": "Add feature",
+                "state": "open",
+                "draft": False,
+                "merged": False,
+                "html_url": "https://example.test/pr/123",
+                "user": {"login": "author", "html_url": "https://example.test/author"},
+                "head": {"ref": "feature/branch", "sha": "abc123"},
+                "base": {"ref": "main"},
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-02T00:00:00Z",
+                "closed_at": None,
+                "merged_at": None,
             }
-        ]}
+        }
+
+    async def fake_list_pr_changed_filenames(
+        full_name: str, pull_number: int, per_page: int = 100, page: int = 1
+    ):
+        return {
+            "json": [
+                {
+                    "filename": "main.py",
+                    "status": "modified",
+                    "additions": 10,
+                    "deletions": 2,
+                    "changes": 12,
+                }
+            ]
+        }
 
     async def fake_get_commit_combined_status(full_name: str, ref: str):
         return {"json": {"state": "success", "total_count": 1}}
@@ -163,20 +175,24 @@ async def test_get_pr_overview_collects_pr_files_and_ci(monkeypatch):
         per_page: int = 30,
         page: int = 1,
     ):
-        return {"json": {"workflow_runs": [
-            {
-                "id": 1,
-                "name": "CI",
-                "event": "push",
-                "status": "completed",
-                "conclusion": "success",
-                "head_branch": branch,
-                "head_sha": "abc123",
-                "html_url": "https://example.test/runs/1",
-                "created_at": "2025-01-02T00:00:00Z",
-                "updated_at": "2025-01-02T00:05:00Z",
+        return {
+            "json": {
+                "workflow_runs": [
+                    {
+                        "id": 1,
+                        "name": "CI",
+                        "event": "push",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "head_branch": branch,
+                        "head_sha": "abc123",
+                        "html_url": "https://example.test/runs/1",
+                        "created_at": "2025-01-02T00:00:00Z",
+                        "updated_at": "2025-01-02T00:05:00Z",
+                    }
+                ]
             }
-        ]}}
+        }
 
     import main
 
@@ -264,43 +280,49 @@ async def test_recent_prs_for_branch_groups_open_and_closed(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_workflow_run_overview_includes_failed_and_longest_jobs(monkeypatch):
     async def fake_get_workflow_run(full_name: str, run_id: int):
-        return {"json": {
-            "id": run_id,
-            "name": "CI",
-            "event": "push",
-            "status": "completed",
-            "conclusion": "failure",
-            "head_branch": "feature/test",
-            "head_sha": "abc123",
-            "run_attempt": 1,
-            "created_at": "2025-01-02T00:00:00Z",
-            "updated_at": "2025-01-02T00:10:00Z",
-            "html_url": "https://example.test/runs/1",
-        }}
+        return {
+            "json": {
+                "id": run_id,
+                "name": "CI",
+                "event": "push",
+                "status": "completed",
+                "conclusion": "failure",
+                "head_branch": "feature/test",
+                "head_sha": "abc123",
+                "run_attempt": 1,
+                "created_at": "2025-01-02T00:00:00Z",
+                "updated_at": "2025-01-02T00:10:00Z",
+                "html_url": "https://example.test/runs/1",
+            }
+        }
 
-    async def fake_list_workflow_run_jobs(full_name: str, run_id: int, per_page: int = 30, page: int = 1):
-        return {"json": {
-            "jobs": [
-                {
-                    "id": 10,
-                    "name": "tests",
-                    "status": "completed",
-                    "conclusion": "success",
-                    "started_at": "2025-01-02T00:00:00Z",
-                    "completed_at": "2025-01-02T00:03:00Z",
-                    "html_url": "https://example.test/job/10",
-                },
-                {
-                    "id": 20,
-                    "name": "lint",
-                    "status": "completed",
-                    "conclusion": "failure",
-                    "started_at": "2025-01-02T00:03:00Z",
-                    "completed_at": "2025-01-02T00:09:00Z",
-                    "html_url": "https://example.test/job/20",
-                },
-            ]
-        }}
+    async def fake_list_workflow_run_jobs(
+        full_name: str, run_id: int, per_page: int = 30, page: int = 1
+    ):
+        return {
+            "json": {
+                "jobs": [
+                    {
+                        "id": 10,
+                        "name": "tests",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "started_at": "2025-01-02T00:00:00Z",
+                        "completed_at": "2025-01-02T00:03:00Z",
+                        "html_url": "https://example.test/job/10",
+                    },
+                    {
+                        "id": 20,
+                        "name": "lint",
+                        "status": "completed",
+                        "conclusion": "failure",
+                        "started_at": "2025-01-02T00:03:00Z",
+                        "completed_at": "2025-01-02T00:09:00Z",
+                        "html_url": "https://example.test/job/20",
+                    },
+                ]
+            }
+        }
 
     monkeypatch.setattr(main, "get_workflow_run", fake_get_workflow_run)
     monkeypatch.setattr(main, "list_workflow_run_jobs", fake_list_workflow_run_jobs)
@@ -329,20 +351,24 @@ async def test_get_workflow_run_overview_handles_missing_timestamps(monkeypatch)
     async def fake_get_workflow_run(full_name: str, run_id: int):
         return {"json": {"id": run_id}}
 
-    async def fake_list_workflow_run_jobs(full_name: str, run_id: int, per_page: int = 30, page: int = 1):
-        return {"json": {
-            "jobs": [
-                {
-                    "id": 30,
-                    "name": "no-timestamps",
-                    "status": "completed",
-                    "conclusion": "success",
-                    "started_at": None,
-                    "completed_at": None,
-                    "html_url": "https://example.test/job/30",
-                }
-            ]
-        }}
+    async def fake_list_workflow_run_jobs(
+        full_name: str, run_id: int, per_page: int = 30, page: int = 1
+    ):
+        return {
+            "json": {
+                "jobs": [
+                    {
+                        "id": 30,
+                        "name": "no-timestamps",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "started_at": None,
+                        "completed_at": None,
+                        "html_url": "https://example.test/job/30",
+                    }
+                ]
+            }
+        }
 
     monkeypatch.setattr(main, "get_workflow_run", fake_get_workflow_run)
     monkeypatch.setattr(main, "list_workflow_run_jobs", fake_list_workflow_run_jobs)

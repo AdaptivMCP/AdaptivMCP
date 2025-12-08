@@ -26,19 +26,19 @@ def test_controller_contract_full_structure():
     assert any("large" in item.lower() for item in expectations["assistant"])
 
     tooling = payload["tooling"]
-    assert set(tooling["discovery"]) >= {"get_server_config", "list_write_tools", "validate_environment"}
-    assert {"run_command", "run_tests", "commit_workspace"} <= set(
-        tooling["execution"]
-    )
+    assert set(tooling["discovery"]) >= {
+        "get_server_config",
+        "list_write_tools",
+        "validate_environment",
+    }
+    assert {"run_command", "run_tests", "commit_workspace"} <= set(tooling["execution"])
     assert {
         "get_file_slice",
         "build_section_based_diff",
         "build_unified_diff_from_strings",
         "validate_json_string",
     } <= set(tooling["large_files"])
-    assert {"create_issue", "update_issue", "comment_on_issue"} <= set(
-        tooling["issues"]
-    )
+    assert {"create_issue", "update_issue", "comment_on_issue"} <= set(tooling["issues"])
     assert "authorize_write_actions" in tooling["safety"]
 
 
