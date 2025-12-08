@@ -1995,8 +1995,6 @@ def _validate_single_tool_args(
 
 @mcp_tool(write_action=False)
 async def validate_tool_args(
-@mcp_tool(write_action=False)
-async def validate_tool_args(
     tool_name: Optional[str] = None,
     payload: Optional[Mapping[str, Any]] = None,
     tool_names: Optional[List[str]] = None,
@@ -2084,27 +2082,6 @@ async def validate_tool_args(
         response["missing_tools"] = sorted(set(missing))
 
     return response
-        raise ValueError("validate_tool_args can validate at most 10 tools per call.")
-
-    results: List[Dict[str, Any]] = []
-    missing: List[str] = []
-
-    for name in normalized:
-        try:
-            result = _validate_single_tool_args(name, args)
-        except ValueError as exc:
-            msg = str(exc)
-            if msg.startswith("Unknown tool ") and "Available tools:" in msg:
-                missing.append(name)
-                continue
-            raise
-        else:
-            results.append(result)
-
-    if not results:
-        raise ValueError(
-            f"Unknown tool name(s): {', '.join(sorted(set(missing)))}"
-        )
 
     response: Dict[str, Any] = {"results": results}
 
