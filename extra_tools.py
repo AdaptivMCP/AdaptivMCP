@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import difflib
-from typing import (Any, Callable, Dict, List, Literal, Optional, Protocol,
-                    TypedDict)
+from typing import Any, Callable, Dict, List, Literal, Optional, Protocol, TypedDict
 
-from main import (GitHubAPIError, _decode_github_content,
-                  _effective_ref_for_repo, _ensure_write_allowed,
-                  _github_request, _resolve_file_sha, _workspace_path)
+from main import (
+    GitHubAPIError,
+    _decode_github_content,
+    _effective_ref_for_repo,
+    _ensure_write_allowed,
+    _github_request,
+    _resolve_file_sha,
+    _workspace_path,
+)
 
 
 class ToolDecorator(Protocol):

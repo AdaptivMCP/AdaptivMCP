@@ -1,5 +1,10 @@
-from main import (CONTROLLER_CONTRACT_VERSION, CONTROLLER_DEFAULT_BRANCH,
-                  CONTROLLER_REPO, WRITE_ALLOWED, controller_contract)
+from main import (
+    CONTROLLER_CONTRACT_VERSION,
+    CONTROLLER_DEFAULT_BRANCH,
+    CONTROLLER_REPO,
+    WRITE_ALLOWED,
+    controller_contract,
+)
 
 
 def test_controller_contract_full_structure():

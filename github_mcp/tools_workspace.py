@@ -7,12 +7,15 @@ from typing import Any, Dict, List, Optional
 
 from github_mcp.config import RUN_COMMAND_MAX_CHARS
 from github_mcp.exceptions import GitHubAPIError
-from github_mcp.server import (_ensure_write_allowed, _structured_tool_error,
-                               mcp_tool)
+from github_mcp.server import _ensure_write_allowed, _structured_tool_error, mcp_tool
 from github_mcp.utils import _effective_ref_for_repo
-from github_mcp.workspace import (_apply_patch_to_repo, _clone_repo,
-                                  _prepare_temp_virtualenv, _run_shell,
-                                  _workspace_path)
+from github_mcp.workspace import (
+    _apply_patch_to_repo,
+    _clone_repo,
+    _prepare_temp_virtualenv,
+    _run_shell,
+    _workspace_path,
+)
 
 # ------------------------------------------------------------------------------
 # Workspace / full-environment tools
