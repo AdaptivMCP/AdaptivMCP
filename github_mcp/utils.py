@@ -9,7 +9,7 @@ import sys
 import zipfile
 from typing import Any, Dict, Mapping
 
-from .exceptions import ToolArgNormalizationError
+from .exceptions import ToolPreflightValidationError
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -41,6 +41,69 @@ def _effective_ref_for_repo(full_name: str, ref: str | None) -> str:
     if repo_defaults and repo_defaults.get("default_branch"):
         return repo_defaults["default_branch"]
     return "main"
+
+
+def _default_branch_for_repo(full_name: str) -> str:
+    """Return the default branch name for a repository."""
+
+    if full_name == CONTROLLER_REPO:
+        return CONTROLLER_DEFAULT_BRANCH
+
+    repo_defaults = REPO_DEFAULTS.get(full_name)
+    if repo_defaults and repo_defaults.get("default_branch"):
+        return repo_defaults["default_branch"]
+
+    return "main"
+
+
+def _normalize_repo_path(path: str) -> str:
+    """Normalize a repo-relative path and enforce basic safety invariants."""
+
+    if not isinstance(path, str):
+        raise ToolPreflightValidationError("<server>", "path must be a string")
+
+    normalized = path.lstrip("/")
+    while "//" in normalized:
+        normalized = normalized.replace("//", "/")
+
+    parts = normalized.split("/")
+    if any(part == ".." for part in parts):
+        raise ToolPreflightValidationError("<server>", f"Invalid path {path!r}: parent-directory segments are not allowed.")
+
+    if not normalized:
+        raise ToolPreflightValidationError("<server>", "Path must not be empty after normalization.")
+
+    return normalized
+
+
+def _normalize_branch(full_name: str, branch: str | None) -> str:
+    """Normalize a branch name while honoring controller defaults."""
+
+    effective = _effective_ref_for_repo(full_name, branch or "main")
+    default_branch = _default_branch_for_repo(full_name)
+
+    # Let higher layers decide whether writes to the default branch are allowed.
+    # The normalizer only ensures we have a stable, explicit ref.
+    if not effective:
+        raise ToolPreflightValidationError("<server>", "Effective branch name resolved to an empty value.")
+
+    if "
+" in effective or "	" in effective:
+        raise ToolPreflightValidationError("<server>", f"Branch name contains control characters: {effective!r}")
+
+    return effective
+
+
+def _normalize_write_context(
+    full_name: str, branch: str | None, path: str | None = None
+) -> tuple[str, str | None]:
+    """Normalize standard write-context arguments (branch + optional path)."""
+
+    effective_branch = _normalize_branch(full_name, branch)
+    normalized_path: str | None = None
+    if path is not None:
+        normalized_path = _normalize_repo_path(path)
+    return effective_branch, normalized_path
 
 
 def _with_numbered_lines(text: str) -> list[Dict[str, Any]]:
@@ -114,79 +177,16 @@ CONTROLLER_REPO = os.environ.get(
 )
 CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main")
 
-
-def _default_branch_for_repo(full_name: str) -> str:
-    """Return the default branch name for a repository."""
-
-    if full_name == CONTROLLER_REPO:
-        return CONTROLLER_DEFAULT_BRANCH
-
-    repo_defaults = REPO_DEFAULTS.get(full_name)
-    if repo_defaults and repo_defaults.get("default_branch"):
-        return repo_defaults["default_branch"]
-
-    return "main"
-
-
-def _normalize_repo_path(path: str) -> str:
-    """Normalize a repo-relative path and enforce basic safety invariants."""
-
-    if not isinstance(path, str):
-        raise ToolArgNormalizationError("path must be a string")
-
-    normalized = path.lstrip("/")
-    while "//" in normalized:
-        normalized = normalized.replace("//", "/")
-
-    parts = normalized.split("/")
-    if any(part == ".." for part in parts):
-        raise ToolArgNormalizationError(
-            f"Invalid path {path!r}: parent-directory segments are not allowed."
-        )
-
-    if not normalized:
-        raise ToolArgNormalizationError("Path must not be empty after normalization.")
-
-    return normalized
-
-
-def _normalize_branch(full_name: str, branch: str | None) -> str:
-    """Normalize a branch name and forbid writes to the default branch."""
-
-    effective = _effective_ref_for_repo(full_name, branch or "main")
-    default_branch = _default_branch_for_repo(full_name)
-
-    if effective == default_branch:
-        raise ToolArgNormalizationError(
-            f"Writes to default branch {default_branch!r} are disallowed by controller policy. "
-            "Create or ensure a feature branch and pass that instead."
-        )
-
-    return effective
-
-
-def _normalize_write_context(
-    full_name: str, branch: str | None, path: str | None = None
-) -> tuple[str, str | None]:
-    """Normalize standard write-context arguments (branch + optional path)."""
-
-    effective_branch = _normalize_branch(full_name, branch)
-    normalized_path: str | None = None
-    if path is not None:
-        normalized_path = _normalize_repo_path(path)
-    return effective_branch, normalized_path
-
-
 __all__ = [
     "REPO_DEFAULTS",
     "_decode_zipped_job_logs",
+    "_default_branch_for_repo",
     "_effective_ref_for_repo",
     "_env_flag",
+    "_normalize_branch",
+    "_normalize_repo_path",
+    "_normalize_write_context",
     "_render_visible_whitespace",
     "_with_numbered_lines",
     "normalize_args",
-    "_default_branch_for_repo",
-    "_normalize_repo_path",
-    "_normalize_branch",
-    "_normalize_write_context",
 ]
