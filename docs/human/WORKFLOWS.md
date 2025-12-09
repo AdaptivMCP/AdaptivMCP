@@ -207,11 +207,9 @@ This section describes common workflows for this controller repo itself, `Proofg
 3. Keep changes focused and incremental.
 4. Run any documentation tooling or linters if present.
 5. Use `commit_workspace` to commit changes to the docs branch.
-6. Open a PR into `main` and summarize the doc changes clearly.
+### 5.2 Medium sized file commits (payload conscious)
 
-### 5.2 Medium sized file commits (token conscious)
-
-When you want to test or exercise medium sized documentation or code commits without flooding the client with huge payloads:
+When you want to test or exercise medium sized documentation or code commits without flooding the client or model context with huge payloads:
 
 1. Prefer branch scoped edits.
    - Create a feature or docs branch dedicated to the experiment.
@@ -220,6 +218,9 @@ When you want to test or exercise medium sized documentation or code commits wit
    - Add or adjust a subsection.
    - Avoid rewriting the entire file unless that is the purpose of the change.
 4. Use `apply_text_update_and_commit` or `apply_patch_and_commit` with:
+   - `return_diff` set to `false` when you only need verification metadata.
+   - Brief, descriptive commit messages.
+5. Open a PR from the experiment branch into `main` and verify that the diff and metadata look reasonable.
    - `return_diff` set to `false` when you only need verification metadata.
    - Brief, descriptive commit messages.
 5. Open a PR from the experiment branch into `main` and verify that the diff and metadata look reasonable.
