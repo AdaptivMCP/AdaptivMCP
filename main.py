@@ -654,10 +654,7 @@ async def pr_smoke_test(
     base_branch: Optional[str] = None,
     draft: bool = True,
 ) -> Dict[str, Any]:
-    """Create a trivial branch with a one-line change and open a draft PR.
-
-    This is intended for diagnostics of PR tooling in the live environment.
-    """
+    """Create a test branch, commit a small change, and open a draft PR to verify PR tooling."""
 
     defaults = await get_repo_defaults(full_name=full_name)
     defaults_payload = defaults.get("defaults") or {}
