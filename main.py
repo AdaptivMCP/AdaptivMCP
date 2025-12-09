@@ -267,23 +267,23 @@ async def get_server_config() -> Dict[str, Any]:
 
 @mcp_tool(
     write_action=False,
-    description=(
-        "Validate and normalize JSON strings before returning them to clients. "
-        "Useful when controller prompts require strict JSON responses and the "
-        "assistant wants to double-check correctness before replying."
-    ),
+    description="Validate a JSON string and return normalized JSON helpers.",
     tags=["meta", "json", "validation"],
 )
 def validate_json_string(raw: str) -> Dict[str, Any]:
-    """Validate a JSON string and return a canonicalized representation.
+    """Validate a JSON string and return a parsed and normalized result."""
 
-    Returns a structured payload indicating whether the JSON parsed
-    successfully, an error description when parsing fails, and a
-    description=("Validate a JSON string and return normalized JSON helpers."),
+    try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
         context_window = 20
-    """Validate a JSON string and return a parsed and normalized result."""
+        start = max(0, exc.pos - context_window)
+        end = min(len(raw), exc.pos + context_window)
+
+        line_start = raw.rfind("\n", 0, exc.pos) + 1
+        line_end = raw.find("\n", exc.pos)
+        if line_end == -1:
+            line_end = len(raw)
 
         line_text = raw[line_start:line_end]
         caret_prefix = " " * (exc.colno - 1)
