@@ -21,9 +21,22 @@ class WriteNotAuthorizedError(Exception):
     pass
 
 
+class ToolPreflightValidationError(Exception):
+    """Raised when server-side tool argument preflight fails.
+
+    This error is intentionally lightweight so callers see a clear, single-line
+    message that points at the offending tool and field.
+    """
+
+    def __init__(self, tool: str, message: str) -> None:
+        super().__init__(f"Preflight validation failed for tool {tool!r}: {message}")
+        self.tool = tool
+
+
 __all__ = [
     "GitHubAPIError",
     "GitHubAuthError",
     "GitHubRateLimitError",
     "WriteNotAuthorizedError",
+    "ToolPreflightValidationError",
 ]
