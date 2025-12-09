@@ -95,6 +95,7 @@ from github_mcp.utils import (
     REPO_DEFAULTS,
     _decode_zipped_job_logs,
     _effective_ref_for_repo,
+    _normalize_repo_path,
     _render_visible_whitespace,
     _with_numbered_lines,
     normalize_args,
@@ -143,6 +144,32 @@ async def run_command(
         full_name=full_name,
         ref=ref,
         command=command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        patch=patch,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+        mutating=mutating,
+    )
+
+
+async def run_tests(
+    full_name: str,
+    ref: str = "main",
+    test_command: str = "pytest",
+    timeout_seconds: int = 600,
+    workdir: Optional[str] = None,
+    patch: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+    mutating: bool = False,
+) -> Dict[str, Any]:
+    """Forward run_tests calls to the workspace helper for test surfaces."""
+
+    return await tools_workspace.run_tests(
+        full_name=full_name,
+        ref=ref,
+        test_command=test_command,
         timeout_seconds=timeout_seconds,
         workdir=workdir,
         patch=patch,
@@ -644,6 +671,7 @@ async def pr_smoke_test(
     await ensure_branch(full_name=repo, branch=branch, from_ref=base)
 
     path = "mcp_pr_smoke_test.txt"
+    normalized_path = _normalize_repo_path(path)
     content = f"MCP PR smoke test branch {branch}.\n"
 
     await apply_text_update_and_commit(
@@ -1435,7 +1463,9 @@ async def build_unified_diff(
     if context_lines < 0:
         raise ValueError("context_lines must be non-negative")
 
-    base = await _decode_github_content(full_name, path, ref)
+    normalized_path = _normalize_repo_path(path)
+
+    base = await _decode_github_content(full_name, normalized_path, ref)
     base_text = base.get("text", "")
 
     diff_lines = difflib.unified_diff(
@@ -1539,6 +1569,8 @@ async def list_repository_tree(
             continue
         if normalized_prefix and not path.startswith(normalized_prefix):
             continue
+
+        normalized_path = _normalize_repo_path(path)
 
         filtered_entries.append(
             {
@@ -3197,6 +3229,8 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
             # Keep only top-level entries (no slashes) for a compact view.
             if "/" in path:
                 continue
+
+            normalized_path = _normalize_repo_path(path)
             top_level_tree.append(
                 {
                     "path": normalized_path,
