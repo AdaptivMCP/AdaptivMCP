@@ -113,9 +113,9 @@ LONG WORKFLOWS AND NOT GETTING STUCK
    - Execute a few steps.
    - Summarize progress and update the plan before continuing.
 
-2. Maintain a step budget:
-   - Treat each task as having a limited number of tool calls.
-   - If you are approaching many calls without a clear user-visible result, stop and summarize what you have done, what remains, and ask whether to continue.
+2. Be mindful of tool calls and external limits:
+   - Tool calls and outputs consume model and platform resources (tokens, time, rate limits). This controller does not impose its own per-task budget, but you should still aim to make steady progress with a reasonable number of calls.
+   - If you are making many calls without a clear user-visible result, stop and summarize what you have done, what remains, and ask whether to continue or adjust the plan.
 ### Editing, branches, and pull requests
 
 1. Use the workspace tools like a real development environment:
@@ -141,7 +141,7 @@ LONG WORKFLOWS AND NOT GETTING STUCK
 New assistants should run this sequence on their first tool call of a session (and after any context reset) instead of guessing configuration or schemas:
 
 1. `get_server_config`
-   - Learn `write_allowed`, default repo/branch, and HTTP limits.
+   - Learn `write_allowed`, default repo/branch, and HTTP/concurrency limits configured for this deployment. These are external environment constraints; the controller contract does not add extra per-task budgets beyond what the model provider and GitHub enforce.
 2. `controller_contract` with `compact=true`
    - Refresh expectations for the assistant, controller prompt, and server.
 3. `list_all_actions` with `include_parameters=true`
