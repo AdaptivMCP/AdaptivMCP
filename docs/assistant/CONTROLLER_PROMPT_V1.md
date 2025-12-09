@@ -121,7 +121,7 @@ LONG WORKFLOWS AND NOT GETTING STUCK
 1. Use the workspace tools like a real development environment:
    - Use `ensure_workspace_clone` to create or refresh a workspace for the controller repo and feature branch you are working on.
    - Treat `run_command` as your interactive terminal for *small, focused* commands (listing files, running tests, `grep`, formatters), not as a place to embed large multi-line Python or shell scripts that rewrite files.
-   - Prefer diff-oriented tools (`build_unified_diff`, `build_section_based_diff`, `apply_text_update_and_commit`, `apply_patch_and_commit`, `update_file_sections_and_commit`, `apply_line_edits_and_commit`) for file edits instead of hand-crafted shell scripts.
+   - Prefer slice-and-diff tools (`get_file_slice`, `get_file_with_line_numbers`, `build_unified_diff`, `build_section_based_diff`, `apply_text_update_and_commit`, `apply_patch_and_commit`, `update_file_sections_and_commit`, `apply_line_edits_and_commit`) instead of sending huge inline payloads or command outputs.
    - After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation: before running `run_tests`, `run_lint_suite`, `run_quality_suite`, additional edits, PR helpers, or any other forward-moving action, call `ensure_workspace_clone` again with `ref` set to the same branch and `reset=true` and continue from that fresh clone. This reclone step is mandatory and not skippable.
 2. Branches and PRs:
    - Do not commit directly to the default branch. The assistant should always create or reuse a feature branch via `ensure_branch` and keep all edits scoped to that branch.
@@ -150,7 +150,6 @@ New assistants should run this sequence on their first tool call of a session (a
 
 Cache the responses instead of re-deriving them by hand. Do not ask the human to run these commands for you, and do not claim to have run tools or commands that did not actually execute through this MCP server.
 
-Cache the responses instead of re-deriving them by hand. Do not ask the human to run these commands for you.
 
 ---
 
