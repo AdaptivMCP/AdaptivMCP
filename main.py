@@ -203,15 +203,7 @@ async def commit_workspace_files(
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Toggle write-tagged tools on or off for the running server instance.
-
-    Args:
-        approved: Set to ``true`` to allow tools marked ``write_action=True`` to
-            execute; set to ``false`` to block them. The environment variable
-            ``GITHUB_MCP_AUTO_APPROVE`` seeds the initial value, but this tool is
-            the runtime override assistants should call when they need to enable
-            writes for a session.
-    """
+    """Enable or disable write-tagged tools for this server session."""
 
     server.WRITE_ALLOWED = bool(approved)
     return {"write_allowed": server.WRITE_ALLOWED}
