@@ -98,6 +98,7 @@ from github_mcp.utils import (
     _render_visible_whitespace,
     _with_numbered_lines,
     normalize_args,
+    _normalize_write_context,
 )
 from github_mcp.workspace import (
     _apply_patch_to_repo,  # noqa: F401
@@ -647,7 +648,7 @@ async def pr_smoke_test(
 
     await apply_text_update_and_commit(
         full_name=repo,
-        path=path,
+        path=normalized_path,
         updated_content=content,
         branch=branch,
         message=f"MCP PR smoke test on {branch}",
@@ -1440,14 +1441,14 @@ async def build_unified_diff(
     diff_lines = difflib.unified_diff(
         base_text.splitlines(keepends=True),
         new_content.splitlines(keepends=True),
-        fromfile=f"a/{path}",
-        tofile=f"b/{path}",
+        fromfile=f"a/{normalized_path}",
+        tofile=f"b/{normalized_path}",
         n=context_lines,
     )
     diff_text = "".join(diff_lines)
 
     response: Dict[str, Any] = {
-        "path": path,
+        "path": normalized_path,
         "ref": ref,
         "context_lines": context_lines,
         "base": {
@@ -1541,7 +1542,7 @@ async def list_repository_tree(
 
         filtered_entries.append(
             {
-                "path": path,
+                "path": normalized_path,
                 "type": entry_type,
                 "mode": entry.get("mode"),
                 "size": entry.get("size"),
@@ -2009,6 +2010,9 @@ async def validate_tool_args(
         tool_names: Optional list of MCP tool names to validate in one call.
             When provided, up to 10 tools are validated using the same payload.
             Duplicates are ignored while preserving order.
+
+    Raises:
+        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
 
     Returns:
         For single-tool calls, returns the legacy shape:
@@ -3085,6 +3089,9 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
             Optional branch name. When omitted, the repository's default
             branch is used via the same normalization logic as other tools.
 
+    Raises:
+        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
+
     Returns:
         A dict with high-level fields such as:
 
@@ -3192,7 +3199,7 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
                 continue
             top_level_tree.append(
                 {
-                    "path": path,
+                    "path": normalized_path,
                     "type": entry.get("type"),
                     "size": entry.get("size"),
                 }
@@ -3482,16 +3489,21 @@ async def create_file(
     branch: str = "main",
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create a new text file in a repository.
+    """Create a new text file in a repository after normalizing path and branch.
 
-    The call fails if the file already exists on the target branch.
+    This helper performs a lightweight server-side preflight to normalize the
+    target branch and repository path before issuing any write to GitHub. The
+    call fails if the file already exists on the target branch.
 
     Args:
         full_name: "owner/repo" string.
-        path: Path of the file within the repository.
+        path: Path of the file within the repository (normalized before write).
         content: UTF-8 text content of the new file.
         branch: Branch to commit to (default "main").
         message: Optional commit message; if omitted, a default is derived.
+
+    Raises:
+        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
 
     Returns:
         A dict with:
@@ -3501,18 +3513,26 @@ async def create_file(
             - commit: Raw commit response from GitHub.
             - verification: A dict containing sha_before (always None),
               sha_after and html_url from a fresh read of the file.
+
+    Raises:
+        ToolPreflightValidationError: If the branch/path combination fails
+            server-side normalization.
     """
 
-    effective_branch = _effective_ref_for_repo(full_name, branch)
+    effective_branch, normalized_path = _normalize_write_context(
+        full_name=full_name,
+        branch=branch,
+        path=path,
+    )
 
     _ensure_write_allowed(
-        "create_file %s %s" % (full_name, path),
+        "create_file %s %s" % (full_name, normalized_path),
         target_ref=effective_branch,
     )
 
     # Ensure the file does not already exist.
     try:
-        await _decode_github_content(full_name, path, effective_branch)
+        await _decode_github_content(full_name, normalized_path, effective_branch)
     except GitHubAPIError as exc:
         msg = str(exc)
         if "404" in msg and "/contents/" in msg:
@@ -3520,21 +3540,23 @@ async def create_file(
         else:
             raise
     else:
-        raise GitHubAPIError(f"File already exists at {path} on branch {effective_branch}")
+        raise GitHubAPIError(
+            f"File already exists at {normalized_path} on branch {effective_branch}"
+        )
 
     body_bytes = content.encode("utf-8")
-    commit_message = message or f"Create {path}"
+    commit_message = message or f"Create {normalized_path}"
 
     commit_result = await _perform_github_commit(
         full_name=full_name,
-        path=path,
+        path=normalized_path,
         message=commit_message,
         body_bytes=body_bytes,
         branch=effective_branch,
         sha=sha_before,
     )
 
-    verified = await _decode_github_content(full_name, path, effective_branch)
+    verified = await _decode_github_content(full_name, normalized_path, effective_branch)
     json_blob = verified.get("json")
     sha_after: Optional[str]
     if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
@@ -3546,7 +3568,7 @@ async def create_file(
     return {
         "status": "created",
         "full_name": full_name,
-        "path": path,
+        "path": normalized_path,
         "branch": effective_branch,
         "message": commit_message,
         "commit": commit_result,
@@ -3584,12 +3606,15 @@ async def apply_text_update_and_commit(
 
     Args:
         full_name: "owner/repo" string.
-        path: Path of the file within the repository.
+        path: Path of the file within the repository (normalized before write).
         updated_content: New full text for the file (UTF-8).
         branch: Branch to commit to (default "main").
         message: Commit message; if omitted, a simple "Update <path>" is used.
         return_diff: If true, include a unified diff in the response under "diff".
         context_lines: Number of context lines for the unified diff.
+
+    Raises:
+        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
 
     Returns:
         A dict with:
@@ -3604,10 +3629,15 @@ async def apply_text_update_and_commit(
     if context_lines < 0:
         raise ValueError("context_lines must be non-negative")
 
-    effective_branch = _effective_ref_for_repo(full_name, branch)
+    effective_branch, normalized_path = _normalize_write_context(
+        full_name=full_name,
+        branch=branch,
+        path=path,
+    )
 
     _ensure_write_allowed(
-        "apply_text_update_and_commit %s %s" % (full_name, path), target_ref=effective_branch
+        "apply_text_update_and_commit %s %s" % (full_name, normalized_path),
+        target_ref=effective_branch,
     )
 
     # 1) Read the current file state on the target branch, treating a 404 as a new file.
@@ -3623,7 +3653,7 @@ async def apply_text_update_and_commit(
         return sha_value if isinstance(sha_value, str) else None
 
     try:
-        decoded = await _decode_github_content(full_name, path, effective_branch)
+        decoded = await _decode_github_content(full_name, normalized_path, effective_branch)
         old_text = decoded.get("text")
         if not isinstance(old_text, str):
             raise GitHubAPIError("Decoded content is not text")
@@ -3643,14 +3673,14 @@ async def apply_text_update_and_commit(
     if message is not None:
         commit_message = message
     elif is_new_file:
-        commit_message = f"Create {path}"
+        commit_message = f"Create {normalized_path}"
     else:
-        commit_message = f"Update {path}"
+        commit_message = f"Update {normalized_path}"
 
     # 2) Commit the new content via the GitHub Contents API.
     commit_result = await _perform_github_commit(
         full_name=full_name,
-        path=path,
+        path=normalized_path,
         message=commit_message,
         body_bytes=body_bytes,
         branch=effective_branch,
@@ -3658,14 +3688,14 @@ async def apply_text_update_and_commit(
     )
 
     # 3) Verify by reading the file again from the same branch.
-    verified = await _decode_github_content(full_name, path, effective_branch)
+    verified = await _decode_github_content(full_name, normalized_path, effective_branch)
     new_text = verified.get("text")
     sha_after = _extract_sha(verified)
 
     result: Dict[str, Any] = {
         "status": "committed",
         "full_name": full_name,
-        "path": path,
+        "path": normalized_path,
         "branch": effective_branch,
         "message": commit_message,
         "commit": commit_result,
@@ -3683,8 +3713,8 @@ async def apply_text_update_and_commit(
         diff_iter = difflib.unified_diff(
             old_text.splitlines(keepends=True),
             (new_text or "").splitlines(keepends=True),
-            fromfile=f"a/{path}",
-            tofile=f"b/{path}",
+            fromfile=f"a/{normalized_path}",
+            tofile=f"b/{normalized_path}",
             n=context_lines,
         )
         result["diff"] = "".join(diff_iter)
@@ -3716,12 +3746,15 @@ async def apply_patch_and_commit(
 
     Args:
         full_name: 'owner/repo' string.
-        path: Path of the file within the repository.
+        path: Path of the file within the repository (normalized before write).
         patch: Unified diff text affecting this path only.
         branch: Branch to commit to (default 'main').
         message: Commit message; if omitted, a default is derived.
         return_diff: If true, include a recomputed unified diff between the
             old and new text (not just echo the incoming patch).
+
+    Raises:
+        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
 
     Returns:
         A dict with:
@@ -3733,10 +3766,14 @@ async def apply_patch_and_commit(
             - diff: unified diff text (if return_diff is true)
     """
 
-    effective_branch = _effective_ref_for_repo(full_name, branch)
+    effective_branch, normalized_path = _normalize_write_context(
+        full_name=full_name,
+        branch=branch,
+        path=path,
+    )
 
     _ensure_write_allowed(
-        "apply_patch_and_commit %s %s" % (full_name, path),
+        "apply_patch_and_commit %s %s" % (full_name, normalized_path),
         target_ref=effective_branch,
     )
 
@@ -3860,16 +3897,16 @@ async def apply_patch_and_commit(
                 f"found: {sorted(header_paths)}"
             )
         header_path = next(iter(header_paths))
-        if header_path != path:
+        if header_path != normalized_path:
             raise GitHubAPIError(
                 "Patch path mismatch: tool was called with path="
-                f"{path!r} but patch headers refer to {header_path!r}"
+                f"{normalized_path!r} but patch headers refer to {header_path!r}"
             )
 
     # 1) Read current file from GitHub on the target branch. Treat a 404 as a new file.
     is_new_file = False
     try:
-        decoded = await _decode_github_content(full_name, path, effective_branch)
+        decoded = await _decode_github_content(full_name, normalized_path, effective_branch)
         old_text = decoded.get("text")
         if not isinstance(old_text, str):
             raise GitHubAPIError("Decoded content is not text")
@@ -3889,19 +3926,19 @@ async def apply_patch_and_commit(
     except GitHubAPIError:
         raise
     except Exception as exc:  # pragma: no cover - defensive wrapper
-        raise GitHubAPIError(f"Failed to apply patch to {path}: {exc}") from exc
+        raise GitHubAPIError(f"Failed to apply patch to {normalized_path}: {exc}") from exc
 
     body_bytes = new_text.encode("utf-8")
     if message is not None:
         commit_message = message
     else:
         default_action = "Create" if is_new_file else "Update"
-        commit_message = f"{default_action} {path} via patch"
+        commit_message = f"{default_action} {normalized_path} via patch"
 
     # 3) Commit the new content via the GitHub Contents API.
     commit_result = await _perform_github_commit(
         full_name=full_name,
-        path=path,
+        path=normalized_path,
         message=commit_message,
         body_bytes=body_bytes,
         branch=effective_branch,
@@ -3909,14 +3946,14 @@ async def apply_patch_and_commit(
     )
 
     # 4) Verify by reading the file again from the same branch.
-    verified = await _decode_github_content(full_name, path, effective_branch)
+    verified = await _decode_github_content(full_name, normalized_path, effective_branch)
     new_text_verified = verified.get("text")
     sha_after = _extract_sha(verified)
 
     result: Dict[str, Any] = {
         "status": "committed",
         "full_name": full_name,
-        "path": path,
+        "path": normalized_path,
         "branch": effective_branch,
         "message": commit_message,
         "commit": commit_result,
@@ -3932,8 +3969,8 @@ async def apply_patch_and_commit(
         diff_iter = difflib.unified_diff(
             old_text.splitlines(keepends=True),
             (new_text_verified or "").splitlines(keepends=True),
-            fromfile=f"a/{path}",
-            tofile=f"b/{path}",
+            fromfile=f"a/{normalized_path}",
+            tofile=f"b/{normalized_path}",
             n=3,
         )
         result["diff"] = "".join(diff_iter)
