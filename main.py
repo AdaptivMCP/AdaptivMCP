@@ -1143,7 +1143,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
             "Use diff-oriented tools for file changes and treat run_command as "
             "your interactive terminal for quick checks. Avoid oversized "
             "inline payloads or heredocs when a focused command, slice, or diff "
-            "keeps context tight."
+            "keeps context tight. These are workflow preferences, not hard limits."
         ),
         "details": [
             "Once you have read the relevant files or logs for a task, avoid re-calling discovery helpers just to see the same content again. Use workspace commands and diffs to drive the work from that point forward.",
@@ -1158,7 +1158,27 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
             "update_files_and_open_pr",
         ],
         "anti_patterns": [
-            "Embedding large Python or shell scripts in run_command.command to " "edit files.",
+            "Embedding large Python or shell scripts in run_command.command to edit files instead of using normal file-editing tools.",
+        ],
+    }
+
+    limits = {
+        "summary": (
+            "This controller does not impose its own per-task budgets. The only hard "
+            "limits are those enforced by external systems (for example OpenAI "
+            "model token/time limits, GitHub API and repository limits, and the "
+            "deployed MCP server's runtime and network constraints). Within those "
+            "bounds, assistants should follow the expectations and guardrails but "
+            "are not artificially capped by this contract."
+        ),
+        "external_sources": [
+            "OpenAI or other model provider token and request limits.",
+            "GitHub API rate limits, repository permissions, and branch protection rules.",
+            "MCP server deployment constraints such as HTTP timeouts, concurrency, sandboxing, and log truncation.",
+        ],
+        "notes": [
+            "The controller contract does not define its own maximum number of tool calls, edits, or tests for a task; those are governed by external platform limits and the user's instructions.",
+            "Editing preferences, guardrails, and workflows in this contract are behavioral guidelines, not additional resource ceilings beyond what the environment enforces.",
         ],
     }
 
@@ -1190,6 +1210,72 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "issues": ["create_issue", "update_issue", "comment_on_issue", "open_issue_context"],
         "branches": ["compare_refs", "get_branch_summary"],
     }
+
+    guardrails = [
+        "Always verify branch and ref inputs when using git-aware tools; prefer explicit branch names or commit SHAs over defaults when modifying code or opening pull requests.",
+        "Do not bypass write gating or auto-approval flows; if a write is denied, stop and surface the reason instead of attempting alternate write paths.",
+        "When content drift is detected between your working copy and GitHub, re-fetch or re-clone before applying large changes so patches are computed against the current remote state.",
+        "Prefer slice-and-diff workflows for large files or risky edits; avoid overwriting entire files when a small, well-scoped patch is sufficient.",
+        "Pause and summarize after repeated failures with the same tool; show recent inputs and outputs and propose a revised plan instead of blindly retrying.",
+        "When responding with tool calls for this controller repo, begin by listing the concrete actions you will take in that turn so humans can confirm the sequence before you execute them.",
+        "For this controller repo, never use the real default branch (for example 'main') as the ref for MCP tools while you are doing work. For each task, create or ensure a dedicated feature branch first, then treat that branch as your effective main and route all repo/ref arguments for reading, editing, testing, linting, and PR helpers through that branch until a human has reviewed, merged, and closed it.",
+        "After every commit that writes from the persistent workspace, you must re-clone the same branch with ensure_workspace_clone(reset=true) before running run_tests, repo-defined lint suites, additional edits, PR helpers, or deployment-related checks. This reclone step is mandatory and never skippable; you may not rely on a stale workspace after a commit.\n",
+        "Before using any MCP tool in a session (including tools you have used in prior sessions), call describe_tool for that tool and, when applicable, validate_tool_args for your candidate payload so you are working from the live schema instead of guesses.",
+        "Treat yourself as the sole author of tool parameters: do not ask humans to supply JSON payloads or guess arguments for you, and proactively adjust parameters (paths, branches, timeouts, flags) to match the work you are performing.",
+        "Never fake or simulate MCP tool calls. Every tool you mention as having run must correspond to a real invocation through this GitHub MCP server, and you must not claim to have merged branches, restarted services, or performed out-of-band actions that only humans (or GitHub) can do.",
+        "Treat validate_environment and other deployment checks as dependent on Joey merging and restarting the service; use them sparingly, do not loop on them, and never claim you merged or restarted anything yourself.",
+    ]
+
+    payload: Dict[str, Any] = {
+        "version": CONTROLLER_CONTRACT_VERSION,
+        "summary": "Contract describing how controllers, assistants, and this GitHub MCP server work together.",
+        "audience": {
+            "applies_to": "assistants_only",
+            "note": (
+                "This contract governs AI assistants using this MCP server. "
+                "Humans, repo owners, and reviewers are not bound by these "
+                "rules and may override them via normal GitHub review and configuration."
+            ),
+        },
+        "controller": {
+            "repo": CONTROLLER_REPO,
+            "default_branch": CONTROLLER_DEFAULT_BRANCH,
+            "write_allowed_default": server.WRITE_ALLOWED,
+        },
+        "expectations": {
+            "assistant": assistant_expectations,
+            "controller_prompt": controller_prompt_expectations,
+            "server": server_expectations,
+        },
+        "prompts": {
+            "controller_prompt": controller_prompt_prompts,
+            "server": server_prompts,
+        },
+        "editing_preferences": editing_preferences,
+        "limits": limits,
+        "tooling": tooling,
+        "guardrails": guardrails,
+    }
+
+    if compact_mode:
+        payload["compact"] = True
+        payload["expectations"] = {
+            "assistant_count": len(assistant_expectations),
+            "controller_prompt_count": len(controller_prompt_expectations),
+            "server_count": len(server_expectations),
+            "note": "Set compact=false to receive the full expectation text.",
+        }
+        payload["prompts"] = {
+            "controller_prompt_count": len(controller_prompt_prompts),
+            "server_count": len(server_prompts),
+            "note": "Set compact=false to receive the full prompt guidance.",
+        }
+        payload["guardrails"] = {
+            "count": len(guardrails),
+            "examples": guardrails[:2],
+        }
+
+    return payload
 
     guardrails = [
         "Always verify branch and ref inputs when using git-aware tools; prefer explicit branch names or commit SHAs over defaults when modifying code or opening pull requests.",
