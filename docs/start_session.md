@@ -2,7 +2,9 @@
 
 This document explains how controllers and assistants should start a session with the GitHub MCP server in this repository.
 
-The single source of truth for expectations is the `controller_contract` tool. This file and the controller prompt docs (`docs/assistant/CONTROLLER_PROMPT_V1.md`) are commentary and examples that show how to honor that contract in practice. If anything here disagrees with `controller_contract`, the contract wins and the docs should be updated.
+The single source of truth for expectations and limits is the `controller_contract` tool. That contract now includes an explicit `limits` section that describes external constraints (model provider token/time limits, GitHub API and repository limits, and MCP runtime constraints). This server does **not** add its own per-task budgets on top of those; instead, it defines workflows, guardrails, and editing preferences that sit inside whatever limits the environment enforces.
+
+This file and the controller prompt docs (`docs/assistant/CONTROLLER_PROMPT_V1.md`) are commentary and examples that show how to honor that contract in practice. If anything here disagrees with `controller_contract`, the contract wins and the docs should be updated via normal PRs.
 
 ## Recommended startup sequence
 
@@ -11,17 +13,16 @@ On a new session (or after the context is obviously truncated), controllers shou
 1. `get_server_config`
    - Discover whether writes are allowed (`write_allowed`).
    - Learn the default controller repository and branch.
-   - Inspect HTTP, concurrency, and approval settings so you understand the environment.
+   - Inspect HTTP, concurrency, and approval settings so you understand the environment and its external limits.
 
 2. `controller_contract` with `compact=true`
-   - Fetch the structured contract that defines expected workflows, guardrails, and tooling.
+   - Fetch the structured contract that defines expected workflows, guardrails, tooling, and external limits.
    - Treat this as the authoritative description of how to use the server.
 
 3. `list_all_actions` with `include_parameters=true`
    - Enumerate every MCP tool exposed by this server.
    - See which tools are read-only versus write-tagged.
    - Inspect top-level input schemas for each tool.
-
 4. For each tool you plan to use in this session (especially write-tagged or complex ones):
    - Call `describe_tool` with that tool's name and `include_parameters=true` to see its current input schema.
    - Prepare the arguments as a real JSON object (no JSON-in-strings).
