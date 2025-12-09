@@ -21,9 +21,23 @@ class WriteNotAuthorizedError(Exception):
     pass
 
 
+class ToolArgNormalizationError(ValueError):
+    """Raised when tool arguments cannot be safely normalized."""
+
+    pass
+
+
+class ToolPreflightValidationError(ValueError):
+    """Raised when tool payloads fail server-side preflight validation."""
+
+    pass
+
+
 __all__ = [
     "GitHubAPIError",
     "GitHubAuthError",
     "GitHubRateLimitError",
     "WriteNotAuthorizedError",
+    "ToolArgNormalizationError",
+    "ToolPreflightValidationError",
 ]
