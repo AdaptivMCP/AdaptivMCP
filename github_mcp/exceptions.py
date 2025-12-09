@@ -21,16 +21,16 @@ class WriteNotAuthorizedError(Exception):
     pass
 
 
-class ToolArgNormalizationError(ValueError):
-    """Raised when tool arguments cannot be safely normalized."""
+class ToolPreflightValidationError(Exception):
+    """Raised when server-side tool argument preflight fails.
 
-    pass
+    This error is intentionally lightweight so callers see a clear, single-line
+    message that points at the offending tool and field.
+    """
 
-
-class ToolPreflightValidationError(ValueError):
-    """Raised when tool payloads fail server-side preflight validation."""
-
-    pass
+    def __init__(self, tool: str, message: str) -> None:
+        super().__init__(f"Preflight validation failed for tool {tool!r}: {message}")
+        self.tool = tool
 
 
 __all__ = [
@@ -38,6 +38,5 @@ __all__ = [
     "GitHubAuthError",
     "GitHubRateLimitError",
     "WriteNotAuthorizedError",
-    "ToolArgNormalizationError",
     "ToolPreflightValidationError",
 ]
