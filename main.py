@@ -1340,7 +1340,7 @@ async def move_file(
         delete_body["sha"] = await _resolve_file_sha(full_name, from_path, effective_branch)
     except GitHubAPIError as exc:
         msg = str(exc)
-        if "404" in msg and "/contents/" in msg:
+        if "404" in msg:
             delete_result = {"status": "noop", "reason": "source path missing"}
         else:
             raise
@@ -3539,7 +3539,7 @@ async def create_file(
         await _decode_github_content(full_name, normalized_path, effective_branch)
     except GitHubAPIError as exc:
         msg = str(exc)
-        if "404" in msg and "/contents/" in msg:
+        if "404" in msg:
             sha_before: Optional[str] = None
         else:
             raise
@@ -3664,7 +3664,7 @@ async def apply_text_update_and_commit(
         sha_before = _extract_sha(decoded)
     except GitHubAPIError as exc:
         msg = str(exc)
-        if "404" in msg and "/contents/" in msg:
+        if "404" in msg:
             # The GitHub Contents API returns 404 when the file does not yet exist.
             # In that case we treat this as a creation rather than an update.
             is_new_file = True
@@ -3917,7 +3917,7 @@ async def apply_patch_and_commit(
         sha_before = _extract_sha(decoded)
     except GitHubAPIError as exc:
         msg = str(exc)
-        if "404" in msg and "/contents/" in msg:
+        if "404" in msg:
             is_new_file = True
             old_text = ""
             sha_before = None
