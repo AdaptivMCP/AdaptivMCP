@@ -98,6 +98,7 @@ from github_mcp.utils import (
     _render_visible_whitespace,
     _with_numbered_lines,
     normalize_args,
+    _normalize_write_context,
 )
 from github_mcp.workspace import (
     _apply_patch_to_repo,  # noqa: F401
@@ -3482,13 +3483,15 @@ async def create_file(
     branch: str = "main",
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create a new text file in a repository.
+    """Create a new text file in a repository after normalizing path and branch.
 
-    The call fails if the file already exists on the target branch.
+    This helper performs a lightweight server-side preflight to normalize the
+    target branch and repository path before issuing any write to GitHub. The
+    call fails if the file already exists on the target branch.
 
     Args:
         full_name: "owner/repo" string.
-        path: Path of the file within the repository.
+        path: Path of the file within the repository (normalized before write).
         content: UTF-8 text content of the new file.
         branch: Branch to commit to (default "main").
         message: Optional commit message; if omitted, a default is derived.
@@ -3501,18 +3504,26 @@ async def create_file(
             - commit: Raw commit response from GitHub.
             - verification: A dict containing sha_before (always None),
               sha_after and html_url from a fresh read of the file.
+
+    Raises:
+        ToolPreflightValidationError: If the branch/path combination fails
+            server-side normalization.
     """
 
-    effective_branch = _effective_ref_for_repo(full_name, branch)
+    effective_branch, normalized_path = _normalize_write_context(
+        full_name=full_name,
+        branch=branch,
+        path=path,
+    )
 
     _ensure_write_allowed(
-        "create_file %s %s" % (full_name, path),
+        "create_file %s %s" % (full_name, normalized_path),
         target_ref=effective_branch,
     )
 
     # Ensure the file does not already exist.
     try:
-        await _decode_github_content(full_name, path, effective_branch)
+        await _decode_github_content(full_name, normalized_path, effective_branch)
     except GitHubAPIError as exc:
         msg = str(exc)
         if "404" in msg and "/contents/" in msg:
@@ -3520,21 +3531,23 @@ async def create_file(
         else:
             raise
     else:
-        raise GitHubAPIError(f"File already exists at {path} on branch {effective_branch}")
+        raise GitHubAPIError(
+            f"File already exists at {normalized_path} on branch {effective_branch}"
+        )
 
     body_bytes = content.encode("utf-8")
-    commit_message = message or f"Create {path}"
+    commit_message = message or f"Create {normalized_path}"
 
     commit_result = await _perform_github_commit(
         full_name=full_name,
-        path=path,
+        path=normalized_path,
         message=commit_message,
         body_bytes=body_bytes,
         branch=effective_branch,
         sha=sha_before,
     )
 
-    verified = await _decode_github_content(full_name, path, effective_branch)
+    verified = await _decode_github_content(full_name, normalized_path, effective_branch)
     json_blob = verified.get("json")
     sha_after: Optional[str]
     if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
@@ -3546,7 +3559,7 @@ async def create_file(
     return {
         "status": "created",
         "full_name": full_name,
-        "path": path,
+        "path": normalized_path,
         "branch": effective_branch,
         "message": commit_message,
         "commit": commit_result,
