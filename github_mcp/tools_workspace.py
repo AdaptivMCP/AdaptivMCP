@@ -41,12 +41,7 @@ def _workspace_deps() -> Dict[str, Any]:
 async def ensure_workspace_clone(
     full_name: str, ref: str = "main", reset: bool = False
 ) -> Dict[str, Any]:
-    """Ensure a persistent workspace exists for ``full_name``/``ref``.
-
-    When ``reset`` is True, the workspace is refreshed to match the remote
-    branch, discarding local edits. Otherwise, the existing workspace (if any)
-    is kept intact so commands and commits share the same on-disk tree.
-    """
+    """Ensure a persistent workspace clone exists for a repo/ref."""
 
     try:
         effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -80,38 +75,7 @@ async def run_command(
     installing_dependencies: bool = False,
     mutating: bool = False,
 ) -> Dict[str, Any]:
-    """Run an arbitrary shell command in a persistent workspace clone.
-
-    Args:
-        full_name: GitHub repository in ``owner/name`` format.
-        ref: Branch, tag, or commit to check out. Defaults to ``main``.
-        command: Shell command to execute inside the clone.
-        timeout_seconds: Hard timeout applied to the command execution.
-        workdir: Optional path inside the repository to use as the working
-            directory.
-        patch: Optional unified diff that will be applied before running the
-            command so assistants can run tests against in-flight edits.
-        use_temp_venv: When true (default), commands run inside a temporary
-            virtualenv rooted in the workspace so ``pip install`` steps do not
-            mutate the server-wide environment. The virtualenv is reused across
-            calls when the workspace persists on disk.
-        installing_dependencies: Set to ``true`` when the command installs
-            packages or otherwise mutates the server environment so write
-            gating can apply to that call. Commands that only inspect or
-            modify the workspace can leave this false for faster iteration.
-        mutating: Set to ``true`` when the command is expected to edit files
-            in the workspace so the write gate can apply only to those
-            calls. Read-only and test commands can leave this false so they
-            run without requiring write approval.
-
-    The workspace directory is kept on disk so subsequent calls can reuse
-    installed dependencies and edits. The same workspace is shared with
-    ``commit_workspace`` so changes made via ``run_command`` remain available
-    for commits and later commands. Callers should pass a patch when they need
-    the workspace to mirror in-flight edits. The tool is read-tagged by default;
-    set ``mutating=true`` (or the other gating flags) when a command will write
-    so approval applies only to those cases.
-    """
+    """Run a shell command in a persistent workspace clone."""
 
     env: Optional[Dict[str, str]] = None
     try:
@@ -161,16 +125,7 @@ async def commit_workspace(
     add_all: bool = True,
     push: bool = True,
 ) -> Dict[str, Any]:
-    """Commit and optionally push changes from the persistent workspace.
-
-    Args:
-        full_name: GitHub repository in ``owner/name`` format.
-        ref: Branch to commit to. Defaults to ``main`` but will map to the
-            controller default branch when appropriate.
-        message: Commit message used when writing changes.
-        add_all: Stage all changes with ``git add -A`` before committing.
-        push: Whether to push the commit back to the remote branch.
-    """
+    """Commit workspace changes and optionally push them."""
 
     try:
         effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -286,13 +241,7 @@ async def get_workspace_changes_summary(
     path_prefix: Optional[str] = None,
     max_files: int = 200,
 ) -> Dict[str, Any]:
-    """Summarize the current workspace changes for a repo/ref.
-
-    This helper inspects the persistent workspace for ``full_name``/``ref``
-    and returns a structured view of modified, added, deleted, renamed, and
-    untracked files. It is intended as a light-weight "what did I change?"
-    helper that assistants can call before committing or opening a PR.
-    """
+    """Summarize modified, added, deleted, renamed, and untracked files in the workspace."""
 
     deps = _workspace_deps()
     effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -385,21 +334,7 @@ async def run_tests(
     installing_dependencies: bool = False,
     mutating: bool = False,
 ) -> Dict[str, Any]:
-    """Run the project's test command inside the persistent workspace.
-
-    ``run_tests`` is a thin wrapper around ``run_command`` with a more explicit
-    default timeout. Provide ``patch`` when running tests against pending edits
-    so the checkout matches the assistant's current working diff.
-    Set ``installing_dependencies`` to ``true`` only when the test command also
-    installs packages so gating can apply to that narrower use case. Set
-    ``mutating=true`` only when the tests will rewrite files; read-only test
-    runs remain ungated by default.
-
-    The returned object always includes a top-level "status" field summarizing
-    the outcome ("passed" or "failed") and echoes the test command so callers
-    and smoke tests can reason about the run without digging into the raw
-    command result.
-    """
+    """Run the project's test command in the persistent workspace and summarize the result."""
     result = await run_command(
         full_name=full_name,
         ref=ref,
@@ -460,12 +395,7 @@ async def run_quality_suite(
     installing_dependencies: bool = False,
     mutating: bool = False,
 ) -> Dict[str, Any]:
-    """Run the standard quality suite for a repo/branch.
-
-    Today this is a thin wrapper around ``run_tests`` so controllers can
-    standardize on a single "quality gate" tool. Future versions may extend
-    this helper to run linters or formatters alongside tests.
-    """
+    """Run the standard quality/test suite for a repo/ref."""
     return await run_tests(
         full_name=full_name,
         ref=ref,
@@ -491,15 +421,7 @@ async def run_lint_suite(
     installing_dependencies: bool = False,
     mutating: bool = False,
 ) -> Dict[str, Any]:
-    """Run the lint/static-analysis suite for a repo/branch.
-
-    By default this runs ``ruff check .`` inside the workspace for the given
-    repo/ref. Callers can override ``lint_command`` to run different or
-    additional tools (for example ``mypy`` or project-specific scripts).
-
-    This helper is parallel to ``run_quality_suite`` but focused on style and
-    static analysis rather than tests.
-    """
+    """Run the lint or static-analysis command in the workspace."""
     return await run_command(
         full_name=full_name,
         ref=ref,
@@ -524,15 +446,7 @@ async def build_pr_summary(
     lint_status: Optional[str] = None,
     breaking_changes: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """Build a structured summary for a pull request description.
-
-    This helper does **not** call the GitHub API. Instead, it returns a
-    normalized JSON object that controllers can render into a rich,
-    high-level PR description or use for automated quality checks.
-
-    Controllers should treat this as the canonical schema for AI-authored
-    PR descriptions in this repo.
-    """
+    """Build a normalized JSON summary for a pull request description."""
     return {
         "repo": full_name,
         "ref": ref,
