@@ -1801,6 +1801,15 @@ def list_all_actions(
         description = getattr(tool, "description", None) or (func.__doc__ or "")
         description = description.strip()
 
+        # In non-compact mode, prefer the full function docstring when it
+        # contains more detail than the MCP-level description. Some tools
+        # expose a short summary via tool.description but keep richer guidance
+        # in the underlying docstring.
+        if not compact_mode:
+            full_doc = (func.__doc__ or "").strip()
+            if full_doc and len(full_doc) > len(description):
+                description = full_doc
+
         if compact_mode and description:
             compact_description = description.splitlines()[0].strip() or description
             max_length = 200
