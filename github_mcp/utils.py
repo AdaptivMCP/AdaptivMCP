@@ -80,15 +80,13 @@ def _normalize_branch(full_name: str, branch: str | None) -> str:
     """Normalize a branch name while honoring controller defaults."""
 
     effective = _effective_ref_for_repo(full_name, branch or "main")
-    default_branch = _default_branch_for_repo(full_name)
 
     # Let higher layers decide whether writes to the default branch are allowed.
     # The normalizer only ensures we have a stable, explicit ref.
     if not effective:
         raise ToolPreflightValidationError("<server>", "Effective branch name resolved to an empty value.")
 
-    if "
-" in effective or "	" in effective:
+    if any(ord(ch) < 32 for ch in effective):
         raise ToolPreflightValidationError("<server>", f"Branch name contains control characters: {effective!r}")
 
     return effective
