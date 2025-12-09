@@ -208,8 +208,6 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
     server.WRITE_ALLOWED = bool(approved)
     return {"write_allowed": server.WRITE_ALLOWED}
 
-    server.WRITE_ALLOWED = bool(approved)
-    return {"write_allowed": server.WRITE_ALLOWED}
 
 
 # ------------------------------------------------------------------------------
