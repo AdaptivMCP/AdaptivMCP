@@ -377,12 +377,7 @@ async def validate_environment() -> Dict[str, Any]:
                 "level": level,
                 "message": message,
                 "details": details,
-            }
-        )
-        if level == "error":
-            status = "error"
-        elif level == "warning" and status != "error":
-            status = "warning"
+    """Check environment configuration and report common problems."""
 
     # GitHub token presence/shape
     raw_token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
