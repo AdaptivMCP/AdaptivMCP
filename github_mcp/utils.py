@@ -68,10 +68,14 @@ def _normalize_repo_path(path: str) -> str:
 
     parts = normalized.split("/")
     if any(part == ".." for part in parts):
-        raise ToolPreflightValidationError("<server>", f"Invalid path {path!r}: parent-directory segments are not allowed.")
+        raise ToolPreflightValidationError(
+            "<server>", f"Invalid path {path!r}: parent-directory segments are not allowed."
+        )
 
     if not normalized:
-        raise ToolPreflightValidationError("<server>", "Path must not be empty after normalization.")
+        raise ToolPreflightValidationError(
+            "<server>", "Path must not be empty after normalization."
+        )
 
     return normalized
 
@@ -84,10 +88,14 @@ def _normalize_branch(full_name: str, branch: str | None) -> str:
     # Let higher layers decide whether writes to the default branch are allowed.
     # The normalizer only ensures we have a stable, explicit ref.
     if not effective:
-        raise ToolPreflightValidationError("<server>", "Effective branch name resolved to an empty value.")
+        raise ToolPreflightValidationError(
+            "<server>", "Effective branch name resolved to an empty value."
+        )
 
     if any(ord(ch) < 32 for ch in effective):
-        raise ToolPreflightValidationError("<server>", f"Branch name contains control characters: {effective!r}")
+        raise ToolPreflightValidationError(
+            "<server>", f"Branch name contains control characters: {effective!r}"
+        )
 
     return effective
 

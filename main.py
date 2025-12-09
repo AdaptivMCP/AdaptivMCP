@@ -200,14 +200,12 @@ async def commit_workspace_files(
     )
 
 
-
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
     """Allow or block tools marked write_action=True for this server."""
 
     server.WRITE_ALLOWED = bool(approved)
     return {"write_allowed": server.WRITE_ALLOWED}
-
 
 
 # ------------------------------------------------------------------------------
@@ -356,7 +354,6 @@ async def validate_environment() -> Dict[str, Any]:
 
     checks: List[Dict[str, Any]] = []
     status = "ok"
-
 
     def add_check(
         name: str, level: str, message: str, details: Optional[Dict[str, Any]] = None
@@ -1912,9 +1909,7 @@ async def describe_tool(
             found.append(entry)
 
     if not found:
-        raise ValueError(
-            f"Unknown tool name(s): {', '.join(sorted(set(missing)))}"
-        )
+        raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
 
     result: Dict[str, Any] = {"tools": found}
 
@@ -1929,9 +1924,8 @@ async def describe_tool(
 
     return result
 
-def _validate_single_tool_args(
-    tool_name: str, args: Optional[Mapping[str, Any]]
-) -> Dict[str, Any]:
+
+def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
 
     found = _find_registered_tool(tool_name)
@@ -1943,9 +1937,7 @@ def _validate_single_tool_args(
                 if getattr(tool, "name", None) or getattr(func, "__name__", None)
             )
         )
-        raise ValueError(
-            f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}"
-        )
+        raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
 
     tool, _ = found
     schema = _normalize_input_schema(tool)
@@ -2073,9 +2065,7 @@ async def validate_tool_args(
             results.append(result)
 
     if not results:
-        raise ValueError(
-            f"Unknown tool name(s): {', '.join(sorted(set(missing)))}"
-        )
+        raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
 
     response: Dict[str, Any] = {"results": results}
 
@@ -2102,7 +2092,6 @@ async def validate_tool_args(
         response["missing_tools"] = sorted(set(missing))
 
     return response
-
 
 
 @mcp_tool(write_action=False)

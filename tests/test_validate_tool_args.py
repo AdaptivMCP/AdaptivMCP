@@ -30,6 +30,7 @@ async def test_validate_tool_args_reports_missing_fields_and_enables_repair_flow
     assert repaired_validation["valid"] is True
     assert repaired_validation["errors"] == []
 
+
 @pytest.mark.asyncio
 async def test_validate_tool_args_passes_for_known_tool():
     result = await main.validate_tool_args(
