@@ -224,11 +224,7 @@ async def get_server_config() -> Dict[str, Any]:
 
     return {
         "write_allowed": server.WRITE_ALLOWED,
-        "github_api_base": GITHUB_API_BASE,
-        "http": {
-            "timeout": HTTPX_TIMEOUT,
-            "max_connections": HTTPX_MAX_CONNECTIONS,
-            "max_keepalive": HTTPX_MAX_KEEPALIVE,
+    """Return a snapshot of server configuration for assistants."""
         },
         "concurrency": {
             "max_concurrency": MAX_CONCURRENCY,
