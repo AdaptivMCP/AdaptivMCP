@@ -1054,8 +1054,8 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
     are gated.
 
     When ``compact`` is ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
-    set), the response is shortened to reduce token usage while keeping counts
-    and summaries available.
+    set), the response is shortened to stay compact while keeping counts and
+    summaries available.
     """
 
     compact_mode = COMPACT_METADATA_DEFAULT if compact is None else compact
@@ -1065,7 +1065,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Use run_command and run_tests as the default execution paths for inspecting repos, installing dependencies, running checks, and driving local workflows; do not assume packages are installed in the MCP server process.",
         "Keep run_command and run_tests visible in normal workflows instead of avoiding them; they are part of the expected toolchain.",
         "Treat run_command as your keyboard on a dedicated development machine: run project-specific or shell-level commands (including git, editors, linters, formatters, build scripts, migrations, and one-off diagnostics) there instead of inventing inline workarounds.",
-        "Discourage token-heavy inline calls for data gathering or editing; prefer targeted run_command queries, slices, and diffs so outputs stay concise.",
+        "Discourage very large inline calls for data gathering or editing; prefer targeted run_command queries, slices, and diffs so outputs stay concise.",
         "Approach tasks like a real developer: gather context from relevant files, usages, and tests before editing, and reference concrete modules, identifiers, and line numbers when summarizing findings or planning changes.",
         "Remember that only the assistant drives tool calls: do not ask humans to type commands, add blank lines, or re-run failed steps manually. Use diff-based tools and workspace helpers to handle quoting, newlines, and retries yourself.",
         "Default to the branch-diff-test-PR flow: create or ensure a feature branch before edits, apply diffs with patch helpers instead of ad-hoc inline scripts, run tests or repo-native checks on that branch, and open a pull request with a concise summary when work is done. When opening a PR, you must use the build_pr_summary tool to construct the PR title and body instead of writing freeform descriptions.\n",
@@ -1124,7 +1124,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
         "Push assistants to run repo-native linters and formatters early (especially autofixers) so trivial syntax or style errors are resolved before code review.",
         "Encourage assistants to add or adjust tests alongside code changes and to run run_tests on the relevant feature branch before opening PRs.",
         "Steer assistants toward update_files_and_open_pr or apply_patch_and_commit instead of low-level Git operations.",
-        "Nudge assistants toward large-file helpers like get_file_slice, build_section_based_diff, and validate_json_string to avoid retries and token blowups.",
+        "Nudge assistants toward large-file helpers like get_file_slice, build_section_based_diff, and validate_json_string to avoid retries and oversized responses.",
         "Remind assistants that search tools have strict schemas; they must use only the parameters documented in list_all_actions(include_parameters=true) and must not invent arguments like full_name unless explicitly supported.",
         "Encourage assistants to treat repo-scoped search as the default for this controller repo by using dedicated repo helpers or including repo:Proofgate-Revocations/chatgpt-mcp-github in search queries.",
         "Discourage unqualified global GitHub searches for normal controller tasks; global search should only be used when the user explicitly asks for cross-repo or ecosystem-wide context.",
@@ -1141,7 +1141,7 @@ def controller_contract(compact: Optional[bool] = None) -> Dict[str, Any]:
     editing_preferences = {
         "summary": (
             "Use diff-oriented tools for file changes and treat run_command as "
-            "your interactive terminal for quick checks. Avoid token-heavy "
+            "your interactive terminal for quick checks. Avoid oversized "
             "inline payloads or heredocs when a focused command, slice, or diff "
             "keeps context tight."
         ),
@@ -1777,8 +1777,9 @@ def list_all_actions(
         include_parameters: When ``True``, include the serialized input schema
             for each tool to clarify argument names and types.
         compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
-            set), shorten descriptions and omit tag metadata to reduce token
-            usage.
+        compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
+            set), shorten descriptions and omit tag metadata to keep responses
+            compact.
     """
 
     compact_mode = COMPACT_METADATA_DEFAULT if compact is None else compact
