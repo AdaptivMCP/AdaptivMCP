@@ -466,27 +466,56 @@ async def validate_environment() -> Dict[str, Any]:
         },
     )
 
-    # Git identity env vars (presence).
-    identity_envs = {
-        "GIT_AUTHOR_NAME": os.environ.get("GIT_AUTHOR_NAME"),
-        "GIT_AUTHOR_EMAIL": os.environ.get("GIT_AUTHOR_EMAIL"),
-        "GIT_COMMITTER_NAME": os.environ.get("GIT_COMMITTER_NAME"),
-        "GIT_COMMITTER_EMAIL": os.environ.get("GIT_COMMITTER_EMAIL"),
-    }
-    missing_identity = [name for name, value in identity_envs.items() if not value]
-    if missing_identity:
-        add_check(
-            "git_identity_env",
-            "warning",
-            "Git identity env vars are not fully configured; defaults may be used for commits",
-            {"missing": missing_identity},
-        )
-    else:
-        add_check(
-            "git_identity_env",
-            "ok",
-            "Git identity env vars are configured",
-            {},
+    # HTTP / concurrency config (always informational; defaults are fine).
+    add_check(
+        "http_config",
+        "ok",
+        "HTTP client configuration resolved",
+        {
+            "github_api_base": GITHUB_API_BASE,
+            "timeout": HTTPX_TIMEOUT,
+            "max_connections": HTTPX_MAX_CONNECTIONS,
+            "max_keepalive": HTTPX_MAX_KEEPALIVE,
+        },
+    )
+    add_check(
+        "concurrency_config",
+        "ok",
+        "Concurrency limits resolved",
+        {
+            "max_concurrency": MAX_CONCURRENCY,
+            "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
+        },
+    )
+
+    # Controller repo/branch health (requires token)
+    if token_ok:
+        try:
+            data = await _github_request("GET", f"/repos/{controller_repo}")
+            payload = data.get("json") or {}
+            default_branch = payload.get("default_branch")
+            add_check(
+                "controller_repo_health",
+                "ok",
+                "Controller repository is reachable",
+                {"full_name": controller_repo, "default_branch": default_branch},
+            )
+        except GitHubAuthError as exc:
+            add_check(
+                "controller_repo_health",
+                "error",
+                "GitHub token is not authorized to access controller repository",
+                {"full_name": controller_repo, "error": str(exc)},
+            )
+        except GitHubAPIError as exc:
+            add_check(
+                "controller_repo_health",
+                "warning",
+                "Controller repository API check failed",
+                {"full_name": controller_repo, "error": str(exc)},
+            )
+
+    return {"status": status, "checks": checks}
         )
 
     # HTTP / concurrency config (always informational; defaults are fine).
