@@ -203,15 +203,10 @@ async def commit_workspace_files(
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Toggle write-tagged tools on or off for the running server instance.
+    """Allow or block tools marked write_action=True for this server."""
 
-    Args:
-        approved: Set to ``true`` to allow tools marked ``write_action=True`` to
-            execute; set to ``false`` to block them. The environment variable
-            ``GITHUB_MCP_AUTO_APPROVE`` seeds the initial value, but this tool is
-            the runtime override assistants should call when they need to enable
-            writes for a session.
-    """
+    server.WRITE_ALLOWED = bool(approved)
+    return {"write_allowed": server.WRITE_ALLOWED}
 
     server.WRITE_ALLOWED = bool(approved)
     return {"write_allowed": server.WRITE_ALLOWED}
@@ -224,11 +219,9 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 @mcp_tool(write_action=False)
 async def get_server_config() -> Dict[str, Any]:
-    """Return a non-sensitive snapshot of connector configuration for assistants.
+    """Return a safe summary of MCP connector and runtime settings."""
 
-    Safe to call at the start of a session to understand write gating, HTTP
-    timeouts, concurrency limits, and sandbox configuration.
-    """
+    return {
 
     return {
         "write_allowed": server.WRITE_ALLOWED,
@@ -279,21 +272,15 @@ async def get_server_config() -> Dict[str, Any]:
 
 @mcp_tool(
     write_action=False,
-    description=(
-        "Validate and normalize JSON strings before returning them to clients. "
-        "Useful when controller prompts require strict JSON responses and the "
-        "assistant wants to double-check correctness before replying."
-    ),
+    description="Validate a JSON string and return a normalized form.",
     tags=["meta", "json", "validation"],
 )
 def validate_json_string(raw: str) -> Dict[str, Any]:
-    """Validate a JSON string and return a canonicalized representation.
+    """Validate a JSON string and report parse status and errors."""
 
-    Returns a structured payload indicating whether the JSON parsed
-    successfully, an error description when parsing fails, and a
-    normalized string the assistant can copy verbatim when it needs to
-    emit strict JSON without risking client-side parse errors.
-    """
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
 
     try:
         parsed = json.loads(raw)
@@ -377,12 +364,10 @@ async def get_repo_defaults(
 
 @mcp_tool(write_action=False)
 async def validate_environment() -> Dict[str, Any]:
-    """Validate environment configuration and report common misconfigurations.
+    """Check GitHub-related environment settings and report problems."""
 
-    This tool is safe to run at any time. It only inspects process environment
-    variables and performs lightweight GitHub API checks for the configured
-    controller repository and branch.
-    """
+    checks: List[Dict[str, Any]] = []
+    status = "ok"
 
     checks: List[Dict[str, Any]] = []
     status = "ok"
