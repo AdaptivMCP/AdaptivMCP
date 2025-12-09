@@ -375,9 +375,31 @@ async def validate_environment() -> Dict[str, Any]:
             {
                 "name": name,
                 "level": level,
+@mcp_tool(write_action=False)
+async def validate_environment() -> Dict[str, Any]:
+    """Check environment configuration and report common problems."""
+
+    checks: List[Dict[str, Any]] = []
+    status = "ok"
+
+    def add_check(
+        name: str, level: str, message: str, details: Optional[Dict[str, Any]] = None
+    ) -> None:
+        nonlocal status
+        if details is None:
+            details = {}
+        checks.append(
+            {
+                "name": name,
+                "level": level,
                 "message": message,
                 "details": details,
-    """Check environment configuration and report common problems."""
+            }
+        )
+        if level == "error":
+            status = "error"
+        elif level == "warning" and status != "error":
+            status = "warning"
 
     # GitHub token presence/shape
     raw_token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
@@ -437,6 +459,9 @@ async def validate_environment() -> Dict[str, Any]:
                 "GITHUB_MCP_CONTROLLER_BRANCH"
                 if os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") is not None
                 else None
+            ),
+        },
+    )
             ),
         },
     )
