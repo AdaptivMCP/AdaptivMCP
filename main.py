@@ -216,15 +216,15 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 @mcp_tool(write_action=False)
 async def get_server_config() -> Dict[str, Any]:
-    """Return a non-sensitive snapshot of connector configuration for assistants.
-
-    Safe to call at the start of a session to understand write gating, HTTP
-    timeouts, concurrency limits, and sandbox configuration.
-    """
+    """Return a snapshot of server configuration for assistants."""
 
     return {
         "write_allowed": server.WRITE_ALLOWED,
-    """Return a snapshot of server configuration for assistants."""
+        "github_api_base": GITHUB_API_BASE,
+        "http": {
+            "timeout": HTTPX_TIMEOUT,
+            "max_connections": HTTPX_MAX_CONNECTIONS,
+            "max_keepalive": HTTPX_MAX_KEEPALIVE,
         },
         "concurrency": {
             "max_concurrency": MAX_CONCURRENCY,
