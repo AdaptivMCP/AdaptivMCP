@@ -1,9 +1,56 @@
 # Detailed MCP tools reference
 
 > Note: This file is intended to be generated or updated from the live tool catalog via `list_all_actions(include_parameters=true, compact=false)`. If new tools are added or schemas change, regenerate or update this document to match the server.
+>
+> This document also shows how tools fit into the branch–diff–test–PR workflow so controllers and assistants can reason about full flows, not just single calls.
+
+---
+
+## High-level flows
+
+### File-editing flow (slice → diff → commit → PR)
+
+```mermaid
+flowchart TD
+    A[open_file_context / get_file_with_line_numbers] --> B[get_file_slice]
+    B --> C[build_unified_diff / build_section_based_diff]
+    C --> D[apply_patch_and_commit / apply_line_edits_and_commit / apply_text_update_and_commit]
+    D --> E[run_tests / run_lint_suite]
+    E --> F[build_pr_summary]
+    F --> G[open_pr_for_existing_branch / update_files_and_open_pr]
+```
+
+This is the recommended pattern for most edits: fetch a focused view, compute a diff, apply a commit helper, validate with tests/linters, then open or update a PR.
+
+### Workspace and CI flow
+
+```mermaid
+flowchart TD
+    A[ensure_workspace_clone] --> B[run_command / run_tests / run_lint_suite / run_quality_suite]
+    B --> C[get_workspace_changes_summary]
+    C --> D[commit_workspace / commit_workspace_files]
+    D --> E[compare_refs / get_branch_summary / get_latest_branch_status]
+    E --> F[open_pr_for_existing_branch / update_files_and_open_pr]
+    F --> G[list_workflow_runs / get_workflow_run_overview / list_recent_failures]
+```
+
+Use this when you need a persistent clone for project scripts, refactors, or CI debugging.
+
+### Issue and PR triage flow
+
+```mermaid
+flowchart TD
+    A[list_recent_issues / list_repository_issues / list_pull_requests] --> B[get_issue_overview / get_pr_overview]
+    B --> C[open_issue_context / get_pr_diff / get_pr_info]
+    C --> D[get_job_logs / list_workflow_runs / get_workflow_run_overview]
+    D --> E[comment_on_issue / comment_on_pull_request / update_issue]
+```
+
+Use these tools to understand existing issues/PRs and their CI state before deciding what code changes to make.
+
+---
 
 ## Table of contents
-
 - [apply_line_edits_and_commit](#apply_line_edits_and_commit)
 - [apply_patch_and_commit](#apply_patch_and_commit)
 - [apply_text_update_and_commit](#apply_text_update_and_commit)
