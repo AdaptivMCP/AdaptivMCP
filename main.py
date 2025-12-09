@@ -270,15 +270,13 @@ async def get_server_config() -> Dict[str, Any]:
 
 @mcp_tool(
     write_action=False,
+@mcp_tool(
+    write_action=False,
     description="Validate a JSON string and return a normalized form.",
     tags=["meta", "json", "validation"],
 )
 def validate_json_string(raw: str) -> Dict[str, Any]:
     """Validate a JSON string and report parse status and errors."""
-
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
 
     try:
         parsed = json.loads(raw)
@@ -328,8 +326,6 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
     }
 
 
-@mcp_tool(write_action=False)
-async def get_repo_defaults(
     full_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Return default configuration for a GitHub repository.
