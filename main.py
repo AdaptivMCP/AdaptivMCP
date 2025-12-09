@@ -279,21 +279,11 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
 
     Returns a structured payload indicating whether the JSON parsed
     successfully, an error description when parsing fails, and a
-    normalized string the assistant can copy verbatim when it needs to
-    emit strict JSON without risking client-side parse errors.
-    """
-
-    try:
+    description=("Validate a JSON string and return normalized JSON helpers."),
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
         context_window = 20
-        start = max(0, exc.pos - context_window)
-        end = min(len(raw), exc.pos + context_window)
-
-        line_start = raw.rfind("\n", 0, exc.pos) + 1
-        line_end = raw.find("\n", exc.pos)
-        if line_end == -1:
-            line_end = len(raw)
+    """Validate a JSON string and return a parsed and normalized result."""
 
         line_text = raw[line_start:line_end]
         caret_prefix = " " * (exc.colno - 1)
