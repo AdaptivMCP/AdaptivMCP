@@ -322,13 +322,11 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
     }
 
 
+@mcp_tool(write_action=False)
+async def get_repo_defaults(
     full_name: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Return default configuration for a GitHub repository.
-
-    If `full_name` is omitted, this uses the controller repository configured
-    for this MCP server.
-    """
+    """Return default configuration for a GitHub repository."""
 
     repo = full_name or CONTROLLER_REPO
 
@@ -352,7 +350,6 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
     }
 
 
-@mcp_tool(write_action=False)
 @mcp_tool(write_action=False)
 async def validate_environment() -> Dict[str, Any]:
     """Check GitHub-related environment settings and report problems."""
