@@ -75,7 +75,10 @@ async def run_command(
     installing_dependencies: bool = False,
     mutating: bool = False,
 ) -> Dict[str, Any]:
-    """Run a shell command in a persistent workspace clone."""
+    """Run a shell command inside the repo workspace and return its result.
+
+    Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
+    persists across calls so installed dependencies and edits are reused."""
 
     env: Optional[Dict[str, str]] = None
     try:
