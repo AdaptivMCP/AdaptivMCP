@@ -357,14 +357,13 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
+@mcp_tool(write_action=False)
 async def validate_environment() -> Dict[str, Any]:
     """Check GitHub-related environment settings and report problems."""
 
     checks: List[Dict[str, Any]] = []
     status = "ok"
 
-    checks: List[Dict[str, Any]] = []
-    status = "ok"
 
     def add_check(
         name: str, level: str, message: str, details: Optional[Dict[str, Any]] = None
