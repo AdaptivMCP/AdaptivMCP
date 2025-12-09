@@ -72,6 +72,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         tags=["meta", "diagnostics"],
     )
     def ping_extensions() -> str:
+        """Return a simple ping response from extra_tools."""
         return "pong from extra_tools.py"
 
     @mcp_tool(
@@ -89,20 +90,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         branch: str = "main",
         if_missing: Literal["error", "noop"] = "error",
     ) -> Dict[str, Any]:
-        """Delete a single file in a repository using the GitHub Contents API.
-
-        Args:
-            full_name: "owner/repo" string.
-            path: Path to the file in the repository.
-            message: Commit message for the delete.
-            branch: Branch to delete from (default "main").
-            if_missing: Behaviour when the file does not exist:
-                - "error" (default): raise a GitHubAPIError.
-                - "noop": return a "skipped" result instead of failing.
-
-        Returns:
-            A JSON-like dict including the API response from GitHub.
-        """
+        """Delete a single file in a repository via the GitHub Contents API."""
 
         if if_missing not in ("error", "noop"):
             raise ValueError("if_missing must be 'error' or 'noop'")
@@ -171,6 +159,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         target_path: str,
         message: str,
     ) -> Dict[str, Any]:
+        """Commit a workspace file to a target path in the repository."""
+
         effective_ref = _effective_ref_for_repo(full_name, branch)
 
         # Respect the same write gating semantics as core tools.
@@ -234,15 +224,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         message: str = "Update file via sections",
         sections: Optional[List[SectionReplacement]] = None,
     ) -> Dict[str, Any]:
-        """Apply simple section-based replacements to a file and commit.
+        """Apply section-based string replacements to a file and commit the result."""
 
-        sections: a list of objects with:
-          - match_text: exact substring to replace
-          - replacement_text: new content to insert in its place
-
-        This avoids embedding large patch scripts in run_command and lets the
-        assistant express edits as structured replacements.
-        """
         if not sections:
             raise ValueError("sections must be a non-empty list")
 
@@ -464,6 +447,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         context_lines: int = 3,
         show_whitespace: bool = False,
     ) -> Dict[str, Any]:
+        """Return a unified diff between original and updated content."""
+
         return _build_unified_diff_from_strings(
             original,
             updated,
@@ -491,43 +476,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
     ) -> Dict[str, Any]:
         ...
 
-        """
-        Build a unified diff for a file from line-based section replacements.
-
-        The tool refuses to run without explicit sections and validates them for
-        ordering, overlap, and bounds before constructing a patch. Invalid
-        ranges raise ``ValueError`` so assistants can surface the refusal mode
-        cleanly.
-
-        Args:
-            full_name:
-                "owner/repo" string.
-            path:
-                Path to the file in the repository.
-            sections:
-                List of sections, each of which must be a dict with:
-                  - "start_line": 1-based inclusive start line.
-                  - "end_line": 1-based inclusive end line
-                    (may be equal to start_line - 1 to represent an insertion).
-                  - "new_text": replacement text for that range.
-            ref:
-                Git ref (branch, tag, or SHA). Defaults to "main".
-            context_lines:
-                Number of context lines in the diff (default 3). Negative values
-                are rejected.
-            show_whitespace:
-                Whether to include a human-oriented preview with visible
-                whitespace markers, like build_unified_diff.
-
-        Returns:
-            A dict containing at least:
-              - patch: unified diff as a string.
-              - path: the file path.
-              - context_lines: the context size used.
-              - full_name: repo name.
-              - ref: effective ref used for the lookup.
-              - preview (optional): human-oriented diff if show_whitespace=True.
-        """
+        """Build a unified diff for a file from line-based section replacements."""
         if context_lines < 0:
             raise ValueError("context_lines must be >= 0")
 
@@ -566,23 +515,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         start_line: int = 1,
         max_lines: int = 200,
     ) -> Dict[str, Any]:
-        """Return a window of lines from a text file.
-
-        Args:
-            full_name: "owner/repo" string.
-            path: Path to the file in the repository.
-            ref: Git ref (branch, tag, or SHA). Defaults to "main".
-            start_line: 1-based line number to start from.
-            max_lines: Maximum number of lines to return in this slice.
-
-        Returns:
-            A dict with:
-                - full_name, path, ref
-                - start_line, end_line, max_lines
-                - total_lines
-                - has_more_above / has_more_below
-                - lines: list of {"line": int, "text": str}
-        """
+        """Return a line-range slice of a text file with basic metadata."""
 
         if start_line < 1:
             raise ValueError("start_line must be >= 1")
@@ -792,12 +725,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         include_diff: bool = False,
         context_lines: int = 3,
     ) -> Dict[str, Any]:
-        """Commit line-based edits while minimizing payload size.
-
-        This tool is designed for low-token workflows: callers only send the
-        line ranges they want to replace plus the replacement text, and can
-        opt-out of receiving diffs by default.
-        """
+        """Apply line-based edits to a file, commit them, and optionally return a diff."""
 
         if context_lines < 0:
             raise ValueError("context_lines must be >= 0")
