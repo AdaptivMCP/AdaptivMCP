@@ -217,8 +217,6 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 @mcp_tool(write_action=False)
 async def get_server_config() -> Dict[str, Any]:
-@mcp_tool(write_action=False)
-async def get_server_config() -> Dict[str, Any]:
     """Return a safe summary of MCP connector and runtime settings."""
 
     return {
