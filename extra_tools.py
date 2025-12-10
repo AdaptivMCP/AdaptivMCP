@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import difflib
-from typing import Any, Callable, Dict, List, Literal, Optional, Protocol, TypedDict
+from typing import Any, Callable, Dict, List, Literal, NotRequired, Optional, Protocol, TypedDict
 
 from main import (
     GitHubAPIError,
@@ -42,6 +42,7 @@ class LineEditSection(TypedDict):
     start_line: int
     end_line: int
     new_text: str
+    expected_text: NotRequired[str]
 
 
 def _render_visible_whitespace(line: str) -> str:
@@ -330,6 +331,15 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             if start_line <= prev_end:
                 raise ValueError("sections must not overlap or go backwards")
             prev_end = end_line
+
+            expected_text = section.get("expected_text")
+            if expected_text is not None:
+                existing_slice = "".join(original_lines[start_line - 1 : end_line])
+                if existing_slice != expected_text:
+                    raise ValueError(
+                        "expected_text does not match the current file content for "
+                        f"section starting at line {start_line}"
+                    )
 
         updated_lines: List[str] = []
         cursor = 1
@@ -725,7 +735,11 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         include_diff: bool = False,
         context_lines: int = 3,
     ) -> Dict[str, Any]:
-        """Apply line-based edits to a file, commit them, and optionally return a diff."""
+        """Apply line-based edits to a file, commit them, and optionally return a diff.
+
+        Each section replaces the inclusive start/end range with ``new_text``; callers can
+        also provide ``expected_text`` to fail fast if the current file content has drifted.
+        """
 
         if context_lines < 0:
             raise ValueError("context_lines must be >= 0")
