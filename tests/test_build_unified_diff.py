@@ -67,7 +67,7 @@ async def test_build_unified_diff_whitespace_only_change(monkeypatch):
 
     visible = result["visible_whitespace"]
     assert "base" in visible
-    assert "·" in visible["base"]
+    assert "⏎" in visible["base"]
 
 
 @pytest.mark.asyncio
