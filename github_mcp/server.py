@@ -194,36 +194,50 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 continue
 
             try:
-                sig = _inspect.signature(func)
+                target_func = _inspect.unwrap(func)
+                sig = _inspect.signature(target_func)
             except (TypeError, ValueError):
                 return None
 
             properties: Dict[str, Any] = {}
             required: list[str] = []
 
-            def _annotation_to_json_type(ann: Any) -> Optional[str]:
+            def _annotation_to_json_types(ann: Any) -> Optional[list[str]]:
                 # Handle typing.Optional / Union[...] by unwrapping None.
                 origin = getattr(ann, "__origin__", None)
                 args = getattr(ann, "__args__", ()) or ()
                 if origin is not None and args:
-                    non_none = [a for a in args if a is not type(None)]  # noqa: E721
-                    if len(non_none) == 1:
-                        return _annotation_to_json_type(non_none[0])
-                    # Multiple concrete types -> no single JSON type.
-                    return None
+                    optional = any(a is type(None) for a in args)  # noqa: E721
+                    json_types: list[str] = []
+                    for arg in args:
+                        if arg is type(None):  # noqa: E721
+                            continue
+                        nested = _annotation_to_json_types(arg)
+                        if nested is None:
+                            continue
+                        if isinstance(nested, list):
+                            json_types.extend(nested)
+                        else:
+                            json_types.append(nested)
+
+                    if not json_types and optional:
+                        return ["null"]
+                    if optional:
+                        json_types.append("null")
+                    return sorted(set(json_types)) if json_types else None
 
                 if ann in (str, bytes):
-                    return "string"
+                    return ["string"]
                 if ann is int:
-                    return "integer"
+                    return ["integer"]
                 if ann is float:
-                    return "number"
+                    return ["number"]
                 if ann is bool:
-                    return "boolean"
+                    return ["boolean"]
                 if ann in (list, tuple, set):
-                    return "array"
+                    return ["array"]
                 if ann is dict:
-                    return "object"
+                    return ["object"]
                 return None
 
             for param_name, param in sig.parameters.items():
@@ -240,9 +254,12 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 prop: Dict[str, Any] = {}
 
                 if param.annotation is not _inspect._empty:
-                    json_type = _annotation_to_json_type(param.annotation)
-                    if json_type is not None:
-                        prop["type"] = json_type
+                    json_types = _annotation_to_json_types(param.annotation)
+                    if json_types:
+                        if len(json_types) == 1:
+                            prop["type"] = json_types[0]
+                        else:
+                            prop["type"] = json_types
 
                 if param.default is _inspect._empty:
                     required.append(param_name)
@@ -251,6 +268,14 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                     # JSON-serializable; they are included on a best-effort
                     # basis only.
                     prop["default"] = param.default
+
+                    if "type" in prop and param.default is None:
+                        type_value = prop["type"]
+                        if isinstance(type_value, list):
+                            if "null" not in type_value:
+                                prop["type"] = sorted(set(type_value + ["null"]))
+                        elif isinstance(type_value, str) and type_value != "null":
+                            prop["type"] = sorted({type_value, "null"})
 
                 properties[param_name] = prop
 

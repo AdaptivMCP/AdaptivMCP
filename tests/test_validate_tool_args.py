@@ -68,3 +68,22 @@ async def test_validate_tool_args_batch_too_many_tools_raises():
     tool_names = ["t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10"]
     with pytest.raises(ValueError):
         await main.validate_tool_args(tool_names=tool_names, payload={})
+
+
+@pytest.mark.asyncio
+async def test_validate_tool_args_optional_null_fields_are_allowed():
+    args = {
+        "full_name": "owner/repo",
+        "path": "file.txt",
+        "patch": "",
+        "message": None,
+    }
+
+    result = await main.validate_tool_args("apply_patch_and_commit", args)
+
+    assert result["valid"] is True
+    assert result["errors"] == []
+
+    message_type = result["schema"]["properties"]["message"].get("type")
+    types = message_type if isinstance(message_type, list) else [message_type]
+    assert "null" in types
