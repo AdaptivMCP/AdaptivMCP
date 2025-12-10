@@ -346,10 +346,14 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         annotations = annotations.model_copy(update={"readOnlyHint": not write_action})
     if not isinstance(existing_meta, dict):
         existing_meta = {}
+    risk_level = "high" if write_action else "low"
+    operation = "write" if write_action else "read"
     meta = {
         **existing_meta,
         "write_action": write_action,
         "auto_approved": not write_action,
+        "risk_level": risk_level,
+        "operation": operation,
     }
 
     import functools as _functools
