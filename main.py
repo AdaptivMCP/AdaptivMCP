@@ -63,8 +63,8 @@ from github_mcp.github_content import (
     _verify_file_on_branch,
 )
 from github_mcp.http_clients import (
-    _concurrency_semaphore,  # noqa: F401
     _external_client_instance,
+    _get_concurrency_semaphore,  # noqa: F401
     _github_client_instance,
     _http_client_external,
     _http_client_github,
@@ -1666,7 +1666,7 @@ async def fetch_url(url: str) -> Dict[str, Any]:
     """Fetch an arbitrary HTTP/HTTPS URL via the shared external client."""
 
     client = _external_client_instance()
-    async with _concurrency_semaphore:
+    async with _get_concurrency_semaphore():
         try:
             resp = await client.get(url)
         except Exception as e:
@@ -2342,7 +2342,7 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
         f"/repos/{full_name}/actions/jobs/{job_id}/logs",
         headers={"Accept": "application/vnd.github+json"},
     )
-    async with _concurrency_semaphore:
+    async with _get_concurrency_semaphore():
         resp = await client.send(request, follow_redirects=True)
     if resp.status_code >= 400:
         raise GitHubAPIError(f"GitHub job logs error {resp.status_code}: {resp.text}")
@@ -2372,7 +2372,7 @@ async def wait_for_workflow_run(
     end_time = asyncio.get_event_loop().time() + timeout_seconds
 
     while True:
-        async with _concurrency_semaphore:
+        async with _get_concurrency_semaphore():
             resp = await client.get(
                 f"/repos/{full_name}/actions/runs/{run_id}",
             )
@@ -2533,7 +2533,7 @@ async def trigger_workflow_dispatch(
     if inputs:
         payload["inputs"] = inputs
     client = _github_client_instance()
-    async with _concurrency_semaphore:
+    async with _get_concurrency_semaphore():
         resp = await client.post(
             f"/repos/{full_name}/actions/workflows/{workflow}/dispatches",
             json=payload,
@@ -3067,7 +3067,7 @@ async def ensure_branch(
 
     _ensure_write_allowed(f"ensure branch {branch} from {from_ref} in {full_name}")
     client = _github_client_instance()
-    async with _concurrency_semaphore:
+    async with _get_concurrency_semaphore():
         resp = await client.get(f"/repos/{full_name}/git/ref/heads/{branch}")
     if resp.status_code == 404:
         return await create_branch(full_name, branch, from_ref)
