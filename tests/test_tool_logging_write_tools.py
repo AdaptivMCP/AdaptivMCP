@@ -75,8 +75,8 @@ async def test_apply_patch_and_commit_logging_shape(
 
     assert result["status"] == "committed"
 
-    start_records = [r for r in caplog.records if r.message == "tool_call_start"]
-    success_records = [r for r in caplog.records if r.message == "tool_call_success"]
+    start_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_start"]
+    success_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_success"]
 
     assert start_records, caplog.text
     assert success_records, caplog.text
@@ -88,6 +88,7 @@ async def test_apply_patch_and_commit_logging_shape(
     assert success.tool_name == "apply_patch_and_commit"
     assert start.call_id == success.call_id
     assert success.status == "ok"
+    assert "args=" in start.message
     assert isinstance(success.duration_ms, int) and success.duration_ms >= 0
     assert success.write_action is True
     assert "write" in success.tags

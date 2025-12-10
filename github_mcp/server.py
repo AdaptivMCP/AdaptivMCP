@@ -397,6 +397,22 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         except (TypeError, ValueError):
             signature = None
 
+        def _format_args_for_log(all_args: Mapping[str, Any], *, limit: int = 1200) -> str:
+            """Return a human-friendly, truncated snapshot of the tool arguments."""
+
+            if not all_args:
+                return "<no args>"
+
+            try:
+                preview = json.dumps(all_args, default=str, ensure_ascii=False)
+            except Exception:
+                preview = repr(all_args)
+
+            if len(preview) > limit:
+                preview = f"{preview[:limit]}… (+{len(preview) - limit} chars)"
+
+            return preview
+
         def _extract_call_context(args, **kwargs):
             all_args: Dict[str, Any] = {}
 
@@ -431,11 +447,14 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     break
 
             arg_keys = sorted(set(all_args.keys()))
+            arg_preview = _format_args_for_log(all_args)
             return {
                 "repo": repo_full_name,
                 "ref": ref,
                 "path": path,
                 "arg_keys": arg_keys,
+                "arg_count": len(all_args),
+                "arg_preview": arg_preview,
             }
 
         def _result_size_hint(result: Any) -> Optional[int]:
@@ -444,6 +463,17 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
             if isinstance(result, dict):
                 return len(result)
             return None
+
+        def _human_context(call_id: str, context: Mapping[str, Any]) -> str:
+            scope = "write" if write_action else "read"
+            repo = context["repo"] or "-"
+            ref = context["ref"] or "-"
+            path = context["path"] or "-"
+            arg_preview = context.get("arg_preview") or "<no args>"
+            return (
+                f"tool={tool.name} ({scope}) | call_id={call_id} | repo={repo} | "
+                f"ref={ref} | path={path} | args={arg_preview}"
+            )
 
         if asyncio.iscoroutinefunction(func):
 
@@ -454,8 +484,9 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 start = time.perf_counter()
 
                 TOOLS_LOGGER.info(
-                    "tool_call_start",
+                    f"[tool start] {_human_context(call_id, context)}",
                     extra={
+                        "event": "tool_call_start",
                         "tool_name": tool.name,
                         "write_action": write_action,
                         "tags": sorted(tags) if tags else [],
@@ -464,6 +495,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         "ref": context["ref"],
                         "path": context["path"],
                         "arg_keys": context["arg_keys"],
+                        "arg_count": context["arg_count"],
+                        "arg_preview": context["arg_preview"],
                     },
                 )
 
@@ -480,8 +513,10 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         errored=True,
                     )
                     TOOLS_LOGGER.exception(
-                        "tool_call_error",
+                        f"[tool error] {_human_context(call_id, context)} | duration_ms={duration_ms} | "
+                        f"error={exc.__class__.__name__}: {exc}",
                         extra={
+                            "event": "tool_call_error",
                             "tool_name": tool.name,
                             "write_action": write_action,
                             "tags": sorted(tags) if tags else [],
@@ -490,6 +525,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                             "ref": context["ref"],
                             "path": context["path"],
                             "arg_keys": context["arg_keys"],
+                            "arg_count": context["arg_count"],
+                            "arg_preview": context["arg_preview"],
                             "duration_ms": duration_ms,
                             "status": "error",
                             "error_type": exc.__class__.__name__,
@@ -505,8 +542,10 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     errored=errored,
                 )
                 TOOLS_LOGGER.info(
-                    "tool_call_success",
+                    f"[tool ok] {_human_context(call_id, context)} | duration_ms={duration_ms} | "
+                    f"result_type={type(result).__name__} | result_size_hint={_result_size_hint(result)}",
                     extra={
+                        "event": "tool_call_success",
                         "tool_name": tool.name,
                         "write_action": write_action,
                         "tags": sorted(tags) if tags else [],
@@ -515,6 +554,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         "ref": context["ref"],
                         "path": context["path"],
                         "arg_keys": context["arg_keys"],
+                        "arg_count": context["arg_count"],
+                        "arg_preview": context["arg_preview"],
                         "duration_ms": duration_ms,
                         "status": "ok",
                         "result_type": type(result).__name__,
@@ -532,8 +573,9 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 start = time.perf_counter()
 
                 TOOLS_LOGGER.info(
-                    "tool_call_start",
+                    f"[tool start] {_human_context(call_id, context)}",
                     extra={
+                        "event": "tool_call_start",
                         "tool_name": tool.name,
                         "write_action": write_action,
                         "tags": sorted(tags) if tags else [],
@@ -542,6 +584,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         "ref": context["ref"],
                         "path": context["path"],
                         "arg_keys": context["arg_keys"],
+                        "arg_count": context["arg_count"],
+                        "arg_preview": context["arg_preview"],
                     },
                 )
 
@@ -558,8 +602,10 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         errored=True,
                     )
                     TOOLS_LOGGER.exception(
-                        "tool_call_error",
+                        f"[tool error] {_human_context(call_id, context)} | duration_ms={duration_ms} | "
+                        f"error={exc.__class__.__name__}: {exc}",
                         extra={
+                            "event": "tool_call_error",
                             "tool_name": tool.name,
                             "write_action": write_action,
                             "tags": sorted(tags) if tags else [],
@@ -568,6 +614,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                             "ref": context["ref"],
                             "path": context["path"],
                             "arg_keys": context["arg_keys"],
+                            "arg_count": context["arg_count"],
+                            "arg_preview": context["arg_preview"],
                             "duration_ms": duration_ms,
                             "status": "error",
                             "error_type": exc.__class__.__name__,
@@ -583,8 +631,10 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     errored=errored,
                 )
                 TOOLS_LOGGER.info(
-                    "tool_call_success",
+                    f"[tool ok] {_human_context(call_id, context)} | duration_ms={duration_ms} | "
+                    f"result_type={type(result).__name__} | result_size_hint={_result_size_hint(result)}",
                     extra={
+                        "event": "tool_call_success",
                         "tool_name": tool.name,
                         "write_action": write_action,
                         "tags": sorted(tags) if tags else [],
@@ -593,6 +643,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         "ref": context["ref"],
                         "path": context["path"],
                         "arg_keys": context["arg_keys"],
+                        "arg_count": context["arg_count"],
+                        "arg_preview": context["arg_preview"],
                         "duration_ms": duration_ms,
                         "status": "ok",
                         "result_type": type(result).__name__,

@@ -17,8 +17,8 @@ async def test_async_tool_logging_success(caplog):
 
     assert isinstance(result, dict)
 
-    start_records = [r for r in caplog.records if r.message == "tool_call_start"]
-    success_records = [r for r in caplog.records if r.message == "tool_call_success"]
+    start_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_start"]
+    success_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_success"]
 
     assert start_records, caplog.text
     assert success_records, caplog.text
@@ -29,8 +29,11 @@ async def test_async_tool_logging_success(caplog):
     assert start.tool_name == "get_server_config"
     assert success.tool_name == "get_server_config"
     assert start.call_id == success.call_id
+    assert "[tool start]" in start.message
+    assert "args=<no args>" in start.message
     assert isinstance(success.duration_ms, int) and success.duration_ms >= 0
     assert success.status == "ok"
+    assert "result_type=dict" in success.message
 
 
 @pytest.mark.asyncio
@@ -47,10 +50,11 @@ async def test_async_tool_logging_error(caplog, monkeypatch):
         with pytest.raises(RuntimeError):
             await failing_tool()
 
-    error_records = [r for r in caplog.records if r.message == "tool_call_error"]
+    error_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_error"]
     assert error_records, caplog.text
     err = error_records[-1]
     assert err.tool_name == "failing_tool"
     assert err.status == "error"
     assert err.error_type == "RuntimeError"
     assert isinstance(err.duration_ms, int) and err.duration_ms >= 0
+    assert "[tool error]" in err.message
