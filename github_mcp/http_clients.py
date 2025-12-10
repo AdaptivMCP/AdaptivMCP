@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from typing import Any, Dict, Optional
+import weakref
 
 import httpx
 
@@ -23,7 +24,9 @@ from .config import (
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError
 from .tool_logging import _record_github_request
 
-_concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+_loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
+    weakref.WeakKeyDictionary()
+)
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
 
@@ -67,6 +70,35 @@ def _get_github_token() -> str:
         raise GitHubAuthError("GitHub authentication failed: token is empty")
 
     return token
+
+
+# ---------------------------------------------------------------------------
+# Concurrency helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_concurrency_semaphore() -> asyncio.Semaphore:
+    """Return a per-event-loop semaphore to cap concurrent outbound requests.
+
+    Asyncio synchronization primitives are bound to the event loop that created
+    them. In connector environments the loop can be restarted or swapped after
+    an idle period, so we lazily create (and cache) a semaphore for whichever
+    loop is active when the helper is called instead of keeping a single global
+    instance. Weak references allow semaphores for old loops to be garbage
+    collected automatically.
+    """
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
+
+    semaphore = _loop_semaphores.get(loop)
+    if semaphore is None or getattr(semaphore, "_loop", loop) is not loop:
+        semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+        _loop_semaphores[loop] = semaphore
+
+    return semaphore
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +350,7 @@ async def _github_request(
 
 
 __all__ = [
-    "_concurrency_semaphore",
+    "_get_concurrency_semaphore",
     "_external_client_instance",
     "_get_github_token",
     "_github_client_instance",
