@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Dict, Iterable, Optional
 
 from . import config
 
