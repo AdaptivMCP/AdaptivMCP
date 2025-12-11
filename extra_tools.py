@@ -658,9 +658,10 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         path: str,
         ref: str = "main",
         start_line: int = 1,
-        max_lines: int = 400,
+        max_lines: int = 5000,
     ) -> Dict[str, Any]:
-        """Return a line-numbered string and structured lines for a file slice."""
+        """Return a line-numbered string and structured lines for a file slice.
+        AI Assistants are not allowed to change default max_lines."""
 
         if start_line < 1:
             raise ValueError("start_line must be >= 1")
