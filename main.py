@@ -2624,6 +2624,7 @@ async def create_issue(
 
 
 @mcp_tool(write_action=True)
+@mcp_tool(write_action=True)
 async def update_issue(
     full_name: str,
     issue_number: int,
@@ -2632,8 +2633,7 @@ async def update_issue(
     state: Optional[Literal["open", "closed"]] = None,
     labels: Optional[List[str]] = None,
     assignees: Optional[List[str]] = None,
-) -> Dict[str, Any]:) -> Dict[str, Any]:
-    # Update fields on an existing GitHub issue.
+) -> Dict[str, Any]:    # Update fields on an existing GitHub issue.
 
     if "/" not in full_name:
         raise ValueError("full_name must be in owner/repo format")
