@@ -15,8 +15,7 @@ import os
 import re
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Mapping, Optional
-
+from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
 import jsonschema
 from starlette.middleware import Middleware
@@ -1499,13 +1498,12 @@ async def fetch_url(url: str) -> Dict[str, Any]:
 @mcp_tool(write_action=False)
 async def search(
     query: str,
-    search_type: str = "code",
+    search_type: Literal["code", "repositories", "issues", "commits", "users"] = "code",
     per_page: int = 30,
     page: int = 1,
     sort: Optional[str] = None,
-    order: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Perform GitHub search queries (code, repos, issues, commits, or users)."""
+    order: Optional[Literal["asc", "desc"]] = None,
+) -> Dict[str, Any]:    """Perform GitHub search queries (code, repos, issues, commits, or users)."""
 
     allowed_types = {"code", "repositories", "issues", "commits", "users"}
     if search_type not in allowed_types:
@@ -2502,13 +2500,12 @@ async def trigger_and_wait_for_workflow(
 @mcp_tool(write_action=False)
 async def list_pull_requests(
     full_name: str,
-    state: str = "open",
+    state: Literal["open", "closed", "all"] = "open",
     head: Optional[str] = None,
     base: Optional[str] = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
-    """List pull requests with optional head/base filters.
+) -> Dict[str, Any]:    """List pull requests with optional head/base filters.
 
     Args:
         full_name: "owner/repo" string.
@@ -2539,11 +2536,10 @@ async def list_pull_requests(
 async def merge_pull_request(
     full_name: str,
     number: int,
-    merge_method: str = "squash",
+    merge_method: Literal["merge", "squash", "rebase"] = "squash",
     commit_title: Optional[str] = None,
     commit_message: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Merge a pull request using squash (default), merge, or rebase.
+) -> Dict[str, Any]:    """Merge a pull request using squash (default), merge, or rebase.
 
     Args:
         full_name: "owner/repo" string.
@@ -2632,12 +2628,11 @@ async def update_issue(
     issue_number: int,
     title: Optional[str] = None,
     body: Optional[str] = None,
-    state: Optional[str] = None,
+    state: Optional[Literal["open", "closed"]] = None,
     labels: Optional[List[str]] = None,
     assignees: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     # Update fields on an existing GitHub issue.
-
     if "/" not in full_name:
         raise ValueError("full_name must be in owner/repo format")
 

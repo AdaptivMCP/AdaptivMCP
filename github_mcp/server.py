@@ -21,8 +21,7 @@ from github_mcp.config import BASE_LOGGER, TOOLS_LOGGER
 from github_mcp.exceptions import WriteNotAuthorizedError
 from github_mcp.http_clients import _github_client_instance
 from github_mcp.metrics import _record_tool_call
-from github_mcp.utils import _env_flag
-
+from github_mcp.utils import _env_flag, normalize_args
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", True)
 
@@ -148,6 +147,28 @@ def _ensure_write_allowed(context: str) -> None:
 _REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
 
 
+def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
+    """Validate a tool call's arguments against its input schema when available."""
+
+    try:
+        normalized_args = normalize_args(raw_args)
+    except Exception as exc:  # extremely defensive - surface as a validation failure
+        raise jsonschema.ValidationError(str(exc)) from exc
+
+    schema = _normalize_input_schema(tool)
+    if schema is None:
+        # When no schema is published we deliberately skip strict validation so
+        # tools without schemas continue to work as before.
+        return None
+
+    validator = jsonschema.Draft7Validator(schema)
+    errors = sorted(validator.iter_errors(normalized_args), key=str)
+    if not errors:
+        return None
+
+    primary = errors[0]
+    primary.context = list(errors[1:])
+    raise primary
 def _find_registered_tool(tool_name: str) -> Optional[tuple[Any, Any]]:
     for tool, func in _REGISTERED_MCP_TOOLS:
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
@@ -505,8 +526,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 "arg_keys": arg_keys,
                 "arg_count": len(all_args),
                 "arg_preview": arg_preview,
+                "_all_args": all_args,
             }
-
         def _result_size_hint(result: Any) -> Optional[int]:
             if isinstance(result, (list, tuple, str)):
                 return len(result)
@@ -533,6 +554,10 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 context = _extract_call_context(args, **kwargs)
                 start = time.perf_counter()
 
+                # Preflight validation of arguments against the tool's declared
+                # input schema, similar to validate_tool_args but applied
+                # automatically for every call.
+                _preflight_tool_args(tool, context.get("_all_args", {}))
                 TOOLS_LOGGER.info(
                     f"[tool start] {_human_context(call_id, context)}",
                     extra={
@@ -622,6 +647,10 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 context = _extract_call_context(args, **kwargs)
                 start = time.perf_counter()
 
+                # Preflight validation of arguments against the tool's declared
+                # input schema, similar to validate_tool_args but applied
+                # automatically for every call.
+                _preflight_tool_args(tool, context.get("_all_args", {}))
                 TOOLS_LOGGER.info(
                     f"[tool start] {_human_context(call_id, context)}",
                     extra={
