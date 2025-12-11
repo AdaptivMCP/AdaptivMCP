@@ -3248,28 +3248,39 @@ async def create_pull_request(
     controller repos honor the configured default branch when callers supply
     ``main`` or omit the ref. This keeps PR targets consistent even when the
     controller prompt tells assistants to open PRs against main.
+
+    Any failure in this flow (ref resolution, write-guard, or the GitHub API
+    call itself) is surfaced as a structured error payload instead of raising
+    an unhandled exception. This avoids leaking opaque 500s back to MCP
+    clients and gives tools like ``open_pr_for_existing_branch`` a consistent
+    contract to inspect.
     """
 
-    effective_base = _effective_ref_for_repo(full_name, base)
-    _ensure_write_allowed(f"create PR from {head} to {effective_base} in {full_name}")
-
-    payload: Dict[str, Any] = {
-        "title": title,
-        "head": head,
-        "base": effective_base,
-        "draft": draft,
-    }
-    if body is not None:
-        payload["body"] = body
-
     try:
+        effective_base = _effective_ref_for_repo(full_name, base)
+        _ensure_write_allowed(
+            f"create PR from {head} to {effective_base} in {full_name}"
+        )
+
+        payload: Dict[str, Any] = {
+            "title": title,
+            "head": head,
+            "base": effective_base,
+            "draft": draft,
+        }
+        if body is not None:
+            payload["body"] = body
+
         return await _github_request(
             "POST",
             f"/repos/{full_name}/pulls",
             json_body=payload,
         )
     except Exception as exc:
-        return _structured_tool_error(exc, context="create_pull_request")
+        # Include a lightweight path-style hint so callers can see which
+        # repository and head/base pair failed without scraping the message.
+        path_hint = f"{full_name} {head}->{base}"
+        return _structured_tool_error(exc, context="create_pull_request", path=path_hint)
 
 
 @mcp_tool(write_action=True)
