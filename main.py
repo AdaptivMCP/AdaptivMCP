@@ -2095,10 +2095,13 @@ async def get_workflow_run_overview(
     }
 
     # Paginate through all jobs for the run up to max_jobs so we do not
-    # silently drop jobs when there are more than a single page.
+    # silently drop jobs when there are more than a single page. In tests we
+    # often stub list_workflow_run_jobs without real pagination, so we also
+    # break if a subsequent page returns the same job IDs as the previous one.
     per_page = 100
     page = 1
     fetched = 0
+    last_page_job_ids: Optional[List[Any]] = None
 
     while fetched < max_jobs:
         remaining = max_jobs - fetched
@@ -2113,6 +2116,14 @@ async def get_workflow_run_overview(
         # Stop if there are no more jobs.
         if not raw_jobs:
             break
+
+        # Defensive guard: if a subsequent page returns the exact same set of
+        # job IDs as the previous page, treat it as the end of the result set
+        # instead of looping forever (useful when tests stub out pagination).
+        page_job_ids = [job.get("id") for job in raw_jobs if isinstance(job, dict)]
+        if page_job_ids and last_page_job_ids is not None and page_job_ids == last_page_job_ids:
+            break
+        last_page_job_ids = page_job_ids
 
         for job in raw_jobs:
             if not isinstance(job, dict):
