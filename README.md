@@ -2,7 +2,7 @@
   <img src="assets/logo/adaptiv-logo.png" alt="Adaptiv Controller logo" width="200" />
 </p>
 
-Adaptiv Controller uses this server to talk to GitHub. You deploy it yourself (for example on Render.com), provide your own GitHub token, and connect it to ChatGPT as an MCP server. The server publishes a versioned controller contract via the `controller_contract` tool; controllers should read that contract instead of hard-coding assumptions or duplicating it in prompts. The contract includes an explicit `limits` section that documents external constraints (model provider token/time limits, GitHub API and repository limits, and MCP runtime constraints).
+Adaptiv Controller uses this server to talk to GitHub. You deploy it yourself (for example on Render.com), provide your own GitHub token, and connect it to ChatGPT as an MCP server.
 
 Assistants are expected to treat this controller like their own development machine—lean on `run_command`/`run_tests` for execution, quick searches, and usage checks, and avoid large, token-heavy inline detours (for example huge heredocs or full-file dumps) when a concise command, slice, or diff keeps context tight. This server does not add its own per-task budgets beyond what OpenAI and GitHub already enforce; instead it defines workflows, guardrails, and editing preferences inside those external limits.
 
@@ -54,8 +54,7 @@ With this kit you get:
   - Uses your GitHub token(s) and respects your repo and branch protections.
   - Exposes a curated set of GitHub tools (read/write) over MCP.
 
-- A controller contract and workflows (your product layer):
-  - A versioned `controller_contract` tool that describes the tool surface and safety expectations.
+- Controller workflows and prompts (your product layer):
   - Recommended controller prompts and workflows that teach the AI to always work on feature branches, run tests, and open PRs instead of pushing directly to `main`.
 
 - Clear separation of responsibilities:
@@ -77,7 +76,7 @@ Here is a minimal end-to-end flow for running Adaptiv Controller as your persona
 
 2. **Connect ChatGPT to the server**
    - In ChatGPT, add an MCP integration pointing at your Render deployment.
-   - In a fresh session, ask the assistant to call `validate_environment`, `get_server_config`, and `controller_contract` so it understands the live configuration and contract.
+   - In a fresh session, ask the assistant to call `validate_environment` and `get_server_config` so it understands the live configuration.
 
 3. **Create or update your Adaptiv Controller assistant**
    - Create a custom GPT or assistant that uses this MCP server.
@@ -218,7 +217,7 @@ When behavior feels surprising or tools appear to be missing, controllers and as
 - `list_write_tools`: Focus on the subset of tools that can modify state.
 - `validate_environment`: Check for missing tokens, misconfigured controller repo/branch, or unsafe timeout/concurrency settings.
 - `ping_extensions`: Confirm that extra_tools.py and any other extensions have been loaded.
-- `controller_contract`: Read the versioned contract that describes expectations between controllers, assistants, and this MCP server.
+- Documentation in `docs/`: Protocols, prompts, and workflows for controllers.
 
 ---
 
@@ -307,7 +306,7 @@ This repository includes a documentation set under `docs/`:
 - `docs/adaptiv/` – optional per-install preferences and product flavoring:
   - `preferences.md` – structured but flexible document where each user or customer can record coding style, branch and PR habits, testing expectations, and communication preferences for their Adaptiv Controller assistant.
 
-The **single source of truth for the contract** between controllers, assistants, and this server is the `controller_contract` tool. All docs are written to stay consistent with that contract and to make it easy for both humans and assistants to work within it.
+Documentation in this repository is the source of truth for how controllers and assistants should interact with the server. Keep prompts and workflows aligned with these docs instead of duplicating stale assumptions.
 ---
 
 ## Licensing and brand notes

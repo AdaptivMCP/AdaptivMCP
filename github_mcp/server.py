@@ -28,7 +28,6 @@ COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", True)
 CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
 )
-CONTROLLER_CONTRACT_VERSION = os.environ.get("GITHUB_MCP_CONTROLLER_CONTRACT_VERSION", "2025-12-09")
 CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main")
 
 mcp = FastMCP("GitHub Fast MCP")
@@ -726,7 +725,6 @@ def register_extra_tools_if_available():
 
 __all__ = [
     "COMPACT_METADATA_DEFAULT",
-    "CONTROLLER_CONTRACT_VERSION",
     "CONTROLLER_DEFAULT_BRANCH",
     "CONTROLLER_REPO",
     "WRITE_ALLOWED",

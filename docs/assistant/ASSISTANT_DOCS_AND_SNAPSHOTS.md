@@ -24,7 +24,7 @@ When reasoning about capabilities, always start from live information and only t
 1. Live MCP server configuration
    - Call `get_server_config` to see which tools and settings are active, including write gating and the configured controller repository and branch.
    - Call `list_all_actions` to see the full set of tools, annotations, and read or write status.
-   - Call `controller_contract` to retrieve the versioned contract that describes expectations between controllers, assistants, and this MCP server.
+   - Review the repository docs to understand the expectations between controllers, assistants, and this MCP server.
 
 2. Repository docs
    - `README.md` for high level product framing and the personal controller story.
@@ -47,14 +47,14 @@ Meta tools when you are unsure:
 - `validate_tool_args` to preflight JSON payloads against a tool's schema (for example before calling `compare_refs` or diff/commit helpers).
 - `validate_environment` when failures look like token or configuration problems.
 - `ping_extensions` to confirm that extension modules are loaded.
-- `controller_contract` when in doubt about expectations or requirements.
+- Repository docs when in doubt about expectations or requirements.
 - `build_pr_summary` when preparing to open or update a PR so you can produce a structured `title` and `body` that reflect the latest tests, lint status, and changed areas instead of writing ad-hoc descriptions.
 
 ### 1.1 Rehydrating after context loss
 
 Assistants sometimes lose history between turns. When that happens, rebuild context explicitly before acting:
 
-- Start with `controller_contract` to refresh expectations and verify the contract version.
+- Start with the repository docs to refresh expectations and verify current guidance.
 - Call `get_server_config` to confirm write posture, controller defaults, and uptime.
 - Reopen the task surface: use `get_branch_summary` for branch state, `open_issue_context` when work is tied to an issue, and `list_repository_tree` to reorient on the repo layout.
 - Pull the exact files you need again with `get_file_contents`, `get_file_slice`, or `fetch_files` instead of relying on hazy memory.
@@ -111,7 +111,7 @@ Some parts of the system should not be changed casually, especially if you plan 
 - The existence and semantics of core safety concepts such as the write gate.
 - The meaning of read versus write tool annotations.
 - The high level branching and PR expectations documented in the workflows doc.
-- The fact that `controller_contract` is the single contract between controllers and this server.
+- The fact that the repository docs capture the single contract between controllers and this server.
 
 If you do change these, treat it as a new major version and update all prompts and docs that depend on the old behavior.
 
@@ -158,7 +158,7 @@ Docs are part of the product. I treat them as part of every change, not an after
 Before making changes:
 
 - I read the relevant sections in `docs/` and tests.
-- I confirm that the planned change fits the documented safety and workflow model as described in `controller_contract`.
+- I confirm that the planned change fits the documented safety and workflow model described in the repository docs.
 
 After making changes:
 
@@ -285,7 +285,7 @@ When a workflow feels stuck or you see repeated failures, use this checklist ins
 
 1. Stop repeating failing calls.
 2. Summarize what you tried, including errors and any truncation flags.
-3. Re run `controller_contract` and reopen the relevant docs.
+3. Reopen the relevant docs to refresh expectations.
 4. Use `validate_tool_args` for complex or write tagged tools.
 5. Use `validate_environment` if you suspect configuration or token problems.
 6. Use `get_branch_summary`, `open_issue_context`, and `get_issue_overview` to understand branch and issue state before taking further action.

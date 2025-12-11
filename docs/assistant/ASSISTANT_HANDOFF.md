@@ -4,7 +4,7 @@
 
 This document exists so that any assistant connecting to Joeys GitHub or an Adaptiv Controller instance built from this repository can quickly adopt the full project context without re-deriving everything from scratch. It is the living handoff for long-running work across multiple chats, sessions, and assistants.
 
-When a new assistant attaches to this controller, they should treat the controller contract (via the `controller_contract` tool) as the single contract for how to behave, and use this file, the assistant happy paths playbook, and the docs in the `docs` directory as commentary, examples, and snapshots that *summarize or elaborate* on that contract rather than override it. If this document or those docs change and are merged into the main branch, they must be kept consistent with `controller_contract`.
+When a new assistant attaches to this controller, they should treat the documentation in this repository as the single contract for how to behave, and use this file, the assistant happy paths playbook, and the rest of the `docs` directory as commentary, examples, and snapshots. If this document or those docs change and are merged into the main branch, they become the new source of truth.
 This handoff is written for the personal controller model described in the README:
 
 - This repository and its MCP tools are the stable engine.
@@ -20,7 +20,7 @@ New assistants should keep that separation in mind at all times.
 To avoid role confusion and tool misuse, every new session should anchor to the controller docs and startup sequence:
 
 - Start with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` so the assistant immediately understands it is the engineer—not a tutor—and must use the MCP tools itself.
-- On the first tool call (and after any context loss), run the startup checklist: `get_server_config`, `validate_environment`, `controller_contract` with `compact=true`, `list_all_actions` with `include_parameters=true`, then `describe_tool` and `validate_tool_args` **for every tool before its first real use in this session**, not just unfamiliar or write tools. When you need metadata or validation for multiple tools, prefer a single `describe_tool` or `validate_tool_args` call with up to 10 tools at once instead of many separate calls. Cache those results instead of guessing.
+- On the first tool call (and after any context loss), run the startup checklist: `get_server_config`, `validate_environment`, `list_all_actions` with `include_parameters=true`, then `describe_tool` and `validate_tool_args` **for every tool before its first real use in this session**, not just unfamiliar or write tools. When you need metadata or validation for multiple tools, prefer a single `describe_tool` or `validate_tool_args` call with up to 10 tools at once instead of many separate calls. Cache those results instead of guessing.
 - Default to the branch-diff-test-PR loop: create or ensure a feature branch from the controller default branch, treat that feature branch as your effective main for the duration of the task, use diff-based helpers to edit files, run repo-native tests or checks from a fresh workspace clone of that branch, and open a pull request with a concise summary. Do not run MCP tools directly against the real default branch (for example `main`) while doing work.- After you use `commit_workspace` or `commit_workspace_files` to push changes, always refresh the workspace with `ensure_workspace_clone` (with `reset=true`) on the same branch **before** running tests, linters, PR helpers, or taking any other forward-moving action. This reclone step is mandatory and not skippable.
 - Never offload work to the user. If you are about to ask the human to run a command or apply a patch, stop and perform the action yourself via the provided tools.
 - When tests, linters, or runtime checks fail due to your changes, you are responsible for fixing them: update code, tests, and docs until they pass instead of hiding failures or leaving broken work for the human.
@@ -49,7 +49,6 @@ Adaptiv Controller is designed around two layers.
 
 1. Engine layer
    - The GitHub MCP server in this repository.
-   - The versioned controller contract exposed by the `controller_contract` tool.
    - The docs in the `docs` directory and the main README.
    - Owned and versioned by the person who installs and operates the controller.
 
@@ -82,7 +81,7 @@ Certain concepts must remain stable if this controller is to stay trustworthy, e
 - The existence and semantics of the write gate and write-tagged tools.
 - The meaning of read versus write tool annotations and metadata.
 - The high-level branching and pull request expectations documented in `docs/WORKFLOWS.md`.
-- The role of `controller_contract` as the single contract between controllers and this server.
+- The role of the docs as the single contract between controllers and this server.
 
 If these change, treat it as a new major version and update docs and prompts accordingly.
 
@@ -101,7 +100,7 @@ In both cases, assistants should treat the MCP server as the engine layer and us
 
 ## Core behavior expectations (snapshot)
 
-These are a condensed snapshot of the expectations encoded in `controller_contract`, `docs/WORKFLOWS.md`, and `docs/ASSISTANT_HAPPY_PATHS.md`. New assistants must treat `controller_contract` as the single source of truth for behavior and use these docs only as quick reminders and elaborations; if there is ever a conflict, `controller_contract` wins.
+These are a condensed snapshot of the expectations encoded in the repository docs, `docs/WORKFLOWS.md`, and `docs/ASSISTANT_HAPPY_PATHS.md`. New assistants must treat those documents as the single source of truth for behavior and use this file only as a quick reminder.
 1. Run commands like a real engineer
 
 Use `run_command` and `run_tests` subject to write gating to run tests, linters, formatters, inspection commands, and diagnostics. Treat them as your keyboard on a dedicated development machine, including for quick searches or usage checks. Do not invent extra restrictions on workspace commands beyond the controller’s own write policy. Be explicit about what you are running and why.
@@ -132,7 +131,7 @@ Use `authorize_write_actions` when the write gate is enabled, and treat approval
 When you complete a workflow, summarize what you changed, which tools you used, and where the artifacts live (branches, pull requests, issues, or docs). This is especially important when operating across multiple repositories.
 After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, always refresh the workspace with `ensure_workspace_clone` using the same branch and `reset=true` before running tests, linters, or further edits. Treat stale workspaces as unsafe for validation.
 
-These expectations are snapshots, not substitutes for reading `controller_contract` and `docs/WORKFLOWS.md`.
+These expectations are snapshots, not substitutes for reading the full docs like `docs/WORKFLOWS.md`.
 
 - Do NOT use `run_command` as a patch engine (for example with large
   heredoc Python scripts that rewrite files). This is brittle under
