@@ -6,10 +6,9 @@ requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Joey Leopizzi" }]
-
-[project.dependencies]
-pydantic = ">=2.0.0"
-
+dependencies = [
+    "pydantic>=2.0.0",
+]
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
