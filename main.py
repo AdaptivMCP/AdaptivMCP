@@ -2623,9 +2623,7 @@ async def create_issue(
     )
 
 
-@mcp_tool(write_action=True)
-@mcp_tool(write_action=True)
-async def update_issue(
+@mcp_tool(write_action=True)async def update_issue(
     full_name: str,
     issue_number: int,
     title: Optional[str] = None,
