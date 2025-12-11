@@ -481,17 +481,6 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
         return None
 
     return None
-            schema: Dict[str, Any] = {"type": "object", "properties": properties}
-            if required:
-                schema["required"] = required
-            schema["additionalProperties"] = True
-            return schema
-    except Exception:
-        # Extremely defensive: if anything goes wrong during introspection,
-        # fall back to having no schema rather than throwing.
-        return None
-
-    return None
 
 
 def _normalize_branch_ref(ref: Optional[str]) -> Optional[str]:
