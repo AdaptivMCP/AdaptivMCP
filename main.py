@@ -32,6 +32,8 @@ from github_mcp import http_clients as _http_clients  # noqa: F401
 from github_mcp.config import (
     BASE_LOGGER,  # noqa: F401
     FETCH_FILES_CONCURRENCY,
+    FILE_CACHE_MAX_BYTES,  # noqa: F401
+    FILE_CACHE_MAX_ENTRIES,  # noqa: F401
     GIT_AUTHOR_EMAIL,
     GIT_AUTHOR_NAME,
     GIT_COMMITTER_EMAIL,
@@ -61,6 +63,12 @@ from github_mcp.github_content import (
     _perform_github_commit,
     _resolve_file_sha,
     _verify_file_on_branch,
+)
+from github_mcp.file_cache import (
+    bulk_get_cached,
+    cache_payload,
+    cache_stats,
+    clear_cache,
 )
 from github_mcp.http_clients import (
     _external_client_instance,
@@ -121,6 +129,23 @@ def __getattr__(name: str):
 server.WRITE_ALLOWED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 
 register_extra_tools_if_available()
+
+
+def _cache_file_result(
+    *, full_name: str, path: str, ref: str, decoded: Dict[str, Any]
+) -> Dict[str, Any]:
+    normalized_path = _normalize_repo_path(path)
+    effective_ref = _effective_ref_for_repo(full_name, ref)
+    return cache_payload(
+        full_name=full_name,
+        ref=effective_ref,
+        path=normalized_path,
+        decoded=decoded,
+    )
+
+
+def _reset_file_cache_for_tests() -> None:
+    clear_cache()
 
 
 async def run_command(
@@ -1455,7 +1480,9 @@ async def get_file_contents(
     ref: str = "main",
 ) -> Dict[str, Any]:
     """Fetch a single file from GitHub and decode base64 to UTF-8 text."""
-    return await _decode_github_content(full_name, path, ref)
+    decoded = await _decode_github_content(full_name, path, ref)
+    _cache_file_result(full_name=full_name, path=path, ref=ref, decoded=decoded)
+    return decoded
 
 
 @mcp_tool(write_action=False)
@@ -1470,10 +1497,17 @@ async def fetch_files(
     sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
 
     async def _fetch_single(p: str) -> None:
+        normalized_path = _normalize_repo_path(p)
         async with sem:
             try:
-                decoded = await _decode_github_content(full_name, p, ref)
-                results[p] = decoded
+                decoded = await _decode_github_content(full_name, normalized_path, ref)
+                cached = _cache_file_result(
+                    full_name=full_name,
+                    path=normalized_path,
+                    ref=ref,
+                    decoded=decoded,
+                )
+                results[p] = cached
             except Exception as e:
                 # Use a consistent error envelope so controllers can rely on structure.
                 results[p] = _structured_tool_error(
@@ -1484,6 +1518,87 @@ async def fetch_files(
 
     await asyncio.gather(*[_fetch_single(p) for p in paths])
     return {"files": results}
+
+
+@mcp_tool(
+    write_action=False,
+    description=(
+        "Return cached file payloads for a repository/ref without re-fetching "
+        "from GitHub. Entries persist for the lifetime of the server process "
+        "until evicted by size or entry limits."
+    ),
+    tags=["github", "cache", "files"],
+)
+async def get_cached_files(
+    full_name: str,
+    paths: List[str],
+    ref: str = "main",
+) -> Dict[str, Any]:
+    """Return cached file entries and list any missing paths."""
+
+    effective_ref = _effective_ref_for_repo(full_name, ref)
+    normalized_paths = [_normalize_repo_path(p) for p in paths]
+    cached = bulk_get_cached(full_name, effective_ref, normalized_paths)
+    missing = [p for p in normalized_paths if p not in cached]
+
+    return {
+        "full_name": full_name,
+        "ref": effective_ref,
+        "files": cached,
+        "missing": missing,
+        "cache": cache_stats(),
+    }
+
+
+@mcp_tool(
+    write_action=False,
+    description=(
+        "Fetch one or more files and persist them in the server-side cache so "
+        "assistants can recall them without repeating GitHub reads. Use "
+        "refresh=true to bypass existing cache entries."
+    ),
+    tags=["github", "cache", "files"],
+)
+async def cache_files(
+    full_name: str,
+    paths: List[str],
+    ref: str = "main",
+    refresh: bool = False,
+) -> Dict[str, Any]:
+    """Fetch files and store them in the in-process cache."""
+
+    results: Dict[str, Any] = {}
+    effective_ref = _effective_ref_for_repo(full_name, ref)
+    normalized_paths = [_normalize_repo_path(p) for p in paths]
+    cached_existing: Dict[str, Any] = {}
+    if not refresh:
+        cached_existing = bulk_get_cached(full_name, effective_ref, normalized_paths)
+
+    sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
+
+    async def _cache_single(p: str) -> None:
+        async with sem:
+            if not refresh and p in cached_existing:
+                results[p] = {**cached_existing[p], "cached": True}
+                return
+
+            decoded = await _decode_github_content(full_name, p, effective_ref)
+            cached = cache_payload(
+                full_name=full_name,
+                ref=effective_ref,
+                path=p,
+                decoded=decoded,
+            )
+            results[p] = {**cached, "cached": False}
+
+    await asyncio.gather(*[_cache_single(p) for p in normalized_paths])
+
+    return {
+        "full_name": full_name,
+        "ref": effective_ref,
+        "files": results,
+        "cache": cache_stats(),
+    }
 
 
 @mcp_tool(write_action=False)

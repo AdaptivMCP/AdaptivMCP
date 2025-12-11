@@ -75,6 +75,8 @@ Use these tools to understand existing issues/PRs and their CI state before deci
 - [download_user_content](#download_user_content)
 - [ensure_branch](#ensure_branch)
 - [ensure_workspace_clone](#ensure_workspace_clone)
+- [cache_files](#cache_files)
+- [get_cached_files](#get_cached_files)
 - [fetch_files](#fetch_files)
 - [fetch_issue](#fetch_issue)
 - [fetch_issue_comments](#fetch_issue_comments)
@@ -245,6 +247,14 @@ Idempotently ensure a branch exists, creating it from a base ref when needed. Th
 ### ensure_workspace_clone
 
 Ensure there is a persistent local clone for a repo/ref. All workspace commands (`run_command`, `run_tests`, `run_lint_suite`, `run_quality_suite`) operate on this clone.
+
+### cache_files
+
+Fetch one or more files and persist them in the server-side cache so assistants can recall the content without re-fetching from GitHub. Cached entries survive across tool calls until evicted by entry or byte limits; use `refresh=true` to force a refetch.
+
+### get_cached_files
+
+Return cached file entries for a repo/ref and list which requested paths are missing from the cache. Use this to quickly rehydrate context without hitting the GitHub API again.
 
 ### fetch_files
 
