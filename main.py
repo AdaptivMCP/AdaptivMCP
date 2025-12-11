@@ -2178,6 +2178,27 @@ async def get_workflow_run_overview(
         reverse=True,
     )[:5]
 
+    summary_lines: list[str] = []
+
+    status = run_summary.get("status") or "unknown"
+    conclusion = run_summary.get("conclusion") or "unknown"
+    name = run_summary.get("name") or str(run_summary.get("id") or run_id)
+
+    summary_lines.append("Workflow run overview:")
+    summary_lines.append(f"- Name: {name}")
+    summary_lines.append(f"- Status: {status}")
+    summary_lines.append(f"- Conclusion: {conclusion}")
+    summary_lines.append(f"- Jobs: {len(jobs)} total, {len(failed_jobs)} failed")
+
+    if longest_jobs:
+        summary_lines.append("- Longest jobs by duration:")
+        for job in longest_jobs:
+            j_name = job.get("name") or job.get("id")
+            dur = job.get("duration_seconds")
+            if j_name is None or dur is None:
+                continue
+            summary_lines.append(f"  * {j_name}: {int(dur)}s")
+
     return {
         "full_name": full_name,
         "run_id": run_id,
@@ -2185,6 +2206,7 @@ async def get_workflow_run_overview(
         "jobs": jobs,
         "failed_jobs": failed_jobs,
         "longest_jobs": longest_jobs,
+        "controller_log": summary_lines,
     }
 
 
@@ -2240,18 +2262,33 @@ async def wait_for_workflow_run(
         conclusion = data.get("conclusion")
 
         if status == "completed":
+            summary_lines = [
+                "Workflow run finished:",
+                f"- Status: {status}",
+                f"- Conclusion: {conclusion}",
+            ]
             return {
                 "status": status,
                 "conclusion": conclusion,
                 "run": data,
+                "controller_log": summary_lines,
             }
 
         if asyncio.get_event_loop().time() > end_time:
+            summary_lines = [
+                "Workflow run timed out while waiting for completion:",
+                f"- Last known status: {status}",
+                f"- Last known conclusion: {conclusion}",
+                f"- Timeout seconds: {timeout_seconds}",
+            ]
             return {
                 "status": status,
                 "timeout": True,
                 "run": data,
+                "controller_log": summary_lines,
             }
+
+        await asyncio.sleep(poll_interval_seconds)
 
         await asyncio.sleep(poll_interval_seconds)
 
@@ -2396,7 +2433,20 @@ async def trigger_workflow_dispatch(
         )
     if resp.status_code not in (204, 201):
         raise GitHubAPIError(f"GitHub workflow dispatch error {resp.status_code}: {resp.text}")
-    return {"status_code": resp.status_code}
+
+    summary_lines = [
+        "Triggered workflow dispatch:",
+        f"- Repo: {full_name}",
+        f"- Workflow: {workflow}",
+        f"- Ref: {ref}",
+    ]
+    if inputs:
+        summary_lines.append(f"- Inputs keys: {sorted(inputs.keys())}")
+
+    return {
+        "status_code": resp.status_code,
+        "controller_log": summary_lines,
+    }
 
 
 @mcp_tool(write_action=True)
@@ -2425,7 +2475,23 @@ async def trigger_and_wait_for_workflow(
     run_id = workflow_runs[0]["id"]
 
     result = await wait_for_workflow_run(full_name, run_id, timeout_seconds, poll_interval_seconds)
-    return {"run_id": run_id, "result": result}
+
+    summary_lines = [
+        "Triggered workflow and waited for completion:",
+        f"- Repo: {full_name}",
+        f"- Workflow: {workflow}",
+        f"- Ref: {ref}",
+        f"- Run ID: {run_id}",
+    ]
+    result_log = result.get("controller_log")
+    if isinstance(result_log, list):
+        summary_lines.extend(result_log)
+
+    return {
+        "run_id": run_id,
+        "result": result,
+        "controller_log": summary_lines,
+    }
 
 
 # ------------------------------------------------------------------------------
