@@ -350,18 +350,21 @@ async def run_tests(
         mutating=mutating,
     )
 
-    # If run_command surfaced a structured error (for example an auth or clone
-    # failure), treat that as a failed test run but keep the error payload.
     if isinstance(result, dict) and "error" in result:
+        # Structured error from run_command (e.g. auth/clone failure).
         return {
             "status": "failed",
             "command": test_command,
             "error": result["error"],
+            "controller_log": [
+                "Test run failed due to a workspace or command error.",
+                f"- Command: {test_command}",
+                f"- Error: {result['error'].get('error')}",
+            ],
         }
 
-    # Normal shape: run_command returned repo/workdir plus a nested result
-    # object containing the exit code and streams.
     if not isinstance(result, dict) or "result" not in result:
+        # Unexpected shape from run_command.
         return {
             "status": "failed",
             "command": test_command,
@@ -370,11 +373,24 @@ async def run_tests(
                 "message": "run_command returned an unexpected result structure",
                 "raw_result": result,
             },
+            "controller_log": [
+                "Test run failed because run_command returned an unexpected result shape.",
+                f"- Command: {test_command}",
+            ],
         }
 
     cmd_result = result.get("result") or {}
     exit_code = cmd_result.get("exit_code")
     status = "passed" if exit_code == 0 else "failed"
+
+    summary_lines = [
+        "Completed test command in workspace:",
+        f"- Repo: {full_name}",
+        f"- Ref: {ref}",
+        f"- Command: {test_command}",
+        f"- Status: {status}",
+        f"- Exit code: {exit_code}",
+    ]
 
     return {
         "status": status,
@@ -383,6 +399,7 @@ async def run_tests(
         "repo_dir": result.get("repo_dir"),
         "workdir": result.get("workdir"),
         "result": cmd_result,
+        "controller_log": summary_lines,
     }
 
 
@@ -401,12 +418,10 @@ async def run_quality_suite(
 ) -> Dict[str, Any]:
     """Run the standard quality/test suite for a repo/ref.
 
-    The `lint_command` parameter is accepted for interface symmetry with
-    `run_lint_suite` and future extension but is not used by this helper.
+    For now this is a thin wrapper around `run_tests`, but it also emits a
+    small `controller_log` so controllers can describe what happened.
     """
-    _ = lint_command
-
-    return await run_tests(
+    tests_result = await run_tests(
         full_name=full_name,
         ref=ref,
         test_command=test_command,
@@ -417,6 +432,23 @@ async def run_quality_suite(
         installing_dependencies=installing_dependencies,
         mutating=mutating,
     )
+
+    status = tests_result.get("status") or "unknown"
+    summary_lines = [
+        "Quality suite run (tests only):",
+        f"- Repo: {full_name}",
+        f"- Ref: {ref}",
+        f"- Test command: {test_command}",
+        f"- Lint command (unused here): {lint_command}",
+        f"- Test status: {status}",
+    ]
+
+    existing_log = tests_result.get("controller_log")
+    if isinstance(existing_log, list):
+        summary_lines.extend(existing_log)
+
+    tests_result["controller_log"] = summary_lines
+    return tests_result
 
 
 @mcp_tool(write_action=False)
@@ -432,7 +464,7 @@ async def run_lint_suite(
     mutating: bool = False,
 ) -> Dict[str, Any]:
     """Run the lint or static-analysis command in the workspace."""
-    return await run_command(
+    result = await run_command(
         full_name=full_name,
         ref=ref,
         command=lint_command,
@@ -443,6 +475,56 @@ async def run_lint_suite(
         installing_dependencies=installing_dependencies,
         mutating=mutating,
     )
+
+    if isinstance(result, dict) and "error" in result:
+        return {
+            "status": "failed",
+            "command": lint_command,
+            "error": result["error"],
+            "controller_log": [
+                "Lint run failed due to a workspace or command error.",
+                f"- Command: {lint_command}",
+                f"- Error: {result['error'].get('error')}",
+            ],
+        }
+
+    if not isinstance(result, dict) or "result" not in result:
+        return {
+            "status": "failed",
+            "command": lint_command,
+            "error": {
+                "error": "UnexpectedResultShape",
+                "message": "run_command returned an unexpected result structure",
+                "raw_result": result,
+            },
+            "controller_log": [
+                "Lint run failed because run_command returned an unexpected result shape.",
+                f"- Command: {lint_command}",
+            ],
+        }
+
+    cmd_result = result.get("result") or {}
+    exit_code = cmd_result.get("exit_code")
+    status = "passed" if exit_code == 0 else "failed"
+
+    summary_lines = [
+        "Completed lint command in workspace:",
+        f"- Repo: {full_name}",
+        f"- Ref: {ref}",
+        f"- Command: {lint_command}",
+        f"- Status: {status}",
+        f"- Exit code: {exit_code}",
+    ]
+
+    return {
+        "status": status,
+        "command": lint_command,
+        "exit_code": exit_code,
+        "repo_dir": result.get("repo_dir"),
+        "workdir": result.get("workdir"),
+        "result": cmd_result,
+        "controller_log": summary_lines,
+    }
 
 
 @mcp_tool(write_action=False)
