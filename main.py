@@ -2623,9 +2623,8 @@ async def create_issue(
     )
 
 
-@mcp_tool(write_action=True)async def update_issue(
-    full_name: str,
-    issue_number: int,
+@mcp_tool(write_action=True)
+async def update_issue(    issue_number: int,
     title: Optional[str] = None,
     body: Optional[str] = None,
     state: Optional[Literal["open", "closed"]] = None,
