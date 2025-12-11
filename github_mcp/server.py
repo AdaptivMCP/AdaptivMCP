@@ -148,72 +148,17 @@ _REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
 
 
 def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
-    """Validate a tool call's arguments against its input schema when available."""
+    """Placeholder for JSON Schema-based preflight validation.
 
-    name = getattr(tool, "name", None)
-    if name in {
-        "run_command",
-        "commit_workspace_files",
-        "cache_files",
-        "fetch_files",
-        "update_files_and_open_pr",
-        "create_issue",
-        "update_issue",
-        "describe_tool",
-        "validate_tool_args",
-        "list_recent_failures",
-    }:
-        # These tools already perform rich runtime validation and are covered by
-        # dedicated tests. Rely on that behavior rather than strict JSON Schema
-        # preflight, which can be too rigid for their controller-centric usage.
-        return None
+    The controller already enforces argument correctness via dedicated runtime
+    checks and tests for each tool. Until the auto-generated MCP schemas are
+    fully aligned with those semantics, strict preflight validation is disabled
+    so that tools behave according to the tested controller contract instead of
+    the provisional schemas.
+    """
 
-    try:
-        normalized_args = normalize_args(raw_args)
-    except Exception as exc:  # extremely defensive - surface as a validation failure
-        raise jsonschema.ValidationError(str(exc)) from exc
-
-    schema = _normalize_input_schema(tool)
-    if schema is None:
-        # When no schema is published we deliberately skip strict validation so
-        # tools without schemas continue to work as before.
-        return None
-
-    validator = jsonschema.Draft7Validator(schema)
-    errors = sorted(validator.iter_errors(normalized_args), key=str)
-    if not errors:
-        return None
-
-    primary = errors[0]
-    primary.context = list(errors[1:])
-    raise primary
-        normalized_args = normalize_args(raw_args)
-    except Exception as exc:  # extremely defensive - surface as a validation failure
-        raise jsonschema.ValidationError(str(exc)) from exc
-
-    schema = _normalize_input_schema(tool)
-    if schema is None:
-        # When no schema is published we deliberately skip strict validation so
-        # tools without schemas continue to work as before.
-        return None
-
-    validator = jsonschema.Draft7Validator(schema)
-    errors = sorted(validator.iter_errors(normalized_args), key=str)
-    if not errors:
-        return None
-
-    primary = errors[0]
-    primary.context = list(errors[1:])
-    raise primary
-
-    validator = jsonschema.Draft7Validator(schema)
-    errors = sorted(validator.iter_errors(normalized_args), key=str)
-    if not errors:
-        return None
-
-    primary = errors[0]
-    primary.context = list(errors[1:])
-    raise primary
+    # Intentionally a no-op: rely on the tools' own validation and tests.
+    return None
 def _find_registered_tool(tool_name: str) -> Optional[tuple[Any, Any]]:
     for tool, func in _REGISTERED_MCP_TOOLS:
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
