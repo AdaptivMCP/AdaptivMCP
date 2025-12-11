@@ -27,3 +27,5 @@ async def test_create_pull_request_returns_structured_error(monkeypatch):
     assert "error" in result
     assert result["error"]["context"] == "create_pull_request"
     assert "boom" in result["error"]["message"]
+    # Path hint helps callers and logs identify the failing repo/head/base.
+    assert result["error"]["path"] == "owner/repo feature->main"
