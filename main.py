@@ -1498,13 +1498,12 @@ async def fetch_url(url: str) -> Dict[str, Any]:
 @mcp_tool(write_action=False)
 async def search(
     query: str,
-    search_type: str = "code",
+    search_type: Literal["code", "repositories", "issues", "commits", "users"] = "code",
     per_page: int = 30,
     page: int = 1,
     sort: Optional[str] = None,
-    order: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Perform GitHub search queries (code, repos, issues, commits, or users)."""
+    order: Optional[Literal["asc", "desc"]] = None,
+) -> Dict[str, Any]:    """Perform GitHub search queries (code, repos, issues, commits, or users)."""
 
     allowed_types = {"code", "repositories", "issues", "commits", "users"}
     if search_type not in allowed_types:
