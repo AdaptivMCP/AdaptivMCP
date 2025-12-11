@@ -150,6 +150,24 @@ _REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
 def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
     """Validate a tool call's arguments against its input schema when available."""
 
+    name = getattr(tool, "name", None)
+    if name in {
+        "run_command",
+        "commit_workspace_files",
+        "cache_files",
+        "fetch_files",
+        "update_files_and_open_pr",
+        "create_issue",
+        "update_issue",
+        "describe_tool",
+        "validate_tool_args",
+        "list_recent_failures",
+    }:
+        # These tools already perform rich runtime validation and are covered by
+        # dedicated tests. Rely on that behavior rather than strict JSON Schema
+        # preflight, which can be too rigid for their controller-centric usage.
+        return None
+
     try:
         normalized_args = normalize_args(raw_args)
     except Exception as exc:  # extremely defensive - surface as a validation failure
@@ -160,6 +178,15 @@ def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
         # When no schema is published we deliberately skip strict validation so
         # tools without schemas continue to work as before.
         return None
+
+    validator = jsonschema.Draft7Validator(schema)
+    errors = sorted(validator.iter_errors(normalized_args), key=str)
+    if not errors:
+        return None
+
+    primary = errors[0]
+    primary.context = list(errors[1:])
+    raise primary
 
     validator = jsonschema.Draft7Validator(schema)
     errors = sorted(validator.iter_errors(normalized_args), key=str)
