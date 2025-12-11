@@ -1503,7 +1503,8 @@ async def search(
     page: int = 1,
     sort: Optional[str] = None,
     order: Optional[Literal["asc", "desc"]] = None,
-) -> Dict[str, Any]:    """Perform GitHub search queries (code, repos, issues, commits, or users)."""
+) -> Dict[str, Any]:
+    """Perform GitHub search queries (code, repos, issues, commits, or users)."""
 
     allowed_types = {"code", "repositories", "issues", "commits", "users"}
     if search_type not in allowed_types:
