@@ -187,6 +187,24 @@ def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
     primary = errors[0]
     primary.context = list(errors[1:])
     raise primary
+        normalized_args = normalize_args(raw_args)
+    except Exception as exc:  # extremely defensive - surface as a validation failure
+        raise jsonschema.ValidationError(str(exc)) from exc
+
+    schema = _normalize_input_schema(tool)
+    if schema is None:
+        # When no schema is published we deliberately skip strict validation so
+        # tools without schemas continue to work as before.
+        return None
+
+    validator = jsonschema.Draft7Validator(schema)
+    errors = sorted(validator.iter_errors(normalized_args), key=str)
+    if not errors:
+        return None
+
+    primary = errors[0]
+    primary.context = list(errors[1:])
+    raise primary
 
     validator = jsonschema.Draft7Validator(schema)
     errors = sorted(validator.iter_errors(normalized_args), key=str)
