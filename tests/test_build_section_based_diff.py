@@ -54,8 +54,8 @@ async def test_build_section_based_diff_whitespace_only_and_zero_context(monkeyp
     assert patch.startswith("--- a/file.txt")
 
     lines = patch.splitlines()
-    assert any(l.startswith("-beta") for l in lines)
-    assert any(l.startswith("+beta " ) for l in lines)
+    assert any(line.startswith("-beta") for line in lines)
+    assert any(line.startswith("+beta " ) for line in lines)
 
     for line in lines:
         if not line or line.startswith(("---", "+++", "@@")):
