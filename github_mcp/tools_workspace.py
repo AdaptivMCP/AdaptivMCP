@@ -397,8 +397,15 @@ async def run_quality_suite(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
+    lint_command: str = "ruff check .",
 ) -> Dict[str, Any]:
-    """Run the standard quality/test suite for a repo/ref."""
+    """Run the standard quality/test suite for a repo/ref.
+
+    The `lint_command` parameter is accepted for interface symmetry with
+    `run_lint_suite` and future extension but is not used by this helper.
+    """
+    _ = lint_command
+
     return await run_tests(
         full_name=full_name,
         ref=ref,
