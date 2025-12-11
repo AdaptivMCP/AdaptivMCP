@@ -2506,7 +2506,8 @@ async def list_pull_requests(
     base: Optional[str] = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:    """List pull requests with optional head/base filters.
+) -> Dict[str, Any]:
+    """List pull requests with optional head/base filters.
 
     Args:
         full_name: "owner/repo" string.
@@ -2540,7 +2541,8 @@ async def merge_pull_request(
     merge_method: Literal["merge", "squash", "rebase"] = "squash",
     commit_title: Optional[str] = None,
     commit_message: Optional[str] = None,
-) -> Dict[str, Any]:    """Merge a pull request using squash (default), merge, or rebase.
+) -> Dict[str, Any]:
+    """Merge a pull request using squash (default), merge, or rebase.
 
     Args:
         full_name: "owner/repo" string.
