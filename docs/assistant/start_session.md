@@ -8,19 +8,18 @@ This protocol applies to assistants using this MCP server. Humans and repository
 
 - Reduce invalid tool calls
 - Keep long workflows from getting stuck
-- Provide a single protocol that controllers can copy into system promptsPair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` and the live `controller_contract` tool so assistants internalize their role as the engineer. `controller_contract` is the single source of truth for contract details; this document and the controller prompt simply describe how to execute that contract in practice. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
+- Provide a single protocol that controllers can copy into system prompts. Pair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` so assistants internalize their role as the engineer. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
 ## 1. Startup sequence
 
 At the start of a new conversation, or after context loss, do these tool calls in order:
 
 1. Call `get_server_config` and `validate_environment` to learn write_allowed, default branch, and limits, and to confirm the server is healthy.
 2. Call `list_write_tools` once so you know which tools are gated before you try to use them.
-3. Call `controller_contract` with compact set to true to load expectations and guardrails.
-4. Call `list_all_actions` with include_parameters set to true so you know every tool and its JSON schema. This controller guarantees that each returned tool exposes a non-null `input_schema` object; when an underlying MCP tool does not publish a schema, the server synthesizes a minimal {type: "object", properties: {}} schema so you can still reason about argument shapes.
-5. Before you invoke any MCP tool in this session (including tools you think you already understand), call `describe_tool` for that tool and, when applicable, use `validate_tool_args` on your planned `args` object before the first real invocation—especially for write-tagged or complex tools. Treat this as mandatory, not optional.
-6. As soon as you know the controller default branch, use `ensure_branch` (or an equivalent helper) to create or ensure a dedicated feature branch for this task, and then run discovery tools like `get_repo_dashboard`, `list_repository_tree`, and `get_latest_branch_status` against that feature branch instead of the real default branch. Do not run MCP tools directly against `main`.
+3. Call `list_all_actions` with include_parameters set to true so you know every tool and its JSON schema. This controller guarantees that each returned tool exposes a non-null `input_schema` object; when an underlying MCP tool does not publish a schema, the server synthesizes a minimal {type: "object", properties: {}} schema so you can still reason about argument shapes.
+4. Before you invoke any MCP tool in this session (including tools you think you already understand), call `describe_tool` for that tool and, when applicable, use `validate_tool_args` on your planned `args` object before the first real invocation—especially for write-tagged or complex tools. Treat this as mandatory, not optional.
+5. As soon as you know the controller default branch, use `ensure_branch` (or an equivalent helper) to create or ensure a dedicated feature branch for this task, and then run discovery tools like `get_repo_dashboard`, `list_repository_tree`, and `get_latest_branch_status` against that feature branch instead of the real default branch. Do not run MCP tools directly against `main`.
 
-Treat the results of these tools as the source of truth for the rest of the session, with `controller_contract` as the canonical contract and this document as the execution playbook that must remain consistent with it.
+Treat the results of these tools as the source of truth for the rest of the session, and keep this document aligned with the live server behavior.
 
 ## 2. Tool arguments and validation
 

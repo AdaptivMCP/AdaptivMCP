@@ -65,7 +65,6 @@ Use these tools to understand existing issues/PRs and their CI state before deci
 - [commit_workspace](#commit_workspace)
 - [commit_workspace_files](#commit_workspace_files)
 - [compare_refs](#compare_refs)
-- [controller_contract](#controller_contract)
 - [create_branch](#create_branch)
 - [create_file](#create_file)
 - [create_issue](#create_issue)
@@ -150,7 +149,7 @@ Use these tools to understand existing issues/PRs and their CI state before deci
 
 ## Tool details
 
-Each section below describes what the tool does, how it is typically used in workflows, and any important constraints or gotchas. The descriptions are written for assistants and controllers who already understand the overall branch–diff–test–PR flow from `controller_contract`.
+Each section below describes what the tool does, how it is typically used in workflows, and any important constraints or gotchas. The descriptions are written for assistants and controllers who already understand the overall branch–diff–test–PR flow described in the docs.
 
 ### apply_line_edits_and_commit
 
@@ -207,10 +206,6 @@ Commit a specific set of files from the workspace and optionally push them. Use 
 ### compare_refs
 
 Compare two refs (base/head) using the GitHub compare API. This returns summaries of commits and file changes and is useful for answering "what changed between these refs?".
-
-### controller_contract
-
-Return the structured contract that governs how assistants and controllers should use this MCP server. Treat this as the source of truth for flows, expectations, and guardrails.
 
 ### create_branch
 

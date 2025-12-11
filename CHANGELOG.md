@@ -11,9 +11,9 @@ This project follows semantic versioning (MAJOR.MINOR.PATCH).
 - Introduce `CHANGELOG.md` as the canonical source of human-readable release notes.
 - Define `1.0.0` as the baseline for subsequent 1.x releases.
 
-### Controller contract and assistant behavior
-- Evolve `controller_contract()` to document the full tool surface, safety model, and assistant expectations for Adaptiv Controller.
-- Require assistants to treat the controller contract as the authoritative source of truth and to avoid inventing parallel "doc contracts".
+### Controller guidance and assistant behavior
+- Document the tool surface, safety model, and assistant expectations for Adaptiv Controller directly in repository docs.
+- Require assistants to treat the published docs as the authoritative source of truth and to avoid inventing parallel "doc contracts".
 - Encode expectations for branch-based, patch-driven, PR-focused workflows and strict JSON/tool schema usage.
 
 ### Core tooling and safety model
@@ -31,10 +31,9 @@ This project follows semantic versioning (MAJOR.MINOR.PATCH).
 - Flesh out `docs/SELF_HOSTED_SETUP.md` with a self-hosted deployment guide and a dedicated section on versioning and CLI checks.
 - Flesh out `docs/UPGRADE_NOTES.md` as the source of truth for install, upgrade, and rollback flows (staging first, tags/branches, Render guidance).
 - Update `docs/WORKFLOWS.md` so every new ChatGPT session:
-  - Calls `controller_contract`.
   - Uses `run_command` to run `python cli.py --version` and confirm the server version (1.0.0 for this release).
   - Refreshes key docs from `main` (ASSISTANT_HANDOFF, WORKFLOWS, ARCHITECTURE_AND_SAFETY, ASSISTANT_DOCS_AND_SNAPSHOTS, SELF_HOSTED_SETUP).
 - Maintain `ASSISTANT_HANDOFF.md` as the living handoff document for assistants, ensuring new chats can re-sync with the project state and expectations.
 
 ### Test suite
-- Keep the test suite green on `main` (currently 86 tests) covering controller contract structure, repo helpers, JSON validation, and core behaviors.
+- Keep the test suite green on `main` (currently 86 tests) covering repo helpers, JSON validation, and core behaviors.
