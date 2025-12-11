@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import sys
 import time
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import jsonschema
 from anyio import ClosedResourceError
@@ -98,6 +99,43 @@ def _structured_tool_error(
     if path:
         error["path"] = path
     return {"error": error}
+
+
+def _stringify_annotation(annotation: Any) -> str:
+    """Return a deterministic, LLM-friendly description of a parameter type."""
+
+    if annotation is inspect.Signature.empty:
+        return "any type"
+    if isinstance(annotation, type):
+        return annotation.__name__
+    if getattr(annotation, "__name__", None):
+        return annotation.__name__
+    return str(annotation)
+
+
+def _normalize_tool_description(func, signature: Optional[inspect.Signature], *, llm_level: str) -> str:
+    """Flatten docstrings and append explicit usage guidance for the MCP tool."""
+
+    raw_doc = func.__doc__ or ""
+    base = " ".join(line.strip() for line in raw_doc.strip().splitlines() if line.strip())
+    if not base:
+        base = f"{func.__name__} runs the '{func.__name__}' tool logic without extra context."
+
+    param_details: list[str] = []
+    if signature is not None:
+        for name, param in signature.parameters.items():
+            if name in {"self", "cls"}:
+                continue
+            annotation = _stringify_annotation(param.annotation)
+            requirement = "required" if param.default is inspect.Signature.empty else f"default={param.default!r}"
+            param_details.append(f"{name} ({annotation}, {requirement})")
+
+    inputs_summary = "Inputs: " + "; ".join(param_details) + "." if param_details else "No parameters are required."
+    level_summary = (
+        "Classification: advanced tool for mutating operations." if llm_level == "advanced" else "Classification: low-level read-focused tool."
+    )
+
+    return f"{base} {inputs_summary} {level_summary}"
 
 
 def _ensure_write_allowed(context: str) -> None:
@@ -354,6 +392,9 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     else:
         tags.add("read")
 
+    llm_level = "advanced" if write_action else "low-level"
+    tags.add(llm_level)
+
     existing_meta = tool_kwargs.pop("meta", None) or {}
     existing_annotations = tool_kwargs.pop("annotations", None)
 
@@ -379,23 +420,32 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         "auto_approved": not write_action,
         "risk_level": risk_level,
         "operation": operation,
+        "llm_level": llm_level,
+        "llm_guidance": "This tool description is expanded for ChatGPT and includes explicit inputs and risk level.",
     }
 
     import functools as _functools
     import inspect as _inspect
 
     def decorator(func):
+        signature = None
+        try:
+            signature = _inspect.signature(func)
+        except (TypeError, ValueError):
+            signature = None
+
+        normalized_description = _normalize_tool_description(
+            func, signature, llm_level=llm_level
+        )
+        tool_kwargs.setdefault("description", normalized_description)
+        func.__doc__ = normalized_description
+
         tool = mcp.tool(
             tags=tags or None,
             meta=meta or None,
             annotations=annotations,
             **tool_kwargs,
         )(func)
-
-        try:
-            signature = _inspect.signature(func)
-        except (TypeError, ValueError):
-            signature = None
 
         def _format_args_for_log(all_args: Mapping[str, Any], *, limit: int = 1200) -> str:
             """Return a human-friendly, truncated snapshot of the tool arguments."""
