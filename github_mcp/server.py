@@ -4,18 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import os
 import sys
 import time
 import uuid
-from __future__ import annotations
+from typing import Any, Dict, Mapping, Optional
 
-import asyncio
-import json
-import logging
-import os
-import signal
-import sys
+import jsonschema
+from anyio import ClosedResourceError
+from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from github_mcp import http_clients as _http_clients
