@@ -2037,14 +2037,21 @@ async def list_workflow_run_jobs(
 
 
 @mcp_tool(write_action=False)
-async def get_workflow_run_overview(full_name: str, run_id: int) -> Dict[str, Any]:
+async def get_workflow_run_overview(
+    full_name: str,
+    run_id: int,
+    max_jobs: int = 500,
+) -> Dict[str, Any]:
     """Summarize a GitHub Actions workflow run for CI triage.
 
     This helper is read-only and safe to call before any write actions. It
-    aggregates run metadata, jobs, failed jobs, and the longest jobs by
-    duration so assistants can answer "what happened in this run?" with a
-    single tool call.
+    aggregates run metadata, jobs (with optional pagination up to max_jobs),
+    failed jobs, and the longest jobs by duration so assistants can answer
+    "what happened in this run?" with a single tool call.
     """
+
+    if max_jobs <= 0:
+        raise ValueError("max_jobs must be > 0")
 
     run_resp = await get_workflow_run(full_name, run_id)
     run_json = run_resp.get("json") if isinstance(run_resp, dict) else run_resp
@@ -2064,10 +2071,6 @@ async def get_workflow_run_overview(full_name: str, run_id: int) -> Dict[str, An
         "updated_at": run_json.get("updated_at"),
         "html_url": run_json.get("html_url"),
     }
-
-    jobs_resp = await list_workflow_run_jobs(full_name, run_id, per_page=100, page=1)
-    jobs_json = jobs_resp.get("json") or {}
-    raw_jobs = jobs_json.get("jobs", []) if isinstance(jobs_json, dict) else []
 
     def _parse_timestamp(value: Any) -> Optional[datetime]:
         if not isinstance(value, str):
@@ -2091,43 +2094,72 @@ async def get_workflow_run_overview(full_name: str, run_id: int) -> Dict[str, An
         "startup_failure",
     }
 
-    for job in raw_jobs:
-        if not isinstance(job, dict):
-            continue
+    # Paginate through all jobs for the run up to max_jobs so we do not
+    # silently drop jobs when there are more than a single page.
+    per_page = 100
+    page = 1
+    fetched = 0
 
-        status = job.get("status")
-        conclusion = job.get("conclusion")
-        started_at = job.get("started_at")
-        completed_at = job.get("completed_at")
+    while fetched < max_jobs:
+        remaining = max_jobs - fetched
+        page_per_page = per_page if remaining >= per_page else remaining
 
-        start_dt = _parse_timestamp(started_at)
-        end_dt = _parse_timestamp(completed_at)
-        duration_seconds: Optional[float] = None
-        if start_dt and end_dt:
-            duration_seconds = max(0.0, (end_dt - start_dt).total_seconds())
+        jobs_resp = await list_workflow_run_jobs(
+            full_name, run_id, per_page=page_per_page, page=page
+        )
+        jobs_json = jobs_resp.get("json") or {}
+        raw_jobs = jobs_json.get("jobs", []) if isinstance(jobs_json, dict) else []
 
-        normalized = {
-            "id": job.get("id"),
-            "name": job.get("name"),
-            "status": status,
-            "conclusion": conclusion,
-            "started_at": started_at,
-            "completed_at": completed_at,
-            "duration_seconds": duration_seconds,
-            "html_url": job.get("html_url"),
-        }
-        jobs.append(normalized)
+        # Stop if there are no more jobs.
+        if not raw_jobs:
+            break
 
-        if duration_seconds is not None:
-            jobs_with_duration.append(normalized)
+        for job in raw_jobs:
+            if not isinstance(job, dict):
+                continue
 
-        include_failure = False
-        if conclusion in failure_conclusions:
-            include_failure = True
-        elif status == "completed" and conclusion not in (None, "success", "neutral", "skipped"):
-            include_failure = True
-        if include_failure:
-            failed_jobs.append(normalized)
+            status = job.get("status")
+            conclusion = job.get("conclusion")
+            started_at = job.get("started_at")
+            completed_at = job.get("completed_at")
+
+            start_dt = _parse_timestamp(started_at)
+            end_dt = _parse_timestamp(completed_at)
+            duration_seconds: Optional[float] = None
+            if start_dt and end_dt:
+                duration_seconds = max(0.0, (end_dt - start_dt).total_seconds())
+
+            normalized = {
+                "id": job.get("id"),
+                "name": job.get("name"),
+                "status": status,
+                "conclusion": conclusion,
+                "started_at": started_at,
+                "completed_at": completed_at,
+                "duration_seconds": duration_seconds,
+                "html_url": job.get("html_url"),
+            }
+            jobs.append(normalized)
+            fetched += 1
+
+            if duration_seconds is not None:
+                jobs_with_duration.append(normalized)
+
+            include_failure = False
+            if conclusion in failure_conclusions:
+                include_failure = True
+            elif status == "completed" and conclusion not in (None, "success", "neutral", "skipped"):
+                include_failure = True
+            if include_failure:
+                failed_jobs.append(normalized)
+
+            if fetched >= max_jobs:
+                break
+
+        if fetched >= max_jobs:
+            break
+
+        page += 1
 
     longest_jobs = sorted(
         jobs_with_duration,
