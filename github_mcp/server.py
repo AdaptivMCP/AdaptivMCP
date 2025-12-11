@@ -183,12 +183,91 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
 
     # Prefer the underlying MCP tool's explicit inputSchema when available.
     raw_schema = getattr(tool, "inputSchema", None)
+    name = getattr(tool, "name", None)
+
+    schema: Optional[Dict[str, Any]] = None
     if raw_schema is not None:
         # FastMCP tools typically expose a Pydantic model here.
         if hasattr(raw_schema, "model_dump"):
-            return raw_schema.model_dump()
-        if isinstance(raw_schema, dict):
-            return dict(raw_schema)
+            schema = raw_schema.model_dump()
+        elif isinstance(raw_schema, dict):
+            schema = dict(raw_schema)
+
+    # Fall back to a small set of hand-authored schemas for important tools
+    # that do not currently expose an inputSchema via the MCP layer. This
+    # keeps describe_tool and validate_tool_args useful without requiring
+    # every tool to be fully annotated.
+    if schema is None:
+        if name is None:
+            name = getattr(tool, "name", None)
+
+        if name == "compare_refs":
+            return {
+                "type": "object",
+                "properties": {
+                    "full_name": {"type": "string"},
+                    "base": {"type": "string"},
+                    "head": {"type": "string"},
+                },
+                "required": ["full_name", "base", "head"],
+                "additionalProperties": True,
+            }
+
+        if name == "list_workflow_runs":
+            return {
+                "type": "object",
+                "properties": {
+                    "full_name": {"type": "string"},
+                    "branch": {"type": ["string", "null"]},
+                    "status": {"type": ["string", "null"]},
+                    "event": {"type": ["string", "null"]},
+                    "per_page": {"type": "integer", "minimum": 1},
+                    "page": {"type": "integer", "minimum": 1},
+                },
+                "required": ["full_name"],
+                "additionalProperties": True,
+            }
+
+        if name == "list_recent_failures":
+            return {
+                "type": "object",
+                "properties": {
+                    "full_name": {"type": "string"},
+                    "branch": {"type": ["string", "null"]},
+                    "limit": {"type": "integer"},
+                },
+                "required": ["full_name"],
+                "additionalProperties": True,
+            }
+
+    # At this point we have either a concrete schema from the MCP layer or
+    # None. When a schema is present, we sometimes need to tweak it slightly
+    # for backwards compatibility with the controller's expectations.
+    if schema is not None and name == "run_command":
+        props = schema.setdefault("properties", {})
+        ref_prop = props.get("ref")
+        if isinstance(ref_prop, dict):
+            # Allow ref to be either a string or null so callers can pass
+            # None and rely on controller defaults without tripping JSON
+            # Schema validation.
+            existing_type = ref_prop.get("type")
+            if isinstance(existing_type, str):
+                if existing_type != "null":
+                    ref_prop["type"] = sorted({existing_type, "null"})
+            elif isinstance(existing_type, list):
+                if "null" not in existing_type:
+                    ref_prop["type"] = sorted(set(existing_type + ["null"]))
+        return schema
+
+    # As a final fallback, derive a best-effort JSON schema from the
+    # registered function's Python signature so that describe_tool and
+    # list_all_actions can still surface argument names and a reasonable
+    # required/optional split even when the MCP layer does not publish an
+    # explicit inputSchema.
+    try:
+        import inspect as _inspect
+    except Exception:  # extremely defensive
+        return None
 
     # Fall back to a small set of hand-authored schemas for important tools
     # that do not currently expose an inputSchema via the MCP layer. This
