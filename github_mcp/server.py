@@ -183,6 +183,25 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
 
     name = getattr(tool, "name", None)
 
+    # A small set of tools have richer controller-level semantics (e.g.
+    # ref-defaulting, list vs. scalar arguments, or controller-managed
+    # validation flows) that do not map cleanly onto the auto-generated MCP
+    # JSON Schemas. For these we deliberately skip strict preflight and rely on
+    # their existing runtime validation and the test suite instead.
+    if name in {
+        "run_command",
+        "commit_workspace_files",
+        "cache_files",
+        "fetch_files",
+        "update_files_and_open_pr",
+        "create_issue",
+        "update_issue",
+        "describe_tool",
+        "validate_tool_args",
+        "list_recent_failures",
+    }:
+        return None
+
     # Prefer the underlying MCP tool's explicit inputSchema when available.
     raw_schema = getattr(tool, "inputSchema", None)
     schema: Optional[Dict[str, Any]] = None
@@ -193,7 +212,6 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
         elif isinstance(raw_schema, dict):
             schema = dict(raw_schema)
 
-    # Fall back to a small set of hand-authored schemas for important tools
     # that do not currently expose an inputSchema via the MCP layer. This
     # keeps describe_tool and validate_tool_args useful without requiring
     # every tool to be fully annotated.
