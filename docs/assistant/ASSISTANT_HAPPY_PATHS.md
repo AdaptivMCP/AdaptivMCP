@@ -18,8 +18,7 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - HTTP, timeout, and concurrency limits that might affect large operations.
    - That the server is healthy before proceeding.
 2. Call `list_write_tools` so you know which tools are gated before you attempt them.
-3. Call `list_all_actions` (include_parameters=true). This server guarantees each tool exposes a non-null `input_schema` in that listing, synthesizing a minimal object schema when none is published. Before you invoke any MCP tool in this session (including tools you think you already understand), call `describe_tool` for that tool and, when applicable, use `validate_tool_args` on your planned `args` object before the first real invocation—especially for write-capable or complex tools. When you need metadata or validation for multiple tools, prefer a single `describe_tool` or `validate_tool_args` call with up to 10 tools at once instead of many separate calls. Treat this as mandatory, not optional.
-4. Once you know the controller `default_branch`, immediately create or ensure a dedicated feature branch for this task with `ensure_branch` (or `create_branch`), and run discovery tools like `get_repo_dashboard`, `list_repository_tree`, and `get_latest_branch_status` against that feature branch instead of the real default branch. Do not run MCP tools directly against `main`.
+3. Call `list_all_actions` (include_parameters=true). This server guarantees each tool exposes a non-null `input_schema` in that listing, synthesizing a minimal object schema when none is published. For unfamiliar, complex, or write-capable tools, call `describe_tool` and, when applicable, use `validate_tool_args` on your planned `args` object before the first real invocation in this session. When you need metadata or validation for multiple tools, prefer a single `describe_tool` or `validate_tool_args` call with up to 10 tools at once instead of many separate calls.4. Once you know the controller `default_branch`, immediately create or ensure a dedicated feature branch for this task with `ensure_branch` (or `create_branch`), and run discovery tools like `get_repo_dashboard`, `list_repository_tree`, and `get_latest_branch_status` against that feature branch instead of the real default branch. Do not run MCP tools directly against `main`.
 5. If you plan to make any GitHub state changes (commits, branches, PRs, issue updates), plan your write posture:
    - For writes that touch the controller default branch or unscoped write tools, call `authorize_write_actions` before using them so `_ensure_write_allowed` will accept the operation.
    - For commits to feature branches, prefer branch-scoped tools like `commit_workspace`, `commit_workspace_files`, and patch-based helpers. These tools pass a `target_ref` and are allowed even when `write_allowed` is `False`, while the controller default branch remains protected behind the write gate.
@@ -49,14 +48,7 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - Use `get_file_slice` when you only need a portion of a large file (for example, a single section in `main.py` or a long test file).
 5. When you need to search within this repo:
    - Prefer the GitHub search tool (for example `search` with a `code` query) using a repo-scoped query (function name, test name, or filename) rather than a global search.
-   - Avoid unqualified global GitHub search unless the user explicitly wants cross-repo context.
-3. For specific files:
-   - Use `get_file_contents` for small to medium files.
-   - Use `get_file_slice` when you only need a portion of a large file (for example, a single section in `main.py` or a long test file).
-4. When you need to search within this repo:
-   - Prefer the GitHub search tool (for example `search` with a code query) using a repo-scoped query (function name, test name, or filename) rather than a global search.
-   - Avoid unqualified global GitHub search unless the user explicitly wants cross-repo context.
-**Validation:**
+   - Avoid unqualified global GitHub search unless the user explicitly wants cross-repo context.**Validation:**
 - You successfully retrieved and summarized the docs or code files you needed without triggering any write tools.
 - Tree listings reflect the expected layout (docs, tests, main code, workflows).
 
@@ -92,8 +84,6 @@ If you ever find yourself guessing or improvising a new flow, check this file an
      - The `title` and `body` rendered from the `build_pr_summary` result so PR descriptions stay consistent with the contract.
 7. Optionally list the PR to confirm state:
    - Call `list_pull_requests` filtered by head branch to confirm the new PR exists and is open.
-7. Optionally list the PR to confirm state:
-   - Call `list_pull_requests` filtered by head branch to confirm the new PR exists and is open.
 
 **Validation:**
 - `apply_text_update_and_commit` or similar returns `status` equal to `committed` with a verification block.
@@ -110,12 +100,12 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 **Steps:**
 1. Discovery:
    - Use repo-scoped search (for example the `search` tool with a `code` query) and `list_repository_tree` to locate the main implementation file and its tests (for example, `tests/test_apply_text_update_and_commit.py`).
-   - Fetch the relevant files using `get_file_contents` or `get_file_slice`.2. Plan the change:
+   - Fetch the relevant files using `get_file_contents` or `get_file_slice`.
+2. Plan the change:
    - Draft the code change and any test updates in your reasoning.
    - Keep the change set small and focused on one feature or bug.
 3. Create a feature branch:
-   - Call `ensure_branch` with `branch` set to a new feature name (for example `feat/single-file-update-happy-path`).
-4. Enable writes:
+   - Call `ensure_branch` with `branch` set to a new feature name (for example `feat/single-file-update-happy-path`).4. Enable writes:
    - Call `authorize_write_actions` if not already done in this session.
 5. Apply code changes in the repo:
    - For small files: use `build_unified_diff` with your proposed new content and then `apply_patch_and_commit`, or use `apply_text_update_and_commit` directly.
@@ -181,10 +171,10 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 1. Identify the region:
    - Use `get_file_slice` to retrieve only the lines relevant to the change.
    - When you need a compact, numbered view to point at exact lines, use `get_file_with_line_numbers`.
-   - Optionally, use a repo-scoped code search (for example via the `search` tool) to find line ranges or markers before slicing.2. Choose an edit strategy:
+   - Optionally, use a repo-scoped code search (for example via the `search` tool) to find line ranges or markers before slicing.
+2. Choose an edit strategy:
    - For marker- or section-based edits, you can still use `build_section_based_diff` + `apply_patch_and_commit`.
-   - For direct, minimal line edits where line numbers are known, use `apply_line_edits_and_commit`.
-3. Using `apply_line_edits_and_commit` for line-based edits:
+   - For direct, minimal line edits where line numbers are known, use `apply_line_edits_and_commit`.3. Using `apply_line_edits_and_commit` for line-based edits:
    - Call `apply_line_edits_and_commit` with:
      - `full_name`: controller repo (for example `Proofgate-Revocations/chatgpt-mcp-github`).
      - `path`: file you are editing (for example `docs/ASSISTANT_HAPPY_PATHS.md`).
@@ -234,9 +224,6 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - Use `build_pr_summary` to construct a structured PR summary for the current branch, including a succinct title, body, list of changed areas, and the latest tests/lint status.
    - Open a new PR using `open_pr_for_existing_branch` and render the `title` and `body` from `build_pr_summary`, or
    - Let `update_files_and_open_pr` manage both updates and PR creation if that tool fits the current flow, still using `build_pr_summary` to shape the description.
-5. Open or update a PR:
-   - Open a new PR using `open_pr_for_existing_branch`, or
-   - Let `update_files_and_open_pr` manage both updates and PR creation if that tool fits the current flow.
 
 **Validation:**
 - Workspace commands see the expected files and changes.
