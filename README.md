@@ -2,11 +2,11 @@
   <img src="assets/logo/adaptiv-logo.png" alt="Adaptiv Controller logo" width="200" />
 </p>
 
+_Last updated: 2025-12-11_
+
 Adaptiv Controller uses this server to talk to GitHub. You deploy it yourself (for example on Render.com), provide your own GitHub token, and connect it to ChatGPT as an MCP server.
 
-Assistants are expected to treat this controller like their own development machine—lean on `run_command`/`run_tests` for execution, quick searches, and usage checks, and avoid large, token-heavy inline detours (for example huge heredocs or full-file dumps) when a concise command, slice, or diff keeps context tight. This server does not add its own per-task budgets beyond what OpenAI and GitHub already enforce; instead it defines workflows, guardrails, and editing preferences inside those external limits.
-
-## What this server does
+Assistants should treat this controller like their own development machine—lean on `run_command`/`run_tests` for execution, quick searches, and usage checks, and avoid huge inline dumps (for example large heredocs or full-file copies) when a concise command, slice, or diff keeps context focused. You do not need to manage token counts manually; external platforms enforce their own limits, and this server focuses on workflows, guardrails, and editing preferences.## What this server does
 
 At a high level, this MCP server:
 
