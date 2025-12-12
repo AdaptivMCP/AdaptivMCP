@@ -1,653 +1,212 @@
-"""Workspace and command tools for GitHub MCP."""
+from datetime import datetime
+from typing import List, Optional
 
-import os
-import shlex
-import sys
-from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
 
-from github_mcp.config import RUN_COMMAND_MAX_CHARS
-from github_mcp.exceptions import GitHubAPIError
-from github_mcp.server import (
-    CONTROLLER_REPO,
-    _ensure_write_allowed,
-    _structured_tool_error,
-    mcp_tool,
-)
-from github_mcp.utils import _effective_ref_for_repo
-from github_mcp.workspace import (
-    _apply_patch_to_repo,
-    _clone_repo,
-    _prepare_temp_virtualenv,
-    _run_shell,
-    _workspace_path,
-)
-
-# ------------------------------------------------------------------------------
-# Workspace / full-environment tools
-# ------------------------------------------------------------------------------
+from .client import GithubClient, RepositoryId
+from .tools import TOOL_NAME_PREFIX, ToolDefinition
 
 
-def _workspace_deps() -> Dict[str, Any]:
-    main_module = sys.modules.get("main")
-    return {
-        "clone_repo": getattr(main_module, "_clone_repo", _clone_repo),
-        "run_shell": getattr(main_module, "_run_shell", _run_shell),
-        "prepare_temp_virtualenv": getattr(
-            main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv
-        ),
-        "apply_patch_to_repo": getattr(main_module, "_apply_patch_to_repo", _apply_patch_to_repo),
-        "ensure_write_allowed": getattr(
-            main_module, "_ensure_write_allowed", _ensure_write_allowed
-        ),
-    }
-
-def _resolve_full_name(
-    full_name: Optional[str], *, owner: Optional[str] = None, repo: Optional[str] = None
-) -> str:
-    if isinstance(full_name, str) and full_name.strip():
-        return full_name.strip()
-    if isinstance(owner, str) and owner.strip() and isinstance(repo, str) and repo.strip():
-        return f"{owner.strip()}/{repo.strip()}"
-    return CONTROLLER_REPO
+class ListRepositoryFilesInput(BaseModel):
+    owner: str = Field(..., description="Owner of the repository.")
+    repo: str = Field(..., description="Name of the repository.")
 
 
-def _resolve_ref(ref: str, *, branch: Optional[str] = None) -> str:
-    if isinstance(branch, str) and branch.strip():
-        return branch.strip()
-    return ref
-
-
-@mcp_tool(write_action=True)
-async def ensure_workspace_clone(
-    full_name: Optional[str] = None,
-    ref: str = "main",
-    reset: bool = False,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Ensure a persistent workspace clone exists for a repo/ref."""
-
-    try:
-        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _resolve_ref(ref, branch=branch)
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        workspace_dir = _workspace_path(full_name, effective_ref)
-        existed = os.path.isdir(os.path.join(workspace_dir, ".git"))
-
-        deps = _workspace_deps()
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=not reset
-        )
-
-        return {
-            "repo_dir": repo_dir,
-            "branch": effective_ref,
-            "reset": reset,
-            "created": not existed,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="ensure_workspace_clone")
-
-
-@mcp_tool(write_action=True)
-async def apply_patch_to_workspace(
-    full_name: Optional[str] = None,
-    ref: str = "main",
-    patch: str = "",
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Apply a unified diff to the persistent workspace clone.
-
-    This provides a structured alternative to relying on ad-hoc shell helpers
-    like `apply_patch`.
-    """
-
-    if not isinstance(patch, str) or not patch.strip():
-        raise ValueError("patch must be a non-empty unified diff string")
-
-    try:
-        deps = _workspace_deps()
-        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _resolve_ref(ref, branch=branch)
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-
-        deps["ensure_write_allowed"](
-            f"apply_patch_to_workspace for {full_name}@{effective_ref}",
-        )
-
-        repo_dir = await deps["clone_repo"](
-            full_name,
-            ref=effective_ref,
-            preserve_changes=True,
-        )
-        await deps["apply_patch_to_repo"](repo_dir, patch)
-
-        return {
-            "repo_dir": repo_dir,
-            "branch": effective_ref,
-            "status": "applied",
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="apply_patch_to_workspace")
-
-
-@mcp_tool(write_action=False)
-async def run_command(
-    full_name: Optional[str] = None,
-    ref: str = "main",
-    command: str = "pytest",
-    timeout_seconds: int = 300,
-    workdir: Optional[str] = None,
-    patch: Optional[str] = None,
-    use_temp_venv: bool = True,
-    installing_dependencies: bool = False,
-    mutating: bool = False,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Run a shell command inside the repo workspace and return its result.
-
-    Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
-    persists across calls so installed dependencies and edits are reused."""
-
-    env: Optional[Dict[str, str]] = None
-    try:
-        deps = _workspace_deps()
-        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _resolve_ref(ref, branch=branch)
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        if len(command) > RUN_COMMAND_MAX_CHARS:
-            raise ValueError(
-                f"run_command.command is too long ({len(command)} chars); "
-                "use diff-based tools (apply_text_update_and_commit, "
-                "apply_patch_and_commit, update_file_sections_and_commit) "
-                "for large edits instead of embedding scripts in command."
-            )
-        needs_write_gate = mutating or installing_dependencies or (patch is not None) or not use_temp_venv
-        if needs_write_gate:
-            deps["ensure_write_allowed"](f"run_command {command} in {full_name}@{effective_ref}")
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-
-        if patch:
-            await deps["apply_patch_to_repo"](repo_dir, patch)
-
-        if use_temp_venv:
-            env = await deps["prepare_temp_virtualenv"](repo_dir)
-
-        cwd = repo_dir
-        if workdir:
-            cwd = os.path.join(repo_dir, workdir)
-        result = await deps["run_shell"](
-            command,
-            cwd=cwd,
-            timeout_seconds=timeout_seconds,
-            env=env,
-        )
-        return {
-            "repo_dir": repo_dir,
-            "workdir": workdir,
-            "result": result,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="run_command")
-
-
-@mcp_tool(write_action=True)
-async def commit_workspace(
-    full_name: Optional[str] = None,
-    ref: str = "main",
-    message: str = "Commit workspace changes",
-    add_all: bool = True,
-    push: bool = True,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Commit workspace changes and optionally push them."""
-
-    try:
-        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _resolve_ref(ref, branch=branch)
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        _ensure_write_allowed(
-            f"commit_workspace for {full_name}@{effective_ref}",
-            target_ref=effective_ref,
-        )
-        deps = _workspace_deps()
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-
-        if add_all:
-            add_result = await deps["run_shell"]("git add -A", cwd=repo_dir, timeout_seconds=120)
-            if add_result["exit_code"] != 0:
-                stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
-                raise GitHubAPIError(f"git add failed: {stderr}")
-
-        status_result = await deps["run_shell"](
-            "git status --porcelain", cwd=repo_dir, timeout_seconds=60
-        )
-        status_lines = status_result.get("stdout", "").strip().splitlines()
-        if not status_lines:
-            raise GitHubAPIError("No changes to commit in workspace")
-
-        commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
-        if commit_result["exit_code"] != 0:
-            stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
-            raise GitHubAPIError(f"git commit failed: {stderr}")
-
-        push_result = None
-        if push:
-            push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
-            if push_result["exit_code"] != 0:
-                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
-                raise GitHubAPIError(f"git push failed: {stderr}")
-
-        return {
-            "repo_dir": repo_dir,
-            "branch": effective_ref,
-            "status": status_lines,
-            "commit": commit_result,
-            "push": push_result,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="commit_workspace")
-
-
-@mcp_tool(write_action=True)
-async def commit_workspace_files(
-    full_name: Optional[str],
-    files: List[str],
-    ref: str = "main",
-    message: str = "Commit selected workspace changes",
-    push: bool = True,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Commit and optionally push specific files from the persistent workspace."""
-
-    if not files:
-        raise ValueError("files must be a non-empty list of paths")
-
-    try:
-        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _resolve_ref(ref, branch=branch)
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        _ensure_write_allowed(
-            f"commit_workspace_files for {full_name}@{effective_ref}",
-            target_ref=effective_ref,
-        )
-        deps = _workspace_deps()
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-
-        add_cmd = "git add -- " + " ".join(shlex.quote(path) for path in files)
-        add_result = await deps["run_shell"](add_cmd, cwd=repo_dir, timeout_seconds=120)
-        if add_result["exit_code"] != 0:
-            stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
-            raise GitHubAPIError(f"git add failed: {stderr}")
-
-        staged_files_result = await deps["run_shell"](
-            "git diff --cached --name-only", cwd=repo_dir, timeout_seconds=60
-        )
-        staged_files = staged_files_result.get("stdout", "").strip().splitlines()
-        if not staged_files:
-            raise GitHubAPIError("No staged changes to commit for provided files")
-
-        commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
-        if commit_result["exit_code"] != 0:
-            stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
-            raise GitHubAPIError(f"git commit failed: {stderr}")
-
-        push_result = None
-        if push:
-            push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
-            if push_result["exit_code"] != 0:
-                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
-                raise GitHubAPIError(f"git push failed: {stderr}")
-
-        return {
-            "repo_dir": repo_dir,
-            "branch": effective_ref,
-            "staged_files": staged_files,
-            "commit": commit_result,
-            "push": push_result,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="commit_workspace_files")
-
-
-@mcp_tool(write_action=False)
-async def get_workspace_changes_summary(
-    full_name: str,
-    ref: str = "main",
-    path_prefix: Optional[str] = None,
-    max_files: int = 200,
-) -> Dict[str, Any]:
-    """Summarize modified, added, deleted, renamed, and untracked files in the workspace."""
-
-    deps = _workspace_deps()
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-
-    status_result = await deps["run_shell"](
-        "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=60
-    )
-    raw_status = status_result.get("stdout", "")
-    lines = [line for line in raw_status.splitlines() if line.strip()]
-
-    def _within_prefix(path: str) -> bool:
-        if not path_prefix:
-            return True
-        prefix = path_prefix.rstrip("/")
-        return path == prefix or path.startswith(prefix + "/")
-
-    changes: List[Dict[str, Any]] = []
-    summary = {
-        "modified": 0,
-        "added": 0,
-        "deleted": 0,
-        "renamed": 0,
-        "untracked": 0,
-    }
-
-    for line in lines:
-        if len(line) < 3:
-            continue
-        x = line[0]
-        y = line[1]
-        rest = line[3:]
-
-        if " -> " in rest:
-            src, dst = rest.split(" -> ", 1)
-            path = dst
-            change_type = "R"
-        else:
-            src = rest
-            dst = None
-            path = src
-            change_type = "??" if x == "?" and y == "?" else "M"
-
-        if not _within_prefix(path):
-            continue
-
-        if x == "?" and y == "?":
-            summary["untracked"] += 1
-        elif x == "A" or y == "A":
-            change_type = "A"
-            summary["added"] += 1
-        elif x == "D" or y == "D":
-            change_type = "D"
-            summary["deleted"] += 1
-        elif x == "R" or y == "R":
-            change_type = "R"
-            summary["renamed"] += 1
-        else:
-            change_type = "M"
-            summary["modified"] += 1
-
-        if len(changes) < max_files:
-            changes.append(
-                {
-                    "status": change_type,
-                    "path": path,
-                    "src": src,
-                    "dst": dst,
-                }
-            )
-
-    has_changes = any(summary.values())
-    return {
-        "ref": effective_ref,
-        "has_changes": has_changes,
-        "summary": summary,
-        "changes": changes,
-    }
-
-
-
-@mcp_tool(write_action=False)
-async def run_tests(
-    full_name: str,
-    ref: str = "main",
-    test_command: str = "pytest",
-    timeout_seconds: int = 600,
-    workdir: Optional[str] = None,
-    patch: Optional[str] = None,
-    use_temp_venv: bool = True,
-    installing_dependencies: bool = False,
-    mutating: bool = False,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Run the project's test command in the persistent workspace and summarize the result."""
-    result = await run_command(
-        full_name=full_name,
-        ref=ref,
-        command=test_command,
-        timeout_seconds=timeout_seconds,
-        workdir=workdir,
-        patch=patch,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        mutating=mutating,
+class GetRepositoryFileContentsInput(ListRepositoryFilesInput):
+    path: str = Field(..., description="Path to the file in the repository.")
+    ref: Optional[str] = Field(
+        None,
+        description="The name of the commit/branch/tag. Defaults to the default branch.",
     )
 
-    if isinstance(result, dict) and "error" in result:
-        # Structured error from run_command (e.g. auth/clone failure).
-        return {
-            "status": "failed",
-            "command": test_command,
-            "error": result["error"],
-            "controller_log": [
-                "Test run failed due to a workspace or command error.",
-                f"- Command: {test_command}",
-                f"- Error: {result['error'].get('error')}",
-            ],
-        }
 
-    if not isinstance(result, dict) or "result" not in result:
-        # Unexpected shape from run_command.
-        return {
-            "status": "failed",
-            "command": test_command,
-            "error": {
-                "error": "UnexpectedResultShape",
-                "message": "run_command returned an unexpected result structure",
-                "raw_result": result,
-            },
-            "controller_log": [
-                "Test run failed because run_command returned an unexpected result shape.",
-                f"- Command: {test_command}",
-            ],
-        }
-
-    cmd_result = result.get("result") or {}
-    exit_code = cmd_result.get("exit_code")
-    status = "passed" if exit_code == 0 else "failed"
-
-    summary_lines = [
-        "Completed test command in workspace:",
-        f"- Repo: {full_name}",
-        f"- Ref: {ref}",
-        f"- Command: {test_command}",
-        f"- Status: {status}",
-        f"- Exit code: {exit_code}",
-    ]
-
-    return {
-        "status": status,
-        "command": test_command,
-        "exit_code": exit_code,
-        "repo_dir": result.get("repo_dir"),
-        "workdir": result.get("workdir"),
-        "result": cmd_result,
-        "controller_log": summary_lines,
-    }
+class ListRepositoryFilesOutput(BaseModel):
+    files: List[str] = Field(..., description="List of files in the repository.")
 
 
-
-@mcp_tool(write_action=False)
-async def run_quality_suite(
-    full_name: str,
-    ref: str = "main",
-    test_command: str = "pytest",
-    timeout_seconds: int = 600,
-    workdir: Optional[str] = None,
-    patch: Optional[str] = None,
-    use_temp_venv: bool = True,
-    installing_dependencies: bool = False,
-    mutating: bool = False,
-    lint_command: str = "ruff check .",
-) -> Dict[str, Any]:
-    """Run the standard quality/test suite for a repo/ref.
-
-    For now this is a thin wrapper around `run_tests`, but it also emits a
-    small `controller_log` so controllers can describe what happened.
-    """
-    tests_result = await run_tests(
-        full_name=full_name,
-        ref=ref,
-        test_command=test_command,
-        timeout_seconds=timeout_seconds,
-        workdir=workdir,
-        patch=patch,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        mutating=mutating,
-    )
-
-    status = tests_result.get("status") or "unknown"
-    summary_lines = [
-        "Quality suite run (tests only):",
-        f"- Repo: {full_name}",
-        f"- Ref: {ref}",
-        f"- Test command: {test_command}",
-        f"- Lint command (unused here): {lint_command}",
-        f"- Test status: {status}",
-    ]
-
-    existing_log = tests_result.get("controller_log")
-    if isinstance(existing_log, list):
-        summary_lines.extend(existing_log)
-
-    tests_result["controller_log"] = summary_lines
-    return tests_result
+class GetRepositoryFileContentsOutput(BaseModel):
+    content: str = Field(..., description="Contents of the file.")
 
 
-@mcp_tool(write_action=False)
-async def run_lint_suite(
-    full_name: str,
-    ref: str = "main",
-    lint_command: str = "ruff check .",
-    timeout_seconds: int = 600,
-    workdir: Optional[str] = None,
-    patch: Optional[str] = None,
-    use_temp_venv: bool = True,
-    installing_dependencies: bool = False,
-    mutating: bool = False,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Run the lint or static-analysis command in the workspace."""
-    result = await run_command(
-        full_name=full_name,
-        ref=ref,
-        command=lint_command,
-        timeout_seconds=timeout_seconds,
-        workdir=workdir,
-        patch=patch,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        mutating=mutating,
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return {
-            "status": "failed",
-            "command": lint_command,
-            "error": result["error"],
-            "controller_log": [
-                "Lint run failed due to a workspace or command error.",
-                f"- Command: {lint_command}",
-                f"- Error: {result['error'].get('error')}",
-            ],
-        }
-
-    if not isinstance(result, dict) or "result" not in result:
-        return {
-            "status": "failed",
-            "command": lint_command,
-            "error": {
-                "error": "UnexpectedResultShape",
-                "message": "run_command returned an unexpected result structure",
-                "raw_result": result,
-            },
-            "controller_log": [
-                "Lint run failed because run_command returned an unexpected result shape.",
-                f"- Command: {lint_command}",
-            ],
-        }
-
-    cmd_result = result.get("result") or {}
-    exit_code = cmd_result.get("exit_code")
-    status = "passed" if exit_code == 0 else "failed"
-
-    summary_lines = [
-        "Completed lint command in workspace:",
-        f"- Repo: {full_name}",
-        f"- Ref: {ref}",
-        f"- Command: {lint_command}",
-        f"- Status: {status}",
-        f"- Exit code: {exit_code}",
-    ]
-
-    return {
-        "status": status,
-        "command": lint_command,
-        "exit_code": exit_code,
-        "repo_dir": result.get("repo_dir"),
-        "workdir": result.get("workdir"),
-        "result": cmd_result,
-        "controller_log": summary_lines,
-    }
+class ListWorkspaceFilesInput(BaseModel):
+    path: Optional[str] = Field("", description="Path within the workspace. Defaults to the root.")
 
 
+class GetWorkspaceFileContentsInput(BaseModel):
+    path: str = Field(..., description="Path to the file in the workspace.")
 
-@mcp_tool(write_action=False)
-async def build_pr_summary(
-    full_name: str,
-    ref: str,
-    title: str,
-    body: str,
-    changed_files: Optional[List[str]] = None,
-    tests_status: Optional[str] = None,
-    lint_status: Optional[str] = None,
-    breaking_changes: Optional[bool] = None,
-) -> Dict[str, Any]:
-    """Build a normalized JSON summary for a pull request description."""
-    return {
-        "repo": full_name,
-        "ref": ref,
-        "title": title,
-        "body": body,
-        "changed_files": changed_files or [],
-        "tests_status": tests_status or "unknown",
-        "lint_status": lint_status or "unknown",
-        "breaking_changes": bool(breaking_changes) if breaking_changes is not None else None,
-    }
+
+class CreateWorkspaceFileInput(BaseModel):
+    path: str = Field(..., description="Path where the file will be created in the workspace.")
+    content: str = Field(..., description="Initial contents of the new file.")
+
+
+class EditWorkspaceFileInput(BaseModel):
+    path: str = Field(..., description="Path to the file in the workspace.")
+    content: str = Field(..., description="New contents of the file.")
+
+
+class ListWorkspaceFilesOutput(BaseModel):
+    files: List[str] = Field(..., description="List of workspace files.")
+
+
+class GetWorkspaceFileContentsOutput(BaseModel):
+    content: str = Field(..., description="Contents of the workspace file.")
+
+
+class ToolsWorkspace:
+    def __init__(self, client: GithubClient, repo_id: RepositoryId):
+        self.client = client
+        self.repo_id = repo_id
+
+    # Existing repository-level tools
+    def list_repository_files(self, args: ListRepositoryFilesInput) -> ListRepositoryFilesOutput:
+        repo = self.client.get_repo(f"{args.owner}/{args.repo}")
+        contents = repo.get_contents("")
+
+        file_paths = []
+        while contents:
+            file_content = contents.pop(0)
+            if file_content.type == "dir":
+                contents.extend(repo.get_contents(file_content.path))
+            else:
+                file_paths.append(file_content.path)
+
+        return ListRepositoryFilesOutput(files=file_paths)
+
+    def get_repository_file_contents(self, args: GetRepositoryFileContentsInput) -> GetRepositoryFileContentsOutput:
+        repo = self.client.get_repo(f"{args.owner}/{args.repo}")
+        file_contents = repo.get_contents(args.path, ref=args.ref)
+
+        return GetRepositoryFileContentsOutput(content=file_contents.decoded_content.decode("utf-8"))
+
+    # Workspace-level helpers
+    def _get_workspace_repo(self):
+        return self.client.get_repo(f"{self.repo_id.owner}/{self.repo_id.repo}")
+
+    # New workspace-level tools
+    def list_workspace_files(self, args: ListWorkspaceFilesInput) -> ListWorkspaceFilesOutput:
+        repo = self._get_workspace_repo()
+        base_path = args.path or ""
+        contents = repo.get_contents(base_path)
+
+        file_paths = []
+        while contents:
+            file_content = contents.pop(0)
+            if file_content.type == "dir":
+                contents.extend(repo.get_contents(file_content.path))
+            else:
+                file_paths.append(file_content.path)
+
+        return ListWorkspaceFilesOutput(files=file_paths)
+
+    def get_workspace_file_contents(self, args: GetWorkspaceFileContentsInput) -> GetWorkspaceFileContentsOutput:
+        repo = self._get_workspace_repo()
+        file_contents = repo.get_contents(args.path)
+
+        return GetWorkspaceFileContentsOutput(
+            content=file_contents.decoded_content.decode("utf-8"),
+        )
+
+    def create_workspace_file(self, args: CreateWorkspaceFileInput) -> GetWorkspaceFileContentsOutput:
+        repo = self._get_workspace_repo()
+        repo.create_file(
+            path=args.path,
+            message=f"Create workspace file {args.path}",
+            content=args.content,
+        )
+
+        # Return the created contents for convenience
+        return GetWorkspaceFileContentsOutput(content=args.content)
+
+    def edit_workspace_file(self, args: EditWorkspaceFileInput) -> GetWorkspaceFileContentsOutput:
+        repo = self._get_workspace_repo()
+        file_contents = repo.get_contents(args.path)
+
+        repo.update_file(
+            path=args.path,
+            message=f"Edit workspace file {args.path}",
+            content=args.content,
+            sha=file_contents.sha,
+        )
+
+        # Return the updated contents for convenience
+        return GetWorkspaceFileContentsOutput(content=args.content)
+
+    def get_tool_definitions(self) -> List[ToolDefinition]:
+        return [
+            # Existing repository tools
+            ToolDefinition.from_fn(
+                f"{TOOL_NAME_PREFIX}-list_repository_files",
+                self.list_repository_files,
+                "List all files in a repository.",
+                tool_metadata={
+                    "author": "openai",
+                    "category": "workspace",
+                    "created_at": datetime(2024, 7, 28).isoformat(),
+                    "updated_at": datetime(2024, 7, 28).isoformat(),
+                    "tags": ["workspace", "files", "github"],
+                },
+            ),
+            ToolDefinition.from_fn(
+                f"{TOOL_NAME_PREFIX}-get_repository_file_contents",
+                self.get_repository_file_contents,
+                "Get the contents of a file in a repository.",
+                tool_metadata={
+                    "author": "openai",
+                    "category": "workspace",
+                    "created_at": datetime(2024, 7, 28).isoformat(),
+                    "updated_at": datetime(2024, 7, 28).isoformat(),
+                    "tags": ["workspace", "files", "github"],
+                },
+            ),
+            # New workspace tools
+            ToolDefinition.from_fn(
+                f"{TOOL_NAME_PREFIX}-list_workspace_files",
+                self.list_workspace_files,
+                "List all files in the current workspace repository.",
+                tool_metadata={
+                    "author": "openai",
+                    "category": "workspace",
+                    "created_at": datetime(2024, 7, 28).isoformat(),
+                    "updated_at": datetime(2024, 7, 28).isoformat(),
+                    "tags": ["workspace", "files", "github"],
+                },
+            ),
+            ToolDefinition.from_fn(
+                f"{TOOL_NAME_PREFIX}-get_workspace_file_contents",
+                self.get_workspace_file_contents,
+                "Get the contents of a file in the current workspace repository.",
+                tool_metadata={
+                    "author": "openai",
+                    "category": "workspace",
+                    "created_at": datetime(2024, 7, 28).isoformat(),
+                    "updated_at": datetime(2024, 7, 28).isoformat(),
+                    "tags": ["workspace", "files", "github"],
+                },
+            ),
+            ToolDefinition.from_fn(
+                f"{TOOL_NAME_PREFIX}-create_workspace_file",
+                self.create_workspace_file,
+                "Create a new file in the current workspace repository.",
+                tool_metadata={
+                    "author": "openai",
+                    "category": "workspace",
+                    "created_at": datetime(2024, 7, 28).isoformat(),
+                    "updated_at": datetime(2024, 7, 28).isoformat(),
+                    "tags": ["workspace", "files", "github", "write"],
+                },
+            ),
+            ToolDefinition.from_fn(
+                f"{TOOL_NAME_PREFIX}-edit_workspace_file",
+                self.edit_workspace_file,
+                "Edit an existing file in the current workspace repository.",
+                tool_metadata={
+                    "author": "openai",
+                    "category": "workspace",
+                    "created_at": datetime(2024, 7, 28).isoformat(),
+                    "updated_at": datetime(2024, 7, 28).isoformat(),
+                    "tags": ["workspace", "files", "github", "write"],
+                },
+            ),
+        ]
