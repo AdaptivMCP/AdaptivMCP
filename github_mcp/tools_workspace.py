@@ -250,6 +250,49 @@ def _workspace_apply_sections(text: str, sections: Optional[List[Dict[str, Any]]
     return "".join(out)
 
 
+
+def _normalize_patch_path(value: str) -> str:
+    value = (value or "").strip()
+    if value.startswith("a/") or value.startswith("b/"):
+        value = value[2:]
+    return value.lstrip("/\\")
+
+
+def _extract_touched_paths_from_patch(patch: str) -> List[str]:
+    """Extract repository-relative paths touched by a unified diff.
+
+    Prefers `diff --git a/... b/...` headers, but also falls back to `---`/`+++`
+    headers when needed.
+    """
+
+    touched: list[str] = []
+    for line in (patch or "").splitlines():
+        if line.startswith("diff --git "):
+            parts = line.split()
+            if len(parts) >= 4:
+                a_path = _normalize_patch_path(parts[2])
+                b_path = _normalize_patch_path(parts[3])
+                if a_path and a_path != "dev/null":
+                    touched.append(a_path)
+                if b_path and b_path != "dev/null":
+                    touched.append(b_path)
+        elif line.startswith("--- ") or line.startswith("+++ "):
+            parts = line.split(maxsplit=1)
+            if len(parts) == 2:
+                pth = _normalize_patch_path(parts[1])
+                if pth and pth != "dev/null":
+                    touched.append(pth)
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for pth in touched:
+        if pth in seen:
+            continue
+        seen.add(pth)
+        out.append(pth)
+    return out
+
+
 @mcp_tool(write_action=False)
 async def get_workspace_file_contents(
     full_name: Optional[str] = None,
@@ -368,9 +411,8 @@ async def apply_patch_to_workspace_file(
 ) -> Dict[str, Any]:
     """Apply a unified diff that is intended to target a single workspace file.
 
-    For now this only enforces that a non-empty unified diff string is provided;
-    the patch is applied to the workspace clone, and the caller is responsible
-    for ensuring the patch only touches the expected file.
+    This enforces that the diff touches exactly one file and that it matches the
+    provided `path`.
     """
 
     if not isinstance(patch, str) or not patch.strip():
@@ -382,6 +424,17 @@ async def apply_patch_to_workspace_file(
         ref = _resolve_ref(ref, branch=branch)
         effective_ref = _effective_ref_for_repo(full_name, ref)
 
+        normalized_target = (path or "").lstrip("/\\")
+        touched_paths = _extract_touched_paths_from_patch(patch)
+        if not touched_paths:
+            raise ValueError("patch did not include any file headers to validate")
+        if len(touched_paths) != 1:
+            raise ValueError(f"patch must touch exactly one file; touched={touched_paths!r}")
+        if touched_paths[0] != normalized_target:
+            raise ValueError(
+                f"patch path mismatch: expected {normalized_target!r} but touched {touched_paths[0]!r}"
+            )
+
         deps["ensure_write_allowed"](
             f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}",
         )
@@ -392,6 +445,7 @@ async def apply_patch_to_workspace_file(
             "repo_dir": repo_dir,
             "branch": effective_ref,
             "path": path,
+            "touched_paths": touched_paths,
             "status": "applied",
         }
     except Exception as exc:
