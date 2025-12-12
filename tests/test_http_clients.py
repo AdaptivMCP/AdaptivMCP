@@ -64,6 +64,7 @@ def test_concurrency_semaphore_is_per_loop(monkeypatch):
 
 def test_github_client_instance_uses_token_header(monkeypatch):
     monkeypatch.setattr(http_clients, "_http_client_github", None)
+    monkeypatch.delenv("GITHUB_PAT", raising=False)
     monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
 
     client = http_clients._github_client_instance()

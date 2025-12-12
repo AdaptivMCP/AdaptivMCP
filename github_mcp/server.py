@@ -29,6 +29,15 @@ CONTROLLER_REPO = os.environ.get(
 )
 CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main")
 
+# Canonical args examples shown in tool descriptions to reduce malformed tool calls.
+_TOOL_EXAMPLES: dict[str, str] = {
+    "run_command": "{\"full_name\":\"owner/repo\",\"ref\":\"main\",\"command\":\"pytest\"}",
+    "apply_patch_to_workspace": "{\"full_name\":\"owner/repo\",\"ref\":\"feature-branch\",\"patch\":\"diff --git ...\"}",
+    "fetch_files": "{\"full_name\":\"owner/repo\",\"ref\":\"main\",\"paths\":[\"main.py\"]}",
+    "open_file_context": "{\"full_name\":\"owner/repo\",\"ref\":\"main\",\"path\":\"main.py\",\"start_line\":1,\"max_lines\":200}",
+    "update_files_and_open_pr": "{\"full_name\":\"owner/repo\",\"base_branch\":\"main\",\"new_branch\":\"feature/my-change\",\"files\":[{\"path\":\"README.md\",\"content\":\"...\"}],\"title\":\"My change\",\"body\":\"Why this change\"}",
+}
+
 mcp = FastMCP("GitHub Fast MCP")
 
 # Suppress noisy tracebacks when SSE clients disconnect mid-response.
@@ -133,7 +142,14 @@ def _normalize_tool_description(func, signature: Optional[inspect.Signature], *,
         "Classification: advanced tool for mutating operations." if llm_level == "advanced" else "Classification: low-level read-focused tool."
     )
 
-    return f"{base} {inputs_summary} {level_summary}"
+    alias_summary = (
+        "Common aliases: owner+repo→full_name; branch→ref; file_path→path; "
+        "(for PR tools) branch→base_branch. Defaults: if full_name is omitted, it defaults "
+        f"to {CONTROLLER_REPO}."
+    )
+    example = _TOOL_EXAMPLES.get(getattr(func, "__name__", ""))
+    example_summary = f" Example args: {example}" if example else ""
+    return f"{base} {inputs_summary} {level_summary} {alias_summary}{example_summary}"
 
 
 def _ensure_write_allowed(context: str) -> None:
@@ -615,6 +631,114 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
 
             return preview
 
+        def _normalize_common_tool_kwargs(args_in, kwargs_in: Mapping[str, Any]) -> Dict[str, Any]:
+            if not kwargs_in:
+                kwargs: Dict[str, Any] = {}
+                return kwargs
+            kwargs = dict(kwargs_in)
+            if signature is None:
+                return kwargs
+            params = signature.parameters
+            has_var_kw = any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in params.values())
+
+            # Which params are already provided positionally?
+            positional = [
+                name
+                for name, p in params.items()
+                if p.kind in (_inspect.Parameter.POSITIONAL_ONLY, _inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            ]
+            provided_positional = set(positional[: len(args_in)])
+
+            # owner/repo -> full_name (and default full_name if omitted)
+            if (
+                "full_name" in params
+                and "full_name" not in kwargs
+                and "full_name" not in provided_positional
+            ):
+                owner = kwargs.get("owner")
+                repo = kwargs.get("repo")
+                repo_val = repo if isinstance(repo, str) else None
+                # Common mistake: pass full "owner/repo" under key "repo".
+                if repo_val and "/" in repo_val and not isinstance(owner, str):
+                    kwargs["full_name"] = repo_val
+                elif isinstance(owner, str) and isinstance(repo, str):
+                    kwargs["full_name"] = f"{owner}/{repo}"
+                else:
+                    kwargs["full_name"] = CONTROLLER_REPO
+
+            # branch -> ref
+            if (
+                "ref" in params
+                and "ref" not in kwargs
+                and "ref" not in provided_positional
+                and isinstance(kwargs.get("branch"), str)
+            ):
+                kwargs["ref"] = kwargs["branch"]
+
+            # base -> base_branch (PR tools)
+            if (
+                "base_branch" in params
+                and "base_branch" not in kwargs
+                and "base_branch" not in provided_positional
+                and isinstance(kwargs.get("base"), str)
+            ):
+                kwargs["base_branch"] = kwargs["base"]
+
+            # head -> new_branch (PR tools)
+            if (
+                "new_branch" in params
+                and "new_branch" not in kwargs
+                and "new_branch" not in provided_positional
+                and isinstance(kwargs.get("head"), str)
+            ):
+                kwargs["new_branch"] = kwargs["head"]
+
+            # branch -> base_branch (PR tools)
+            if (
+                "base_branch" in params
+                and "base_branch" not in kwargs
+                and "base_branch" not in provided_positional
+                and isinstance(kwargs.get("branch"), str)
+            ):
+                kwargs["base_branch"] = kwargs["branch"]
+
+            # file_path -> path
+            if (
+                "path" in params
+                and "path" not in kwargs
+                and "path" not in provided_positional
+                and isinstance(kwargs.get("file_path"), str)
+            ):
+                kwargs["path"] = kwargs["file_path"]
+
+            # file_paths -> paths
+            if (
+                "paths" in params
+                and "paths" not in kwargs
+                and "paths" not in provided_positional
+                and isinstance(kwargs.get("file_paths"), list)
+            ):
+                fps = kwargs.get("file_paths")
+                if isinstance(fps, list) and all(isinstance(x, str) for x in fps):
+                    kwargs["paths"] = fps
+
+            # Normalize nested file entries for update_files_and_open_pr
+            if tool.name == "update_files_and_open_pr" and isinstance(kwargs.get("files"), list):
+                for entry in kwargs["files"]:
+                    if not isinstance(entry, dict):
+                        continue
+                    if "path" not in entry and isinstance(entry.get("file_path"), str):
+                        entry["path"] = entry.pop("file_path")
+                    if "content" not in entry and isinstance(entry.get("updated_content"), str):
+                        entry["content"] = entry.pop("updated_content")
+
+            # Drop unknown keys unless tool accepts **kwargs
+            if not has_var_kw:
+                for key in list(kwargs.keys()):
+                    if key not in params:
+                        kwargs.pop(key, None)
+            return kwargs
+
         def _extract_call_context(args, **kwargs):
             all_args: Dict[str, Any] = {}
 
@@ -681,6 +805,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
 
             @_functools.wraps(func)
             async def wrapper(*args, **kwargs):
+                kwargs = _normalize_common_tool_kwargs(args, kwargs)
                 call_id = str(uuid.uuid4())
                 context = _extract_call_context(args, **kwargs)
                 start = time.perf_counter()

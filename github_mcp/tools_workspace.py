@@ -7,7 +7,12 @@ from typing import Any, Dict, List, Optional
 
 from github_mcp.config import RUN_COMMAND_MAX_CHARS
 from github_mcp.exceptions import GitHubAPIError
-from github_mcp.server import _ensure_write_allowed, _structured_tool_error, mcp_tool
+from github_mcp.server import (
+    CONTROLLER_REPO,
+    _ensure_write_allowed,
+    _structured_tool_error,
+    mcp_tool,
+)
 from github_mcp.utils import _effective_ref_for_repo
 from github_mcp.workspace import (
     _apply_patch_to_repo,
@@ -36,14 +41,37 @@ def _workspace_deps() -> Dict[str, Any]:
         ),
     }
 
+def _resolve_full_name(
+    full_name: Optional[str], *, owner: Optional[str] = None, repo: Optional[str] = None
+) -> str:
+    if isinstance(full_name, str) and full_name.strip():
+        return full_name.strip()
+    if isinstance(owner, str) and owner.strip() and isinstance(repo, str) and repo.strip():
+        return f"{owner.strip()}/{repo.strip()}"
+    return CONTROLLER_REPO
+
+
+def _resolve_ref(ref: str, *, branch: Optional[str] = None) -> str:
+    if isinstance(branch, str) and branch.strip():
+        return branch.strip()
+    return ref
+
 
 @mcp_tool(write_action=True)
 async def ensure_workspace_clone(
-    full_name: str, ref: str = "main", reset: bool = False
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    reset: bool = False,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Ensure a persistent workspace clone exists for a repo/ref."""
 
     try:
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
         effective_ref = _effective_ref_for_repo(full_name, ref)
         workspace_dir = _workspace_path(full_name, effective_ref)
         existed = os.path.isdir(os.path.join(workspace_dir, ".git"))
@@ -63,9 +91,54 @@ async def ensure_workspace_clone(
         return _structured_tool_error(exc, context="ensure_workspace_clone")
 
 
+@mcp_tool(write_action=True)
+async def apply_patch_to_workspace(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    patch: str = "",
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Apply a unified diff to the persistent workspace clone.
+
+    This provides a structured alternative to relying on ad-hoc shell helpers
+    like `apply_patch`.
+    """
+
+    if not isinstance(patch, str) or not patch.strip():
+        raise ValueError("patch must be a non-empty unified diff string")
+
+    try:
+        deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+
+        deps["ensure_write_allowed"](
+            f"apply_patch_to_workspace for {full_name}@{effective_ref}",
+        )
+
+        repo_dir = await deps["clone_repo"](
+            full_name,
+            ref=effective_ref,
+            preserve_changes=True,
+        )
+        await deps["apply_patch_to_repo"](repo_dir, patch)
+
+        return {
+            "repo_dir": repo_dir,
+            "branch": effective_ref,
+            "status": "applied",
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="apply_patch_to_workspace")
+
+
 @mcp_tool(write_action=False)
 async def run_command(
-    full_name: str,
+    full_name: Optional[str] = None,
     ref: str = "main",
     command: str = "pytest",
     timeout_seconds: int = 300,
@@ -74,6 +147,10 @@ async def run_command(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run a shell command inside the repo workspace and return its result.
 
@@ -83,6 +160,8 @@ async def run_command(
     env: Optional[Dict[str, str]] = None
     try:
         deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
         effective_ref = _effective_ref_for_repo(full_name, ref)
         if len(command) > RUN_COMMAND_MAX_CHARS:
             raise ValueError(
@@ -91,7 +170,7 @@ async def run_command(
                 "apply_patch_and_commit, update_file_sections_and_commit) "
                 "for large edits instead of embedding scripts in command."
             )
-        needs_write_gate = mutating or installing_dependencies or not use_temp_venv
+        needs_write_gate = mutating or installing_dependencies or (patch is not None) or not use_temp_venv
         if needs_write_gate:
             deps["ensure_write_allowed"](f"run_command {command} in {full_name}@{effective_ref}")
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -122,15 +201,21 @@ async def run_command(
 
 @mcp_tool(write_action=True)
 async def commit_workspace(
-    full_name: str,
+    full_name: Optional[str] = None,
     ref: str = "main",
     message: str = "Commit workspace changes",
     add_all: bool = True,
     push: bool = True,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Commit workspace changes and optionally push them."""
 
     try:
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
         effective_ref = _effective_ref_for_repo(full_name, ref)
         _ensure_write_allowed(
             f"commit_workspace for {full_name}@{effective_ref}",
@@ -179,11 +264,15 @@ async def commit_workspace(
 
 @mcp_tool(write_action=True)
 async def commit_workspace_files(
-    full_name: str,
+    full_name: Optional[str],
     files: List[str],
     ref: str = "main",
     message: str = "Commit selected workspace changes",
     push: bool = True,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Commit and optionally push specific files from the persistent workspace."""
 
@@ -191,6 +280,8 @@ async def commit_workspace_files(
         raise ValueError("files must be a non-empty list of paths")
 
     try:
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
         effective_ref = _effective_ref_for_repo(full_name, ref)
         _ensure_write_allowed(
             f"commit_workspace_files for {full_name}@{effective_ref}",
@@ -325,6 +416,7 @@ async def get_workspace_changes_summary(
     }
 
 
+
 @mcp_tool(write_action=False)
 async def run_tests(
     full_name: str,
@@ -336,6 +428,10 @@ async def run_tests(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the project's test command in the persistent workspace and summarize the result."""
     result = await run_command(
@@ -403,6 +499,7 @@ async def run_tests(
     }
 
 
+
 @mcp_tool(write_action=False)
 async def run_quality_suite(
     full_name: str,
@@ -462,6 +559,10 @@ async def run_lint_suite(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the lint or static-analysis command in the workspace."""
     result = await run_command(
@@ -525,6 +626,7 @@ async def run_lint_suite(
         "result": cmd_result,
         "controller_log": summary_lines,
     }
+
 
 
 @mcp_tool(write_action=False)
