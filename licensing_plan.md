@@ -1,113 +1,91 @@
-# Adaptiv AI Controller – Licensing and Plans
+# Adaptiv Controller – Controller-in-a-box License (single user)
 
-The Adaptiv AI Controller GitHub Kit is licensed as a **self-hosted, closed-source product**. You run the MCP server in your own infrastructure, using your own GitHub tokens. This document describes the standard commercial tiers and what is included in each.
+_Last updated: 2025-12-11_
 
-All plans share these principles:
+This document describes the default commercial model for the **Adaptiv Controller – GitHub MCP Server (controller-in-a-box edition)**. It is written in plain language and is not legal advice; your actual purchase terms and any formal agreement always take precedence.
 
-- You host and operate the controller yourself (for example on Render.com).
-- You supply your own GitHub tokens and control which repositories the AI can access.
-- You may customize the kit internally for your own workflows.
-- You may **not** redistribute the source code or sell it as your own product.
-
-For legal details, the LICENSE file or your commercial agreement is the source of truth; this file is a plain-language summary.
+The intent is simple: one developer buys a copy of the controller, deploys it for themselves, and uses it as their personal AI engineer.
 
 ---
 
-## Individual license (solo developer)
+## 1. What you are buying
 
-**Intended for:** solo developers using Adaptiv AI Controller for their own projects (personal or commercial).
+A **single-user, self-hosted license** to run the Adaptiv Controller GitHub MCP server for your own development work. In practical terms, you get:
 
-**Price:**
+- A versioned code bundle (for example `adaptiv-controller-v1.0.0.zip`) containing this repository.
+- The right to deploy the MCP server in your own infrastructure (for example Render.com, a VM, or a container host).
+- The right to connect your own ChatGPT controller or custom GPT to this server via MCP.
+- The right to modify the code and configuration for your own personal use.
 
-- One-time license: **$499 USD** per developer.
-
-**Rights:**
-
-- Use Adaptiv AI Controller for your own repositories and client work where you are the primary operator.
-- Run one or more self-hosted instances for your own use (for example separate Render services or environments).
-- Customize tools, prompts, and workflows for your own internal use.
-
-**Updates and support:**
-
-- Includes **12 months of updates** (new versions, bug fixes, improvements) from the date of purchase.
-- Includes **best-effort support** via the channels the author provides (for example email or issue tracker).
-- After 12 months, you can continue using the last version you have indefinitely, even if you do not renew support.
-- Optional: **continued updates + support** at **$199 USD per year** if you want ongoing upgrades.
-
-Support is explicitly best-effort: there are no formal SLAs. The product is maintained by a single developer who will do their best to respond and help, but response times may vary.
-
-**Custom tools and tweaks:**
-
-- If you want specific tools added, removed, or significantly changed for your deployment, this can be done as a paid customization.
-- Pricing is case-by-case based on complexity and time required.
+You do **not** get the right to redistribute the code, resell it as your own product, or host it as a shared service for other users.
 
 ---
 
-## Small team license (up to 5 developers)
+## 2. Price and scope
 
-**Intended for:** small teams who want to share Adaptiv AI Controller across a handful of developers.
+**Single-user controller-in-a-box license:**
 
-**Price:**
+- One-time price: **$399 USD** per individual.
+- Intended use: one developer using the controller for their own repositories and client work where they are the primary operator.
+- You may run multiple self-hosted instances (for example different Render services or environments) as long as they are for **you** as a single user.
 
-- One-time license: **$1,499 USD** for up to **5 developers**.
-
-**Rights:**
-
-- Use Adaptiv AI Controller across your team for internal and client projects.
-- Allow up to 5 named developers to use the product (each with their own MCP / ChatGPT configuration if desired).
-- Run multiple self-hosted instances (for example staging, production, separate services per repo) as long as they are for the same team/organization.
-- Customize tools, prompts, and workflows for your internal use.
-
-**Updates and support:**
-
-- Includes **12 months of updates** for the team.
-- Includes **best-effort support** for the team (questions, bug reports, basic guidance).
-- After 12 months, you may keep using the last supported version indefinitely.
-- Optional: **continued updates + support** at **$199 USD per year** per team (not per developer) if you want ongoing upgrades.
-
-**Custom tools and tweaks:**
-
-- As with the individual license, you can request additional tools, removals, or workflow changes.
-- Larger or more complex requests may be priced at a higher custom rate depending on scope.
+This model is intentionally straightforward: pay once, host it yourself, and keep using that version indefinitely.
 
 ---
 
-## Large organizations and custom deployments
+## 3. Updates and support (recommended defaults)
 
-**Intended for:** larger teams, companies with stricter requirements, or buyers who need custom terms.
+The exact terms for updates and support are up to the author of the product, but a typical model for this controller-in-a-box edition is:
 
-For these deployments, pricing and terms are **custom**. Typical factors include:
+- **Updates:**
+  - Purchase includes access to the specific version you receive (for example `v1.0.0`).
+  - You may continue using that version indefinitely.
+  - At the author’s discretion, you may be offered paid upgrades to newer major versions in the future.
 
-- Number of developers who will use Adaptiv AI Controller.
-- Number of environments/instances (development, staging, production, etc.).
-- Expected level of support and response targets.
-- Any required custom tooling, integrations, or onboarding help.
+- **Support:**
+  - Best-effort support only (for example via email or issue tracker).
+  - No formal SLAs or uptime guarantees.
+  - You are responsible for your own hosting, configuration, and infrastructure costs.
 
-If you fall into this category, the recommended model is:
-
-- **Contact for custom pricing.**
-- Negotiate a license that covers your team size and usage pattern.
-- Optionally include a support/maintenance add-on that fits your risk and uptime requirements.
-
----
-
-## What is not included by default
-
-Regardless of tier, the following are **not** included unless explicitly added to your agreement:
-
-- Hosting or operating the MCP server on your behalf (you are responsible for your Render/infra costs and configuration).
-- Writing or maintaining your internal prompts/controllers (beyond the reference docs and examples provided).
-- Deep debugging of your own codebase or CI/CD pipelines.
-- Broad custom development unrelated to Adaptiv AI Controller itself.
-
-These may be offered separately as professional services if both sides agree.
+If the author chooses to offer a separate "updates + support" add-on, those terms will be described outside this file (for example on a checkout page or in a separate agreement).
 
 ---
 
-## Summary
+## 4. What you can and cannot do
 
-- **Solo devs:** $499 one-time, self-hosted, 12 months of updates, optional $199/year for ongoing updates and best-effort support.
-- **Small teams (up to 5 devs):** $1,499 one-time, self-hosted, 12 months of updates, optional $199/year for ongoing updates and best-effort support.
-- **Large orgs:** contact for custom pricing and terms.
+### You can:
 
-All tiers emphasize the core philosophy of Adaptiv AI Controller: a personal AI developer that adapts to your preferences over time, running on your infrastructure, with a trust, but verify workflow centered on branches, tests, and pull requests.
+- Run the MCP server in your own environment (Render.com, VM, Docker, Kubernetes, etc.).
+- Use it against your own GitHub account and repositories.
+- Customize prompts, workflows, and tools for your own use.
+- Use the controller to help with personal projects or client projects where **you** operate the controller.
+
+### You cannot:
+
+- Redistribute the source code to others as a product (for example uploading the repository publicly or reselling the zip bundle).
+- Rebrand and resell the controller as your own commercial product without a separate agreement.
+- Host the controller as a multi-tenant service for third parties (for example "Adaptiv-as-a-Service" for many external users) without explicit permission.
+
+---
+
+## 5. Larger teams and custom licenses
+
+This edition is designed for **individuals**. If you later want to:
+
+- Use Adaptiv Controller across a team or company, or
+- Run it as part of a larger commercial offering,
+
+then you should negotiate a separate agreement that covers team size, usage, and any support/maintenance expectations.
+
+You can treat this document as the baseline for a simple, one-person license. Anything beyond that belongs in a custom contract.
+
+---
+
+## 6. Summary
+
+- **Product:** Adaptiv Controller – GitHub MCP Server (controller-in-a-box).
+- **License:** Single-user, self-hosted, non-redistributable.
+- **Price:** $399 USD one-time per individual.
+- **Use:** You deploy and operate it yourself, with your own GitHub tokens and infrastructure.
+
+The goal is to give a single developer a powerful, self-hosted AI engineer that runs on their own terms while keeping the licensing model clear and simple.

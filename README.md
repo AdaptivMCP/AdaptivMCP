@@ -69,9 +69,9 @@ This design keeps credentials and source code access entirely under the customer
 Here is a minimal end-to-end flow for running Adaptiv Controller as your personal AI developer:
 
 1. **Deploy the MCP server on Render.com**
-   - Fork or clone this repository, or unpack a versioned bundle (for example `adaptiv-controller-v0.1.0.tar.gz`).
-   - Create a new Render web service and point it at this repository or bundle.
-   - Configure required environment variables (GitHub token, controller repo, default branch, timeouts, and similar) using `docs/human/SELF_HOSTED_SETUP.md`.
+   - If you purchased a controller-in-a-box bundle (for example `adaptiv-controller-v1.0.0.zip`), follow `GETTING_STARTED.md` first to unpack it into your own private GitHub repo.
+   - Create a new Render web service and point it at that repository. The included `Dockerfile` is suitable for a default Render Docker deploy.
+   - Configure required environment variables (GitHub token, controller repo, default branch, timeouts, and similar) using `.env.example` and the details in `docs/human/SELF_HOSTED_SETUP.md`.
    - Wait for Render to deploy and confirm `/healthz` reports status ok.
 
 2. **Connect ChatGPT to the server**
@@ -240,8 +240,8 @@ Your commercial product is the controller design and workflows layered on top of
 Typical deployment for an end user:
 
 1. Host the MCP server
-   - Fork or clone this repository, or unpack a versioned bundle (for example `adaptiv-controller-v0.1.0.tar.gz`) as described in `docs/DISTRIBUTION.md`.
-   - Deploy to Render.com or another hosting platform as a Python web service.
+   - Fork or clone this repository into your own GitHub account, or unpack a versioned bundle (for example `adaptiv-controller-v1.0.0.zip`) as described in `GETTING_STARTED.md`.
+   - Deploy to Render.com or another hosting platform as a Python web service using the provided `Dockerfile`.
    - Configure environment variables, for example GitHub tokens, optional auto approval flags, concurrency limits, and HTTP timeouts.
    - Start the app (for example via uvicorn) and confirm health by:
      - Hitting `GET /healthz` on your deployment URL to verify status, uptime, token presence, and a small metrics snapshot.
