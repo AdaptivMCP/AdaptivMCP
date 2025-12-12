@@ -98,3 +98,52 @@ This file is an initial snapshot. Over time it can be extended with:
 - Architectural diagrams and controller usage patterns.
 
 Even in this initial form, it captures the core idea that your Adaptiv Controller vision works in practice: a human provides intent and approvals; an LLM working through the controller handles the rest of the engineering workflow in a safe, reviewable way.
+
+---
+
+## 6. Timeline of key branches and PRs (summary)
+
+This is not an exhaustive list, but it highlights several branches and PRs that shaped the proof of concept:
+
+- **`fix-ci-actions-final`**  \n  Stabilized CI by fixing malformed MCP tool definitions, adding missing dependencies (like `pydantic`), and relaxing brittle JSON Schema preflight for complex tools.
+
+- **`fix-ci-workflows-alignment`**  \n  Repaired `pyproject.toml` so that `pip install .` works in GitHub Actions by using a PEP 621–style `[project]` section and a modern `[build-system]` with `setuptools>=68.0`.
+
+- **`improve-pr-error-handling`**  \n  Hardened `create_pull_request` so exceptions from ref resolution, write guards, or the GitHub API are returned as structured errors that include a `context` field and a `path` hint like `"owner/repo head->base"`.
+
+- **`test-pr-flow`**  \n  Temporary branch used purely to validate the happy path of PR creation: add a small file, open a PR via the updated tool, then close it.
+
+- **`proof-of-concept-doc`**  \n  Branch used to add this `ProofOfConcept.md` file itself, documenting the Adaptiv Controller proof of concept from the assistant perspective and merging it back into `main`.
+
+There were also earlier branches focused on schema modernization, validation tweaks, logging improvements, and documentation alignment. Each followed the same pattern: branch, edit, test, lint, PR, review, merge, and then restart the server against `main`.
+
+---
+
+## 7. How someone else could apply this pattern
+
+For another person or team wanting to use an Adaptiv Controller in a similar way, the pattern looks like this:
+
+1. **Connect a repo to the controller.**
+   - Point the controller at a GitHub repository that represents your codebase or automation logic.
+
+2. **Describe goals and constraints, not diffs.**
+   - Tell the assistant what you want (e.g., "make CI green", "add a new endpoint", "improve error messages").
+   - Specify constraints (e.g., keep tests green, use certain tools, avoid certain files, require PRs).
+
+3. **Let the assistant drive through tools.**
+   - The assistant uses controller tools to inspect code, design changes, edit files, run tests/lint, and open PRs.
+   - You see progress as a sequence of tool-driven updates rather than raw shell logs.
+
+4. **Review PRs instead of raw patches.**
+   - GitHub PRs become the main review surface.
+   - You can request changes, leave comments, and merge when comfortable.
+
+5. **Rely on CI as an independent gate.**
+   - GitHub Actions (or equivalent) runs tests and lint on each PR.
+   - You can inspect CI logs independently of the assistant’s narrative.
+
+6. **Iterate and let the controller improve itself.**
+   - Over time, the controller can be used to refine its own tools, schemas, and workflows, just like we did here.
+
+Following this pattern, a person who understands their product and goals—but does not want to hand-edit code—can still direct and benefit from a robust, Git-backed, CI-guarded engineering workflow powered by an Adaptiv Controller.
+
