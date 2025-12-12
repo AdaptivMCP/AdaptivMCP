@@ -147,3 +147,32 @@ For another person or team wanting to use an Adaptiv Controller in a similar way
 
 Following this pattern, a person who understands their product and goals—but does not want to hand-edit code—can still direct and benefit from a robust, Git-backed, CI-guarded engineering workflow powered by an Adaptiv Controller.
 
+
+---
+
+## 8. Additional details from early phases
+
+This proof of concept did not start from a clean, finished controller. The early phases were about discovery, hardening, and learning how the real system behaved under load and with messy history. Some highlights:
+
+1. **Deep dive into GitHub Actions and workflows.**
+   - We spent multiple cycles inspecting failing workflow runs, their jobs, and logs using the controller's GitHub Actions tools ("recent failures", run overviews, and job logs).
+   - This surfaced concrete issues such as packaging failures (`pip install .` breaking on `pyproject.toml`), test import errors, and version mismatches between local and CI environments.
+
+2. **Iterative repair of validation helpers.**
+   - We investigated older validation helpers like `validate_json_string` and `validate_tool_args`, recognized they were written for an earlier version of the tooling, and decided not to force-fit them into every tool in their legacy form.
+   - Instead, we refocused on the controller's runtime validation (the code that tests already assert on) and used that as the source of truth for complex tools.
+
+3. **Schema modernization and selective preflight.**
+   - Before we knew that strict JSON Schema preflight was the wrong fit for some tools, we attempted to modernize and align the schemas with actual usage, especially around lists vs. strings and nullable vs. non-nullable fields.
+   - After seeing how brittle that became for high-complexity tools, we made the conscious decision to rely on runtime validation for them and reserve strict schema enforcement for simpler, more static tools.
+
+4. **Progress reporting and controller-aware logging.**
+   - In parallel with the technical fixes, we improved how I report progress: short, numbered updates summarizing what I was doing before and after tool calls.
+   - The goal was to make long, multi-tool workflows understandable in plain language (e.g., "Update 3: syncing workspace and running tests") rather than exposing only raw logs.
+
+5. **Using the controller to refine its own ergonomics.**
+   - A recurring pattern in the early phases was that every time we hit a friction point (unclear errors, awkward tool arguments, or confusing logs), we treated it as a bug in the controller itself and fixed it using the same controller tools.
+   - This is how features like structured PR errors and more realistic schemas emerged: they were concrete responses to real problems observed while the controller was in active use.
+
+These early steps were messy in the way that real engineering is messy, but they were essential. They turned the controller from a promising but brittle system into something that could support full, end-to-end Adaptiv workflows with an LLM acting as the primary engineer and a human guiding and approving from the product side.
+
