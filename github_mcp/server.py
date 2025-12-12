@@ -31,16 +31,16 @@ CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main
 
 # Canonical args examples shown in tool descriptions to reduce malformed tool calls.
 _TOOL_EXAMPLES: dict[str, str] = {
-    "run_command": "{\"full_name\":\"owner/repo\",\"ref\":\"main\",\"command\":\"pytest\"}",
-    "apply_patch_to_workspace": "{\"full_name\":\"owner/repo\",\"ref\":\"feature-branch\",\"patch\":\"diff --git ...\"}",
-    "ensure_workspace_clone": "{\"full_name\":\"owner/repo\",\"ref\":\"feature-branch\",\"reset\":true}",
-    "get_workspace_file_contents": "{\"full_name\":\"owner/repo\",\"ref\":\"feature-branch\",\"path\":\"path/to/file.py\"}",
-    "build_unified_diff_from_workspace": "{\"full_name\":\"owner/repo\",\"ref\":\"feature-branch\",\"path\":\"file.py\",\"updated_content\":\"...\",\"context_lines\":3}",
-    "build_section_based_diff_from_workspace": "{\"full_name\":\"owner/repo\",\"ref\":\"feature-branch\",\"path\":\"file.py\",\"sections\":[{\"start_line\":1,\"end_line\":1,\"new_text\":\"...\"}]}",
-    "apply_patch_to_workspace_file": "{\"full_name\":\"owner/repo\",\"ref\":\"feature-branch\",\"path\":\"file.py\",\"patch\":\"diff --git ...\"}",
-    "fetch_files": "{\"full_name\":\"owner/repo\",\"ref\":\"main\",\"paths\":[\"main.py\"]}",
-    "open_file_context": "{\"full_name\":\"owner/repo\",\"ref\":\"main\",\"path\":\"main.py\",\"start_line\":1,\"max_lines\":200}",
-    "update_files_and_open_pr": "{\"full_name\":\"owner/repo\",\"base_branch\":\"main\",\"new_branch\":\"feature/my-change\",\"files\":[{\"path\":\"README.md\",\"content\":\"...\"}],\"title\":\"My change\",\"body\":\"Why this change\"}",
+    "run_command": '{"full_name":"owner/repo","ref":"main","command":"pytest"}',
+    "apply_patch_to_workspace": '{"full_name":"owner/repo","ref":"feature-branch","patch":"diff --git ..."}',
+    "ensure_workspace_clone": '{"full_name":"owner/repo","ref":"feature-branch","reset":true}',
+    "get_workspace_file_contents": '{"full_name":"owner/repo","ref":"feature-branch","path":"path/to/file.py"}',
+    "build_unified_diff_from_workspace": '{"full_name":"owner/repo","ref":"feature-branch","path":"file.py","updated_content":"...","context_lines":3}',
+    "build_section_based_diff_from_workspace": '{"full_name":"owner/repo","ref":"feature-branch","path":"file.py","sections":[{"start_line":1,"end_line":1,"new_text":"..."}]}',
+    "apply_patch_to_workspace_file": '{"full_name":"owner/repo","ref":"feature-branch","path":"file.py","patch":"diff --git ..."}',
+    "fetch_files": '{"full_name":"owner/repo","ref":"main","paths":["main.py"]}',
+    "open_file_context": '{"full_name":"owner/repo","ref":"main","path":"main.py","start_line":1,"max_lines":200}',
+    "update_files_and_open_pr": '{"full_name":"owner/repo","base_branch":"main","new_branch":"feature/my-change","files":[{"path":"README.md","content":"..."}],"title":"My change","body":"Why this change"}',
 }
 
 mcp = FastMCP("GitHub Fast MCP")
