@@ -16,11 +16,7 @@ The server is organized around two Python modules:
   - Contains commit orchestration helpers and workspace commands.
   - Exposes issue and PR helpers, search utilities, and background read tools.
 
-- `extra_tools.py`
-  - Adds additional tools via `register_extra_tools(mcp_tool)`, without changing `main.py`.
-  - Currently includes file deletion and remote branch deletion helpers.
-
-From ChatGPT's point of view the important surface is the set of tools returned by `list_all_actions`. Everything else in this document explains how those tools behave under the hood.
+From an assistant or controller point of view the important surface is the set of tools returned by `list_all_actions`. Everything else in this document explains how those tools behave under the hood.
 
 ---
 
@@ -38,10 +34,9 @@ This registry powers:
 - `list_all_actions`, which returns every registered tool (including those from `extra_tools.py`).
 - `list_write_tools`, which summarizes write-capable tools for controller prompts and safety docs.
 
-In addition to the raw tool list, the server exposes a best-effort JSON schema for each tool's arguments when possible. When an MCP tool exports an explicit input schema, that schema is returned as-is. When no schema is available, the server synthesizes a minimal `{type: "object", properties: {}}` schema so controllers can still treat the presence of `input_schema` as a stable contract instead of a sometimes-`null` field.
+In addition to the raw tool list, the server exposes a best-effort JSON schema for each tool's arguments when possible. When an MCP tool exports an explicit input schema, that schema is returned as-is. When no schema is available, the server synthesizes a minimal `{type: 'object', properties: {}}` schema so controllers can still treat the presence of `input_schema` as a stable contract instead of a sometimes-`null` field.
 
-Controllers and assistants are expected to call `describe_tool` and `validate_tool_args` against these schemas before invoking unfamiliar or write-tagged tools. For certain helpers (for example `compare_refs`), the server provides a hand-authored JSON schema so validation can enforce required fields even when the upstream MCP layer has no schema configured.
-
+Controllers and assistants can call `describe_tool` and, where it provides additional value, `validate_tool_args` against these schemas before invoking unfamiliar or write-tagged tools. For certain helpers (for example `compare_refs`), the server provides a hand-authored JSON schema so validation can enforce required fields even when the upstream MCP layer has no schema configured.
 ---
 
 ## 3. Write safety model
