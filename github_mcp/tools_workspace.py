@@ -3,6 +3,7 @@
 import os
 import shlex
 import sys
+import difflib
 from typing import Any, Dict, List, Optional
 
 from github_mcp.config import RUN_COMMAND_MAX_CHARS
@@ -134,6 +135,267 @@ async def apply_patch_to_workspace(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="apply_patch_to_workspace")
+
+
+# ------------------------------------------------------------------------------
+# Workspace file helpers and diff builders
+# ------------------------------------------------------------------------------
+
+
+def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
+    if not isinstance(rel_path, str) or not rel_path.strip():
+        raise ValueError("path must be a non-empty string")
+    rel_path = rel_path.lstrip("/\\")
+    if os.path.isabs(rel_path):
+        raise ValueError("path must be relative")
+
+    candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
+    root = os.path.realpath(repo_dir)
+    if candidate == root or not candidate.startswith(root + os.sep):
+        raise ValueError("path escapes repository root")
+    return candidate
+
+
+def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
+    abs_path = _workspace_safe_join(repo_dir, path)
+    if not os.path.exists(abs_path):
+        return {
+            "exists": False,
+            "path": path,
+            "text": "",
+            "encoding": "utf-8",
+            "had_decoding_errors": False,
+        }
+
+    with open(abs_path, "rb") as f:
+        data = f.read()
+
+    had_errors = False
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        had_errors = True
+        text = data.decode("utf-8", errors="replace")
+
+    return {
+        "exists": True,
+        "path": path,
+        "text": text,
+        "encoding": "utf-8",
+        "had_decoding_errors": had_errors,
+        "size_bytes": len(data),
+    }
+
+
+def _workspace_build_unified_diff(
+    original: str,
+    updated: str,
+    *,
+    path: str,
+    context_lines: int,
+) -> str:
+    if context_lines < 0:
+        raise ValueError("context_lines must be >= 0")
+
+    original_lines = original.splitlines(keepends=True)
+    updated_lines = updated.splitlines(keepends=True)
+
+    diff_lines = difflib.unified_diff(
+        original_lines,
+        updated_lines,
+        fromfile=f"a/{path}",
+        tofile=f"b/{path}",
+        n=context_lines,
+    )
+    return "".join(diff_lines)
+
+
+def _workspace_apply_sections(text: str, sections: Optional[List[Dict[str, Any]]]) -> str:
+    if not sections:
+        raise ValueError("sections must be a non-empty list")
+
+    lines = text.splitlines(keepends=True)
+    total = len(lines)
+
+    ordered = sorted(sections, key=lambda s: int(s.get("start_line", 0)))
+
+    out: List[str] = []
+    cursor = 1
+
+    for section in ordered:
+        try:
+            start = int(section["start_line"])
+            end = int(section["end_line"])
+        except KeyError as exc:
+            raise ValueError("each section must have 'start_line' and 'end_line'") from exc
+
+        new_text = section.get("new_text", "")
+
+        if start < 1:
+            raise ValueError("start_line must be >= 1")
+        if end < start - 1:
+            raise ValueError("end_line must be >= start_line - 1")
+
+        if cursor <= start - 1 and total > 0:
+            out.extend(lines[cursor - 1 : min(start - 1, total)])
+
+        if new_text:
+            out.extend(new_text.splitlines(keepends=True))
+
+        cursor = max(cursor, end + 1)
+
+    if total > 0 and cursor <= total:
+        out.extend(lines[cursor - 1 :])
+
+    return "".join(out)
+
+
+@mcp_tool(write_action=False)
+async def get_workspace_file_contents(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    path: str = "",
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Read a file from the persistent workspace clone (no shell)."""
+
+    try:
+        deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        info = _workspace_read_text(repo_dir, path)
+        info.update({"full_name": full_name, "ref": effective_ref, "repo_dir": repo_dir})
+        return info
+    except Exception as exc:
+        return _structured_tool_error(exc, context="get_workspace_file_contents")
+
+
+@mcp_tool(write_action=False)
+async def build_unified_diff_from_workspace(
+    full_name: Optional[str] = None,
+    path: str = "",
+    updated_content: str = "",
+    ref: str = "main",
+    context_lines: int = 3,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build a unified diff against the current workspace file content."""
+
+    try:
+        deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        original = _workspace_read_text(repo_dir, path).get("text", "")
+        patch = _workspace_build_unified_diff(
+            original,
+            updated_content,
+            path=path,
+            context_lines=context_lines,
+        )
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": path,
+            "patch": patch,
+            "context_lines": context_lines,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="build_unified_diff_from_workspace")
+
+
+@mcp_tool(write_action=False)
+async def build_section_based_diff_from_workspace(
+    full_name: Optional[str] = None,
+    path: str = "",
+    sections: Optional[List[Dict[str, Any]]] = None,
+    ref: str = "main",
+    context_lines: int = 3,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build a unified diff by applying line-based sections to the workspace file."""
+
+    try:
+        deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        original = _workspace_read_text(repo_dir, path).get("text", "")
+        updated_text = _workspace_apply_sections(original, sections)
+        patch = _workspace_build_unified_diff(
+            original,
+            updated_text,
+            path=path,
+            context_lines=context_lines,
+        )
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": path,
+            "patch": patch,
+            "context_lines": context_lines,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="build_section_based_diff_from_workspace")
+
+
+@mcp_tool(write_action=True)
+async def apply_patch_to_workspace_file(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    path: str = "",
+    patch: str = "",
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Apply a unified diff that is intended to target a single workspace file.
+
+    For now this only enforces that a non-empty unified diff string is provided;
+    the patch is applied to the workspace clone, and the caller is responsible
+    for ensuring the patch only touches the expected file.
+    """
+
+    if not isinstance(patch, str) or not patch.strip():
+        raise ValueError("patch must be a non-empty unified diff string")
+
+    try:
+        deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+
+        deps["ensure_write_allowed"](
+            f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}",
+        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        await deps["apply_patch_to_repo"](repo_dir, patch)
+
+        return {
+            "repo_dir": repo_dir,
+            "branch": effective_ref,
+            "path": path,
+            "status": "applied",
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="apply_patch_to_workspace_file")
 
 
 @mcp_tool(write_action=False)
