@@ -209,12 +209,13 @@ Once your MCP server is live, you can connect it to ChatGPT as a custom MCP inte
 
 3. **Create a controller (Adaptiv Controller instance)**
    - Create a new custom GPT or assistant in ChatGPT.
+3. **Create a controller (Adaptiv Controller instance)**
+   - Create a new custom GPT or assistant in ChatGPT.
    - Attach the MCP integration you just configured.
    - Apply the Adaptiv Controller system prompt and instructions that describe how to use the tools (these are part of the product you purchased or designed).
    - Give the controller any display name you like (for example, `Joey's GitHub`).
 
-From this point on, the controller can call the tools exposed by your self-hosted MCP server to read and write GitHub data according to the safety model documented in `docs/ARCHITECTURE_AND_SAFETY.md`.
-
+From this point on, the controller can call the tools exposed by your self-hosted MCP server to read and write GitHub data according to the safety model documented in `docs/human/ARCHITECTURE_AND_SAFETY.md`.
 ---
 
 ## 7. Safety model recap (operator view)

@@ -8,9 +8,8 @@ It is written for
 - Advanced assistants that need precise, repeatable workflows over GitHub.
 - Engineers who want to move quickly while keeping the controller safe.
 
-For internals and guarantees, see `docs/ARCHITECTURE_AND_SAFETY.md`.
-For prompt and snapshot guidance, see `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md`.
-
+For internals and guarantees, see `docs/human/ARCHITECTURE_AND_SAFETY.md`.
+For prompt and snapshot guidance, see `docs/assistant/ASSISTANT_DOCS_AND_SNAPSHOTS.md`.
 ---
 
 ## 1. Golden rules
@@ -69,8 +68,7 @@ Recommended sequence
    - Confirm that GitHub access works and controller repo defaults match expectations.
 
 5. Read the core docs.
-   - Fetch and read this file, `ASSISTANT_HANDOFF.md`, `docs/ARCHITECTURE_AND_SAFETY.md`, `docs/ASSISTANT_DOCS_AND_SNAPSHOTS.md`, `docs/UPGRADE_NOTES.md`, `docs/SELF_HOSTED_SETUP.md`, `docs/SELF_HOSTING_DOCKER.md`, and `docs/OPERATIONS.md`.
-
+   - Fetch and read this file, `docs/assistant/ASSISTANT_HANDOFF.md`, `docs/human/ARCHITECTURE_AND_SAFETY.md`, `docs/assistant/ASSISTANT_DOCS_AND_SNAPSHOTS.md`, `docs/human/UPGRADE_NOTES.md`, `docs/human/SELF_HOSTED_SETUP.md`, `docs/human/SELF_HOSTING_DOCKER.md`, and `docs/human/OPERATIONS.md`.
 ### Validating tool arguments before writes
 
 For tools that accept structured JSON arguments, especially write-tagged tools, assistants SHOULD validate payloads before calling them:
@@ -117,8 +115,8 @@ Assistants should
 When operating inside a workspace
 
 - Use `run_quality_suite`, `run_lint_suite`, or `run_command` for inspection, edits, and tests.
-Best practicesBest practices
 
+Best practices
 - Keep commits focused and well described.
 - Reference issues or PRs in commit messages when relevant.
 - Do not commit unrelated changes in the same commit.
@@ -221,10 +219,6 @@ When you want to test or exercise medium sized documentation or code commits wit
    - `return_diff` set to `false` when you only need verification metadata.
    - Brief, descriptive commit messages.
 5. Open a PR from the experiment branch into `main` and verify that the diff and metadata look reasonable.
-   - `return_diff` set to `false` when you only need verification metadata.
-   - Brief, descriptive commit messages.
-5. Open a PR from the experiment branch into `main` and verify that the diff and metadata look reasonable.
-
 ### 5.3 Updating the controller contract
 
 1. Create a dedicated branch for contract changes.

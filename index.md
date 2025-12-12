@@ -1,6 +1,6 @@
-# ChatGPT GitHub MCP Server
+# Adaptiv Controller – GitHub MCP Server
 
-This repository implements a GitHub MCP (Model Context Protocol) server that lets assistants work on GitHub repositories like a careful, senior engineer.
+This repository implements a GitHub MCP (Model Context Protocol) server that lets assistants work on GitHub repositories like a careful, senior engineer, using branches, tests, and pull requests as their main workflow.
 
 The server exposes tools for:
 
@@ -19,9 +19,10 @@ The server exposes tools for:
 ## Documentation map
 
 - `README.md`: High-level project overview and setup notes.
-- `index.md` (this file): Entry point for controllers and assistant authors.
+- `index.md` (this file): Entry point for controller authors and assistant prompt designers.
 - `docs/start_session.md`: Recommended startup sequence and controller-facing guidance.
 - `docs/assistant/ASSISTANT_HANDOFF.md`: Detailed expectations for assistants using this server.
 - `docs/assistant/CONTROLLER_PROMPT_V1.md`: Copy-pasteable controller prompt for assistants using this server.
 - `Detailed_Tools.md`: Human-readable reference for every MCP tool exposed by this server.
+
 For day-to-day use, controllers should keep the branch–diff–test–PR flow visible in their prompts and rely on these docs to keep assistants aligned with the live server behavior.
