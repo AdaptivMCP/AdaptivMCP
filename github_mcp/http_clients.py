@@ -94,7 +94,8 @@ def _get_concurrency_semaphore() -> asyncio.Semaphore:
         loop = asyncio.get_event_loop()
 
     semaphore = _loop_semaphores.get(loop)
-    if semaphore is None or getattr(semaphore, "_loop", loop) is not loop:
+    loop_hint = getattr(semaphore, "_loop", None) if semaphore is not None else None
+    if semaphore is None or (loop_hint is not None and loop_hint is not loop):
         semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
         _loop_semaphores[loop] = semaphore
 
