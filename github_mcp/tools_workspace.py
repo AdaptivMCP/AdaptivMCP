@@ -130,10 +130,17 @@ async def apply_patch_to_workspace(
         ref = _resolve_ref(ref, branch=branch)
         effective_ref = _effective_ref_for_repo(full_name, ref)
 
-        deps["ensure_write_allowed"](
-            f"apply_patch_to_workspace for {full_name}@{effective_ref}",
-        )
-
+        # Prefer scoped write gating so feature-branch work is allowed even
+        # when global WRITE_ALLOWED is disabled.
+        try:
+            deps["ensure_write_allowed"](
+                f"apply_patch_to_workspace for {full_name}@{effective_ref}",
+                target_ref=effective_ref,
+            )
+        except TypeError:
+            deps["ensure_write_allowed"](
+                f"apply_patch_to_workspace for {full_name}@{effective_ref}"
+            )
         repo_dir = await deps["clone_repo"](
             full_name,
             ref=effective_ref,
@@ -549,9 +556,17 @@ async def apply_patch_to_workspace_file(
                 f"patch path mismatch: expected {normalized_target!r} to match one of {sorted(allowed)!r}"
             )
 
-        deps["ensure_write_allowed"](
-            f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}",
-        )
+        # Prefer scoped write gating so feature-branch work is allowed even
+        # when global WRITE_ALLOWED is disabled.
+        try:
+            deps["ensure_write_allowed"](
+                f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}",
+                target_ref=effective_ref,
+            )
+        except TypeError:
+            deps["ensure_write_allowed"](
+                f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}"
+            )
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         await deps["apply_patch_to_repo"](repo_dir, patch)
 
@@ -804,16 +819,31 @@ async def run_command(
                 "apply_patch_and_commit, update_file_sections_and_commit) "
                 "for large edits instead of embedding scripts in command."
             )
+        patch_str = patch if isinstance(patch, str) else None
+        has_patch = bool(patch_str and patch_str.strip())
         needs_write_gate = (
-            mutating or installing_dependencies or (patch is not None) or not use_temp_venv
+            mutating
+            or installing_dependencies
+            or has_patch
+            or not use_temp_venv
         )
         if needs_write_gate:
-            deps["ensure_write_allowed"](f"run_command {command} in {full_name}@{effective_ref}")
+            # Prefer scoped write gating so feature-branch work is allowed even
+            # when global WRITE_ALLOWED is disabled.
+            try:
+                deps["ensure_write_allowed"](
+                    f"run_command {command} in {full_name}@{effective_ref}",
+                    target_ref=effective_ref,
+                )
+            except TypeError:
+                # Backwards-compat: older implementations accept only (context).
+                deps["ensure_write_allowed"](
+                    f"run_command {command} in {full_name}@{effective_ref}"
+                )
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        if patch:
-            await deps["apply_patch_to_repo"](repo_dir, patch)
-
+        if has_patch and patch_str is not None:
+            await deps["apply_patch_to_repo"](repo_dir, patch_str)
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
 

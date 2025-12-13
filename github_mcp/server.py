@@ -414,13 +414,7 @@ def _normalize_tool_description(
     return f"{base} {inputs_summary} {level_summary} {alias_summary}{example_summary}"
 
 
-def _ensure_write_allowed(context: str) -> None:
-    if not WRITE_ALLOWED:
-        raise WriteNotAuthorizedError(
-            f"MCP write action is temporarily disabled (context: {context})"
-        )
-
-
+# _ensure_write_allowed is defined later with target_ref support.
 _REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
 
 
