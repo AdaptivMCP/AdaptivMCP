@@ -307,6 +307,7 @@ def _extract_patch_file_blocks(patch: str) -> List[Dict[str, str]]:
     """Extract (a_path, b_path) pairs for each file block in a unified diff."""
 
     patch = patch or ""
+    patch = _coerce_unified_diff_text(patch)
     lines = patch.splitlines()
 
     blocks: List[Dict[str, str]] = []
@@ -354,6 +355,7 @@ def _extract_touched_paths_from_patch(patch: str) -> List[str]:
     Returns one entry per file block. For creates/deletes, this is the non-dev/null
     path. For renames, this is the new (b/) path.
     """
+    patch = _coerce_unified_diff_text(patch)
 
     logical_paths: List[str] = []
     for blk in _extract_patch_file_blocks(patch):

@@ -1,7 +1,7 @@
 import pytest
 
-from github_mcp.workspace import _maybe_unescape_unified_diff
 from github_mcp.tools_workspace import _coerce_unified_diff_text
+from github_mcp.workspace import _maybe_unescape_unified_diff
 
 
 RAW_DIFF = """diff --git a/foo.txt b/foo.txt
