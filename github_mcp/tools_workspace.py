@@ -770,20 +770,138 @@ async def run_command(
         cwd = repo_dir
         if workdir:
             cwd = os.path.join(repo_dir, workdir)
+
+        # Optional dependency installation. If requested, install requirements.txt when present
+        # (unless the command already appears to be installing deps).
+        install_result = None
+        if installing_dependencies and use_temp_venv:
+            req_path = os.path.join(repo_dir, "requirements.txt")
+            cmd_lower = command.lower()
+            already_installing = ("pip install" in cmd_lower) or ("pip3 install" in cmd_lower)
+            if (not already_installing) and os.path.exists(req_path):
+                install_result = await deps["run_shell"](
+                    "python -m pip install -r requirements.txt",
+                    cwd=cwd,
+                    timeout_seconds=max(600, timeout_seconds),
+                    env=env,
+                )
+                if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
+                    stderr = (install_result.get("stderr") or "")
+                    stdout = (install_result.get("stdout") or "")
+                    raise GitHubAPIError(
+                        "Dependency installation failed: " + (stderr.strip() or stdout.strip())
+                    )
+
         result = await deps["run_shell"](
             command,
             cwd=cwd,
             timeout_seconds=timeout_seconds,
             env=env,
         )
-        return {
+        out: Dict[str, Any] = {
             "repo_dir": repo_dir,
             "workdir": workdir,
+            "install": install_result,
             "result": result,
         }
+
+        # If a python dependency is missing, nudge the assistant to rerun with deps installation.
+        if (
+            not installing_dependencies
+            and isinstance(result, dict)
+            and result.get("exit_code", 0) != 0
+        ):
+            stderr = (result.get("stderr") or "")
+            stdout = (result.get("stdout") or "")
+            combined = f"{stderr}\n{stdout}"
+            mm = re.search(
+                r"ModuleNotFoundError: No module named ['\"]([^'\"]+)['\"]",
+                combined,
+            )
+            if mm:
+                out["dependency_hint"] = {
+                    "missing_module": mm.group(1),
+                    "message": "Missing python dependency. Re-run run_command with installing_dependencies=true.",
+                }
+
+        return out
     except Exception as exc:
         return _structured_tool_error(exc, context="run_command")
 
+
+
+
+@mcp_tool(write_action=True)
+async def workspace_create_branch(
+    full_name: Optional[str] = None,
+    base_ref: str = "main",
+    new_branch: str = "",
+    push: bool = True,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create a branch using the workspace (git), optionally pushing to origin.
+
+    This exists because some direct GitHub-API branch-creation calls can be blocked upstream.
+    """
+
+    try:
+        deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        base_ref = _resolve_ref(base_ref, branch=branch)
+        effective_base = _effective_ref_for_repo(full_name, base_ref)
+
+        if not isinstance(new_branch, str) or not new_branch:
+            raise ValueError("new_branch must be a non-empty string")
+
+        # Conservative branch-name validation.
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", new_branch):
+            raise ValueError("new_branch contains invalid characters")
+        if ".." in new_branch or "@{" in new_branch:
+            raise ValueError("new_branch contains invalid ref sequence")
+        if new_branch.startswith("/") or new_branch.endswith("/"):
+            raise ValueError("new_branch must not start or end with '/'")
+        if new_branch.endswith(".lock"):
+            raise ValueError("new_branch must not end with '.lock'")
+
+        _ensure_write_allowed(
+            f"workspace_create_branch {new_branch} from {full_name}@{effective_base}",
+            target_ref=effective_base,
+        )
+
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_base, preserve_changes=True)
+
+        checkout = await deps["run_shell"](
+            f"git checkout -b {shlex.quote(new_branch)}",
+            cwd=repo_dir,
+            timeout_seconds=120,
+        )
+        if checkout.get("exit_code", 0) != 0:
+            stderr = checkout.get("stderr", "") or checkout.get("stdout", "")
+            raise GitHubAPIError(f"git checkout -b failed: {stderr}")
+
+        push_result = None
+        if push:
+            push_result = await deps["run_shell"](
+                f"git push -u origin {shlex.quote(new_branch)}",
+                cwd=repo_dir,
+                timeout_seconds=300,
+            )
+            if push_result.get("exit_code", 0) != 0:
+                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
+                raise GitHubAPIError(f"git push failed: {stderr}")
+
+        return {
+            "repo_dir": repo_dir,
+            "base_ref": effective_base,
+            "new_branch": new_branch,
+            "checkout": checkout,
+            "push": push_result,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="workspace_create_branch")
 
 @mcp_tool(write_action=True)
 async def commit_workspace(
