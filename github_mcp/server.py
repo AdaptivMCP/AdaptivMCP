@@ -816,6 +816,32 @@ def _ensure_write_allowed(context: str, *, target_ref: Optional[str] = None) -> 
     return None
 
 
+def _format_tool_args_preview(all_args: Mapping[str, Any], *, limit: int = 1200) -> str:
+    """Return a human-friendly, truncated snapshot of tool arguments.
+
+    Avoid returning strings that contain literal ``\\n`` sequences (double-escaped
+    newlines) because those show up as `\\n` in client UIs and confuse assistants.
+    """
+
+    if not all_args:
+        return "<no args>"
+
+    try:
+        preview = json.dumps(all_args, default=str, ensure_ascii=False)
+    except Exception:
+        preview = repr(all_args)
+
+    # If json.dumps produced escaped control sequences, make them readable.
+    # Intentionally narrow (only \\n, \\r\\n, \\t) to avoid surprising transforms.
+    if isinstance(preview, str) and "\\n" in preview and "\n" not in preview:
+        preview = preview.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+
+    if len(preview) > limit:
+        preview = f"{preview[:limit]}… (+{len(preview) - limit} chars)"
+
+    return preview
+
+
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
     existing_tags = tool_kwargs.pop("tags", None)
     tags: set[str] = set(existing_tags or [])
@@ -878,20 +904,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         )(func)
 
         def _format_args_for_log(all_args: Mapping[str, Any], *, limit: int = 1200) -> str:
-            """Return a human-friendly, truncated snapshot of the tool arguments."""
-
-            if not all_args:
-                return "<no args>"
-
-            try:
-                preview = json.dumps(all_args, default=str, ensure_ascii=False)
-            except Exception:
-                preview = repr(all_args)
-
-            if len(preview) > limit:
-                preview = f"{preview[:limit]}… (+{len(preview) - limit} chars)"
-
-            return preview
+            return _format_tool_args_preview(all_args, limit=limit)
 
         def _normalize_common_tool_kwargs(args_in, kwargs_in: Mapping[str, Any]) -> Dict[str, Any]:
             if not kwargs_in:
