@@ -1,4 +1,3 @@
-
 import pytest
 
 
@@ -40,7 +39,9 @@ async def test_run_command_adds_dependency_hint_on_module_not_found(monkeypatch,
     )
     monkeypatch.setattr(tw, "_effective_ref_for_repo", lambda full_name, ref: ref)
 
-    res = await tw.run_command(full_name="owner/repo", ref="main", command="python -c 'x'", use_temp_venv=True)
+    res = await tw.run_command(
+        full_name="owner/repo", ref="main", command="python -c 'x'", use_temp_venv=True
+    )
 
     assert res["result"]["exit_code"] == 1
     assert res["dependency_hint"]["missing_module"] == "jsonschema"

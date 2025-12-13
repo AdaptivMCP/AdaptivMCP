@@ -76,7 +76,9 @@ async def test_apply_patch_and_commit_logging_shape(
     assert result["status"] == "committed"
 
     start_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_start"]
-    success_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_success"]
+    success_records = [
+        r for r in caplog.records if getattr(r, "event", None) == "tool_call_success"
+    ]
 
     assert start_records, caplog.text
     assert success_records, caplog.text

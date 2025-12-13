@@ -51,6 +51,7 @@ Use these tools to understand existing issues/PRs and their CI state before deci
 ---
 
 ## Table of contents
+
 - [apply_line_edits_and_commit](#apply_line_edits_and_commit)
 - [apply_patch_and_commit](#apply_patch_and_commit)
 - [apply_text_update_and_commit](#apply_text_update_and_commit)

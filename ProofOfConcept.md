@@ -2,7 +2,9 @@
 
 _Last updated: 2025-12-11_
 
-> Repo: Proofgate-Revocations/chatgpt-mcp-github\n> Branch: proof-of-concept-doc\n> Role: LLM (ChatGPT 5.1 Thinking) acting as primary engineer; human as product owner/reviewer.
+> Repo: Proofgate-Revocations/chatgpt-mcp-github
+> Branch: proof-of-concept-doc
+> Role: LLM (ChatGPT 5.1 Thinking) acting as primary engineer; human as product owner/reviewer.
 
 ## Executive summary
 
@@ -115,7 +117,9 @@ This file is a snapshot of one long, real session. Over time it can be extended 
 - Deeper dives into individual tools and workflows.
 - Architectural diagrams and controller usage patterns.
 
-Even in this form, it captures the core idea that your Adaptiv Controller vision works in practice: a human provides intent and approvals; an LLM working through the controller handles the rest of the engineering workflow in a safe, reviewable way.---
+Even in this form, it captures the core idea that your Adaptiv Controller vision works in practice: a human provides intent and approvals; an LLM working through the controller handles the rest of the engineering workflow in a safe, reviewable way.
+
+---
 
 ## 6. Timeline of key branches and PRs (summary)
 

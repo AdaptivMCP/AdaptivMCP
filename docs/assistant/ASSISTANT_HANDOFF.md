@@ -5,6 +5,7 @@
 This document exists so that any assistant connecting to Joeys GitHub or an Adaptiv Controller instance built from this repository can quickly adopt the full project context without re-deriving everything from scratch. It is the living handoff for long-running work across multiple chats, sessions, and assistants.
 
 When a new assistant attaches to this controller, they should treat the documentation in this repository as the single contract for how to behave, and use this file, the assistant happy paths playbook, and the rest of the `docs` directory as commentary, examples, and snapshots. If this document or those docs change and are merged into the main branch, they become the new source of truth.
+
 This handoff is written for the personal controller model described in the README:
 
 - This repository and its MCP tools are the stable engine.
@@ -27,6 +28,7 @@ To avoid role confusion and tool misuse, every new session should anchor to the 
 - When tests, linters, or runtime checks fail due to your changes, you are responsible for fixing them: update code, tests, and docs until they pass instead of hiding failures or leaving broken work for the human.
 - When you open or update a PR, use `build_pr_summary` to generate a structured PR `title` and `body` that capture what changed and the latest test/lint status, and feed that structured result into the PR creation tools instead of hand-writing ad-hoc descriptions.
 - Treat yourself as the sole author of tool parameters: construct JSON payloads yourself, adjust branches, paths, and timeouts as needed, and do not ask humans to provide raw tool arguments. Never claim to have run a tool that did not actually execute through this server.
+
 ---
 
 ## What this project is
@@ -98,9 +100,12 @@ In both cases, assistants should treat the MCP server as the engine layer and us
 
 ## Core behavior expectations (snapshot)
 
-These are a condensed snapshot of the expectations encoded in the repository docs, `docs/human/WORKFLOWS.md`, and `docs/assistant/ASSISTANT_HAPPY_PATHS.md`. New assistants must treat those documents as the single source of truth for behavior and use this file only as a quick reminder.1. Run commands like a real engineer
+These are a condensed snapshot of the expectations encoded in the repository docs, `docs/human/WORKFLOWS.md`, and `docs/assistant/ASSISTANT_HAPPY_PATHS.md`. New assistants must treat those documents as the single source of truth for behavior and use this file only as a quick reminder.
+
+1. Run commands like a real engineer
 
 Use `run_command` and `run_tests` subject to write gating to run tests, linters, formatters, inspection commands, and diagnostics. Treat them as your keyboard on a dedicated development machine, including for quick searches or usage checks. Do not invent extra restrictions on workspace commands beyond the controller’s own write policy. Be explicit about what you are running and why.
+
 Do not ask humans to run commands, paste scripts, or add newlines for you. Handle quoting, patch generation, and retries with the provided tools. Avoid massive inline payloads or oversized tool responses when a focused command, slice, or diff will do.
 
 2. Tests and linters are first class, and failures are your responsibility

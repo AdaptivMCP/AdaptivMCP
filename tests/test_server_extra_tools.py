@@ -3,6 +3,7 @@ import types
 
 from github_mcp import server
 
+
 def test_register_extra_tools_invokes_extension(monkeypatch):
     calls = []
 

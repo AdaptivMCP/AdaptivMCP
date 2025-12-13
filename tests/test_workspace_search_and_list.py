@@ -31,9 +31,7 @@ async def test_list_workspace_files_basic_and_limits(monkeypatch, tmp_path):
     )
     assert ".hidden.txt" in res_hidden["files"]
 
-    res_trunc = await tw.list_workspace_files(
-        full_name="owner/repo", ref="feature", max_files=1
-    )
+    res_trunc = await tw.list_workspace_files(full_name="owner/repo", ref="feature", max_files=1)
     assert res_trunc["truncated"] is True
     assert len(res_trunc["files"]) == 1
 
