@@ -1,3 +1,5 @@
+Do not paste tokens into chat messages, tool inputs, logs, or command strings. Set them only via your hosting provider's environment variable settings.
+
 # Self-hosting with Docker and Docker Compose (Joey's GitHub)
 
 This document explains how to run the Adaptiv Controller GitHub MCP server using Docker and Docker Compose. It is written for individual developers who want to run the backend on their own machine or infrastructure and use a controller inside ChatGPT (for example, a controller named "Joey's GitHub") to drive it.
@@ -54,7 +56,7 @@ Open `.env` in your editor and set at least:
 
 # REQUIRED: your GitHub token (PAT or GitHub App token)
 
-GITHUB_PAT=ghp_your_token_here
+GITHUB_PAT=<YOUR_GITHUB_TOKEN>
 
 # Controller repo (defaults are fine if you use this repo)
 
