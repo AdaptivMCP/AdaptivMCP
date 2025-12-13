@@ -24,6 +24,15 @@ from github_mcp.workspace import (
     _workspace_path,
 )
 
+
+# Guardrail: prevent token-like secret strings from being committed into repos.
+# The scan only runs when the repo contains scripts/check_no_tokenlike_strings.py.
+TOKENLIKE_SCAN_COMMAND = (
+    "if [ -f scripts/check_no_tokenlike_strings.py ]; then "
+    "python scripts/check_no_tokenlike_strings.py; "
+    "else echo 'token scan skipped: scripts/check_no_tokenlike_strings.py not found'; fi"
+)
+
 # ------------------------------------------------------------------------------
 # Workspace / full-environment tools
 # ------------------------------------------------------------------------------
@@ -1214,12 +1223,80 @@ async def run_quality_suite(
     installing_dependencies: bool = False,
     mutating: bool = False,
     lint_command: str = "ruff check .",
+    run_tokenlike_scan: bool = True,
 ) -> Dict[str, Any]:
     """Run the standard quality/test suite for a repo/ref.
 
-    For now this is a thin wrapper around `run_tests`, but it also emits a
-    small `controller_log` so controllers can describe what happened.
+    This executes, in order:
+      1) Optional token-like string scan (only if the repo contains the scanner script)
+      2) Lint/static analysis via `run_lint_suite`
+      3) Tests via `run_tests`
+
+    The scan step helps prevent upstream OpenAI blocks and accidental leakage by
+    ensuring token-shaped strings are not committed into docs/tests/examples.
     """
+
+    controller_log: List[str] = [
+        "Quality suite run:",
+        f"- Repo: {full_name}",
+        f"- Ref: {ref}",
+        f"- Token-like scan: {'enabled' if run_tokenlike_scan else 'disabled'}",
+        f"- Lint command: {lint_command}",
+        f"- Test command: {test_command}",
+    ]
+
+    if run_tokenlike_scan:
+        scan_result = await run_command(
+            full_name=full_name,
+            ref=ref,
+            command=TOKENLIKE_SCAN_COMMAND,
+            timeout_seconds=min(timeout_seconds, 300),
+            workdir=workdir,
+            patch=patch,
+            use_temp_venv=use_temp_venv,
+            installing_dependencies=installing_dependencies,
+            mutating=mutating,
+        )
+        if isinstance(scan_result, dict) and "error" in scan_result:
+            return {
+                "status": "failed",
+                "command": TOKENLIKE_SCAN_COMMAND,
+                "error": scan_result["error"],
+                "controller_log": controller_log
+                + ["Token-like scan failed due to a workspace/command error."],
+            }
+        cmd = (scan_result or {}).get("result") or {}
+        exit_code = cmd.get("exit_code")
+        if exit_code not in (0, None):
+            return {
+                "status": "failed",
+                "command": TOKENLIKE_SCAN_COMMAND,
+                "exit_code": exit_code,
+                "repo_dir": scan_result.get("repo_dir"),
+                "workdir": scan_result.get("workdir"),
+                "result": cmd,
+                "controller_log": controller_log
+                + ["Token-like scan failed; replace secrets with <REDACTED> placeholders."],
+            }
+        controller_log.append("- Token-like scan: passed (or skipped)")
+
+    lint_result = await run_lint_suite(
+        full_name=full_name,
+        ref=ref,
+        lint_command=lint_command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        patch=patch,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+        mutating=mutating,
+        run_tokenlike_scan=False,
+    )
+    if (lint_result or {}).get("status") != "passed":
+        lint_result.setdefault("controller_log", controller_log + ["- Lint: failed"])
+        return lint_result
+    controller_log.append("- Lint: passed")
+
     tests_result = await run_tests(
         full_name=full_name,
         ref=ref,
@@ -1231,22 +1308,14 @@ async def run_quality_suite(
         installing_dependencies=installing_dependencies,
         mutating=mutating,
     )
-
     status = tests_result.get("status") or "unknown"
-    summary_lines = [
-        "Quality suite run (tests only):",
-        f"- Repo: {full_name}",
-        f"- Ref: {ref}",
-        f"- Test command: {test_command}",
-        f"- Lint command (unused here): {lint_command}",
-        f"- Test status: {status}",
-    ]
+    controller_log.append(f"- Tests: {status}")
 
     existing_log = tests_result.get("controller_log")
     if isinstance(existing_log, list):
-        summary_lines.extend(existing_log)
+        controller_log.extend(existing_log)
 
-    tests_result["controller_log"] = summary_lines
+    tests_result["controller_log"] = controller_log
     return tests_result
 
 
@@ -1262,11 +1331,53 @@ async def run_lint_suite(
     installing_dependencies: bool = False,
     mutating: bool = False,
     *,
+    run_tokenlike_scan: bool = True,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the lint or static-analysis command in the workspace."""
+
+    if run_tokenlike_scan:
+        scan_result = await run_command(
+            full_name=full_name,
+            ref=ref,
+            command=TOKENLIKE_SCAN_COMMAND,
+            timeout_seconds=min(timeout_seconds, 300),
+            workdir=workdir,
+            patch=patch,
+            use_temp_venv=use_temp_venv,
+            installing_dependencies=installing_dependencies,
+            mutating=mutating,
+        )
+        if isinstance(scan_result, dict) and "error" in scan_result:
+            return {
+                "status": "failed",
+                "command": TOKENLIKE_SCAN_COMMAND,
+                "error": scan_result["error"],
+                "controller_log": [
+                    "Token-like scan failed due to a workspace or command error.",
+                    f"- Repo: {full_name}",
+                    f"- Ref: {ref}",
+                ],
+            }
+        cmd = (scan_result or {}).get("result") or {}
+        exit_code = cmd.get("exit_code")
+        if exit_code not in (0, None):
+            return {
+                "status": "failed",
+                "command": TOKENLIKE_SCAN_COMMAND,
+                "exit_code": exit_code,
+                "repo_dir": scan_result.get("repo_dir"),
+                "workdir": scan_result.get("workdir"),
+                "result": cmd,
+                "controller_log": [
+                    "Token-like scan failed; replace secrets with <REDACTED> placeholders.",
+                    f"- Repo: {full_name}",
+                    f"- Ref: {ref}",
+                ],
+            }
+
     result = await run_command(
         full_name=full_name,
         ref=ref,
