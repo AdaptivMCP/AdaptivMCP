@@ -57,7 +57,7 @@ RULES: list[Rule] = [
         rule_id="ENV_ASSIGNMENT_TOKEN",
         # catches e.g. GITHUB_PAT=ghp_... or GITHUB_TOKEN=... (but not placeholders)
         pattern=re.compile(
-            r"\b(GITHUB_PAT|GITHUB_TOKEN)=(?!<YOUR_GITHUB_TOKEN>|<REDACTED>|\$\{?\w+\}?)[^\s#]+"
+            r"\b(GITHUB_PAT|GITHUB_TOKEN)=(?!<YOUR_GITHUB_TOKEN>|<REDACTED>|\$\{?\w+\}?)[^\s#]+"  # tokenlike-allow
         ),
         description="Token-like env var assignment detected",
     ),
@@ -91,6 +91,8 @@ def _git_tracked_files() -> list[Path]:
             continue
         # Skip vendored/binary-ish directories if they appear in repo
         if any(part in {".git", "assets", "sandbox"} for part in p.parts):
+            continue
+        if p.as_posix() == "scripts/check_no_tokenlike_strings.py":
             continue
         files.append(p)
     return files
