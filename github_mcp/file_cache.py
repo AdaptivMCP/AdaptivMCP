@@ -126,4 +126,3 @@ def clear_cache() -> None:
 
 def cache_stats() -> Dict[str, int]:
     return FILE_CACHE.stats()
-
