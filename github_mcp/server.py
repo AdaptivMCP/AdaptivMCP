@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import inspect
 import json
 import os
@@ -23,6 +24,17 @@ from github_mcp.exceptions import WriteNotAuthorizedError
 from github_mcp.http_clients import _github_client_instance
 from github_mcp.metrics import _record_tool_call
 from github_mcp.utils import _env_flag
+
+RECENT_TOOL_EVENTS = deque(maxlen=200)
+
+
+def _record_recent_tool_event(event: dict) -> None:
+    """Best-effort in-memory ring buffer for debugging recent tool calls."""
+    try:
+        RECENT_TOOL_EVENTS.append(event)
+    except Exception:
+        pass
+
 
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", True)
@@ -1088,6 +1100,34 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 except Exception as exc:
                     errored = True
                     duration_ms = int((time.perf_counter() - start) * 1000)
+                    _record_recent_tool_event(
+                        {
+                            "ts": time.time(),
+                            "event": "tool_recent_exception",
+                            "tool_name": tool.name,
+                            "call_id": call_id,
+                            "write_action": write_action,
+                            "duration_ms": duration_ms,
+                            "error_type": exc.__class__.__name__,
+                            "message": _summarize_exception(exc)[:200],
+                            "repo": context.get("repo"),
+                            "ref": context.get("ref"),
+                        }
+                    )
+                    _record_recent_tool_event(
+                        {
+                            "ts": time.time(),
+                            "event": "tool_recent_exception",
+                            "tool_name": tool.name,
+                            "call_id": call_id,
+                            "write_action": write_action,
+                            "duration_ms": duration_ms,
+                            "error_type": exc.__class__.__name__,
+                            "message": _summarize_exception(exc)[:200],
+                            "repo": context.get("repo"),
+                            "ref": context.get("ref"),
+                        }
+                    )
                     _record_tool_call(
                         tool_name=tool.name,
                         write_action=write_action,
@@ -1122,6 +1162,19 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     write_action=write_action,
                     duration_ms=duration_ms,
                     errored=errored,
+                )
+                _record_recent_tool_event(
+                    {
+                        "ts": time.time(),
+                        "event": "tool_recent_ok",
+                        "tool_name": tool.name,
+                        "call_id": call_id,
+                        "write_action": write_action,
+                        "duration_ms": duration_ms,
+                        "repo": context.get("repo"),
+                        "ref": context.get("ref"),
+                        "result_type": type(result).__name__,
+                    }
                 )
                 TOOLS_LOGGER.info(
                     f"[tool ok] {_human_context(call_id, context)} | duration_ms={duration_ms} | "
@@ -1215,6 +1268,19 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     write_action=write_action,
                     duration_ms=duration_ms,
                     errored=errored,
+                )
+                _record_recent_tool_event(
+                    {
+                        "ts": time.time(),
+                        "event": "tool_recent_ok",
+                        "tool_name": tool.name,
+                        "call_id": call_id,
+                        "write_action": write_action,
+                        "duration_ms": duration_ms,
+                        "repo": context.get("repo"),
+                        "ref": context.get("ref"),
+                        "result_type": type(result).__name__,
+                    }
                 )
                 TOOLS_LOGGER.info(
                     f"[tool ok] {_human_context(call_id, context)} | duration_ms={duration_ms} | "

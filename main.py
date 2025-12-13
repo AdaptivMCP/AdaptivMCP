@@ -231,6 +231,23 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 # ------------------------------------------------------------------------------
 # Read-only tools
+
+
+@server.mcp_tool(write_action=False)
+def get_recent_tool_events(limit: int = 50, include_success: bool = False) -> Dict[str, Any]:
+    """Return recent tool-call events captured in-memory by the server wrappers."""
+    try:
+        limit_int = int(limit)
+    except Exception:
+        limit_int = 50
+    limit_int = max(1, min(200, limit_int))
+    events = list(getattr(server, "RECENT_TOOL_EVENTS", []))
+    if not include_success:
+        events = [e for e in events if e.get("event") != "tool_recent_ok"]
+    events = list(reversed(events))[:limit_int]
+    return {"limit": limit_int, "include_success": include_success, "events": events}
+
+
 # ------------------------------------------------------------------------------
 
 
