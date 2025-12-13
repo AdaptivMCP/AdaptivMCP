@@ -27,13 +27,16 @@ From your local clone (or a CI job), you can create archives that contain only t
 tracked files at a given tag, without the `.git` history:
 
 ```bash
+
 # Create a tar.gz bundle
+
 git archive \
   --format=tar.gz \
   --prefix=adaptiv-controller-v0.1.0/ \
   v0.1.0 > adaptiv-controller-v0.1.0.tar.gz
 
 # Optionally, also create a zip bundle
+
 git archive \
   --format=zip \
   --prefix=adaptiv-controller-v0.1.0/ \
@@ -62,18 +65,24 @@ When a buyer receives `adaptiv-controller-v0.1.0.tar.gz` or `.zip`, their setup 
 like this (from their perspective):
 
 ```bash
+
 # Unpack the bundle
+
 tar xzf adaptiv-controller-v0.1.0.tar.gz
 cd adaptiv-controller-v0.1.0
 
 # Copy and edit environment config
+
 cp .env.example .env
+
 # (edit .env with their GitHub token, controller repo, etc.)
 
 # Install dependencies
+
 pip install -r requirements.txt
 
 # Run the MCP server locally
+
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 

@@ -1,5 +1,3 @@
-
-
 def _assert_step_meta(step: dict) -> None:
     assert step.get("actor") == "assistant"
     assert step.get("user_can_invoke_tools") is False
@@ -53,7 +51,9 @@ def test_pr_hint_step_also_includes_actor_metadata():
     steps = payload["error"]["next_steps"]
 
     # Should include a PR-specific hint step.
-    pr_hints = [s for s in steps if s.get("kind") == "hint" and "PR creation" in s.get("action", "")]
+    pr_hints = [
+        s for s in steps if s.get("kind") == "hint" and "PR creation" in s.get("action", "")
+    ]
     assert pr_hints
     for step in pr_hints:
         _assert_step_meta(step)

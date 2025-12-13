@@ -69,6 +69,7 @@ Recommended sequence
 
 5. Read the core docs.
    - Fetch and read this file, `docs/assistant/ASSISTANT_HANDOFF.md`, `docs/human/ARCHITECTURE_AND_SAFETY.md`, `docs/assistant/ASSISTANT_DOCS_AND_SNAPSHOTS.md`, `docs/human/UPGRADE_NOTES.md`, `docs/human/SELF_HOSTED_SETUP.md`, `docs/human/SELF_HOSTING_DOCKER.md`, and `docs/human/OPERATIONS.md`.
+
 ### Validating tool arguments before writes
 
 For tools that accept structured JSON arguments, especially write-tagged tools, assistants SHOULD validate payloads before calling them:
@@ -205,6 +206,7 @@ This section describes common workflows for this controller repo itself, `Proofg
 3. Keep changes focused and incremental.
 4. Run any documentation tooling or linters if present.
 5. Use `commit_workspace` to commit changes to the docs branch.
+
 ### 5.2 Medium sized file commits (payload conscious)
 
 When you want to test or exercise medium sized documentation or code commits without flooding the client or model context with huge payloads:
@@ -219,6 +221,7 @@ When you want to test or exercise medium sized documentation or code commits wit
    - `return_diff` set to `false` when you only need verification metadata.
    - Brief, descriptive commit messages.
 5. Open a PR from the experiment branch into `main` and verify that the diff and metadata look reasonable.
+
 ### 5.3 Updating the controller contract
 
 1. Create a dedicated branch for contract changes.

@@ -18,7 +18,9 @@ async def test_async_tool_logging_success(caplog):
     assert isinstance(result, dict)
 
     start_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_start"]
-    success_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_success"]
+    success_records = [
+        r for r in caplog.records if getattr(r, "event", None) == "tool_call_success"
+    ]
 
     assert start_records, caplog.text
     assert success_records, caplog.text

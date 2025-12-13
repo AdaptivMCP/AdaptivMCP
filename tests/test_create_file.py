@@ -32,7 +32,10 @@ async def test_create_file_treats_404_as_missing(monkeypatch):
 
     assert result["status"] == "created"
     # We should have tried to read before and after the commit.
-    assert calls["decode"] == [("owner/repo", "index.md", "feature"), ("owner/repo", "index.md", "feature")]
+    assert calls["decode"] == [
+        ("owner/repo", "index.md", "feature"),
+        ("owner/repo", "index.md", "feature"),
+    ]
 
 
 @pytest.mark.asyncio

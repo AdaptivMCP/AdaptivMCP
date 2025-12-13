@@ -10,6 +10,7 @@ If you are running the Adaptiv Controller server for yourself (for example on Re
 - `CHANGELOG.md` and `pyproject.toml` for version numbers and release history.
 
 ---
+
 ## 1. High-level mental model
 
 At a high level, the system has three layers that are relevant during an incident:

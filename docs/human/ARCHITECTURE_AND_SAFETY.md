@@ -74,9 +74,6 @@ This design lets a controller keep the server in a read-only posture by default 
 
 ### 3.3 Server configuration snapshot
 
-
-### 3.3 Server configuration snapshot
-
 The `get_server_config` tool returns a non-sensitive snapshot of the current
 write policy, including:
 
@@ -88,8 +85,6 @@ write policy, including:
 - `approval_policy.write_actions.toggle_tool`: the name of the tool that
   toggles the write flag.
 
-Controllers can call `get_server_config` at the start of a session to decide
-whether they need to request user approval for writes.
 Controllers can call `get_server_config` at the start of a session to decide whether they need to request user approval for writes, and can use `get_latest_branch_status` to understand the current branch head's PR and workflow state before attempting CI fixes.
 
 ## 4. Controller-aware branch and ref scoping
@@ -190,6 +185,7 @@ This lets assistants describe large-file changes as structured sections instead 
 - Re-reads and verifies the new file.
 
 This helper is the default choice for localized code edits and is used heavily in the workflows described in `docs/WORKFLOWS.md`.
+
 ### 5.4 update_files_and_open_pr
 
 `update_files_and_open_pr` orchestrates multi-file changes and PR creation:
@@ -212,6 +208,7 @@ Tests in `tests/test_apply_text_update_and_commit.py` and `tests/test_apply_line
 By contrast, unscoped or potentially dangerous write tools call `_ensure_write_allowed` with `target_ref=None`, which treats `WRITE_ALLOWED` as a global kill switch. I should assume those tools are disabled unless the controller has explicitly authorized writes via `authorize_write_actions`.
 
 ---
+
 ## 6. Workspace execution and truncation
 
 Two tools, `run_command` and `run_tests`, execute commands in a real cloned workspace. They are useful for running tests, linters, or migrations after a change.
@@ -289,6 +286,7 @@ For discovering the current tool surface, use:
 Assistants should use these discovery tools rather than relying on hard-coded tool lists in prompts.
 
 ---
+
 ## 9. Tool-level structured logging
 
 The server emits structured logs around every MCP tool call using a dedicated
@@ -350,6 +348,7 @@ The behaviors described in this document are backed by a set of tests, including
 - `tests/test_tool_logging.py` and `tests/test_tool_logging_write_tools.py` for tool-level logging behavior (read and write tools).
 - Tests for diff helpers (including `build_section_based_diff`) and large-file workflows.
 When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.
+
 ## 11. How to use this document
 
 Use this document when you need to:

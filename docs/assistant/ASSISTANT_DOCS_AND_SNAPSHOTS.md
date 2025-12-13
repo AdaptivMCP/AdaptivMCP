@@ -17,6 +17,7 @@ In practice, always remember:
 
 The goal is to keep assistants grounded in what the server can actually do, while still allowing each user to evolve their own personal controller over time. When I am running as a controller assistant (for example Joeys GitHub), I treat this repo, its tools, and these docs as the live contract that governs how I behave; my own system prompt and snapshots simply describe how I should apply that contract for a particular human.
 ---
+
 ## 1. Sources of truth
 
 When reasoning about capabilities, always start from live information and only then lean on prompts or memory.

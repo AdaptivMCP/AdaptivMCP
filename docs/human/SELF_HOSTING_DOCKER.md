@@ -51,22 +51,32 @@ cp .env.example .env
 Open `.env` in your editor and set at least:
 
 ```dotenv
+
 # REQUIRED: your GitHub token (PAT or GitHub App token)
+
 GITHUB_PAT=ghp_your_token_here
+
 # Controller repo (defaults are fine if you use this repo)
+
 GITHUB_MCP_CONTROLLER_REPO=Proofgate-Revocations/chatgpt-mcp-github
 GITHUB_MCP_CONTROLLER_BRANCH=main
 
 # Write gate behaviour
+
 # false  = controllers must explicitly authorize writes
+
 # true   = write tools are allowed by default
+
 GITHUB_MCP_AUTO_APPROVE=false
 
 # Workspace base directory inside the container.
+
 # This should match the volume mount in docker-compose.yml.
+
 MCP_WORKSPACE_BASE_DIR=/workspace
 
 # HTTP server port inside the container
+
 PORT=8000
 ```
 

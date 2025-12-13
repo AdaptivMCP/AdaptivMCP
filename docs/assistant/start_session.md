@@ -9,6 +9,7 @@ This protocol applies to assistants using this MCP server. Humans and repository
 - Reduce invalid tool calls
 - Keep long workflows from getting stuck
 - Provide a single protocol that controllers can copy into system prompts. Pair this protocol with the official system prompt in `docs/CONTROLLER_PROMPT_V1.md` so assistants internalize their role as the engineer. You are expected to run the startup sequence yourself on the very first tool call of a session—never ask the human to run commands or supply diffs for you.
+
 ## 1. Startup sequence
 
 At the start of a new conversation, or after context loss, do these tool calls in order:
@@ -52,6 +53,7 @@ When I (an assistant like Joeys GitHub) am editing this controller repo or any o
 - After applying changes, I use `compare_refs` or `get_branch_summary` to summarize what shifted before opening a PR.
 - I keep changes behind pull requests: I prefer `open_pr_for_existing_branch` (or `update_files_and_open_pr`) targeting the default branch unless the user says otherwise.
 - Before I call a PR creation tool, I use `build_pr_summary` with the repo `full_name`, the feature `ref`, a short human-written title/body, and any available `changed_files`, `tests_status`, and `lint_status` strings. I then render the structured `title` and `body` from that helper into the PR so descriptions stay consistent with the contract.
+
 ## 4. Workspace, tests, and editing rules
 
 For more complex or test-sensitive work, and especially when editing code or docs in this controller repo:
