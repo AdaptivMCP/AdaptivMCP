@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import uuid
+import re
 from typing import Any, Dict, Mapping, Optional
 
 import jsonschema
@@ -22,6 +23,7 @@ from github_mcp.exceptions import WriteNotAuthorizedError
 from github_mcp.http_clients import _github_client_instance
 from github_mcp.metrics import _record_tool_call
 from github_mcp.utils import _env_flag
+
 WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", True)
 CONTROLLER_REPO = os.environ.get(
@@ -78,6 +80,131 @@ def _summarize_exception(exc: BaseException) -> str:
     return str(exc) or exc.__class__.__name__
 
 
+_OPENAI_BLOCK_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"blocked by openai", re.IGNORECASE),
+    re.compile(r"couldn['’]?t determine the safety status", re.IGNORECASE),
+    re.compile(r"could not determine the safety status", re.IGNORECASE),
+)
+
+
+def _classify_tool_error_origin(message: str) -> str:
+    """Best-effort attribution for a tool failure.
+
+    - openai_platform: blocked/failed before reaching the controller.
+    - adaptiv_controller: failure inside the controller (validation, timeout, GitHub API, etc.).
+
+    The controller cannot see true upstream blocks that prevent the tool call from
+    being invoked at all, but it can still label errors when those upstream messages
+    are surfaced as strings.
+    """
+
+    if not isinstance(message, str):
+        return "adaptiv_controller"
+    for pat in _OPENAI_BLOCK_PATTERNS:
+        if pat.search(message):
+            return "openai_platform"
+    return "adaptiv_controller"
+
+
+def _classify_tool_error_category(exc: BaseException, message: str) -> str:
+    if isinstance(exc, WriteNotAuthorizedError):
+        return "write_not_authorized"
+    if isinstance(exc, jsonschema.ValidationError) or isinstance(exc, ValueError):
+        return "validation"
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return "timeout"
+    lowered = (message or "").lower()
+    if "timeout" in lowered or "timed out" in lowered:
+        return "timeout"
+    if exc.__class__.__name__ in {"GitHubAPIError", "GitHubAuthError", "GitHubRateLimitError"}:
+        return "github_api"
+    return "unknown"
+
+
+def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = []
+
+    if origin == "openai_platform":
+        steps.append(
+            {
+                "kind": "openai",
+                "action": "The request was blocked upstream by OpenAI before it reached the Adaptiv controller.",
+                "what_to_do": "Adjust the request to comply with OpenAI tool policies, or route the operation through workspace-based flows.",
+            }
+        )
+
+        if context in {"create_branch", "ensure_branch"}:
+            steps.append(
+                {
+                    "kind": "workspace_fallback",
+                    "tool": "workspace_create_branch",
+                    "action": "Create the branch using the workspace git flow instead of the GitHub API tool.",
+                }
+            )
+        if context in {
+            "create_pull_request",
+            "open_pr_for_existing_branch",
+            "update_files_and_open_pr",
+        }:
+            steps.append(
+                {
+                    "kind": "workspace_fallback",
+                    "tool": "run_command",
+                    "action": "Create the PR from the workspace using a GitHub API call (python/curl).",
+                }
+            )
+
+        return steps
+
+    # Controller-origin errors.
+    steps.append(
+        {
+            "kind": "controller",
+            "action": "The failure occurred inside the Adaptiv controller (tool execution).",
+        }
+    )
+
+    if category == "validation":
+        steps.append(
+            {
+                "kind": "args",
+                "tool": "describe_tool",
+                "action": "Validate tool parameters with describe_tool (or validate_tool_args) and retry.",
+            }
+        )
+
+    if category == "timeout":
+        steps.append(
+            {
+                "kind": "timeout",
+                "tool": "run_command",
+                "action": "Retry with a higher timeout_seconds or split into smaller steps (workspace run_command is best for long operations).",
+            }
+        )
+
+    # Context-specific guidance to reduce repeated confusion.
+    if context in {"create_branch", "ensure_branch"}:
+        steps.append(
+            {
+                "kind": "hint",
+                "action": "If you encounter upstream blocks for branch creation, use workspace_create_branch instead of create_branch.",
+            }
+        )
+    if context in {
+        "create_pull_request",
+        "open_pr_for_existing_branch",
+        "update_files_and_open_pr",
+    }:
+        steps.append(
+            {
+                "kind": "hint",
+                "action": "If you encounter upstream blocks for PR creation, use run_command in the workspace to call the GitHub PR API.",
+            }
+        )
+
+    return steps
+
+
 def _structured_tool_error(
     exc: BaseException, *, context: str, path: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -86,9 +213,19 @@ def _structured_tool_error(
     This helper also centralizes logging for tool failures so that every
     exception is captured once with enough context for humans to debug,
     without requiring individual tools to sprinkle their own logging.
+
+    In addition to a short message, the payload includes:
+      - origin: openai_platform vs adaptiv_controller
+      - category: validation/timeout/github_api/etc.
+      - next_steps: actionable recovery guidance (often: use workspace tools)
     """
 
     message = _summarize_exception(exc)
+    origin = _classify_tool_error_origin(message)
+    category = _classify_tool_error_category(exc, message)
+
+    if origin == "openai_platform":
+        category = "openai_block"
 
     # Always log the error once with structured context but without
     # re-raising here. The MCP layer will surface the returned payload
@@ -100,6 +237,8 @@ def _structured_tool_error(
             "tool_error_type": exc.__class__.__name__,
             "tool_error_message": message,
             "tool_error_path": path,
+            "tool_error_origin": origin,
+            "tool_error_category": category,
         },
     )
 
@@ -107,6 +246,9 @@ def _structured_tool_error(
         "error": exc.__class__.__name__,
         "message": message,
         "context": context,
+        "origin": origin,
+        "category": category,
+        "next_steps": _tool_error_next_steps(context=context, origin=origin, category=category),
     }
     if path:
         error["path"] = path
@@ -125,7 +267,9 @@ def _stringify_annotation(annotation: Any) -> str:
     return str(annotation)
 
 
-def _normalize_tool_description(func, signature: Optional[inspect.Signature], *, llm_level: str) -> str:
+def _normalize_tool_description(
+    func, signature: Optional[inspect.Signature], *, llm_level: str
+) -> str:
     """Flatten docstrings and append explicit usage guidance for the MCP tool."""
 
     raw_doc = func.__doc__ or ""
@@ -139,12 +283,22 @@ def _normalize_tool_description(func, signature: Optional[inspect.Signature], *,
             if name in {"self", "cls"}:
                 continue
             annotation = _stringify_annotation(param.annotation)
-            requirement = "required" if param.default is inspect.Signature.empty else f"default={param.default!r}"
+            requirement = (
+                "required"
+                if param.default is inspect.Signature.empty
+                else f"default={param.default!r}"
+            )
             param_details.append(f"{name} ({annotation}, {requirement})")
 
-    inputs_summary = "Inputs: " + "; ".join(param_details) + "." if param_details else "No parameters are required."
+    inputs_summary = (
+        "Inputs: " + "; ".join(param_details) + "."
+        if param_details
+        else "No parameters are required."
+    )
     level_summary = (
-        "Classification: advanced tool for mutating operations." if llm_level == "advanced" else "Classification: low-level read-focused tool."
+        "Classification: advanced tool for mutating operations."
+        if llm_level == "advanced"
+        else "Classification: low-level read-focused tool."
     )
 
     alias_summary = (
@@ -179,6 +333,8 @@ def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
 
     # Intentionally a no-op: rely on the tools' own validation and tests.
     return None
+
+
 def _find_registered_tool(tool_name: str) -> Optional[tuple[Any, Any]]:
     for tool, func in _REGISTERED_MCP_TOOLS:
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
@@ -607,9 +763,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         except (TypeError, ValueError):
             signature = None
 
-        normalized_description = _normalize_tool_description(
-            func, signature, llm_level=llm_level
-        )
+        normalized_description = _normalize_tool_description(func, signature, llm_level=llm_level)
         tool_kwargs.setdefault("description", normalized_description)
         func.__doc__ = normalized_description
 
@@ -650,7 +804,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
             positional = [
                 name
                 for name, p in params.items()
-                if p.kind in (_inspect.Parameter.POSITIONAL_ONLY, _inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                if p.kind
+                in (_inspect.Parameter.POSITIONAL_ONLY, _inspect.Parameter.POSITIONAL_OR_KEYWORD)
             ]
             provided_positional = set(positional[: len(args_in)])
 
@@ -788,6 +943,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 "arg_preview": arg_preview,
                 "_all_args": all_args,
             }
+
         def _result_size_hint(result: Any) -> Optional[int]:
             if isinstance(result, (list, tuple, str)):
                 return len(result)

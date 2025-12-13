@@ -43,6 +43,7 @@ def _workspace_deps() -> Dict[str, Any]:
         ),
     }
 
+
 def _resolve_full_name(
     full_name: Optional[str], *, owner: Optional[str] = None, repo: Optional[str] = None
 ) -> str:
@@ -249,7 +250,6 @@ def _workspace_apply_sections(text: str, sections: Optional[List[Dict[str, Any]]
         out.extend(lines[cursor - 1 :])
 
     return "".join(out)
-
 
 
 def _normalize_patch_path(value: str) -> str:
@@ -518,7 +518,6 @@ async def apply_patch_to_workspace_file(
         return _structured_tool_error(exc, context="apply_patch_to_workspace_file")
 
 
-
 @mcp_tool(write_action=False)
 async def list_workspace_files(
     full_name: Optional[str] = None,
@@ -756,7 +755,9 @@ async def run_command(
                 "apply_patch_and_commit, update_file_sections_and_commit) "
                 "for large edits instead of embedding scripts in command."
             )
-        needs_write_gate = mutating or installing_dependencies or (patch is not None) or not use_temp_venv
+        needs_write_gate = (
+            mutating or installing_dependencies or (patch is not None) or not use_temp_venv
+        )
         if needs_write_gate:
             deps["ensure_write_allowed"](f"run_command {command} in {full_name}@{effective_ref}")
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -786,8 +787,8 @@ async def run_command(
                     env=env,
                 )
                 if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
-                    stderr = (install_result.get("stderr") or "")
-                    stdout = (install_result.get("stdout") or "")
+                    stderr = install_result.get("stderr") or ""
+                    stdout = install_result.get("stdout") or ""
                     raise GitHubAPIError(
                         "Dependency installation failed: " + (stderr.strip() or stdout.strip())
                     )
@@ -811,8 +812,8 @@ async def run_command(
             and isinstance(result, dict)
             and result.get("exit_code", 0) != 0
         ):
-            stderr = (result.get("stderr") or "")
-            stdout = (result.get("stdout") or "")
+            stderr = result.get("stderr") or ""
+            stdout = result.get("stdout") or ""
             combined = f"{stderr}\n{stdout}"
             mm = re.search(
                 r"ModuleNotFoundError: No module named ['\"]([^'\"]+)['\"]",
@@ -827,8 +828,6 @@ async def run_command(
         return out
     except Exception as exc:
         return _structured_tool_error(exc, context="run_command")
-
-
 
 
 @mcp_tool(write_action=True)
@@ -902,6 +901,7 @@ async def workspace_create_branch(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_create_branch")
+
 
 @mcp_tool(write_action=True)
 async def commit_workspace(
@@ -1120,7 +1120,6 @@ async def get_workspace_changes_summary(
     }
 
 
-
 @mcp_tool(write_action=False)
 async def run_tests(
     full_name: str,
@@ -1201,7 +1200,6 @@ async def run_tests(
         "result": cmd_result,
         "controller_log": summary_lines,
     }
-
 
 
 @mcp_tool(write_action=False)
@@ -1330,7 +1328,6 @@ async def run_lint_suite(
         "result": cmd_result,
         "controller_log": summary_lines,
     }
-
 
 
 @mcp_tool(write_action=False)
