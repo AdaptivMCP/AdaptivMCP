@@ -130,10 +130,17 @@ async def apply_patch_to_workspace(
         ref = _resolve_ref(ref, branch=branch)
         effective_ref = _effective_ref_for_repo(full_name, ref)
 
-        deps["ensure_write_allowed"](
-            f"apply_patch_to_workspace for {full_name}@{effective_ref}",
-        )
-
+        # Prefer scoped write gating so feature-branch work is allowed even
+        # when global WRITE_ALLOWED is disabled.
+        try:
+            deps["ensure_write_allowed"](
+                f"apply_patch_to_workspace for {full_name}@{effective_ref}",
+                target_ref=effective_ref,
+            )
+        except TypeError:
+            deps["ensure_write_allowed"](
+                f"apply_patch_to_workspace for {full_name}@{effective_ref}"
+            )
         repo_dir = await deps["clone_repo"](
             full_name,
             ref=effective_ref,
@@ -549,9 +556,17 @@ async def apply_patch_to_workspace_file(
                 f"patch path mismatch: expected {normalized_target!r} to match one of {sorted(allowed)!r}"
             )
 
-        deps["ensure_write_allowed"](
-            f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}",
-        )
+        # Prefer scoped write gating so feature-branch work is allowed even
+        # when global WRITE_ALLOWED is disabled.
+        try:
+            deps["ensure_write_allowed"](
+                f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}",
+                target_ref=effective_ref,
+            )
+        except TypeError:
+            deps["ensure_write_allowed"](
+                f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}"
+            )
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         await deps["apply_patch_to_repo"](repo_dir, patch)
 
