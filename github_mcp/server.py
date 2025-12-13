@@ -122,45 +122,125 @@ def _classify_tool_error_category(exc: BaseException, message: str) -> str:
 
 
 def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[dict[str, Any]]:
+    def mk(kind: str, **kwargs: Any) -> dict[str, Any]:
+        base: dict[str, Any] = {
+            "kind": kind,
+            "actor": "assistant",
+            "user_can_invoke_tools": False,
+        }
+        base.update(kwargs)
+        return base
+
     steps: list[dict[str, Any]] = []
 
     if origin == "openai_platform":
         steps.append(
-            {
-                "kind": "openai",
-                "action": "The request was blocked upstream by OpenAI before it reached the Adaptiv controller.",
-                "what_to_do": "Adjust the request to comply with OpenAI tool policies, or route the operation through workspace-based flows.",
-            }
+            mk(
+                "openai",
+                action=(
+                    "Assistant: this tool call was blocked upstream by OpenAI before it reached the Adaptiv controller."
+                ),
+                what_to_do=(
+                    "Assistant: rephrase the tool call to comply with OpenAI tool rules. "
+                    "If it is still blocked, use the workspace fallback tool for this operation. "
+                    "Do not ask the user to run controller tools."
+                ),
+            )
         )
 
         if context in {"create_branch", "ensure_branch"}:
             steps.append(
-                {
-                    "kind": "workspace_fallback",
-                    "tool": "workspace_create_branch",
-                    "action": "Create the branch using the workspace git flow instead of the GitHub API tool.",
-                }
+                mk(
+                    "workspace_fallback",
+                    tool="workspace_create_branch",
+                    action=(
+                        "Assistant: create the branch using workspace git (workspace_create_branch) instead of the GitHub API tool."
+                    ),
+                )
             )
+
         if context in {
             "create_pull_request",
             "open_pr_for_existing_branch",
             "update_files_and_open_pr",
         }:
             steps.append(
-                {
-                    "kind": "workspace_fallback",
-                    "tool": "run_command",
-                    "action": "Create the PR from the workspace using a GitHub API call (python/curl).",
-                }
+                mk(
+                    "workspace_fallback",
+                    tool="run_command",
+                    action=(
+                        "Assistant: create the PR from the workspace using run_command (GitHub API call via python/curl)."
+                    ),
+                )
             )
 
         return steps
 
     # Controller-origin errors.
     steps.append(
+        mk(
+            "controller",
+            action="Assistant: the failure occurred inside the Adaptiv controller (tool execution).",
+        )
+    )
+
+    if category == "validation":
+        steps.append(
+            mk(
+                "args",
+                tool="describe_tool",
+                action=(
+                    "Assistant: validate tool parameters with describe_tool (or validate_tool_args) and retry."
+                ),
+            )
+        )
+
+    if category == "timeout":
+        steps.append(
+            mk(
+                "timeout",
+                tool="run_command",
+                action=(
+                    "Assistant: retry with a higher timeout_seconds or split into smaller steps "
+                    "(workspace run_command is best for long operations)."
+                ),
+            )
+        )
+
+    # Context-specific guidance to reduce repeated confusion.
+    if context in {"create_branch", "ensure_branch"}:
+        steps.append(
+            mk(
+                "hint",
+                action=(
+                    "Assistant: if branch creation is blocked upstream, use workspace_create_branch instead of create_branch."
+                ),
+            )
+        )
+
+    if context in {
+        "create_pull_request",
+        "open_pr_for_existing_branch",
+        "update_files_and_open_pr",
+    }:
+        steps.append(
+            mk(
+                "hint",
+                action=(
+                    "Assistant: if PR creation is blocked upstream, use run_command in the workspace to call the GitHub PR API."
+                ),
+            )
+        )
+
+    return steps
+
+    # Controller-origin errors.
+    steps.append(
         {
             "kind": "controller",
-            "action": "The failure occurred inside the Adaptiv controller (tool execution).",
+            "actor": "assistant",
+            "user_can_invoke_tools": False,
+            "action": "Assistant: the failure occurred inside the Adaptiv controller (tool execution).",
         }
     )
 
@@ -168,8 +248,10 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
         steps.append(
             {
                 "kind": "args",
+                "actor": "assistant",
+                "user_can_invoke_tools": False,
                 "tool": "describe_tool",
-                "action": "Validate tool parameters with describe_tool (or validate_tool_args) and retry.",
+                "action": "Assistant: validate tool parameters with describe_tool (or validate_tool_args) and retry.",
             }
         )
 
@@ -177,8 +259,10 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
         steps.append(
             {
                 "kind": "timeout",
+                "actor": "assistant",
+                "user_can_invoke_tools": False,
                 "tool": "run_command",
-                "action": "Retry with a higher timeout_seconds or split into smaller steps (workspace run_command is best for long operations).",
+                "action": "Assistant: retry with a higher timeout_seconds or split into smaller steps (workspace run_command is best for long operations).",
             }
         )
 
@@ -187,7 +271,9 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
         steps.append(
             {
                 "kind": "hint",
-                "action": "If you encounter upstream blocks for branch creation, use workspace_create_branch instead of create_branch.",
+                "actor": "assistant",
+                "user_can_invoke_tools": False,
+                "action": "Assistant: if branch creation is blocked upstream, use workspace_create_branch instead of create_branch.",
             }
         )
     if context in {
@@ -198,7 +284,9 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
         steps.append(
             {
                 "kind": "hint",
-                "action": "If you encounter upstream blocks for PR creation, use run_command in the workspace to call the GitHub PR API.",
+                "actor": "assistant",
+                "user_can_invoke_tools": False,
+                "action": "Assistant: if PR creation is blocked upstream, use run_command in the workspace to call the GitHub PR API.",
             }
         )
 
@@ -248,6 +336,8 @@ def _structured_tool_error(
         "context": context,
         "origin": origin,
         "category": category,
+        "actor": "assistant",
+        "user_can_invoke_tools": False,
         "next_steps": _tool_error_next_steps(context=context, origin=origin, category=category),
     }
     if path:
