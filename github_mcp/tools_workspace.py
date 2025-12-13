@@ -122,6 +122,8 @@ async def apply_patch_to_workspace(
     if not isinstance(patch, str) or not patch.strip():
         raise ValueError("patch must be a non-empty unified diff string")
 
+    patch = _coerce_unified_diff_text(patch)
+
     try:
         deps = _workspace_deps()
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
@@ -268,10 +270,44 @@ def _normalize_patch_path(value: str) -> str:
     return value.lstrip("/\\")
 
 
+def _coerce_unified_diff_text(patch: str) -> str:
+    """Normalize a possibly-escaped unified diff string.
+
+    If the diff contains no real newlines but does contain literal \n sequences and
+    looks like a diff, unescape it so validators and git apply can work.
+    """
+
+    if not isinstance(patch, str):
+        return patch
+
+    if "\n" in patch:
+        return patch
+
+    if "\\n" not in patch:
+        return patch
+
+    looks_like_diff = (
+        patch.lstrip().startswith("diff --git ")
+        or patch.lstrip().startswith("--- ")
+        or "diff --git " in patch
+        or "--- " in patch
+        or "+++ " in patch
+        or "@@ " in patch
+    )
+    if not looks_like_diff:
+        return patch
+
+    try:
+        return patch.encode("utf-8").decode("unicode_escape")
+    except Exception:
+        return patch.replace("\r\\n", "\n").replace("\\n", "\n").replace("\t", "\t")
+
+
 def _extract_patch_file_blocks(patch: str) -> List[Dict[str, str]]:
     """Extract (a_path, b_path) pairs for each file block in a unified diff."""
 
     patch = patch or ""
+    patch = _coerce_unified_diff_text(patch)
     lines = patch.splitlines()
 
     blocks: List[Dict[str, str]] = []
@@ -319,6 +355,7 @@ def _extract_touched_paths_from_patch(patch: str) -> List[str]:
     Returns one entry per file block. For creates/deletes, this is the non-dev/null
     path. For renames, this is the new (b/) path.
     """
+    patch = _coerce_unified_diff_text(patch)
 
     logical_paths: List[str] = []
     for blk in _extract_patch_file_blocks(patch):
@@ -474,6 +511,8 @@ async def apply_patch_to_workspace_file(
     if not isinstance(patch, str) or not patch.strip():
         raise ValueError("patch must be a non-empty unified diff string")
 
+    patch = _coerce_unified_diff_text(patch)
+
     try:
         deps = _workspace_deps()
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
@@ -485,6 +524,7 @@ async def apply_patch_to_workspace_file(
         # Validate that the patch targets exactly one logical file. For create/delete
         # operations, the logical file is the non-dev/null path. For renames, the
         # logical file is the new (b/) path.
+
         touched_paths = _extract_touched_paths_from_patch(patch)
         if not touched_paths:
             raise ValueError("patch did not include any file headers to validate")
