@@ -4,6 +4,7 @@ import os
 import shlex
 import sys
 import difflib
+import re
 from typing import Any, Dict, List, Optional
 
 from github_mcp.config import RUN_COMMAND_MAX_CHARS
@@ -258,34 +259,80 @@ def _normalize_patch_path(value: str) -> str:
     return value.lstrip("/\\")
 
 
-def _extract_touched_paths_from_patch(patch: str) -> List[str]:
-    """Extract repository-relative paths touched by a unified diff.
+def _extract_patch_file_blocks(patch: str) -> List[Dict[str, str]]:
+    """Extract (a_path, b_path) pairs for each file block in a unified diff."""
 
-    Prefers `diff --git a/... b/...` headers, but also falls back to `---`/`+++`
-    headers when needed.
-    """
+    patch = patch or ""
+    lines = patch.splitlines()
 
-    touched: list[str] = []
-    for line in (patch or "").splitlines():
-        if line.startswith("diff --git "):
+    blocks: List[Dict[str, str]] = []
+
+    # Prefer diff --git headers when present because they establish file boundaries.
+    has_diff_git = any(line.startswith("diff --git ") for line in lines)
+
+    if has_diff_git:
+        for line in lines:
+            if not line.startswith("diff --git "):
+                continue
             parts = line.split()
-            if len(parts) >= 4:
-                a_path = _normalize_patch_path(parts[2])
-                b_path = _normalize_patch_path(parts[3])
-                if a_path and a_path != "dev/null":
-                    touched.append(a_path)
-                if b_path and b_path != "dev/null":
-                    touched.append(b_path)
-        elif line.startswith("--- ") or line.startswith("+++ "):
+            if len(parts) < 4:
+                continue
+            blocks.append(
+                {
+                    "a": _normalize_patch_path(parts[2]),
+                    "b": _normalize_patch_path(parts[3]),
+                }
+            )
+        return blocks
+
+    # Fallback: use ---/+++ headers for diffs that omit diff --git lines.
+    a_path = ""
+    b_path = ""
+    for line in lines:
+        if line.startswith("--- "):
             parts = line.split(maxsplit=1)
             if len(parts) == 2:
-                pth = _normalize_patch_path(parts[1])
-                if pth and pth != "dev/null":
-                    touched.append(pth)
+                a_path = _normalize_patch_path(parts[1])
+        elif line.startswith("+++ "):
+            parts = line.split(maxsplit=1)
+            if len(parts) == 2:
+                b_path = _normalize_patch_path(parts[1])
 
+    if a_path or b_path:
+        blocks.append({"a": a_path, "b": b_path})
+
+    return blocks
+
+
+def _extract_touched_paths_from_patch(patch: str) -> List[str]:
+    """Extract repository-relative *logical* paths touched by a unified diff.
+
+    Returns one entry per file block. For creates/deletes, this is the non-dev/null
+    path. For renames, this is the new (b/) path.
+    """
+
+    logical_paths: List[str] = []
+    for blk in _extract_patch_file_blocks(patch):
+        a_path = (blk.get("a") or "").strip()
+        b_path = (blk.get("b") or "").strip()
+
+        a_is_null = a_path in {"dev/null", ""}
+        b_is_null = b_path in {"dev/null", ""}
+
+        if not b_is_null:
+            logical = b_path
+        elif not a_is_null:
+            logical = a_path
+        else:
+            logical = ""
+
+        if logical:
+            logical_paths.append(logical)
+
+    # De-dupe while preserving order.
     seen: set[str] = set()
     out: list[str] = []
-    for pth in touched:
+    for pth in logical_paths:
         if pth in seen:
             continue
         seen.add(pth)
@@ -425,14 +472,32 @@ async def apply_patch_to_workspace_file(
         effective_ref = _effective_ref_for_repo(full_name, ref)
 
         normalized_target = (path or "").lstrip("/\\")
+
+        # Validate that the patch targets exactly one logical file. For create/delete
+        # operations, the logical file is the non-dev/null path. For renames, the
+        # logical file is the new (b/) path.
         touched_paths = _extract_touched_paths_from_patch(patch)
         if not touched_paths:
             raise ValueError("patch did not include any file headers to validate")
         if len(touched_paths) != 1:
             raise ValueError(f"patch must touch exactly one file; touched={touched_paths!r}")
-        if touched_paths[0] != normalized_target:
+
+        logical_path = touched_paths[0]
+
+        # If the patch is a rename, accept either old or new path (still single-file).
+        blocks = _extract_patch_file_blocks(patch)
+        allowed = {logical_path}
+        if blocks:
+            a_path = _normalize_patch_path(blocks[0].get("a") or "")
+            b_path = _normalize_patch_path(blocks[0].get("b") or "")
+            if a_path and a_path != "dev/null":
+                allowed.add(a_path)
+            if b_path and b_path != "dev/null":
+                allowed.add(b_path)
+
+        if normalized_target not in allowed:
             raise ValueError(
-                f"patch path mismatch: expected {normalized_target!r} but touched {touched_paths[0]!r}"
+                f"patch path mismatch: expected {normalized_target!r} to match one of {sorted(allowed)!r}"
             )
 
         deps["ensure_write_allowed"](
@@ -446,10 +511,215 @@ async def apply_patch_to_workspace_file(
             "branch": effective_ref,
             "path": path,
             "touched_paths": touched_paths,
+            "logical_path": logical_path,
             "status": "applied",
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="apply_patch_to_workspace_file")
+
+
+
+@mcp_tool(write_action=False)
+async def list_workspace_files(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    path: str = "",
+    max_files: int = 500,
+    max_depth: int = 20,
+    include_hidden: bool = False,
+    include_dirs: bool = False,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """List files in the workspace clone (bounded, no shell)."""
+
+    try:
+        deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        root = os.path.realpath(repo_dir)
+        start = os.path.realpath(os.path.join(repo_dir, path)) if path else root
+        if not start.startswith(root):
+            raise ValueError("path must stay within repo")
+
+        out: list[str] = []
+        truncated = False
+
+        for cur_dir, dirnames, filenames in os.walk(start):
+            rel_dir = os.path.relpath(cur_dir, root)
+            depth = 0 if rel_dir == os.curdir else rel_dir.count(os.sep) + 1
+            if depth > max_depth:
+                dirnames[:] = []
+                continue
+
+            dirnames[:] = [d for d in dirnames if d != ".git"]
+            if not include_hidden:
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+            if include_dirs:
+                for d in dirnames:
+                    rp = os.path.relpath(os.path.join(cur_dir, d), root)
+                    if not include_hidden and os.path.basename(rp).startswith("."):
+                        continue
+                    out.append(rp)
+                    if len(out) >= max_files:
+                        truncated = True
+                        break
+                if truncated:
+                    break
+
+            for f in filenames:
+                if not include_hidden and f.startswith("."):
+                    continue
+                rp = os.path.relpath(os.path.join(cur_dir, f), root)
+                out.append(rp)
+                if len(out) >= max_files:
+                    truncated = True
+                    break
+            if truncated:
+                break
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": path,
+            "files": out,
+            "truncated": truncated,
+            "max_files": max_files,
+            "max_depth": max_depth,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="list_workspace_files")
+
+
+@mcp_tool(write_action=False)
+async def search_workspace(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    query: str = "",
+    path: str = "",
+    use_regex: bool = False,
+    case_sensitive: bool = False,
+    max_results: int = 100,
+    max_file_bytes: int = 1_000_000,
+    include_hidden: bool = False,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Search text files in the workspace clone (bounded, no shell)."""
+
+    if not isinstance(query, str) or not query:
+        raise ValueError("query must be a non-empty string")
+
+    try:
+        deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
+        effective_ref = _effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        root = os.path.realpath(repo_dir)
+        start = os.path.realpath(os.path.join(repo_dir, path)) if path else root
+        if not start.startswith(root):
+            raise ValueError("path must stay within repo")
+
+        flags = 0 if case_sensitive else re.IGNORECASE
+        matcher = re.compile(query, flags=flags) if use_regex else None
+
+        results: list[dict[str, Any]] = []
+        truncated = False
+        files_scanned = 0
+        files_skipped = 0
+
+        needle = query if case_sensitive else query.lower()
+
+        for cur_dir, dirnames, filenames in os.walk(start):
+            dirnames[:] = [d for d in dirnames if d != ".git"]
+            if not include_hidden:
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+            for fname in filenames:
+                if not include_hidden and fname.startswith("."):
+                    continue
+
+                abs_path = os.path.join(cur_dir, fname)
+                try:
+                    st = os.stat(abs_path)
+                except OSError:
+                    files_skipped += 1
+                    continue
+
+                if st.st_size > max_file_bytes:
+                    files_skipped += 1
+                    continue
+
+                try:
+                    with open(abs_path, "rb") as bf:
+                        sample = bf.read(2048)
+                        if b"\x00" in sample:
+                            files_skipped += 1
+                            continue
+                except OSError:
+                    files_skipped += 1
+                    continue
+
+                files_scanned += 1
+                rel_path = os.path.relpath(abs_path, root)
+
+                try:
+                    with open(abs_path, "r", encoding="utf-8", errors="ignore") as tf:
+                        for i, line in enumerate(tf, start=1):
+                            if use_regex:
+                                if not matcher or not matcher.search(line):
+                                    continue
+                            else:
+                                hay = line if case_sensitive else line.lower()
+                                if needle not in hay:
+                                    continue
+
+                            results.append(
+                                {
+                                    "file": rel_path,
+                                    "line": i,
+                                    "text": line.rstrip("\n")[:400],
+                                }
+                            )
+                            if len(results) >= max_results:
+                                truncated = True
+                                break
+                except OSError:
+                    files_skipped += 1
+                    continue
+
+                if truncated:
+                    break
+
+            if truncated:
+                break
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": path,
+            "query": query,
+            "use_regex": use_regex,
+            "case_sensitive": case_sensitive,
+            "results": results,
+            "truncated": truncated,
+            "files_scanned": files_scanned,
+            "files_skipped": files_skipped,
+            "max_results": max_results,
+            "max_file_bytes": max_file_bytes,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="search_workspace")
 
 
 @mcp_tool(write_action=False)
