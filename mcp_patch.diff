@@ -1,0 +1,14 @@
+--- a/main.py
++++ b/main.py
+@@ -1679,5 +1679,4 @@
+ 
+ 
+-@mcp_tool(write_action=False)
+ @mcp_tool(
+     write_action=False,
+@@ -1751,5 +1750,4 @@
+         include_parameters: When ``True``, include the serialized input schema
+             for each tool to clarify argument names and types.
+-        compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
+         compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
+             set), shorten descriptions and omit tag metadata to keep responses

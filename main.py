@@ -1678,7 +1678,65 @@ async def list_recent_failures(
     }
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(
+    write_action=False,
+    description=(
+        "List available MCP tools with basic read/write metadata. "
+        "Use describe_tool (or list_all_actions with include_parameters=true) when you need full schemas."
+    ),
+)
+async def list_tools(
+    only_write: bool = False,
+    only_read: bool = False,
+    name_prefix: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Lightweight tool catalog.
+
+    Args:
+        only_write: If True, return only write-tagged tools.
+        only_read: If True, return only read-tagged tools.
+        name_prefix: Optional prefix filter for tool names.
+
+    Notes:
+        - For schema/args: call describe_tool(include_parameters=true) and validate_tool_args.
+        - If you see tool-call JSON/schema errors: stop guessing and re-read the schema.
+    """
+
+    if only_write and only_read:
+        raise ValueError("only_write and only_read cannot both be true")
+
+    catalog = list_all_actions(include_parameters=False, compact=True)
+    tools = []
+    for entry in catalog.get("tools", []) or []:
+        name = entry.get("name")
+        if not isinstance(name, str):
+            continue
+        if name_prefix and not name.startswith(name_prefix):
+            continue
+
+        write_action = bool(entry.get("write_action"))
+        if only_write and not write_action:
+            continue
+        if only_read and write_action:
+            continue
+
+        tools.append(
+            {
+                "name": name,
+                "write_action": write_action,
+                "operation": entry.get("operation"),
+                "risk_level": entry.get("risk_level"),
+                "auto_approved": bool(entry.get("auto_approved")),
+            }
+        )
+
+    tools.sort(key=lambda t: t["name"])
+    return {
+        "write_actions_enabled": server.WRITE_ALLOWED,
+        "tools": tools,
+    }
+
+
 def list_all_actions(
     include_parameters: bool = False, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
@@ -1691,7 +1749,6 @@ def list_all_actions(
     Args:
         include_parameters: When ``True``, include the serialized input schema
             for each tool to clarify argument names and types.
-        compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
         compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
             set), shorten descriptions and omit tag metadata to keep responses
             compact.
@@ -1759,6 +1816,29 @@ def list_all_actions(
             tool_info["input_schema"] = schema
 
         tools.append(tool_info)
+
+    # Include this helper itself so describe_tool can inspect it.
+    if "list_all_actions" not in seen_names:
+        synthetic: Dict[str, Any] = {
+            "name": "list_all_actions",
+            "write_action": False,
+            "auto_approved": True,
+            "read_only_hint": True,
+            "description": "Enumerate every available MCP tool with read/write metadata.",
+        }
+        if not compact_mode:
+            synthetic["tags"] = ["meta"]
+        if include_parameters:
+            synthetic["input_schema"] = {
+                "type": "object",
+                "properties": {
+                    "include_parameters": {"type": "boolean"},
+                    "compact": {"type": ["boolean", "null"]},
+                },
+                "additionalProperties": False,
+            }
+        tools.append(synthetic)
+        seen_names.add("list_all_actions")
 
     tools.sort(key=lambda entry: entry["name"])
 

@@ -16,10 +16,13 @@ from .http_clients import _get_github_token
 
 TOKEN_PATTERNS = [
     (
-        re.compile(r"https://x-access-token:([^@/\s]+)@github\.com/"),
-        "https://x-access-token:***@github.com/",
+        re.compile(r"https://x-access-token:([^@/\s]+)@github\.com/"),  # tokenlike-allow
+        "https://x-access-token:***@github.com/",  # tokenlike-allow
     ),
-    (re.compile(r"x-access-token:([^@\s]+)@github\.com"), "x-access-token:***@github.com"),
+    (
+        re.compile(r"x-access-token:([^@\s]+)@github\.com"),
+        "x-access-token:***@github.com",  # tokenlike-allow
+    ),
     (re.compile(r"\bghp_[A-Za-z0-9]{20,}\b"), "ghp_***"),
     (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"), "github_pat_***"),
 ]
@@ -187,7 +190,7 @@ async def _clone_repo(
     tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
     token = _get_github_token()
 
-    url = f"https://x-access-token:{token}@github.com/{full_name}.git"
+    url = f"https://x-access-token:{token}@github.com/{full_name}.git"  # tokenlike-allow
     cmd = f"git clone --depth 1 --branch {effective_ref} {url} {tmpdir}"
     result = await run_shell(cmd, cwd=None, timeout_seconds=600)
     if result["exit_code"] != 0:

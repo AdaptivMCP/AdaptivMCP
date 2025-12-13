@@ -33,6 +33,10 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f pyproject.toml ]; then pip install .; fi
 
+      - name: Guardrail: block token-like strings in repo
+        run: |
+          if [ -f scripts/check_no_tokenlike_strings.py ]; then python scripts/check_no_tokenlike_strings.py; fi
+
       - name: Run tests
         run: |
           pytest -q
