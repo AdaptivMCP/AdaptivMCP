@@ -281,6 +281,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
 
     if patch and not patch.endswith("\n"):
         patch = patch + "\n"
+
     with open(patch_path, "w", encoding="utf-8") as f:
         f.write(patch)
 

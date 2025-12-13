@@ -3,6 +3,7 @@ import pytest
 from github_mcp.workspace import _maybe_unescape_unified_diff
 from github_mcp.tools_workspace import _coerce_unified_diff_text
 
+
 RAW_DIFF = """diff --git a/foo.txt b/foo.txt
 index 0000000..1111111 100644
 --- a/foo.txt

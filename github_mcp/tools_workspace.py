@@ -522,6 +522,8 @@ async def apply_patch_to_workspace_file(
         # Validate that the patch targets exactly one logical file. For create/delete
         # operations, the logical file is the non-dev/null path. For renames, the
         # logical file is the new (b/) path.
+        patch = _coerce_unified_diff_text(patch)
+
         touched_paths = _extract_touched_paths_from_patch(patch)
         if not touched_paths:
             raise ValueError("patch did not include any file headers to validate")
