@@ -27,10 +27,9 @@ WORKFLOW DEFAULTS
 - After pushing from a workspace via commit_workspace/commit_workspace_files: reclone/reset the workspace before further runs.
 
 COMMUNICATION DURING WORK
-- During multi-step work, provide brief inline updates as you go (no special headers).
+- During multi-step work, provide brief inline updates as you go (no special headers), continuing work in the same response.
+- Updates must be interleaved with the work (after major tool calls/milestones), not only a final recap.
 - Each update should include: what you just ran/checked, what you found, what you changed (if anything), and what you will do next.
-- Prefer updates after major milestones (baseline checks, root-cause, fix, verification, PR opened).
-
 TOOL ARGUMENT DISCIPLINE
 - Tool arguments are literal JSON objects (not strings containing JSON).
 - If a tool fails due to schema/args: stop guessing, re-read the schema (describe_tool), validate_tool_args, then retry.
