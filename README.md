@@ -46,6 +46,9 @@ Workspace tools operate in a persistent clone on the server (for example on Rend
 - `run_command`
 - `run_tests`, `run_lint_suite`, `run_quality_suite`
 - `commit_workspace`, `commit_workspace_files`
+- `get_recent_tool_events` (diagnostics)
+
+Note: `run_command` output is token-redacted (GitHub tokens are masked in stdout/stderr).
 
 These are what make “act like a real engineer” possible: install deps, run tests, debug CI, and keep changes reviewable.
 
@@ -79,6 +82,7 @@ When you see “improperly coded JSON” or a tool call does not execute, treat 
 
 Operator checklist for any report of “tools are missing” or “it’s acting weird”:
 
+- `get_recent_tool_events(limit=50, include_success=false)`
 - `get_server_config`
 - `list_all_actions(include_parameters=true)`
 - `validate_environment`
