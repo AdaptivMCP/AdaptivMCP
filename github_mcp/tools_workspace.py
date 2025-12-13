@@ -122,6 +122,8 @@ async def apply_patch_to_workspace(
     if not isinstance(patch, str) or not patch.strip():
         raise ValueError("patch must be a non-empty unified diff string")
 
+    patch = _coerce_unified_diff_text(patch)
+
     try:
         deps = _workspace_deps()
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
@@ -266,6 +268,39 @@ def _normalize_patch_path(value: str) -> str:
     if value.startswith("a/") or value.startswith("b/"):
         value = value[2:]
     return value.lstrip("/\\")
+
+
+def _coerce_unified_diff_text(patch: str) -> str:
+    """Normalize a possibly-escaped unified diff string.
+
+    If the diff contains no real newlines but does contain literal \n sequences and
+    looks like a diff, unescape it so validators and git apply can work.
+    """
+
+    if not isinstance(patch, str):
+        return patch
+
+    if "\n" in patch:
+        return patch
+
+    if "\\n" not in patch:
+        return patch
+
+    looks_like_diff = (
+        patch.lstrip().startswith("diff --git ")
+        or patch.lstrip().startswith("--- ")
+        or "diff --git " in patch
+        or "--- " in patch
+        or "+++ " in patch
+        or "@@ " in patch
+    )
+    if not looks_like_diff:
+        return patch
+
+    try:
+        return patch.encode("utf-8").decode("unicode_escape")
+    except Exception:
+        return patch.replace("\r\\n", "\n").replace("\\n", "\n").replace("\t", "\t")
 
 
 def _extract_patch_file_blocks(patch: str) -> List[Dict[str, str]]:
@@ -473,6 +508,8 @@ async def apply_patch_to_workspace_file(
 
     if not isinstance(patch, str) or not patch.strip():
         raise ValueError("patch must be a non-empty unified diff string")
+
+    patch = _coerce_unified_diff_text(patch)
 
     try:
         deps = _workspace_deps()

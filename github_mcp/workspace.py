@@ -233,13 +233,54 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
     }
 
 
+def _maybe_unescape_unified_diff(patch: str) -> str:
+    """Coerce a unified diff into newline-delimited text.
+
+    Some upstream callers accidentally double-escape diffs (e.g. a single-line
+    string containing literal \\n sequences). This breaks header parsing and
+    `git apply`. We only unescape when the input looks like an escaped diff and
+    contains no real newlines.
+    """
+
+    if not isinstance(patch, str):
+        return patch
+
+    # Already a normal multi-line diff.
+    if "\n" in patch:
+        return patch
+
+    if "\\n" not in patch:
+        return patch
+
+    looks_like_diff = (
+        patch.lstrip().startswith("diff --git ")
+        or patch.lstrip().startswith("--- ")
+        or "diff --git " in patch
+        or "--- " in patch
+        or "+++ " in patch
+        or "@@ " in patch
+    )
+    if not looks_like_diff:
+        return patch
+
+    try:
+        return patch.encode("utf-8").decode("unicode_escape")
+    except Exception:
+        return patch.replace("\r\\n", "\n").replace("\\n", "\n").replace("\t", "\t")
+
+
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     """Write a unified diff to disk and apply it with ``git apply``."""
 
     if not patch or not patch.strip():
         raise GitHubAPIError("Received empty patch to apply in workspace")
 
+    patch = _maybe_unescape_unified_diff(patch)
+
     patch_path = os.path.join(repo_dir, "mcp_patch.diff")
+
+    if patch and not patch.endswith("\n"):
+        patch = patch + "\n"
     with open(patch_path, "w", encoding="utf-8") as f:
         f.write(patch)
 
