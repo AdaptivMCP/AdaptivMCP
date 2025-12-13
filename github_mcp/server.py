@@ -151,6 +151,7 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
                 "openai",
                 action=(
                     "Assistant: this tool call was blocked upstream by OpenAI before it reached the Adaptiv controller."
+                    "Do NOT include token-like strings (e.g., PAT formats) in tool inputs or command strings; use placeholders like <REDACTED>."
                 ),
                 what_to_do=(
                     "Assistant: rephrase the tool call to comply with OpenAI tool rules. "
@@ -225,7 +226,7 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
             mk(
                 "hint",
                 action=(
-                    "Assistant: if branch creation is blocked upstream, use workspace_create_branch instead of create_branch."
+                    "Assistant: if branch creation is blocked upstream, use workspace_create_branch instead of create_branch. Avoid token-like strings in tool inputs; use <REDACTED> placeholders."
                 ),
             )
         )
@@ -239,7 +240,7 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
             mk(
                 "hint",
                 action=(
-                    "Assistant: if PR creation is blocked upstream, use run_command in the workspace to call the GitHub PR API."
+                    "Assistant: if PR creation is blocked upstream, use run_command in the workspace to call the GitHub PR API. Avoid token-like strings in tool inputs; use <REDACTED> placeholders."
                 ),
             )
         )
@@ -285,7 +286,7 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
                 "kind": "hint",
                 "actor": "assistant",
                 "user_can_invoke_tools": False,
-                "action": "Assistant: if branch creation is blocked upstream, use workspace_create_branch instead of create_branch.",
+                "action": "Assistant: if branch creation is blocked upstream, use workspace_create_branch instead of create_branch. Avoid token-like strings in tool inputs; use <REDACTED> placeholders.",
             }
         )
     if context in {
@@ -298,7 +299,7 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
                 "kind": "hint",
                 "actor": "assistant",
                 "user_can_invoke_tools": False,
-                "action": "Assistant: if PR creation is blocked upstream, use run_command in the workspace to call the GitHub PR API.",
+                "action": "Assistant: if PR creation is blocked upstream, use run_command in the workspace to call the GitHub PR API. Avoid token-like strings in tool inputs; use <REDACTED> placeholders.",
             }
         )
 
