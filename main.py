@@ -3404,11 +3404,144 @@ async def create_pull_request(
     an unhandled exception. This avoids leaking opaque 500s back to MCP
     clients and gives tools like ``open_pr_for_existing_branch`` a consistent
     contract to inspect.
+
+    When no explicit body is provided, a structured default description is
+    generated using the branch comparison and recent CI status so reviewers
+    immediately see key context.
     """
 
     try:
         effective_base = _effective_ref_for_repo(full_name, base)
         _ensure_write_allowed(f"create PR from {head} to {effective_base} in {full_name}")
+
+        async def _build_default_pr_body() -> str:
+            """Compose a rich default PR body when the caller omits one.
+
+            This helper intentionally favors robustness over strictness: if any
+            of the underlying GitHub lookups fail, it falls back to partial
+            information instead of raising and breaking the overall tool call.
+            """
+
+            lines: List[str] = []
+
+            # Summary
+            lines.append("## Summary")
+            lines.append("")
+            lines.append(f"- Title: {title}")
+            lines.append(f"- From: `{head}` → `{effective_base}`")
+            lines.append(f"- Status: {'Draft (still in progress)' if draft else 'Ready for review'}")
+            lines.append("")
+
+            # Change summary from compare_refs
+            changed_files: List[str] = []
+            try:
+                compare = await compare_refs(full_name=full_name, base=effective_base, head=head)
+            except Exception:
+                compare = None
+
+            lines.append("## Change summary")
+            lines.append("")
+            if isinstance(compare, dict):
+                ahead_by = compare.get("ahead_by")
+                behind_by = compare.get("behind_by")
+                total_commits = compare.get("total_commits")
+
+                summary_bits: List[str] = []
+                if isinstance(total_commits, int):
+                    summary_bits.append(f"{total_commits} commit(s)")
+                if isinstance(ahead_by, int) and isinstance(behind_by, int):
+                    summary_bits.append(f"{ahead_by} ahead / {behind_by} behind `{effective_base}`")
+
+                if summary_bits:
+                    lines.append("- " + "; ".join(summary_bits))
+                else:
+                    lines.append("- Comparison data not available.")
+
+                files = compare.get("files") or []
+                if isinstance(files, list):
+                    for f in files[:10]:
+                        if isinstance(f, dict):
+                            filename = f.get("filename")
+                            if isinstance(filename, str):
+                                changed_files.append(filename)
+            else:
+                lines.append("- Comparison data not available.")
+
+            lines.append("")
+
+            if changed_files:
+                lines.append("### Files touched (sample)")
+                lines.append("")
+                for filename in changed_files:
+                    lines.append(f"- `{filename}`")
+                lines.append("")
+
+            # CI & quality: look at recent workflow runs on this branch.
+            lines.append("## CI & quality")
+            lines.append("")
+            workflows: List[Dict[str, Any]] = []
+            try:
+                runs_resp = await list_workflow_runs(
+                    full_name=full_name,
+                    branch=head,
+                    per_page=3,
+                    page=1,
+                )
+                runs_json = runs_resp.get("json") if isinstance(runs_resp, dict) else None
+                if isinstance(runs_json, dict):
+                    workflows = runs_json.get("workflow_runs") or []
+            except Exception:
+                workflows = []
+
+            if workflows:
+                latest = workflows[0] if isinstance(workflows[0], dict) else {}
+                name = latest.get("name") or latest.get("id")
+                status = latest.get("status") or "unknown"
+                conclusion = latest.get("conclusion") or "unknown"
+                url = latest.get("html_url")
+
+                lines.append(f"- Latest workflow: **{name}**")
+                lines.append(f"- Status: `{status}` / Conclusion: `{conclusion}`")
+                if url:
+                    lines.append(f"- URL: {url}")
+            else:
+                lines.append("- No recent workflow runs found for this branch.")
+
+            lines.append("")
+            lines.append("## Testing")
+            lines.append("")
+            lines.append("- [ ] `pytest`")
+            lines.append("- [ ] Additional checks")
+            lines.append("- [ ] Not run (explain why)")
+            lines.append("")
+
+            lines.append("## Risks & rollout")
+            lines.append("")
+            lines.append("- Risk level: low/medium/high")
+            lines.append("- Rollback plan: describe how to revert if needed.")
+            lines.append("")
+
+            lines.append("## Reviewer checklist")
+            lines.append("")
+            lines.append("- [ ] Code style and readability")
+            lines.append("- [ ] Tests cover the main paths")
+            lines.append("- [ ] Breaking changes are documented")
+            lines.append("- [ ] CI is green or issues are understood")
+            lines.append("")
+
+            lines.append("<!-- Default PR body generated by chatgpt-mcp-github. Edit freely. -->")
+
+            return "\n".join(lines)
+
+        effective_body = body
+        if effective_body is None or not str(effective_body).strip():
+            try:
+                effective_body = await _build_default_pr_body()
+            except Exception:
+                # If the helper fails for any reason, fall back to whatever the
+                # caller provided (including None) instead of blocking PR
+                # creation entirely.
+                effective_body = body
 
         payload: Dict[str, Any] = {
             "title": title,
@@ -3416,8 +3549,8 @@ async def create_pull_request(
             "base": effective_base,
             "draft": draft,
         }
-        if body is not None:
-            payload["body"] = body
+        if effective_body is not None:
+            payload["body"] = effective_body
 
         return await _github_request(
             "POST",
@@ -3429,7 +3562,6 @@ async def create_pull_request(
         # repository and head/base pair failed without scraping the message.
         path_hint = f"{full_name} {head}->{base}"
         return _structured_tool_error(exc, context="create_pull_request", path=path_hint)
-
 
 @mcp_tool(write_action=True)
 async def open_pr_for_existing_branch(
