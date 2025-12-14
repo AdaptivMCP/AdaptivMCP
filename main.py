@@ -46,6 +46,8 @@ from github_mcp.config import (
     TOOL_STDIO_COMBINED_MAX_CHARS,  # noqa: F401
     TOOL_STDOUT_MAX_CHARS,  # noqa: F401
     WORKSPACE_BASE_DIR,  # noqa: F401
+    ERROR_LOG_HANDLER,
+    ERROR_LOG_CAPACITY,
 )
 from github_mcp.exceptions import (
     GitHubAPIError,  # noqa: F401
@@ -296,8 +298,31 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = False) -> Di
     return {"limit": limit_int, "include_success": include_success, "events": events}
 
 
-# ------------------------------------------------------------------------------
+@server.mcp_tool(write_action=False)
+def get_recent_server_errors(limit: int = 50) -> Dict[str, Any]:
+    """Return recent server-side error logs for failed MCP tool calls.
 
+    This surfaces the underlying MCP server error records so assistants can
+    debug misinputs instead of re-looping blindly.
+    """
+
+    try:
+        limit_int = int(limit)
+    except Exception:
+        limit_int = 50
+    limit_int = max(1, min(ERROR_LOG_CAPACITY, limit_int))
+
+    records = getattr(ERROR_LOG_HANDLER, "records", [])
+    records = list(reversed(records))[:limit_int]
+
+    return {
+        "limit": limit_int,
+        "capacity": ERROR_LOG_CAPACITY,
+        "errors": records,
+    }
+
+
+# ------------------------------------------------------------------------------
 
 @mcp_tool(write_action=False)
 async def get_server_config() -> Dict[str, Any]:

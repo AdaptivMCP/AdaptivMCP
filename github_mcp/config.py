@@ -6,6 +6,7 @@ import logging
 import os
 import tempfile
 import time
+from collections import deque
 
 # Configuration and globals
 # ------------------------------------------------------------------------------
@@ -65,6 +66,50 @@ logging.basicConfig(
 BASE_LOGGER = logging.getLogger("github_mcp")
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
+ERROR_LOG_CAPACITY = int(os.environ.get("MCP_ERROR_LOG_CAPACITY", "200"))
+
+
+class _InMemoryErrorLogHandler(logging.Handler):
+    """Capture recent error-level log records in memory for MCP tools.
+
+    This provides a lightweight alternative to provider-specific log viewers so
+    assistants can inspect the underlying server errors when tools keep failing
+    with limited context.
+    """
+
+    def __init__(self, capacity: int = 200) -> None:
+        super().__init__(level=logging.ERROR)
+        self._records: deque[dict[str, object]] = deque(maxlen=max(1, capacity))
+
+    @property
+    def records(self) -> list[dict[str, object]]:
+        """Return a snapshot of buffered error records."""
+
+        return list(self._records)
+
+    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - trivial
+        try:
+            message = self.format(record)
+        except Exception:  # noqa: BLE001
+            message = record.getMessage()
+
+        payload = {
+            "logger": record.name,
+            "level": record.levelname,
+            "message": message,
+            "created": record.created,
+            "tool_context": getattr(record, "tool_context", None),
+            "tool_error_type": getattr(record, "tool_error_type", None),
+            "tool_error_message": getattr(record, "tool_error_message", None),
+            "tool_error_origin": getattr(record, "tool_error_origin", None),
+            "tool_error_category": getattr(record, "tool_error_category", None),
+        }
+        self._records.append(payload)
+
+
+ERROR_LOG_HANDLER = _InMemoryErrorLogHandler(capacity=ERROR_LOG_CAPACITY)
+BASE_LOGGER.addHandler(ERROR_LOG_HANDLER)
+
 SERVER_START_TIME = time.time()
 
 __all__ = [
@@ -90,4 +135,6 @@ __all__ = [
     "TOOL_STDIO_COMBINED_MAX_CHARS",
     "TOOL_STDOUT_MAX_CHARS",
     "WORKSPACE_BASE_DIR",
+    "ERROR_LOG_HANDLER",
+    "ERROR_LOG_CAPACITY",
 ]
