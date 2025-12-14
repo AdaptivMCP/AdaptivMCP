@@ -3397,6 +3397,18 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
         tree_error = str(exc)
 
     return {
+        "branch": effective_branch,
+        "repo": repo_info,
+        "repo_error": repo_error,
+        "pull_requests": open_prs,
+        "pull_requests_error": pr_error,
+        "issues": open_issues,
+        "issues_error": issues_error,
+        "workflows": workflow_runs,
+        "workflows_error": workflows_error,
+        "top_level_tree": top_level_tree,
+        "top_level_tree_error": tree_error,
+    }
 
 
 async def _build_default_pr_body(
@@ -3527,19 +3539,6 @@ async def _build_default_pr_body(
 
     return "\n".join(lines)
 
-        "branch": effective_branch,
-        "repo": repo_info,
-        "repo_error": repo_error,
-        "pull_requests": open_prs,
-        "pull_requests_error": pr_error,
-        "issues": open_issues,
-        "issues_error": issues_error,
-        "workflows": workflow_runs,
-        "workflows_error": workflows_error,
-        "top_level_tree": top_level_tree,
-        "top_level_tree_error": tree_error,
-    }
-
 
 @mcp_tool(write_action=True)
 async def create_pull_request(
@@ -3553,9 +3552,11 @@ async def create_pull_request(
     """Open a pull request from ``head`` into ``base``.
 
     The base branch is normalized via ``_effective_ref_for_repo`` so that
-    controller repos honor the configured default branch when callers supply
-    try:
-        effective_base = _effective_ref_for_repo(full_name, base)
+    controller repos honor the configured default branch even when callers
+    supply a simple base name like "main".
+    """
+
+    try:        effective_base = _effective_ref_for_repo(full_name, base)
         _ensure_write_allowed(
             f"create PR from {head} to {effective_base} in {full_name}"
         )
