@@ -186,6 +186,17 @@ This lets assistants describe large-file changes as structured sections instead 
 
 This helper is the default choice for localized code edits and is used heavily in the workflows described in `docs/WORKFLOWS.md`.
 
+### 5.3 Workspace refresh after Contents-API commits
+
+To keep the long-lived workspace clone in sync with branches that are updated via the GitHub Contents API, the server uses a small wrapper around `_perform_github_commit`:
+
+- `_perform_github_commit_and_refresh_workspace` calls `_perform_github_commit` and then, on success, calls `ensure_workspace_clone(full_name=..., ref=branch, reset=True)`.
+- Any failure in the workspace refresh path is logged at debug level and does not affect the result of the underlying commit.
+
+All single-file and multi-file helpers that write via the Contents API (including `create_file`, `apply_text_update_and_commit`, `apply_patch_and_commit`, and the internal helper used by `update_files_and_open_pr`) call this wrapper instead of `_perform_github_commit` directly. This means that after each successful Contents-API commit, the corresponding workspace clone for that repository and branch is immediately reset to match the remote.
+
+Tests in `tests/test_workspace_sync_after_commit.py` exercise this behavior by asserting that both the commit helper and `ensure_workspace_clone` are invoked with the expected parameters.
+
 ### 5.4 update_files_and_open_pr
 
 `update_files_and_open_pr` orchestrates multi-file changes and PR creation:

@@ -52,6 +52,12 @@ Note: `run_command` output is token-redacted (GitHub tokens are masked in stdout
 
 These are what make “act like a real engineer” possible: install deps, run tests, debug CI, and keep changes reviewable.
 
+### Workspace sync after Contents-API commits
+
+When you use single-file or multi-file write helpers that commit via the GitHub Contents API (for example `create_file`, `apply_text_update_and_commit`, `apply_patch_and_commit`, or `update_files_and_open_pr`), the server automatically refreshes the corresponding workspace clone for that repository and branch after each successful commit.
+
+This keeps subsequent workspace-based commands (`run_command`, `run_tests`, `run_quality_suite`, and related tools) aligned with the remote branch without requiring a manual reclone step after every Contents-API write.
+
 ## Safety model in one page
 
 - **Branch-first work**: do not develop directly on the default branch; use a feature branch and open a PR.
