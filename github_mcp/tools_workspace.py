@@ -15,7 +15,7 @@ from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
-from github_mcp.utils import _effective_ref_for_repo
+from github_mcp.utils import _effective_ref_for_repo, _default_branch_for_repo
 from github_mcp.workspace import (
     _apply_patch_to_repo,
     _clone_repo,
@@ -980,6 +980,92 @@ async def workspace_create_branch(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_create_branch")
+
+
+@mcp_tool(write_action=True)
+async def workspace_delete_branch(
+    full_name: Optional[str] = None,
+    branch: str = "",
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Delete a non-default branch using the workspace clone.
+
+    This is the workspace counterpart to branch-creation helpers and is intended
+    for closing out ephemeral feature branches once their work has been merged.
+    """
+
+    try:
+        deps = _workspace_deps()
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+
+        if not isinstance(branch, str) or not branch.strip():
+            raise ValueError("branch must be a non-empty string")
+
+        branch = branch.strip()
+
+        # Conservative branch-name validation (mirror workspace_create_branch).
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", branch):
+            raise ValueError("branch contains invalid characters")
+        if ".." in branch or "@{" in branch:
+            raise ValueError("branch contains invalid ref sequence")
+        if branch.startswith("/") or branch.endswith("/"):
+            raise ValueError("branch must not start or end with '/'")
+        if branch.endswith(".lock"):
+            raise ValueError("branch must not end with '.lock'")
+
+        default_branch = _default_branch_for_repo(full_name)
+        if branch == default_branch:
+            raise GitHubAPIError(
+                f"Refusing to delete default branch {default_branch!r}; "
+                "delete it manually in GitHub if this is truly desired."
+            )
+
+        # Normalize to the default branch for workspace operations so we are not
+        # checked out on the branch we are about to delete.
+        effective_ref = _effective_ref_for_repo(full_name, default_branch)
+
+        _ensure_write_allowed(
+            f"workspace_delete_branch {branch} for {full_name}@{effective_ref}",
+            target_ref=effective_ref,
+        )
+
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        # Ensure the working copy is on the effective ref.
+        await deps["run_shell"](
+            f"git checkout {shlex.quote(effective_ref)}",
+            cwd=repo_dir,
+            timeout_seconds=120,
+        )
+
+        # Delete remote first; if the remote delete fails, surface that.
+        delete_remote = await deps["run_shell"](
+            f"git push origin --delete {shlex.quote(branch)}",
+            cwd=repo_dir,
+            timeout_seconds=300,
+        )
+        if delete_remote.get("exit_code", 0) != 0:
+            stderr = delete_remote.get("stderr", "") or delete_remote.get("stdout", "")
+            raise GitHubAPIError(f"git push origin --delete failed: {stderr}")
+
+        # Then delete local branch if it exists. If it does not, treat that as best-effort.
+        delete_local = await deps["run_shell"](
+            f"git branch -D {shlex.quote(branch)}",
+            cwd=repo_dir,
+            timeout_seconds=120,
+        )
+
+        return {
+            "repo_dir": repo_dir,
+            "default_branch": default_branch,
+            "deleted_branch": branch,
+            "delete_remote": delete_remote,
+            "delete_local": delete_local,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="workspace_delete_branch")
 
 
 @mcp_tool(write_action=True)
