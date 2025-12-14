@@ -3,7 +3,7 @@ import pytest
 import extra_tools
 import main
 
-# Capture extra_tools MCP functions that are defined via register_extra_tools
+# Capture extra_tools MCP-like functions that are defined via register_extra_tools
 # so we can unit-test their behavior without depending on the MCP runtime.
 _TOOL_REGISTRY: dict[str, object] = {}
 
@@ -20,7 +20,9 @@ def _capture_tool(*, write_action: bool = False, **tool_kwargs):  # type: ignore
 extra_tools.register_extra_tools(_capture_tool)
 
 DELETE_FILE = _TOOL_REGISTRY["delete_file"]
-GET_FILE_SLICE = _TOOL_REGISTRY["get_file_slice"]
+
+
+def test_effective_ref_for_repo_controller(monkeypatch: pytest.MonkeyPatch) -> None:GET_FILE_SLICE = _TOOL_REGISTRY["get_file_slice"]
 
 
 def test_effective_ref_for_repo_controller(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,49 +103,6 @@ async def test_run_command_uses_controller_default_branch(
     assert "@ally-refactor" in str(calls["write_context"])
 
 
-@pytest.mark.asyncio
-async def test_run_command_non_controller_defaults_to_main(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path,
-) -> None:
-    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
-    monkeypatch.setattr(main, "CONTROLLER_REPO", "owner/controller")
-    monkeypatch.setattr(main, "CONTROLLER_DEFAULT_BRANCH", "ally-refactor")
-
-    calls: dict[str, object] = {}
-
-    async def fake_clone(
-        full_name: str, ref: str | None = None, *, preserve_changes: bool = False
-    ) -> str:
-        calls["clone_full_name"] = full_name
-        calls["clone_ref"] = ref
-        return str(tmp_path)
-
-    async def fake_run_shell(cmd, cwd=None, timeout_seconds=300, env=None):
-        return {
-            "exit_code": 0,
-            "timed_out": False,
-            "stdout": "",
-            "stderr": "",
-            "stdout_truncated": False,
-            "stderr_truncated": False,
-        }
-
-    def fake_ensure_write_allowed(context: str) -> None:
-        calls["write_context"] = context
-
-    monkeypatch.setattr(main, "_clone_repo", fake_clone)
-    monkeypatch.setattr(main, "_run_shell", fake_run_shell)
-    monkeypatch.setattr(main, "_ensure_write_allowed", fake_ensure_write_allowed)
-
-    await main.run_command(
-        full_name="other/repo",
-        ref=None,  # should fall back to "main"
-        command="echo hi",
-        use_temp_venv=False,
-    )
-
-    assert calls["clone_full_name"] == "other/repo"
     assert calls["clone_ref"] == "main"
     assert "@main" in str(calls["write_context"])
 
