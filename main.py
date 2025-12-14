@@ -3618,12 +3618,10 @@ async def create_pull_request(
         # repository and head/base pair failed without scraping the message.
         path_hint = f"{full_name} {head}->{base}"
         return _structured_tool_error(
-            f"Failed to create PR for {path_hint}: {exc}",
-            details={
-                "full_name": full_name,
-                "head": head,
-                "base": base,
-                "draft": draft,
+            exc,
+            context="create_pull_request",
+            path=path_hint,
+        )
             },
         )
 
