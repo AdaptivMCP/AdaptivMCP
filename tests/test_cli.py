@@ -17,8 +17,7 @@ def test_main_basic_cli(argv, capsys):
     assert err == ""
 
 
-@pytest.mark.asyncio
-async def test_doctor_uses_validate_environment_and_summarizes(capsys, monkeypatch):
+def test_doctor_uses_validate_environment_and_summarizes(capsys, monkeypatch):
     cli = importlib.import_module("cli")
 
     fake_result = {
@@ -33,7 +32,7 @@ async def test_doctor_uses_validate_environment_and_summarizes(capsys, monkeypat
         ],
     }
 
-    async def fake_validate_environment():  # type: ignore[override]
+    def fake_validate_environment():  # type: ignore[override]
         return fake_result
 
     fake_main = SimpleNamespace(validate_environment=fake_validate_environment)
