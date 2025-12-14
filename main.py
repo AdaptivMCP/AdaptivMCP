@@ -2439,8 +2439,6 @@ async def wait_for_workflow_run(
 
         await asyncio.sleep(poll_interval_seconds)
 
-        await asyncio.sleep(poll_interval_seconds)
-
 
 @mcp_tool(
     write_action=False,
