@@ -3622,8 +3622,6 @@ async def create_pull_request(
             context="create_pull_request",
             path=path_hint,
         )
-            },
-        )
 
 @mcp_tool(write_action=True)
 async def open_pr_for_existing_branch(
