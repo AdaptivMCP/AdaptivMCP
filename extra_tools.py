@@ -389,10 +389,10 @@ async def open_file_context(
 
     total_lines = slice_result.get("total_lines")
     should_expand_small_file = (
-        total_lines is not None
+        normalized_start_line == 1
         and isinstance(total_lines, int)
+        and total_lines > 0
         and total_lines <= 120
-        and slice_result.get("start_line", 1) == 1
         and slice_result.get("end_line", 0) < total_lines
     )
 
