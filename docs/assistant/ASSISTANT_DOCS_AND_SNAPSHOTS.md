@@ -50,6 +50,7 @@ Meta tools when you are unsure:
 - `ping_extensions` to confirm that extension modules are loaded.
 - Repository docs when in doubt about expectations or requirements.
 - `build_pr_summary` when preparing to open or update a PR so you can produce a structured `title` and `body` that reflect the latest tests, lint status, and changed areas instead of writing ad-hoc descriptions.
+- `create_pull_request` itself now generates a rich default body when you omit the `body` argument; it uses `compare_refs` and recent workflow runs to prefill a structured template (summary, change summary, sample files touched, CI & quality, testing, risks, and reviewer checklist) that you can then edit instead of starting from a blank description.
 
 ### 1.1 Rehydrating after context loss
 
