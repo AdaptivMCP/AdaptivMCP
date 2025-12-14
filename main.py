@@ -4163,14 +4163,8 @@ async def apply_patch_and_commit(
         return sha_value if isinstance(sha_value, str) else None
 
     def _apply_unified_diff_to_text(original_text: str, patch_text: str) -> str:
-        """Apply a unified diff to original_text and return the updated text.
-
-        This implementation supports patches for a single file with one or more
-        hunks, of the form typically produced by difflib.unified_diff. It
-        ignores 'diff --git', 'index', and file header lines, and processes
-        only hunk headers and +/-/space lines.
-        """
         orig_lines = original_text.splitlines(keepends=True)
+        new_lines: list[str] = []
         new_lines: list[str] = []
 
         orig_idx = 0
