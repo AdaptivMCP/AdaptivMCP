@@ -467,6 +467,7 @@ async def validate_environment() -> Dict[str, Any]:
         if os.environ.get("GITHUB_PAT") is not None
         else ("GITHUB_TOKEN" if os.environ.get("GITHUB_TOKEN") is not None else None)
     )
+
     if raw_token is None:
         add_check(
             "github_token",
@@ -477,80 +478,25 @@ async def validate_environment() -> Dict[str, Any]:
         token_ok = False
     elif not raw_token.strip():
         add_check(
-@mcp_tool()
-async def list_write_tools() -> Dict[str, Any]:
-    """List write-enabled tools grouped by high-level workflow categories.
+            "github_token",
+            "error",
+            "GitHub token environment variable is set but empty",
+            {"env_var": token_env_var} if token_env_var else {},
+        )
+        token_ok = False
+    else:
+        add_check(
+            "github_token",
+            "ok",
+            "GitHub token environment variable is set",
+            {"env_var": token_env_var, "length": len(raw_token)},
+        )
+        token_ok = True
 
-    This is primarily a discovery aid for controllers. It does not change
-    behavior of the underlying tools; it only exposes metadata so the
-    controller can pick tools more intelligently.
-    """
+    # Controller repo/branch config
+    controller_repo = os.environ.get("GITHUB_MCP_CONTROLLER_REPO") or CONTROLLER_REPO
+    controller_branch = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") or CONTROLLER_DEFAULT_BRANCH
 
-    categories: Dict[str, List[str]] = {
-        "pr_workflow": [
-            "create_pull_request",
-            "open_pr_for_existing_branch",
-            "pr_smoke_test",
-            "merge_pull_request",
-            "close_pull_request",
-        ],
-        "workspace_execution": [
-            "run_command",
-            "run_tests",
-            "run_lint_suite",
-            "run_quality_suite",
-        ],
-        "diff_and_edits": [
-            "apply_line_edits_and_commit",
-            "apply_patch_and_commit",
-            "update_files_and_open_pr",
-            "update_file_sections_and_commit",
-            "update_file_from_workspace",
-            "commit_workspace",
-            "commit_workspace_files",
-        ],
-        "fs_and_branch": [
-            "create_branch",
-            "workspace_create_branch",
-            "create_file",
-            "delete_file",
-            "move_file",
-            "ensure_branch",
-        ],
-        "ci_and_workflows": [
-            "trigger_workflow_dispatch",
-            "trigger_and_wait_for_workflow",
-            "wait_for_workflow_run",
-        ],
-        "issues_and_discussions": [
-            "create_issue",
-            "update_issue",
-            "comment_on_issue",
-            "comment_on_pull_request",
-        ],
-    }
-
-    # Reconcile with the actual tool registry at runtime so we don't expose
-    # stale names if the implementation changes.
-    grouped: Dict[str, List[str]] = {}
-
-    for category, tool_names in categories.items():
-        present = []
-        for name in tool_names:
-            if name in _TOOLS:
-                meta = _TOOLS[name]
-                if getattr(meta, "write_action", False):
-                    present.append(name)
-        if present:
-            grouped[category] = sorted(present)
-
-    # Also include a flat list of all write tools known to the registry.
-    all_write_tools = sorted(
-        name for name, meta in _TOOLS.items() if getattr(meta, "write_action", False)
-    )
-
-    return {"categories": grouped, "all_write_tools": all_write_tools}
-    )
     add_check(
         "controller_branch_config",
         "ok",
@@ -743,6 +689,81 @@ async def list_write_tools() -> Dict[str, Any]:
             "github_api_base": GITHUB_API_BASE,
         },
     }
+
+
+@mcp_tool()
+async def list_write_tools() -> Dict[str, Any]:
+    """List write-enabled tools grouped by high-level workflow categories.
+
+    This is primarily a discovery aid for controllers. It does not change
+    behavior of the underlying tools; it only exposes metadata so the
+    controller can pick tools more intelligently.
+    """
+
+    categories: Dict[str, List[str]] = {
+        "pr_workflow": [
+            "create_pull_request",
+            "open_pr_for_existing_branch",
+            "pr_smoke_test",
+            "merge_pull_request",
+            "close_pull_request",
+        ],
+        "workspace_execution": [
+            "run_command",
+            "run_tests",
+            "run_lint_suite",
+            "run_quality_suite",
+        ],
+        "diff_and_edits": [
+            "apply_line_edits_and_commit",
+            "apply_patch_and_commit",
+            "update_files_and_open_pr",
+            "update_file_sections_and_commit",
+            "update_file_from_workspace",
+            "commit_workspace",
+            "commit_workspace_files",
+        ],
+        "fs_and_branch": [
+            "create_branch",
+            "workspace_create_branch",
+            "create_file",
+            "delete_file",
+            "move_file",
+            "ensure_branch",
+        ],
+        "ci_and_workflows": [
+            "trigger_workflow_dispatch",
+            "trigger_and_wait_for_workflow",
+            "wait_for_workflow_run",
+        ],
+        "issues_and_discussions": [
+            "create_issue",
+            "update_issue",
+            "comment_on_issue",
+            "comment_on_pull_request",
+        ],
+    }
+
+    # Reconcile with the actual tool registry at runtime so we don't expose
+    # stale names if the implementation changes.
+    grouped: Dict[str, List[str]] = {}
+
+    for category, tool_names in categories.items():
+        present = []
+        for name in tool_names:
+            if name in _TOOLS:
+                meta = _TOOLS[name]
+                if getattr(meta, "write_action", False):
+                    present.append(name)
+        if present:
+            grouped[category] = sorted(present)
+
+    # Also include a flat list of all write tools known to the registry.
+    all_write_tools = sorted(
+        name for name, meta in _TOOLS.items() if getattr(meta, "write_action", False)
+    )
+
+    return {"categories": grouped, "all_write_tools": all_write_tools}
 
 
 @mcp_tool(write_action=True)
