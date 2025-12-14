@@ -9,14 +9,16 @@ def test_main_basic_cli(argv, capsys):
     cli = importlib.import_module("cli")
     exit_code = cli.main(argv)
 
+    # For --version and help, argparse normally calls SystemExit; main now
+    # returns that exit code instead, so we expect 0 for these variants.
     assert exit_code == 0
     out, err = capsys.readouterr()
-    # For --version we expect at least something version-like; for others, help text.
     assert out.strip() != ""
     assert err == ""
 
 
-def test_doctor_uses_validate_environment_and_summarizes(capsys, monkeypatch):
+@pytest.mark.asyncio
+async def test_doctor_uses_validate_environment_and_summarizes(capsys, monkeypatch):
     cli = importlib.import_module("cli")
 
     fake_result = {
@@ -31,7 +33,10 @@ def test_doctor_uses_validate_environment_and_summarizes(capsys, monkeypatch):
         ],
     }
 
-    fake_main = SimpleNamespace(validate_environment=lambda: fake_result)
+    async def fake_validate_environment():  # type: ignore[override]
+        return fake_result
+
+    fake_main = SimpleNamespace(validate_environment=fake_validate_environment)
     monkeypatch.setitem(importlib.import_module("sys").modules, "main", fake_main)
 
     exit_code = cli.main(["doctor"])
