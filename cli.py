@@ -92,7 +92,13 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
 
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        # When used as a library function in tests, return the exit code
+        # instead of raising. The __main__ guard still exits with this code
+        # when the CLI is invoked from the shell.
+        return int(getattr(exc, "code", 1) or 0)
 
     if args.version and not args.command:
         print(_load_project_version())
