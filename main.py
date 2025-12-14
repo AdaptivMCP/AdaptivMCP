@@ -94,7 +94,7 @@ from github_mcp.server import (
     mcp_tool,
     register_extra_tools_if_available,
 )
-from github_mcp.tools_workspace import commit_workspace  # noqa: F401
+from github_mcp.tools_workspace import commit_workspace, ensure_workspace_clone  # noqa: F401
 from github_mcp.utils import (
     REPO_DEFAULTS,
     _decode_zipped_job_logs,
@@ -112,6 +112,54 @@ from github_mcp.workspace import (
     _run_shell,  # noqa: F401
     _workspace_path,  # noqa: F401
 )
+
+
+LOGGER = BASE_LOGGER.getChild("main")
+
+
+async def _perform_github_commit_and_refresh_workspace(
+    *,
+    full_name: str,
+    path: str,
+    message: str,
+    branch: str,
+    body_bytes: bytes,
+    sha: Optional[str],
+) -> Dict[str, Any]:
+    """Perform a Contents API commit and then refresh the workspace clone.
+
+    This keeps the long-lived workspace clone in sync with the branch when
+    writes happen directly via the GitHub Contents API. Workspace refresh
+    failures are logged but never fail the commit itself.
+    """
+
+    commit_result = await _perform_github_commit(
+        full_name=full_name,
+        path=path,
+        message=message,
+        body_bytes=body_bytes,
+        branch=branch,
+        sha=sha,
+    )
+
+    try:
+        # Best-effort: do not break commits if workspace refresh fails.
+        await ensure_workspace_clone(
+            full_name=full_name,
+            ref=branch,
+            reset=True,
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging only
+        LOGGER.debug(
+            "Failed to refresh workspace after commit",
+            extra={
+                "full_name": full_name,
+                "branch": branch,
+                "error": str(exc),
+            },
+        )
+
+    return commit_result
 
 
 def __getattr__(name: str):
