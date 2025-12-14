@@ -50,7 +50,12 @@ def _run_doctor() -> int:
         return 1
 
     try:
-        result = asyncio.run(server_main.validate_environment())
+        validate_env = getattr(server_main, "validate_environment")
+        result_or_coro = validate_env()
+        if asyncio.iscoroutine(result_or_coro):
+            result = asyncio.run(result_or_coro)
+        else:
+            result = result_or_coro
     except Exception as exc:  # pragma: no cover - defensive
         print(f"validate_environment failed: {exc}", file=sys.stderr)
         return 1
