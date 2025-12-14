@@ -3598,20 +3598,6 @@ async def create_pull_request(
         return _structured_tool_error(
             exc, context="create_pull_request", path=path_hint
         )
-        }
-        if effective_body is not None:
-            payload["body"] = effective_body
-
-        return await _github_request(
-            "POST",
-            f"/repos/{full_name}/pulls",
-            json_body=payload,
-        )
-    except Exception as exc:
-        # Include a lightweight path-style hint so callers can see which
-        # repository and head/base pair failed without scraping the message.
-        path_hint = f"{full_name} {head}->{base}"
-        return _structured_tool_error(exc, context="create_pull_request", path=path_hint)
 
 @mcp_tool(write_action=True)
 async def open_pr_for_existing_branch(
