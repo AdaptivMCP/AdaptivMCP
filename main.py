@@ -3577,7 +3577,8 @@ async def create_pull_request(
     supply a simple base name like "main".
     """
 
-    try:        effective_base = _effective_ref_for_repo(full_name, base)
+    try:
+        effective_base = _effective_ref_for_repo(full_name, base)
         _ensure_write_allowed(
             f"create PR from {head} to {effective_base} in {full_name}"
         )
@@ -3617,6 +3618,14 @@ async def create_pull_request(
         # repository and head/base pair failed without scraping the message.
         path_hint = f"{full_name} {head}->{base}"
         return _structured_tool_error(
+            f"Failed to create PR for {path_hint}: {exc}",
+            details={
+                "full_name": full_name,
+                "head": head,
+                "base": base,
+                "draft": draft,
+            },
+        )
             exc, context="create_pull_request", path=path_hint
         )
 
