@@ -144,3 +144,62 @@ async def test_run_lint_suite_respects_custom_lint_command(monkeypatch):
     assert result["result"]["exit_code"] == 5
     assert calls[0]["command"] == tools_workspace.TOKENLIKE_SCAN_COMMAND
     assert calls[1]["command"] == "mypy ."
+
+
+@pytest.mark.asyncio
+async def test_run_quality_suite_fails_on_token_scan_workspace_error(monkeypatch):
+    calls = {"scan": 0, "lint": 0, "tests": 0}
+
+    async def fake_run_command(**kwargs):
+        calls["scan"] += 1
+        # Simulate structured error shape from run_command
+        return {"error": {"error": "WorkspaceError", "message": "clone failed"}}
+
+    async def fake_run_lint_suite(**kwargs):
+        calls["lint"] += 1
+        raise AssertionError("run_lint_suite should not be called when scan fails")
+
+    async def fake_run_tests(**kwargs):
+        calls["tests"] += 1
+        raise AssertionError("run_tests should not be called when scan fails")
+
+    monkeypatch.setattr(tools_workspace, "run_command", fake_run_command)
+    monkeypatch.setattr(tools_workspace, "run_lint_suite", fake_run_lint_suite)
+    monkeypatch.setattr(tools_workspace, "run_tests", fake_run_tests)
+
+    result = await tools_workspace.run_quality_suite(full_name="owner/repo")
+
+    assert calls == {"scan": 1, "lint": 0, "tests": 0}
+    assert result["status"] == "failed"
+    assert result["command"] == tools_workspace.TOKENLIKE_SCAN_COMMAND
+    log = result.get("controller_log") or []
+    assert any("Token-like scan failed due to a workspace/command error." in line for line in log)
+
+
+@pytest.mark.asyncio
+async def test_run_quality_suite_stops_on_lint_failure(monkeypatch):
+    calls = {"scan": 0, "lint": 0, "tests": 0}
+
+    async def fake_run_command(**kwargs):
+        # Successful scan so we reach lint
+        assert kwargs["command"] == tools_workspace.TOKENLIKE_SCAN_COMMAND
+        calls["scan"] += 1
+        return {"repo_dir": "/tmp/repo", "workdir": None, "result": {"exit_code": 0}}
+
+    async def fake_run_lint_suite(**kwargs):
+        calls["lint"] += 1
+        return {"status": "failed", "marker": "from_lint"}
+
+    async def fake_run_tests(**kwargs):
+        calls["tests"] += 1
+        raise AssertionError("run_tests should not be called when lint fails")
+
+    monkeypatch.setattr(tools_workspace, "run_command", fake_run_command)
+    monkeypatch.setattr(tools_workspace, "run_lint_suite", fake_run_lint_suite)
+    monkeypatch.setattr(tools_workspace, "run_tests", fake_run_tests)
+
+    result = await tools_workspace.run_quality_suite(full_name="owner/repo")
+
+    assert calls == {"scan": 1, "lint": 1, "tests": 0}
+    assert result["status"] == "failed"
+    assert result["marker"] == "from_lint"
