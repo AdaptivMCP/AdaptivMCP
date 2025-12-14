@@ -2133,18 +2133,6 @@ async def validate_tool_args(
 
     return response
 
-    response: Dict[str, Any] = {"results": results}
-
-    # Preserve the legacy single-tool shape for backwards compatibility by
-    # mirroring the first result's metadata at the top level.
-    first = results[0]
-    for key, value in first.items():
-        response.setdefault(key, value)
-
-    if missing:
-        response["missing_tools"] = sorted(set(missing))
-
-    return response
 
 
 @mcp_tool(write_action=False)
