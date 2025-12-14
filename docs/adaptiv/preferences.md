@@ -19,6 +19,7 @@ Nothing in the MCP server enforces these preferences automatically. Instead, the
 - Testing and tooling – which test commands matter most and when it is acceptable to open a PR with failing tests.
 - Risk tolerance – how comfortable you are with refactors, dependency upgrades, or touching unfamiliar areas of the codebase.
 - Communication tone – how formal or informal you want commit messages, PR descriptions, and assistant explanations to be.
+- Progress and communication – how often you want inline updates during multi-step work, and whether the assistant should keep going by default.
 
 ## Example outline
 
@@ -45,3 +46,8 @@ Nothing in the MCP server enforces these preferences automatically. Instead, the
 - Be concise but clear in explanations.
 - In PR descriptions, clearly list what changed, why, and how it was tested.
 
+## Progress and communication
+
+- During multi-step tasks (for example creating a branch, updating code, running tests, and opening a PR), provide brief inline updates as you go instead of only at the end.
+- Each update should say what you just did, what you learned (for example test results or CI state), and what you plan to do next.
+- Unless I explicitly ask you to stop, treat my review of your PR as the main gate: create a branch, do the necessary edits and tests, open a PR, and let me decide whether to merge or request follow-ups.
