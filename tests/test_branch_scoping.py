@@ -20,9 +20,7 @@ def _capture_tool(*, write_action: bool = False, **tool_kwargs):  # type: ignore
 extra_tools.register_extra_tools(_capture_tool)
 
 DELETE_FILE = _TOOL_REGISTRY["delete_file"]
-
-
-def test_effective_ref_for_repo_controller(monkeypatch: pytest.MonkeyPatch) -> None:GET_FILE_SLICE = _TOOL_REGISTRY["get_file_slice"]
+GET_FILE_SLICE = _TOOL_REGISTRY["get_file_slice"]
 
 
 def test_effective_ref_for_repo_controller(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,10 +99,6 @@ async def test_run_command_uses_controller_default_branch(
     assert calls["clone_ref"] == "ally-refactor"
     # The write context string should also include the effective ref.
     assert "@ally-refactor" in str(calls["write_context"])
-
-
-    assert calls["clone_ref"] == "main"
-    assert "@main" in str(calls["write_context"])
 
 
 @pytest.mark.asyncio
