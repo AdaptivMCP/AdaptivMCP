@@ -211,13 +211,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         }
 
     @mcp_tool(
-        write_action=True,
-        description=(
-            "Update a file by applying simple section-based replacements and "
-            "commit the result to a branch."
-        ),
-        tags=["editing", "diff", "commit"],
-    )
     async def update_file_sections_and_commit(
         full_name: str,
         path: str,
@@ -225,7 +218,12 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         message: str = "Update file via sections",
         sections: Optional[List[SectionReplacement]] = None,
     ) -> Dict[str, Any]:
-        """Apply section-based string replacements to a file and commit the result."""
+        """Internal helper: apply section-based replacements and commit.
+
+        This remains available for future higher-level flows but is no longer
+        exposed as an MCP tool. Prefer workspace-based edit/commit tools for
+        LLM-facing workflows.
+        """
 
         if not sections:
             raise ValueError("sections must be a non-empty list")
@@ -279,15 +277,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "commit": commit_result.get("commit"),
             "verification": commit_result.get("verification"),
             "diff": commit_result.get("diff"),
-        }
-
-    def _apply_line_sections(
-        text: str,
-        sections: Optional[List[LineEditSection]],
-    ) -> Dict[str, Any]:
-        """Validate and apply line-based sections to text, returning the new text."""
-
-        if sections is None:
+        }        if sections is None:
             raise ValueError("sections must be provided")
 
         original_lines = text.splitlines(keepends=True)
@@ -443,13 +433,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
 
     @mcp_tool(
         write_action=False,
-        description=(
-            "Build a unified diff when you already have both the original and updated "
-            "file content. Useful when fetching from GitHub is unnecessary. This tool "
-            "refuses negative context sizes so patches stay well-formed."
-        ),
-        tags=["github", "read", "diff"],
-    )
     def build_unified_diff_from_strings(
         original: str,
         updated: str,
@@ -457,7 +440,11 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         context_lines: int = 3,
         show_whitespace: bool = False,
     ) -> Dict[str, Any]:
-        """Return a unified diff between original and updated content."""
+        """Internal helper wrapper for _build_unified_diff_from_strings.
+
+        This is no longer exposed as an MCP tool; assistants should prefer the
+        workspace-based diff tools that operate on real files.
+        """
 
         return _build_unified_diff_from_strings(
             original,
@@ -465,17 +452,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             path=path,
             context_lines=context_lines,
             show_whitespace=show_whitespace,
-        )
-
-    @mcp_tool(
-        write_action=False,
-        description=(
-            "Build a unified diff for a file by applying line-based section "
-            "replacements. Useful for large files: you describe the sections "
-            "to replace and then pass the resulting patch to apply_patch_and_commit."
-        ),
-        tags=["github", "read", "diff", "orchestration"],
-    )
+        )        ),
     async def build_section_based_diff(
         full_name: str,
         path: str,
@@ -484,9 +461,12 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         context_lines: int = 3,
         show_whitespace: bool = False,
     ) -> Dict[str, Any]:
-        ...
+        """Internal helper: build a unified diff from line-based sections.
 
-        """Build a unified diff for a file from line-based section replacements."""
+        This remains for potential higher-level orchestration but is no longer
+        surfaced as an MCP tool. Prefer build_section_based_diff_from_workspace
+        for LLM-facing workflows.
+        """
         if context_lines < 0:
             raise ValueError("context_lines must be >= 0")
 
@@ -508,16 +488,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         diff_result["full_name"] = full_name
         diff_result["ref"] = effective_ref
         diff_result["applied_sections"] = normalized_sections
-        return diff_result
-
-    @mcp_tool(
-        write_action=False,
-        description=(
-            "Fetch a slice of a large text file by line range. "
-            "Useful when the full file would be too large to return in a single tool call."
-        ),
-        tags=["github", "read", "files"],
-    )
+        return diff_result        diff_result["ref"] = effective_ref
     async def get_file_slice(
         full_name: str,
         path: str,
@@ -525,7 +496,12 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         start_line: int = 1,
         max_lines: int = 200,
     ) -> Dict[str, Any]:
-        """Return a line-range slice of a text file with basic metadata."""
+        """Internal helper: fetch a line-range slice of a text file.
+
+        This is now used as a building block for open_file_context and
+        get_file_with_line_numbers rather than being exposed directly as an
+        MCP tool.
+        """
 
         if start_line < 1:
             raise ValueError("start_line must be >= 1")
@@ -552,6 +528,39 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
                 "has_more_below": False,
                 "lines": [],
             }
+
+        start_idx = min(max(start_line - 1, 0), total_lines - 1)
+        end_idx = min(start_idx + max_lines, total_lines)
+
+        slice_lines = [{"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)]
+
+        has_more_above = start_idx > 0
+        has_more_below = end_idx < total_lines
+
+        return {
+            "full_name": full_name,
+            "path": path,
+            "ref": effective_ref,
+            "start_line": start_idx + 1,
+            "end_line": end_idx,
+            "max_lines": max_lines,
+            "total_lines": total_lines,
+            "has_more_above": has_more_above,
+            "has_more_below": has_more_below,
+            "lines": slice_lines,
+        }
+
+    @mcp_tool(
+        write_action=False,
+        description=(
+            "Return a citation-friendly slice of a file with line numbers. "
+            "Wraps an internal get_file_slice helper and normalizes the output "
+            "for code review or referencing. Defaults to the repo's default "
+            "branch and will expand very small files when starting at line 1 so "
+            "you can see the whole file."
+        ),
+        tags=["github", "read", "files", "context"],
+    )            }
 
         start_idx = min(max(start_line - 1, 0), total_lines - 1)
         end_idx = min(start_idx + max_lines, total_lines)
@@ -717,16 +726,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "numbered_text": numbered_text,
         }
 
-    @mcp_tool(
-        write_action=True,
-        description=(
-            "Apply minimal line-based edits to a file and commit them without "
-            "sending the entire file content. Provide start/end lines and the "
-            "replacement text for each section; the server fetches, patches, "
-            "and commits on your behalf."
-        ),
-        tags=["github", "write", "files", "diff", "bandwidth"],
-    )
     async def apply_line_edits_and_commit(
         full_name: str,
         path: str,
@@ -736,10 +735,11 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         include_diff: bool = False,
         context_lines: int = 3,
     ) -> Dict[str, Any]:
-        """Apply line-based edits to a file, commit them, and optionally return a diff.
+        """Internal helper: apply line-based edits and commit.
 
-        Each section replaces the inclusive start/end range with ``new_text``; callers can
-        also provide ``expected_text`` to fail fast if the current file content has drifted.
+        This is now used as a building block for higher-level workflows rather
+        than being exposed directly as an MCP tool. Prefer workspace-based
+        section-diff tools in LLM flows.
         """
 
         if context_lines < 0:
@@ -758,6 +758,26 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
                 "status": "no-op",
                 "reason": "no_changes",
                 "full_name": full_name,
+                "path": path,
+                "branch": effective_branch,
+                "applied_sections": normalized_sections,
+            }
+
+        from main import apply_text_update_and_commit
+
+        commit_result = await apply_text_update_and_commit(
+            full_name=full_name,
+            path=path,
+            updated_content=updated_text,
+            branch=effective_branch,
+            message=message,
+            return_diff=include_diff,
+            context_lines=context_lines,
+        )
+
+        commit_result["applied_sections"] = normalized_sections
+        commit_result["context_lines"] = context_lines
+        return commit_result                "full_name": full_name,
                 "path": path,
                 "branch": effective_branch,
                 "applied_sections": normalized_sections,
