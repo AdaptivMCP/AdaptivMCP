@@ -36,7 +36,7 @@ This registry powers:
 
 In addition to the raw tool list, the server exposes a best-effort JSON schema for each tool's arguments when possible. When an MCP tool exports an explicit input schema, that schema is returned as-is. When no schema is available, the server synthesizes a minimal `{type: 'object', properties: {}}` schema so controllers can still treat the presence of `input_schema` as a stable contract instead of a sometimes-`null` field.
 
-Controllers and assistants can call `describe_tool` and, where it provides additional value, `validate_tool_args` against these schemas before invoking unfamiliar or write-tagged tools. For certain helpers (for example `compare_refs`), the server provides a hand-authored JSON schema so validation can enforce required fields even when the upstream MCP layer has no schema configured.
+Controllers and assistants can call `describe_tool` and, where it provides additional value, `validate_tool_args` against these schemas before invoking unfamiliar or write-tagged tools. For certain helpers (for example `list_workflow_runs`), the server provides a hand-authored JSON schema so validation can enforce required fields even when the upstream MCP layer has no schema configured.
 ---
 
 ## 3. Write safety model
@@ -68,7 +68,6 @@ Destructive operations are gated by a global flag and explicit tagging.
 ### 3.2 Read vs write tools
 
 - Read tools (for example `get_file_contents`, `get_file_slice`, `list_repository_tree`, `search`) do not consult `WRITE_ALLOWED` and are tagged read-only.
-- Write tools (for example `apply_text_update_and_commit`, `apply_patch_and_commit`, `update_files_and_open_pr`, `delete_file`, `run_command`, `run_tests`, issue helpers) are tagged with `write_action=True` and must pass through `_ensure_write_allowed`.
 
 This design lets a controller keep the server in a read-only posture by default and only enable writes when the user explicitly approves, while still allowing assistants to commit freely to feature branches and keeping the controller default branch protected.
 
@@ -110,7 +109,7 @@ This makes it hard for assistants to accidentally write to the controller's `mai
 The helper is used in multiple subsystems:
 
 - GitHub content reads (`_decode_github_content`, `get_file_contents`, `get_file_slice`).
-- Workspace cloning (`_clone_repo`), which powers `run_command` and `run_tests`.
+- Workspace cloning (`_clone_repo`), which powers `terminal_command` and `run_tests`.
 - Extra tools in `extra_tools.py` such as `delete_file` and `delete_remote_branch`.
 
 Tests in `tests/test_branch_scoping.py` verify that:
@@ -157,16 +156,11 @@ Other helpers call this rather than constructing ad-hoc API requests.
 
 `apply_text_update_and_commit` performs full-file text updates and creation in a
 single commit. Because this is powerful and easy to misuse on code-heavy files,
-patch-based helpers remain the preferred default (`build_unified_diff` or
-`build_unified_diff_from_strings` + `apply_patch_and_commit`, or
 `update_files_and_open_pr`).
-`build_unified_diff` reads the current file from GitHub and builds a diff
 against caller-provided `new_content`; it rejects negative context sizes and
-surfaces GitHub fetch errors instead of guessing. `build_unified_diff_from_strings`
 builds a patch directly from caller-supplied `original` and `updated` buffers
 and also rejects negative context sizes.
 
-`build_section_based_diff` is a higher-level, read-only orchestration helper for large files. It:
 
 - Reads the current file content from GitHub.
 - Accepts a list of line-based sections (`start_line`, `end_line`, `new_text`).
@@ -174,9 +168,7 @@ and also rejects negative context sizes.
 - Applies those section replacements in memory.
 - Calls the string-based diff helper internally to produce a unified diff patch.
 
-This lets assistants describe large-file changes as structured sections instead of shipping full file contents back and forth. The resulting patch is then applied and committed via `apply_patch_and_commit` just like any other diff.
 
-`apply_patch_and_commit` applies a unified diff patch:
 
 Note: patches received by workspace-oriented tooling are normalized before application (unescape single-line diffs with literal \\n sequences and strip common trailing artifacts like code fences) to reduce accidental `git apply` failures.
 
@@ -195,7 +187,6 @@ To keep the long-lived workspace clone in sync with branches that are updated vi
 - `_perform_github_commit_and_refresh_workspace` calls `_perform_github_commit` and then, on success, calls `ensure_workspace_clone(full_name=..., ref=branch, reset=True)`.
 - Any failure in the workspace refresh path is logged at debug level and does not affect the result of the underlying commit.
 
-All single-file and multi-file helpers that write via the Contents API (including `create_file`, `apply_text_update_and_commit`, `apply_patch_and_commit`, and the internal helper used by `update_files_and_open_pr`) call this wrapper instead of `_perform_github_commit` directly. This means that after each successful Contents-API commit, the corresponding workspace clone for that repository and branch is immediately reset to match the remote.
 
 Tests in `tests/test_workspace_sync_after_commit.py` exercise this behavior by asserting that both the commit helper and `ensure_workspace_clone` are invoked with the expected parameters.
 
@@ -211,12 +202,10 @@ Tests in `tests/test_update_files_and_open_pr.py` validate this behavior.
 
 ### 5.5 Workspace and text-based commit helpers and branch-aware gating
 
-When I use workspace commit helpers like `commit_workspace` or `commit_workspace_files`, and text-based commit helpers like `apply_text_update_and_commit` and `apply_line_edits_and_commit`, the server passes the effective branch (computed by `_effective_ref_for_repo`) as `target_ref` into `_ensure_write_allowed`. This means:
 
 - Commits to non-default branches are allowed even when `WRITE_ALLOWED` is `False`, so I can iterate on feature branches without elevating global write permissions.
 - Direct writes to the controller default branch still require explicit approval, because `_ensure_write_allowed` treats the controller default branch as protected and enforces the global write flag there.
 
-Tests in `tests/test_apply_text_update_and_commit.py` and `tests/test_apply_line_edits_and_commit.py` assert that both the write gate and the underlying GitHub commit use this effective branch, so decisions about whether a write is allowed always match the branch where commits actually land, even when the controller default branch changes or feature branches are scoped.
 
 By contrast, unscoped or potentially dangerous write tools call `_ensure_write_allowed` with `target_ref=None`, which treats `WRITE_ALLOWED` as a global kill switch. I should assume those tools are disabled unless the controller has explicitly authorized writes via `authorize_write_actions`.
 
@@ -224,7 +213,7 @@ By contrast, unscoped or potentially dangerous write tools call `_ensure_write_a
 
 ## 6. Workspace execution and truncation
 
-Two tools, `run_command` and `run_tests`, execute commands in a real cloned workspace. They are useful for running tests, linters, or migrations after a change.
+Two tools, `terminal_command` and `run_tests`, execute commands in a real cloned workspace. They are useful for running tests, linters, or migrations after a change.
 
 ### 6.1 Workspace model
 
@@ -356,10 +345,9 @@ The behaviors described in this document are backed by a set of tests, including
 - `tests/test_branch_scoping.py` for controller-aware ref behavior and branch scoping.
 - `tests/test_update_files_and_open_pr.py` for multi-file PR orchestration.
 - `tests/test_apply_text_update_and_commit.py` for text-based commit flows and new file creation.
-- Workspace-related tests for `run_command` and truncation.
+- Workspace-related tests for `terminal_command` and truncation.
 - `tests/test_issue_tools.py` for issue-related behavior.
 - `tests/test_tool_logging.py` and `tests/test_tool_logging_write_tools.py` for tool-level logging behavior (read and write tools).
-- Tests for diff helpers (including `build_section_based_diff`) and large-file workflows.
 When adding new tools or changing behavior, update tests alongside the code so that these guarantees remain true over time.
 
 ## 11. How to use this document
@@ -413,18 +401,18 @@ Metrics are intentionally kept in memory only; they reset on process restart
 and never include request bodies, secrets, or other user content. The `/healthz`
 endpoint is safe to use for uptime checks, basic dashboards, and smoke tests.
 
-## 12. Execution environment: run_command and run_tests
+## 12. Execution environment: terminal_command and run_tests
 
 For all code execution and tests against this repository (or any other repo accessed through this controller), assistants must treat the workspace tools as the canonical execution environment, not the MCP server process itself.
 
 Specifically:
 
-- `run_command` and `run_tests` clone the target repository at the effective ref (as computed by `_effective_ref_for_repo`) into a persistent workspace so installs and edits are preserved across calls.
+- `terminal_command` and `run_tests` clone the target repository at the effective ref (as computed by `_effective_ref_for_repo`) into a persistent workspace so installs and edits are preserved across calls.
 - They optionally create a temporary virtual environment and run the requested command or test suite inside that workspace.
 - The same workspace is reused across calls and shared with commit helpers so edits and installs persist until explicitly reset.
 
 This means:
 
-- Assistants should not assume any global packages or state in the MCP server process; all project-level dependencies must be managed via `run_command` / `run_tests` inside the cloned workspace.
+- Assistants should not assume any global packages or state in the MCP server process; all project-level dependencies must be managed via `terminal_command` / `run_tests` inside the cloned workspace.
 - When describing workflows in docs or prompts, assume that code execution and tests always happen through these tools, on a reusable checkout of the branch being worked on.
 - When new workflow tools are added that depend on executing code, they should internally use the same workspace model rather than relying on ambient process state.

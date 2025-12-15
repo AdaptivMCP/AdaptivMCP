@@ -1,3 +1,7 @@
+
+- Full-file replacements are preferred: edit with `terminal_command` (workspace) or set `updated_content` and commit with `apply_text_update_and_commit`.
+- `terminal_command` was previously named `run_command`; `run_command` remains available as a deprecated alias.
+- Avoid diff/patch tools; Git commits already provide diffs in GitHub.
 # start_session: GitHub MCP session protocol
 
 This document describes how assistants should start and run sessions when using the GitHub MCP server for this controller repo (Proofgate-Revocations/chatgpt-mcp-github).
@@ -49,8 +53,7 @@ When I (an assistant like Joeys GitHub) am editing this controller repo or any o
 
 - I call `get_server_config` once per session to confirm write posture and learn the controller default branch.
 - I immediately create or ensure a dedicated feature branch from the default branch with `ensure_branch` (or `create_branch`), and I never use MCP tools that target the real default branch (for example `main`) while doing work. All subsequent repo/ref arguments for reading, editing, testing, linting, and PR helpers are routed through that feature branch.
-- I prefer diff based tools such as `build_unified_diff`, `build_section_based_diff`, and commit helpers instead of rewriting whole files. I reserve full replacements for intentional, small files that are easy to review.
-- After applying changes, I use `compare_refs` or `get_branch_summary` to summarize what shifted before opening a PR.
+- After applying changes, I use `get_branch_summary` to summarize what shifted before opening a PR.
 - I keep changes behind pull requests: I prefer `open_pr_for_existing_branch` (or `update_files_and_open_pr`) targeting the default branch unless the user says otherwise.
 - Before I call a PR creation tool, I use `build_pr_summary` with the repo `full_name`, the feature `ref`, a short human-written title/body, and any available `changed_files`, `tests_status`, and `lint_status` strings. I then render the structured `title` and `body` from that helper into the PR so descriptions stay consistent with the contract.
 
@@ -59,14 +62,12 @@ When I (an assistant like Joeys GitHub) am editing this controller repo or any o
 For more complex or test-sensitive work, and especially when editing code or docs in this controller repo:
 
 - Use `ensure_workspace_clone` on the relevant branch to get a persistent workspace.
-- Treat `run_command` as your interactive terminal for *small, focused* commands (listing files, running tests, `grep`, formatters), not as a place to embed large multi-line Python or shell scripts that rewrite files.
+- Treat `terminal_command` as your interactive terminal for *small, focused* commands (listing files, running tests, `grep`, formatters), not as a place to embed large multi-line Python or shell scripts that rewrite files.
 - Prefer diff- and section-based tools for file edits instead of hand-rolled inline scripts:
-  - Use `update_file_sections_and_commit` or `apply_line_edits_and_commit` for targeted updates to existing files.
-  - Use `build_unified_diff` or `build_section_based_diff` together with `apply_patch_and_commit` when you need to stage more complex patches.
-- Avoid constructing huge heredocs or multi-line code blobs inside tool arguments (for example `run_command.command`); those patterns are brittle under JSON encoding and often cause control-character errors or disconnections.
+- Avoid constructing huge heredocs or multi-line code blobs inside tool arguments (for example `terminal_command.command`); those patterns are brittle under JSON encoding and often cause control-character errors or disconnections.
 - After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation. Before running `run_tests`, `run_lint_suite`, or any other forward-moving action (including additional edits, PR helpers, or deployment-related checks), call `ensure_workspace_clone` again with `reset=true` on the same branch and continue from that fresh clone. This reclone step is mandatory and not skippable.
-- When your changes cause failing tests, linters, or obvious runtime errors, you are responsible for fixing them: use `run_tests`, `run_lint_suite`, and focused `run_command` calls to debug and update code, tests, and docs until they pass. Do not hide failures or leave broken work for the human to repair.
-- When failures are due to missing dependencies, prefer installing them in the workspace environment via `run_command` (using the controller-provided virtualenv and dependency flags) instead of editing project configuration files solely to make a one-off test run succeed.
+- When your changes cause failing tests, linters, or obvious runtime errors, you are responsible for fixing them: use `run_tests`, `run_lint_suite`, and focused `terminal_command` calls to debug and update code, tests, and docs until they pass. Do not hide failures or leave broken work for the human to repair.
+- When failures are due to missing dependencies, prefer installing them in the workspace environment via `terminal_command` (using the controller-provided virtualenv and dependency flags) instead of editing project configuration files solely to make a one-off test run succeed.
 - Sync edits back with `update_file_from_workspace`, `commit_workspace_files`, or `commit_workspace` on a feature branch rather than trying to rewrite controller files inline via ad-hoc scripts.
 - Keep all workspace actions scoped to the feature branch created via `ensure_branch`, then summarize changes and open a PR when ready.
 
@@ -74,13 +75,11 @@ For more complex or test-sensitive work, and especially when editing code or doc
 
 - Default to `open_file_context`, `get_file_slice`, or `get_file_with_line_numbers` when only part of a file is relevant.
 - When I know I need the entire contents of a single large GitHub file, I prefer `download_user_content` with a `github:` URL (for example `github:owner/repo:path/to/file[@ref]`) so I can fetch it once into the workspace instead of calling file-slice tools in a loop.
-- Use `build_section_based_diff` or `build_unified_diff` for targeted patches instead of full-file rewrites.
 - For large searches or cross-repo questions, prefer repo-scoped `search` calls before resorting to global queries.
 
 ## 6. Issues, PRs, CI, and rate limits
 
 - For issue or PR tasks, start with `open_issue_context` for issues or `get_pr_overview`/`get_pr_info` for pull requests.
-- When you need a normalized issue summary, checklists, and related branches/PRs, call `get_issue_overview` before planning work, then inspect diffs via `list_pr_changed_filenames` and `get_pr_diff`.
 - When you need a compact PR summary, changed files, and CI status for a pull request, call `get_pr_overview` before deciding which write tools to use.
 - When you know the branch name and want to discover PRs tied to it, call `recent_prs_for_branch` to list open (and optionally recent closed) pull requests for that branch.
 - When diagnosing CI, use `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, and `get_job_logs` instead of guessing. Use `trigger_workflow_dispatch` or `trigger_and_wait_for_workflow` only when asked.

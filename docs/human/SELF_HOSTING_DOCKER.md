@@ -8,7 +8,7 @@ At a high level:
 
 - The MCP server runs in your environment (Docker Desktop, a VM, or any Docker-capable host).
 - The controller in ChatGPT connects to this MCP server.
-- The controller does most of its work via `run_command` in a persistent workspace, including installing any dependencies the repo needs, creating branches, committing changes, and opening pull requests.
+- The controller does most of its work via `terminal_command` in a persistent workspace, including installing any dependencies the repo needs, creating branches, committing changes, and opening pull requests.
 
 ---
 
@@ -101,7 +101,7 @@ This will:
 - Build the image using the provided `Dockerfile`.
 - Start the `adaptiv-controller-github` container.
 - Expose the MCP HTTP server on `http://localhost:8000`.
-- Mount `./workspace` on your host as `/workspace` inside the container so `run_command` and `run_tests` can use a persistent workspace.
+- Mount `./workspace` on your host as `/workspace` inside the container so `terminal_command` and `run_tests` can use a persistent workspace.
 
 To stop the container:
 
@@ -152,7 +152,7 @@ This confirms that:
 When you are using a controller like **Joey's GitHub**, the typical workflow against this self-hosted Docker deployment is:
 
 1. **Create a feature branch** from `main` for any change.
-2. **Use `run_command` for all repo work** in the workspace clone: file inspection, edits, formatting, tests, and installing any dependencies.
+2. **Use `terminal_command` for all repo work** in the workspace clone: file inspection, edits, formatting, tests, and installing any dependencies.
 3. **Commit from the workspace** with `commit_workspace`, targeting that feature branch and pushing back to GitHub.
 4. **Open a pull request** from the feature branch into `main`.
 5. **Review and merge** the PR yourself, then delete the branch.

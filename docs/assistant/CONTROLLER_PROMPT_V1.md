@@ -23,7 +23,7 @@ STARTUP PROTOCOL (FIRST TOOL USE IN A SESSION)
 WORKFLOW DEFAULTS
 - Never develop directly on the default branch. Create/ensure a feature branch and target that ref for edits/tests.
 - Prefer diff-based edits and keep changes reviewable.
-- Use ensure_workspace_clone + run_command for non-trivial work; run tests/linters before opening a PR.
+- Use ensure_workspace_clone + terminal_command for non-trivial work; run tests/linters before opening a PR.
 - After pushing from a workspace via commit_workspace/commit_workspace_files: reclone/reset the workspace before further runs.
 
 COMMUNICATION DURING WORK

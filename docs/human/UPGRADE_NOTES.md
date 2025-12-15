@@ -93,7 +93,7 @@ When you want to upgrade the MCP server (for example after merging new tools or 
    - Run a small set of smoke tests using your Adaptiv Controller, for example:
      - `get_server_config` and `list_all_actions`.
      - A simple docs-only change (branch → edit → PR) against a test repo.
-     - `run_command` and `run_tests` on the controller repo or a sample project.
+     - `terminal_command` and `run_tests` on the controller repo or a sample project.
    - Confirm that:
      - The controller contract looks correct.
      - Tools behave as expected.
@@ -152,7 +152,7 @@ Every upgrade should include at least three kinds of checks:
    - Metrics do not show abnormal spikes in errors, timeouts, or rate limiting.
 
 2. **Workspace-level tests**
-   - Use `run_command` and `run_tests` in the workspace to validate the controller repo and any key projects you care about.
+   - Use `terminal_command` and `run_tests` in the workspace to validate the controller repo and any key projects you care about.
    - For example, on the controller repo itself:
      - `run_tests` with `pytest -q`.
 

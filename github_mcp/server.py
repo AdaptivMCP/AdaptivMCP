@@ -46,12 +46,9 @@ CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main
 # Canonical args examples shown in tool descriptions to reduce malformed tool calls.
 _TOOL_EXAMPLES: dict[str, str] = {
     "run_command": '{"full_name":"owner/repo","ref":"main","command":"pytest"}',
-    "apply_patch_to_workspace": '{"full_name":"owner/repo","ref":"feature-branch","patch":"diff --git ..."}',
     "ensure_workspace_clone": '{"full_name":"owner/repo","ref":"feature-branch","reset":true}',
     "get_workspace_file_contents": '{"full_name":"owner/repo","ref":"feature-branch","path":"path/to/file.py"}',
-    "build_unified_diff_from_workspace": '{"full_name":"owner/repo","ref":"feature-branch","path":"file.py","updated_content":"...","context_lines":3}',
-    "build_section_based_diff_from_workspace": '{"full_name":"owner/repo","ref":"feature-branch","path":"file.py","sections":[{"start_line":1,"end_line":1,"new_text":"..."}]}',
-    "apply_patch_to_workspace_file": '{"full_name":"owner/repo","ref":"feature-branch","path":"file.py","patch":"diff --git ..."}',
+    "set_workspace_file_contents": '{\"full_name\":\"owner/repo\",\"ref\":\"feature-branch\",\"path\":\"path/to/file.py\",\"content\":\"...\"}',
     "fetch_files": '{"full_name":"owner/repo","ref":"main","paths":["main.py"]}',
     "open_file_context": '{"full_name":"owner/repo","ref":"main","path":"main.py","start_line":1,"max_lines":200}',
     "update_files_and_open_pr": '{"full_name":"owner/repo","base_branch":"main","new_branch":"feature/my-change","files":[{"path":"README.md","content":"..."}],"title":"My change","body":"Why this change"}',
@@ -452,6 +449,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     # JSON Schemas. For these we deliberately skip strict preflight and rely on
     # their existing runtime validation and the test suite instead.
     if name in {
+        "terminal_command",
         "run_command",
         "commit_workspace_files",
         "cache_files",
@@ -461,7 +459,6 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
         "update_issue",
         "describe_tool",
         "validate_tool_args",
-        "list_recent_failures",
     }:
         return None
 
@@ -479,18 +476,6 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     # keeps describe_tool and validate_tool_args useful without requiring
     # every tool to be fully annotated.
     if schema is None:
-        if name == "compare_refs":
-            return {
-                "type": "object",
-                "properties": {
-                    "full_name": {"type": "string"},
-                    "base": {"type": "string"},
-                    "head": {"type": "string"},
-                },
-                "required": ["full_name", "base", "head"],
-                "additionalProperties": True,
-            }
-
         if name == "list_workflow_runs":
             return {
                 "type": "object",

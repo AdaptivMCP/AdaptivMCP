@@ -7,7 +7,7 @@ from github_mcp import tools_workspace
 async def test_run_tests_success_maps_exit_code_and_arguments(monkeypatch):
     calls = {}
 
-    async def fake_run_command(**kwargs):
+    async def fake_terminal_command(**kwargs):
         calls["kwargs"] = kwargs
         return {
             "repo_dir": "/tmp/repo",
@@ -19,7 +19,7 @@ async def test_run_tests_success_maps_exit_code_and_arguments(monkeypatch):
             },
         }
 
-    monkeypatch.setattr(tools_workspace, "run_command", fake_run_command)
+    monkeypatch.setattr(tools_workspace, "terminal_command", fake_terminal_command)
 
     result = await tools_workspace.run_tests(
         full_name="owner/repo",
@@ -27,13 +27,11 @@ async def test_run_tests_success_maps_exit_code_and_arguments(monkeypatch):
         test_command="pytest -q",
         timeout_seconds=123,
         workdir="subdir",
-        patch="diff",
         use_temp_venv=False,
         installing_dependencies=True,
         mutating=True,
     )
 
-    # Status and basic shape
     assert result["status"] == "passed"
     assert result["command"] == "pytest -q"
     assert result["exit_code"] == 0
@@ -41,14 +39,12 @@ async def test_run_tests_success_maps_exit_code_and_arguments(monkeypatch):
     assert result["workdir"] == "subdir"
     assert result["result"]["stdout"] == "ok"
 
-    # Ensure run_tests forwarded arguments to run_command correctly
     assert calls["kwargs"] == {
         "full_name": "owner/repo",
         "ref": "feature-branch",
         "command": "pytest -q",
         "timeout_seconds": 123,
         "workdir": "subdir",
-        "patch": "diff",
         "use_temp_venv": False,
         "installing_dependencies": True,
         "mutating": True,
@@ -57,7 +53,7 @@ async def test_run_tests_success_maps_exit_code_and_arguments(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_run_tests_failed_exit_code_sets_failed_status(monkeypatch):
-    async def fake_run_command(**kwargs):
+    async def fake_terminal_command(**kwargs):
         return {
             "repo_dir": "/tmp/repo",
             "workdir": kwargs.get("workdir"),
@@ -68,7 +64,7 @@ async def test_run_tests_failed_exit_code_sets_failed_status(monkeypatch):
             },
         }
 
-    monkeypatch.setattr(tools_workspace, "run_command", fake_run_command)
+    monkeypatch.setattr(tools_workspace, "terminal_command", fake_terminal_command)
 
     result = await tools_workspace.run_tests(full_name="owner/repo")
 
@@ -80,13 +76,13 @@ async def test_run_tests_failed_exit_code_sets_failed_status(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_run_tests_propagates_structured_error_from_run_command(monkeypatch):
+async def test_run_tests_propagates_structured_error_from_terminal_command(monkeypatch):
     error_payload = {"error": "CloneFailed", "message": "unable to clone repo"}
 
-    async def fake_run_command(**kwargs):
+    async def fake_terminal_command(**kwargs):
         return {"error": error_payload}
 
-    monkeypatch.setattr(tools_workspace, "run_command", fake_run_command)
+    monkeypatch.setattr(tools_workspace, "terminal_command", fake_terminal_command)
 
     result = await tools_workspace.run_tests(full_name="owner/repo")
 
@@ -99,10 +95,10 @@ async def test_run_tests_propagates_structured_error_from_run_command(monkeypatc
 async def test_run_tests_handles_unexpected_result_shape(monkeypatch):
     unexpected = {"unexpected": True}
 
-    async def fake_run_command(**kwargs):
+    async def fake_terminal_command(**kwargs):
         return unexpected
 
-    monkeypatch.setattr(tools_workspace, "run_command", fake_run_command)
+    monkeypatch.setattr(tools_workspace, "terminal_command", fake_terminal_command)
 
     result = await tools_workspace.run_tests(full_name="owner/repo")
 

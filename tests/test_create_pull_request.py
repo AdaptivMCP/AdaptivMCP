@@ -89,16 +89,6 @@ async def test_create_pull_request_generates_default_body_when_missing(monkeypat
     def fake_ensure_write_allowed(context):
         return None
 
-    async def fake_compare_refs(full_name, base, head):  # type: ignore[override]
-        return {
-            "ahead_by": 2,
-            "behind_by": 0,
-            "total_commits": 2,
-            "files": [
-                {"filename": "main.py"},
-                {"filename": "tests/test_create_pull_request.py"},
-            ],
-        }
 
     async def fake_list_workflow_runs(full_name, branch=None, per_page=3, page=1):  # type: ignore[override]
         return {
@@ -127,7 +117,6 @@ async def test_create_pull_request_generates_default_body_when_missing(monkeypat
 
     monkeypatch.setattr(main, "_effective_ref_for_repo", fake_effective_ref)
     monkeypatch.setattr(main.server, "_ensure_write_allowed", fake_ensure_write_allowed)
-    monkeypatch.setattr(main, "compare_refs", fake_compare_refs)
     monkeypatch.setattr(main, "list_workflow_runs", fake_list_workflow_runs)
     monkeypatch.setattr(main, "_github_request", fake_github_request)
 

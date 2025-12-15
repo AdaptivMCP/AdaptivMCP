@@ -45,12 +45,12 @@ Meta tools when you are unsure:
 - `get_server_config` for configuration and write posture.
 - `list_all_actions` and `list_write_tools` for the live tool surface.
 - `describe_tool` when you need a focused view of a single tool, including its `input_schema`.
-- `validate_tool_args` to preflight JSON payloads against a tool's schema (for example before calling `compare_refs` or diff/commit helpers).
+- `validate_tool_args` to preflight JSON payloads against a tool's schema (for example before calling any unfamiliar tool).
 - `validate_environment` when failures look like token or configuration problems.
 - `ping_extensions` to confirm that extension modules are loaded.
 - Repository docs when in doubt about expectations or requirements.
 - `build_pr_summary` when preparing to open or update a PR so you can produce a structured `title` and `body` that reflect the latest tests, lint status, and changed areas instead of writing ad-hoc descriptions.
-- `create_pull_request` itself now generates a rich default body when you omit the `body` argument; it uses `compare_refs` and recent workflow runs to prefill a structured template (summary, change summary, sample files touched, CI & quality, testing, risks, and reviewer checklist) that you can then edit instead of starting from a blank description.
+- `create_pull_request` itself now generates a rich default body when you omit the `body` argument; it uses recent workflow runs to prefill a structured template (summary, change summary, sample files touched, CI & quality, testing, risks, and reviewer checklist) that you can then edit instead of starting from a blank description.
 
 ### 1.1 Rehydrating after context loss
 
@@ -60,7 +60,7 @@ Assistants sometimes lose history between turns. When that happens, rebuild cont
 - Call `get_server_config` to confirm write posture, controller defaults, and uptime.
 - Reopen the task surface: use `get_branch_summary` for branch state, `open_issue_context` when work is tied to an issue, and `list_repository_tree` to reorient on the repo layout.
 - Pull the exact files you need again with `get_file_contents`, `get_file_slice`, or `fetch_files` instead of relying on hazy memory.
-- Run quick, scoped discovery commands through `run_command` (for example `ls`, `git status`, or `rg <pattern> . --max-count 50`) to rebuild a mental map of the workspace; keep searches repo-scoped instead of global when working on this controller.
+- Run quick, scoped discovery commands through `terminal_command` (for example `ls`, `git status`, or `rg <pattern> . --max-count 50`) to rebuild a mental map of the workspace; keep searches repo-scoped instead of global when working on this controller.
 - Restate the goal and current findings in the chat so subsequent turns keep the refreshed context visible to both you and the user.
 
 ---
@@ -222,9 +222,6 @@ For large files:
 
 - Use `get_file_slice` to read only the region you care about instead of the entire file.
 - Use `get_file_with_line_numbers` when you need exact line references for citations or for line-based patch tools; copy the ranges directly instead of hand-numbering snippets.
-- Use `build_section_based_diff` to construct diffs for the specific line ranges that need to change.
-- Apply the resulting patch with `apply_patch_and_commit` on the appropriate branch.
-- Use `apply_line_edits_and_commit` for small, line-targeted updates when you know the exact line numbers.
 - Use `download_user_content` when you need to pull bytes for an example or test fixture without writing a file back to the repo. It accepts:
   - `sandbox:/` paths and absolute server paths.
   - Absolute `http(s)` URLs.
@@ -269,14 +266,14 @@ Teach assistants these patterns directly in prompts and examples so they stop ge
 
 When you need to run tests or commands, always think in terms of the workspace model exposed by this engine.
 
-- `run_command` clones the target repo at a given ref into a persistent workspace and runs a command there.
-- `run_tests` is a focused wrapper around `run_command` for test commands.
+- `terminal_command` clones the target repo at a given ref into a persistent workspace and runs a command there.
+- `run_tests` is a focused wrapper around `terminal_command` for test commands.
 - Workspaces are persistent per repo/ref and shared with `commit_workspace`, so edits and installs survive between calls until explicitly reset.
 
 Prompts and workflows should
 
 - Avoid assuming that packages are globally installed in the controller process.
-- Treat `run_command` and `run_tests` as the canonical way to execute code and tests.
+- Treat `terminal_command` and `run_tests` as the canonical way to execute code and tests.
 - Explicitly describe what is being run and why when invoking these tools.
 
 ---

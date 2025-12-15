@@ -26,10 +26,10 @@ This is the recommended pattern for most edits: fetch a focused view, compute a 
 
 ```mermaid
 flowchart TD
-    A[ensure_workspace_clone] --> B[run_command / run_tests / run_lint_suite / run_quality_suite]
+    A[ensure_workspace_clone] --> B[terminal_command / run_tests / run_lint_suite / run_quality_suite]
     B --> C[get_workspace_changes_summary]
     C --> D[commit_workspace / commit_workspace_files]
-    D --> E[compare_refs / get_branch_summary / get_latest_branch_status]
+    D --> E[get_branch_summary / get_latest_branch_status]
     E --> F[open_pr_for_existing_branch / update_files_and_open_pr]
     F --> G[list_workflow_runs / get_workflow_run_overview / list_recent_failures]
 ```
@@ -51,7 +51,6 @@ flowchart TD
 - [comment_on_pull_request](#comment_on_pull_request)
 - [commit_workspace](#commit_workspace)
 - [commit_workspace_files](#commit_workspace_files)
-- [compare_refs](#compare_refs)
 - [create_branch](#create_branch)
 - [create_file](#create_file)
 - [create_issue](#create_issue)
@@ -115,7 +114,7 @@ flowchart TD
 - [pr_smoke_test](#pr_smoke_test)
 - [recent_prs_for_branch](#recent_prs_for_branch)
 - [resolve_handle](#resolve_handle)
-- [run_command](#run_command)
+- [terminal_command](#terminal_command)
 - [run_lint_suite](#run_lint_suite)
 - [run_quality_suite](#run_quality_suite)
 - [run_tests](#run_tests)
@@ -171,7 +170,7 @@ flowchart TD
 - [pr_smoke_test](#pr_smoke_test)
 - [recent_prs_for_branch](#recent_prs_for_branch)
 - [resolve_handle](#resolve_handle)
-- [run_command](#run_command)
+- [terminal_command](#terminal_command)
 - [run_lint_suite](#run_lint_suite)
 - [run_quality_suite](#run_quality_suite)
 - [run_tests](#run_tests)
@@ -226,9 +225,6 @@ Create a commit from the current state of the persistent workspace and optionall
 
 Commit a specific set of files from the workspace and optionally push them. Use this for targeted commits that only include the files you specify.
 
-### compare_refs
-
-Compare two refs (base/head) using the GitHub compare API. This returns summaries of commits and file changes and is useful for answering "what changed between these refs?".
 
 ### create_branch
 
@@ -264,7 +260,7 @@ Idempotently ensure a branch exists, creating it from a base ref when needed. Th
 
 ### ensure_workspace_clone
 
-Ensure there is a persistent local clone for a repo/ref. All workspace commands (`run_command`, `run_tests`, `run_lint_suite`, `run_quality_suite`) operate on this clone.
+Ensure there is a persistent local clone for a repo/ref. All workspace commands (`terminal_command`, `run_tests`, `run_lint_suite`, `run_quality_suite`) operate on this clone.
 
 ### cache_files
 
@@ -388,7 +384,7 @@ Return a compact summary of a workflow run, including status, conclusion, and ke
 
 ### get_workspace_changes_summary
 
-Summarize modified, added, deleted, and untracked files in the workspace clone. Use this after running `run_command` or tests to see what changed before committing.
+Summarize modified, added, deleted, and untracked files in the workspace clone. Use this after running `terminal_command` or tests to see what changed before committing.
 
 ### graphql_query
 
@@ -482,9 +478,11 @@ List recent pull requests associated with a branch, grouped by state. Use this t
 
 Resolve a lightweight handle (like `#123` or `pr:45`) into a concrete issue, PR, or branch reference. Use this to understand shorthand the user provides.
 
-### run_command
+### terminal_command
 
 Run a shell command inside the persistent workspace clone. Use this for tests, linters, formatters, build tools, search commands, and one-off diagnostics that need the real tree.
+
+Note: `run_command` is a deprecated alias for `terminal_command`.
 
 ### run_lint_suite
 
@@ -512,7 +510,7 @@ Trigger a GitHub Actions workflow dispatch event for a workflow and ref without 
 
 ### update_file_from_workspace
 
-Update a file in GitHub from the corresponding file in the workspace clone. Use this when you edited files via `run_command` and now want to sync them back to the branch.
+Update a file in GitHub from the corresponding file in the workspace clone. Use this when you edited files via `terminal_command` and now want to sync them back to the branch.
 
 ### update_files_and_open_pr
 
@@ -569,7 +567,7 @@ Idempotently ensure a branch exists, creating it from a base ref when needed. Th
 
 ### ensure_workspace_clone
 
-Ensure there is a persistent local clone for a repo/ref. All workspace commands (`run_command`, `run_tests`, `run_lint_suite`, `run_quality_suite`) operate on this clone.
+Ensure there is a persistent local clone for a repo/ref. All workspace commands (`terminal_command`, `run_tests`, `run_lint_suite`, `run_quality_suite`) operate on this clone.
 
 ### cache_files
 
@@ -697,7 +695,7 @@ Return a compact summary of a workflow run, including status, conclusion, and ke
 
 ### get_workspace_changes_summary
 
-Summarize modified, added, deleted, and untracked files in the workspace clone. Use this after running `run_command` or tests to see what changed before committing.
+Summarize modified, added, deleted, and untracked files in the workspace clone. Use this after running `terminal_command` or tests to see what changed before committing.
 
 ### graphql_query
 
@@ -791,9 +789,11 @@ List recent pull requests associated with a branch, grouped by state. Use this t
 
 Resolve a lightweight handle (like `#123` or `pr:45`) into a concrete issue, PR, or branch reference. Use this to understand shorthand the user provides.
 
-### run_command
+### terminal_command
 
 Run a shell command inside the persistent workspace clone. Use this for tests, linters, formatters, build tools, search commands, and one-off diagnostics that need the real tree.
+
+Note: `run_command` is a deprecated alias for `terminal_command`.
 
 ### run_lint_suite
 
@@ -821,7 +821,7 @@ Trigger a GitHub Actions workflow dispatch event for a workflow and ref without 
 
 ### update_file_from_workspace
 
-Update a file in GitHub from the corresponding file in the workspace clone. Use this when you edited files via `run_command` and now want to sync them back to the branch.
+Update a file in GitHub from the corresponding file in the workspace clone. Use this when you edited files via `terminal_command` and now want to sync them back to the branch.
 
 ### update_file_sections_and_commit
 

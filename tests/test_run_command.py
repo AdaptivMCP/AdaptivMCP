@@ -7,59 +7,6 @@ import pytest
 import main
 
 
-@pytest.mark.asyncio
-async def test_run_command_applies_patch_before_command(monkeypatch, tmp_path):
-    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
-
-    repo_dir = tmp_path / "repo"
-    repo_dir.mkdir()
-
-    subprocess.run(["git", "init", "-q"], cwd=repo_dir, check=True)
-    (repo_dir / "sample.txt").write_text("old\n", encoding="utf-8")
-    subprocess.run(["git", "add", "sample.txt"], cwd=repo_dir, check=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.email=test@example.com",
-            "-c",
-            "user.name=test",
-            "commit",
-            "-m",
-            "init",
-        ],
-        cwd=repo_dir,
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    async def fake_clone(
-        full_name: str, ref: str = "main", *, preserve_changes: bool = False
-    ) -> str:
-        return str(repo_dir)
-
-    monkeypatch.setattr(main, "_clone_repo", fake_clone)
-
-    patch = textwrap.dedent(
-        """
-        --- a/sample.txt
-        +++ b/sample.txt
-        @@ -1 +1 @@
-        -old
-        +new
-        """
-    )
-
-    result = await main.run_command(
-        full_name="owner/repo",
-        ref="main",
-        command="cat sample.txt",
-        patch=patch,
-    )
-
-    assert result["result"]["exit_code"] == 0
-    assert result["result"]["stdout"].strip() == "new"
 
 
 @pytest.mark.asyncio
@@ -74,7 +21,7 @@ async def test_run_shell_returns_full_output():
 
 
 @pytest.mark.asyncio
-async def test_run_command_uses_temp_virtualenv(monkeypatch, tmp_path):
+async def test_terminal_command_uses_temp_virtualenv(monkeypatch, tmp_path):
     monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     repo_dir = tmp_path / "repo"
@@ -100,7 +47,7 @@ async def test_run_command_uses_temp_virtualenv(monkeypatch, tmp_path):
 
     monkeypatch.setattr(main, "_run_shell", fake_run_shell)
 
-    await main.run_command(full_name="owner/repo", command="echo ok")
+    await main.terminal_command(full_name="owner/repo", command="echo ok")
 
     assert any("-m venv" in call["cmd"] for call in calls)
     run_call = calls[-1]
@@ -113,7 +60,7 @@ async def test_run_command_uses_temp_virtualenv(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_run_command_allows_disabling_virtualenv(monkeypatch, tmp_path):
+async def test_terminal_command_allows_disabling_virtualenv(monkeypatch, tmp_path):
     monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     repo_dir = tmp_path / "repo"
@@ -139,14 +86,14 @@ async def test_run_command_allows_disabling_virtualenv(monkeypatch, tmp_path):
 
     monkeypatch.setattr(main, "_run_shell", fake_run_shell)
 
-    await main.run_command(full_name="owner/repo", command="echo ok", use_temp_venv=False)
+    await main.terminal_command(full_name="owner/repo", command="echo ok", use_temp_venv=False)
 
     assert not any("-m venv" in call["cmd"] for call in calls)
     assert calls[-1]["env"] is None
 
 
 @pytest.mark.asyncio
-async def test_run_command_read_only_skips_write_gate(monkeypatch, tmp_path):
+async def test_terminal_command_read_only_skips_write_gate(monkeypatch, tmp_path):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
 
@@ -178,14 +125,14 @@ async def test_run_command_read_only_skips_write_gate(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "_run_shell", fake_run_shell)
     monkeypatch.setattr(main, "_ensure_write_allowed", fail_write_gate)
 
-    result = await main.run_command(full_name="owner/repo", command="echo ok")
+    result = await main.terminal_command(full_name="owner/repo", command="echo ok")
 
     assert result["result"]["exit_code"] == 0
     assert calls[-1] == "echo ok"
 
 
 @pytest.mark.asyncio
-async def test_run_command_mutating_triggers_write_gate(monkeypatch, tmp_path):
+async def test_terminal_command_mutating_triggers_write_gate(monkeypatch, tmp_path):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
 
@@ -216,10 +163,10 @@ async def test_run_command_mutating_triggers_write_gate(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "_run_shell", fake_run_shell)
     monkeypatch.setattr(main, "_ensure_write_allowed", record_write_gate)
 
-    result = await main.run_command(full_name="owner/repo", command="echo ok", mutating=True)
+    result = await main.terminal_command(full_name="owner/repo", command="echo ok", mutating=True)
 
     assert result["result"]["exit_code"] == 0
-    assert write_contexts and "run_command" in write_contexts[-1]
+    assert write_contexts and "terminal_command" in write_contexts[-1]
 
 
 @pytest.mark.asyncio
@@ -320,7 +267,7 @@ async def test_clone_repo_reuses_persistent_workspace(monkeypatch, tmp_path):
 
     monkeypatch.setattr(main, "_run_shell", fake_run_shell)
 
-    result = await main.run_command(
+    result = await main.terminal_command(
         full_name="owner/repo",
         ref="main",
         command="echo ok",
@@ -391,7 +338,7 @@ async def test_commit_workspace_creates_commit(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_run_command_and_commit_share_workspace(monkeypatch, tmp_path):
+async def test_terminal_command_and_commit_share_workspace(monkeypatch, tmp_path):
     monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
 
     repo_dir = tmp_path / "repo"
@@ -433,7 +380,7 @@ async def test_run_command_and_commit_share_workspace(monkeypatch, tmp_path):
 
     monkeypatch.setattr(main, "_run_shell", fake_run_shell)
 
-    run_result = await main.run_command(
+    run_result = await main.terminal_command(
         full_name="owner/repo",
         ref="feature",
         command="echo hi",

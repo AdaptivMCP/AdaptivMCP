@@ -62,7 +62,7 @@ async def test_resolve_handle_branch(monkeypatch):
         return {
             "branch": branch,
             "base": base,
-            "compare": {"ahead_by": 1, "behind_by": 0, "status": "ahead", "total_commits": 1},
+            "compare": None,
             "open_prs": [
                 {
                     "number": 5,
@@ -83,7 +83,7 @@ async def test_resolve_handle_branch(monkeypatch):
     result = await main.resolve_handle("owner/repo", handle="feature/foo")
 
     assert result["resolved_kinds"] == ["branch"]
-    assert result["branch"]["compare"]["ahead_by"] == 1
+    assert "compare" not in result["branch"]
     assert result["branch"]["open_prs"][0]["number"] == 5
 
 

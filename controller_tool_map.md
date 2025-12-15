@@ -36,8 +36,6 @@ short description of what each tool does.
 | `fetch_pr` | `main.py` | 814 | Fetch pull request details. |
 | `get_pr_info` | `main.py` | 821 | Get metadata for a pull request without downloading the diff. |
 | `fetch_pr_comments` | `main.py` | 842 | Fetch issue-style comments for a pull request. |
-| `get_pr_diff` | `main.py` | 854 | Fetch the unified diff for a pull request. |
-| `fetch_pr_patch` | `main.py` | 866 | Fetch the patch for a GitHub pull request. |
 | `list_pr_changed_filenames` | `main.py` | 878 | List files changed in a pull request. |
 | `get_commit_combined_status` | `main.py` | 890 | Get combined status for a commit or ref. |
 | `get_issue_comment_reactions` | `main.py` | 897 | Fetch reactions for an issue comment. |
@@ -79,7 +77,6 @@ short description of what each tool does.
 | `comment_on_issue` | `main.py` | 2672 | Post a comment on an issue. |
 | `open_issue_context` | `main.py` | 2692 | Return an issue plus related branches and pull requests. |
 | `resolve_handle` | `main.py` | 2850 | Resolve a lightweight GitHub handle into issue, PR, or branch details. |
-| `compare_refs` | `main.py` | 2943 | Compare two refs and return the GitHub diff summary (max 100 files). |
 | `create_branch` | `main.py` | 2965 | Create a new branch from an existing ref (default `main`). |
 | `ensure_branch` | `main.py` | 2983 | Idempotently ensure a branch exists, creating it from `from_ref`. |
 | `get_branch_summary` | `main.py` | 3002 | Return ahead/behind data, PRs, and latest workflow run for a branch. |
@@ -99,7 +96,7 @@ short description of what each tool does.
 | Tool name | Module | Line | Summary |
 | --- | --- | --- | --- |
 | `ensure_workspace_clone` | `github_mcp/tools_workspace.py` | 41 | Ensure a persistent workspace clone exists for a repo/ref. |
-| `run_command` | `github_mcp/tools_workspace.py` | 67 | Run a shell command inside the repo workspace and return its result. |
+| `terminal_command` | `github_mcp/tools_workspace.py` | 67 | Run a shell command inside the repo workspace and return its result. |
 | `commit_workspace` | `github_mcp/tools_workspace.py` | 124 | Commit workspace changes and optionally push them. |
 | `commit_workspace_files` | `github_mcp/tools_workspace.py` | 181 | Commit and optionally push specific files from the persistent workspace. |
 | `get_workspace_changes_summary` | `github_mcp/tools_workspace.py` | 241 | Summarize modified, added, deleted, renamed, and untracked files in the workspace. |
