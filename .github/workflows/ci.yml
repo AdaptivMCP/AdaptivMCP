@@ -46,9 +46,13 @@ jobs:
         run: |
           ruff check .
 
-      - name: 'Guardrail: block token-like strings in repo'
+      - name: Guardrail: block token-like strings in repo
         run: |
           if [ -f scripts/check_no_tokenlike_strings.py ]; then python scripts/check_no_tokenlike_strings.py; fi
+
+      - name: Guardrail: docs must prefer full-file replacement edits
+        run: |
+          python scripts/check_docs_full_file_replacements.py
 
       - name: Run tests
         run: |
