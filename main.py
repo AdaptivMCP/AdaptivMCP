@@ -12,7 +12,6 @@ import base64
 import json
 import os
 import re
-from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
 
@@ -62,7 +61,6 @@ from github_mcp.http_clients import (
     _external_client_instance,
     _get_concurrency_semaphore,  # noqa: F401
     _github_client_instance,
-    _http_client_github,
     _get_github_token,  # noqa: F401
 )
 from github_mcp.metrics import (
@@ -86,7 +84,6 @@ from github_mcp.server import (
 from github_mcp.tools_workspace import commit_workspace, ensure_workspace_clone  # noqa: F401
 from github_mcp.utils import (
     REPO_DEFAULTS,
-    _decode_zipped_job_logs,
     _effective_ref_for_repo,
     _normalize_repo_path,
     _with_numbered_lines,
@@ -1462,6 +1459,38 @@ async def download_user_content(content_url: str) -> Dict[str, Any]:
     }
 
 
+def _decode_zipped_job_logs(content: bytes) -> str:
+    """Decode a zipped GitHub Actions job logs payload into a readable string.
+
+    Returns an empty string for invalid zip payloads. For valid zip files,
+    entries are sorted by filename and combined with section headers:
+
+        [file.txt]
+<contents>
+    """
+
+    import io
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zip_file:
+            names = sorted(zip_file.namelist())
+            parts: list[str] = []
+            for name in names:
+                try:
+                    raw = zip_file.read(name)
+                except Exception:
+                    continue
+                try:
+                    text = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    text = raw.decode("utf-8", errors="replace")
+                parts.append(f"[{name}]\n{text}")
+            return "\n\n".join(parts)
+    except Exception:
+        return ""
+
+
 # ------------------------------------------------------------------------------
 # GitHub Actions tools
 # ------------------------------------------------------------------------------
@@ -1477,26 +1506,9 @@ async def list_workflow_runs(
     page: int = 1,
 ) -> Dict[str, Any]:
     """List recent GitHub Actions workflow runs with optional filters."""
+    from github_mcp.main_tools.workflows import list_workflow_runs as _impl
+    return await _impl(full_name=full_name, branch=branch, status=status, event=event, per_page=per_page, page=page)
 
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-    if per_page <= 0:
-        raise ValueError("per_page must be > 0")
-    if page <= 0:
-        raise ValueError("page must be > 0")
-
-    params: Dict[str, Any] = {"per_page": per_page, "page": page}
-    if branch:
-        params["branch"] = branch
-    if status:
-        params["status"] = status
-    if event:
-        params["event"] = event
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/actions/runs",
-        params=params,
-    )
 
 
 @mcp_tool(write_action=False)
@@ -1512,71 +1524,9 @@ async def list_recent_failures(
     cancelled, or timed out). It is intended as a navigation helper for CI
     debugging flows.
     """
+    from github_mcp.main_tools.workflows import list_recent_failures as _impl
+    return await _impl(full_name=full_name, branch=branch, limit=limit)
 
-    if limit <= 0:
-        raise ValueError("limit must be > 0")
-
-    # Fetch a bounded page of recent runs; callers can tune ``limit`` but
-    # results are further filtered to non-successful conclusions.
-    per_page = min(max(limit, 10), 50)
-
-    runs_resp = await list_workflow_runs(
-        full_name=full_name,
-        branch=branch,
-        per_page=per_page,
-        page=1,
-    )
-
-    runs_json = runs_resp.get("json") or {}
-    raw_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
-
-    failure_conclusions = {
-        "failure",
-        "cancelled",
-        "timed_out",
-        "action_required",
-        "startup_failure",
-    }
-
-    failures: List[Dict[str, Any]] = []
-    for run in raw_runs:
-        status = run.get("status")
-        conclusion = run.get("conclusion")
-
-        if conclusion in failure_conclusions:
-            include = True
-        elif status == "completed" and conclusion not in (None, "success", "neutral", "skipped"):
-            include = True
-        else:
-            include = False
-
-        if not include:
-            continue
-
-        failures.append(
-            {
-                "id": run.get("id"),
-                "name": run.get("name"),
-                "event": run.get("event"),
-                "status": status,
-                "conclusion": conclusion,
-                "head_branch": run.get("head_branch"),
-                "head_sha": run.get("head_sha"),
-                "created_at": run.get("created_at"),
-                "updated_at": run.get("updated_at"),
-                "html_url": run.get("html_url"),
-            }
-        )
-
-        if len(failures) >= limit:
-            break
-
-    return {
-        "full_name": full_name,
-        "branch": branch,
-        "limit": limit,
-        "runs": failures,
-    }
 
 
 @mcp_tool(
@@ -1741,10 +1691,9 @@ async def validate_tool_args(
 @mcp_tool(write_action=False)
 async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
     """Retrieve a specific workflow run including timing and conclusion."""
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/actions/runs/{run_id}",
-    )
+    from github_mcp.main_tools.workflows import get_workflow_run as _impl
+    return await _impl(full_name=full_name, run_id=run_id)
+
 
 
 @mcp_tool(write_action=False)
@@ -1755,20 +1704,9 @@ async def list_workflow_run_jobs(
     page: int = 1,
 ) -> Dict[str, Any]:
     """List jobs within a workflow run, useful for troubleshooting failures."""
+    from github_mcp.main_tools.workflows import list_workflow_run_jobs as _impl
+    return await _impl(full_name=full_name, run_id=run_id, per_page=per_page, page=page)
 
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-    if per_page <= 0:
-        raise ValueError("per_page must be > 0")
-    if page <= 0:
-        raise ValueError("page must be > 0")
-
-    params = {"per_page": per_page, "page": page}
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/actions/runs/{run_id}/jobs",
-        params=params,
-    )
 
 
 @mcp_tool(write_action=False)
@@ -1784,197 +1722,17 @@ async def get_workflow_run_overview(
     failed jobs, and the longest jobs by duration so assistants can answer
     "what happened in this run?" with a single tool call.
     """
+    from github_mcp.main_tools.workflows import get_workflow_run_overview as _impl
+    return await _impl(full_name=full_name, run_id=run_id, max_jobs=max_jobs)
 
-    if max_jobs <= 0:
-        raise ValueError("max_jobs must be > 0")
-
-    run_resp = await get_workflow_run(full_name, run_id)
-    run_json = run_resp.get("json") if isinstance(run_resp, dict) else run_resp
-    if not isinstance(run_json, dict):
-        run_json = {}
-
-    run_summary: Dict[str, Any] = {
-        "id": run_json.get("id"),
-        "name": run_json.get("name"),
-        "event": run_json.get("event"),
-        "status": run_json.get("status"),
-        "conclusion": run_json.get("conclusion"),
-        "head_branch": run_json.get("head_branch"),
-        "head_sha": run_json.get("head_sha"),
-        "run_attempt": run_json.get("run_attempt"),
-        "created_at": run_json.get("created_at"),
-        "updated_at": run_json.get("updated_at"),
-        "html_url": run_json.get("html_url"),
-    }
-
-    def _parse_timestamp(value: Any) -> Optional[datetime]:
-        if not isinstance(value, str):
-            return None
-        try:
-            if value.endswith("Z"):
-                value = value[:-1] + "+00:00"
-            return datetime.fromisoformat(value)
-        except Exception:
-            return None
-
-    jobs: List[Dict[str, Any]] = []
-    failed_jobs: List[Dict[str, Any]] = []
-    jobs_with_duration: List[Dict[str, Any]] = []
-
-    failure_conclusions = {
-        "failure",
-        "cancelled",
-        "timed_out",
-        "action_required",
-        "startup_failure",
-    }
-
-    # Paginate through all jobs for the run up to max_jobs so we do not
-    # silently drop jobs when there are more than a single page. In tests we
-    # often stub list_workflow_run_jobs without real pagination, so we also
-    # break if a subsequent page returns the same job IDs as the previous one.
-    per_page = 100
-    page = 1
-    fetched = 0
-    last_page_job_ids: Optional[List[Any]] = None
-
-    while fetched < max_jobs:
-        remaining = max_jobs - fetched
-        page_per_page = per_page if remaining >= per_page else remaining
-
-        jobs_resp = await list_workflow_run_jobs(
-            full_name, run_id, per_page=page_per_page, page=page
-        )
-        jobs_json = jobs_resp.get("json") or {}
-        raw_jobs = jobs_json.get("jobs", []) if isinstance(jobs_json, dict) else []
-
-        # Stop if there are no more jobs.
-        if not raw_jobs:
-            break
-
-        # Defensive guard: if a subsequent page returns the exact same set of
-        # job IDs as the previous page, treat it as the end of the result set
-        # instead of looping forever (useful when tests stub out pagination).
-        page_job_ids = [job.get("id") for job in raw_jobs if isinstance(job, dict)]
-        if page_job_ids and last_page_job_ids is not None and page_job_ids == last_page_job_ids:
-            break
-        last_page_job_ids = page_job_ids
-
-        for job in raw_jobs:
-            if not isinstance(job, dict):
-                continue
-
-            status = job.get("status")
-            conclusion = job.get("conclusion")
-            started_at = job.get("started_at")
-            completed_at = job.get("completed_at")
-
-            start_dt = _parse_timestamp(started_at)
-            end_dt = _parse_timestamp(completed_at)
-            duration_seconds: Optional[float] = None
-            if start_dt and end_dt:
-                duration_seconds = max(0.0, (end_dt - start_dt).total_seconds())
-
-            normalized = {
-                "id": job.get("id"),
-                "name": job.get("name"),
-                "status": status,
-                "conclusion": conclusion,
-                "started_at": started_at,
-                "completed_at": completed_at,
-                "duration_seconds": duration_seconds,
-                "html_url": job.get("html_url"),
-            }
-            jobs.append(normalized)
-            fetched += 1
-
-            if duration_seconds is not None:
-                jobs_with_duration.append(normalized)
-
-            include_failure = False
-            if conclusion in failure_conclusions:
-                include_failure = True
-            elif status == "completed" and conclusion not in (
-                None,
-                "success",
-                "neutral",
-                "skipped",
-            ):
-                include_failure = True
-            if include_failure:
-                failed_jobs.append(normalized)
-
-            if fetched >= max_jobs:
-                break
-
-        if fetched >= max_jobs:
-            break
-
-        page += 1
-
-    longest_jobs = sorted(
-        jobs_with_duration,
-        key=lambda j: j.get("duration_seconds") or 0.0,
-        reverse=True,
-    )[:5]
-
-    summary_lines: list[str] = []
-
-    status = run_summary.get("status") or "unknown"
-    conclusion = run_summary.get("conclusion") or "unknown"
-    name = run_summary.get("name") or str(run_summary.get("id") or run_id)
-
-    summary_lines.append("Workflow run overview:")
-    summary_lines.append(f"- Name: {name}")
-    summary_lines.append(f"- Status: {status}")
-    summary_lines.append(f"- Conclusion: {conclusion}")
-    summary_lines.append(f"- Jobs: {len(jobs)} total, {len(failed_jobs)} failed")
-
-    if longest_jobs:
-        summary_lines.append("- Longest jobs by duration:")
-        for job in longest_jobs:
-            j_name = job.get("name") or job.get("id")
-            dur = job.get("duration_seconds")
-            if j_name is None or dur is None:
-                continue
-            summary_lines.append(f"  * {j_name}: {int(dur)}s")
-
-    return {
-        "full_name": full_name,
-        "run_id": run_id,
-        "run": run_summary,
-        "jobs": jobs,
-        "failed_jobs": failed_jobs,
-        "longest_jobs": longest_jobs,
-        "controller_log": summary_lines,
-    }
 
 
 @mcp_tool(write_action=False)
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     """Fetch raw logs for a GitHub Actions job without truncation."""
+    from github_mcp.main_tools.workflows import get_job_logs as _impl
+    return await _impl(full_name=full_name, job_id=job_id)
 
-    client = _http_client_github or _github_client_instance()
-    request = client.build_request(
-        "GET",
-        f"/repos/{full_name}/actions/jobs/{job_id}/logs",
-        headers={"Accept": "application/vnd.github+json"},
-    )
-    async with _get_concurrency_semaphore():
-        resp = await client.send(request, follow_redirects=True)
-    if resp.status_code >= 400:
-        raise GitHubAPIError(f"GitHub job logs error {resp.status_code}: {resp.text}")
-    content_type = resp.headers.get("Content-Type", "")
-    if "zip" in content_type.lower():
-        logs = _decode_zipped_job_logs(resp.content)
-    else:
-        logs = resp.text
-
-    return {
-        "status_code": resp.status_code,
-        "logs": logs,
-        "content_type": content_type,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -1985,50 +1743,9 @@ async def wait_for_workflow_run(
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
     """Poll a workflow run until completion or timeout."""
+    from github_mcp.main_tools.workflows import wait_for_workflow_run as _impl
+    return await _impl(full_name=full_name, run_id=run_id, timeout_seconds=timeout_seconds, poll_interval_seconds=poll_interval_seconds)
 
-    client = _github_client_instance()
-    end_time = asyncio.get_event_loop().time() + timeout_seconds
-
-    while True:
-        async with _get_concurrency_semaphore():
-            resp = await client.get(
-                f"/repos/{full_name}/actions/runs/{run_id}",
-            )
-        if resp.status_code >= 400:
-            raise GitHubAPIError(f"GitHub workflow run error {resp.status_code}: {resp.text}")
-
-        data = resp.json()
-        status = data.get("status")
-        conclusion = data.get("conclusion")
-
-        if status == "completed":
-            summary_lines = [
-                "Workflow run finished:",
-                f"- Status: {status}",
-                f"- Conclusion: {conclusion}",
-            ]
-            return {
-                "status": status,
-                "conclusion": conclusion,
-                "run": data,
-                "controller_log": summary_lines,
-            }
-
-        if asyncio.get_event_loop().time() > end_time:
-            summary_lines = [
-                "Workflow run timed out while waiting for completion:",
-                f"- Last known status: {status}",
-                f"- Last known conclusion: {conclusion}",
-                f"- Timeout seconds: {timeout_seconds}",
-            ]
-            return {
-                "status": status,
-                "timeout": True,
-                "run": data,
-                "controller_log": summary_lines,
-            }
-
-        await asyncio.sleep(poll_interval_seconds)
 
 
 @mcp_tool(
@@ -2159,32 +1876,9 @@ async def trigger_workflow_dispatch(
         ref: Git ref (branch, tag, or SHA) to run the workflow on.
         inputs: Optional input payload for workflows that declare inputs.
     """
-    _ensure_write_allowed(f"trigger workflow {workflow} on {full_name}@{ref}")
-    payload: Dict[str, Any] = {"ref": ref}
-    if inputs:
-        payload["inputs"] = inputs
-    client = _github_client_instance()
-    async with _get_concurrency_semaphore():
-        resp = await client.post(
-            f"/repos/{full_name}/actions/workflows/{workflow}/dispatches",
-            json=payload,
-        )
-    if resp.status_code not in (204, 201):
-        raise GitHubAPIError(f"GitHub workflow dispatch error {resp.status_code}: {resp.text}")
+    from github_mcp.main_tools.workflows import trigger_workflow_dispatch as _impl
+    return await _impl(full_name=full_name, workflow=workflow, ref=ref, inputs=inputs)
 
-    summary_lines = [
-        "Triggered workflow dispatch:",
-        f"- Repo: {full_name}",
-        f"- Workflow: {workflow}",
-        f"- Ref: {ref}",
-    ]
-    if inputs:
-        summary_lines.append(f"- Inputs keys: {sorted(inputs.keys())}")
-
-    return {
-        "status_code": resp.status_code,
-        "controller_log": summary_lines,
-    }
 
 
 @mcp_tool(write_action=True)
@@ -2197,39 +1891,9 @@ async def trigger_and_wait_for_workflow(
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
     """Trigger a workflow and block until it completes or hits timeout."""
+    from github_mcp.main_tools.workflows import trigger_and_wait_for_workflow as _impl
+    return await _impl(full_name=full_name, workflow=workflow, ref=ref, inputs=inputs, timeout_seconds=timeout_seconds, poll_interval_seconds=poll_interval_seconds)
 
-    _ensure_write_allowed(f"trigger+wait workflow {workflow} on {full_name}@{ref}")
-    await trigger_workflow_dispatch(full_name, workflow, ref, inputs)
-
-    runs = await list_workflow_runs(
-        full_name,
-        branch=ref,
-        per_page=1,
-        page=1,
-    )
-    workflow_runs = runs.get("json", {}).get("workflow_runs", [])
-    if not workflow_runs:
-        raise GitHubAPIError("No workflow runs found after dispatch")
-    run_id = workflow_runs[0]["id"]
-
-    result = await wait_for_workflow_run(full_name, run_id, timeout_seconds, poll_interval_seconds)
-
-    summary_lines = [
-        "Triggered workflow and waited for completion:",
-        f"- Repo: {full_name}",
-        f"- Workflow: {workflow}",
-        f"- Ref: {ref}",
-        f"- Run ID: {run_id}",
-    ]
-    result_log = result.get("controller_log")
-    if isinstance(result_log, list):
-        summary_lines.extend(result_log)
-
-    return {
-        "run_id": run_id,
-        "result": result,
-        "controller_log": summary_lines,
-    }
 
 
 # ------------------------------------------------------------------------------
