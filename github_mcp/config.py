@@ -67,6 +67,7 @@ BASE_LOGGER = logging.getLogger("github_mcp")
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
 ERROR_LOG_CAPACITY = int(os.environ.get("MCP_ERROR_LOG_CAPACITY", "200"))
+LOG_RECORD_CAPACITY = int(os.environ.get("MCP_LOG_RECORD_CAPACITY", "500"))
 
 
 class _InMemoryErrorLogHandler(logging.Handler):
@@ -110,6 +111,36 @@ class _InMemoryErrorLogHandler(logging.Handler):
 ERROR_LOG_HANDLER = _InMemoryErrorLogHandler(capacity=ERROR_LOG_CAPACITY)
 BASE_LOGGER.addHandler(ERROR_LOG_HANDLER)
 
+class _InMemoryLogHandler(logging.Handler):
+    """Capture recent log records in memory for MCP diagnostics tools."""
+
+    def __init__(self, capacity: int = 500) -> None:
+        super().__init__(level=logging.INFO)
+        self._records: deque[dict[str, object]] = deque(maxlen=max(1, capacity))
+
+    @property
+    def records(self) -> list[dict[str, object]]:
+        return list(self._records)
+
+    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - trivial
+        # Avoid capturing non-github_mcp logs by default.
+        if not record.name.startswith("github_mcp"):
+            return
+        try:
+            message = self.format(record)
+        except Exception:  # noqa: BLE001
+            message = record.getMessage()
+        payload = {
+            "logger": record.name,
+            "level": record.levelname,
+            "message": message,
+            "created": record.created,
+        }
+        self._records.append(payload)
+
+LOG_RECORD_HANDLER = _InMemoryLogHandler(capacity=LOG_RECORD_CAPACITY)
+BASE_LOGGER.addHandler(LOG_RECORD_HANDLER)
+
 SERVER_START_TIME = time.time()
 
 __all__ = [
@@ -137,4 +168,6 @@ __all__ = [
     "WORKSPACE_BASE_DIR",
     "ERROR_LOG_HANDLER",
     "ERROR_LOG_CAPACITY",
+    "LOG_RECORD_HANDLER",
+    "LOG_RECORD_CAPACITY",
 ]

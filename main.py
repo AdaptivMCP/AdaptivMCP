@@ -105,6 +105,7 @@ __all__ = [
     "CONTROLLER_REPO",
     "CONTROLLER_DEFAULT_BRANCH",
     "_github_request",
+    "get_recent_server_logs",
 ]
 # Exposed for tests that monkeypatch the external HTTP client used for sandbox: URLs.
 _http_client_external: httpx.AsyncClient | None = None
@@ -416,6 +417,20 @@ def get_recent_server_errors(limit: int = 50) -> Dict[str, Any]:
         "errors": records,
     }
 
+
+
+
+@server.mcp_tool(write_action=False)
+def get_recent_server_logs(limit: int = 100, min_level: str = "INFO") -> Dict[str, Any]:
+    """Return recent server-side logs captured in memory.
+
+    Use this when debugging tool behavior in environments where you cannot
+    access provider logs.
+    """
+
+    from github_mcp.main_tools.server_logs import get_recent_server_logs as _impl
+
+    return _impl(limit=limit, min_level=min_level)
 
 # ------------------------------------------------------------------------------
 
@@ -1766,4 +1781,3 @@ async def recent_prs_for_branch(
     # find the PR(s) tied to a feature branch without guessing numbers.
     from github_mcp.main_tools.pull_requests import recent_prs_for_branch as _impl
     return await _impl(full_name=full_name, branch=branch, include_closed=include_closed, per_page_open=per_page_open, per_page_closed=per_page_closed)
-
