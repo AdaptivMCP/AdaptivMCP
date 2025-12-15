@@ -266,7 +266,32 @@ def _maybe_unescape_unified_diff(patch: str) -> str:
     try:
         return patch.encode("utf-8").decode("unicode_escape")
     except Exception:
-        return patch.replace("\r\\n", "\n").replace("\\n", "\n").replace("\t", "\t")
+        return patch.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+
+
+def _sanitize_patch_tail(patch: str) -> str:
+    """Strip common trailing junk that breaks `git apply`.
+
+    Guards against accidental JSON/Markdown artifacts being appended to patches
+    (e.g. `}}`, code fences), which commonly yields:
+    - "corrupt patch"
+    - "No valid patches in input"
+    """
+
+    if not isinstance(patch, str):
+        return patch
+
+    ends_with_nl = patch.endswith("\n")
+    lines = patch.splitlines()
+
+    junk_lines = {"}", "}}", "```", "```diff", "```patch"}
+    while lines and lines[-1].strip() in junk_lines:
+        lines.pop()
+
+    out = "\n".join(lines)
+    if ends_with_nl and out and not out.endswith("\n"):
+        out += "\n"
+    return out
 
 
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
@@ -276,6 +301,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
         raise GitHubAPIError("Received empty patch to apply in workspace")
 
     patch = _maybe_unescape_unified_diff(patch)
+    patch = _sanitize_patch_tail(patch)
 
     patch_path = os.path.join(repo_dir, "mcp_patch.diff")
 
