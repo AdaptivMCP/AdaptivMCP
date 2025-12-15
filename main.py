@@ -102,6 +102,8 @@ from github_mcp.workspace import (
     _run_shell,  # noqa: F401
     _workspace_path,  # noqa: F401
 )
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 
 
@@ -172,6 +174,40 @@ register_extra_tools_if_available()
 # constructs a Starlette application through ``http_app``; we create it once at
 # import time so ``uvicorn main:app`` works as expected.
 app = server.mcp.http_app()
+
+
+def _serialize_actions_for_compatibility() -> list[dict[str, Any]]:
+    """Expose a stable actions listing for clients expecting /v1/actions.
+
+    The FastMCP server only exposes its MCP transport at ``/mcp`` by default.
+    Some clients (including the ChatGPT UI) attempt to refresh available
+    Actions using the OpenAI Actions-style ``/v1/actions`` endpoint. Provide a
+    lightweight JSON response that mirrors the MCP tool surface so those
+    clients receive a graceful payload instead of a 404.
+    """
+
+    actions: list[dict[str, Any]] = []
+    for tool, _func in server._REGISTERED_MCP_TOOLS:
+        schema = server._normalize_input_schema(tool)
+        actions.append(
+            {
+                "name": tool.name,
+                "display_name": getattr(tool, "title", None) or tool.name,
+                "description": tool.description,
+                "parameters": schema or {"type": "object", "properties": {}},
+                "annotations": getattr(tool, "annotations", None).model_dump() if getattr(tool, "annotations", None) else None,
+            }
+        )
+
+    return actions
+
+
+async def _actions_compatibility_endpoint(_: Request) -> JSONResponse:
+    return JSONResponse({"actions": _serialize_actions_for_compatibility()})
+
+
+app.add_route("/v1/actions", _actions_compatibility_endpoint, methods=["GET"])
+app.add_route("/actions", _actions_compatibility_endpoint, methods=["GET"])
 
 
 def _cache_file_result(
