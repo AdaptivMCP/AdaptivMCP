@@ -932,51 +932,10 @@ async def list_tools(
     only_read: bool = False,
     name_prefix: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Lightweight tool catalog.
+    """Lightweight tool catalog."""
+    from github_mcp.main_tools.introspection import list_tools as _impl
+    return await _impl(only_write=only_write, only_read=only_read, name_prefix=name_prefix)
 
-    Args:
-        only_write: If True, return only write-tagged tools.
-        only_read: If True, return only read-tagged tools.
-        name_prefix: Optional prefix filter for tool names.
-
-    Notes:
-        - For schema/args: call describe_tool(include_parameters=true) and validate_tool_args.
-        - If you see tool-call JSON/schema errors: stop guessing and re-read the schema.
-    """
-
-    if only_write and only_read:
-        raise ValueError("only_write and only_read cannot both be true")
-
-    catalog = list_all_actions(include_parameters=False, compact=True)
-    tools = []
-    for entry in catalog.get("tools", []) or []:
-        name = entry.get("name")
-        if not isinstance(name, str):
-            continue
-        if name_prefix and not name.startswith(name_prefix):
-            continue
-
-        write_action = bool(entry.get("write_action"))
-        if only_write and not write_action:
-            continue
-        if only_read and write_action:
-            continue
-
-        tools.append(
-            {
-                "name": name,
-                "write_action": write_action,
-                "operation": entry.get("operation"),
-                "risk_level": entry.get("risk_level"),
-                "auto_approved": bool(entry.get("auto_approved")),
-            }
-        )
-
-    tools.sort(key=lambda t: t["name"])
-    return {
-        "write_actions_enabled": server.WRITE_ALLOWED,
-        "tools": tools,
-    }
 
 
 @mcp_tool(write_action=False)

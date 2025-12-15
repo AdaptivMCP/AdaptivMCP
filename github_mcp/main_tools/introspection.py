@@ -224,6 +224,48 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
     }
 
 
+
+async def list_tools(
+    only_write: bool = False,
+    only_read: bool = False,
+    name_prefix: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Lightweight tool catalog."""
+
+    if only_write and only_read:
+        raise ValueError("only_write and only_read cannot both be true")
+
+    catalog = list_all_actions(include_parameters=False, compact=True)
+    tools: List[Dict[str, Any]] = []
+    for entry in catalog.get("tools", []) or []:
+        name = entry.get("name")
+        if not isinstance(name, str):
+            continue
+        if name_prefix and not name.startswith(name_prefix):
+            continue
+
+        write_action = bool(entry.get("write_action"))
+        if only_write and not write_action:
+            continue
+        if only_read and write_action:
+            continue
+
+        tools.append(
+            {
+                "name": name,
+                "write_action": write_action,
+                "operation": entry.get("operation"),
+                "risk_level": entry.get("risk_level"),
+                "auto_approved": bool(entry.get("auto_approved")),
+            }
+        )
+
+    tools.sort(key=lambda t: t["name"])
+    m = _main()
+    return {
+        "write_actions_enabled": m.server.WRITE_ALLOWED,
+        "tools": tools,
+    }
 async def describe_tool(
     name: Optional[str] = None,
     names: Optional[List[str]] = None,
