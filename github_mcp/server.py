@@ -443,24 +443,9 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
 
     name = getattr(tool, "name", None)
 
-    # A small set of tools have richer controller-level semantics (e.g.
-    # ref-defaulting, list vs. scalar arguments, or controller-managed
-    # validation flows) that do not map cleanly onto the auto-generated MCP
-    # JSON Schemas. For these we deliberately skip strict preflight and rely on
-    # their existing runtime validation and the test suite instead.
-    if name in {
-        "terminal_command",
-        "run_command",
-        "commit_workspace_files",
-        "cache_files",
-        "fetch_files",
-        "update_files_and_open_pr",
-        "create_issue",
-        "update_issue",
-        "describe_tool",
-        "validate_tool_args",
-    }:
-        return None
+    # Preflight validation is intentionally relaxed elsewhere (see _preflight_tool_args).
+    # This helper should still surface a best-effort JSON schema for *every* tool so
+    # clients can render argument names/types reliably.
 
     # Prefer the underlying MCP tool's explicit inputSchema when available.
     raw_schema = getattr(tool, "inputSchema", None)
@@ -529,8 +514,8 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 files_prop["type"] = "array"
                 files_prop["items"] = {"type": "string"}
 
-        # cache_files / fetch_files: paths should be a list of strings.
-        if name in {"cache_files", "fetch_files"}:
+        # cache_files / fetch_files / get_cached_files: paths should be a list of strings.
+        if name in {"cache_files", "fetch_files", "get_cached_files"}:
             paths_prop = props.get("paths")
             if isinstance(paths_prop, dict):
                 paths_prop["type"] = "array"
@@ -614,6 +599,14 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 tool_names_prop["type"] = sorted(types)
                 tool_names_prop["items"] = {"type": "string"}
 
+        # Final normalization: always surface an object schema shape.
+        if isinstance(schema, dict):
+            if schema.get("type") is None:
+                schema["type"] = "object"
+            schema.setdefault("properties", {})
+            schema.setdefault("required", [])
+            schema.setdefault("additionalProperties", True)
+
         # list_recent_failures: if the MCP schema provided a minimum on limit,
         # drop it so the tool's own ValueError semantics are preserved.
         if name == "list_recent_failures":
@@ -649,43 +642,87 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
             properties: Dict[str, Any] = {}
             required: list[str] = []
 
-            def _annotation_to_json_types(ann: Any) -> Optional[list[str]]:
-                # Handle typing.Optional / Union[...] by unwrapping None.
-                origin = getattr(ann, "__origin__", None)
-                args = getattr(ann, "__args__", ()) or ()
-                if origin is not None and args:
-                    optional = any(a is type(None) for a in args)  # noqa: E721
-                    json_types: list[str] = []
-                    for arg in args:
-                        if arg is type(None):  # noqa: E721
-                            continue
-                        nested = _annotation_to_json_types(arg)
-                        if nested is None:
-                            continue
-                        if isinstance(nested, list):
-                            json_types.extend(nested)
-                        else:
-                            json_types.append(nested)
+            def _annotation_to_schema(ann: Any) -> Dict[str, Any]:
+                """Convert a Python type annotation to a shallow JSON Schema fragment.
 
-                    if not json_types and optional:
-                        return ["null"]
-                    if optional:
-                        json_types.append("null")
-                    return sorted(set(json_types)) if json_types else None
+                This is best-effort and intentionally permissive; it exists to make
+                tool metadata stable for clients and assistants.
+                """
 
+                try:
+                    from typing import get_args, get_origin
+                except Exception:  # pragma: no cover
+                    get_args = lambda _a: ()
+                    get_origin = lambda _a: None
+
+                origin = get_origin(ann)
+                args = get_args(ann) or ()
+
+                # Optional/Union handling (focus on adding null).
+                if origin is None and hasattr(ann, '__origin__'):
+                    origin = getattr(ann, '__origin__', None)
+                    args = getattr(ann, '__args__', ()) or ()
+
+                if origin is not None and origin is getattr(__import__('typing'), 'Union', None):
+                    non_null = [a for a in args if a is not type(None)]  # noqa: E721
+                    nullable = len(non_null) != len(args)
+                    # If Union[T, None], keep the richer schema for T and add null.
+                    if len(non_null) == 1:
+                        schema = _annotation_to_schema(non_null[0])
+                        if nullable:
+                            tv = schema.get('type')
+                            if isinstance(tv, str):
+                                schema['type'] = sorted({tv, 'null'})
+                            elif isinstance(tv, list):
+                                schema['type'] = sorted(set(tv + ['null']))
+                            else:
+                                schema['type'] = ['null']
+                        return schema
+
+                    # For wider unions, degrade to a simple type union when possible.
+                    types: set[str] = set()
+                    for a in non_null:
+                        frag = _annotation_to_schema(a)
+                        t = frag.get('type')
+                        if isinstance(t, str):
+                            types.add(t)
+                        elif isinstance(t, list):
+                            types.update(t)
+                    if nullable:
+                        types.add('null')
+                    return {'type': sorted(types)} if types else ({'type': ['null']} if nullable else {})
+
+                # Containers: list/tuple/set and typing equivalents.
+                if origin in (list, tuple, set):
+                    item_schema: Dict[str, Any] = {}
+                    if args:
+                        item_schema = _annotation_to_schema(args[0])
+                    out: Dict[str, Any] = {'type': 'array'}
+                    if item_schema:
+                        out['items'] = item_schema
+                    return out
+
+                if origin is dict:
+                    return {'type': 'object'}
+
+                # Primitives
                 if ann in (str, bytes):
-                    return ["string"]
+                    return {'type': 'string'}
                 if ann is int:
-                    return ["integer"]
+                    return {'type': 'integer'}
                 if ann is float:
-                    return ["number"]
+                    return {'type': 'number'}
                 if ann is bool:
-                    return ["boolean"]
+                    return {'type': 'boolean'}
+
+                # Plain builtins
                 if ann in (list, tuple, set):
-                    return ["array"]
+                    return {'type': 'array'}
                 if ann is dict:
-                    return ["object"]
-                return None
+                    return {'type': 'object'}
+
+                return {}
+
 
             for param_name, param in sig.parameters.items():
                 if param.kind in (
@@ -701,12 +738,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 prop: Dict[str, Any] = {}
 
                 if param.annotation is not _inspect._empty:
-                    json_types = _annotation_to_json_types(param.annotation)
-                    if json_types:
-                        if len(json_types) == 1:
-                            prop["type"] = json_types[0]
-                        else:
-                            prop["type"] = json_types
+                    prop.update(_annotation_to_schema(param.annotation))
 
                 if param.default is _inspect._empty:
                     required.append(param_name)
@@ -714,20 +746,19 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                     # Defaults are helpful hints but may not always be
                     # JSON-serializable; they are included on a best-effort
                     # basis only.
-                    prop["default"] = param.default
+                    if isinstance(param.default, (str, int, float, bool)) or param.default is None:
+                        prop["default"] = param.default
 
-                    if "type" in prop and param.default is None:
-                        type_value = prop["type"]
-                        if isinstance(type_value, list):
-                            if "null" not in type_value:
-                                prop["type"] = sorted(set(type_value + ["null"]))
-                        elif isinstance(type_value, str) and type_value != "null":
-                            prop["type"] = sorted({type_value, "null"})
+                    if param.default is None:
+                        tv = prop.get("type")
+                        if isinstance(tv, str):
+                            if tv != "null":
+                                prop["type"] = sorted({tv, "null"})
+                        elif isinstance(tv, list):
+                            if "null" not in tv:
+                                prop["type"] = sorted(set(tv + ["null"]))
 
                 properties[param_name] = prop
-
-            if not properties and not required:
-                return None
 
             return {
                 "type": "object",

@@ -15,6 +15,31 @@ def test_list_all_actions_includes_input_schema():
     assert "properties" in apply_tool["input_schema"]
 
 
+def _tool_schema(name: str):
+    result = main.list_all_actions(include_parameters=True)
+    tool = next(tool for tool in result["tools"] if tool["name"] == name)
+    return tool["input_schema"]
+
+
+def test_list_all_actions_schema_includes_common_params():
+    cache_schema = _tool_schema("cache_files")
+    assert cache_schema.get("type") == "object"
+    props = cache_schema.get("properties") or {}
+    assert {"full_name", "paths", "ref", "refresh"} <= set(props)
+    assert props["paths"].get("type") == "array"
+    assert (props["paths"].get("items") or {}).get("type") in {"string", None}
+
+    cached_schema = _tool_schema("get_cached_files")
+    props2 = cached_schema.get("properties") or {}
+    assert {"full_name", "paths", "ref"} <= set(props2)
+    assert props2["paths"].get("type") == "array"
+
+    commit_schema = _tool_schema("commit_workspace_files")
+    props3 = commit_schema.get("properties") or {}
+    assert "files" in props3
+    assert props3["files"].get("type") == "array"
+
+
 def test_list_write_tools_includes_issue_helpers():
     tools = main.list_write_tools()["tools"]
 
