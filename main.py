@@ -49,7 +49,6 @@ from github_mcp.exceptions import (
 )
 from github_mcp.github_content import (
     _decode_github_content,
-    _get_branch_sha,
     _load_body_from_content_url,
     _perform_github_commit,
     _resolve_file_sha,
@@ -344,7 +343,7 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 
 @server.mcp_tool(write_action=False)
-def get_recent_tool_events(limit: int = 50, include_success: bool = False) -> Dict[str, Any]:
+def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dict[str, Any]:
     """Return recent tool-call events captured in-memory by the server wrappers."""
     try:
         limit_int = int(limit)
@@ -3363,7 +3362,6 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
     effective_base = _effective_ref_for_repo(full_name, base)
 
     # Diff/compare tooling has been removed; branch summary focuses on PRs and CI.
-    compare_result: Optional[Dict[str, Any]] = None
     compare_error: Optional[str] = None
 
     owner: Optional[str] = None
@@ -4158,7 +4156,6 @@ async def apply_text_update_and_commit(
 
     # 3) Verify by reading the file again from the same branch.
     verified = await _decode_github_content(full_name, normalized_path, effective_branch)
-    new_text = verified.get("text")
     sha_after = _extract_sha(verified)
 
     result: Dict[str, Any] = {

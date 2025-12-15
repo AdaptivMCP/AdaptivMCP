@@ -42,10 +42,6 @@ async def test_run_quality_suite_runs_scan_then_lint_then_tests(monkeypatch):
 async def test_run_quality_suite_can_disable_tokenlike_scan(monkeypatch):
     calls = {"scan": 0, "lint": 0, "tests": 0}
 
-    async def fake_terminal_command(**kwargs):
-        calls["scan"] += 1
-        raise AssertionError("terminal_command should not be called when scan is disabled")
-
     async def fake_run_tests(**kwargs):
         calls["tests"] += 1
         return {"status": "failed"}
@@ -165,21 +161,15 @@ async def test_run_quality_suite_stops_on_lint_failure(monkeypatch):
         calls["scan"] += 1
         return {"repo_dir": "/tmp/repo", "workdir": None, "result": {"exit_code": 0}}
 
-    async def fake_terminal_command_lint(**kwargs):
-        calls["lint"] += 1
-        return {"repo_dir": "/tmp/repo", "workdir": None, "result": {"exit_code": 7}}
-
     async def fake_run_tests(**kwargs):
         calls["tests"] += 1
         raise AssertionError("run_tests should not be called when lint fails")
-
-    def fake_run_lint_suite(**kwargs):
-        raise AssertionError('run_lint_suite should not be called; run_quality_suite uses it internally')
 
     # Patch terminal_command and run_tests; quality suite uses run_lint_suite internally.
     monkeypatch.setattr(tools_workspace, "terminal_command", fake_terminal_command)
     # Swap in a failing lint by patching the function call site: monkeypatch run_lint_suite to use our lint failure.
     async def fake_run_lint_suite(**kwargs):
+        calls['lint'] += 1
         # run_tokenlike_scan should already be False here
         assert kwargs.get('run_tokenlike_scan') is False
         return {"status": "failed", "result": {"exit_code": 7}, "marker": "from_lint"}

@@ -1257,6 +1257,19 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 # input schema, similar to validate_tool_args but applied
                 # automatically for every call.
                 _preflight_tool_args(tool, context.get("_all_args", {}))
+                _record_recent_tool_event(
+                    {
+                        "ts": time.time(),
+                        "event": "tool_recent_start",
+                        "tool_name": tool.name,
+                        "call_id": call_id,
+                        "write_action": write_action,
+                        "repo": context.get("repo"),
+                        "ref": context.get("ref"),
+                        "path": context.get("path"),
+                        "user_message": _tool_user_message("start"),
+                    }
+                )
                 TOOLS_LOGGER.info(
                     f"[tool start] {_human_context(call_id, context)}",
                     extra={
@@ -1280,6 +1293,26 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 except Exception as exc:
                     errored = True
                     duration_ms = int((time.perf_counter() - start) * 1000)
+                    _record_recent_tool_event(
+                        {
+                            "ts": time.time(),
+                            "event": "tool_recent_exception",
+                            "tool_name": tool.name,
+                            "call_id": call_id,
+                            "write_action": write_action,
+                            "duration_ms": duration_ms,
+                            "error_type": exc.__class__.__name__,
+                            "message": _summarize_exception(exc)[:200],
+                            "repo": context.get("repo"),
+                            "ref": context.get("ref"),
+                            "path": context.get("path"),
+                            "user_message": _tool_user_message(
+                                "error",
+                                duration_ms=duration_ms,
+                                error=_summarize_exception(exc)[:120],
+                            ),
+                        }
+                    )
                     _record_tool_call(
                         tool_name=tool.name,
                         write_action=write_action,
@@ -1326,6 +1359,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         "repo": context.get("repo"),
                         "ref": context.get("ref"),
                         "result_type": type(result).__name__,
+                        "user_message": _tool_user_message("ok", duration_ms=duration_ms),
                     }
                 )
                 TOOLS_LOGGER.info(

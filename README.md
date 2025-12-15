@@ -89,7 +89,7 @@ When you see “improperly coded JSON” or a tool call does not execute, treat 
 
 Operator checklist for any report of “tools are missing” or “it’s acting weird” (tool events include `user_message` for UI-friendly logs):
 
-- `get_recent_tool_events(limit=50, include_success=false)`
+- `get_recent_tool_events(limit=50, include_success=true)`
 - `get_server_config`
 - `list_all_actions(include_parameters=true)`
 - `validate_environment`

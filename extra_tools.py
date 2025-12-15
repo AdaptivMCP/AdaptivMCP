@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional, Protocol
+from typing import Any, Callable, Dict, Literal, Protocol
 
 from main import (
-    GitHubAPIError,
     _decode_github_content,
     _effective_ref_for_repo,
     _ensure_write_allowed,
