@@ -11,7 +11,6 @@ import asyncio
 import base64
 import json
 import os
-import re
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
 
@@ -60,8 +59,8 @@ from github_mcp.file_cache import (
 from github_mcp.http_clients import (
     _external_client_instance,
     _get_concurrency_semaphore,  # noqa: F401
-    _github_client_instance,
     _get_github_token,  # noqa: F401
+    _github_client_instance,  # noqa: F401
 )
 from github_mcp.metrics import (
     _METRICS,  # noqa: F401
@@ -1801,71 +1800,9 @@ async def create_branch(
     branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
-    """Create a new branch from a base ref.
+    from github_mcp.main_tools.branches import create_branch as _impl
+    return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
 
-    This uses the Git refs API. Prefer ``ensure_branch`` when you want an
-    idempotent flow.
-    """
-
-    _ensure_write_allowed(f"create branch {branch} from {from_ref} in {full_name}")
-
-    branch = branch.strip()
-    if not branch:
-        raise ValueError("branch must be non-empty")
-
-    # Conservative branch-name validation.
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", branch):
-        raise ValueError("branch contains invalid characters")
-    if ".." in branch or "@{" in branch:
-        raise ValueError("branch contains invalid ref sequence")
-    if branch.startswith("/") or branch.endswith("/"):
-        raise ValueError("branch must not start or end with '/'")
-    if branch.endswith(".lock"):
-        raise ValueError("branch must not end with '.lock'")
-
-    base_ref = _effective_ref_for_repo(full_name, from_ref)
-
-    client = _github_client_instance()
-
-    # Resolve base sha.
-    base_sha: Optional[str] = None
-    async with _get_concurrency_semaphore():
-        resp = await client.get(f"/repos/{full_name}/git/ref/heads/{base_ref}")
-    if resp.status_code == 200:
-        payload = resp.json() if hasattr(resp, "json") else {}
-        obj = payload.get("object") if isinstance(payload, dict) else None
-        if isinstance(obj, dict):
-            base_sha = obj.get("sha")
-    elif resp.status_code == 404:
-        # Try tags.
-        async with _get_concurrency_semaphore():
-            tag_resp = await client.get(f"/repos/{full_name}/git/ref/tags/{base_ref}")
-        if tag_resp.status_code == 200:
-            payload = tag_resp.json() if hasattr(tag_resp, "json") else {}
-            obj = payload.get("object") if isinstance(payload, dict) else None
-            if isinstance(obj, dict):
-                base_sha = obj.get("sha")
-    else:
-        raise GitHubAPIError(f"GitHub create_branch base ref error {resp.status_code}: {resp.text}")
-
-    # If base_sha still missing, allow direct SHA usage.
-    if base_sha is None:
-        if re.fullmatch(r"[0-9a-fA-F]{7,40}", from_ref.strip()):
-            base_sha = from_ref.strip()
-        else:
-            raise GitHubAPIError(f"Unable to resolve base ref {from_ref!r} in {full_name}")
-
-    new_ref = f"refs/heads/{branch}"
-    body = {"ref": new_ref, "sha": base_sha}
-
-    async with _get_concurrency_semaphore():
-        create_resp = await client.post(f"/repos/{full_name}/git/refs", json=body)
-
-    if create_resp.status_code == 201:
-        return {"status_code": create_resp.status_code, "json": create_resp.json()}
-
-    # 422 typically means the ref already exists.
-    raise GitHubAPIError(f"GitHub create_branch error {create_resp.status_code}: {create_resp.text}")
 
 @mcp_tool(write_action=True)
 async def ensure_branch(
@@ -1873,97 +1810,25 @@ async def ensure_branch(
     branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
-    """Idempotently ensure a branch exists, creating it from ``from_ref``."""
+    from github_mcp.main_tools.branches import ensure_branch as _impl
+    return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
 
-    _ensure_write_allowed(f"ensure branch {branch} from {from_ref} in {full_name}")
-    client = _github_client_instance()
-    async with _get_concurrency_semaphore():
-        resp = await client.get(f"/repos/{full_name}/git/ref/heads/{branch}")
-    if resp.status_code == 404:
-        return await create_branch(full_name, branch, from_ref)
-    if resp.status_code >= 400:
-        raise GitHubAPIError(f"GitHub ensure_branch error {resp.status_code}: {resp.text}")
-    return {"status_code": resp.status_code, "json": resp.json()}
 
 
 @mcp_tool(write_action=False)
 async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
-    """Return PRs and latest workflow run for a branch."""
+    from github_mcp.main_tools.branches import get_branch_summary as _impl
+    return await _impl(full_name=full_name, branch=branch, base=base)
 
-    effective_branch = _effective_ref_for_repo(full_name, branch)
-    effective_base = _effective_ref_for_repo(full_name, base)
-
-    # Diff/compare tooling has been removed; branch summary focuses on PRs and CI.
-    compare_error: Optional[str] = None
-
-    owner: Optional[str] = None
-    if "/" in full_name:
-        owner = full_name.split("/", 1)[0]
-    head_param = f"{owner}:{effective_branch}" if owner else None
-
-    async def _safe_list_prs(state: str) -> Dict[str, Any]:
-        try:
-            return await list_pull_requests(
-                full_name, state=state, head=head_param, base=effective_base
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            return {"error": str(exc), "json": []}
-
-    open_prs_resp = await _safe_list_prs("open")
-    closed_prs_resp = await _safe_list_prs("closed")
-
-    open_prs = open_prs_resp.get("json") or []
-    closed_prs = closed_prs_resp.get("json") or []
-
-    workflow_error: Optional[str] = None
-    latest_workflow_run: Optional[Dict[str, Any]] = None
-    try:
-        runs_resp = await list_workflow_runs(full_name, branch=effective_branch, per_page=1)
-        runs_json = runs_resp.get("json") or {}
-        runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
-        if runs:
-            latest_workflow_run = runs[0]
-    except Exception as exc:
-        workflow_error = str(exc)
-
-    return {
-        "full_name": full_name,
-        "branch": effective_branch,
-        "base": effective_base,
-        "compare_error": compare_error,
-        "open_prs": open_prs,
-        "closed_prs": closed_prs,
-        "latest_workflow_run": latest_workflow_run,
-        "workflow_error": workflow_error,
-    }
 
 
 @mcp_tool(write_action=False)
 async def get_latest_branch_status(
     full_name: str, branch: str, base: str = "main"
 ) -> Dict[str, Any]:
-    """Return a normalized, assistant-friendly view of the latest status for a branch.
+    from github_mcp.main_tools.branches import get_latest_branch_status as _impl
+    return await _impl(full_name=full_name, branch=branch, base=base)
 
-    This wraps ``get_branch_summary`` and ``_normalize_branch_summary`` so controllers
-    and assistants can quickly answer questions like:
-
-      - "Is there an open PR for it?"
-      - "What was the latest workflow run and how did it finish?"
-    """
-
-    summary = await get_branch_summary(full_name, branch, base=base)
-    normalized = _normalize_branch_summary(summary)
-
-    # Always return a consistent shape so callers do not have to special-case
-    # "no data" situations; instead they can look at the ``normalized`` field
-    # and fall back to the raw summary if needed.
-    return {
-        "full_name": full_name,
-        "branch": summary.get("branch"),
-        "base": summary.get("base"),
-        "summary": summary,
-        "normalized": normalized,
-    }
 
 
 @mcp_tool(write_action=False)
