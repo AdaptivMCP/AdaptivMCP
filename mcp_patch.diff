@@ -1,0 +1,19 @@
+diff --git a/tests/test_recent_tool_events_narrative.py b/tests/test_recent_tool_events_narrative.py
+index 0df1790..16f4fc8 100644
+--- a/tests/test_recent_tool_events_narrative.py
++++ b/tests/test_recent_tool_events_narrative.py
+@@ -1,4 +1,4 @@
+-def test_get_recent_tool_events_includes_narrative(monkeypatch):
++def test_get_recent_tool_events_includes_narrative_and_transcript(monkeypatch):
+     import main
+     from github_mcp import server
+@@
+     res = main.get_recent_tool_events(limit=10, include_success=True)
+ 
+     assert "narrative" in res
++    assert "transcript" in res
+     assert any("Starting run_command" in msg for msg in res["narrative"])
+     assert any("Finished run_command" in msg for msg in res["narrative"])
++    assert "Starting run_command" in res["transcript"]
++    assert "Finished run_command" in res["transcript"]
+*** End Patch

@@ -46,7 +46,8 @@ Workspace tools operate in a persistent clone on the server (for example on Rend
 - `run_command`
 - `run_tests`, `run_lint_suite`, `run_quality_suite`
 - `commit_workspace`, `commit_workspace_files`
-- `get_recent_tool_events` (diagnostics)
+- `workspace_self_heal_branch` (recover from a mangled workspace branch)
+- `get_recent_tool_events` (diagnostics; includes plain-language `narrative`)
 
 Note: `run_command` output is token-redacted (GitHub tokens are masked in stdout/stderr).
 
@@ -86,7 +87,7 @@ When you see “improperly coded JSON” or a tool call does not execute, treat 
    - Symptoms: 401/403/422/429 or rate-limit messaging.
    - Fix: token scopes, repo permissions, branch protections, retry/backoff.
 
-Operator checklist for any report of “tools are missing” or “it’s acting weird”:
+Operator checklist for any report of “tools are missing” or “it’s acting weird” (tool events include `user_message` for UI-friendly logs):
 
 - `get_recent_tool_events(limit=50, include_success=false)`
 - `get_server_config`

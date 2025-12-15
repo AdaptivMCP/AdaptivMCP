@@ -295,7 +295,35 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = False) -> Di
     if not include_success:
         events = [e for e in events if e.get("event") != "tool_recent_ok"]
     events = list(reversed(events))[:limit_int]
-    return {"limit": limit_int, "include_success": include_success, "events": events}
+
+    # Plain-language summaries for UI surfaces.
+    narrative = []
+    for e in events:
+        msg = e.get("user_message")
+        if not msg:
+            tool = e.get("tool_name") or "tool"
+            ev = e.get("event") or "event"
+            repo = e.get("repo") or "-"
+            ref = e.get("ref") or "-"
+            dur = e.get("duration_ms")
+            loc = f"{repo}@{ref}" if ref not in {None, "", "-"} else repo
+            if ev == "tool_recent_start":
+                msg = f"Starting {tool} on {loc}."
+            elif ev == "tool_recent_ok":
+                msg = f"Finished {tool} on {loc}{(' in %sms' % dur) if isinstance(dur, int) else ''}."
+            else:
+                msg = f"{tool} event {ev} on {loc}."
+        narrative.append(msg)
+
+    transcript = "\n".join(narrative)
+
+    return {
+        "limit": limit_int,
+        "include_success": include_success,
+        "events": events,
+        "narrative": narrative,
+        "transcript": transcript,
+    }
 
 
 @server.mcp_tool(write_action=False)

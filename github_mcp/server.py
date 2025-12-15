@@ -1073,18 +1073,56 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
             )
 
         if asyncio.iscoroutinefunction(func):
-
             @_functools.wraps(func)
             async def wrapper(*args, **kwargs):
                 kwargs = _normalize_common_tool_kwargs(args, kwargs)
                 call_id = str(uuid.uuid4())
                 context = _extract_call_context(args, **kwargs)
+                def _tool_user_message(phase: str, *, duration_ms: int | None = None, error: str | None = None) -> str:
+                    repo = context.get("repo") or "-"
+                    ref = context.get("ref") or "-"
+                    path = context.get("path") or "-"
+                    scope = "write" if write_action else "read"
+
+                    location = repo
+                    if ref and ref != "-":
+                        location = f"{location}@{ref}"
+                    if path and path not in {"-", ""}:
+                        location = f"{location}:{path}"
+
+                    if phase == "start":
+                        prefix = f"Starting {tool.name} ({scope}) on {location}."
+                        if write_action:
+                            return prefix + " This will modify repo state."
+                        return prefix
+                    if phase == "ok":
+                        dur = f" in {duration_ms}ms" if duration_ms is not None else ""
+                        return f"Finished {tool.name} on {location}{dur}."
+                    if phase == "error":
+                        dur = f" after {duration_ms}ms" if duration_ms is not None else ""
+                        msg = f" ({error})" if error else ""
+                        return f"Failed {tool.name} on {location}{dur}.{msg}"
+                    return f"{tool.name} ({scope}) on {location}."
+
                 start = time.perf_counter()
 
                 # Preflight validation of arguments against the tool's declared
                 # input schema, similar to validate_tool_args but applied
                 # automatically for every call.
                 _preflight_tool_args(tool, context.get("_all_args", {}))
+                _record_recent_tool_event(
+                    {
+                        "ts": time.time(),
+                        "event": "tool_recent_start",
+                        "tool_name": tool.name,
+                        "call_id": call_id,
+                        "write_action": write_action,
+                        "repo": context.get("repo"),
+                        "ref": context.get("ref"),
+                        "path": context.get("path"),
+                        "user_message": _tool_user_message("start"),
+                    }
+                )
                 TOOLS_LOGGER.info(
                     f"[tool start] {_human_context(call_id, context)}",
                     extra={
@@ -1120,20 +1158,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                             "message": _summarize_exception(exc)[:200],
                             "repo": context.get("repo"),
                             "ref": context.get("ref"),
-                        }
-                    )
-                    _record_recent_tool_event(
-                        {
-                            "ts": time.time(),
-                            "event": "tool_recent_exception",
-                            "tool_name": tool.name,
-                            "call_id": call_id,
-                            "write_action": write_action,
-                            "duration_ms": duration_ms,
-                            "error_type": exc.__class__.__name__,
-                            "message": _summarize_exception(exc)[:200],
-                            "repo": context.get("repo"),
-                            "ref": context.get("ref"),
+                        "path": context.get("path"),
+                            "user_message": _tool_user_message("error", duration_ms=duration_ms, error=_summarize_exception(exc)[:120]),
                         }
                     )
                     _record_tool_call(
@@ -1182,6 +1208,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         "repo": context.get("repo"),
                         "ref": context.get("ref"),
                         "result_type": type(result).__name__,
+                        "user_message": _tool_user_message("ok", duration_ms=duration_ms),
                     }
                 )
                 TOOLS_LOGGER.info(
@@ -1213,6 +1240,32 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
             def wrapper(*args, **kwargs):
                 call_id = str(uuid.uuid4())
                 context = _extract_call_context(args, **kwargs)
+                def _tool_user_message(phase: str, *, duration_ms: int | None = None, error: str | None = None) -> str:
+                    repo = context.get("repo") or "-"
+                    ref = context.get("ref") or "-"
+                    path = context.get("path") or "-"
+                    scope = "write" if write_action else "read"
+
+                    location = repo
+                    if ref and ref != "-":
+                        location = f"{location}@{ref}"
+                    if path and path not in {"-", ""}:
+                        location = f"{location}:{path}"
+
+                    if phase == "start":
+                        prefix = f"Starting {tool.name} ({scope}) on {location}."
+                        if write_action:
+                            return prefix + " This will modify repo state."
+                        return prefix
+                    if phase == "ok":
+                        dur = f" in {duration_ms}ms" if duration_ms is not None else ""
+                        return f"Finished {tool.name} on {location}{dur}."
+                    if phase == "error":
+                        dur = f" after {duration_ms}ms" if duration_ms is not None else ""
+                        msg = f" ({error})" if error else ""
+                        return f"Failed {tool.name} on {location}{dur}.{msg}"
+                    return f"{tool.name} ({scope}) on {location}."
+
                 start = time.perf_counter()
 
                 # Preflight validation of arguments against the tool's declared

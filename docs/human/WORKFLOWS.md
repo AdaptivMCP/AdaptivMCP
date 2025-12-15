@@ -272,6 +272,18 @@ When a workflow stalls or fails repeatedly
 7. Propose smaller, more observable next steps.
 8. Ask the human for input when ambiguity remains.
 
+### 7.x Self-healing a mangled workspace branch
+
+If a workspace clone becomes inconsistent mid-flow (for example: wrong branch checked out, merge/rebase in progress, conflicts stuck, repeated git errors), use:
+
+- `workspace_self_heal_branch(full_name=..., branch=...)`
+
+This tool returns a plain-language `steps` log describing exactly what happened (diagnosis, deletion/reset, new branch name, fresh clone path) and a small repo `snapshot` so the assistant can quickly rebuild context on the new branch.
+
+For UI-friendly observability of long workflows, combine it with:
+
+- `get_recent_tool_events(include_success=true)` which returns `narrative` strings derived from `user_message`.
+
 Remember that this file is the engine side playbook. Personal controllers can adjust tone, verbosity, and other stylistic choices, but they should not contradict the safety and workflow rules documented here.
 
 ---
