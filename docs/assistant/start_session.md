@@ -1,7 +1,7 @@
-
 - Full-file replacements are preferred: edit with `terminal_command` (workspace) or set `updated_content` and commit with `apply_text_update_and_commit`.
 - `terminal_command` was previously named `run_command`; `run_command` remains available as a deprecated alias.
-- Avoid diff/patch tools; Git commits already provide diffs in GitHub.
+- Avoid diff/patch editing tools; Git commits already provide diffs in GitHub.
+
 # start_session: GitHub MCP session protocol
 
 This document describes how assistants should start and run sessions when using the GitHub MCP server for this controller repo (Proofgate-Revocations/chatgpt-mcp-github).
@@ -62,8 +62,8 @@ When I (an assistant like Joeys GitHub) am editing this controller repo or any o
 For more complex or test-sensitive work, and especially when editing code or docs in this controller repo:
 
 - Use `ensure_workspace_clone` on the relevant branch to get a persistent workspace.
-- Treat `terminal_command` as your interactive terminal for *small, focused* commands (listing files, running tests, `grep`, formatters), not as a place to embed large multi-line Python or shell scripts that rewrite files.
-- Prefer diff- and section-based tools for file edits instead of hand-rolled inline scripts:
+- Treat `terminal_command` as your interactive terminal for *small, focused* commands (listing files, running tests, `grep`, formatters).
+- Prefer full-file replacement edits (workspace edits + commits, or `apply_text_update_and_commit`). Avoid diff/patch editing tools.
 - Avoid constructing huge heredocs or multi-line code blobs inside tool arguments (for example `terminal_command.command`); those patterns are brittle under JSON encoding and often cause control-character errors or disconnections.
 - After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation. Before running `run_tests`, `run_lint_suite`, or any other forward-moving action (including additional edits, PR helpers, or deployment-related checks), call `ensure_workspace_clone` again with `reset=true` on the same branch and continue from that fresh clone. This reclone step is mandatory and not skippable.
 - When your changes cause failing tests, linters, or obvious runtime errors, you are responsible for fixing them: use `run_tests`, `run_lint_suite`, and focused `terminal_command` calls to debug and update code, tests, and docs until they pass. Do not hide failures or leave broken work for the human to repair.
@@ -71,13 +71,20 @@ For more complex or test-sensitive work, and especially when editing code or doc
 - Sync edits back with `update_file_from_workspace`, `commit_workspace_files`, or `commit_workspace` on a feature branch rather than trying to rewrite controller files inline via ad-hoc scripts.
 - Keep all workspace actions scoped to the feature branch created via `ensure_branch`, then summarize changes and open a PR when ready.
 
-## 5. Large files and context management
+## 5. Observability and progress logs
+
+Humans should be able to follow long workflows, see failures, and interrupt.
+
+- After major tool calls/milestones, call `get_recent_tool_events(limit=20, include_success=true)`.
+- Use the returned `narrative` (or `transcript`) as plain-language progress logs.
+
+## 6. Large files and context management
 
 - Default to `open_file_context`, `get_file_slice`, or `get_file_with_line_numbers` when only part of a file is relevant.
 - When I know I need the entire contents of a single large GitHub file, I prefer `download_user_content` with a `github:` URL (for example `github:owner/repo:path/to/file[@ref]`) so I can fetch it once into the workspace instead of calling file-slice tools in a loop.
 - For large searches or cross-repo questions, prefer repo-scoped `search` calls before resorting to global queries.
 
-## 6. Issues, PRs, CI, and rate limits
+## 7. Issues, PRs, CI, and rate limits
 
 - For issue or PR tasks, start with `open_issue_context` for issues or `get_pr_overview`/`get_pr_info` for pull requests.
 - When you need a compact PR summary, changed files, and CI status for a pull request, call `get_pr_overview` before deciding which write tools to use.
@@ -85,7 +92,7 @@ For more complex or test-sensitive work, and especially when editing code or doc
 - When diagnosing CI, use `list_workflow_runs`, `get_workflow_run`, `list_workflow_run_jobs`, and `get_job_logs` instead of guessing. Use `trigger_workflow_dispatch` or `trigger_and_wait_for_workflow` only when asked.
 - Check `get_rate_limit` before heavy searches or bulk operations. Use `resolve_handle` to expand shorthand references before acting on them.
 
-## 7. Long workflows
+## 8. Long workflows
 
 For non trivial tasks:
 
@@ -99,14 +106,14 @@ If you see repeated failures on the same operation:
 - Re-check the schema and use `validate_tool_args`.
 - If you still cannot progress, explain the blocker to the user instead of looping.
 
-## 8. Interaction with the user
+## 9. Interaction with the user
 
 - Do not ask the user to run shell commands or apply patches by hand.
 - Clearly state which files, branches, and tools you used, and only describe real tool calls that actually occurred.
 - When you open a pull request, include what changed, why, and how it was tested.
 
-## 9. Role clarity and branch-first workflows
+## 10. Role clarity and branch-first workflows
 
 - You are the developer in this setup. Run the startup checklist yourself, use the tools directly, and never offload edits or command execution to the human.
-- Default to the branch-diff-test-PR loop: create or reuse a feature branch with `ensure_branch`, apply changes with diff helpers, run repo-native tests or checks on that branch, and open a PR when the work is ready for review.
+- Default to the branch-commit-test-PR loop: create or reuse a feature branch with `ensure_branch`, apply changes via full-file replacement edits + commits, run repo-native tests or checks on that branch, and open a PR when the work is ready for review.
 - Keep JSON discipline: lean on `list_all_actions`/`describe_tool` to confirm schemas, and use `validate_tool_args` before invoking write or unfamiliar tools so you catch mistakes before execution.

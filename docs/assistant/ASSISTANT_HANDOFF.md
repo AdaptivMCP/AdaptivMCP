@@ -22,7 +22,7 @@ To avoid role confusion and tool misuse, every new session should anchor to the 
 
 - Start with the official system prompt in `docs/assistant/CONTROLLER_PROMPT_V1.md` so the assistant immediately understands it is the engineer—not a tutor—and must use the MCP tools itself.
 - On the first tool call (and after any context loss), run the startup checklist: `get_server_config`, `validate_environment`, `list_all_actions` with `include_parameters=true`, then `describe_tool` and `validate_tool_args` for unfamiliar, complex, or write-tagged tools before their first real use in this session. When you need metadata or validation for multiple tools, prefer a single `describe_tool` or `validate_tool_args` call with up to 10 tools at once instead of many separate calls. Cache those results instead of guessing.
-- Default to the branch-diff-test-PR loop: create or ensure a feature branch from the controller default branch, treat that feature branch as your effective main for the duration of the task, use diff-based helpers to edit files, run repo-native tests or checks from a fresh workspace clone of that branch, and open a pull request with a concise summary. Do not run MCP tools directly against the real default branch (for example `main`) while doing work.
+- Default to the branch-commit-test-PR loop: create or ensure a feature branch from the controller default branch, treat that feature branch as your effective main for the duration of the task, make edits via full-file replacement + commits, run repo-native tests or checks from a fresh workspace clone of that branch, and open a pull request with a concise summary. Do not run MCP tools directly against the real default branch (for example `main`) while doing work.
 - After you use `commit_workspace` or `commit_workspace_files` to push changes, always refresh the workspace with `ensure_workspace_clone` (with `reset=true`) on the same branch **before** running tests, linters, PR helpers, or taking any other forward-moving action. This reclone step is mandatory and not skippable.
 - Never offload work to the user. If you are about to ask the human to run a command or apply a patch, stop and perform the action yourself via the provided tools.
 - When tests, linters, or runtime checks fail due to your changes, you are responsible for fixing them: update code, tests, and docs until they pass instead of hiding failures or leaving broken work for the human.
@@ -84,6 +84,7 @@ Certain concepts must remain stable if this controller is to stay trustworthy, e
 - The meaning of read versus write tool annotations and metadata.
 - The high-level branching and pull request expectations documented in `docs/human/WORKFLOWS.md`.
 - The role of the docs as the single contract between controllers and this server.
+
 If these change, treat it as a new major version and update docs and prompts accordingly.
 
 ---
@@ -96,6 +97,7 @@ Adaptiv Controller is typically deployed in one of two ways:
 2. A self-hosted Docker deployment using the `Dockerfile`, `docker-compose.yml`, and `.env.example` in this repo (see `docs/human/SELF_HOSTING_DOCKER.md` and `docs/human/SELF_HOSTED_SETUP.md`).
 
 In both cases, assistants should treat the MCP server as the engine layer and use the same branch-and-PR-oriented, `terminal_command`-heavy workflows described here and in `docs/human/WORKFLOWS.md`. The main difference is who operates the server and where it runs, not how assistants behave.
+
 ---
 
 ## Core behavior expectations (snapshot)
@@ -106,22 +108,24 @@ These are a condensed snapshot of the expectations encoded in the repository doc
 
 Use `terminal_command` and `run_tests` subject to write gating to run tests, linters, formatters, inspection commands, and diagnostics. Treat them as your keyboard on a dedicated development machine, including for quick searches or usage checks. Do not invent extra restrictions on workspace commands beyond the controller’s own write policy. Be explicit about what you are running and why.
 
-Do not ask humans to run commands, paste scripts, or add newlines for you. Handle quoting, patch generation, and retries with the provided tools. Avoid massive inline payloads or oversized tool responses when a focused command, slice, or diff will do.
+Do not ask humans to run commands, paste scripts, or add newlines for you. Avoid massive inline payloads or oversized tool responses when a focused command, slice, or diff will do.
 
 2. Tests and linters are first class, and failures are your responsibility
 
 3. Work on branches and use pull requests
 
-Do not commit directly to the main branch for this repository. Always create or reuse a feature branch from the default branch, make your changes there, run tests and linters on that branch from a fresh workspace clone (recloned with `ensure_workspace_clone(reset=true)` after each commit that writes from the workspace), and then open a pull request into the default branch. You can use patch-based diffs or full-file updates as appropriate for the change, but keep diffs reviewable and avoid accidentally overwriting large or critical files.
-
-When you open or update a PR, call `build_pr_summary` with the controller repo `full_name`, your feature branch `ref`, a concise human-written title/body, and (when available) short summaries of changed files plus `tests_status` and `lint_status`. Render the structured `title` and `body` from that helper into the PR so descriptions stay consistent across assistants. Do not describe PRs, commits, or tool runs that did not actually occur.
+Do not commit directly to the main branch for this repository. Always create or reuse a feature branch from the default branch, make your changes there, run tests and linters on that branch from a fresh workspace clone (recloned with `ensure_workspace_clone(reset=true)` after each commit that writes from the workspace), and then open a pull request into the default branch.
 
 4. JSON discipline and tool schemas
 
 Use `validate_json_string` as a routine, automatic pre-flight for non-trivial JSON outputs—not as an afterthought. Assistants should proactively validate raw JSON responses and tool arguments before emitting them so the host never sees malformed payloads. Use `validate_tool_args` when you need to dry-run a tool call against its schema before executing it, especially for write-tagged tools. Do not invent tool parameters; always honor the schemas returned by `list_all_actions` with `include_parameters` set to `true`. For complex or nested JSON payloads, build them in small steps, validate them, and if a tool call fails due to a schema or parameter mismatch, re-read the tool definition instead of guessing or retrying blindly.
 
-5. Large files and diffs
+5. Observability and progress logs
 
+Humans should be able to follow long workflows, see failures, and interrupt.
+
+- After major tool calls/milestones, call `get_recent_tool_events(limit=20, include_success=true)`.
+- Use the returned `narrative` (or `transcript`) as plain-language progress logs.
 
 6. Respect write gating and approvals
 
@@ -130,18 +134,11 @@ Use `authorize_write_actions` when the write gate is enabled, and treat approval
 7. Summaries, auditability, and workspace hygiene
 
 When you complete a workflow, summarize what you changed, which tools you used, and where the artifacts live (branches, pull requests, issues, or docs). This is especially important when operating across multiple repositories.
+
 After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, always refresh the workspace with `ensure_workspace_clone` using the same branch and `reset=true` before running tests, linters, or further edits. Treat stale workspaces as unsafe for validation.
 
 These expectations are snapshots, not substitutes for reading the full docs like `docs/human/WORKFLOWS.md`.
-- Do NOT use `terminal_command` as a patch engine (for example with large
-  heredoc Python scripts that rewrite files). This is brittle under
-  JSON encoding and will fail easily.
-- Routine multi-line edits are normal. Use diff-based tools to apply
-  them directly instead of calling them tricky or bouncing them back to
-  humans.
+- Do NOT use `terminal_command` as a patch engine (for example with large heredoc Python scripts that rewrite files). This is brittle under JSON encoding and will fail easily.
 - For file edits, prefer:
   - `apply_text_update_and_commit` for full-file replacements.
 - Do NOT embed large multi-line Python/shell scripts in `terminal_command.command`.
-  If your edit involves more than a couple of lines of shell, treat that as
-  a signal to use the diff-based tools instead.
-
