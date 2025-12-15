@@ -440,13 +440,20 @@ def get_recent_server_errors(limit: int = 50) -> Dict[str, Any]:
         limit_int = max(1, min(ERROR_LOG_CAPACITY, limit_int))
     else:
         limit_int = max(1, limit_int)
+        # Include recent server logs as additional context for debugging.
+        try:
+            from github_mcp.main_tools.server_logs import get_recent_server_logs as _get_logs
+            server_logs = _get_logs(limit=max(100, limit_int), min_level="INFO")
+        except Exception as e:
+            server_logs = {"error": str(e)}
 
-    return {
-        "limit": limit_int,
-        "capacity": None if ERROR_LOG_CAPACITY <= 0 else ERROR_LOG_CAPACITY,
-        "errors": records[:limit_int],
-        "total_available": len(records),
-    }
+        return {
+            "limit": limit_int,
+            "capacity": None if ERROR_LOG_CAPACITY <= 0 else ERROR_LOG_CAPACITY,
+            "errors": records[:limit_int],
+            "total_available": len(records),
+            "server_logs": server_logs,
+        }
 @server.mcp_tool(write_action=False)
 def get_recent_server_logs(limit: int = 100, min_level: str = "INFO") -> Dict[str, Any]:
     """Return recent server-side logs captured in memory.
