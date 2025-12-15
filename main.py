@@ -168,6 +168,11 @@ server.WRITE_ALLOWED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
 
 register_extra_tools_if_available()
 
+# Expose an ASGI app for hosting via uvicorn/Render. The FastMCP server lazily
+# constructs a Starlette application through ``http_app``; we create it once at
+# import time so ``uvicorn main:app`` works as expected.
+app = server.mcp.http_app()
+
 
 def _cache_file_result(
     *, full_name: str, path: str, ref: str, decoded: Dict[str, Any]
