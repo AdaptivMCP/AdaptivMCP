@@ -1997,6 +1997,7 @@ async def list_tools(
     }
 
 
+@mcp_tool(write_action=False)
 def list_all_actions(
     include_parameters: bool = False, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
