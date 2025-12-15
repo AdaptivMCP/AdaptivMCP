@@ -26,7 +26,7 @@ At a high level, the system has three layers that are relevant during an inciden
    - Are tools and workspace commands behaving as expected?
 
 3. **Controller and assistants** (ChatGPT side)
-   - Is the controller using `get_server_config`, `validate_environment`, `run_command`, and `run_tests` correctly?
+   - Is the controller using `get_server_config`, `validate_environment`, `terminal_command`, and `run_tests` correctly?
    - Are prompts configured to follow safe branching and testing workflows?
 
 Most incidents can be narrowed down by checking these layers in order: hosting → MCP server → controller/assistant behavior.
@@ -49,7 +49,7 @@ When someone reports "GitHub via Adaptiv Controller is broken":
 1. **Check /healthz**
    - Call `GET /healthz` on the MCP server.
    - Confirm:
-   - If you suspect a version mismatch (for example after an upgrade), use `run_command` to run `python cli.py --version` in the controller repo workspace and compare it with `docs/UPGRADE_NOTES.md` and `CHANGELOG.md`.
+   - If you suspect a version mismatch (for example after an upgrade), use `terminal_command` to run `python cli.py --version` in the controller repo workspace and compare it with `docs/UPGRADE_NOTES.md` and `CHANGELOG.md`.
      - `status` is `ok` or similar.
      - `github_token_present` is `true`.
      - `controller.repo` and `controller.default_branch` match your expectations.
@@ -162,11 +162,11 @@ Actions:
    - Use `list_pull_requests` and GitHub UI to confirm whether a PR for the same branch already exists.
    - If needed, close or merge old PRs and delete stale branches before retrying.
 
-### 5.2 Workspace command failures (run_command / run_tests)
+### 5.2 Workspace command failures (terminal_command / run_tests)
 
 Symptoms:
 
-- `run_command` fails with missing dependencies or import errors.
+- `terminal_command` fails with missing dependencies or import errors.
 - `run_tests` fails immediately due to environment issues.
 
 Actions:
@@ -176,12 +176,12 @@ Actions:
    - If output is truncated, consider re-running with more targeted commands (for example a single test module instead of the entire suite).
 
 2. **Ensure project dependencies are installed in the workspace**
-   - Use `run_command` to install dependencies inside the workspace, for example:
+   - Use `terminal_command` to install dependencies inside the workspace, for example:
      - `pip install -r requirements.txt`
    - The workspace itself persists on disk between related commands, but commands typically run inside a temporary virtual environment. Install only what is necessary for the current repo and avoid relying on global state across unrelated sessions.
 
 3. **Use smaller, focused commands for debugging**
-   - Instead of running the entire test suite on every iteration, use `run_command` or `run_tests` with narrower scopes (for example a single test file).
+   - Instead of running the entire test suite on every iteration, use `terminal_command` or `run_tests` with narrower scopes (for example a single test file).
 If workspace commands consistently fail in the same way, capture `exit_code`, key parts of `stderr`, and the command arguments in an internal incident doc.
 
 ---
@@ -215,7 +215,7 @@ Options include:
 
 1. **Disable writes globally**
    - Call `authorize_write_actions(approved=False)` from the controller.
-   - This will cause write tools (including `run_command`, `run_tests`, commit helpers, and issue tools) to fail fast with a clear error.
+   - This will cause write tools (including `terminal_command`, `run_tests`, commit helpers, and issue tools) to fail fast with a clear error.
    - Use this when you suspect a misbehaving workflow or prompt is issuing unsafe write operations.
 
 2. **Switch to manual approval mode**

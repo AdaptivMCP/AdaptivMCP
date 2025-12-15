@@ -95,7 +95,7 @@ Adaptiv Controller is typically deployed in one of two ways:
 1. A managed platform (for example Render) with an HTTPS URL that controllers like Joeys GitHub connect to from ChatGPT.
 2. A self-hosted Docker deployment using the `Dockerfile`, `docker-compose.yml`, and `.env.example` in this repo (see `docs/human/SELF_HOSTING_DOCKER.md` and `docs/human/SELF_HOSTED_SETUP.md`).
 
-In both cases, assistants should treat the MCP server as the engine layer and use the same branch-and-PR-oriented, `run_command`-heavy workflows described here and in `docs/human/WORKFLOWS.md`. The main difference is who operates the server and where it runs, not how assistants behave.
+In both cases, assistants should treat the MCP server as the engine layer and use the same branch-and-PR-oriented, `terminal_command`-heavy workflows described here and in `docs/human/WORKFLOWS.md`. The main difference is who operates the server and where it runs, not how assistants behave.
 ---
 
 ## Core behavior expectations (snapshot)
@@ -104,7 +104,7 @@ These are a condensed snapshot of the expectations encoded in the repository doc
 
 1. Run commands like a real engineer
 
-Use `run_command` and `run_tests` subject to write gating to run tests, linters, formatters, inspection commands, and diagnostics. Treat them as your keyboard on a dedicated development machine, including for quick searches or usage checks. Do not invent extra restrictions on workspace commands beyond the controller’s own write policy. Be explicit about what you are running and why.
+Use `terminal_command` and `run_tests` subject to write gating to run tests, linters, formatters, inspection commands, and diagnostics. Treat them as your keyboard on a dedicated development machine, including for quick searches or usage checks. Do not invent extra restrictions on workspace commands beyond the controller’s own write policy. Be explicit about what you are running and why.
 
 Do not ask humans to run commands, paste scripts, or add newlines for you. Handle quoting, patch generation, and retries with the provided tools. Avoid massive inline payloads or oversized tool responses when a focused command, slice, or diff will do.
 
@@ -122,7 +122,6 @@ Use `validate_json_string` as a routine, automatic pre-flight for non-trivial JS
 
 5. Large files and diffs
 
-For large files, such as `main.py`, prefer `get_file_slice` to inspect specific regions, and use `build_unified_diff` or `build_section_based_diff` for patch-based updates. Avoid shuttling full contents back and forth when a small section-level diff will do.
 
 6. Respect write gating and approvals
 
@@ -134,7 +133,7 @@ When you complete a workflow, summarize what you changed, which tools you used, 
 After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, always refresh the workspace with `ensure_workspace_clone` using the same branch and `reset=true` before running tests, linters, or further edits. Treat stale workspaces as unsafe for validation.
 
 These expectations are snapshots, not substitutes for reading the full docs like `docs/human/WORKFLOWS.md`.
-- Do NOT use `run_command` as a patch engine (for example with large
+- Do NOT use `terminal_command` as a patch engine (for example with large
   heredoc Python scripts that rewrite files). This is brittle under
   JSON encoding and will fail easily.
 - Routine multi-line edits are normal. Use diff-based tools to apply
@@ -142,9 +141,7 @@ These expectations are snapshots, not substitutes for reading the full docs like
   humans.
 - For file edits, prefer:
   - `apply_text_update_and_commit` for full-file replacements.
-  - `update_file_sections_and_commit` for structured section-level edits.
-  - `build_unified_diff` + `apply_patch_and_commit` when you want explicit diffs.
-- Do NOT embed large multi-line Python/shell scripts in `run_command.command`.
+- Do NOT embed large multi-line Python/shell scripts in `terminal_command.command`.
   If your edit involves more than a couple of lines of shell, treat that as
   a signal to use the diff-based tools instead.
 

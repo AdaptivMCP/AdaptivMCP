@@ -70,11 +70,8 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - Call `authorize_write_actions` once for the session when you are ready to commit.
 4. Prepare the updated content:
    - Draft the new version of the file in your response.
-   - If the file is large or only a section is changing, consider using `build_section_based_diff` instead of a full replacement.
 5. Commit the change using one of:
    - `apply_text_update_and_commit` for full-file replacement, or
-   - `apply_patch_and_commit` with a unified diff from `build_unified_diff`, or
-   - `update_file_sections_and_commit` when you have clear section markers.
    In all cases, set `branch` to your docs branch and provide a descriptive commit message.
 6. Open a pull request:
    - First, call `build_pr_summary` with the repo `full_name`, your docs branch `ref`, a concise human-written `title`/`body`, and (optionally) a short `changed_files` summary and any `tests_status` or `lint_status` strings if checks were run.
@@ -108,15 +105,13 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - Call `ensure_branch` with `branch` set to a new feature name (for example `feat/single-file-update-happy-path`).4. Enable writes:
    - Call `authorize_write_actions` if not already done in this session.
 5. Apply code changes in the repo:
-   - For small files: use `build_unified_diff` with your proposed new content and then `apply_patch_and_commit`, or use `apply_text_update_and_commit` directly.
-   - For large or sectioned files: use `build_section_based_diff` and then `apply_patch_and_commit`.
    - Update both implementation and tests in the same branch, with clear commit messages.
 6. Run tests and lint in a workspace:
    - Call `ensure_workspace_clone` for the repo and branch to create or refresh a workspace before running tests or linters.
-   - Use `run_quality_suite` for full-suite or default quality gate runs, `run_lint_suite` for lint/static analysis, or `run_tests` / `run_command` for more targeted invocations.
-   - If tests or linters require dependencies, set `installing_dependencies=true` on the first run that installs packages and use `run_command` inside the workspace to install what is needed instead of editing project config only to satisfy local runs.
+   - Use `run_quality_suite` for full-suite or default quality gate runs, `run_lint_suite` for lint/static analysis, or `run_tests` / `terminal_command` for more targeted invocations.
+   - If tests or linters require dependencies, set `installing_dependencies=true` on the first run that installs packages and use `terminal_command` inside the workspace to install what is needed instead of editing project config only to satisfy local runs.
 7. Handle failures and refresh the workspace after each commit:
-   - When tests or linters fail, you are responsible for fixing them. Use `run_command` (for example `pytest path/to/test -k failing_case -vv` or `ruff check path/to/module.py`) together with small, focused code and test edits until everything passes.
+   - When tests or linters fail, you are responsible for fixing them. Use `terminal_command` (for example `pytest path/to/test -k failing_case -vv` or `ruff check path/to/module.py`) together with small, focused code and test edits until everything passes.
    - After using `commit_workspace` or `commit_workspace_files` to push changes from a workspace, treat that workspace as stale for validation. Before running `run_tests`, `run_lint_suite`, `run_quality_suite`, or any other forward-moving action, call `ensure_workspace_clone` again with `ref` set to the same feature branch and `reset=true`, then continue from that fresh clone.
 8. Open a PR:
    - Use `build_pr_summary` first with the controller repo `full_name`, your feature `ref`, a short title/body, and a summary of `changed_files`, `tests_status`, and `lint_status` based on the most recent runs.
@@ -173,9 +168,6 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - When you need a compact, numbered view to point at exact lines, use `get_file_with_line_numbers`.
    - Optionally, use a repo-scoped code search (for example via the `search` tool) to find line ranges or markers before slicing.
 2. Choose an edit strategy:
-   - For marker- or section-based edits, you can still use `build_section_based_diff` + `apply_patch_and_commit`.
-   - For direct, minimal line edits where line numbers are known, use `apply_line_edits_and_commit`.3. Using `apply_line_edits_and_commit` for line-based edits:
-   - Call `apply_line_edits_and_commit` with:
      - `full_name`: controller repo (for example `Proofgate-Revocations/chatgpt-mcp-github`).
      - `path`: file you are editing (for example `docs/ASSISTANT_HAPPY_PATHS.md`).
      - `branch`: feature/docs branch (never `main` directly).
@@ -193,8 +185,7 @@ If you ever find yourself guessing or improvising a new flow, check this file an
      a separate section unless both ranges must coexist.
    - For multi-block edits, list the sections in file order and sanity-check that no two ranges overlap or leave the old block
      intact.
-5. Optionally run tests or linters via `run_quality_suite`, `run_lint_suite`, `run_tests`, or `run_command` if the change affects behavior.
-- `apply_line_edits_and_commit` returns `status` equal to `committed` with commit metadata.
+5. Optionally run tests or linters via `run_quality_suite`, `run_lint_suite`, `run_tests`, or `terminal_command` if the change affects behavior.
 - If you set `include_diff=true`, the diff touches only the intended lines and no unrelated parts of the file.
 
 ---
@@ -209,12 +200,12 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 1. Create or refresh a workspace:
    - Call `ensure_workspace_clone` with `ref` set to your feature branch (or `main` if you are just exploring).
 2. Explore and modify in the workspace:
-   - Use `run_command` with commands like `ls`, `tree`, or `grep` to understand the layout.
+   - Use `terminal_command` with commands like `ls`, `tree`, or `grep` to understand the layout.
    - Run formatters or generators (for example `ruff`, `black`, or project-specific scripts) as needed.
-   - Keep `installing_dependencies` false unless the command installs packages. When dependencies are required for tests or linters, install them via `run_command` in the workspace environment rather than editing project config solely to satisfy one-off runs.
+   - Keep `installing_dependencies` false unless the command installs packages. When dependencies are required for tests or linters, install them via `terminal_command` in the workspace environment rather than editing project config solely to satisfy one-off runs.
 3. Run tests and lint from a fresh clone after commits:
    - Before running `run_quality_suite`, `run_lint_suite`, `run_tests`, or other test commands, ensure you are working from a fresh workspace clone for the current feature branch. After you commit via `commit_workspace` or `commit_workspace_files`, call `ensure_workspace_clone` again with `ref` set to that branch and `reset=true` before continuing.
-   - Use `run_quality_suite` for the default quality gate, `run_lint_suite` for lint/static analysis, or `run_tests` / `run_command` with targeted invocations as needed.
+   - Use `run_quality_suite` for the default quality gate, `run_lint_suite` for lint/static analysis, or `run_tests` / `terminal_command` with targeted invocations as needed.
    - Treat any failing tests or lint checks as your responsibility to fix; iterate with small edits and re-runs until they pass.
 4. Commit from the workspace:
    - Use `commit_workspace` when you want to commit all changes in one commit, or
@@ -314,9 +305,8 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 - Prefer repo-scoped search and controller-specific tools over global GitHub searches.
 - Use feature branches and pull requests for any change to this controller repo.
 - Keep changes small, focused, and backed by tests when behavior changes.
-- Use large-file helpers (`get_file_slice`, `build_section_based_diff`, `build_unified_diff_from_strings`) instead of loading huge files.
 - Use `describe_tool` to fetch the input schema for a specific tool before constructing or repairing arguments, then `validate_tool_args` to check your payloads. When a tool call fails with a schema or argument error, stop guessing, re-read the tool definition via `list_all_actions`/`describe_tool`, and fix the payload to match the declared schema before trying again.
-- Treat `run_command` as your interactive terminal for short, focused commands (tests, `grep`, formatters, simple utilities), and rely on diff- and section-based tools (`update_file_sections_and_commit`, `apply_line_edits_and_commit`, `build_section_based_diff`, `apply_patch_and_commit`) for multi-line or structural edits instead of embedding large scripts inside tool arguments.
+- Treat `terminal_command` as your interactive terminal for short, focused commands (tests, `grep`, formatters, simple utilities), and rely on diff- and section-based tools for multi-line or structural edits instead of embedding large scripts inside tool arguments.
 - After docs in this repo are updated and merged into the default branch, treat them as the **source of truth** for future sessions and re-read them via `get_file_contents` or `fetch_files`.
 
 ---
@@ -337,9 +327,8 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 3. If edits are required on the PR branch:
    - Use `ensure_branch` on the head branch from `fetch_pr.head.ref`.
    - Fetch relevant files (`get_file_contents`, `get_file_slice`) and plan small, targeted changes.
-   - Apply changes with `apply_patch_and_commit`, `apply_text_update_and_commit`, or `commit_workspace_files` if you worked locally.
 4. Run validation the reviewer will expect:
-   - Use `run_tests` or targeted `run_command` invocations (for example `pytest -k <name>`) on the PR branch.
+   - Use `run_tests` or targeted `terminal_command` invocations (for example `pytest -k <name>`) on the PR branch.
 5. Communicate back on the PR:
    - Post a concise summary with `comment_on_pull_request`, linking to tests you ran and which comments are resolved.
    - If you addressed a specific thread, reply in that thread via `comment_on_pull_request` with `in_reply_to` pointing at the comment ID.
@@ -363,17 +352,17 @@ If you ever find yourself guessing or improvising a new flow, check this file an
    - Otherwise, call `get_repo_defaults` for the default branch and confirm the target base.
 2. Prepare a workspace for conflict resolution:
    - Call `ensure_workspace_clone` with `ref` set to the feature branch.
-   - Run `run_command` with `git fetch origin` followed by `git merge origin/<base>` (or `git rebase origin/<base>` if rebase is desired).
+   - Run `terminal_command` with `git fetch origin` followed by `git merge origin/<base>` (or `git rebase origin/<base>` if rebase is desired).
 3. Resolve conflicts locally:
-   - Use `run_command` to inspect conflicted files with commands like `sed -n`, `rg`, or other CLI tools.
-   - After fixing conflicts, run `git status` and `git add` via `run_command` to stage changes.
+   - Use `terminal_command` to inspect conflicted files with commands like `sed -n`, `rg`, or other CLI tools.
+   - After fixing conflicts, run `git status` and `git add` via `terminal_command` to stage changes.
 4. Verify behavior:
    - Run `run_tests` or targeted commands to ensure the conflict resolution did not break functionality.
 5. Commit and push:
    - Use `commit_workspace` (or `commit_workspace_files` for a subset) with a message like "Merge <base> into <branch>".
    - Confirm the branch is updated by re-running `fetch_pr` and checking that GitHub no longer reports the branch as behind or conflicted.
 **Validation:**
-- `run_command` for `git status` shows a clean working tree after the merge/rebase.
+- `terminal_command` for `git status` shows a clean working tree after the merge/rebase.
 - Tests pass on the refreshed branch.
 - The PR no longer shows merge conflicts or "out of date" warnings.
 
@@ -448,7 +437,7 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 3. Apply changes using the same commit tools as in Sections 3–6, always passing `full_name` and the topic branch.
 4. Run validation commands in a workspace clone of that repo:
    - Call `ensure_workspace_clone` with `full_name` and the topic branch.
-   - Use `run_tests`/`run_command` as needed.
+   - Use `run_tests`/`terminal_command` as needed.
 5. Open a PR against the target repo:
    - Use `open_pr_for_existing_branch`, setting `full_name` and `base` explicitly.
    - In the PR body, note any controller-specific constraints (for example limited token scopes).

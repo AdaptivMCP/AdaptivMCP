@@ -9,19 +9,13 @@ for optional, non-binding examples of how the tools can fit together.
 
 import asyncio
 import base64
-import difflib
 import json
 import os
 import re
-import time
 from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
 import jsonschema
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
-from starlette.requests import Request
-from starlette.responses import JSONResponse, PlainTextResponse
 
 import github_mcp.server as server  # noqa: F401
 import github_mcp.tools_workspace as tools_workspace  # noqa: F401
@@ -36,12 +30,10 @@ from github_mcp.config import (
     GIT_COMMITTER_EMAIL,
     GIT_COMMITTER_NAME,
     GITHUB_API_BASE,
-    GITHUB_PAT,
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
-    SERVER_START_TIME,
     TOOL_STDERR_MAX_CHARS,  # noqa: F401
     TOOL_STDIO_COMBINED_MAX_CHARS,  # noqa: F401
     TOOL_STDOUT_MAX_CHARS,  # noqa: F401
@@ -73,7 +65,6 @@ from github_mcp.http_clients import (
     _external_client_instance,
     _get_concurrency_semaphore,  # noqa: F401
     _github_client_instance,
-    _http_client_external,
     _http_client_github,
     _get_github_token,  # noqa: F401
 )
@@ -92,7 +83,6 @@ from github_mcp.server import (
     _github_request,
     _normalize_input_schema,
     _structured_tool_error,
-    mcp,
     mcp_tool,
     register_extra_tools_if_available,
 )
@@ -102,19 +92,21 @@ from github_mcp.utils import (
     _decode_zipped_job_logs,
     _effective_ref_for_repo,
     _normalize_repo_path,
-    _render_visible_whitespace,
     _with_numbered_lines,
     normalize_args,
     _normalize_write_context,
 )
 from github_mcp.workspace import (
-    _apply_patch_to_repo,  # noqa: F401
     _clone_repo,  # noqa: F401
     _prepare_temp_virtualenv,  # noqa: F401
     _run_shell,  # noqa: F401
     _workspace_path,  # noqa: F401
 )
 
+
+
+# Exposed for tests that monkeypatch the external HTTP client used for sandbox: URLs.
+_http_client_external: httpx.AsyncClient | None = None
 
 LOGGER = BASE_LOGGER.getChild("main")
 
@@ -194,18 +186,43 @@ def _reset_file_cache_for_tests() -> None:
     clear_cache()
 
 
+async def terminal_command(
+    full_name: str,
+    ref: str = "main",
+    command: str = "pytest",
+    timeout_seconds: int = 300,
+    workdir: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+    mutating: bool = False,
+) -> Dict[str, Any]:
+    """Run a shell command in the persistent repo workspace (terminal gateway).
+
+    This is a thin wrapper around github_mcp.tools_workspace.terminal_command.
+    """
+    return await tools_workspace.terminal_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+        mutating=mutating,
+    )
+
+
 async def run_command(
     full_name: str,
     ref: str = "main",
     command: str = "pytest",
     timeout_seconds: int = 300,
     workdir: Optional[str] = None,
-    patch: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
 ) -> Dict[str, Any]:
-    """Thin wrapper around github_mcp.tools_workspace.run_command.
+    """Thin wrapper around github_mcp.tools_workspace.terminal_command (via run_command alias).
 
     Tests import run_command from main so this helper forwards to the
     workspace tool while still allowing monkeypatching of internal
@@ -217,7 +234,6 @@ async def run_command(
         command=command,
         timeout_seconds=timeout_seconds,
         workdir=workdir,
-        patch=patch,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
@@ -230,7 +246,6 @@ async def run_tests(
     test_command: str = "pytest",
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
-    patch: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
@@ -243,7 +258,6 @@ async def run_tests(
         test_command=test_command,
         timeout_seconds=timeout_seconds,
         workdir=workdir,
-        patch=patch,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
@@ -776,7 +790,6 @@ async def pr_smoke_test(
         updated_content=content,
         branch=branch,
         message=f"MCP PR smoke test on {branch}",
-        return_diff=False,
     )
 
     pr = await create_pull_request(
@@ -1132,7 +1145,7 @@ async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
 
 @mcp_tool(write_action=False)
 async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
-    """Get metadata for a pull request without downloading the diff."""
+    """Get metadata for a pull request."""
 
     data = await fetch_pr(full_name, pull_number)
     pr = data.get("json") or {}
@@ -1160,30 +1173,6 @@ async def fetch_pr_comments(
     params = {"per_page": per_page, "page": page}
     return await _github_request(
         "GET", f"/repos/{full_name}/issues/{pull_number}/comments", params=params
-    )
-
-
-@mcp_tool(write_action=False)
-async def get_pr_diff(full_name: str, pull_number: int) -> Dict[str, Any]:
-    """Fetch the unified diff for a pull request."""
-
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/pulls/{pull_number}",
-        headers={"Accept": "application/vnd.github.v3.diff"},
-        expect_json=False,
-    )
-
-
-@mcp_tool(write_action=False)
-async def fetch_pr_patch(full_name: str, pull_number: int) -> Dict[str, Any]:
-    """Fetch the patch for a GitHub pull request."""
-
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/pulls/{pull_number}",
-        headers={"Accept": "application/vnd.github.v3.patch"},
-        expect_json=False,
     )
 
 
@@ -1450,7 +1439,6 @@ async def move_file(
         updated_content=source_text,
         branch=effective_branch,
         message=commit_message + " (add new path)",
-        return_diff=False,
     )
 
     # 2) Delete the original path now that the destination exists.
@@ -1610,76 +1598,6 @@ async def cache_files(
         "files": results,
         "cache": cache_stats(),
     }
-
-
-@mcp_tool(write_action=False)
-async def build_unified_diff(
-    full_name: str,
-    path: str,
-    new_content: str,
-    ref: str = "main",
-    context_lines: int = 3,
-    show_whitespace: bool = False,
-) -> Dict[str, Any]:
-    """Generate a unified diff for a file against proposed new content.
-
-    Args:
-        full_name: ``owner/repo`` string.
-        path: Repository-relative file path to diff.
-        new_content: Proposed replacement content for the file.
-        ref: Branch, tag, or commit SHA to compare against (default ``main``).
-        context_lines: Number of unchanged context lines to include in the diff
-            (default ``3``).
-        show_whitespace: When ``True``, include a whitespace-visualized version
-            of the base, proposed, and diff outputs so assistants can see tabs
-            and trailing spaces that UI layers might hide.
-
-    Raises:
-        ValueError: If ``context_lines`` is negative.
-        GitHubAPIError: If the base file cannot be fetched (for example missing
-            file, ref, or permissions).
-    """
-
-    if context_lines < 0:
-        raise ValueError("context_lines must be non-negative")
-
-    normalized_path = _normalize_repo_path(path)
-
-    base = await _decode_github_content(full_name, normalized_path, ref)
-    base_text = base.get("text", "")
-
-    diff_lines = difflib.unified_diff(
-        base_text.splitlines(keepends=True),
-        new_content.splitlines(keepends=True),
-        fromfile=f"a/{normalized_path}",
-        tofile=f"b/{normalized_path}",
-        n=context_lines,
-    )
-    diff_text = "".join(diff_lines)
-
-    response: Dict[str, Any] = {
-        "path": normalized_path,
-        "ref": ref,
-        "context_lines": context_lines,
-        "base": {
-            "text": base_text,
-            "numbered_lines": base.get("numbered_lines"),
-        },
-        "proposed": {
-            "text": new_content,
-            "numbered_lines": _with_numbered_lines(new_content),
-        },
-        "diff": diff_text,
-    }
-
-    if show_whitespace:
-        response["visible_whitespace"] = {
-            "base": _render_visible_whitespace(base_text),
-            "proposed": _render_visible_whitespace(new_content),
-            "diff": _render_visible_whitespace(diff_text),
-        }
-
-    return response
 
 
 @mcp_tool(write_action=False)
@@ -2243,36 +2161,16 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
 
     tool, _ = found
     schema = _normalize_input_schema(tool)
-
-    # For some tools we know the expected argument contract even when the MCP
-    # layer does not expose a concrete inputSchema. In those cases we build a
-    # small JSON schema by hand so callers can preflight their payloads.
-    if schema is None and tool_name == "compare_refs":
-        schema = {
-            "type": "object",
-            "properties": {
-                "full_name": {"type": "string"},
-                "base": {"type": "string"},
-                "head": {"type": "string"},
-            },
-            "required": ["full_name", "base", "head"],
-            "additionalProperties": True,
-        }
-
-    normalized_args = normalize_args(args or {})
-
     if schema is None:
-        return {
-            "tool": tool_name,
-            "valid": True,
-            "warnings": [
-                "No input schema available for this tool; nothing to validate.",
-            ],
-            "schema": None,
-            "errors": [],
-        }
+        raise ValueError(f"Tool {tool_name!r} does not expose an input schema")
 
-    validator = jsonschema.Draft7Validator(schema)
+    normalized_args = normalize_args(dict(args or {}))
+
+    # jsonschema can infer an appropriate validator for the schema version.
+    validator_cls = jsonschema.validators.validator_for(schema)
+    validator_cls.check_schema(schema)
+    validator = validator_cls(schema)
+
     errors = [
         {
             "message": error.message,
@@ -3165,21 +3063,14 @@ def _normalize_pr_payload(raw_pr: Any) -> Optional[Dict[str, Any]]:
 
 
 def _normalize_branch_summary(summary: Any) -> Optional[Dict[str, Any]]:
+    """Normalize get_branch_summary output into a compact shape.
+
+    Diff/compare data has been removed from the server; this helper focuses on PRs
+    and CI signals.
+    """
+
     if not isinstance(summary, dict):
         return None
-
-    if summary.get("compare_error") and not summary.get("compare"):
-        return None
-
-    compare = summary.get("compare") if isinstance(summary.get("compare"), dict) else None
-    compare_normalized = None
-    if compare:
-        compare_normalized = {
-            "ahead_by": compare.get("ahead_by"),
-            "behind_by": compare.get("behind_by"),
-            "total_commits": compare.get("total_commits"),
-            "status": compare.get("status"),
-        }
 
     def _simplify_prs(prs: Any) -> list[Dict[str, Any]]:
         simplified: list[Dict[str, Any]] = []
@@ -3217,7 +3108,6 @@ def _normalize_branch_summary(summary: Any) -> Optional[Dict[str, Any]]:
     normalized = {
         "branch": summary.get("branch"),
         "base": summary.get("base"),
-        "compare": compare_normalized,
         "open_prs": _simplify_prs(summary.get("open_prs")),
         "closed_prs": _simplify_prs(summary.get("closed_prs")),
         "latest_workflow_run": latest_run_normalized,
@@ -3322,45 +3212,83 @@ async def resolve_handle(full_name: str, handle: str) -> Dict[str, Any]:
     }
 
 
-@mcp_tool(write_action=False)
-async def compare_refs(
-    full_name: str,
-    base: str,
-    head: str,
-) -> Dict[str, Any]:
-    """Compare two refs and return the GitHub diff summary (max 100 files)."""
-
-    data = await _github_request(
-        "GET",
-        f"/repos/{full_name}/compare/{base}...{head}",
-    )
-    j = data.get("json") or {}
-    files = j.get("files", [])
-    return {**j, "files": files[:100]}
-
-
 # ------------------------------------------------------------------------------
 # Branch / commit / PR helpers
 # ------------------------------------------------------------------------------
 
 
+
 @mcp_tool(write_action=True)
 async def create_branch(
     full_name: str,
-    new_branch: str,
+    branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
-    """Create a new branch from an existing ref (default ``main``)."""
+    """Create a new branch from a base ref.
 
-    _ensure_write_allowed(f"create branch {new_branch} from {from_ref} in {full_name}")
-    sha = await _get_branch_sha(full_name, from_ref)
-    payload = {"ref": f"refs/heads/{new_branch}", "sha": sha}
-    return await _github_request(
-        "POST",
-        f"/repos/{full_name}/git/refs",
-        json_body=payload,
-    )
+    This uses the Git refs API. Prefer ``ensure_branch`` when you want an
+    idempotent flow.
+    """
 
+    _ensure_write_allowed(f"create branch {branch} from {from_ref} in {full_name}")
+
+    branch = branch.strip()
+    if not branch:
+        raise ValueError("branch must be non-empty")
+
+    # Conservative branch-name validation.
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", branch):
+        raise ValueError("branch contains invalid characters")
+    if ".." in branch or "@{" in branch:
+        raise ValueError("branch contains invalid ref sequence")
+    if branch.startswith("/") or branch.endswith("/"):
+        raise ValueError("branch must not start or end with '/'")
+    if branch.endswith(".lock"):
+        raise ValueError("branch must not end with '.lock'")
+
+    base_ref = _effective_ref_for_repo(full_name, from_ref)
+
+    client = _github_client_instance()
+
+    # Resolve base sha.
+    base_sha: Optional[str] = None
+    async with _get_concurrency_semaphore():
+        resp = await client.get(f"/repos/{full_name}/git/ref/heads/{base_ref}")
+    if resp.status_code == 200:
+        payload = resp.json() if hasattr(resp, "json") else {}
+        obj = payload.get("object") if isinstance(payload, dict) else None
+        if isinstance(obj, dict):
+            base_sha = obj.get("sha")
+    elif resp.status_code == 404:
+        # Try tags.
+        async with _get_concurrency_semaphore():
+            tag_resp = await client.get(f"/repos/{full_name}/git/ref/tags/{base_ref}")
+        if tag_resp.status_code == 200:
+            payload = tag_resp.json() if hasattr(tag_resp, "json") else {}
+            obj = payload.get("object") if isinstance(payload, dict) else None
+            if isinstance(obj, dict):
+                base_sha = obj.get("sha")
+    else:
+        raise GitHubAPIError(f"GitHub create_branch base ref error {resp.status_code}: {resp.text}")
+
+    # If base_sha still missing, allow direct SHA usage.
+    if base_sha is None:
+        if re.fullmatch(r"[0-9a-fA-F]{7,40}", from_ref.strip()):
+            base_sha = from_ref.strip()
+        else:
+            raise GitHubAPIError(f"Unable to resolve base ref {from_ref!r} in {full_name}")
+
+    new_ref = f"refs/heads/{branch}"
+    body = {"ref": new_ref, "sha": base_sha}
+
+    async with _get_concurrency_semaphore():
+        create_resp = await client.post(f"/repos/{full_name}/git/refs", json=body)
+
+    if create_resp.status_code == 201:
+        return {"status_code": create_resp.status_code, "json": create_resp.json()}
+
+    # 422 typically means the ref already exists.
+    raise GitHubAPIError(f"GitHub create_branch error {create_resp.status_code}: {create_resp.text}")
 
 @mcp_tool(write_action=True)
 async def ensure_branch(
@@ -3383,17 +3311,14 @@ async def ensure_branch(
 
 @mcp_tool(write_action=False)
 async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
-    """Return ahead/behind data, PRs, and latest workflow run for a branch."""
+    """Return PRs and latest workflow run for a branch."""
 
     effective_branch = _effective_ref_for_repo(full_name, branch)
     effective_base = _effective_ref_for_repo(full_name, base)
 
+    # Diff/compare tooling has been removed; branch summary focuses on PRs and CI.
     compare_result: Optional[Dict[str, Any]] = None
     compare_error: Optional[str] = None
-    try:
-        compare_result = await compare_refs(full_name, effective_base, effective_branch)
-    except Exception as exc:
-        compare_error = str(exc)
 
     owner: Optional[str] = None
     if "/" in full_name:
@@ -3429,7 +3354,6 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
         "full_name": full_name,
         "branch": effective_branch,
         "base": effective_base,
-        "compare": compare_result,
         "compare_error": compare_error,
         "open_prs": open_prs,
         "closed_prs": closed_prs,
@@ -3447,7 +3371,6 @@ async def get_latest_branch_status(
     This wraps ``get_branch_summary`` and ``_normalize_branch_summary`` so controllers
     and assistants can quickly answer questions like:
 
-      - "Is this branch ahead or behind the base?"
       - "Is there an open PR for it?"
       - "What was the latest workflow run and how did it finish?"
     """
@@ -3642,51 +3565,11 @@ async def _build_default_pr_body(
     lines.append(f"- Status: {'Draft (still in progress)' if draft else 'Ready for review'}")
     lines.append("")
 
-    # Change summary from compare_refs
-    changed_files: List[str] = []
-    try:
-        compare = await compare_refs(full_name=full_name, base=effective_base, head=head)
-    except Exception:
-        compare = None
-
+    # Change summary
     lines.append("## Change summary")
     lines.append("")
-    if isinstance(compare, dict):
-        ahead_by = compare.get("ahead_by")
-        behind_by = compare.get("behind_by")
-        total_commits = compare.get("total_commits")
-
-        summary_bits: List[str] = []
-        if isinstance(total_commits, int):
-            summary_bits.append(f"{total_commits} commit(s)")
-        if isinstance(ahead_by, int) and isinstance(behind_by, int):
-            summary_bits.append(
-                f"{ahead_by} ahead / {behind_by} behind `{effective_base}`"
-            )
-
-        if summary_bits:
-            lines.append("- " + "; ".join(summary_bits))
-        else:
-            lines.append("- Comparison data not available.")
-
-        files = compare.get("files") or []
-        if isinstance(files, list):
-            for f in files[:10]:
-                if isinstance(f, dict):
-                    filename = f.get("filename")
-                    if isinstance(filename, str):
-                        changed_files.append(filename)
-    else:
-        lines.append("- Comparison data not available.")
-
+    lines.append("- See the PR *Files changed* tab for the authoritative change list.")
     lines.append("")
-
-    if changed_files:
-        lines.append("### Files touched (sample)")
-        lines.append("")
-        for filename in changed_files:
-            lines.append(f"- `{filename}`")
-        lines.append("")
 
     # CI & quality: look at recent workflow runs on this branch.
     lines.append("## CI & quality")
@@ -4136,17 +4019,15 @@ async def apply_text_update_and_commit(
     *,
     branch: str = "main",
     message: Optional[str] = None,
-    return_diff: bool = True,
-    context_lines: int = 3,
 ) -> Dict[str, Any]:
     """Apply a text update to a single file on a branch, then verify it.
 
-    This is a lower-level building block for diff-based flows:
+    This is a lower-level building block for full-file replacement flows:
 
     1. Read the current file text from GitHub.
     2. Commit the provided updated_content via the Contents API on the target branch.
     3. Re-read the file to verify the new SHA and contents landed.
-    4. Optionally compute and return a unified diff between old and new text.
+    4. Commit the full file contents (no patch/diff application).
 
     It does NOT create a PR; callers are expected to open a PR separately
     (for example using create_pull_request or update_files_and_open_pr) if
@@ -4158,8 +4039,6 @@ async def apply_text_update_and_commit(
         updated_content: New full text for the file (UTF-8).
         branch: Branch to commit to (default "main").
         message: Commit message; if omitted, a simple "Update <path>" is used.
-        return_diff: If true, include a unified diff in the response under "diff".
-        context_lines: Number of context lines for the unified diff.
 
     Raises:
         ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
@@ -4171,11 +4050,8 @@ async def apply_text_update_and_commit(
             - message: commit message used
             - commit: raw GitHub commit API response
             - verification: {sha_before, sha_after, html_url}
-            - diff: unified diff text (if return_diff is true)
     """
 
-    if context_lines < 0:
-        raise ValueError("context_lines must be non-negative")
 
     effective_branch, normalized_path = _normalize_write_context(
         full_name=full_name,
@@ -4202,8 +4078,8 @@ async def apply_text_update_and_commit(
 
     try:
         decoded = await _decode_github_content(full_name, normalized_path, effective_branch)
-        old_text = decoded.get("text")
-        if not isinstance(old_text, str):
+        _old_text = decoded.get("text")
+        if not isinstance(_old_text, str):
             raise GitHubAPIError("Decoded content is not text")
         sha_before = _extract_sha(decoded)
     except GitHubAPIError as exc:
@@ -4212,7 +4088,6 @@ async def apply_text_update_and_commit(
             # The GitHub Contents API returns 404 when the file does not yet exist.
             # In that case we treat this as a creation rather than an update.
             is_new_file = True
-            old_text = ""
             sha_before = None
         else:
             raise
@@ -4254,338 +4129,7 @@ async def apply_text_update_and_commit(
         },
     }
 
-    # 4) Optionally compute a unified diff between the old and new text.
-    if return_diff:
-        import difflib
-
-        diff_iter = difflib.unified_diff(
-            old_text.splitlines(keepends=True),
-            (new_text or "").splitlines(keepends=True),
-            fromfile=f"a/{normalized_path}",
-            tofile=f"b/{normalized_path}",
-            n=context_lines,
-        )
-        result["diff"] = "".join(diff_iter)
-
     return result
-
-
-@mcp_tool(write_action=True)
-async def apply_patch_and_commit(
-    full_name: str,
-    path: str,
-    patch: str,
-    *,
-    branch: str = "main",
-    message: Optional[str] = None,
-    return_diff: bool = True,
-) -> Dict[str, Any]:
-    """Apply a unified diff to a single file, commit it, then verify it.
-
-    This is a first-class patch-based flow for a single file:
-
-      1. Read the current file text from GitHub on the given branch.
-      2. Apply a unified diff (for that file) in memory.
-      3. Commit the resulting text via the GitHub Contents API.
-      4. Re-read the file on the branch to verify the new SHA and contents.
-
-    The patch is expected to be a standard unified diff for *this* path,
-    typically generated by `build_unified_diff` against the same branch.
-
-    Args:
-        full_name: 'owner/repo' string.
-        path: Path of the file within the repository (normalized before write).
-        patch: Unified diff text affecting this path only.
-        branch: Branch to commit to (default 'main').
-        message: Commit message; if omitted, a default is derived.
-        return_diff: If true, include a recomputed unified diff between the
-            old and new text (not just echo the incoming patch).
-
-    Raises:
-        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
-
-    Returns:
-        A dict with:
-            - status: 'committed'
-            - full_name, path, branch
-            - message: commit message used
-            - commit: raw GitHub commit API response
-            - verification: {sha_before, sha_after, html_url}
-            - diff: unified diff text (if return_diff is true)
-    """
-
-    effective_branch, normalized_path = _normalize_write_context(
-        full_name=full_name,
-        branch=branch,
-        path=path,
-    )
-
-    _ensure_write_allowed(
-        "apply_patch_and_commit %s %s" % (full_name, normalized_path),
-        target_ref=effective_branch,
-    )
-
-    import difflib
-    import re
-
-    def _extract_paths_from_patch(patch_text: str) -> set[str]:
-        """Return the set of file paths mentioned in ---/+++ headers (normalized).
-
-        Paths are normalized by stripping leading a/ or b/ prefixes.
-        /dev/null entries are ignored.
-        """
-        paths: set[str] = set()
-        for line in patch_text.splitlines():
-            if not (line.startswith("--- ") or line.startswith("+++ ")):
-                continue
-            _, raw = line.split(" ", 1)
-            raw = raw.strip()
-            if raw == "/dev/null":
-                continue
-            if raw.startswith("a/") or raw.startswith("b/"):
-                raw = raw[2:]
-            if raw:
-                paths.add(raw)
-        return paths
-
-    def _extract_sha(decoded: Dict[str, Any]) -> Optional[str]:
-        if not isinstance(decoded, dict):
-            return None
-        json_blob = decoded.get("json")
-        if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
-            return json_blob.get("sha")
-        sha_value = decoded.get("sha")
-        return sha_value if isinstance(sha_value, str) else None
-
-    def _apply_unified_diff_to_text(original_text: str, patch_text: str) -> str:
-        orig_lines = original_text.splitlines(keepends=True)
-        new_lines: list[str] = []
-        new_lines: list[str] = []
-
-        orig_idx = 0
-
-        hunk_header_re = re.compile(
-            r"^@@ -(?P<old_start>\d+)(?:,(?P<old_len>\d+))? "
-            r"\+(?P<new_start>\d+)(?:,(?P<new_len>\d+))? @@"
-        )
-
-        in_hunk = False
-
-        for line in patch_text.splitlines(keepends=True):
-            if line.startswith("diff --git") or line.startswith("index "):
-                # Ignore Git metadata lines.
-                continue
-            if line.startswith("--- ") or line.startswith("+++ "):
-                # Ignore file header lines; we assume the caller passes `path`.
-                continue
-
-            m = hunk_header_re.match(line)
-            if m:
-                in_hunk = True
-                old_start = int(m.group("old_start"))
-                # Copy any untouched lines before this hunk.
-                target_idx = max(0, old_start - 1)
-                if target_idx < orig_idx:
-                    raise GitHubAPIError("Patch hunk moves backwards in the file")
-                while orig_idx < target_idx and orig_idx < len(orig_lines):
-                    new_lines.append(orig_lines[orig_idx])
-                    orig_idx += 1
-                continue
-
-            if not in_hunk:
-                # Skip any preamble before the first hunk.
-                continue
-
-            prefix = line[:1]
-            content = line[1:]
-
-            if prefix == " ":
-                # Context line: must match original; copy from original.
-                if orig_idx >= len(orig_lines):
-                    raise GitHubAPIError("Patch context extends beyond end of file")
-                if orig_lines[orig_idx] != content:
-                    raise GitHubAPIError("Patch context does not match original text")
-                new_lines.append(orig_lines[orig_idx])
-                orig_idx += 1
-            elif prefix == "-":
-                # Deletion line: skip the corresponding original line.
-                if orig_idx >= len(orig_lines):
-                    raise GitHubAPIError("Patch deletion extends beyond end of file")
-                if orig_lines[orig_idx] != content:
-                    raise GitHubAPIError("Patch deletion does not match original text")
-                orig_idx += 1
-            elif prefix == "+":
-                # Addition line: insert new content.
-                new_lines.append(content)
-            elif prefix in {"@", "#"}:
-                # Unexpected hunk or comment-style line inside a hunk.
-                raise GitHubAPIError(f"Unsupported patch line inside hunk: {line!r}")
-            else:
-                raise GitHubAPIError(f"Unsupported patch line prefix: {prefix!r}")
-
-        # Append any remaining original lines that were not part of a hunk.
-        while orig_idx < len(orig_lines):
-            new_lines.append(orig_lines[orig_idx])
-            orig_idx += 1
-
-        return "".join(new_lines)
-
-    # Validate that the patch only touches this path.
-    header_paths = _extract_paths_from_patch(patch)
-    if header_paths:
-        if len(header_paths) > 1:
-            raise GitHubAPIError(
-                "apply_patch_and_commit only supports patches for a single path; "
-                f"found: {sorted(header_paths)}"
-            )
-        header_path = next(iter(header_paths))
-        if header_path != normalized_path:
-            raise GitHubAPIError(
-                "Patch path mismatch: tool was called with path="
-                f"{normalized_path!r} but patch headers refer to {header_path!r}"
-            )
-
-    # 1) Read current file from GitHub on the target branch. Treat a 404 as a new file.
-    is_new_file = False
-    try:
-        decoded = await _decode_github_content(full_name, normalized_path, effective_branch)
-        old_text = decoded.get("text")
-        if not isinstance(old_text, str):
-            raise GitHubAPIError("Decoded content is not text")
-        sha_before = _extract_sha(decoded)
-    except GitHubAPIError as exc:
-        msg = str(exc)
-        if "404" in msg:
-            is_new_file = True
-            old_text = ""
-            sha_before = None
-        else:
-            raise
-
-    # 2) Apply the patch to get the updated text.
-    try:
-        new_text = _apply_unified_diff_to_text(old_text, patch)
-    except GitHubAPIError:
-        raise
-    except Exception as exc:  # pragma: no cover - defensive wrapper
-        raise GitHubAPIError(f"Failed to apply patch to {normalized_path}: {exc}") from exc
-
-    body_bytes = new_text.encode("utf-8")
-    if message is not None:
-        commit_message = message
-    else:
-        default_action = "Create" if is_new_file else "Update"
-        commit_message = f"{default_action} {normalized_path} via patch"
-
-    # 3) Commit the new content via the GitHub Contents API.
-    commit_result = await _perform_github_commit(
-        full_name=full_name,
-        path=normalized_path,
-        message=commit_message,
-        body_bytes=body_bytes,
-        branch=effective_branch,
-        sha=sha_before,
-    )
-
-    # 4) Verify by reading the file again from the same branch.
-    verified = await _decode_github_content(full_name, normalized_path, effective_branch)
-    new_text_verified = verified.get("text")
-    sha_after = _extract_sha(verified)
-
-    result: Dict[str, Any] = {
-        "status": "committed",
-        "full_name": full_name,
-        "path": normalized_path,
-        "branch": effective_branch,
-        "message": commit_message,
-        "commit": commit_result,
-        "verification": {
-            "sha_before": sha_before,
-            "sha_after": sha_after,
-            "html_url": verified.get("html_url"),
-        },
-    }
-
-    # Optional: recompute a unified diff between old and verified new text.
-    if return_diff:
-        diff_iter = difflib.unified_diff(
-            old_text.splitlines(keepends=True),
-            (new_text_verified or "").splitlines(keepends=True),
-            fromfile=f"a/{normalized_path}",
-            tofile=f"b/{normalized_path}",
-            n=3,
-        )
-        result["diff"] = "".join(diff_iter)
-
-    return result
-
-
-middleware = [
-    Middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-]
-
-# SSE endpoint at /sse plus POST /messages handled by FastMCP internally.
-app = mcp.http_app(path="/sse", middleware=middleware, transport="sse")
-
-HOME_MESSAGE = (
-    "GitHub MCP server is running. Connect your ChatGPT MCP client to /sse "
-    "(POST back to /messages) and use /healthz for health checks.\n"
-)
-
-
-@mcp.custom_route("/", methods=["GET"])
-async def homepage(request: Request) -> PlainTextResponse:
-    return PlainTextResponse(HOME_MESSAGE)
-
-
-def _build_health_payload() -> Dict[str, Any]:
-    # Construct a small JSON health payload for the HTTP health check endpoint.
-    #
-    # Keeping this logic in a helper keeps /healthz aligned with the controller
-    # configuration and exposes a minimal view of in-process metrics without
-    # changing any structured log shapes validated elsewhere.
-
-    now = time.time()
-    uptime_seconds = max(0.0, now - SERVER_START_TIME)
-
-    return {
-        "status": "ok",
-        "uptime_seconds": uptime_seconds,
-        "github_token_present": bool(GITHUB_PAT),
-        "controller": {
-            "repo": CONTROLLER_REPO,
-            "default_branch": CONTROLLER_DEFAULT_BRANCH,
-        },
-        "metrics": _metrics_snapshot(),
-    }
-
-
-@mcp.custom_route("/healthz", methods=["GET"])
-async def healthz(request: Request) -> JSONResponse:
-    # Lightweight JSON health endpoint with metrics summary.
-    #
-    # The body is intentionally small: a status flag, uptime, basic controller
-    # configuration, and a compact metrics snapshot suitable for logs or external
-    # polling.
-
-    payload = _build_health_payload()
-    return JSONResponse(payload)
-
-
-async def _shutdown_clients() -> None:
-    if _http_client_github is not None:
-        await _http_client_github.aclose()
-    if _http_client_external is not None:
-        await _http_client_external.aclose()
-
-
-app.add_event_handler("shutdown", _shutdown_clients)
 
 
 @mcp_tool(

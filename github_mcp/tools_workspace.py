@@ -6,7 +6,6 @@ import time
 import uuid
 import shlex
 import sys
-import difflib
 import re
 from typing import Any, Dict, List, Optional
 
@@ -20,7 +19,6 @@ from github_mcp.server import (
 )
 from github_mcp.utils import _effective_ref_for_repo, _default_branch_for_repo
 from github_mcp.workspace import (
-    _apply_patch_to_repo,
     _clone_repo,
     _prepare_temp_virtualenv,
     _run_shell,
@@ -162,7 +160,6 @@ def _workspace_deps() -> Dict[str, Any]:
         "prepare_temp_virtualenv": getattr(
             main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv
         ),
-        "apply_patch_to_repo": getattr(main_module, "_apply_patch_to_repo", _apply_patch_to_repo),
         "ensure_write_allowed": getattr(
             main_module, "_ensure_write_allowed", _ensure_write_allowed
         ),
@@ -219,60 +216,6 @@ async def ensure_workspace_clone(
         return _structured_tool_error(exc, context="ensure_workspace_clone")
 
 
-@mcp_tool(write_action=True)
-async def apply_patch_to_workspace(
-    full_name: Optional[str] = None,
-    ref: str = "main",
-    patch: str = "",
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Apply a unified diff to the persistent workspace clone.
-
-    This provides a structured alternative to relying on ad-hoc shell helpers
-    like `apply_patch`.
-    """
-
-    if not isinstance(patch, str) or not patch.strip():
-        raise ValueError("patch must be a non-empty unified diff string")
-
-    patch = _coerce_unified_diff_text(patch)
-
-    try:
-        deps = _workspace_deps()
-        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _resolve_ref(ref, branch=branch)
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-
-        # Prefer scoped write gating so feature-branch work is allowed even
-        # when global WRITE_ALLOWED is disabled.
-        try:
-            deps["ensure_write_allowed"](
-                f"apply_patch_to_workspace for {full_name}@{effective_ref}",
-                target_ref=effective_ref,
-            )
-        except TypeError:
-            deps["ensure_write_allowed"](
-                f"apply_patch_to_workspace for {full_name}@{effective_ref}"
-            )
-        repo_dir = await deps["clone_repo"](
-            full_name,
-            ref=effective_ref,
-            preserve_changes=True,
-        )
-        await deps["apply_patch_to_repo"](repo_dir, patch)
-
-        return {
-            "repo_dir": repo_dir,
-            "branch": effective_ref,
-            "status": "applied",
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="apply_patch_to_workspace")
-
-
 # ------------------------------------------------------------------------------
 # Workspace file helpers and diff builders
 # ------------------------------------------------------------------------------
@@ -323,190 +266,32 @@ def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
     }
 
 
-def _workspace_build_unified_diff(
-    original: str,
-    updated: str,
-    *,
+def _workspace_write_text(
+    repo_dir: str,
     path: str,
-    context_lines: int,
-) -> str:
-    if context_lines < 0:
-        raise ValueError("context_lines must be >= 0")
+    text: str,
+    *,
+    create_parents: bool = True,
+) -> Dict[str, Any]:
+    abs_path = _workspace_safe_join(repo_dir, path)
+    parent = os.path.dirname(abs_path)
+    if create_parents:
+        os.makedirs(parent, exist_ok=True)
 
-    original_lines = original.splitlines(keepends=True)
-    updated_lines = updated.splitlines(keepends=True)
+    existed = os.path.exists(abs_path)
+    data = (text or "").encode("utf-8")
 
-    diff_lines = difflib.unified_diff(
-        original_lines,
-        updated_lines,
-        fromfile=f"a/{path}",
-        tofile=f"b/{path}",
-        n=context_lines,
-    )
-    return "".join(diff_lines)
+    tmp_path = abs_path + ".tmp"
+    with open(tmp_path, "wb") as f:
+        f.write(data)
+    os.replace(tmp_path, abs_path)
 
-
-def _workspace_apply_sections(text: str, sections: Optional[List[Dict[str, Any]]]) -> str:
-    if not sections:
-        raise ValueError("sections must be a non-empty list")
-
-    lines = text.splitlines(keepends=True)
-    total = len(lines)
-
-    ordered = sorted(sections, key=lambda s: int(s.get("start_line", 0)))
-
-    out: List[str] = []
-    cursor = 1
-
-    for section in ordered:
-        try:
-            start = int(section["start_line"])
-            end = int(section["end_line"])
-        except KeyError as exc:
-            raise ValueError("each section must have 'start_line' and 'end_line'") from exc
-
-        new_text = section.get("new_text", "")
-
-        if start < 1:
-            raise ValueError("start_line must be >= 1")
-        if end < start - 1:
-            raise ValueError("end_line must be >= start_line - 1")
-
-        if cursor <= start - 1 and total > 0:
-            out.extend(lines[cursor - 1 : min(start - 1, total)])
-
-        if new_text:
-            out.extend(new_text.splitlines(keepends=True))
-
-        cursor = max(cursor, end + 1)
-
-    if total > 0 and cursor <= total:
-        out.extend(lines[cursor - 1 :])
-
-    return "".join(out)
-
-
-def _normalize_patch_path(value: str) -> str:
-    value = (value or "").strip()
-    if value.startswith("a/") or value.startswith("b/"):
-        value = value[2:]
-    return value.lstrip("/\\")
-
-
-def _coerce_unified_diff_text(patch: str) -> str:
-    """Normalize a possibly-escaped unified diff string.
-
-    If the diff contains no real newlines but does contain literal \n sequences and
-    looks like a diff, unescape it so validators and git apply can work.
-    """
-
-    if not isinstance(patch, str):
-        return patch
-
-    if "\n" in patch:
-        return patch
-
-    if "\\n" not in patch:
-        return patch
-
-    looks_like_diff = (
-        patch.lstrip().startswith("diff --git ")
-        or patch.lstrip().startswith("--- ")
-        or "diff --git " in patch
-        or "--- " in patch
-        or "+++ " in patch
-        or "@@ " in patch
-    )
-    if not looks_like_diff:
-        return patch
-
-    try:
-        return patch.encode("utf-8").decode("unicode_escape")
-    except Exception:
-        return patch.replace("\r\\n", "\n").replace("\\n", "\n").replace("\t", "\t")
-
-
-def _extract_patch_file_blocks(patch: str) -> List[Dict[str, str]]:
-    """Extract (a_path, b_path) pairs for each file block in a unified diff."""
-
-    patch = patch or ""
-    patch = _coerce_unified_diff_text(patch)
-    lines = patch.splitlines()
-
-    blocks: List[Dict[str, str]] = []
-
-    # Prefer diff --git headers when present because they establish file boundaries.
-    has_diff_git = any(line.startswith("diff --git ") for line in lines)
-
-    if has_diff_git:
-        for line in lines:
-            if not line.startswith("diff --git "):
-                continue
-            parts = line.split()
-            if len(parts) < 4:
-                continue
-            blocks.append(
-                {
-                    "a": _normalize_patch_path(parts[2]),
-                    "b": _normalize_patch_path(parts[3]),
-                }
-            )
-        return blocks
-
-    # Fallback: use ---/+++ headers for diffs that omit diff --git lines.
-    a_path = ""
-    b_path = ""
-    for line in lines:
-        if line.startswith("--- "):
-            parts = line.split(maxsplit=1)
-            if len(parts) == 2:
-                a_path = _normalize_patch_path(parts[1])
-        elif line.startswith("+++ "):
-            parts = line.split(maxsplit=1)
-            if len(parts) == 2:
-                b_path = _normalize_patch_path(parts[1])
-
-    if a_path or b_path:
-        blocks.append({"a": a_path, "b": b_path})
-
-    return blocks
-
-
-def _extract_touched_paths_from_patch(patch: str) -> List[str]:
-    """Extract repository-relative *logical* paths touched by a unified diff.
-
-    Returns one entry per file block. For creates/deletes, this is the non-dev/null
-    path. For renames, this is the new (b/) path.
-    """
-    patch = _coerce_unified_diff_text(patch)
-
-    logical_paths: List[str] = []
-    for blk in _extract_patch_file_blocks(patch):
-        a_path = (blk.get("a") or "").strip()
-        b_path = (blk.get("b") or "").strip()
-
-        a_is_null = a_path in {"dev/null", ""}
-        b_is_null = b_path in {"dev/null", ""}
-
-        if not b_is_null:
-            logical = b_path
-        elif not a_is_null:
-            logical = a_path
-        else:
-            logical = ""
-
-        if logical:
-            logical_paths.append(logical)
-
-    # De-dupe while preserving order.
-    seen: set[str] = set()
-    out: list[str] = []
-    for pth in logical_paths:
-        if pth in seen:
-            continue
-        seen.add(pth)
-        out.append(pth)
-    return out
+    return {
+        "path": path,
+        "exists_before": existed,
+        "size_bytes": len(data),
+        "encoding": "utf-8",
+    }
 
 
 @mcp_tool(write_action=False)
@@ -535,167 +320,64 @@ async def get_workspace_file_contents(
         return _structured_tool_error(exc, context="get_workspace_file_contents")
 
 
-@mcp_tool(write_action=False)
-async def build_unified_diff_from_workspace(
-    full_name: Optional[str] = None,
-    path: str = "",
-    updated_content: str = "",
-    ref: str = "main",
-    context_lines: int = 3,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Build a unified diff against the current workspace file content."""
-
-    try:
-        deps = _workspace_deps()
-        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _resolve_ref(ref, branch=branch)
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-
-        original = _workspace_read_text(repo_dir, path).get("text", "")
-        patch = _workspace_build_unified_diff(
-            original,
-            updated_content,
-            path=path,
-            context_lines=context_lines,
-        )
-        return {
-            "full_name": full_name,
-            "ref": effective_ref,
-            "path": path,
-            "patch": patch,
-            "context_lines": context_lines,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="build_unified_diff_from_workspace")
-
-
-@mcp_tool(write_action=False)
-async def build_section_based_diff_from_workspace(
-    full_name: Optional[str] = None,
-    path: str = "",
-    sections: Optional[List[Dict[str, Any]]] = None,
-    ref: str = "main",
-    context_lines: int = 3,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Build a unified diff by applying line-based sections to the workspace file."""
-
-    try:
-        deps = _workspace_deps()
-        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _resolve_ref(ref, branch=branch)
-        effective_ref = _effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-
-        original = _workspace_read_text(repo_dir, path).get("text", "")
-        updated_text = _workspace_apply_sections(original, sections)
-        patch = _workspace_build_unified_diff(
-            original,
-            updated_text,
-            path=path,
-            context_lines=context_lines,
-        )
-        return {
-            "full_name": full_name,
-            "ref": effective_ref,
-            "path": path,
-            "patch": patch,
-            "context_lines": context_lines,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="build_section_based_diff_from_workspace")
-
 
 @mcp_tool(write_action=True)
-async def apply_patch_to_workspace_file(
+async def set_workspace_file_contents(
     full_name: Optional[str] = None,
     ref: str = "main",
     path: str = "",
-    patch: str = "",
+    content: str = "",
+    create_parents: bool = True,
     *,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Apply a unified diff that is intended to target a single workspace file.
+    """Replace a workspace file's contents by writing the full file text.
 
-    This enforces that the diff touches exactly one file and that it matches the
-    provided `path`.
+    This is the preferred write primitive for workspace edits. It avoids
+    patch/unified-diff application.
     """
 
-    if not isinstance(patch, str) or not patch.strip():
-        raise ValueError("patch must be a non-empty unified diff string")
-
-    patch = _coerce_unified_diff_text(patch)
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("path must be a non-empty string")
 
     try:
         deps = _workspace_deps()
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _resolve_ref(ref, branch=branch)
         effective_ref = _effective_ref_for_repo(full_name, ref)
-
-        normalized_target = (path or "").lstrip("/\\")
-
-        # Validate that the patch targets exactly one logical file. For create/delete
-        # operations, the logical file is the non-dev/null path. For renames, the
-        # logical file is the new (b/) path.
-
-        touched_paths = _extract_touched_paths_from_patch(patch)
-        if not touched_paths:
-            raise ValueError("patch did not include any file headers to validate")
-        if len(touched_paths) != 1:
-            raise ValueError(f"patch must touch exactly one file; touched={touched_paths!r}")
-
-        logical_path = touched_paths[0]
-
-        # If the patch is a rename, accept either old or new path (still single-file).
-        blocks = _extract_patch_file_blocks(patch)
-        allowed = {logical_path}
-        if blocks:
-            a_path = _normalize_patch_path(blocks[0].get("a") or "")
-            b_path = _normalize_patch_path(blocks[0].get("b") or "")
-            if a_path and a_path != "dev/null":
-                allowed.add(a_path)
-            if b_path and b_path != "dev/null":
-                allowed.add(b_path)
-
-        if normalized_target not in allowed:
-            raise ValueError(
-                f"patch path mismatch: expected {normalized_target!r} to match one of {sorted(allowed)!r}"
-            )
 
         # Prefer scoped write gating so feature-branch work is allowed even
         # when global WRITE_ALLOWED is disabled.
         try:
             deps["ensure_write_allowed"](
-                f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}",
+                f"set_workspace_file_contents {path} for {full_name}@{effective_ref}",
                 target_ref=effective_ref,
             )
         except TypeError:
             deps["ensure_write_allowed"](
-                f"apply_patch_to_workspace_file {path} for {full_name}@{effective_ref}"
+                f"set_workspace_file_contents {path} for {full_name}@{effective_ref}"
             )
+
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        await deps["apply_patch_to_repo"](repo_dir, patch)
+        write_info = _workspace_write_text(
+            repo_dir,
+            path,
+            content,
+            create_parents=create_parents,
+        )
 
         return {
             "repo_dir": repo_dir,
             "branch": effective_ref,
-            "path": path,
-            "touched_paths": touched_paths,
-            "logical_path": logical_path,
-            "status": "applied",
+            "status": "written",
+            **write_info,
         }
     except Exception as exc:
-        return _structured_tool_error(exc, context="apply_patch_to_workspace_file")
+        return _structured_tool_error(exc, context="set_workspace_file_contents", path=path)
+
+
 
 
 @mcp_tool(write_action=False)
@@ -902,13 +584,12 @@ async def search_workspace(
 
 
 @mcp_tool(write_action=False)
-async def run_command(
+async def terminal_command(
     full_name: Optional[str] = None,
     ref: str = "main",
     command: str = "pytest",
     timeout_seconds: int = 300,
     workdir: Optional[str] = None,
-    patch: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
@@ -931,16 +612,11 @@ async def run_command(
         if len(command) > RUN_COMMAND_MAX_CHARS:
             raise ValueError(
                 f"run_command.command is too long ({len(command)} chars); "
-                "use diff-based tools (apply_text_update_and_commit, "
-                "apply_patch_and_commit, update_file_sections_and_commit) "
-                "for large edits instead of embedding scripts in command."
+                "split it into smaller commands or check in a script into the repo and run it from the workspace."
             )
-        patch_str = patch if isinstance(patch, str) else None
-        has_patch = bool(patch_str and patch_str.strip())
         needs_write_gate = (
             mutating
             or installing_dependencies
-            or has_patch
             or not use_temp_venv
         )
         if needs_write_gate:
@@ -948,18 +624,15 @@ async def run_command(
             # when global WRITE_ALLOWED is disabled.
             try:
                 deps["ensure_write_allowed"](
-                    f"run_command {command} in {full_name}@{effective_ref}",
+                    f"terminal_command {command} in {full_name}@{effective_ref}",
                     target_ref=effective_ref,
                 )
             except TypeError:
                 # Backwards-compat: older implementations accept only (context).
                 deps["ensure_write_allowed"](
-                    f"run_command {command} in {full_name}@{effective_ref}"
+                    f"terminal_command {command} in {full_name}@{effective_ref}"
                 )
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-
-        if has_patch and patch_str is not None:
-            await deps["apply_patch_to_repo"](repo_dir, patch_str)
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
 
@@ -1017,12 +690,54 @@ async def run_command(
             if mm:
                 out["dependency_hint"] = {
                     "missing_module": mm.group(1),
-                    "message": "Missing python dependency. Re-run run_command with installing_dependencies=true.",
+                    "message": "Missing python dependency. Re-run terminal_command with installing_dependencies=true.",
                 }
 
         return out
     except Exception as exc:
-        return _structured_tool_error(exc, context="run_command")
+        return _structured_tool_error(exc, context="terminal_command")
+
+
+@mcp_tool(write_action=False)
+async def run_command(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    command: str = "pytest",
+    timeout_seconds: int = 300,
+    workdir: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+    mutating: bool = False,
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Deprecated alias for terminal_command.
+
+    Use terminal_command for a clearer "terminal/PC gateway" mental model.
+    """
+
+    out = await terminal_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+        mutating=mutating,
+        owner=owner,
+        repo=repo,
+        branch=branch,
+    )
+    if isinstance(out, dict):
+        log = out.get("controller_log")
+        if not isinstance(log, list):
+            log = []
+        log.insert(0, "run_command is deprecated; use terminal_command instead.")
+        out["controller_log"] = log
+    return out
 
 
 @mcp_tool(write_action=True)
@@ -1675,7 +1390,6 @@ async def run_tests(
     test_command: str = "pytest",
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
-    patch: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
@@ -1685,13 +1399,12 @@ async def run_tests(
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the project's test command in the persistent workspace and summarize the result."""
-    result = await run_command(
+    result = await terminal_command(
         full_name=full_name,
         ref=ref,
         command=test_command,
         timeout_seconds=timeout_seconds,
         workdir=workdir,
-        patch=patch,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
@@ -1717,7 +1430,7 @@ async def run_tests(
             "command": test_command,
             "error": {
                 "error": "UnexpectedResultShape",
-                "message": "run_command returned an unexpected result structure",
+                "message": "terminal_command returned an unexpected result structure",
                 "raw_result": result,
             },
             "controller_log": [
@@ -1757,7 +1470,6 @@ async def run_quality_suite(
     test_command: str = "pytest",
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
-    patch: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
@@ -1785,13 +1497,12 @@ async def run_quality_suite(
     ]
 
     if run_tokenlike_scan:
-        scan_result = await run_command(
+        scan_result = await terminal_command(
             full_name=full_name,
             ref=ref,
             command=TOKENLIKE_SCAN_COMMAND,
             timeout_seconds=min(timeout_seconds, 300),
             workdir=workdir,
-            patch=patch,
             use_temp_venv=use_temp_venv,
             installing_dependencies=installing_dependencies,
             mutating=mutating,
@@ -1825,7 +1536,6 @@ async def run_quality_suite(
         lint_command=lint_command,
         timeout_seconds=timeout_seconds,
         workdir=workdir,
-        patch=patch,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
@@ -1842,7 +1552,6 @@ async def run_quality_suite(
         test_command=test_command,
         timeout_seconds=timeout_seconds,
         workdir=workdir,
-        patch=patch,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
@@ -1865,7 +1574,6 @@ async def run_lint_suite(
     lint_command: str = "ruff check .",
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
-    patch: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
@@ -1878,13 +1586,12 @@ async def run_lint_suite(
     """Run the lint or static-analysis command in the workspace."""
 
     if run_tokenlike_scan:
-        scan_result = await run_command(
+        scan_result = await terminal_command(
             full_name=full_name,
             ref=ref,
             command=TOKENLIKE_SCAN_COMMAND,
             timeout_seconds=min(timeout_seconds, 300),
             workdir=workdir,
-            patch=patch,
             use_temp_venv=use_temp_venv,
             installing_dependencies=installing_dependencies,
             mutating=mutating,
@@ -1917,13 +1624,12 @@ async def run_lint_suite(
                 ],
             }
 
-    result = await run_command(
+    result = await terminal_command(
         full_name=full_name,
         ref=ref,
         command=lint_command,
         timeout_seconds=timeout_seconds,
         workdir=workdir,
-        patch=patch,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
@@ -1947,7 +1653,7 @@ async def run_lint_suite(
             "command": lint_command,
             "error": {
                 "error": "UnexpectedResultShape",
-                "message": "run_command returned an unexpected result structure",
+                "message": "terminal_command returned an unexpected result structure",
                 "raw_result": result,
             },
             "controller_log": [

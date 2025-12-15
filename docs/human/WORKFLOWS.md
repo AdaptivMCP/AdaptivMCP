@@ -33,10 +33,10 @@ All workflows should respect these rules, especially when touching the controlle
    - Rely on built in verification in write tools.
    - Never assume a write succeeded without checking.
 
-5. Use run_quality_suite, run_lint_suite, and run_command for real work.
+5. Use run_quality_suite, run_lint_suite, and terminal_command for real work.
    - Treat `run_quality_suite` as your primary way to run the project's default test suite (for example `pytest`) on a branch.
    - Use `run_lint_suite` for lint/static analysis (for example `ruff check .`, `mypy` or other project specific commands).
-   - Use `run_command` for additional inspection commands, focused test invocations, linters, and dependency installs when necessary.
+   - Use `terminal_command` for additional inspection commands, focused test invocations, linters, and dependency installs when necessary.
    - Do not ask humans to type commands or fiddle with blank lines or quoting. Handle multi-line commands, patches, and retries
      with the workspace tools yourself.
 
@@ -56,7 +56,7 @@ Recommended sequence
    - Understand defaults (controller repo, main branch, timeouts, feature flags, write gate).
    - Pay attention to the `write_allowed` and `auto_approve` configuration.
 
-2. Call `list_all_actions` with `include_parameters` set to true. This controller guarantees that each tool will expose a non-null `input_schema` object in that response. When the underlying MCP tool does not publish an explicit input schema, the server either synthesizes a minimal `{type: "object", properties: {}}` schema or uses a hand-authored schema for key navigation tools like `compare_refs`, `list_workflow_runs`, and `list_recent_failures` so assistants can still reason about required fields and filters.
+2. Call `list_all_actions` with `include_parameters` set to true. This controller guarantees that each tool will expose a non-null `input_schema` object in that response. When the underlying MCP tool does not publish an explicit input schema, the server either synthesizes a minimal `{type: "object", properties: {}}` schema or uses a hand-authored schema for key navigation tools like `list_workflow_runs` and `list_recent_failures` so assistants can still reason about required fields and filters.
    - Discover the full tool surface, including MCP tools and any GitHub specific helpers.
    - Learn parameter shapes and required fields.
 
@@ -76,7 +76,7 @@ For tools that accept structured JSON arguments, especially write-tagged tools, 
 
 - Use `describe_tool` or `list_all_actions(include_parameters=true)` to understand the expected JSON schema for a tool.
 - Call `validate_tool_args` with `tool_name` and the candidate `args` object to get structured validation feedback without executing the tool.
-- For tools like `compare_refs`, the controller provides a hand-authored JSON schema even when the underlying MCP tool does not publish one, so missing fields (for example `head`) will surface as explicit validation errors.
+- For tools like `list_workflow_runs` / `list_recent_failures`, the controller provides a hand-authored JSON schema even when the underlying MCP tool does not publish one, so missing fields (for example required fields) will surface as explicit validation errors.
 - Treat `validate_tool_args` as part of the default workflow for complex tools and repair flows, not just a rescue tool after a failure.
 
 When validation succeeds (`valid: true` and `errors: []`), proceed to the actual tool call. When it fails, use the returned `errors` array to repair the payload before retrying.
@@ -115,7 +115,7 @@ Assistants should
 
 When operating inside a workspace
 
-- Use `run_quality_suite`, `run_lint_suite`, or `run_command` for inspection, edits, and tests.
+- Use `run_quality_suite`, `run_lint_suite`, or `terminal_command` for inspection, edits, and tests.
 
 Best practices
 - Keep commits focused and well described.
@@ -127,7 +127,7 @@ Best practices
 Use the PR tools to open and update pull requests. A typical flow
 
 1. Complete changes on a feature branch.
-2. Run tests and any relevant CLI checks via `run_quality_suite` (the default quality gate), `run_lint_suite` (lint/type checks), or `run_command` / `run_tests`.
+2. Run tests and any relevant CLI checks via `run_quality_suite` (the default quality gate), `run_lint_suite` (lint/type checks), or `terminal_command` / `run_tests`.
 4. Include in the PR body
    - Summary of changes.
    - Motivation and context.
@@ -140,7 +140,7 @@ Humans typically review, merge, and delete branches.
 
 ## 4. Diff-based editing tools
 
-Assistants SHOULD avoid using `run_command` to embed large shell/Python
+Assistants SHOULD avoid using `terminal_command` to embed large shell/Python
 scripts to modify files. This is brittle because those scripts must be
 embedded inside JSON strings and are easy to mis-escape.
 
@@ -150,10 +150,6 @@ humans.
 
 Instead, assistants SHOULD use these tools:
 
-- `build_unified_diff` – generate a unified diff from old/new file content.
-- `build_section_based_diff` – generate a diff by describing section-level replacements, useful for large files.
-- `apply_line_edits_and_commit` – small, line-targeted edits to existing files.
-- `apply_patch_and_commit` – apply a unified diff (usually from the two diff builders above).
 - Patch strings are normalized when applying: the server will unescape diffs that were accidentally pasted as a single line with literal \\n sequences, and it will strip common trailing Markdown/JSON artifacts (like code fences or `}}`) when the input looks like a diff.
 - `apply_text_update_and_commit` – full-file overwrite; use only when intentionally regenerating the entire file.
 - `update_files_and_open_pr` – commit multiple files and open a PR in one call.
@@ -164,8 +160,6 @@ Use this table to choose the right tool path when editing files:
 
 | Use case                      | Recommended tools                                                          |
 |-------------------------------|----------------------------------------------------------------------------|
-| Small/local edits             | `get_file_with_line_numbers` → `apply_line_edits_and_commit`             |
-| Multi-line edits in large file| `get_file_with_line_numbers` → `build_section_based_diff` → `apply_patch_and_commit` |
 | Regenerate whole doc from spec| `apply_text_update_and_commit` (full-file overwrite)                     |
 | Multiple files in one change  | `update_files_and_open_pr` (optionally preceded by diff builders)        |
 
@@ -185,12 +179,10 @@ Typical pattern for a single file:
 
 For complex edits to large files, use:
 
-1. `build_section_based_diff` to describe replacements by sections.
-2. `apply_patch_and_commit` with the resulting patch.
 
-`run_command`, `run_quality_suite`, and `run_lint_suite` SHOULD be used primarily for:
+`terminal_command`, `run_quality_suite`, and `run_lint_suite` SHOULD be used primarily for:
 
-- Tests (`pytest`, linters, type checkers) via `run_quality_suite` for the default test command, or `run_command` for custom/test-specific invocations.
+- Tests (`pytest`, linters, type checkers) via `run_quality_suite` for the default test command, or `terminal_command` for custom/test-specific invocations.
 - Lint/static analysis via `run_lint_suite` when you want a consistent entry point for style/type checks.
 - Small shell commands (`ls`, `grep`, diagnostics).
 - NOT for large inline patch scripts.
@@ -203,7 +195,7 @@ This section describes common workflows for this controller repo itself, `Proofg
 ### 5.1 Updating docs
 
 1. Create a docs branch from `main` (for example `docs/update-handoff-and-workflows`).
-2. Use `run_command` to inspect and edit `ASSISTANT_HANDOFF.md`, `docs/WORKFLOWS.md`, and related files.
+2. Use `terminal_command` to inspect and edit `ASSISTANT_HANDOFF.md`, `docs/WORKFLOWS.md`, and related files.
 3. Keep changes focused and incremental.
 4. Run any documentation tooling or linters if present.
 5. Use `commit_workspace` to commit changes to the docs branch.
@@ -218,7 +210,6 @@ When you want to test or exercise medium sized documentation or code commits wit
 3. Make structured but modest edits.
    - Add or adjust a subsection.
    - Avoid rewriting the entire file unless that is the purpose of the change.
-4. Use `apply_text_update_and_commit` or `apply_patch_and_commit` with:
    - `return_diff` set to `false` when you only need verification metadata.
    - Brief, descriptive commit messages.
 5. Open a PR from the experiment branch into `main` and verify that the diff and metadata look reasonable.
@@ -331,24 +322,22 @@ Remember that this file is the engine side playbook. Personal controllers can ad
 
 This section records concrete workflows exercised by an assistant against this controller to validate the 1.0 release. It is not a how-to; it is a "we actually did this" log.
 
-### 8.1 Docs-only change using workspace + run_command + commit_workspace
+### 8.1 Docs-only change using workspace + terminal_command + commit_workspace
 
 Workflow:
 
 1. Created branch `docs/workflow-poc-1-0b` from `main` using `ensure_branch`.
 2. Created or refreshed a workspace for that branch using `ensure_workspace_clone`.
-3. Ran `run_command` with:
+3. Ran `terminal_command` with:
    - `command`: `ls && ls docs && pytest -q`
    - `installing_dependencies`: `false`
    This validated that the workspace contained the repo files and that the test suite passes on this branch.
 4. Fetched `docs/WORKFLOWS.md` for context using `get_file_contents` on the branch.
-5. Used `apply_line_edits_and_commit` (documented in `docs/ASSISTANT_HAPPY_PATHS.md`) to append this section as a proof-of-concept log.
 6. Opened a pull request from `docs/workflow-poc-1-0b` into `main` describing the exercised workflow and its purpose as a 1.0 proof-of-concept.
 
 Notes:
 
 - This flow demonstrates that:
   - Docs-only changes on a dedicated branch work end-to-end.
-  - `ensure_workspace_clone` + `run_command` is sufficient for running the full test suite.
-  - `apply_line_edits_and_commit` can be used for low-token, direct-to-GitHub doc updates without rewriting the whole file.
+  - `ensure_workspace_clone` + `terminal_command` is sufficient for running the full test suite.
 - The PR associated with this workflow can be referenced as a concrete 1.0 validation artifact.

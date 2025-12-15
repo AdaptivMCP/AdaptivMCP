@@ -101,7 +101,7 @@ Additional optional variables may exist for HTTP timeouts, retry settings, and l
 
 ### Output truncation and payload sizing
 
-Long `run_command` / `run_tests` outputs can cause the ChatGPT client to drop or
+Long `terminal_command` / `run_tests` outputs can cause the ChatGPT client to drop or
 replace a conversation thread. Deployments can clamp stdout/stderr with:
 
 - `TOOL_STDOUT_MAX_CHARS` and `TOOL_STDERR_MAX_CHARS`
@@ -236,7 +236,7 @@ When you deploy this server, keep the following in mind:
   - Patch-based edits fail if the underlying file does not match the expected context.
 
 - **Workspace commands**
-  - `run_command` and `run_tests` operate in a persistent clone of your repo so installs and edits survive between calls.
+  - `terminal_command` and `run_tests` operate in a persistent clone of your repo so installs and edits survive between calls.
   - Output is truncated according to configured limits, with explicit flags when truncation occurs.
 
 For more detail, see `docs/ARCHITECTURE_AND_SAFETY.md`.
@@ -308,7 +308,7 @@ For the 1.0 release of this server, version information is wired in three places
 
 To confirm the version in a given environment (local dev, Render shell, or the controller workspace):
 
-1. Open a shell in the deployment (or use the `run_command` tool against this repo).
+1. Open a shell in the deployment (or use the `terminal_command` tool against this repo).
 2. From the repository root, run:
 
    ```bash
