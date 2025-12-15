@@ -173,7 +173,12 @@ register_extra_tools_if_available()
 # Expose an ASGI app for hosting via uvicorn/Render. The FastMCP server lazily
 # constructs a Starlette application through ``http_app``; we create it once at
 # import time so ``uvicorn main:app`` works as expected.
-app = server.mcp.http_app()
+#
+# Force the SSE transport so the controller serves ``/sse`` again. FastMCP
+# 2.14 defaults to the streamable HTTP transport, which removed the SSE route
+# and caused the public endpoint to return ``404 Not Found``. Using the SSE
+# transport keeps the documented ``/sse`` path working for existing clients.
+app = server.mcp.http_app(path="/sse", transport="sse")
 
 
 def _serialize_actions_for_compatibility() -> list[dict[str, Any]]:
