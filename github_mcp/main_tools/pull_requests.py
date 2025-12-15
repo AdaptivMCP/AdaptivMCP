@@ -383,3 +383,167 @@ async def update_files_and_open_pr(
         return m._structured_tool_error(
             exc, context="update_files_and_open_pr", path=current_path
         )
+
+
+async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
+    """Return a compact overview of a pull request, including files and CI status."""
+
+    m = _main()
+
+    pr_resp = await m.fetch_pr(full_name, pull_number)
+    pr_json = pr_resp.get("json") or {}
+    if not isinstance(pr_json, dict):
+        pr_json = {}
+
+    def _get_user(raw: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(raw, dict):
+            return None
+        login = raw.get("login")
+        if not isinstance(login, str):
+            return None
+        return {"login": login, "html_url": raw.get("html_url")}
+
+    pr_summary: Dict[str, Any] = {
+        "number": pr_json.get("number"),
+        "title": pr_json.get("title"),
+        "state": pr_json.get("state"),
+        "draft": pr_json.get("draft"),
+        "merged": pr_json.get("merged"),
+        "html_url": pr_json.get("html_url"),
+        "user": _get_user(pr_json.get("user")),
+        "created_at": pr_json.get("created_at"),
+        "updated_at": pr_json.get("updated_at"),
+        "closed_at": pr_json.get("closed_at"),
+        "merged_at": pr_json.get("merged_at"),
+    }
+
+    files: List[Dict[str, Any]] = []
+    try:
+        files_resp = await m.list_pr_changed_filenames(full_name, pull_number, per_page=100)
+        files_json = files_resp.get("json") or []
+        if isinstance(files_json, list):
+            for f in files_json:
+                if not isinstance(f, dict):
+                    continue
+                files.append(
+                    {
+                        "filename": f.get("filename"),
+                        "status": f.get("status"),
+                        "additions": f.get("additions"),
+                        "deletions": f.get("deletions"),
+                        "changes": f.get("changes"),
+                    }
+                )
+    except Exception:
+        files = []
+
+    status_checks: Optional[Dict[str, Any]] = None
+    head = pr_json.get("head")
+    head_sha = head.get("sha") if isinstance(head, dict) else None
+    if isinstance(head_sha, str):
+        try:
+            status_resp = await m.get_commit_combined_status(full_name, head_sha)
+            status_checks = status_resp.get("json") or {}
+        except Exception:
+            status_checks = None
+
+    workflow_runs: List[Dict[str, Any]] = []
+    head_ref = head.get("ref") if isinstance(head, dict) else None
+    if isinstance(head_ref, str):
+        try:
+            runs_resp = await m.list_workflow_runs(
+                full_name,
+                branch=head_ref,
+                per_page=5,
+                page=1,
+            )
+            runs_json = runs_resp.get("json") or {}
+            raw_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
+            for run in raw_runs:
+                if not isinstance(run, dict):
+                    continue
+                workflow_runs.append(
+                    {
+                        "id": run.get("id"),
+                        "name": run.get("name"),
+                        "event": run.get("event"),
+                        "status": run.get("status"),
+                        "conclusion": run.get("conclusion"),
+                        "head_branch": run.get("head_branch"),
+                        "head_sha": run.get("head_sha"),
+                        "html_url": run.get("html_url"),
+                        "created_at": run.get("created_at"),
+                        "updated_at": run.get("updated_at"),
+                    }
+                )
+        except Exception:
+            workflow_runs = []
+
+    return {
+        "repository": full_name,
+        "pull_number": pull_number,
+        "pr": pr_summary,
+        "files": files,
+        "status_checks": status_checks,
+        "workflow_runs": workflow_runs,
+    }
+
+
+async def recent_prs_for_branch(
+    full_name: str,
+    branch: str,
+    include_closed: bool = False,
+    per_page_open: int = 20,
+    per_page_closed: int = 5,
+) -> Dict[str, Any]:
+    """Return recent pull requests associated with a branch, grouped by state."""
+
+    m = _main()
+
+    if not full_name or "/" not in full_name:
+        raise ValueError("full_name must be of the form 'owner/repo'")
+    if not branch:
+        raise ValueError("branch must be a non-empty string")
+
+    owner, _repo = full_name.split("/", 1)
+    head_filter = f"{owner}:{branch}"
+
+    normalize = getattr(m, "_normalize_pr_payload", None)
+
+    open_resp = await m.list_pull_requests(
+        full_name=full_name,
+        state="open",
+        head=head_filter,
+        per_page=per_page_open,
+        page=1,
+    )
+    open_raw = open_resp.get("json") or []
+    if callable(normalize):
+        open_prs = [normalize(pr) for pr in open_raw if isinstance(pr, dict)]
+    else:
+        open_prs = [pr for pr in open_raw if isinstance(pr, dict)]
+    open_prs = [pr for pr in open_prs if pr is not None]
+
+    closed_prs: List[Dict[str, Any]] = []
+    if include_closed:
+        closed_resp = await m.list_pull_requests(
+            full_name=full_name,
+            state="closed",
+            head=head_filter,
+            per_page=per_page_closed,
+            page=1,
+        )
+        closed_raw = closed_resp.get("json") or []
+        if callable(normalize):
+            closed_prs = [normalize(pr) for pr in closed_raw if isinstance(pr, dict)]
+        else:
+            closed_prs = [pr for pr in closed_raw if isinstance(pr, dict)]
+        closed_prs = [pr for pr in closed_prs if pr is not None]
+
+    return {
+        "full_name": full_name,
+        "branch": branch,
+        "head_filter": head_filter,
+        "open": open_prs,
+        "closed": closed_prs,
+    }
