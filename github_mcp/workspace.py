@@ -269,6 +269,59 @@ def _maybe_unescape_unified_diff(patch: str) -> str:
         return patch.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
 
 
+def _sanitize_patch_head(patch: str) -> str:
+    """Strip common leading junk that breaks `git apply`.
+
+    Common failure cases:
+    - Patches wrapped in markdown fences (```diff ... ```)
+    - Patches prefixed with stray JSON braces or assistant metadata
+
+    We only strip when the input looks like a diff somewhere in the text.
+    """
+
+    if not isinstance(patch, str):
+        return patch
+
+    # Normalize line endings early.
+    patch = patch.replace("\r\n", "\n")
+
+    looks_like_diff = (
+        patch.lstrip().startswith("diff --git ")
+        or patch.lstrip().startswith("--- ")
+        or "diff --git " in patch
+        or "--- " in patch
+        or "+++ " in patch
+        or "@@ " in patch
+    )
+    if not looks_like_diff:
+        return patch
+
+    lines = patch.splitlines()
+
+    # Remove leading blank lines.
+    while lines and not lines[0].strip():
+        lines.pop(0)
+
+    # Remove leading markdown fences.
+    if lines and lines[0].strip().startswith("```"):
+        lines.pop(0)
+        # Some callers include a blank line after the fence.
+        while lines and not lines[0].strip():
+            lines.pop(0)
+
+    # If the diff starts later (e.g., after some chatter), drop everything before it.
+    start_idx = None
+    for i, ln in enumerate(lines):
+        s = ln.lstrip()
+        if s.startswith("diff --git ") or s.startswith("--- "):
+            start_idx = i
+            break
+    if start_idx is not None and start_idx > 0:
+        lines = lines[start_idx:]
+
+    return "\n".join(lines) + ("\n" if patch.endswith("\n") else "")
+
+
 def _sanitize_patch_tail(patch: str) -> str:
     """Strip common trailing junk that breaks `git apply`.
 
@@ -315,6 +368,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
         raise GitHubAPIError("Received empty patch to apply in workspace")
 
     patch = _maybe_unescape_unified_diff(patch)
+    patch = _sanitize_patch_head(patch)
     patch = _sanitize_patch_tail(patch)
 
     patch_path = os.path.join(repo_dir, "mcp_patch.diff")
