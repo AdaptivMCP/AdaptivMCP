@@ -49,7 +49,7 @@ from github_mcp.github_content import (
     _decode_github_content,
     _load_body_from_content_url,
     _perform_github_commit,
-    _resolve_file_sha,
+    _resolve_file_sha,  # noqa: F401
 )
 from github_mcp.file_cache import (
     bulk_get_cached,
@@ -87,7 +87,6 @@ from github_mcp.utils import (
     _effective_ref_for_repo,
     _normalize_repo_path,
     _with_numbered_lines,
-    _normalize_write_context,
     normalize_args,
 )
 from github_mcp.workspace import (
@@ -884,72 +883,9 @@ async def move_file(
     branch: str = "main",
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Move or rename a file within a repository on a single branch.
+    from github_mcp.main_tools.files import move_file as _impl
+    return await _impl(full_name=full_name, from_path=from_path, to_path=to_path, branch=branch, message=message)
 
-    This helper reads the source path at the given branch, writes its contents
-    to the destination path, and then deletes the original path using the same
-    commit/contents APIs as other file helpers.
-    """
-
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-
-    effective_branch = _effective_ref_for_repo(full_name, branch)
-
-    _ensure_write_allowed(
-        f"move_file from {from_path} to {to_path} in {full_name}@{effective_branch}",
-        target_ref=effective_branch,
-    )
-
-    if from_path == to_path:
-        raise ValueError("from_path and to_path must be different")
-
-    # Read the source file text first.
-    source = await _decode_github_content(full_name, from_path, effective_branch)
-    source_text = source.get("text")
-    if source_text is None:
-        raise GitHubAPIError("Source file contents missing or undecodable")
-
-    commit_message = message or f"Move {from_path} to {to_path}"
-
-    # 1) Write the destination file with the source contents.
-    write_result = await apply_text_update_and_commit(
-        full_name=full_name,
-        path=to_path,
-        updated_content=source_text,
-        branch=effective_branch,
-        message=commit_message + " (add new path)",
-    )
-
-    # 2) Delete the original path now that the destination exists.
-    delete_body = {
-        "message": commit_message + " (remove old path)",
-        "branch": effective_branch,
-    }
-    try:
-        delete_body["sha"] = await _resolve_file_sha(full_name, from_path, effective_branch)
-    except GitHubAPIError as exc:
-        msg = str(exc)
-        if "404" in msg:
-            delete_result = {"status": "noop", "reason": "source path missing"}
-        else:
-            raise
-    else:
-        delete_result = await _github_request(
-            "DELETE",
-            f"/repos/{full_name}/contents/{from_path}",
-            json=delete_body,
-        )
-
-    return {
-        "status": "moved",
-        "full_name": full_name,
-        "branch": effective_branch,
-        "from_path": from_path,
-        "to_path": to_path,
-        "write_result": write_result,
-        "delete_result": delete_result,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -2240,95 +2176,9 @@ async def create_file(
     branch: str = "main",
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create a new text file in a repository after normalizing path and branch.
+    from github_mcp.main_tools.files import create_file as _impl
+    return await _impl(full_name=full_name, path=path, content=content, branch=branch, message=message)
 
-    This helper performs a lightweight server-side preflight to normalize the
-    target branch and repository path before issuing any write to GitHub. The
-    call fails if the file already exists on the target branch.
-
-    Args:
-        full_name: "owner/repo" string.
-        path: Path of the file within the repository (normalized before write).
-        content: UTF-8 text content of the new file.
-        branch: Branch to commit to (default "main").
-        message: Optional commit message; if omitted, a default is derived.
-
-    Raises:
-        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
-
-    Returns:
-        A dict with:
-            - status: "created"
-            - full_name, path, branch
-            - message: The commit message used.
-            - commit: Raw commit response from GitHub.
-            - verification: A dict containing sha_before (always None),
-              sha_after and html_url from a fresh read of the file.
-
-    Raises:
-        ToolPreflightValidationError: If the branch/path combination fails
-            server-side normalization.
-    """
-
-    effective_branch, normalized_path = _normalize_write_context(
-        full_name=full_name,
-        branch=branch,
-        path=path,
-    )
-
-    _ensure_write_allowed(
-        "create_file %s %s" % (full_name, normalized_path),
-        target_ref=effective_branch,
-    )
-
-    # Ensure the file does not already exist.
-    try:
-        await _decode_github_content(full_name, normalized_path, effective_branch)
-    except GitHubAPIError as exc:
-        msg = str(exc)
-        if "404" in msg:
-            sha_before: Optional[str] = None
-        else:
-            raise
-    else:
-        raise GitHubAPIError(
-            f"File already exists at {normalized_path} on branch {effective_branch}"
-        )
-
-    body_bytes = content.encode("utf-8")
-    commit_message = message or f"Create {normalized_path}"
-
-    commit_result = await _perform_github_commit(
-        full_name=full_name,
-        path=normalized_path,
-        message=commit_message,
-        body_bytes=body_bytes,
-        branch=effective_branch,
-        sha=sha_before,
-    )
-
-    verified = await _decode_github_content(full_name, normalized_path, effective_branch)
-    json_blob = verified.get("json")
-    sha_after: Optional[str]
-    if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
-        sha_after = json_blob["sha"]
-    else:
-        sha_value = verified.get("sha")
-        sha_after = sha_value if isinstance(sha_value, str) else None
-
-    return {
-        "status": "created",
-        "full_name": full_name,
-        "path": normalized_path,
-        "branch": effective_branch,
-        "message": commit_message,
-        "commit": commit_result,
-        "verification": {
-            "sha_before": sha_before,
-            "sha_after": sha_after,
-            "html_url": verified.get("html_url"),
-        },
-    }
 
 
 @mcp_tool(write_action=True)
@@ -2340,115 +2190,9 @@ async def apply_text_update_and_commit(
     branch: str = "main",
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Apply a text update to a single file on a branch, then verify it.
+    from github_mcp.main_tools.files import apply_text_update_and_commit as _impl
+    return await _impl(full_name=full_name, path=path, updated_content=updated_content, branch=branch, message=message)
 
-    This is a lower-level building block for full-file replacement flows:
-
-    1. Read the current file text from GitHub.
-    2. Commit the provided updated_content via the Contents API on the target branch.
-    3. Re-read the file to verify the new SHA and contents landed.
-    4. Commit the full file contents (no patch/diff application).
-
-    It does NOT create a PR; callers are expected to open a PR separately
-    (for example using create_pull_request or update_files_and_open_pr) if
-    they want reviewable changes.
-
-    Args:
-        full_name: "owner/repo" string.
-        path: Path of the file within the repository (normalized before write).
-        updated_content: New full text for the file (UTF-8).
-        branch: Branch to commit to (default "main").
-        message: Commit message; if omitted, a simple "Update <path>" is used.
-
-    Raises:
-        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
-
-    Returns:
-        A dict with:
-            - status: "committed"
-            - full_name, path, branch
-            - message: commit message used
-            - commit: raw GitHub commit API response
-            - verification: {sha_before, sha_after, html_url}
-    """
-
-
-    effective_branch, normalized_path = _normalize_write_context(
-        full_name=full_name,
-        branch=branch,
-        path=path,
-    )
-
-    _ensure_write_allowed(
-        "apply_text_update_and_commit %s %s" % (full_name, normalized_path),
-        target_ref=effective_branch,
-    )
-
-    # 1) Read the current file state on the target branch, treating a 404 as a new file.
-    is_new_file = False
-
-    def _extract_sha(decoded: Dict[str, Any]) -> Optional[str]:
-        if not isinstance(decoded, dict):
-            return None
-        json_blob = decoded.get("json")
-        if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
-            return json_blob.get("sha")
-        sha_value = decoded.get("sha")
-        return sha_value if isinstance(sha_value, str) else None
-
-    try:
-        decoded = await _decode_github_content(full_name, normalized_path, effective_branch)
-        _old_text = decoded.get("text")
-        if not isinstance(_old_text, str):
-            raise GitHubAPIError("Decoded content is not text")
-        sha_before = _extract_sha(decoded)
-    except GitHubAPIError as exc:
-        msg = str(exc)
-        if "404" in msg:
-            # The GitHub Contents API returns 404 when the file does not yet exist.
-            # In that case we treat this as a creation rather than an update.
-            is_new_file = True
-            sha_before = None
-        else:
-            raise
-
-    body_bytes = updated_content.encode("utf-8")
-    if message is not None:
-        commit_message = message
-    elif is_new_file:
-        commit_message = f"Create {normalized_path}"
-    else:
-        commit_message = f"Update {normalized_path}"
-
-    # 2) Commit the new content via the GitHub Contents API.
-    commit_result = await _perform_github_commit(
-        full_name=full_name,
-        path=normalized_path,
-        message=commit_message,
-        body_bytes=body_bytes,
-        branch=effective_branch,
-        sha=sha_before,
-    )
-
-    # 3) Verify by reading the file again from the same branch.
-    verified = await _decode_github_content(full_name, normalized_path, effective_branch)
-    sha_after = _extract_sha(verified)
-
-    result: Dict[str, Any] = {
-        "status": "committed",
-        "full_name": full_name,
-        "path": normalized_path,
-        "branch": effective_branch,
-        "message": commit_message,
-        "commit": commit_result,
-        "verification": {
-            "sha_before": sha_before,
-            "sha_after": sha_after,
-            "html_url": verified.get("html_url"),
-        },
-    }
-
-    return result
 
 
 @mcp_tool(
