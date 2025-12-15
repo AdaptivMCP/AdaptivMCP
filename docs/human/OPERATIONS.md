@@ -236,7 +236,7 @@ During any change to write policies, make sure to communicate to users of the co
 When you need to rotate secrets or change environment variables:
 
 1. **Plan the change**
-   - Identify which variables will change (for example `GITHUB_TOKEN`, timeouts, concurrency limits).
+   - Identify which variables will change (for example `GITHUB_TOKEN`, timeouts, concurrency settings).
    - Decide whether you will restart the service or roll out a fresh deploy.
 
 2. **Apply the changes in your hosting provider**

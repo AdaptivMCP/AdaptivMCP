@@ -15,7 +15,7 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 **Steps:**
 1. Call `get_server_config` and `validate_environment` to learn:
    - Whether `write_allowed` is currently true for this server instance.
-   - HTTP, timeout, and concurrency limits that might affect large operations.
+   - HTTP, timeout, and concurrency settings that might affect large operations.
    - That the server is healthy before proceeding.
 2. Call `list_write_tools` so you know which tools are gated before you attempt them.
 3. Call `list_all_actions` (include_parameters=true). This server guarantees each tool exposes a non-null `input_schema` in that listing, synthesizing a minimal object schema when none is published. For unfamiliar, complex, or write-capable tools, call `describe_tool` and, when applicable, use `validate_tool_args` on your planned `args` object before the first real invocation in this session. When you need metadata or validation for multiple tools, prefer a single `describe_tool` or `validate_tool_args` call with up to 10 tools at once instead of many separate calls.4. Once you know the controller `default_branch`, immediately create or ensure a dedicated feature branch for this task with `ensure_branch` (or `create_branch`), and run discovery tools like `get_repo_dashboard`, `list_repository_tree`, and `get_latest_branch_status` against that feature branch instead of the real default branch. Do not run MCP tools directly against `main`.

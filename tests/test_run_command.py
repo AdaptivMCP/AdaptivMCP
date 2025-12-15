@@ -218,7 +218,7 @@ async def test_run_shell_combined_truncation(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_run_shell_no_truncation_when_limits_disabled(monkeypatch):
-    """If the truncation limits are disabled (0 or negative), _run_shell
+    """If the truncation caps are disabled (0 or negative), _run_shell
     should return full output and leave truncation flags False.
     """
 

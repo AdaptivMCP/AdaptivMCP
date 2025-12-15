@@ -18,7 +18,7 @@ This protocol applies to assistants using this MCP server. Humans and repository
 
 At the start of a new conversation, or after context loss, do these tool calls in order:
 
-1. Call `get_server_config` and `validate_environment` to learn write_allowed, default branch, and limits, and to confirm the server is healthy.
+1. Call `get_server_config` and `validate_environment` to learn write_allowed, default branch, and constraints, and to confirm the server is healthy.
 2. Call `list_write_tools` once so you know which tools are gated before you try to use them.
 3. Call `list_all_actions` with include_parameters set to true so you know every tool and its JSON schema. This controller guarantees that each returned tool exposes a non-null `input_schema` object; when an underlying MCP tool does not publish a schema, the server synthesizes a minimal {type: "object", properties: {}} schema so you can still reason about argument shapes.
 4. Before you invoke any MCP tool in this session (including tools you think you already understand), call `describe_tool` for that tool and, when applicable, use `validate_tool_args` on your planned `args` object before the first real invocation—especially for write-tagged or complex tools. Treat this as mandatory, not optional.
@@ -84,7 +84,7 @@ Humans should be able to follow long workflows, see failures, and interrupt.
 - When I know I need the entire contents of a single large GitHub file, I prefer `download_user_content` with a `github:` URL (for example `github:owner/repo:path/to/file[@ref]`) so I can fetch it once into the workspace instead of calling file-slice tools in a loop.
 - For large searches or cross-repo questions, prefer repo-scoped `search` calls before resorting to global queries.
 
-## 7. Issues, PRs, CI, and rate limits
+## 7. Issues, PRs, CI, and rate limiting
 
 - For issue or PR tasks, start with `open_issue_context` for issues or `get_pr_overview`/`get_pr_info` for pull requests.
 - When you need a compact PR summary, changed files, and CI status for a pull request, call `get_pr_overview` before deciding which write tools to use.

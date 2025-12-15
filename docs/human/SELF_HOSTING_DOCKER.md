@@ -82,7 +82,7 @@ MCP_WORKSPACE_BASE_DIR=/workspace
 PORT=8000
 ```
 
-All other variables in `.env.example` have sensible defaults and can be tuned later (HTTP timeouts, concurrency limits, Git identity, truncation, logging, and sandbox configuration).
+All other variables in `.env.example` have sensible defaults and can be tuned later (HTTP timeouts, concurrency settings, Git identity, truncation, logging, and sandbox configuration).
 
 Because `docker-compose.yml` wires every tunable variable through from `.env`, you can use `.env.example` as a full reference for all supported knobs.
 

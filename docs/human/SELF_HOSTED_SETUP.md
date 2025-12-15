@@ -109,7 +109,7 @@ replace a conversation thread. Deployments can clamp stdout/stderr with:
   - Set lower values if Render or your MCP client struggles with large payloads.
 - `TOOL_STDIO_COMBINED_MAX_CHARS`
   - Upper bound for stdout + stderr together (default `18000`).
-  - Useful on Render to keep responses safely under provider and client limits
+  - Useful on Render to keep responses safely under provider and client constraints
     without losing truncation signals (both streams include `*_truncated` flags).
 
 For a canonical, copy-pasteable list of supported variables, see the
@@ -122,7 +122,7 @@ names directly, supplying values appropriate for your deployment.
 Check the repository README and configuration sections for any new variables added over time.
 
 > Meta tools for verification and troubleshooting:
-> - Use `get_server_config` to confirm the effective configuration (write gating, timeouts, limits).
+> - Use `get_server_config` to confirm the effective configuration (write gating, timeouts, constraints).
 > - Use `list_all_actions` to see all registered tools and their write/read status.
 > - Use `ping_extensions` to verify that `extra_tools.py` and any other extensions loaded correctly.
 
@@ -237,7 +237,7 @@ When you deploy this server, keep the following in mind:
 
 - **Workspace commands**
   - `terminal_command` and `run_tests` operate in a persistent clone of your repo so installs and edits survive between calls.
-  - Output is truncated according to configured limits, with explicit flags when truncation occurs.
+  - Output is truncated according to configured caps, with explicit flags when truncation occurs.
 
 For more detail, see `docs/ARCHITECTURE_AND_SAFETY.md`.
 
