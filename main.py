@@ -790,7 +790,6 @@ async def pr_smoke_test(
         updated_content=content,
         branch=branch,
         message=f"MCP PR smoke test on {branch}",
-        return_diff=False,
     )
 
     pr = await create_pull_request(
@@ -1440,7 +1439,6 @@ async def move_file(
         updated_content=source_text,
         branch=effective_branch,
         message=commit_message + " (add new path)",
-        return_diff=False,
     )
 
     # 2) Delete the original path now that the destination exists.
