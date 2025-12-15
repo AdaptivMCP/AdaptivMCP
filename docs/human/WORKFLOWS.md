@@ -258,6 +258,45 @@ Typical pattern
 
 ---
 
+### 6.1 Creating a new repository
+
+Use `create_repository` when an assistant needs to create a brand new repo (personal or org).
+
+Recommended flow
+
+1. Bootstrap:
+   - `get_server_config` and `validate_environment`
+   - `list_write_tools`
+   - If `write_allowed` is false and you need this tool, call `authorize_write_actions`.
+
+2. Create the repository:
+
+   Example (org repo, initialize with README + topics):
+
+   - Tool: `create_repository`
+   - Args:
+     - `name`: `my-new-repo`
+     - `owner`: `my-org`
+     - `owner_type`: `org`
+     - `description`: `Short description`
+     - `visibility`: `private`
+     - `auto_init`: `true`
+     - `topics`: `["mcp", "automation"]`
+
+3. Advanced settings:
+   - For any GitHub REST fields not exposed as first-class params, pass them via:
+     - `create_payload_overrides` (sent to the create endpoint)
+     - `update_payload_overrides` (sent to `PATCH /repos/{owner}/{repo}`)
+
+4. Optional:
+   - Set `clone_to_workspace=true` to clone the repo into the server workspace.
+
+Notes
+
+- Template repos are supported via `template_full_name` (uses `POST /repos/{template}/generate`).
+- The tool returns a plain-language `steps` log suitable for UI surfaces.
+
+
 ## 7. Troubleshooting and stuck workflows
 
 When a workflow stalls or fails repeatedly

@@ -458,3 +458,33 @@ If you ever find yourself guessing or improvising a new flow, check this file an
 - Tests run against the intended codebase rather than the controller repo.
 - PR metadata clearly shows the external repo and branch pair to avoid accidental controller edits.
 
+
+
+---
+
+## 17. Creating a brand new repository
+
+**Goal:** Create a new GitHub repository (user or org), optionally from a template, and return a clean, UI-friendly result.
+
+**When to use:** The user asks you to "make a new repo" or wants a repo scaffolded with specific settings.
+
+**Steps:**
+1. Bootstrap:
+   - Call `get_server_config` and confirm whether `write_allowed` is enabled.
+   - If needed, call `authorize_write_actions`.
+
+2. Validate the plan:
+   - Use `describe_tool(create_repository)` and `validate_tool_args` if you are constructing a large payload.
+
+3. Create the repository:
+   - Call `create_repository` with the common fields (name, owner, description, visibility, README init).
+   - If you need an uncommon GitHub field, pass it through `create_payload_overrides` or `update_payload_overrides`.
+
+4. Optional:
+   - Set `template_full_name` to generate from a template.
+   - Set `topics` to apply repo topics.
+   - Set `clone_to_workspace=true` if you want to immediately start work in a workspace clone.
+
+**Validation:**
+- The tool returns `full_name` and a `steps` array explaining what happened.
+- The created repo is accessible via subsequent read tools like `get_repo_dashboard` or `list_repository_tree`.
