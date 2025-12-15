@@ -66,8 +66,8 @@ logging.basicConfig(
 BASE_LOGGER = logging.getLogger("github_mcp")
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
-ERROR_LOG_CAPACITY = int(os.environ.get("MCP_ERROR_LOG_CAPACITY", "200"))
-LOG_RECORD_CAPACITY = int(os.environ.get("MCP_LOG_RECORD_CAPACITY", "500"))
+ERROR_LOG_CAPACITY = int(os.environ.get("MCP_ERROR_LOG_CAPACITY", "0"))
+LOG_RECORD_CAPACITY = int(os.environ.get("MCP_LOG_RECORD_CAPACITY", "0"))
 
 
 class _InMemoryErrorLogHandler(logging.Handler):
@@ -80,7 +80,11 @@ class _InMemoryErrorLogHandler(logging.Handler):
 
     def __init__(self, capacity: int = 200) -> None:
         super().__init__(level=logging.ERROR)
-        self._records: deque[dict[str, object]] = deque(maxlen=max(1, capacity))
+        self._capacity = int(capacity)
+        if self._capacity <= 0:
+            self._records: list[dict[str, object]] = []
+        else:
+            self._records = deque(maxlen=max(1, self._capacity))
 
     @property
     def records(self) -> list[dict[str, object]]:
@@ -116,7 +120,11 @@ class _InMemoryLogHandler(logging.Handler):
 
     def __init__(self, capacity: int = 500) -> None:
         super().__init__(level=logging.INFO)
-        self._records: deque[dict[str, object]] = deque(maxlen=max(1, capacity))
+        self._capacity = int(capacity)
+        if self._capacity <= 0:
+            self._records: list[dict[str, object]] = []
+        else:
+            self._records = deque(maxlen=max(1, self._capacity))
 
     @property
     def records(self) -> list[dict[str, object]]:

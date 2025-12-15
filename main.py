@@ -353,18 +353,36 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 @server.mcp_tool(write_action=False)
 def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dict[str, Any]:
-    """Return recent tool-call events captured in-memory by the server wrappers."""
+    """Return recent tool-call events captured in-memory by the server wrappers.
+
+    Notes:
+        - If MCP_RECENT_TOOL_EVENTS_CAPACITY <= 0, event capture is unbounded.
+        - If limit <= 0, returns all available (post-filter) events.
+    """
+
     try:
         limit_int = int(limit)
     except Exception:
         limit_int = 50
-    limit_int = max(1, min(200, limit_int))
+
     events = list(getattr(server, "RECENT_TOOL_EVENTS", []))
     if not include_success:
         events = [e for e in events if e.get("event") != "tool_recent_ok"]
-    events = list(reversed(events))[:limit_int]
 
-    # Plain-language summaries for UI surfaces.
+    # newest first
+    events = list(reversed(events))
+
+    if limit_int <= 0:
+        limit_int = len(events)
+
+    capacity = getattr(server, "RECENT_TOOL_EVENTS_CAPACITY", None)
+    if isinstance(capacity, int) and capacity > 0:
+        limit_int = max(1, min(capacity, limit_int))
+    else:
+        limit_int = max(1, limit_int)
+
+    events = events[:limit_int]
+
     narrative = []
     for e in events:
         msg = e.get("user_message")
@@ -391,6 +409,10 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dic
         "events": events,
         "narrative": narrative,
         "transcript": transcript,
+        "capacity": None if not (isinstance(capacity, int) and capacity > 0) else capacity,
+        "total_recorded": getattr(server, "RECENT_TOOL_EVENTS_TOTAL", len(getattr(server, "RECENT_TOOL_EVENTS", []))),
+        "dropped": getattr(server, "RECENT_TOOL_EVENTS_DROPPED", 0),
+        "total_available": len(list(getattr(server, "RECENT_TOOL_EVENTS", []))),
     }
 
 
@@ -398,28 +420,33 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dic
 def get_recent_server_errors(limit: int = 50) -> Dict[str, Any]:
     """Return recent server-side error logs for failed MCP tool calls.
 
-    This surfaces the underlying MCP server error records so assistants can
-    debug misinputs instead of re-looping blindly.
+    Notes:
+        - If MCP_ERROR_LOG_CAPACITY <= 0, error capture is unbounded.
+        - If limit <= 0, returns all available errors.
     """
 
     try:
         limit_int = int(limit)
     except Exception:
         limit_int = 50
-    limit_int = max(1, min(ERROR_LOG_CAPACITY, limit_int))
 
     records = getattr(ERROR_LOG_HANDLER, "records", [])
-    records = list(reversed(records))[:limit_int]
+    records = list(reversed(records))
+
+    if limit_int <= 0:
+        limit_int = len(records)
+
+    if ERROR_LOG_CAPACITY > 0:
+        limit_int = max(1, min(ERROR_LOG_CAPACITY, limit_int))
+    else:
+        limit_int = max(1, limit_int)
 
     return {
         "limit": limit_int,
-        "capacity": ERROR_LOG_CAPACITY,
-        "errors": records,
+        "capacity": None if ERROR_LOG_CAPACITY <= 0 else ERROR_LOG_CAPACITY,
+        "errors": records[:limit_int],
+        "total_available": len(records),
     }
-
-
-
-
 @server.mcp_tool(write_action=False)
 def get_recent_server_logs(limit: int = 100, min_level: str = "INFO") -> Dict[str, Any]:
     """Return recent server-side logs captured in memory.

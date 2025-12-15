@@ -41,6 +41,29 @@ async def list_workspace_files(
         if not start.startswith(root):
             raise ValueError("path must stay within repo")
 
+        # If path points to a file, return that file (subject to include_hidden).
+        if os.path.isfile(start):
+            rp = os.path.relpath(start, root)
+            if not include_hidden and os.path.basename(rp).startswith("."):
+                return {
+                    "full_name": full_name,
+                    "ref": effective_ref,
+                    "path": path,
+                    "files": [],
+                    "truncated": False,
+                    "max_files": max_files,
+                    "max_depth": max_depth,
+                }
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": path,
+                "files": [rp],
+                "truncated": False,
+                "max_files": max_files,
+                "max_depth": max_depth,
+            }
+
         out: list[str] = []
         truncated = False
 
@@ -122,6 +145,24 @@ async def search_workspace(
         if not start.startswith(root):
             raise ValueError("path must stay within repo")
 
+        # Allow searching a single file path.
+        single_file = os.path.isfile(start)
+        if single_file and (not include_hidden) and os.path.basename(start).startswith("."):
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": path,
+                "query": query,
+                "use_regex": use_regex,
+                "case_sensitive": case_sensitive,
+                "results": [],
+                "truncated": False,
+                "files_scanned": 0,
+                "files_skipped": 1,
+                "max_results": max_results,
+                "max_file_bytes": max_file_bytes,
+            }
+
         flags = 0 if case_sensitive else re.IGNORECASE
         matcher = re.compile(query, flags=flags) if use_regex else None
 
@@ -132,7 +173,8 @@ async def search_workspace(
 
         needle = query if case_sensitive else query.lower()
 
-        for cur_dir, dirnames, filenames in os.walk(start):
+        walk_iter = [(os.path.dirname(start), [], [os.path.basename(start)])] if single_file else os.walk(start)
+        for cur_dir, dirnames, filenames in walk_iter:
             dirnames[:] = [d for d in dirnames if d != ".git"]
             if not include_hidden:
                 dirnames[:] = [d for d in dirnames if not d.startswith(".")]

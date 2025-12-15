@@ -26,6 +26,10 @@ async def test_list_workspace_files_basic_and_limits(monkeypatch, tmp_path):
     assert ".hidden.txt" not in res["files"]
     assert os.path.join(".git", "ignored") not in res["files"]
 
+    # File paths are allowed (useful for narrowing to one file).
+    res_file = await tw.list_workspace_files(full_name="owner/repo", ref="feature", path="a.txt")
+    assert res_file["files"] == ["a.txt"]
+
     res_hidden = await tw.list_workspace_files(
         full_name="owner/repo", ref="feature", include_hidden=True
     )
@@ -62,6 +66,16 @@ async def test_search_workspace_basic_and_safety(monkeypatch, tmp_path):
     assert "note.txt" in files
     assert "big.txt" not in files
     assert "bin.dat" not in files
+
+    res_one = await tw.search_workspace(
+        full_name="owner/repo",
+        ref="feature",
+        query="hello",
+        path="note.txt",
+        max_results=10,
+        max_file_bytes=1000,
+    )
+    assert any(r["file"] == "note.txt" for r in res_one["results"])
 
     # Path traversal should be rejected.
     bad = await tw.search_workspace(
