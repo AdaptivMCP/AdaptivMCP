@@ -862,6 +862,213 @@ async def list_repositories_by_installation(
     )
 
 
+@mcp_tool(write_action=True)
+async def create_repository(
+    name: str,
+    owner: Optional[str] = None,
+    owner_type: Literal["auto", "user", "org"] = "auto",
+    description: Optional[str] = None,
+    homepage: Optional[str] = None,
+    visibility: Optional[Literal["public", "private", "internal"]] = None,
+    private: Optional[bool] = None,
+    auto_init: bool = True,
+    gitignore_template: Optional[str] = None,
+    license_template: Optional[str] = None,
+    is_template: bool = False,
+    has_issues: bool = True,
+    has_projects: Optional[bool] = None,
+    has_wiki: bool = True,
+    has_discussions: Optional[bool] = None,
+    team_id: Optional[int] = None,
+    security_and_analysis: Optional[Dict[str, Any]] = None,
+    template_full_name: Optional[str] = None,
+    include_all_branches: bool = False,
+    topics: Optional[List[str]] = None,
+    create_payload_overrides: Optional[Dict[str, Any]] = None,
+    update_payload_overrides: Optional[Dict[str, Any]] = None,
+    clone_to_workspace: bool = False,
+    clone_ref: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create a new GitHub repository for the authenticated user or an organization.
+
+    Designed to match GitHub's "New repository" UI with a safe escape hatch:
+
+    - Use first-class params for common fields.
+    - Use create_payload_overrides and update_payload_overrides to pass any
+      additional GitHub REST fields without waiting for server updates.
+
+    Template-based creation is supported via template_full_name using:
+    POST /repos/{template_owner}/{template_repo}/generate
+    """
+
+    steps: List[str] = []
+    warnings: List[str] = []
+
+    try:
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("name must be a non-empty string")
+        name = name.strip()
+
+        if "/" in name or name.endswith(".git"):
+            raise ValueError("name must not contain '/' and must not end with '.git'")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", name):
+            raise ValueError(
+                "name must match [A-Za-z0-9][A-Za-z0-9_.-]{0,99} (max 100 chars)"
+            )
+
+        if visibility is not None and private is not None:
+            inferred_private = visibility != "public"
+            if inferred_private != private:
+                raise ValueError("visibility and private disagree")
+
+        if visibility is not None:
+            effective_private = visibility != "public"
+        elif private is not None:
+            effective_private = bool(private)
+        else:
+            effective_private = False
+
+        target_owner = owner.strip() if isinstance(owner, str) and owner.strip() else None
+        authenticated_login: Optional[str] = None
+
+        # Resolve the authenticated user (needed for auto owner and template generation).
+        if owner_type != "org" or template_full_name:
+            user = await _github_request("GET", "/user")
+            if isinstance(user.get("json"), dict):
+                authenticated_login = user["json"].get("login")
+            if not target_owner:
+                target_owner = authenticated_login
+
+        if owner_type == "org" and not target_owner:
+            raise ValueError("owner is required when owner_type='org'")
+
+        use_org_endpoint = False
+        if owner_type == "org":
+            use_org_endpoint = True
+        elif owner_type == "user":
+            use_org_endpoint = False
+            if target_owner and authenticated_login and target_owner != authenticated_login:
+                warnings.append(
+                    f"owner '{target_owner}' differs from authenticated user '{authenticated_login}'; using user endpoint"
+                )
+        else:
+            # auto: if caller provided an owner different from auth login, assume org.
+            if target_owner and authenticated_login and target_owner != authenticated_login:
+                use_org_endpoint = True
+
+        create_target_desc = (
+            f"{target_owner}/{name}" if target_owner else f"(authenticated-user)/{name}"
+        )
+        _ensure_write_allowed(f"create repository {create_target_desc}")
+
+        def _apply_overrides(
+            base: Dict[str, Any], overrides: Optional[Dict[str, Any]]
+        ) -> Dict[str, Any]:
+            if overrides and isinstance(overrides, dict):
+                base.update(overrides)
+            return base
+
+        created_resp: Dict[str, Any]
+        create_payload: Dict[str, Any]
+
+        if template_full_name:
+            if not isinstance(template_full_name, str) or "/" not in template_full_name:
+                raise ValueError("template_full_name must look like 'owner/repo'")
+            template_full_name = template_full_name.strip()
+
+            steps.append(
+                f"Creating repository from template {template_full_name} as {create_target_desc}."
+            )
+            create_payload = {
+                "owner": target_owner,
+                "name": name,
+                "description": description,
+                "private": effective_private,
+                "include_all_branches": bool(include_all_branches),
+            }
+            create_payload = _apply_overrides(create_payload, create_payload_overrides)
+            created_resp = await _github_request(
+                "POST", f"/repos/{template_full_name}/generate", json_body=create_payload
+            )
+        else:
+            endpoint = "/user/repos"
+            if use_org_endpoint:
+                endpoint = f"/orgs/{target_owner}/repos"
+
+            steps.append(f"Creating repository {create_target_desc} via {endpoint}.")
+            create_payload = {
+                "name": name,
+                "description": description,
+                "homepage": homepage,
+                "private": effective_private,
+                "auto_init": bool(auto_init),
+                "is_template": bool(is_template),
+                "has_issues": bool(has_issues),
+                "has_wiki": bool(has_wiki),
+            }
+            if visibility is not None:
+                create_payload["visibility"] = visibility
+            if gitignore_template:
+                create_payload["gitignore_template"] = gitignore_template
+            if license_template:
+                create_payload["license_template"] = license_template
+            if has_projects is not None:
+                create_payload["has_projects"] = bool(has_projects)
+            if has_discussions is not None:
+                create_payload["has_discussions"] = bool(has_discussions)
+            if team_id is not None:
+                create_payload["team_id"] = int(team_id)
+            if security_and_analysis is not None:
+                create_payload["security_and_analysis"] = security_and_analysis
+
+            create_payload = _apply_overrides(create_payload, create_payload_overrides)
+            created_resp = await _github_request("POST", endpoint, json_body=create_payload)
+
+        repo_json = created_resp.get("json") if isinstance(created_resp, dict) else None
+        full_name = repo_json.get("full_name") if isinstance(repo_json, dict) else None
+        if not isinstance(full_name, str) or not full_name:
+            if target_owner:
+                full_name = f"{target_owner}/{name}"
+
+        updated_resp = None
+        if update_payload_overrides and full_name:
+            steps.append(f"Applying post-create settings to {full_name}.")
+            updated_resp = await _github_request(
+                "PATCH", f"/repos/{full_name}", json_body=dict(update_payload_overrides)
+            )
+
+        topics_resp = None
+        if topics and full_name:
+            cleaned = [t.strip() for t in topics if isinstance(t, str) and t.strip()]
+            if cleaned:
+                steps.append(f"Setting topics on {full_name}: {', '.join(cleaned)}.")
+                topics_resp = await _github_request(
+                    "PUT",
+                    f"/repos/{full_name}/topics",
+                    json_body={"names": cleaned},
+                    headers={"Accept": "application/vnd.github+json"},
+                )
+
+        workspace_dir = None
+        if clone_to_workspace and full_name:
+            steps.append(f"Cloning {full_name}@{clone_ref or 'default'} into workspace.")
+            workspace_dir = await _clone_repo(full_name, ref=clone_ref)
+
+        return {
+            "full_name": full_name,
+            "repo": repo_json,
+            "created": created_resp,
+            "create_payload": create_payload,
+            "updated": updated_resp,
+            "topics": topics_resp,
+            "workspace_dir": workspace_dir,
+            "steps": steps,
+            "warnings": warnings,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="create_repository")
+
+
 @mcp_tool(write_action=False)
 async def list_recent_issues(
     filter: str = "assigned",
