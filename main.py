@@ -7,7 +7,6 @@ being pushed toward a particular working style. See ``docs/WORKFLOWS.md`` and ``
 for optional, non-binding examples of how the tools can fit together.
 """
 
-import asyncio
 import base64
 import json
 import os
@@ -51,9 +50,7 @@ from github_mcp.github_content import (
     _resolve_file_sha,  # noqa: F401
 )
 from github_mcp.file_cache import (
-    bulk_get_cached,
     cache_payload,
-    cache_stats,
     clear_cache,
 )
 from github_mcp.http_clients import (
@@ -905,33 +902,9 @@ async def fetch_files(
     paths: List[str],
     ref: str = "main",
 ) -> Dict[str, Any]:
-    """Fetch multiple files concurrently with per-file error isolation."""
+    from github_mcp.main_tools.content_cache import fetch_files as _impl
+    return await _impl(full_name=full_name, paths=paths, ref=ref)
 
-    results: Dict[str, Any] = {}
-    sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
-
-    async def _fetch_single(p: str) -> None:
-        normalized_path = _normalize_repo_path(p)
-        async with sem:
-            try:
-                decoded = await _decode_github_content(full_name, normalized_path, ref)
-                cached = _cache_file_result(
-                    full_name=full_name,
-                    path=normalized_path,
-                    ref=ref,
-                    decoded=decoded,
-                )
-                results[p] = cached
-            except Exception as e:
-                # Use a consistent error envelope so controllers can rely on structure.
-                results[p] = _structured_tool_error(
-                    str(e),
-                    context="fetch_files",
-                    path=p,
-                )
-
-    await asyncio.gather(*[_fetch_single(p) for p in paths])
-    return {"files": results}
 
 
 @mcp_tool(
@@ -948,20 +921,9 @@ async def get_cached_files(
     paths: List[str],
     ref: str = "main",
 ) -> Dict[str, Any]:
-    """Return cached file entries and list any missing paths."""
+    from github_mcp.main_tools.content_cache import get_cached_files as _impl
+    return await _impl(full_name=full_name, paths=paths, ref=ref)
 
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    normalized_paths = [_normalize_repo_path(p) for p in paths]
-    cached = bulk_get_cached(full_name, effective_ref, normalized_paths)
-    missing = [p for p in normalized_paths if p not in cached]
-
-    return {
-        "full_name": full_name,
-        "ref": effective_ref,
-        "files": cached,
-        "missing": missing,
-        "cache": cache_stats(),
-    }
 
 
 @mcp_tool(
@@ -979,40 +941,9 @@ async def cache_files(
     ref: str = "main",
     refresh: bool = False,
 ) -> Dict[str, Any]:
-    """Fetch files and store them in the in-process cache."""
+    from github_mcp.main_tools.content_cache import cache_files as _impl
+    return await _impl(full_name=full_name, paths=paths, ref=ref, refresh=refresh)
 
-    results: Dict[str, Any] = {}
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    normalized_paths = [_normalize_repo_path(p) for p in paths]
-    cached_existing: Dict[str, Any] = {}
-    if not refresh:
-        cached_existing = bulk_get_cached(full_name, effective_ref, normalized_paths)
-
-    sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
-
-    async def _cache_single(p: str) -> None:
-        async with sem:
-            if not refresh and p in cached_existing:
-                results[p] = {**cached_existing[p], "cached": True}
-                return
-
-            decoded = await _decode_github_content(full_name, p, effective_ref)
-            cached = cache_payload(
-                full_name=full_name,
-                ref=effective_ref,
-                path=p,
-                decoded=decoded,
-            )
-            results[p] = {**cached, "cached": False}
-
-    await asyncio.gather(*[_cache_single(p) for p in normalized_paths])
-
-    return {
-        "full_name": full_name,
-        "ref": effective_ref,
-        "files": results,
-        "cache": cache_stats(),
-    }
 
 
 @mcp_tool(write_action=False)
@@ -1025,83 +956,9 @@ async def list_repository_tree(
     include_blobs: bool = True,
     include_trees: bool = True,
 ) -> Dict[str, Any]:
-    """List files and folders in a repository tree with optional filtering.
+    from github_mcp.main_tools.content_cache import list_repository_tree as _impl
+    return await _impl(full_name=full_name, ref=ref, path_prefix=path_prefix, recursive=recursive, max_entries=max_entries, include_blobs=include_blobs, include_trees=include_trees)
 
-    Args:
-        full_name: ``owner/repo`` string.
-        ref: Branch, tag, or commit SHA to inspect (default ``main``).
-        path_prefix: If set, only include entries whose paths start with this
-            prefix (useful for zooming into subdirectories without fetching a
-            huge response).
-        recursive: Whether to request a recursive tree (default ``True``).
-        max_entries: Maximum number of entries to return (default ``1000``).
-        include_blobs: Include files in the listing (default ``True``).
-        include_trees: Include directories in the listing (default ``True``).
-
-    The GitHub Trees API caps responses at 100,000 entries server side. This
-    tool applies an additional ``max_entries`` limit so assistants get a fast,
-    bounded listing. When ``truncated`` is true in the response, narrow the
-    ``path_prefix`` and call again.
-    """
-
-    if max_entries <= 0:
-        raise ValueError("max_entries must be a positive integer")
-
-    params = {"recursive": 1 if recursive else 0}
-    data = await _github_request("GET", f"/repos/{full_name}/git/trees/{ref}", params=params)
-
-    payload = data.get("json") or {}
-    tree = payload.get("tree")
-    if not isinstance(tree, list):
-        raise GitHubAPIError("Unexpected tree response from GitHub")
-
-    allowed_types = set()
-    if include_blobs:
-        allowed_types.add("blob")
-    if include_trees:
-        allowed_types.add("tree")
-    if not allowed_types:
-        return {
-            "entries": [],
-            "entry_count": 0,
-            "truncated": False,
-            "message": "Both blobs and trees were excluded; nothing to return.",
-        }
-
-    normalized_prefix = path_prefix.lstrip("/") if path_prefix else None
-
-    filtered_entries: List[Dict[str, Any]] = []
-    for entry in tree:
-        if not isinstance(entry, dict):
-            continue
-        entry_type = entry.get("type")
-        if entry_type not in allowed_types:
-            continue
-        path = entry.get("path")
-        if not isinstance(path, str):
-            continue
-        if normalized_prefix and not path.startswith(normalized_prefix):
-            continue
-
-        normalized_path = _normalize_repo_path(path)
-
-        filtered_entries.append(
-            {
-                "path": normalized_path,
-                "type": entry_type,
-                "mode": entry.get("mode"),
-                "size": entry.get("size"),
-                "sha": entry.get("sha"),
-            }
-        )
-
-    truncated = len(filtered_entries) > max_entries
-    return {
-        "ref": payload.get("sha") or ref,
-        "entry_count": len(filtered_entries),
-        "truncated": truncated,
-        "entries": filtered_entries[:max_entries],
-    }
 
 
 @mcp_tool(write_action=False)
