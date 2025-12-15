@@ -15,7 +15,6 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
-import jsonschema
 
 import github_mcp.server as server  # noqa: F401
 import github_mcp.tools_workspace as tools_workspace  # noqa: F401
@@ -74,16 +73,16 @@ from github_mcp.metrics import (
 )
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
-    COMPACT_METADATA_DEFAULT,
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
     _ensure_write_allowed,
-    _find_registered_tool,
     _github_request,
-    _normalize_input_schema,
     _structured_tool_error,
     mcp_tool,
     register_extra_tools_if_available,
+    COMPACT_METADATA_DEFAULT,
+    _find_registered_tool,
+    _normalize_input_schema,
 )
 from github_mcp.tools_workspace import commit_workspace, ensure_workspace_clone  # noqa: F401
 from github_mcp.utils import (
@@ -92,8 +91,8 @@ from github_mcp.utils import (
     _effective_ref_for_repo,
     _normalize_repo_path,
     _with_numbered_lines,
-    normalize_args,
     _normalize_write_context,
+    normalize_args,
 )
 from github_mcp.workspace import (
     _clone_repo,  # noqa: F401
@@ -110,6 +109,14 @@ from starlette.responses import JSONResponse
 _http_client_external: httpx.AsyncClient | None = None
 
 LOGGER = BASE_LOGGER.getChild("main")
+
+# Keep selected symbols in main for tests/backwards-compat and for impl modules.
+_EXPORT_COMPAT = (
+    COMPACT_METADATA_DEFAULT,
+    _find_registered_tool,
+    _normalize_input_schema,
+    normalize_args,
+)
 
 
 async def _perform_github_commit_and_refresh_workspace(
@@ -549,258 +556,9 @@ async def get_repo_defaults(
 @mcp_tool(write_action=False)
 async def validate_environment() -> Dict[str, Any]:
     """Check GitHub-related environment settings and report problems."""
+    from github_mcp.main_tools.env import validate_environment as _impl
+    return await _impl()
 
-    checks: List[Dict[str, Any]] = []
-    status = "ok"
-
-    def add_check(
-        name: str, level: str, message: str, details: Optional[Dict[str, Any]] = None
-    ) -> None:
-        nonlocal status
-        if details is None:
-            details = {}
-        checks.append(
-            {
-                "name": name,
-                "level": level,
-                "message": message,
-                "details": details,
-            }
-        )
-        if level == "error":
-            status = "error"
-        elif level == "warning" and status != "error":
-            status = "warning"
-
-    # GitHub token presence/shape
-    raw_token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
-    token_env_var = (
-        "GITHUB_PAT"
-        if os.environ.get("GITHUB_PAT") is not None
-        else ("GITHUB_TOKEN" if os.environ.get("GITHUB_TOKEN") is not None else None)
-    )
-
-    if raw_token is None:
-        add_check(
-            "github_token",
-            "error",
-            "GITHUB_PAT or GITHUB_TOKEN is not set",
-            {"env_vars": ["GITHUB_PAT", "GITHUB_TOKEN"]},
-        )
-        token_ok = False
-    elif not raw_token.strip():
-        add_check(
-            "github_token",
-            "error",
-            "GitHub token environment variable is set but empty",
-            {"env_var": token_env_var} if token_env_var else {},
-        )
-        token_ok = False
-    else:
-        add_check(
-            "github_token",
-            "ok",
-            "GitHub token environment variable is set",
-            {"env_var": token_env_var, "length": len(raw_token)},
-        )
-        token_ok = True
-
-    # Controller repo/branch config
-    controller_repo = os.environ.get("GITHUB_MCP_CONTROLLER_REPO") or CONTROLLER_REPO
-    controller_branch = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") or CONTROLLER_DEFAULT_BRANCH
-
-    add_check(
-        "controller_branch_config",
-        "ok",
-        "Controller branch is configured",
-        {
-            "value": controller_branch,
-            "env_var": (
-                "GITHUB_MCP_CONTROLLER_BRANCH"
-                if os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") is not None
-                else None
-            ),
-        },
-    )
-
-    # Git identity env vars (presence).
-    identity_envs = {
-        "GIT_AUTHOR_NAME": os.environ.get("GIT_AUTHOR_NAME"),
-        "GIT_AUTHOR_EMAIL": os.environ.get("GIT_AUTHOR_EMAIL"),
-        "GIT_COMMITTER_NAME": os.environ.get("GIT_COMMITTER_NAME"),
-        "GIT_COMMITTER_EMAIL": os.environ.get("GIT_COMMITTER_EMAIL"),
-    }
-    missing_identity = [name for name, value in identity_envs.items() if not value]
-    if missing_identity:
-        add_check(
-            "git_identity_env",
-            "warning",
-            "Git identity env vars are not fully configured; defaults may be used for commits",
-            {"missing": missing_identity},
-        )
-    else:
-        add_check(
-            "git_identity_env",
-            "ok",
-            "Git identity env vars are configured",
-            {},
-        )
-
-    # HTTP / concurrency config (always informational; defaults are fine).
-    add_check(
-        "http_config",
-        "ok",
-        "HTTP client configuration resolved",
-        {
-            "github_api_base": GITHUB_API_BASE,
-            "timeout": HTTPX_TIMEOUT,
-            "max_connections": HTTPX_MAX_CONNECTIONS,
-            "max_keepalive": HTTPX_MAX_KEEPALIVE,
-        },
-    )
-    add_check(
-        "concurrency_config",
-        "ok",
-        "Concurrency settings resolved",
-        {
-            "max_concurrency": MAX_CONCURRENCY,
-            "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
-        },
-    )
-
-    # Remote validation for controller repo/branch, only if token is usable.
-    if token_ok:
-        repo_payload: Dict[str, Any] = {}
-        try:
-            repo_response = await _github_request("GET", f"/repos/{controller_repo}")
-            if isinstance(repo_response.get("json"), dict):
-                repo_payload = repo_response.get("json", {})
-        except Exception as exc:  # pragma: no cover - defensive
-            add_check(
-                "controller_repo_remote",
-                "error",
-                "Controller repository does not exist or is not accessible",
-                {
-                    "full_name": controller_repo,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                },
-            )
-        else:
-            add_check(
-                "controller_repo_remote",
-                "ok",
-                "Controller repository exists and is accessible",
-                {"full_name": controller_repo},
-            )
-
-            permissions = {}
-            if isinstance(repo_payload, dict):
-                permissions = repo_payload.get("permissions") or {}
-
-            push_allowed = permissions.get("push") if isinstance(permissions, dict) else None
-            if push_allowed is True:
-                add_check(
-                    "controller_repo_push_permission",
-                    "ok",
-                    "GitHub token can push to the controller repository",
-                    {"full_name": controller_repo},
-                )
-            elif push_allowed is False:
-                add_check(
-                    "controller_repo_push_permission",
-                    "error",
-                    "GitHub token lacks push permission to the controller repository; write tools will fail with 403 errors",
-                    {"full_name": controller_repo, "permissions": permissions},
-                )
-            else:
-                add_check(
-                    "controller_repo_push_permission",
-                    "warning",
-                    "Could not confirm push permission for the controller repository; ensure the token can push before using commit or push tools",
-                    {"full_name": controller_repo, "permissions": permissions},
-                )
-
-        try:
-            await _github_request(
-                "GET",
-                f"/repos/{controller_repo}/branches/{controller_branch}",
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            add_check(
-                "controller_branch_remote",
-                "error",
-                "Controller branch does not exist or is not accessible",
-                {
-                    "full_name": controller_repo,
-                    "branch": controller_branch,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                },
-            )
-        else:
-            add_check(
-                "controller_branch_remote",
-                "ok",
-                "Controller branch exists and is accessible",
-                {"full_name": controller_repo, "branch": controller_branch},
-            )
-
-        try:
-            pr_response = await _github_request(
-                "GET",
-                f"/repos/{controller_repo}/pulls",
-                params={"state": "open", "per_page": 1},
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            add_check(
-                "controller_pr_endpoint",
-                "warning",
-                "Pull request endpoint is not reachable; PR tools may fail with HTTP errors or timeouts",
-                {
-                    "full_name": controller_repo,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                },
-            )
-        else:
-            pr_json = pr_response.get("json")
-            open_sample_count = None
-            if isinstance(pr_json, list):
-                open_sample_count = len(pr_json)
-            add_check(
-                "controller_pr_endpoint",
-                "ok",
-                "Pull request endpoint is reachable",
-                {
-                    "full_name": controller_repo,
-                    "sample_open_count": open_sample_count,
-                },
-            )
-    else:
-        add_check(
-            "controller_remote_checks",
-            "warning",
-            "Skipped controller repo/branch remote validation because GitHub token is not configured",
-            {},
-        )
-
-    summary = {
-        "ok": sum(1 for c in checks if c["level"] == "ok"),
-        "warning": sum(1 for c in checks if c["level"] == "warning"),
-        "error": sum(1 for c in checks if c["level"] == "error"),
-    }
-
-    return {
-        "status": status,
-        "summary": summary,
-        "checks": checks,
-        "config": {
-            "controller_repo": controller_repo,
-            "controller_branch": controller_branch,
-            "github_api_base": GITHUB_API_BASE,
-        },
-    }
 
 
 @mcp_tool(write_action=True)
@@ -1292,125 +1050,9 @@ def list_write_tools() -> Dict[str, Any]:
     This is intended for assistants to discover what they can do safely without
     reading the entire main.py.
     """
+    from github_mcp.main_tools.introspection import list_write_tools as _impl
+    return _impl()
 
-    tools = [
-        {
-            "name": "authorize_write_actions",
-            "category": "control",
-            "description": "Enable or disable write tools within this MCP session.",
-            "notes": "Call with approved=true before using any write tools.",
-        },
-        {
-            "name": "create_branch",
-            "category": "branch",
-            "description": "Create a new branch from a base ref.",
-            "notes": "Prefer ensure_branch unless you know the branch does not exist.",
-        },
-        {
-            "name": "ensure_branch",
-            "category": "branch",
-            "description": "Ensure a branch exists, creating it from a base ref if needed.",
-            "notes": "Safe default for preparing branches before commits or PRs.",
-        },
-        {
-            "name": "update_file_and_open_pr",
-            "category": "pr",
-            "description": "Fast path: commit one file and open a PR without cloning.",
-            "notes": "Use for tiny fixes like lint nits or typo corrections.",
-        },
-        {
-            "name": "create_pull_request",
-            "category": "pr",
-            "description": "Open a GitHub pull request between two branches.",
-            "notes": "Usually called indirectly by higher-level tools.",
-        },
-        {
-            "name": "update_files_and_open_pr",
-            "category": "pr",
-            "description": "Commit multiple files and open a PR in one call.",
-            "notes": "Use primarily for docs and multi-file updates.",
-        },
-        {
-            "name": "ensure_workspace_clone",
-            "category": "workspace",
-            "description": "Ensure a persistent workspace exists for a repo/ref.",
-            "notes": "Clones if missing and can optionally reset to the remote ref; now allowed without toggling write approval so assistants can set up quickly.",
-        },
-        {
-            "name": "run_command",
-            "category": "workspace",
-            "description": "Run an arbitrary shell command in a persistent workspace clone.",
-            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls; set mutating=true (or installing_dependencies=true/use_temp_venv=false) when a command will modify files or server state so gating applies only to those cases.",
-        },
-        {
-            "name": "commit_workspace",
-            "category": "workspace",
-            "description": "Commit and optionally push changes from the persistent workspace.",
-            "notes": "Stages changes, commits with a provided message, and can push to the effective branch.",
-        },
-        {
-            "name": "commit_workspace_files",
-            "category": "workspace",
-            "description": "Commit a specific list of files from the persistent workspace.",
-            "notes": "Use to avoid staging temporary artifacts while still pushing changes to the branch.",
-        },
-        {
-            "name": "run_tests",
-            "category": "workspace",
-            "description": "Run tests (default: pytest) inside the persistent workspace clone.",
-            "notes": "Preferred way to run tests; shares the persistent workspace with run_command and commit helpers. Mark mutating=true only when the test command will edit files so read-only runs stay ungated.",
-        },
-        {
-            "name": "trigger_workflow_dispatch",
-            "category": "workflow",
-            "description": "Trigger a GitHub Actions workflow via workflow_dispatch.",
-            "notes": "Use only when Joey explicitly asks to run a workflow.",
-        },
-        {
-            "name": "trigger_and_wait_for_workflow",
-            "category": "workflow",
-            "description": "Trigger a workflow and poll until completion or timeout.",
-            "notes": "Summarize the run result in your response.",
-        },
-        {
-            "name": "create_issue",
-            "category": "issue",
-            "description": "Open a GitHub issue with optional body, labels, and assignees.",
-            "notes": "Use to capture new work items or questions.",
-        },
-        {
-            "name": "update_issue",
-            "category": "issue",
-            "description": "Update fields on an existing GitHub issue.",
-            "notes": "Adjust scope, status, or ownership directly in the issue.",
-        },
-        {
-            "name": "comment_on_issue",
-            "category": "issue",
-            "description": "Post a comment on an existing GitHub issue.",
-            "notes": "Log progress updates and decisions.",
-        },
-        {
-            "name": "merge_pull_request",
-            "category": "pr",
-            "description": "Merge an existing PR using the chosen method.",
-            "notes": "Assistants should only merge when Joey explicitly requests it.",
-        },
-        {
-            "name": "close_pull_request",
-            "category": "pr",
-            "description": "Close an existing PR without merging.",
-            "notes": "Only when Joey asks to close a PR.",
-        },
-        {
-            "name": "comment_on_pull_request",
-            "category": "pr",
-            "description": "Post a comment on an existing PR.",
-            "notes": "Use for status, summaries, or test results if Joey likes that pattern.",
-        },
-    ]
-
-    return {"tools": tools}
 
 
 @mcp_tool(write_action=False)
@@ -2014,100 +1656,9 @@ def list_all_actions(
             set), shorten descriptions and omit tag metadata to keep responses
             compact.
     """
+    from github_mcp.main_tools.introspection import list_all_actions as _impl
+    return _impl(include_parameters=include_parameters, compact=compact)
 
-    compact_mode = COMPACT_METADATA_DEFAULT if compact is None else compact
-
-    tools: List[Dict[str, Any]] = []
-    seen_names: set[str] = set()
-
-    for tool, func in _REGISTERED_MCP_TOOLS:
-        name = getattr(tool, "name", None) or getattr(func, "__name__", None)
-        if not name:
-            continue
-        name_str = str(name)
-        if name_str in seen_names:
-            continue
-        seen_names.add(name_str)
-
-        meta = getattr(tool, "meta", {}) or {}
-        annotations = getattr(tool, "annotations", None)
-
-        description = getattr(tool, "description", None) or (func.__doc__ or "")
-        description = description.strip()
-
-        # In non-compact mode, prefer the full function docstring when it
-        # contains more detail than the MCP-level description. Some tools
-        # expose a short summary via tool.description but keep richer guidance
-        # in the underlying docstring.
-        if not compact_mode:
-            full_doc = (func.__doc__ or "").strip()
-            if full_doc and len(full_doc) > len(description):
-                description = full_doc
-
-        if compact_mode and description:
-            compact_description = description.splitlines()[0].strip() or description
-            max_length = 200
-            if len(compact_description) > max_length:
-                compact_description = f"{compact_description[: max_length - 3].rstrip()}..."
-            description = compact_description
-
-        tool_info: Dict[str, Any] = {
-            "name": name_str,
-            "write_action": bool(meta.get("write_action")),
-            "auto_approved": bool(meta.get("auto_approved")),
-            "read_only_hint": getattr(annotations, "readOnlyHint", None),
-        }
-
-        if description:
-            tool_info["description"] = description
-
-        if not compact_mode:
-            tool_info["tags"] = sorted(list(getattr(tool, "tags", []) or []))
-
-        if include_parameters:
-            # Surface a best-effort JSON schema for each tool so callers can
-            # reason about argument names and types. When the underlying MCP
-            # tool does not expose an explicit inputSchema, we still return a
-            # minimal object schema instead of ``null`` so downstream
-            # assistants can treat the presence of input_schema as a stable
-            # contract.
-            schema = _normalize_input_schema(tool)
-            if schema is None:
-                schema = {"type": "object", "properties": {}}
-            tool_info["input_schema"] = schema
-
-        tools.append(tool_info)
-
-    # Include this helper itself so describe_tool can inspect it.
-    if "list_all_actions" not in seen_names:
-        synthetic: Dict[str, Any] = {
-            "name": "list_all_actions",
-            "write_action": False,
-            "auto_approved": True,
-            "read_only_hint": True,
-            "description": "Enumerate every available MCP tool with read/write metadata.",
-        }
-        if not compact_mode:
-            synthetic["tags"] = ["meta"]
-        if include_parameters:
-            synthetic["input_schema"] = {
-                "type": "object",
-                "properties": {
-                    "include_parameters": {"type": "boolean"},
-                    "compact": {"type": ["boolean", "null"]},
-                },
-                "additionalProperties": False,
-            }
-        tools.append(synthetic)
-        seen_names.add("list_all_actions")
-
-    tools.sort(key=lambda entry: entry["name"])
-
-    return {
-        "write_actions_enabled": server.WRITE_ALLOWED,
-        "compact": compact_mode,
-        "tools": tools,
-    }
 
 
 @mcp_tool(
@@ -2137,102 +1688,16 @@ async def describe_tool(
         include_parameters: When True, include the serialized input schema for
             each tool (equivalent to list_all_actions(include_parameters=True)).
     """
+    from github_mcp.main_tools.introspection import describe_tool as _impl
+    return await _impl(name=name, names=names, include_parameters=include_parameters)
 
-    if names is None or len(names) == 0:
-        if not name:
-            raise ValueError("describe_tool requires 'name' or 'names'.")
-        names = [name]
-    else:
-        # Normalize and deduplicate while preserving order.
-        seen = set()
-        normalized: List[str] = []
-        for candidate in names:
-            if not isinstance(candidate, str):
-                raise TypeError("names must be a list of strings.")
-            if candidate not in seen:
-                seen.add(candidate)
-                normalized.append(candidate)
-        if name and name not in seen:
-            normalized.insert(0, name)
-        names = normalized
-
-    if len(names) == 0:
-        raise ValueError("describe_tool requires at least one tool name.")
-    if len(names) > 10:
-        raise ValueError("describe_tool can return at most 10 tools per call.")
-
-    catalog = list_all_actions(include_parameters=include_parameters, compact=False)
-    tools_index = {entry.get("name"): entry for entry in catalog.get("tools", [])}
-
-    found: List[Dict[str, Any]] = []
-    missing: List[str] = []
-
-    for tool_name in names:
-        entry = tools_index.get(tool_name)
-        if entry is None:
-            missing.append(tool_name)
-        else:
-            found.append(entry)
-
-    if not found:
-        raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
-
-    result: Dict[str, Any] = {"tools": found}
-
-    # Preserve the legacy single-tool shape for backwards compatibility by
-    # mirroring the first tool's metadata at the top level.
-    first = found[0]
-    for key, value in first.items():
-        result.setdefault(key, value)
-
-    if missing:
-        result["missing_tools"] = sorted(set(missing))
-
-    return result
 
 
 def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
+    from github_mcp.main_tools.introspection import _validate_single_tool_args as _impl
+    return _impl(tool_name=tool_name, args=args)
 
-    found = _find_registered_tool(tool_name)
-    if found is None:
-        available = sorted(
-            set(
-                getattr(tool, "name", None) or getattr(func, "__name__", None)
-                for tool, func in _REGISTERED_MCP_TOOLS
-                if getattr(tool, "name", None) or getattr(func, "__name__", None)
-            )
-        )
-        raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
-
-    tool, _ = found
-    schema = _normalize_input_schema(tool)
-    if schema is None:
-        raise ValueError(f"Tool {tool_name!r} does not expose an input schema")
-
-    normalized_args = normalize_args(dict(args or {}))
-
-    # jsonschema can infer an appropriate validator for the schema version.
-    validator_cls = jsonschema.validators.validator_for(schema)
-    validator_cls.check_schema(schema)
-    validator = validator_cls(schema)
-
-    errors = [
-        {
-            "message": error.message,
-            "path": list(error.absolute_path),
-            "validator": error.validator,
-            "validator_value": error.validator_value,
-        }
-        for error in sorted(validator.iter_errors(normalized_args), key=str)
-    ]
-
-    return {
-        "tool": tool_name,
-        "valid": len(errors) == 0,
-        "errors": errors,
-        "schema": schema,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -2268,63 +1733,9 @@ async def validate_tool_args(
         The first entry in results is mirrored at the top level (tool, valid,
         errors, schema) for backwards compatibility with existing callers.
     """
+    from github_mcp.main_tools.introspection import validate_tool_args as _impl
+    return await _impl(tool_name=tool_name, payload=payload, tool_names=tool_names)
 
-    # Legacy single-tool behavior when no batch list is provided.
-    if not tool_names:
-        if not tool_name:
-            raise ValueError("validate_tool_args requires 'tool_name' or 'tool_names'.")
-        return _validate_single_tool_args(tool_name, payload)
-
-    # Normalize and deduplicate the batch list while preserving order and
-    # ensuring an explicit tool_name (when provided) is included.
-    seen = set()
-    normalized: List[str] = []
-
-    for candidate in tool_names:
-        if not isinstance(candidate, str):
-            raise TypeError("tool_names must be a list of strings.")
-        if candidate not in seen:
-            seen.add(candidate)
-            normalized.append(candidate)
-
-    if tool_name and tool_name not in seen:
-        normalized.insert(0, tool_name)
-
-    if len(normalized) == 0:
-        raise ValueError("validate_tool_args requires at least one tool name.")
-    if len(normalized) > 10:
-        raise ValueError("validate_tool_args can validate at most 10 tools per call.")
-
-    results: List[Dict[str, Any]] = []
-    missing: List[str] = []
-
-    for name in normalized:
-        try:
-            result = _validate_single_tool_args(name, payload)
-        except ValueError as exc:
-            msg = str(exc)
-            if msg.startswith("Unknown tool ") and "Available tools:" in msg:
-                missing.append(name)
-                continue
-            raise
-        else:
-            results.append(result)
-
-    if not results:
-        raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
-
-    response: Dict[str, Any] = {"results": results}
-
-    # Preserve the legacy single-tool shape for backwards compatibility by
-    # mirroring the first result's metadata at the top level.
-    first = results[0]
-    for key, value in first.items():
-        response.setdefault(key, value)
-
-    if missing:
-        response["missing_tools"] = sorted(set(missing))
-
-    return response
 
 
 
