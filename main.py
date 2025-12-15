@@ -28,9 +28,7 @@ from github_mcp.config import (
     TOOL_STDIO_COMBINED_MAX_CHARS,  # noqa: F401
     TOOL_STDOUT_MAX_CHARS,  # noqa: F401
     WORKSPACE_BASE_DIR,  # noqa: F401
-    ERROR_LOG_HANDLER,
-    ERROR_LOG_CAPACITY,
-)
+    )
 from github_mcp.exceptions import (
     GitHubAPIError,  # noqa: F401
     GitHubAuthError,
@@ -353,107 +351,18 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 @server.mcp_tool(write_action=False)
 def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dict[str, Any]:
-    """Return recent tool-call events captured in-memory by the server wrappers.
+    """Delegates to github_mcp.main_tools.observability.get_recent_tool_events."""
+    from github_mcp.main_tools.observability import get_recent_tool_events as _impl
+    return _impl(limit=limit, include_success=include_success)
 
-    Notes:
-        - If MCP_RECENT_TOOL_EVENTS_CAPACITY <= 0, event capture is unbounded.
-        - If limit <= 0, returns all available (post-filter) events.
-    """
-
-    try:
-        limit_int = int(limit)
-    except Exception:
-        limit_int = 50
-
-    events = list(getattr(server, "RECENT_TOOL_EVENTS", []))
-    if not include_success:
-        events = [e for e in events if e.get("event") != "tool_recent_ok"]
-
-    # newest first
-    events = list(reversed(events))
-
-    if limit_int <= 0:
-        limit_int = len(events)
-
-    capacity = getattr(server, "RECENT_TOOL_EVENTS_CAPACITY", None)
-    if isinstance(capacity, int) and capacity > 0:
-        limit_int = max(1, min(capacity, limit_int))
-    else:
-        limit_int = max(1, limit_int)
-
-    events = events[:limit_int]
-
-    narrative = []
-    for e in events:
-        msg = e.get("user_message")
-        if not msg:
-            tool = e.get("tool_name") or "tool"
-            ev = e.get("event") or "event"
-            repo = e.get("repo") or "-"
-            ref = e.get("ref") or "-"
-            dur = e.get("duration_ms")
-            loc = f"{repo}@{ref}" if ref not in {None, "", "-"} else repo
-            if ev == "tool_recent_start":
-                msg = f"Starting {tool} on {loc}."
-            elif ev == "tool_recent_ok":
-                msg = f"Finished {tool} on {loc}{(' in %sms' % dur) if isinstance(dur, int) else ''}."
-            else:
-                msg = f"{tool} event {ev} on {loc}."
-        narrative.append(msg)
-
-    transcript = "\n".join(narrative)
-
-    return {
-        "limit": limit_int,
-        "include_success": include_success,
-        "events": events,
-        "narrative": narrative,
-        "transcript": transcript,
-        "capacity": None if not (isinstance(capacity, int) and capacity > 0) else capacity,
-        "total_recorded": getattr(server, "RECENT_TOOL_EVENTS_TOTAL", len(getattr(server, "RECENT_TOOL_EVENTS", []))),
-        "dropped": getattr(server, "RECENT_TOOL_EVENTS_DROPPED", 0),
-        "total_available": len(list(getattr(server, "RECENT_TOOL_EVENTS", []))),
-    }
 
 
 @server.mcp_tool(write_action=False)
 def get_recent_server_errors(limit: int = 50) -> Dict[str, Any]:
-    """Return recent server-side error logs for failed MCP tool calls.
+    """Delegates to github_mcp.main_tools.observability.get_recent_server_errors."""
+    from github_mcp.main_tools.observability import get_recent_server_errors as _impl
+    return _impl(limit=limit)
 
-    Notes:
-        - If MCP_ERROR_LOG_CAPACITY <= 0, error capture is unbounded.
-        - If limit <= 0, returns all available errors.
-    """
-
-    try:
-        limit_int = int(limit)
-    except Exception:
-        limit_int = 50
-
-    records = getattr(ERROR_LOG_HANDLER, "records", [])
-    records = list(reversed(records))
-
-    if limit_int <= 0:
-        limit_int = len(records)
-
-    if ERROR_LOG_CAPACITY > 0:
-        limit_int = max(1, min(ERROR_LOG_CAPACITY, limit_int))
-    else:
-        limit_int = max(1, limit_int)
-        # Include recent server logs as additional context for debugging.
-        try:
-            from github_mcp.main_tools.server_logs import get_recent_server_logs as _get_logs
-            server_logs = _get_logs(limit=max(100, limit_int), min_level="INFO")
-        except Exception as e:
-            server_logs = {"error": str(e)}
-
-        return {
-            "limit": limit_int,
-            "capacity": None if ERROR_LOG_CAPACITY <= 0 else ERROR_LOG_CAPACITY,
-            "errors": records[:limit_int],
-            "total_available": len(records),
-            "server_logs": server_logs,
-        }
 @server.mcp_tool(write_action=False)
 def get_recent_server_logs(limit: int = 100, min_level: str = "INFO") -> Dict[str, Any]:
     """Return recent server-side logs captured in memory.
