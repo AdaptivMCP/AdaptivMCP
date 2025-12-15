@@ -178,6 +178,8 @@ This lets assistants describe large-file changes as structured sections instead 
 
 `apply_patch_and_commit` applies a unified diff patch:
 
+Note: patches received by workspace-oriented tooling are normalized before application (unescape single-line diffs with literal \\n sequences and strip common trailing artifacts like code fences) to reduce accidental `git apply` failures.
+
 - Reads the original file via `_decode_github_content`.
 - Applies the diff using `_apply_unified_diff_to_text`, which validates context lines and positions.
 - If the patch does not match the original text, raises a `GitHubAPIError` instead of producing a broken file.

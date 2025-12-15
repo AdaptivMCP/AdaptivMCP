@@ -281,6 +281,20 @@ def _sanitize_patch_tail(patch: str) -> str:
     if not isinstance(patch, str):
         return patch
 
+    # Only attempt to strip trailing junk when the input actually looks like a diff.
+    # This avoids surprising behavior for arbitrary strings that may legitimately end
+    # with code fences or braces.
+    looks_like_diff = (
+        patch.lstrip().startswith("diff --git ")
+        or patch.lstrip().startswith("--- ")
+        or "diff --git " in patch
+        or "--- " in patch
+        or "+++ " in patch
+        or "@@ " in patch
+    )
+    if not looks_like_diff:
+        return patch
+
     ends_with_nl = patch.endswith("\n")
     lines = patch.splitlines()
 
