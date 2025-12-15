@@ -154,6 +154,7 @@ Instead, assistants SHOULD use these tools:
 - `build_section_based_diff` – generate a diff by describing section-level replacements, useful for large files.
 - `apply_line_edits_and_commit` – small, line-targeted edits to existing files.
 - `apply_patch_and_commit` – apply a unified diff (usually from the two diff builders above).
+- Patch strings are normalized when applying: the server will unescape diffs that were accidentally pasted as a single line with literal \\n sequences, and it will strip common trailing Markdown/JSON artifacts (like code fences or `}}`) when the input looks like a diff.
 - `apply_text_update_and_commit` – full-file overwrite; use only when intentionally regenerating the entire file.
 - `update_files_and_open_pr` – commit multiple files and open a PR in one call.
 
