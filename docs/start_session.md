@@ -6,7 +6,7 @@
 
 This document explains how controllers and assistants should start a session with the GitHub MCP server in this repository.
 
-These docs are the source of truth for expectations and limits. The server does **not** add its own per-task budgets beyond the limits enforced by OpenAI and GitHub; instead, it defines workflows, guardrails, and editing preferences that sit inside whatever limits the environment enforces.
+These docs are the source of truth for expectations and constraints. The server does **not** add its own per-task budgets beyond the constraints imposed by the host environment (for example ChatGPT/OpenAI) and GitHub; instead, it defines workflows, guardrails, and editing preferences that operate within whatever constraints the environment enforces.
 
 ## Recommended startup sequence
 
@@ -15,7 +15,7 @@ On a new session (or after the context is obviously truncated), controllers shou
 1. `get_server_config`
    - Discover whether writes are allowed (`write_allowed`).
    - Learn the default controller repository and branch.
-   - Inspect HTTP, concurrency, and approval settings so you understand the environment and its external limits.
+   - Inspect HTTP, concurrency, and approval settings so you understand the environment and its external constraints.
 
 2. `list_all_actions` with `include_parameters=true`
    - Enumerate every MCP tool exposed by this server.
@@ -43,7 +43,7 @@ Instead, assistants should:
 - Use `get_file_slice` or `get_file_with_line_numbers` to fetch only the relevant portion of a file.
 - Use `terminal_command` for small, focused commands (`rg`, `grep`, `sed -n 'start,endp'`, formatters, tests) and limit output size with flags such as `head` or explicit line ranges.
 
-This keeps responses compact, reduces the risk of truncation or client crashes, and makes PR reviews easier, without requiring assistants to manage token counts directly.
+This keeps responses compact, reduces the risk of truncation or client crashes, and makes PR reviews easier, without requiring assistants to micromanage context windows.
 
 ## Branches, workspaces, and PRs (controller summary)
 

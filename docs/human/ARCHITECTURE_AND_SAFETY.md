@@ -228,7 +228,7 @@ Both tools:
 
 ### 6.2 Output truncation
 
-To avoid huge outputs, `_run_shell` enforces character limits using:
+To avoid huge outputs, `_run_shell` enforces character caps using:
 
 - `TOOL_STDOUT_MAX_CHARS`.
 - `TOOL_STDERR_MAX_CHARS`.

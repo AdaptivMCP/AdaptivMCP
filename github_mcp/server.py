@@ -652,8 +652,11 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 try:
                     from typing import get_args, get_origin
                 except Exception:  # pragma: no cover
-                    get_args = lambda _a: ()
-                    get_origin = lambda _a: None
+                    def get_args(_a):
+                        return ()
+
+                    def get_origin(_a):
+                        return None
 
                 origin = get_origin(ann)
                 args = get_args(ann) or ()

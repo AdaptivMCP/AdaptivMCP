@@ -201,6 +201,6 @@ In particular, revisit this document when you:
 - Introduce new release tags or a `CHANGELOG`.
 - Change how Render (or your hosting platform) is configured.
 - Add staging environments, canary deployments, or blue/green strategies.
-- Adjust write policies or workspace limits in ways that affect upgrades or rollbacks.
+- Adjust write policies or workspace settings in ways that affect upgrades or rollbacks.
 
 Treat `docs/UPGRADE_NOTES.md` as the single source of truth for how to move between versions of the Adaptiv Controller GitHub MCP server safely.

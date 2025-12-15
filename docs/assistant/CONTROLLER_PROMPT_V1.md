@@ -44,7 +44,7 @@ ERROR TRIAGE
 When a tool call fails, classify it:
 - Client/host tool-call rejection (tool never ran): reduce payload size, avoid nested JSON-in-strings, retry minimal args.
 - Server/tool error (tool ran and returned an error): use error context + /healthz + validate_environment.
-- GitHub API error (401/403/422/429): check token scopes, repo permissions, branch protections, rate limits.
+- GitHub API error (401/403/422/429): check token scopes, repo permissions, branch protections, rate limiting.
 
 DELIVERABLES
 - For any non-trivial change: work on a branch, run repo checks, and open a PR with a concise summary and test/lint status.

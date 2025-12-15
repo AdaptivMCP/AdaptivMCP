@@ -3,7 +3,7 @@
 The cache is intentionally lightweight: it keeps decoded file payloads in
 memory for the lifetime of the process so assistants can rehydrate context
 without re-fetching from GitHub on every tool call. Entries are evicted using
-an LRU policy when the cache exceeds configured entry or byte limits.
+an LRU policy when the cache exceeds configured entry or byte caps.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ class FileCache:
             self._current_bytes -= evicted.get("size_bytes", 0)
 
     def put(self, key: str, value: Dict) -> None:
-        """Insert ``value`` keyed by ``key`` and evict if over limits."""
+        """Insert ``value`` keyed by ``key`` and evict if over caps."""
 
         if key in self._cache:
             existing = self._cache.pop(key)

@@ -124,7 +124,7 @@ def _github_client_instance() -> httpx.AsyncClient:
         except GitHubAuthError:
             token = None
 
-        limits = httpx.Limits(
+        http_limits = httpx.Limits(
             max_connections=HTTPX_MAX_CONNECTIONS,
             max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
         )
@@ -135,7 +135,7 @@ def _github_client_instance() -> httpx.AsyncClient:
         _http_client_github = httpx.AsyncClient(
             base_url=GITHUB_API_BASE,
             timeout=HTTPX_TIMEOUT,
-            limits=limits,
+            limits=http_limits,
             headers=headers,
             verify=False,
         )
@@ -152,11 +152,11 @@ def _external_client_instance() -> httpx.AsyncClient:
         _http_client_external = patched_client
 
     if _http_client_external is None:
-        limits = httpx.Limits(
+        http_limits = httpx.Limits(
             max_connections=HTTPX_MAX_CONNECTIONS,
             max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
         )
-        _http_client_external = httpx.AsyncClient(timeout=HTTPX_TIMEOUT, limits=limits)
+        _http_client_external = httpx.AsyncClient(timeout=HTTPX_TIMEOUT, limits=http_limits)
     return _http_client_external
 
 

@@ -661,7 +661,7 @@ async def validate_environment() -> Dict[str, Any]:
     add_check(
         "concurrency_config",
         "ok",
-        "Concurrency limits resolved",
+        "Concurrency settings resolved",
         {
             "max_concurrency": MAX_CONCURRENCY,
             "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
@@ -1569,7 +1569,7 @@ async def fetch_files(
     description=(
         "Return cached file payloads for a repository/ref without re-fetching "
         "from GitHub. Entries persist for the lifetime of the server process "
-        "until evicted by size or entry limits."
+        "until evicted by size or entry caps."
     ),
     tags=["github", "cache", "files"],
 )

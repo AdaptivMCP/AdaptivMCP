@@ -101,7 +101,7 @@ These are all things that belong in your ChatGPT controller prompt and instructi
 Advanced users can optionally customize some engine behavior, but should do so deliberately and in a way that keeps the contract coherent. Examples:
 
 - Adding new tools or orchestrations that wrap existing tools.
-- Adjusting environment defaults, such as branch policies or workspace limits.
+- Adjusting environment defaults, such as branch policies or workspace settings.
 - Extending `extra_tools.py` with narrowly scoped helpers.
 
 When doing this, always update tests and docs and consider whether the contract needs an explicit version bump.

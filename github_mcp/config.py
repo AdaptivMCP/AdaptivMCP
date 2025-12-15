@@ -43,7 +43,7 @@ GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
 # truncation if a deployment prefers full logs at the cost of larger responses.
 #
 # For this controller we default to *no* machine-side truncation and let the host
-# environment enforce any transport limits. Deployments that want smaller payloads
+# environment enforce any transport constraints. Deployments that want smaller payloads
 # can still override these via environment variables.
 TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "0"))
 TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "0"))
