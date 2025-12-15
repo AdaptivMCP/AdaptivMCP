@@ -509,66 +509,8 @@ async def pr_smoke_test(
     base_branch: Optional[str] = None,
     draft: bool = True,
 ) -> Dict[str, Any]:
-    """Create a trivial branch with a one-line change and open a draft PR.
-
-    This is intended for diagnostics of PR tooling in the live environment.
-    """
-
-    defaults = await get_repo_defaults(full_name=full_name)
-    defaults_payload = defaults.get("defaults") or {}
-    repo = defaults_payload.get("full_name") or full_name or CONTROLLER_REPO
-    base = base_branch or defaults_payload.get("default_branch") or CONTROLLER_DEFAULT_BRANCH
-
-    import uuid
-
-    branch = f"mcp-pr-smoke-{uuid.uuid4().hex[:8]}"
-
-    await ensure_branch(full_name=repo, branch=branch, from_ref=base)
-
-    path = "mcp_pr_smoke_test.txt"
-    normalized_path = _normalize_repo_path(path)
-    content = f"MCP PR smoke test branch {branch}.\n"
-
-    await apply_text_update_and_commit(
-        full_name=repo,
-        path=normalized_path,
-        updated_content=content,
-        branch=branch,
-        message=f"MCP PR smoke test on {branch}",
-    )
-
-    pr = await create_pull_request(
-        full_name=repo,
-        title=f"MCP PR smoke test ({branch})",
-        head=branch,
-        base=base,
-        body="Automated MCP PR smoke test created by pr_smoke_test.",
-        draft=draft,
-    )
-
-    # Normalize the result so smoke-test callers can reliably see whether a PR
-    # was actually created and, if so, which URL/number to look at.
-    pr_json = pr.get("json") or {}
-    if not isinstance(pr_json, dict) or not pr_json.get("number"):
-        # Bubble through the structured error shape produced by
-        # ``create_pull_request`` so the caller can see status/message details.
-        return {
-            "status": "error",
-            "repository": repo,
-            "base": base,
-            "branch": branch,
-            "raw_response": pr,
-        }
-
-    return {
-        "status": "ok",
-        "repository": repo,
-        "base": base,
-        "branch": branch,
-        "pr_number": pr_json.get("number"),
-        "pr_url": pr_json.get("html_url"),
-    }
-
+    from github_mcp.main_tools.diagnostics import pr_smoke_test as _impl
+    return await _impl(full_name=full_name, base_branch=base_branch, draft=draft)
 
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
