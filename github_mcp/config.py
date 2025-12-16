@@ -119,6 +119,8 @@ def _configure_logging() -> None:
         "mcp",
         "mcp.server",
         "mcp.server.lowlevel.server",
+        "httpx",
+        "httpcore",
     ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 

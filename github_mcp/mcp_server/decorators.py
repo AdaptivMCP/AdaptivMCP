@@ -25,7 +25,11 @@ from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 from github_mcp.config import TOOLS_LOGGER
 from github_mcp.mcp_server.context import _record_recent_tool_event, mcp
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
-from github_mcp.mcp_server.schemas import _format_tool_args_preview
+from github_mcp.mcp_server.schemas import (
+    _format_tool_args_preview,
+    _normalize_tool_description,
+    _title_from_tool_name,
+)
 from github_mcp.metrics import _record_tool_call
 
 
@@ -121,17 +125,21 @@ def _register_with_fastmcp(
     fn: Callable[..., Any],
     *,
     name: str,
+    title: Optional[str],
     description: Optional[str],
     tags: set[str],
     write_action: bool,
+    visibility: str = "public",
 ) -> Any:
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
     meta = {
         "write_action": bool(write_action),
         "auto_approved": bool(not write_action),
+        "visibility": visibility,
     }
     annotations = {
         "readOnlyHint": bool(not write_action),
+        "title": title or _title_from_tool_name(name),
     }
 
     tool_obj = mcp.tool(
@@ -160,6 +168,7 @@ def mcp_tool(
     write_action: bool,
     tags: Optional[Iterable[str]] = None,
     description: str | None = None,
+    visibility: str = "public",
     **_ignored: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator used across the repo to register an MCP tool.
@@ -175,6 +184,13 @@ def mcp_tool(
             signature = None
 
         tool_name = name or getattr(func, "__name__", "tool")
+
+        tool_visibility = _ignored.get("visibility", visibility)
+        tool_title = _title_from_tool_name(tool_name)
+
+        llm_level = "advanced" if write_action else "basic"
+        normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
+
 
         tag_set = set(tags or [])
         tag_set.add("write" if write_action else "read")
@@ -480,21 +496,31 @@ def mcp_tool(
 
                 return result
 
+        invoking_msg = f"Adaptiv: {tool_title}"
+        invoked_msg = f"Adaptiv: {tool_title} done"
         setattr(
             wrapper,
             "__openai__",
             {
-                "invoking_message": OPENAI_INVOKING_MESSAGE,
-                "invoked_message": OPENAI_INVOKED_MESSAGE,
+                "invoking_message": invoking_msg,
+                "invoked_message": invoked_msg,
             },
         )
+
+        # Ensure connector UI gets the normalized description.
+        try:
+            wrapper.__doc__ = normalized_description
+        except Exception:
+            pass
 
         _register_with_fastmcp(
             wrapper,
             name=tool_name,
-            description=description,
+            title=tool_title,
+            description=normalized_description,
             tags=tag_set,
             write_action=write_action,
+            visibility=tool_visibility,
         )
 
         return wrapper
