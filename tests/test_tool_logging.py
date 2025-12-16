@@ -11,7 +11,7 @@ def test_sanitize_url_for_logs_strips_trailing_quote():
     assert _sanitize_url_for_logs('https://example.com/path"') == 'https://example.com/path'
 
 
-def test_record_github_request_emits_web_url_without_angle_brackets(caplog: pytest.LogCaptureFixture):
+def test_record_github_request_emits_clickable_web_url(caplog: pytest.LogCaptureFixture):
     caplog.set_level(logging.INFO)
 
     _record_github_request(
@@ -22,12 +22,13 @@ def test_record_github_request_emits_web_url_without_angle_brackets(caplog: pyte
         error=False,
     )
 
-    # Find our human-friendly line.
     msgs = [r.getMessage() for r in caplog.records if 'GitHub API GET' in r.getMessage()]
     assert msgs, 'expected github request log message'
 
     msg = msgs[-1]
     assert 'web:' in msg
-    assert '| web: <' not in msg
-    assert not msg.rstrip().endswith('>')
-    assert msg.endswith('https://github.com/owner/repo/blob/main/some/file.py')
+    assert 'https://github.com/owner/repo/blob/main/some/file.py' in msg
+    # URL should not be immediately followed by a quote.
+    assert 'file.py"' not in msg
+    # And should not be the last token in the message (helps Render autolinkers).
+    assert msg.rstrip().endswith('[web]')
