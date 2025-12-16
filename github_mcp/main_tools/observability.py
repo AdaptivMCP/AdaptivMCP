@@ -62,6 +62,12 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dic
 
     transcript = "\n".join(narrative)
 
+    total_available = len(list(getattr(server, "RECENT_TOOL_EVENTS", [])))
+    total_recorded = getattr(ctx, "RECENT_TOOL_EVENTS_TOTAL", 0)
+    if not isinstance(total_recorded, int) or total_recorded < total_available:
+        total_recorded = total_available
+
+
     return {
         "limit": limit_int,
         "include_success": include_success,
@@ -69,13 +75,9 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dic
         "narrative": narrative,
         "transcript": transcript,
         "capacity": None if not (isinstance(capacity, int) and capacity > 0) else capacity,
-        "total_recorded": getattr(
-            ctx,
-            "RECENT_TOOL_EVENTS_TOTAL",
-            len(list(getattr(server, "RECENT_TOOL_EVENTS", []))),
-        ),
+        "total_recorded": total_recorded,
         "dropped": getattr(ctx, "RECENT_TOOL_EVENTS_DROPPED", 0),
-        "total_available": len(list(getattr(server, "RECENT_TOOL_EVENTS", []))),
+        "total_available": total_available,
     }
 
 

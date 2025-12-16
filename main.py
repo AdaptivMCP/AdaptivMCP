@@ -38,7 +38,6 @@ from github_mcp.exceptions import (
 from github_mcp.github_content import (
     _decode_github_content,
     _load_body_from_content_url,
-    _perform_github_commit,
     _resolve_file_sha,  # noqa: F401
 )
 from github_mcp.file_cache import (
@@ -128,42 +127,36 @@ async def _perform_github_commit_and_refresh_workspace(
     body_bytes: bytes,
     sha: Optional[str],
 ) -> Dict[str, Any]:
-    """Perform a Contents API commit and then refresh the workspace clone.
+    """Perform a Contents API commit and then refresh the workspace clone."""
+    from github_mcp.main_tools.workspace_sync import _perform_github_commit_and_refresh_workspace as _impl
+    return await _impl(full_name=full_name, path=path, message=message, branch=branch, body_bytes=body_bytes, sha=sha)
 
-    This keeps the long-lived workspace clone in sync with the branch when
-    writes happen directly via the GitHub Contents API. Workspace refresh
-    failures are logged but never fail the commit itself.
-    """
 
-    commit_result = await _perform_github_commit(
-        full_name=full_name,
+
+
+async def _perform_github_commit(
+    full_name: str,
+    *,
+    branch: str,
+    path: str,
+    message: str,
+    body_bytes: bytes,
+    sha: Optional[str],
+    committer: Optional[Dict[str, str]] = None,
+    author: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Compat wrapper for github_mcp.github_content._perform_github_commit."""
+    from github_mcp.github_content import _perform_github_commit as _impl
+    return await _impl(
+        full_name,
+        branch=branch,
         path=path,
         message=message,
         body_bytes=body_bytes,
-        branch=branch,
         sha=sha,
+        committer=committer,
+        author=author,
     )
-
-    try:
-        # Best-effort: do not break commits if workspace refresh fails.
-        await ensure_workspace_clone(
-            full_name=full_name,
-            ref=branch,
-            reset=True,
-        )
-    except Exception as exc:  # pragma: no cover - defensive logging only
-        LOGGER.debug(
-            "Failed to refresh workspace after commit",
-            extra={
-                "full_name": full_name,
-                "branch": branch,
-                "error": str(exc),
-            },
-        )
-
-    return commit_result
-
-
 def __getattr__(name: str):
     if name == "WRITE_ALLOWED":
         return server.WRITE_ALLOWED
