@@ -18,6 +18,7 @@ from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
     _normalize_tool_description,
     _preflight_tool_args,
+    _title_from_tool_name,
 )
 
 def mcp_tool(*, write_action: bool = False, **tool_kwargs):
@@ -58,12 +59,14 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         "operation": operation,
         "llm_level": llm_level,
         "llm_guidance": "This tool description is expanded for ChatGPT and includes explicit inputs and risk level.",
+        "visibility": existing_meta.get("visibility") or "public",
     }
 
     import functools as _functools
     import inspect as _inspect
 
     def decorator(func):
+        nonlocal annotations
         signature = None
         try:
             signature = _inspect.signature(func)
@@ -74,10 +77,20 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         tool_kwargs.setdefault("description", normalized_description)
         func.__doc__ = normalized_description
 
+        # Provide a human-readable title for clients that render tool lists.
+        if getattr(annotations, "title", None) is None:
+            annotations = annotations.model_copy(update={"title": _title_from_tool_name(func.__name__)})
+
+        final_annotations = annotations
+        if getattr(final_annotations, "title", None) is None:
+            final_annotations = final_annotations.model_copy(
+                update={"title": _title_from_tool_name(func.__name__)}
+            )
+
         tool = mcp.tool(
             tags=tags or None,
             meta=meta or None,
-            annotations=annotations,
+            annotations=final_annotations,
             **tool_kwargs,
         )(func)
 

@@ -7,6 +7,39 @@ from typing import Any, Dict, Mapping, Optional
 from github_mcp.mcp_server.context import CONTROLLER_REPO, _TOOL_EXAMPLES
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 
+
+_TITLE_TOKEN_MAP = {
+    "api": "API",
+    "id": "ID",
+    "mcp": "MCP",
+    "oauth": "OAuth",
+    "pr": "PR",
+    "prs": "PRs",
+    "repo": "Repo",
+    "repos": "Repos",
+    "sse": "SSE",
+    "url": "URL",
+    "gh": "GH",
+    "github": "GitHub",
+}
+
+
+def _title_from_tool_name(name: str) -> str:
+    parts = [p for p in (name or "").strip().split("_") if p]
+    if not parts:
+        return name
+    out: list[str] = []
+    for part in parts:
+        lower = part.lower()
+        mapped = _TITLE_TOKEN_MAP.get(lower)
+        if mapped:
+            out.append(mapped)
+        elif len(part) <= 3 and lower.isalpha():
+            out.append(part.upper())
+        else:
+            out.append(part.capitalize())
+    return " ".join(out)
+
 def _stringify_annotation(annotation: Any) -> str:
     """Return a deterministic, LLM-friendly description of a parameter type."""
 
@@ -22,45 +55,53 @@ def _stringify_annotation(annotation: Any) -> str:
 def _normalize_tool_description(
     func, signature: Optional[inspect.Signature], *, llm_level: str
 ) -> str:
-    """Flatten docstrings and append explicit usage guidance for the MCP tool."""
+    """Return a concise, UI-friendly description for the MCP tool."""
 
     raw_doc = func.__doc__ or ""
-    base = " ".join(line.strip() for line in raw_doc.strip().splitlines() if line.strip())
-    if not base:
-        base = f"{func.__name__} runs the '{func.__name__}' tool logic without extra context."
+    raw_lines = [line.strip() for line in raw_doc.strip().splitlines() if line.strip()]
+    base = raw_lines[0] if raw_lines else ""
+    if base.lower().startswith("delegates to"):
+        base = ""
 
-    param_details: list[str] = []
+    title = _title_from_tool_name(getattr(func, "__name__", "") or "")
+    if not base:
+        base = f"{title}."
+    elif not base.endswith((".", "!", "?")):
+        base = f"{base}."
+
+    required: list[str] = []
+    optional: list[str] = []
     if signature is not None:
         for name, param in signature.parameters.items():
             if name in {"self", "cls"}:
                 continue
-            annotation = _stringify_annotation(param.annotation)
-            requirement = (
-                "required"
-                if param.default is inspect.Signature.empty
-                else f"default={param.default!r}"
-            )
-            param_details.append(f"{name} ({annotation}, {requirement})")
+            if param.default is inspect.Signature.empty:
+                required.append(name)
+            else:
+                optional.append(name)
 
-    inputs_summary = (
-        "Inputs: " + "; ".join(param_details) + "."
-        if param_details
-        else "No parameters are required."
-    )
-    level_summary = (
-        "Classification: advanced tool for mutating operations."
-        if llm_level == "advanced"
-        else "Classification: low-level read-focused tool."
-    )
+    scope = "write" if llm_level == "advanced" else "read"
+    required_summary = f"Required: {', '.join(required)}." if required else ""
+    optional_summary = f"Optional: {', '.join(optional)}." if optional else ""
 
     alias_summary = (
-        "Common aliases: owner+repo→full_name; branch→ref; file_path→path; "
-        "(for PR tools) branch→base_branch. Defaults: if full_name is omitted, it defaults "
-        f"to {CONTROLLER_REPO}."
+        "Aliases: owner+repo→full_name; branch→ref; file_path→path; "
+        "base→base_branch; head→new_branch."
     )
+    default_summary = f"Defaults: full_name defaults to {CONTROLLER_REPO}."
     example = _TOOL_EXAMPLES.get(getattr(func, "__name__", ""))
-    example_summary = f" Example args: {example}" if example else ""
-    return f"{base} {inputs_summary} {level_summary} {alias_summary}{example_summary}"
+    example_summary = f"Example: {example}" if example else ""
+
+    parts = [
+        base,
+        f"Scope: {scope}.",
+        required_summary,
+        optional_summary,
+        alias_summary,
+        default_summary,
+        example_summary,
+    ]
+    return "\n".join([p for p in parts if p])
 
 def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
     """Placeholder for JSON Schema-based preflight validation.
