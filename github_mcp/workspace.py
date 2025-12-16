@@ -68,6 +68,7 @@ async def _run_shell(
     if env is not None:
         proc_env.update(env)
 
+    start_new_session = os.name != 'nt'
     proc = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
@@ -75,16 +76,43 @@ async def _run_shell(
         stderr=asyncio.subprocess.PIPE,
         executable=shell_executable,
         env=proc_env,
+        start_new_session=start_new_session,
     )
+
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(
             proc.communicate(), timeout=timeout_seconds
         )
         timed_out = False
     except asyncio.TimeoutError:
-        proc.kill()
-        stdout_bytes, stderr_bytes = await proc.communicate()
         timed_out = True
+        # Best-effort termination: kill the whole process group on POSIX so
+        # child processes (e.g. pytest workers) don't keep pipes open.
+        if os.name != 'nt':
+            import signal
+
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except Exception:
+                pass
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=3)
+            except Exception:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except Exception:
+                    pass
+        else:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=5)
+        except Exception:
+            stdout_bytes, stderr_bytes = b'', b''
+
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
