@@ -114,12 +114,14 @@ class _CacheControlMiddleware:
                 def _has_cache_control(hdrs):
                     return any(k.lower() == b'cache-control' for k, _ in hdrs)
 
-                if path.startswith(('/sse', '/messages')):
-                    headers = [(k, v) for (k, v) in headers if k.lower() != b'cache-control']
-                    headers.append((b'cache-control', b'no-store'))
-                elif path.startswith('/static/'):
+                if path.startswith('/static/'):
+                    # Honor any explicit Cache-Control set upstream; otherwise make static assets cacheable.
                     if not _has_cache_control(headers):
                         headers.append((b'cache-control', b'public, max-age=31536000, immutable'))
+                else:
+                    # Default to no-store for everything else so edge caching (or proxies) never cache dynamic endpoints.
+                    headers = [(k, v) for (k, v) in headers if k.lower() != b'cache-control']
+                    headers.append((b'cache-control', b'no-store'))
                 message['headers'] = headers
             await send(message)
 

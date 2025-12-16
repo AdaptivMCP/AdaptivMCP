@@ -19,6 +19,7 @@ def test_healthz_reports_ok_when_token_present(monkeypatch):
     resp = client.get("/healthz")
 
     assert resp.status_code == 200
+    assert "no-store" in resp.headers.get("Cache-Control", "")
     payload = resp.json()
 
     assert payload["status"] == "ok"
@@ -45,6 +46,7 @@ def test_healthz_warns_when_token_missing(monkeypatch):
     resp = client.get("/healthz")
 
     assert resp.status_code == 200
+    assert "no-store" in resp.headers.get("Cache-Control", "")
     payload = resp.json()
 
     assert payload["status"] == "warning"
