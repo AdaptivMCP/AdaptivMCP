@@ -59,7 +59,7 @@ from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
-    _ensure_write_allowed,
+    _ensure_write_allowed,  # noqa: F401
     _github_request,
     _structured_tool_error,
     mcp_tool,
@@ -103,6 +103,7 @@ __all__ = [
     "CONTROLLER_DEFAULT_BRANCH",
     "_github_request",
     "get_recent_server_logs",
+    "_ensure_write_allowed",
 ]
 # Exposed for tests that monkeypatch the external HTTP client used for sandbox: URLs.
 _http_client_external: httpx.AsyncClient | None = None
@@ -1156,31 +1157,9 @@ async def list_pull_requests(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List pull requests with optional head/base filters.
+    from github_mcp.main_tools.pull_requests import list_pull_requests as _impl
+    return await _impl(full_name=full_name, state=state, head=head, base=base, per_page=per_page, page=page)
 
-    Args:
-        full_name: "owner/repo" string.
-        state: One of 'open', 'closed', or 'all'.
-        head: Optional head filter of the form 'user:branch'.
-        base: Optional base branch filter.
-        per_page: Number of results per page (must be > 0).
-        page: Page number for pagination (must be > 0).
-    """
-
-    allowed_states = {"open", "closed", "all"}
-    if state not in allowed_states:
-        raise ValueError("state must be 'open', 'closed', or 'all'")
-    if per_page <= 0:
-        raise ValueError("per_page must be > 0")
-    if page <= 0:
-        raise ValueError("page must be > 0")
-
-    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
-    if head:
-        params["head"] = head
-    if base:
-        params["base"] = base
-    return await _github_request("GET", f"/repos/{full_name}/pulls", params=params)
 
 
 @mcp_tool(write_action=True)
@@ -1191,41 +1170,16 @@ async def merge_pull_request(
     commit_title: Optional[str] = None,
     commit_message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Merge a pull request using squash (default), merge, or rebase.
+    from github_mcp.main_tools.pull_requests import merge_pull_request as _impl
+    return await _impl(full_name=full_name, number=number, merge_method=merge_method, commit_title=commit_title, commit_message=commit_message)
 
-    Args:
-        full_name: "owner/repo" string.
-        number: Pull request number.
-        merge_method: One of 'merge', 'squash', or 'rebase'.
-        commit_title: Optional custom commit title.
-        commit_message: Optional custom commit message.
-    """
-
-    allowed_methods = {"merge", "squash", "rebase"}
-    if merge_method not in allowed_methods:
-        raise ValueError("merge_method must be 'merge', 'squash', or 'rebase'")
-
-    _ensure_write_allowed(f"merge PR #{number} in {full_name}")
-    payload: Dict[str, Any] = {"merge_method": merge_method}
-    if commit_title is not None:
-        payload["commit_title"] = commit_title
-    if commit_message is not None:
-        payload["commit_message"] = commit_message
-    return await _github_request(
-        "PUT", f"/repos/{full_name}/pulls/{number}/merge", json_body=payload
-    )
 
 
 @mcp_tool(write_action=True)
 async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
-    """Close a pull request without merging."""
+    from github_mcp.main_tools.pull_requests import close_pull_request as _impl
+    return await _impl(full_name=full_name, number=number)
 
-    _ensure_write_allowed(f"close PR #{number} in {full_name}")
-    return await _github_request(
-        "PATCH",
-        f"/repos/{full_name}/pulls/{number}",
-        json_body={"state": "closed"},
-    )
 
 
 @mcp_tool(write_action=True)
@@ -1234,14 +1188,9 @@ async def comment_on_pull_request(
     number: int,
     body: str,
 ) -> Dict[str, Any]:
-    """Post a comment on a pull request (issue API under the hood)."""
+    from github_mcp.main_tools.pull_requests import comment_on_pull_request as _impl
+    return await _impl(full_name=full_name, number=number, body=body)
 
-    _ensure_write_allowed(f"comment on PR #{number} in {full_name}")
-    return await _github_request(
-        "POST",
-        f"/repos/{full_name}/issues/{number}/comments",
-        json_body={"body": body},
-    )
 
 
 @mcp_tool(write_action=True)

@@ -5,6 +5,84 @@ from typing import Any, Dict, List, Optional
 
 from ._main import _main
 
+async def list_pull_requests(
+    full_name: str,
+    state: str = "open",
+    head: Optional[str] = None,
+    base: Optional[str] = None,
+    per_page: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """List pull requests with optional head/base filters."""
+
+    allowed_states = {"open", "closed", "all"}
+    if state not in allowed_states:
+        raise ValueError("state must be 'open', 'closed', or 'all'")
+    if per_page <= 0:
+        raise ValueError("per_page must be > 0")
+    if page <= 0:
+        raise ValueError("page must be > 0")
+
+    m = _main()
+    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
+    if head:
+        params["head"] = head
+    if base:
+        params["base"] = base
+    return await m._github_request("GET", f"/repos/{full_name}/pulls", params=params)
+
+
+async def merge_pull_request(
+    full_name: str,
+    number: int,
+    merge_method: str = "squash",
+    commit_title: Optional[str] = None,
+    commit_message: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Merge a pull request."""
+
+    allowed_methods = {"merge", "squash", "rebase"}
+    if merge_method not in allowed_methods:
+        raise ValueError("merge_method must be 'merge', 'squash', or 'rebase'")
+
+    m = _main()
+    m._ensure_write_allowed(f"merge PR #{number} in {full_name}")
+    payload: Dict[str, Any] = {"merge_method": merge_method}
+    if commit_title is not None:
+        payload["commit_title"] = commit_title
+    if commit_message is not None:
+        payload["commit_message"] = commit_message
+    return await m._github_request(
+        "PUT",
+        f"/repos/{full_name}/pulls/{number}/merge",
+        json_body=payload,
+    )
+
+
+async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
+    """Close a pull request without merging."""
+
+    m = _main()
+    m._ensure_write_allowed(f"close PR #{number} in {full_name}")
+    return await m._github_request(
+        "PATCH",
+        f"/repos/{full_name}/pulls/{number}",
+        json_body={"state": "closed"},
+    )
+
+
+async def comment_on_pull_request(full_name: str, number: int, body: str) -> Dict[str, Any]:
+    """Post a comment on a pull request (issue API under the hood)."""
+
+    m = _main()
+    m._ensure_write_allowed(f"comment on PR #{number} in {full_name}")
+    return await m._github_request(
+        "POST",
+        f"/repos/{full_name}/issues/{number}/comments",
+        json_body={"body": body},
+    )
+
+
 
 async def _build_default_pr_body(
     *,
