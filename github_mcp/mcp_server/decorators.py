@@ -237,7 +237,28 @@ def mcp_tool(
                     }
                 )
 
-                TOOLS_LOGGER.info(
+                TOOLS_LOGGER.chat(
+                    _tool_user_message(
+                        tool_name,
+                        write_action=write_action,
+                        repo=ctx["repo"],
+                        ref=ctx["ref"],
+                        path=ctx["path"],
+                        phase="start",
+                    ),
+                    extra={
+                        "event": "tool_chat",
+                        "status": "start",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "write_action": write_action,
+                        "repo": ctx["repo"],
+                        "ref": ctx["ref"],
+                        "path": ctx["path"],
+                    },
+                )
+
+                TOOLS_LOGGER.detailed(
                     f"[tool start] tool={tool_name} | call_id={call_id} | args={ctx['arg_preview']}",
                     extra={
                         "event": "tool_call_start",
@@ -284,6 +305,32 @@ def mcp_tool(
                                 error=f"{exc.__class__.__name__}: {exc}",
                             ),
                         }
+                    )
+
+                    TOOLS_LOGGER.chat(
+                        _tool_user_message(
+                            tool_name,
+                            write_action=write_action,
+                            repo=ctx["repo"],
+                            ref=ctx["ref"],
+                            path=ctx["path"],
+                            phase="error",
+                            duration_ms=duration_ms,
+                            error=f"{exc.__class__.__name__}: {exc}",
+                        ),
+                        extra={
+                            "event": "tool_chat",
+                            "status": "error",
+                            "tool_name": tool_name,
+                            "call_id": call_id,
+                            "write_action": write_action,
+                            "repo": ctx["repo"],
+                            "ref": ctx["ref"],
+                            "path": ctx["path"],
+                            "duration_ms": duration_ms,
+                            "error_type": exc.__class__.__name__,
+                            "error_message": str(exc),
+                        },
                     )
 
                     TOOLS_LOGGER.exception(
@@ -335,7 +382,30 @@ def mcp_tool(
                     }
                 )
 
-                TOOLS_LOGGER.info(
+                TOOLS_LOGGER.chat(
+                    _tool_user_message(
+                        tool_name,
+                        write_action=write_action,
+                        repo=ctx["repo"],
+                        ref=ctx["ref"],
+                        path=ctx["path"],
+                        phase="ok",
+                        duration_ms=duration_ms,
+                    ),
+                    extra={
+                        "event": "tool_chat",
+                        "status": "ok",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "write_action": write_action,
+                        "repo": ctx["repo"],
+                        "ref": ctx["ref"],
+                        "path": ctx["path"],
+                        "duration_ms": duration_ms,
+                    },
+                )
+
+                TOOLS_LOGGER.detailed(
                     f"[tool ok] tool={tool_name} | call_id={call_id} | duration_ms={duration_ms} | result_type={result_type}",
                     extra={
                         "event": "tool_call_success",
@@ -387,7 +457,28 @@ def mcp_tool(
                     }
                 )
 
-                TOOLS_LOGGER.info(
+                TOOLS_LOGGER.chat(
+                    _tool_user_message(
+                        tool_name,
+                        write_action=write_action,
+                        repo=ctx["repo"],
+                        ref=ctx["ref"],
+                        path=ctx["path"],
+                        phase="start",
+                    ),
+                    extra={
+                        "event": "tool_chat",
+                        "status": "start",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "write_action": write_action,
+                        "repo": ctx["repo"],
+                        "ref": ctx["ref"],
+                        "path": ctx["path"],
+                    },
+                )
+
+                TOOLS_LOGGER.detailed(
                     f"[tool start] tool={tool_name} | call_id={call_id} | args={ctx['arg_preview']}",
                     extra={
                         "event": "tool_call_start",
@@ -435,6 +526,32 @@ def mcp_tool(
                                 error=f"{exc.__class__.__name__}: {exc}",
                             ),
                         }
+                    )
+
+                    TOOLS_LOGGER.chat(
+                        _tool_user_message(
+                            tool_name,
+                            write_action=write_action,
+                            repo=ctx["repo"],
+                            ref=ctx["ref"],
+                            path=ctx["path"],
+                            phase="error",
+                            duration_ms=duration_ms,
+                            error=f"{exc.__class__.__name__}: {exc}",
+                        ),
+                        extra={
+                            "event": "tool_chat",
+                            "status": "error",
+                            "tool_name": tool_name,
+                            "call_id": call_id,
+                            "write_action": write_action,
+                            "repo": ctx["repo"],
+                            "ref": ctx["ref"],
+                            "path": ctx["path"],
+                            "duration_ms": duration_ms,
+                            "error_type": exc.__class__.__name__,
+                            "error_message": str(exc),
+                        },
                     )
 
                     TOOLS_LOGGER.exception(
@@ -486,7 +603,30 @@ def mcp_tool(
                     }
                 )
 
-                TOOLS_LOGGER.info(
+                TOOLS_LOGGER.chat(
+                    _tool_user_message(
+                        tool_name,
+                        write_action=write_action,
+                        repo=ctx["repo"],
+                        ref=ctx["ref"],
+                        path=ctx["path"],
+                        phase="ok",
+                        duration_ms=duration_ms,
+                    ),
+                    extra={
+                        "event": "tool_chat",
+                        "status": "ok",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "write_action": write_action,
+                        "repo": ctx["repo"],
+                        "ref": ctx["ref"],
+                        "path": ctx["path"],
+                        "duration_ms": duration_ms,
+                    },
+                )
+
+                TOOLS_LOGGER.detailed(
                     f"[tool ok] tool={tool_name} | call_id={call_id} | duration_ms={duration_ms} | result_type={result_type}",
                     extra={
                         "event": "tool_call_success",

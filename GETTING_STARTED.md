@@ -66,6 +66,11 @@ Do **not** commit your token to Git.
 - `GITHUB_MCP_AUTO_APPROVE=false` (recommended)
 - `PORT=8000`
 
+Optional logging: 
+
+- `LOG_LEVEL=CHAT` (chat-like progress lines)
+- `LOG_LEVEL=DETAILED` (more verbose operational logs)
+
 Once deployed, verify:
 
 - `https://<your-service>.onrender.com/healthz`

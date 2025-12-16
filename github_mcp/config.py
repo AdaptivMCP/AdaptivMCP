@@ -8,6 +8,67 @@ import tempfile
 import time
 from collections import deque
 
+# Custom log levels
+# ------------------------------------------------------------------------------
+#
+# CHAT: user-facing, chat-like progress messages intended to keep the human
+# informed while long tools run.
+# DETAILED: verbose operational logging that is more detailed than INFO but less
+# noisy than full DEBUG.
+
+DETAILED_LEVEL = 15
+CHAT_LEVEL = 25
+
+
+def _install_custom_log_levels() -> None:
+    # Make them visible as logging.CHAT / logging.DETAILED, etc.
+    if not hasattr(logging, 'DETAILED'):
+        logging.addLevelName(DETAILED_LEVEL, 'DETAILED')
+        setattr(logging, 'DETAILED', DETAILED_LEVEL)
+
+    if not hasattr(logging, 'CHAT'):
+        logging.addLevelName(CHAT_LEVEL, 'CHAT')
+        setattr(logging, 'CHAT', CHAT_LEVEL)
+
+    # Add Logger helpers: logger.chat(...), logger.detailed(...)
+    if not hasattr(logging.Logger, 'detailed'):
+        def detailed(self: logging.Logger, msg, *args, **kwargs):
+            if self.isEnabledFor(DETAILED_LEVEL):
+                self._log(DETAILED_LEVEL, msg, args, **kwargs)
+        logging.Logger.detailed = detailed  # type: ignore[attr-defined]
+
+    if not hasattr(logging.Logger, 'chat'):
+        def chat(self: logging.Logger, msg, *args, **kwargs):
+            if self.isEnabledFor(CHAT_LEVEL):
+                self._log(CHAT_LEVEL, msg, args, **kwargs)
+        logging.Logger.chat = chat  # type: ignore[attr-defined]
+
+
+def _resolve_log_level(level_name: str | None) -> int:
+    if not level_name:
+        return logging.INFO
+
+    name = str(level_name).strip().upper()
+    if not name:
+        return logging.INFO
+
+    # Numeric levels are allowed.
+    if name.lstrip('-').isdigit():
+        try:
+            return int(name)
+        except Exception:
+            return logging.INFO
+
+    if name == 'DETAILED':
+        return DETAILED_LEVEL
+    if name == 'CHAT':
+        return CHAT_LEVEL
+
+    return getattr(logging, name, logging.INFO)
+
+
+_install_custom_log_levels()
+
 # Configuration and globals
 # ------------------------------------------------------------------------------
 
@@ -81,7 +142,9 @@ class _ColorFormatter(logging.Formatter):
 
     _C = {
         "DEBUG": "\x1b[36m",  # cyan
+        "DETAILED": "\x1b[36m",  # cyan
         "INFO": "\x1b[32m",  # green
+        "CHAT": "\x1b[34m",  # blue
         "WARNING": "\x1b[33m",  # yellow
         "ERROR": "\x1b[31m",  # red
         "CRITICAL": "\x1b[35m",  # magenta
@@ -114,7 +177,7 @@ def _configure_logging() -> None:
     console_handler.setFormatter(_ColorFormatter(LOG_FORMAT, use_color=use_color))
 
     logging.basicConfig(
-        level=getattr(logging, LOG_LEVEL, logging.INFO),
+        level=_resolve_log_level(LOG_LEVEL),
         handlers=[console_handler],
         force=True,
     )
@@ -188,7 +251,7 @@ class _InMemoryLogHandler(logging.Handler):
     """Capture recent log records in memory for MCP diagnostics tools."""
 
     def __init__(self, capacity: int = 500) -> None:
-        super().__init__(level=logging.INFO)
+        super().__init__(level=DETAILED_LEVEL)
         self._capacity = int(capacity)
         self._formatter = logging.Formatter(LOG_FORMAT_PLAIN)
         if self._capacity <= 0:
@@ -245,6 +308,8 @@ __all__ = [
     "MAX_CONCURRENCY",
     "RUN_COMMAND_MAX_CHARS",
     "SERVER_START_TIME",
+    "CHAT_LEVEL",
+    "DETAILED_LEVEL",
     "TOOLS_LOGGER",
     "TOOL_STDERR_MAX_CHARS",
     "TOOL_STDIO_COMBINED_MAX_CHARS",

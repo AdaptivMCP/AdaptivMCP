@@ -5,6 +5,8 @@ import pytest
 
 import main
 
+import github_mcp.config as config
+
 
 @pytest.fixture(autouse=True)
 def _enable_writes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -54,9 +56,9 @@ async def test_apply_text_update_and_commit_logging_shape(
     monkeypatch.setattr(main, "_decode_github_content", fake_decode)
     monkeypatch.setattr(main, "_perform_github_commit", fake_commit)
 
-    caplog.set_level(logging.INFO, logger="github_mcp.tools")
+    caplog.set_level(config.DETAILED_LEVEL, logger="github_mcp.tools")
 
-    with caplog.at_level(logging.INFO, logger="github_mcp.tools"):
+    with caplog.at_level(config.DETAILED_LEVEL, logger="github_mcp.tools"):
         result = await main.apply_text_update_and_commit(
             full_name="Proofgate-Revocations/chatgpt-mcp-github",
             path="file.txt",
