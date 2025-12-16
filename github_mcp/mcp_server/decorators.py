@@ -486,3 +486,25 @@ def mcp_tool(*, write_action: bool, tags: Optional[Iterable[str]] = None) -> Cal
         return wrapper
 
     return decorator
+
+
+def register_extra_tools_if_available() -> None:
+    """Best-effort import of optional `extra_tools` module.
+
+    If present, we expect it to expose `register_extra_tools(mcp_tool)`.
+    Any failure here must never prevent the server from starting.
+    """
+
+    try:
+        # Intentionally uses __import__ semantics (tests monkeypatch this).
+        extra_tools = __import__("extra_tools")
+    except ImportError:
+        return
+
+    try:
+        register = getattr(extra_tools, "register_extra_tools", None)
+        if callable(register):
+            register(mcp_tool)
+    except Exception:
+        # Keep message stable; tests assert on it.
+        TOOLS_LOGGER.error("register_extra_tools failed", exc_info=True)
