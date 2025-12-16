@@ -182,11 +182,15 @@ When running on Render (or similar PaaS providers):
    - Point Render's health check at `GET /healthz`.
    - Configure a sensible timeout and failure threshold.
 
-4. **Keep environment variables in sync**
+4. **Be careful with edge caching**
+   - Do not enable edge caching for dynamic endpoints like `/sse` and `/messages` (it can break ChatGPT connector streaming).
+   - If you want edge caching, configure it for static assets only. The server also sets `Cache-Control: no-store` on `/sse` and `/messages` as a safety net.
+
+5. **Keep environment variables in sync**
    - Use the same set of env vars in staging and production.
    - Differences should be intentional (for example different GitHub tokens, different controller repos or branches).
 
-5. **Document your rollback plan**
+6. **Document your rollback plan**
    - In your internal runbook (or in `docs/OPERATIONS.md`), write down exactly how to change the deployed tag/branch and redeploy.
    - Practice a rollback at least once in a non-critical environment.
 
