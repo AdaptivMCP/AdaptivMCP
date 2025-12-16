@@ -15,6 +15,12 @@ GITHUB_PAT = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
 GITHUB_API_BASE_URL = GITHUB_API_BASE
 
+# Render Public API (optional, for provider-side logs/metrics).
+RENDER_API_BASE = os.environ.get("RENDER_API_BASE", "https://api.render.com/v1")
+RENDER_API_KEY = os.environ.get("RENDER_API_KEY") or os.environ.get("RENDER_API_TOKEN")
+# Default Render resource/service id for render_* observability tools.
+RENDER_DEFAULT_RESOURCE = os.environ.get("RENDER_RESOURCE") or os.environ.get("RENDER_SERVICE_ID")
+
 # Base directory for persistent workspaces used by run_command and related tools.
 # This keeps cloned repositories stable across tool invocations so installations
 # and edits survive until explicitly reset or deleted.
@@ -230,6 +236,9 @@ __all__ = [
     "GITHUB_API_BASE",
     "GITHUB_LOGGER",
     "GITHUB_PAT",
+    "RENDER_API_BASE",
+    "RENDER_API_KEY",
+    "RENDER_DEFAULT_RESOURCE",
     "HTTPX_MAX_CONNECTIONS",
     "HTTPX_MAX_KEEPALIVE",
     "HTTPX_TIMEOUT",

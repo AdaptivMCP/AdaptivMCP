@@ -364,21 +364,33 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 # Read-only tools
 
 
-@server.mcp_tool(write_action=False)
+@mcp_tool(
+    write_action=False,
+    description="List recent tool invocation events captured in memory.",
+    tags=["observability", "tools", "events"],
+)
 def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dict[str, Any]:
     """Delegates to github_mcp.main_tools.observability.get_recent_tool_events."""
     from github_mcp.main_tools.observability import get_recent_tool_events as _impl
     return _impl(limit=limit, include_success=include_success)
 
 
-
-@server.mcp_tool(write_action=False)
+@mcp_tool(
+    write_action=False,
+    description="List recent server-side errors captured in memory.",
+    tags=["observability", "logs", "errors"],
+)
 def get_recent_server_errors(limit: int = 50) -> Dict[str, Any]:
     """Delegates to github_mcp.main_tools.observability.get_recent_server_errors."""
     from github_mcp.main_tools.observability import get_recent_server_errors as _impl
     return _impl(limit=limit)
 
-@server.mcp_tool(write_action=False)
+
+@mcp_tool(
+    write_action=False,
+    description="Return recent server-side logs captured in memory (useful when provider logs are unavailable).",
+    tags=["observability", "logs"],
+)
 def get_recent_server_logs(limit: int = 100, min_level: str = "INFO") -> Dict[str, Any]:
     """Return recent server-side logs captured in memory.
 
@@ -390,6 +402,57 @@ def get_recent_server_logs(limit: int = 100, min_level: str = "INFO") -> Dict[st
 
     return _impl(limit=limit, min_level=min_level)
 
+
+@mcp_tool(
+    write_action=False,
+    description="Fetch recent logs from Render for the configured service (requires RENDER_API_KEY).",
+    tags=["render", "observability", "logs"],
+)
+async def list_render_logs(
+    resource: Optional[List[str]] = None,
+    level: Optional[List[str]] = None,
+    type: Optional[List[str]] = None,
+    text: Optional[List[str]] = None,
+    startTime: Optional[str] = None,
+    endTime: Optional[str] = None,
+    direction: Optional[str] = None,
+    limit: Optional[int] = 100,
+) -> Any:
+    from github_mcp.main_tools.render_observability import list_render_logs as _impl
+
+    return await _impl(
+        resource=resource,
+        level=level,
+        type=type,
+        text=text,
+        startTime=startTime,
+        endTime=endTime,
+        direction=direction,
+        limit=limit,
+    )
+
+
+@mcp_tool(
+    write_action=False,
+    description="Fetch basic Render service metrics for a resource (requires RENDER_API_KEY).",
+    tags=["render", "observability", "metrics"],
+)
+async def get_render_metrics(
+    resourceId: str,
+    metricTypes: List[str],
+    startTime: Optional[str] = None,
+    endTime: Optional[str] = None,
+    resolution: Optional[int] = None,
+) -> Dict[str, Any]:
+    from github_mcp.main_tools.render_observability import get_render_metrics as _impl
+
+    return await _impl(
+        resourceId=resourceId,
+        metricTypes=metricTypes,
+        startTime=startTime,
+        endTime=endTime,
+        resolution=resolution,
+    )
 # ------------------------------------------------------------------------------
 
 @mcp_tool(write_action=False)

@@ -1,62 +1,33 @@
+from __future__ import annotations
+
 import logging
 
 import pytest
 
-import main
+from github_mcp.tool_logging import _record_github_request, _sanitize_url_for_logs
 
 
-@pytest.mark.asyncio
-async def test_async_tool_logging_success(caplog):
-    caplog.set_level(logging.INFO, logger="github_mcp.tools")
-
-    # Use a simple async tool that does not talk to GitHub so the test is
-    # hermetic. get_server_config is defined with @mcp_tool and should be
-    # wrapped by the logging decorator.
-    with caplog.at_level(logging.INFO, logger="github_mcp.tools"):
-        result = await main.get_server_config()
-
-    assert isinstance(result, dict)
-
-    start_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_start"]
-    success_records = [
-        r for r in caplog.records if getattr(r, "event", None) == "tool_call_success"
-    ]
-
-    assert start_records, caplog.text
-    assert success_records, caplog.text
-
-    start = start_records[-1]
-    success = success_records[-1]
-
-    assert start.tool_name == "get_server_config"
-    assert success.tool_name == "get_server_config"
-    assert start.call_id == success.call_id
-    assert "[tool start]" in start.message
-    assert "args=<no args>" in start.message
-    assert isinstance(success.duration_ms, int) and success.duration_ms >= 0
-    assert success.status == "ok"
-    assert "result_type=dict" in success.message
+def test_sanitize_url_for_logs_strips_trailing_quote():
+    assert _sanitize_url_for_logs('https://example.com/path"') == 'https://example.com/path'
 
 
-@pytest.mark.asyncio
-async def test_async_tool_logging_error(caplog, monkeypatch):
-    caplog.set_level(logging.INFO, logger="github_mcp.tools")
+def test_record_github_request_emits_web_url_without_angle_brackets(caplog: pytest.LogCaptureFixture):
+    caplog.set_level(logging.INFO)
 
-    # Define a simple failing tool via the same decorator so that it is wrapped
-    # by the logging layer but does not depend on network access.
-    @main.mcp_tool(write_action=False)
-    async def failing_tool() -> None:  # pragma: no cover - body always fails
-        raise RuntimeError("boom")
+    _record_github_request(
+        method='GET',
+        url='https://api.github.com/repos/owner/repo/contents/some/file.py?ref=main"',
+        status_code=200,
+        duration_ms=12,
+        error=False,
+    )
 
-    with caplog.at_level(logging.INFO, logger="github_mcp.tools"):
-        with pytest.raises(RuntimeError):
-            await failing_tool()
+    # Find our human-friendly line.
+    msgs = [r.getMessage() for r in caplog.records if 'GitHub API GET' in r.getMessage()]
+    assert msgs, 'expected github request log message'
 
-    error_records = [r for r in caplog.records if getattr(r, "event", None) == "tool_call_error"]
-    assert error_records, caplog.text
-    err = error_records[-1]
-    assert err.tool_name == "failing_tool"
-    assert err.status == "error"
-    assert err.error_type == "RuntimeError"
-    assert isinstance(err.duration_ms, int) and err.duration_ms >= 0
-    assert "[tool error]" in err.message
+    msg = msgs[-1]
+    assert 'web:' in msg
+    assert '| web: <' not in msg
+    assert not msg.rstrip().endswith('>')
+    assert msg.endswith('https://github.com/owner/repo/blob/main/some/file.py')

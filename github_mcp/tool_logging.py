@@ -54,13 +54,14 @@ def _sanitize_url_for_logs(raw: str) -> str:
 
 
 def _derive_github_web_url(api_url: str) -> Optional[str]:
-    api_url = _sanitize_url_for_logs(api_url)
     """Convert an api.github.com URL into a human-friendly github.com URL.
 
     Clicking raw GitHub API links in a browser frequently shows 404 (especially
     for private repos without auth). This helper generates an equivalent GitHub
     web URL so Render log links work for humans.
     """
+
+    api_url = _sanitize_url_for_logs(api_url)
 
     try:
         parsed = urlparse(api_url)
@@ -126,10 +127,11 @@ def _record_github_request(
     if method:
         log_extra["method"] = method
     if url:
+        url = _sanitize_url_for_logs(url)
         log_extra["url"] = url
         web_url = _derive_github_web_url(url)
         if web_url:
-            log_extra["web_url"] = web_url
+            log_extra["web_url"] = _sanitize_url_for_logs(web_url)
     if resp is not None:
         log_extra["rate_limit_remaining"] = resp.headers.get("X-RateLimit-Remaining")
     if exc is not None:
@@ -138,15 +140,13 @@ def _record_github_request(
         log_extra.update(extra)
 
     # Human-friendly message.
-    if url:
-        url = _sanitize_url_for_logs(url)
     status = status_code if status_code is not None else "ERR"
     method_s = method or "?"
     url_s = _shorten_api_url(url or "")
     msg = f"GitHub API {method_s} {url_s} -> {status} ({duration_ms}ms)"
     web_url_val = log_extra.get("web_url")
     if isinstance(web_url_val, str) and web_url_val:
-        msg += f" | web: <{web_url_val}>"
+        msg += f" | web: {web_url_val}"
 
     GITHUB_LOGGER.info(msg, extra=log_extra)
 

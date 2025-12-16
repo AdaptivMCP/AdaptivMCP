@@ -33,10 +33,20 @@ class ToolPreflightValidationError(Exception):
         self.tool = tool
 
 
+class UsageError(Exception):
+    """Raised when a tool cannot proceed due to user misconfiguration or bad inputs.
+
+    This is intended to surface a clear, single-line message to the caller.
+    """
+
+    pass
+
+
 __all__ = [
     "GitHubAPIError",
     "GitHubAuthError",
     "GitHubRateLimitError",
     "WriteNotAuthorizedError",
     "ToolPreflightValidationError",
+    "UsageError",
 ]
