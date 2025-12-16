@@ -845,35 +845,10 @@ async def download_user_content(content_url: str) -> Dict[str, Any]:
 
 
 def _decode_zipped_job_logs(content: bytes) -> str:
-    """Decode a zipped GitHub Actions job logs payload into a readable string.
+    """Decode a zipped GitHub Actions job logs payload into a readable string."""
+    from github_mcp.utils import _decode_zipped_job_logs as _impl
+    return _impl(content)
 
-    Returns an empty string for invalid zip payloads. For valid zip files,
-    entries are sorted by filename and combined with section headers:
-
-        [file.txt]
-<contents>
-    """
-
-    import io
-    import zipfile
-
-    try:
-        with zipfile.ZipFile(io.BytesIO(content)) as zip_file:
-            names = sorted(zip_file.namelist())
-            parts: list[str] = []
-            for name in names:
-                try:
-                    raw = zip_file.read(name)
-                except Exception:
-                    continue
-                try:
-                    text = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    text = raw.decode("utf-8", errors="replace")
-                parts.append(f"[{name}]\n{text}")
-            return "\n\n".join(parts)
-    except Exception:
-        return ""
 
 
 # ------------------------------------------------------------------------------
