@@ -84,6 +84,63 @@ async def comment_on_pull_request(full_name: str, number: int, body: str) -> Dic
 
 
 
+
+async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
+    """Fetch pull request details."""
+
+    m = _main()
+    return await m._github_request("GET", f"/repos/{full_name}/pulls/{pull_number}")
+
+
+async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
+    """Get metadata for a pull request."""
+
+    data = await fetch_pr(full_name, pull_number)
+    pr = data.get("json") or {}
+    if isinstance(pr, dict):
+        summary = {
+            "title": pr.get("title"),
+            "state": pr.get("state"),
+            "draft": pr.get("draft"),
+            "merged": pr.get("merged"),
+            "user": pr.get("user", {}).get("login") if isinstance(pr.get("user"), dict) else None,
+            "head": pr.get("head", {}).get("ref") if isinstance(pr.get("head"), dict) else None,
+            "base": pr.get("base", {}).get("ref") if isinstance(pr.get("base"), dict) else None,
+        }
+    else:
+        summary = None
+    return {"status_code": data.get("status_code"), "summary": summary, "pr": pr}
+
+
+async def fetch_pr_comments(
+    full_name: str, pull_number: int, per_page: int = 30, page: int = 1
+) -> Dict[str, Any]:
+    """Fetch issue-style comments for a pull request."""
+
+    m = _main()
+    params = {"per_page": per_page, "page": page}
+    return await m._github_request(
+        "GET", f"/repos/{full_name}/issues/{pull_number}/comments", params=params
+    )
+
+
+async def list_pr_changed_filenames(
+    full_name: str, pull_number: int, per_page: int = 100, page: int = 1
+) -> Dict[str, Any]:
+    """List files changed in a pull request."""
+
+    m = _main()
+    params = {"per_page": per_page, "page": page}
+    return await m._github_request(
+        "GET", f"/repos/{full_name}/pulls/{pull_number}/files", params=params
+    )
+
+
+async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
+    """Get combined status for a commit or ref."""
+
+    m = _main()
+    return await m._github_request("GET", f"/repos/{full_name}/commits/{ref}/status")
 async def _build_default_pr_body(
     *,
     full_name: str,

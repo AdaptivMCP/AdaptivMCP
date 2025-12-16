@@ -530,61 +530,41 @@ async def fetch_issue_comments(
 
 @mcp_tool(write_action=False)
 async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
-    """Fetch pull request details."""
+    from github_mcp.main_tools.pull_requests import fetch_pr as _impl
+    return await _impl(full_name=full_name, pull_number=pull_number)
 
-    return await _github_request("GET", f"/repos/{full_name}/pulls/{pull_number}")
 
 
 @mcp_tool(write_action=False)
 async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
-    """Get metadata for a pull request."""
+    from github_mcp.main_tools.pull_requests import get_pr_info as _impl
+    return await _impl(full_name=full_name, pull_number=pull_number)
 
-    data = await fetch_pr(full_name, pull_number)
-    pr = data.get("json") or {}
-    if isinstance(pr, dict):
-        summary = {
-            "title": pr.get("title"),
-            "state": pr.get("state"),
-            "draft": pr.get("draft"),
-            "merged": pr.get("merged"),
-            "user": pr.get("user", {}).get("login") if isinstance(pr.get("user"), dict) else None,
-            "head": pr.get("head", {}).get("ref") if isinstance(pr.get("head"), dict) else None,
-            "base": pr.get("base", {}).get("ref") if isinstance(pr.get("base"), dict) else None,
-        }
-    else:
-        summary = None
-    return {"status_code": data.get("status_code"), "summary": summary, "pr": pr}
 
 
 @mcp_tool(write_action=False)
 async def fetch_pr_comments(
     full_name: str, pull_number: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
-    """Fetch issue-style comments for a pull request."""
+    from github_mcp.main_tools.pull_requests import fetch_pr_comments as _impl
+    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
-    params = {"per_page": per_page, "page": page}
-    return await _github_request(
-        "GET", f"/repos/{full_name}/issues/{pull_number}/comments", params=params
-    )
 
 
 @mcp_tool(write_action=False)
 async def list_pr_changed_filenames(
     full_name: str, pull_number: int, per_page: int = 100, page: int = 1
 ) -> Dict[str, Any]:
-    """List files changed in a pull request."""
+    from github_mcp.main_tools.pull_requests import list_pr_changed_filenames as _impl
+    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
-    params = {"per_page": per_page, "page": page}
-    return await _github_request(
-        "GET", f"/repos/{full_name}/pulls/{pull_number}/files", params=params
-    )
 
 
 @mcp_tool(write_action=False)
 async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
-    """Get combined status for a commit or ref."""
+    from github_mcp.main_tools.pull_requests import get_commit_combined_status as _impl
+    return await _impl(full_name=full_name, ref=ref)
 
-    return await _github_request("GET", f"/repos/{full_name}/commits/{ref}/status")
 
 
 @mcp_tool(write_action=False)
