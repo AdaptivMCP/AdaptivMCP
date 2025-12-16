@@ -42,15 +42,15 @@ GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
 # can be tuned via environment variables; set to 0 or a negative value to disable
 # truncation if a deployment prefers full logs at the cost of larger responses.
 #
-# For this controller we default to *no* machine-side truncation and let the host
-# environment enforce any transport constraints. Deployments that want smaller payloads
-# can still override these via environment variables.
-TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "0"))
-TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "0"))
-TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "0"))
+# Defaults are tuned to avoid huge tool payloads that can cause UI/network failures.
+# Set to 0 or a negative value to disable truncation if a deployment prefers full logs
+# at the cost of larger responses.
+TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
+TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
+TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "20000"))
 
 # Soft limit for run_command.command length to discourage huge inline scripts.
-RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "8000"))
+RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "20000"))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 LOG_STYLE = os.environ.get("LOG_STYLE", "color").lower()
