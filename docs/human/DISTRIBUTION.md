@@ -51,7 +51,7 @@ object store, or deliver them to the buyer by whatever secure channel you use.
 Each archive contains a directory like `adaptiv-controller-v0.1.0/` with:
 
 - `main.py`, `github_mcp/`, and other server code.
-- `requirements.txt` / `pyproject.toml` for Python dependencies.
+- `dev-requirements.txt` / `pyproject.toml` for Python dependencies.
 - `.env.example` listing all environment variables.
 - `docs/` with self-hosting and workflow documentation.
 - `LICENSE` with your proprietary license terms.
@@ -79,7 +79,7 @@ cp .env.example .env
 
 # Install dependencies
 
-pip install -r requirements.txt
+pip install -r dev-requirements.txt
 
 # Run the MCP server locally
 

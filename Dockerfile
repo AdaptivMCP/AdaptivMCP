@@ -12,10 +12,10 @@ RUN apt-get update \
 WORKDIR /app
 
 # Copy dependency metadata first for better build caching
-COPY requirements.txt ./
+COPY dev-requirements.txt ./
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r dev-requirements.txt
 
 # Copy the rest of the repository
 COPY . .

@@ -72,16 +72,20 @@ async def terminal_command(
         if workdir:
             cwd = os.path.join(repo_dir, workdir)
 
-        # Optional dependency installation. If requested, install requirements.txt when present
+        # Optional dependency installation. If requested, install dev-requirements.txt (preferred)
+        # or requirements.txt when present
         # (unless the command already appears to be installing deps).
         install_result = None
         if installing_dependencies and use_temp_venv:
-            req_path = os.path.join(repo_dir, "requirements.txt")
+            preferred = os.path.join(repo_dir, "dev-requirements.txt")
+            fallback = os.path.join(repo_dir, "requirements.txt")
+            req_path = preferred if os.path.exists(preferred) else fallback
+            req_file = ("dev-requirements.txt" if os.path.exists(preferred) else "requirements.txt")
             cmd_lower = command.lower()
             already_installing = ("pip install" in cmd_lower) or ("pip3 install" in cmd_lower)
             if (not already_installing) and os.path.exists(req_path):
                 install_result = await deps["run_shell"](
-                    "python -m pip install -r requirements.txt",
+                    f"python -m pip install -r {req_file}",
                     cwd=cwd,
                     timeout_seconds=max(600, timeout_seconds),
                     env=env,

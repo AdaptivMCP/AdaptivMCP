@@ -54,7 +54,7 @@ async def test_run_command_adds_dependency_hint_on_module_not_found(monkeypatch,
 async def test_run_command_installs_requirements_when_requested(monkeypatch, tmp_path):
     from github_mcp import tools_workspace as tw
 
-    (tmp_path / "requirements.txt").write_text("pytest\n", encoding="utf-8")
+    (tmp_path / "dev-requirements.txt").write_text("pytest\n", encoding="utf-8")
 
     async def fake_clone_repo(full_name, ref, preserve_changes=True):
         return str(tmp_path)
@@ -99,7 +99,7 @@ async def test_run_command_installs_requirements_when_requested(monkeypatch, tmp
     )
 
     assert res["result"]["exit_code"] == 0
-    assert calls[0] == "python -m pip install -r requirements.txt"
+    assert calls[0] == "python -m pip install -r dev-requirements.txt"
     assert calls[1] == "pytest -q"
 
 
@@ -107,7 +107,7 @@ async def test_run_command_installs_requirements_when_requested(monkeypatch, tmp
 async def test_run_command_skips_auto_install_if_command_installs(monkeypatch, tmp_path):
     from github_mcp import tools_workspace as tw
 
-    (tmp_path / "requirements.txt").write_text("pytest\n", encoding="utf-8")
+    (tmp_path / "dev-requirements.txt").write_text("pytest\n", encoding="utf-8")
 
     async def fake_clone_repo(full_name, ref, preserve_changes=True):
         return str(tmp_path)
@@ -143,7 +143,7 @@ async def test_run_command_skips_auto_install_if_command_installs(monkeypatch, t
     )
     monkeypatch.setattr(tw, "_effective_ref_for_repo", lambda full_name, ref: ref)
 
-    cmd = "python -m pip install -r requirements.txt && pytest -q"
+    cmd = "python -m pip install -r dev-requirements.txt && pytest -q"
     res = await tw.run_command(
         full_name="owner/repo",
         ref="main",
