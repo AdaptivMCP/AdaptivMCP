@@ -1,9 +1,9 @@
-"""Lightweight logging helpers for GitHub MCP tools.
+"""Logging helpers for GitHub MCP tools.
 
-This module centralizes structured logging for GitHub HTTP requests while
-re-exporting the metrics hook used throughout the codebase. Keeping the logic
-here avoids circular imports between http client helpers and the broader server
-module.
+Goals:
+- Keep Render logs human-readable and clickable.
+- Preserve structured metadata for debugging and metrics.
+- Avoid circular imports between HTTP helpers and the MCP server.
 """
 
 from __future__ import annotations
@@ -20,9 +20,9 @@ from github_mcp.metrics import _record_github_request as _record_github_request_
 def _derive_github_web_url(api_url: str) -> Optional[str]:
     """Convert an api.github.com URL into a human-friendly github.com URL.
 
-    This is primarily used so Render logs contain clickable links that work for
-    humans without requiring an API token (the GitHub API returns 404 for private
-    repos when unauthenticated).
+    Clicking raw GitHub API links in a browser frequently shows 404 (especially
+    for private repos without auth). This helper generates an equivalent GitHub
+    web URL so Render log links work for humans.
     """
 
     try:
@@ -55,16 +55,30 @@ def _shorten_api_url(api_url: str) -> str:
 
 def _record_github_request(
     *,
-    method: Optional[str] = None,
-    url: Optional[str] = None,
     status_code: Optional[int],
     duration_ms: int,
     error: bool,
     resp: Optional[httpx.Response] = None,
     exc: Optional[BaseException] = None,
+    method: Optional[str] = None,
+    url: Optional[str] = None,
     extra: Optional[dict[str, Any]] = None,
 ) -> None:
-    """Log GitHub request metadata and record metrics."""
+    """Log GitHub request metadata and record metrics.
+
+    This keeps compatibility with existing call sites while adding richer,
+    user-friendly logging (method + URL + clickable web link).
+    """
+
+    # Infer request details when possible.
+    if resp is not None and getattr(resp, "request", None) is not None:
+        req = resp.request
+        method = method or getattr(req, "method", None)
+        if url is None:
+            try:
+                url = str(req.url)
+            except Exception:  # pragma: no cover
+                url = None
 
     log_extra: dict[str, Any] = {
         "status_code": status_code,
@@ -85,17 +99,17 @@ def _record_github_request(
     if extra:
         log_extra.update(extra)
 
-    # Make Render logs readable without requiring JSON expansion.
+    # Human-friendly message.
     status = status_code if status_code is not None else "ERR"
     method_s = method or "?"
     url_s = _shorten_api_url(url or "")
     msg = f"GitHub API {method_s} {url_s} -> {status} ({duration_ms}ms)"
-    if url:
-        web_url = log_extra.get("web_url")
-        if isinstance(web_url, str) and web_url:
-            msg += f" | web: {web_url}"
+    web_url_val = log_extra.get("web_url")
+    if isinstance(web_url_val, str) and web_url_val:
+        msg += f" | web: {web_url_val}"
 
     GITHUB_LOGGER.info(msg, extra=log_extra)
+
     _record_github_request_metrics(
         status_code=status_code,
         duration_ms=duration_ms,
