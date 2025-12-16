@@ -65,6 +65,16 @@ async def create_file(
         sha_value = verified.get("sha")
         sha_after = sha_value if isinstance(sha_value, str) else None
 
+    diff_text: Optional[str] = None
+    if return_diff:
+        diff_lines = unified_diff(
+            [],
+            content.splitlines(keepends=True),
+            fromfile=f"a/{normalized_path}",
+            tofile=f"b/{normalized_path}",
+        )
+        diff_text = "".join(diff_lines)
+
     return {
         "status": "created",
         "full_name": full_name,
@@ -175,6 +185,7 @@ async def apply_text_update_and_commit(
             "sha_after": sha_after,
             "html_url": verified.get("html_url"),
         },
+        **({"diff": diff_text} if return_diff else {}),
     }
 
 
