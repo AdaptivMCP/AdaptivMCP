@@ -2,6 +2,12 @@
 httpx[http2]>=0.28.1
 pydantic[email]>=2.11.7,<3.0.0
 
+# Explicit transport pins for Uvicorn/H11 compatibility in hosted environments.
+# Some hosts end up with mismatched uvicorn/h11 versions after partial upgrades.
+# Keeping these explicit prevents "h11_max_incomplete_event_size" / loop_factory startup crashes.
+h11==0.16.0
+uvicorn==0.37.0
+
 # Development / QA tooling
 anyio>=4.7.0
 black>=24.3.0
@@ -26,8 +32,4 @@ starlette>=0.37.0
 twine>=5.1.1
 types-jsonschema>=4.23.0.20240701
 types-python-dateutil>=2.9.0.20240316
-
-# Uvicorn 0.38+ currently breaks on some Python 3.12 runtimes (loop_factory on asyncio.run).
-# Pin to a known-good range for Render/Dockerfile python:3.12-slim.
-uvicorn>=0.35.0,<0.38.0
 wheel>=0.43.0
