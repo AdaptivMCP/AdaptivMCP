@@ -45,7 +45,7 @@ from github_mcp.file_cache import (
     clear_cache,
 )
 from github_mcp.http_clients import (
-    _external_client_instance,
+    _external_client_instance,  # noqa: F401
     _get_concurrency_semaphore,  # noqa: F401
     _get_github_token,  # noqa: F401
     _github_client_instance,  # noqa: F401
@@ -60,8 +60,8 @@ from github_mcp.server import (
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
     _ensure_write_allowed,  # noqa: F401
+    _structured_tool_error,  # noqa: F401
     _github_request,
-    _structured_tool_error,
     mcp_tool,
     register_extra_tools_if_available,
     COMPACT_METADATA_DEFAULT,
@@ -742,37 +742,16 @@ async def graphql_query(
     query: str,
     variables: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Execute a GitHub GraphQL query using the shared HTTP client and logging wrapper."""
+    from github_mcp.main_tools.querying import graphql_query as _impl
+    return await _impl(query=query, variables=variables)
 
-    payload = {"query": query, "variables": variables or {}}
-    result = await _github_request(
-        "POST",
-        "/graphql",
-        json_body=payload,
-    )
-    return result.get("json")
 
 
 @mcp_tool(write_action=False)
 async def fetch_url(url: str) -> Dict[str, Any]:
-    """Fetch an arbitrary HTTP/HTTPS URL via the shared external client."""
+    from github_mcp.main_tools.querying import fetch_url as _impl
+    return await _impl(url=url)
 
-    client = _external_client_instance()
-    async with _get_concurrency_semaphore():
-        try:
-            resp = await client.get(url)
-        except Exception as e:
-            return _structured_tool_error(
-                str(e),
-                context="fetch_url",
-                path=url,
-            )
-
-    return {
-        "status_code": resp.status_code,
-        "headers": dict(resp.headers),
-        "content": resp.text,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -784,25 +763,9 @@ async def search(
     sort: Optional[str] = None,
     order: Optional[Literal["asc", "desc"]] = None,
 ) -> Dict[str, Any]:
-    """Perform GitHub search queries (code, repos, issues, commits, or users)."""
+    from github_mcp.main_tools.querying import search as _impl
+    return await _impl(query=query, search_type=search_type, per_page=per_page, page=page, sort=sort, order=order)
 
-    allowed_types = {"code", "repositories", "issues", "commits", "users"}
-    if search_type not in allowed_types:
-        raise ValueError(f"search_type must be one of {sorted(allowed_types)}")
-    if per_page <= 0:
-        raise ValueError("per_page must be > 0")
-    if page <= 0:
-        raise ValueError("page must be > 0")
-
-    params: Dict[str, Any] = {"q": query, "per_page": per_page, "page": page}
-    if sort:
-        params["sort"] = sort
-    if order is not None:
-        allowed_order = {"asc", "desc"}
-        if order not in allowed_order:
-            raise ValueError("order must be 'asc' or 'desc'")
-        params["order"] = order
-    return await _github_request("GET", f"/search/{search_type}", params=params)
 
 
 @mcp_tool(write_action=False)
