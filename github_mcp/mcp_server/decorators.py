@@ -59,7 +59,7 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         "operation": operation,
         "llm_level": llm_level,
         "llm_guidance": "This tool description is expanded for ChatGPT and includes explicit inputs and risk level.",
-        "visibility": existing_meta.get("visibility") or "public",
+        "openai/visibility": existing_meta.get("openai/visibility") or existing_meta.get("visibility") or "public",
     }
 
     import functools as _functools
@@ -75,6 +75,9 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
 
         normalized_description = _normalize_tool_description(func, signature, llm_level=llm_level)
         tool_kwargs.setdefault("description", normalized_description)
+        tool_kwargs.setdefault("title", _title_from_tool_name(func.__name__))
+        meta.setdefault("openai/toolInvocation/invoking", "Running…")
+        meta.setdefault("openai/toolInvocation/invoked", "Completed")
         func.__doc__ = normalized_description
 
         # Provide a human-readable title for clients that render tool lists.
