@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 import github_mcp.server as server
+import github_mcp.mcp_server.context as ctx
 from github_mcp.config import ERROR_LOG_CAPACITY, ERROR_LOG_HANDLER
 
 
@@ -69,11 +70,11 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dic
         "transcript": transcript,
         "capacity": None if not (isinstance(capacity, int) and capacity > 0) else capacity,
         "total_recorded": getattr(
-            server,
+            ctx,
             "RECENT_TOOL_EVENTS_TOTAL",
             len(list(getattr(server, "RECENT_TOOL_EVENTS", []))),
         ),
-        "dropped": getattr(server, "RECENT_TOOL_EVENTS_DROPPED", 0),
+        "dropped": getattr(ctx, "RECENT_TOOL_EVENTS_DROPPED", 0),
         "total_available": len(list(getattr(server, "RECENT_TOOL_EVENTS", []))),
     }
 
