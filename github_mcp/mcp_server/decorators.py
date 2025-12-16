@@ -1,140 +1,190 @@
+"""Decorators and helpers for registering MCP tools.
+
+This module provides the `mcp_tool` decorator used across the repo to:
+- declare tools + schemas
+- normalize common arguments
+- emit consistent logs/events for observability
+- attach OpenAI connector UI metadata
+"""
+
 from __future__ import annotations
 
 import asyncio
-
+import functools as _functools
+import inspect
 import time
 import uuid
-from typing import Any, Dict, Mapping, Optional
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
 
-from mcp.types import ToolAnnotations
+from pydantic import BaseModel
 
-from github_mcp.config import BASE_LOGGER, TOOLS_LOGGER
-from github_mcp.metrics import _record_tool_call
+from github_mcp.config import TOOLS_LOGGER
+from github_mcp.mcp_server.errors import ToolInputValidationError
 
-from github_mcp.mcp_server.context import CONTROLLER_REPO, mcp, _record_recent_tool_event
-from github_mcp.mcp_server.errors import _summarize_exception
-from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
-from github_mcp.mcp_server.schemas import (
-    _format_tool_args_preview,
-    _normalize_tool_description,
-    _preflight_tool_args,
-    _title_from_tool_name,
-)
+# OpenAI connector UI strings.
+# These appear in ChatGPT's Apps & Connectors UI while a tool is running.
+# Keep them short, scannable, and specific to this project.
+OPENAI_INVOKING_MESSAGE = "Adaptiv Controller: running tool…"
+OPENAI_INVOKED_MESSAGE = "Adaptiv Controller: tool finished."
 
-def mcp_tool(*, write_action: bool = False, **tool_kwargs):
-    existing_tags = tool_kwargs.pop("tags", None)
-    tags: set[str] = set(existing_tags or [])
-    if write_action:
-        tags.add("write")
-    else:
-        tags.add("read")
+# This list records recent tool events that the server exposes for diagnostics.
+# The host UI may not stream per-step updates (especially on mobile), so these
+# events are also useful for tools like get_recent_tool_events.
+RECENT_TOOL_EVENTS_CAPACITY = 200
+_RECENT_TOOL_EVENTS: deque[dict[str, Any]] = deque(maxlen=RECENT_TOOL_EVENTS_CAPACITY)
 
-    llm_level = "advanced" if write_action else "low-level"
-    tags.add(llm_level)
 
-    existing_meta = tool_kwargs.pop("meta", None) or {}
-    existing_annotations = tool_kwargs.pop("annotations", None)
+def _record_recent_tool_event(event: dict[str, Any]) -> None:
+    _RECENT_TOOL_EVENTS.append(event)
 
-    annotations: ToolAnnotations | None
-    if isinstance(existing_annotations, ToolAnnotations):
-        annotations = existing_annotations
-    elif isinstance(existing_annotations, dict):
-        annotations = ToolAnnotations(**existing_annotations)
-    else:
-        annotations = None
 
-    if annotations is None:
-        annotations = ToolAnnotations(readOnlyHint=not write_action)
-    elif annotations.readOnlyHint is None:
-        annotations = annotations.model_copy(update={"readOnlyHint": not write_action})
-    if not isinstance(existing_meta, dict):
-        existing_meta = {}
-    risk_level = "high" if write_action else "low"
-    operation = "write" if write_action else "read"
-    meta = {
-        **existing_meta,
-        "write_action": write_action,
-        "auto_approved": not write_action,
-        "risk_level": risk_level,
-        "operation": operation,
-        "llm_level": llm_level,
-        "llm_guidance": "This tool description is expanded for ChatGPT and includes explicit inputs and risk level.",
-        "openai/visibility": existing_meta.get("openai/visibility") or existing_meta.get("visibility") or "public",
+def get_recent_tool_events(limit: int = 50) -> list[dict[str, Any]]:
+    limit = max(1, min(int(limit), RECENT_TOOL_EVENTS_CAPACITY))
+    return list(_RECENT_TOOL_EVENTS)[-limit:]
+
+
+def _format_args_for_log(args: Mapping[str, Any], *, max_len: int = 220) -> str:
+    """Format a safe preview of tool args for logs.
+
+    Avoid dumping large blobs (file content, base64, etc.) into provider logs.
+    """
+
+    parts: list[str] = []
+    for k, v in args.items():
+        if k in {"updated_content", "content", "patch", "diff", "body"}:
+            if isinstance(v, str):
+                parts.append(f"{k}=<str:{len(v)}>")
+            elif isinstance(v, (bytes, bytearray)):
+                parts.append(f"{k}=<bytes:{len(v)}>")
+            else:
+                parts.append(f"{k}=<blob>")
+            continue
+
+        if isinstance(v, str):
+            vv = v
+            if len(vv) > 80:
+                vv = vv[:77] + "…"
+            parts.append(f"{k}={vv!r}")
+        else:
+            parts.append(f"{k}={type(v).__name__}")
+
+    preview = ", ".join(parts)
+    if len(preview) > max_len:
+        preview = preview[: max_len - 1] + "…"
+    return preview
+
+
+@dataclass
+class Tool:
+    name: str
+    func: Callable[..., Any]
+    write_action: bool
+    tags: set[str]
+    input_schema: dict[str, Any]
+
+
+TOOLS: Dict[str, Tool] = {}
+
+
+def _build_input_schema(func: Callable[..., Any]) -> dict[str, Any]:
+    sig = inspect.signature(func)
+    props: dict[str, Any] = {}
+    required: list[str] = []
+
+    for name, param in sig.parameters.items():
+        if name.startswith("_"):
+            continue
+        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            continue
+
+        schema: dict[str, Any] = {}
+        ann = param.annotation
+        if ann in (int, Optional[int]):
+            schema["type"] = "integer"
+        elif ann in (float, Optional[float]):
+            schema["type"] = "number"
+        elif ann in (bool, Optional[bool]):
+            schema["type"] = "boolean"
+        elif ann in (dict, Dict[str, Any], Optional[Dict[str, Any]]):
+            schema["type"] = "object"
+        elif ann in (list, Sequence[str], Optional[Sequence[str]]):
+            schema["type"] = "array"
+            schema["items"] = {"type": "string"}
+        else:
+            schema["type"] = "string"
+
+        # Basic help text from docstrings isn't available here; descriptions are
+        # handled in the MCP tool list.
+        props[name] = schema
+        if param.default is inspect._empty:
+            required.append(name)
+
+    out: dict[str, Any] = {
+        "type": "object",
+        "properties": props,
     }
+    if required:
+        out["required"] = required
+    return out
 
-    import functools as _functools
-    import inspect as _inspect
 
-    def decorator(func):
-        nonlocal annotations
-        signature = None
-        try:
-            signature = _inspect.signature(func)
-        except (TypeError, ValueError):
-            signature = None
-
-        normalized_description = _normalize_tool_description(func, signature, llm_level=llm_level)
-        tool_kwargs.setdefault("description", normalized_description)
-        tool_kwargs.setdefault("title", _title_from_tool_name(func.__name__))
-        meta.setdefault("openai/toolInvocation/invoking", "Adaptiv Controller: executing")
-        meta.setdefault("openai/toolInvocation/invoked", "Adaptiv Controller: complete")
-        func.__doc__ = normalized_description
-
-        # Provide a human-readable title for clients that render tool lists.
-        if getattr(annotations, "title", None) is None:
-            annotations = annotations.model_copy(update={"title": _title_from_tool_name(func.__name__)})
-
-        final_annotations = annotations
-        if getattr(final_annotations, "title", None) is None:
-            final_annotations = final_annotations.model_copy(
-                update={"title": _title_from_tool_name(func.__name__)}
+def _preflight_tool_args(tool: Tool, provided_args: Mapping[str, Any]) -> None:
+    # Minimal schema validation to fail fast and surface better errors.
+    schema = tool.input_schema
+    required = schema.get("required") or []
+    for req in required:
+        if req not in provided_args:
+            raise ToolInputValidationError(
+                tool_name=tool.name,
+                message=f"Missing required argument: {req}",
+                field=req,
             )
 
-        tool = mcp.tool(
-            tags=tags or None,
-            meta=meta or None,
-            annotations=final_annotations,
-            **tool_kwargs,
-        )(func)
 
-        def _format_args_for_log(all_args: Mapping[str, Any], *, limit: int = 1200) -> str:
-            return _format_tool_args_preview(all_args, limit=limit)
+def mcp_tool(*, write_action: bool, tags: Optional[Iterable[str]] = None) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        tool = Tool(
+            name=func.__name__,
+            func=func,
+            write_action=write_action,
+            tags=set(tags or []),
+            input_schema=_build_input_schema(func),
+        )
+        TOOLS[tool.name] = tool
 
-        def _normalize_common_tool_kwargs(args_in, kwargs_in: Mapping[str, Any]) -> Dict[str, Any]:
-            if not kwargs_in:
-                kwargs: Dict[str, Any] = {}
-                return kwargs
-            kwargs = dict(kwargs_in)
+        signature = None
+        try:
+            signature = inspect.signature(func)
+        except Exception:
+            signature = None
+
+        has_var_kw = False
+        if signature is not None:
+            for param in signature.parameters.values():
+                if param.kind == inspect.Parameter.VAR_KEYWORD:
+                    has_var_kw = True
+                    break
+
+        def _normalize_common_tool_kwargs(args, kwargs):
+            # Normalize common aliases used by the assistant.
             if signature is None:
                 return kwargs
+
             params = signature.parameters
-            has_var_kw = any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in params.values())
+            provided_positional = set(list(params)[: len(args)])
 
-            # Which params are already provided positionally?
-            positional = [
-                name
-                for name, p in params.items()
-                if p.kind
-                in (_inspect.Parameter.POSITIONAL_ONLY, _inspect.Parameter.POSITIONAL_OR_KEYWORD)
-            ]
-            provided_positional = set(positional[: len(args_in)])
-
-            # owner/repo -> full_name (and default full_name if omitted)
+            # owner+repo -> full_name
             if (
                 "full_name" in params
                 and "full_name" not in kwargs
                 and "full_name" not in provided_positional
+                and isinstance(kwargs.get("owner"), str)
+                and isinstance(kwargs.get("repo"), str)
             ):
-                owner = kwargs.get("owner")
-                repo = kwargs.get("repo")
-                repo_val = repo if isinstance(repo, str) else None
-                # Common mistake: pass full "owner/repo" under key "repo".
-                if repo_val and "/" in repo_val and not isinstance(owner, str):
-                    kwargs["full_name"] = repo_val
-                elif isinstance(owner, str) and isinstance(repo, str):
-                    kwargs["full_name"] = f"{owner}/{repo}"
-                else:
-                    kwargs["full_name"] = CONTROLLER_REPO
+                kwargs["full_name"] = f"{kwargs['owner']}/{kwargs['repo']}"
 
             # branch -> ref
             if (
@@ -278,7 +328,13 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                 kwargs = _normalize_common_tool_kwargs(args, kwargs)
                 call_id = str(uuid.uuid4())
                 context = _extract_call_context(args, **kwargs)
-                def _tool_user_message(phase: str, *, duration_ms: int | None = None, error: str | None = None) -> str:
+
+                def _tool_user_message(
+                    phase: str,
+                    *,
+                    duration_ms: int | None = None,
+                    error: str | None = None,
+                ) -> str:
                     repo = context.get("repo") or "-"
                     ref = context.get("ref") or "-"
                     path = context.get("path") or "-"
@@ -306,9 +362,6 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
 
                 start = time.perf_counter()
 
-                # Preflight validation of arguments against the tool's declared
-                # input schema, similar to validate_tool_args but applied
-                # automatically for every call.
                 _preflight_tool_args(tool, context.get("_all_args", {}))
                 _record_recent_tool_event(
                     {
@@ -323,13 +376,14 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         "user_message": _tool_user_message("start"),
                     }
                 )
+
                 TOOLS_LOGGER.info(
                     f"[tool start] {_human_context(call_id, context)}",
                     extra={
                         "event": "tool_call_start",
                         "tool_name": tool.name,
                         "write_action": write_action,
-                        "tags": sorted(tags) if tags else [],
+                        "tags": sorted(tool.tags) if tool.tags else [],
                         "call_id": call_id,
                         "repo": context["repo"],
                         "ref": context["ref"],
@@ -340,229 +394,45 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                     },
                 )
 
-                errored = False
                 try:
                     result = await func(*args, **kwargs)
                 except Exception as exc:
-                    errored = True
                     duration_ms = int((time.perf_counter() - start) * 1000)
                     _record_recent_tool_event(
                         {
                             "ts": time.time(),
-                            "event": "tool_recent_exception",
+                            "event": "tool_recent_error",
                             "tool_name": tool.name,
                             "call_id": call_id,
                             "write_action": write_action,
-                            "duration_ms": duration_ms,
-                            "error_type": exc.__class__.__name__,
-                            "message": _summarize_exception(exc)[:200],
-                            "repo": context.get("repo"),
-                            "ref": context.get("ref"),
-                        "path": context.get("path"),
-                            "user_message": _tool_user_message("error", duration_ms=duration_ms, error=_summarize_exception(exc)[:120]),
-                        }
-                    )
-                    _record_tool_call(
-                        tool_name=tool.name,
-                        write_action=write_action,
-                        duration_ms=duration_ms,
-                        errored=True,
-                    )
-                    TOOLS_LOGGER.exception(
-                        f"[tool error] {_human_context(call_id, context)} | duration_ms={duration_ms} | "
-                        f"error={exc.__class__.__name__}: {exc}",
-                        extra={
-                            "event": "tool_call_error",
-                            "tool_name": tool.name,
-                            "write_action": write_action,
-                            "tags": sorted(tags) if tags else [],
-                            "call_id": call_id,
-                            "repo": context["repo"],
-                            "ref": context["ref"],
-                            "path": context["path"],
-                            "arg_keys": context["arg_keys"],
-                            "arg_count": context["arg_count"],
-                            "arg_preview": context["arg_preview"],
-                            "duration_ms": duration_ms,
-                            "status": "error",
-                            "error_type": exc.__class__.__name__,
-                        },
-                    )
-                    raise
-
-                duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(
-                    tool_name=tool.name,
-                    write_action=write_action,
-                    duration_ms=duration_ms,
-                    errored=errored,
-                )
-                _record_recent_tool_event(
-                    {
-                        "ts": time.time(),
-                        "event": "tool_recent_ok",
-                        "tool_name": tool.name,
-                        "call_id": call_id,
-                        "write_action": write_action,
-                        "duration_ms": duration_ms,
-                        "repo": context.get("repo"),
-                        "ref": context.get("ref"),
-                        "result_type": type(result).__name__,
-                        "user_message": _tool_user_message("ok", duration_ms=duration_ms),
-                    }
-                )
-                TOOLS_LOGGER.info(
-                    f"[tool ok] {_human_context(call_id, context)} | duration_ms={duration_ms} | "
-                    f"result_type={type(result).__name__} | result_size_hint={_result_size_hint(result)}",
-                    extra={
-                        "event": "tool_call_success",
-                        "tool_name": tool.name,
-                        "write_action": write_action,
-                        "tags": sorted(tags) if tags else [],
-                        "call_id": call_id,
-                        "repo": context["repo"],
-                        "ref": context["ref"],
-                        "path": context["path"],
-                        "arg_keys": context["arg_keys"],
-                        "arg_count": context["arg_count"],
-                        "arg_preview": context["arg_preview"],
-                        "duration_ms": duration_ms,
-                        "status": "ok",
-                        "result_type": type(result).__name__,
-                        "result_size_hint": _result_size_hint(result),
-                    },
-                )
-                return result
-
-        else:
-
-            @_functools.wraps(func)
-            def wrapper(*args, **kwargs):
-                call_id = str(uuid.uuid4())
-                context = _extract_call_context(args, **kwargs)
-                def _tool_user_message(phase: str, *, duration_ms: int | None = None, error: str | None = None) -> str:
-                    repo = context.get("repo") or "-"
-                    ref = context.get("ref") or "-"
-                    path = context.get("path") or "-"
-                    scope = "write" if write_action else "read"
-
-                    location = repo
-                    if ref and ref != "-":
-                        location = f"{location}@{ref}"
-                    if path and path not in {"-", ""}:
-                        location = f"{location}:{path}"
-
-                    if phase == "start":
-                        prefix = f"Starting {tool.name} ({scope}) on {location}."
-                        if write_action:
-                            return prefix + " This will modify repo state."
-                        return prefix
-                    if phase == "ok":
-                        dur = f" in {duration_ms}ms" if duration_ms is not None else ""
-                        return f"Finished {tool.name} on {location}{dur}."
-                    if phase == "error":
-                        dur = f" after {duration_ms}ms" if duration_ms is not None else ""
-                        msg = f" ({error})" if error else ""
-                        return f"Failed {tool.name} on {location}{dur}.{msg}"
-                    return f"{tool.name} ({scope}) on {location}."
-
-                start = time.perf_counter()
-
-                # Preflight validation of arguments against the tool's declared
-                # input schema, similar to validate_tool_args but applied
-                # automatically for every call.
-                _preflight_tool_args(tool, context.get("_all_args", {}))
-                _record_recent_tool_event(
-                    {
-                        "ts": time.time(),
-                        "event": "tool_recent_start",
-                        "tool_name": tool.name,
-                        "call_id": call_id,
-                        "write_action": write_action,
-                        "repo": context.get("repo"),
-                        "ref": context.get("ref"),
-                        "path": context.get("path"),
-                        "user_message": _tool_user_message("start"),
-                    }
-                )
-                TOOLS_LOGGER.info(
-                    f"[tool start] {_human_context(call_id, context)}",
-                    extra={
-                        "event": "tool_call_start",
-                        "tool_name": tool.name,
-                        "write_action": write_action,
-                        "tags": sorted(tags) if tags else [],
-                        "call_id": call_id,
-                        "repo": context["repo"],
-                        "ref": context["ref"],
-                        "path": context["path"],
-                        "arg_keys": context["arg_keys"],
-                        "arg_count": context["arg_count"],
-                        "arg_preview": context["arg_preview"],
-                    },
-                )
-
-                errored = False
-                try:
-                    result = func(*args, **kwargs)
-                except Exception as exc:
-                    errored = True
-                    duration_ms = int((time.perf_counter() - start) * 1000)
-                    _record_recent_tool_event(
-                        {
-                            "ts": time.time(),
-                            "event": "tool_recent_exception",
-                            "tool_name": tool.name,
-                            "call_id": call_id,
-                            "write_action": write_action,
-                            "duration_ms": duration_ms,
-                            "error_type": exc.__class__.__name__,
-                            "message": _summarize_exception(exc)[:200],
                             "repo": context.get("repo"),
                             "ref": context.get("ref"),
                             "path": context.get("path"),
+                            "duration_ms": duration_ms,
+                            "error_type": exc.__class__.__name__,
+                            "error_message": str(exc),
                             "user_message": _tool_user_message(
                                 "error",
                                 duration_ms=duration_ms,
-                                error=_summarize_exception(exc)[:120],
+                                error=f"{exc.__class__.__name__}: {exc}",
                             ),
                         }
                     )
-                    _record_tool_call(
-                        tool_name=tool.name,
-                        write_action=write_action,
-                        duration_ms=duration_ms,
-                        errored=True,
-                    )
                     TOOLS_LOGGER.exception(
-                        f"[tool error] {_human_context(call_id, context)} | duration_ms={duration_ms} | "
-                        f"error={exc.__class__.__name__}: {exc}",
+                        f"[tool error] {_human_context(call_id, context)}",
                         extra={
                             "event": "tool_call_error",
                             "tool_name": tool.name,
                             "write_action": write_action,
-                            "tags": sorted(tags) if tags else [],
                             "call_id": call_id,
-                            "repo": context["repo"],
-                            "ref": context["ref"],
-                            "path": context["path"],
-                            "arg_keys": context["arg_keys"],
-                            "arg_count": context["arg_count"],
-                            "arg_preview": context["arg_preview"],
-                            "duration_ms": duration_ms,
-                            "status": "error",
-                            "error_type": exc.__class__.__name__,
+                            "repo": context.get("repo"),
+                            "ref": context.get("ref"),
+                            "path": context.get("path"),
                         },
                     )
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(
-                    tool_name=tool.name,
-                    write_action=write_action,
-                    duration_ms=duration_ms,
-                    errored=errored,
-                )
                 _record_recent_tool_event(
                     {
                         "ts": time.time(),
@@ -570,51 +440,49 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
                         "tool_name": tool.name,
                         "call_id": call_id,
                         "write_action": write_action,
-                        "duration_ms": duration_ms,
                         "repo": context.get("repo"),
                         "ref": context.get("ref"),
-                        "result_type": type(result).__name__,
+                        "path": context.get("path"),
+                        "duration_ms": duration_ms,
+                        "result_size_hint": _result_size_hint(result),
                         "user_message": _tool_user_message("ok", duration_ms=duration_ms),
                     }
                 )
                 TOOLS_LOGGER.info(
-                    f"[tool ok] {_human_context(call_id, context)} | duration_ms={duration_ms} | "
-                    f"result_type={type(result).__name__} | result_size_hint={_result_size_hint(result)}",
+                    f"[tool ok] {_human_context(call_id, context)} | duration_ms={duration_ms}",
                     extra={
-                        "event": "tool_call_success",
+                        "event": "tool_call_ok",
                         "tool_name": tool.name,
                         "write_action": write_action,
-                        "tags": sorted(tags) if tags else [],
                         "call_id": call_id,
-                        "repo": context["repo"],
-                        "ref": context["ref"],
-                        "path": context["path"],
-                        "arg_keys": context["arg_keys"],
-                        "arg_count": context["arg_count"],
-                        "arg_preview": context["arg_preview"],
+                        "repo": context.get("repo"),
+                        "ref": context.get("ref"),
+                        "path": context.get("path"),
                         "duration_ms": duration_ms,
-                        "status": "ok",
-                        "result_type": type(result).__name__,
-                        "result_size_hint": _result_size_hint(result),
                     },
                 )
                 return result
 
-        wrapper._mcp_tool = tool  # type: ignore[attr-defined]
-        _REGISTERED_MCP_TOOLS.append((tool, wrapper))
+            # Attach OpenAI UI metadata used by the connector.
+            setattr(wrapper, "__openai__", {
+                "invoking_message": OPENAI_INVOKING_MESSAGE,
+                "invoked_message": OPENAI_INVOKED_MESSAGE,
+            })
+            setattr(wrapper, "__mcp_tool__", tool)
+            return wrapper
+
+        # sync function
+        @_functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            kwargs = _normalize_common_tool_kwargs(args, kwargs)
+            _preflight_tool_args(tool, kwargs)
+            return func(*args, **kwargs)
+
+        setattr(wrapper, "__openai__", {
+            "invoking_message": OPENAI_INVOKING_MESSAGE,
+            "invoked_message": OPENAI_INVOKED_MESSAGE,
+        })
+        setattr(wrapper, "__mcp_tool__", tool)
         return wrapper
 
     return decorator
-
-def register_extra_tools_if_available():
-    try:
-        from extra_tools import register_extra_tools  # type: ignore[import]
-    except Exception:
-        register_extra_tools = None  # type: ignore[assignment]
-
-    if callable(register_extra_tools):
-        BASE_LOGGER.info("registering additional MCP tools from extra_tools.py")
-        try:
-            register_extra_tools(mcp_tool)
-        except Exception:
-            BASE_LOGGER.exception("register_extra_tools failed")
