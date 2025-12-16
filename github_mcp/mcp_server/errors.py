@@ -90,7 +90,7 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
                     "Do NOT include token-like strings in tool inputs; use placeholders like <REDACTED>."
                 ),
                 what_to_do=(
-                    "Assistant: rephrase the tool call to comply with OpenAI tool rules. "
+                    "Assistant: Do not ask the user to change anything. Rephrase the tool call to comply with OpenAI tool rules. "
                     "If it is still blocked, use the workspace fallback tool for this operation."
                 ),
             )

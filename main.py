@@ -1332,9 +1332,10 @@ async def apply_text_update_and_commit(
     *,
     branch: str = "main",
     message: Optional[str] = None,
+    return_diff: bool = False,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.files import apply_text_update_and_commit as _impl
-    return await _impl(full_name=full_name, path=path, updated_content=updated_content, branch=branch, message=message)
+    return await _impl(full_name=full_name, path=path, updated_content=updated_content, branch=branch, message=message, return_diff=return_diff)
 
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from difflib import unified_diff
+
 from ._main import _main
 
 
@@ -12,10 +14,12 @@ async def create_file(
     *,
     branch: str = "main",
     message: Optional[str] = None,
+    return_diff: bool = False,
 ) -> Dict[str, Any]:
     """Create a new text file in a repository after normalizing path and branch."""
 
     m = _main()
+    _ = return_diff  # noqa: F841
 
     effective_branch = m._effective_ref_for_repo(full_name, branch)
     normalized_path = m._normalize_repo_path(path)
@@ -73,6 +77,7 @@ async def create_file(
             "sha_after": sha_after,
             "html_url": verified.get("html_url"),
         },
+        **({"diff": diff_text} if return_diff else {}),
     }
 
 
@@ -83,6 +88,7 @@ async def apply_text_update_and_commit(
     *,
     branch: str = "main",
     message: Optional[str] = None,
+    return_diff: bool = False,
 ) -> Dict[str, Any]:
     """Apply a text update to a single file on a branch, then verify it."""
 
@@ -98,6 +104,7 @@ async def apply_text_update_and_commit(
     )
 
     is_new_file = False
+    old_text: str | None = None
 
     def _extract_sha(decoded: Dict[str, Any]) -> Optional[str]:
         if not isinstance(decoded, dict):
@@ -112,13 +119,15 @@ async def apply_text_update_and_commit(
         decoded = await m._decode_github_content(full_name, normalized_path, effective_branch)
         _old_text = decoded.get("text")
         if not isinstance(_old_text, str):
-            raise m.GitHubAPIError("Decoded content is not text")  # type: ignore[attr-defined]
+            raise m.GitHubAPIError("Decoded content is not text")
+        old_text = _old_text  # type: ignore[attr-defined]
         sha_before = _extract_sha(decoded)
     except m.GitHubAPIError as exc:  # type: ignore[attr-defined]
         msg = str(exc)
         if "404" in msg:
             is_new_file = True
             sha_before = None
+            old_text = ""
         else:
             raise
 
@@ -141,6 +150,18 @@ async def apply_text_update_and_commit(
 
     verified = await m._decode_github_content(full_name, normalized_path, effective_branch)
     sha_after = _extract_sha(verified)
+
+    diff_text: Optional[str] = None
+    if return_diff:
+        before = old_text or ""
+        after = updated_content
+        diff_lines = unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=f"a/{normalized_path}",
+            tofile=f"b/{normalized_path}",
+        )
+        diff_text = "".join(diff_lines)
 
     return {
         "status": "committed",
