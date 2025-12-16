@@ -13,6 +13,22 @@ def _tw():
     from github_mcp import tools_workspace as tw
     return tw
 
+def _slim_shell_result(result: Any, *, max_chars: int = 2000) -> Dict[str, Any]:
+    """Return a small, connector-safe view of a run_shell result."""
+    if not isinstance(result, dict):
+        return {"raw": str(result)[:max_chars]}
+    stdout = (result.get("stdout") or "").strip()
+    stderr = (result.get("stderr") or "").strip()
+    return {
+        "exit_code": result.get("exit_code"),
+        "timed_out": result.get("timed_out", False),
+        "stdout": stdout[:max_chars] if stdout else "",
+        "stderr": stderr[:max_chars] if stderr else "",
+        "stdout_truncated": len(stdout) > max_chars,
+        "stderr_truncated": len(stderr) > max_chars,
+    }
+
+
 @mcp_tool(write_action=True)
 async def commit_workspace(
     full_name: Optional[str] = None,
@@ -65,12 +81,21 @@ async def commit_workspace(
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
+        # Keep tool responses small to avoid connector transport issues.
+        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+        head_sha = (rev.get("stdout", "").strip() if isinstance(rev, dict) else "")
+        oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
+        head_summary = (oneline.get("stdout", "").strip() if isinstance(oneline, dict) else "")
+
         return {
             "repo_dir": repo_dir,
             "branch": effective_ref,
-            "status": status_lines,
-            "commit": commit_result,
-            "push": push_result,
+            "changed_files": status_lines[:200],
+            "changed_files_truncated": len(status_lines) > 200,
+            "commit_sha": head_sha,
+            "commit_summary": head_summary,
+            "commit": _slim_shell_result(commit_result),
+            "push": _slim_shell_result(push_result) if push_result is not None else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace")
@@ -129,12 +154,22 @@ async def commit_workspace_files(
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
+
+        # Keep tool responses small to avoid connector transport issues.
+        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+        head_sha = (rev.get("stdout", "").strip() if isinstance(rev, dict) else "")
+        oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
+        head_summary = (oneline.get("stdout", "").strip() if isinstance(oneline, dict) else "")
+
         return {
             "repo_dir": repo_dir,
             "branch": effective_ref,
-            "staged_files": staged_files,
-            "commit": commit_result,
-            "push": push_result,
+            "staged_files": staged_files[:200],
+            "staged_files_truncated": len(staged_files) > 200,
+            "commit_sha": head_sha,
+            "commit_summary": head_summary,
+            "commit": _slim_shell_result(commit_result),
+            "push": _slim_shell_result(push_result) if push_result is not None else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace_files")

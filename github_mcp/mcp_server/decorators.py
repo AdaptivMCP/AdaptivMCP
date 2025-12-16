@@ -76,8 +76,8 @@ def mcp_tool(*, write_action: bool = False, **tool_kwargs):
         normalized_description = _normalize_tool_description(func, signature, llm_level=llm_level)
         tool_kwargs.setdefault("description", normalized_description)
         tool_kwargs.setdefault("title", _title_from_tool_name(func.__name__))
-        meta.setdefault("openai/toolInvocation/invoking", "Running…")
-        meta.setdefault("openai/toolInvocation/invoked", "Completed")
+        meta.setdefault("openai/toolInvocation/invoking", "Adaptiv Controller: executing")
+        meta.setdefault("openai/toolInvocation/invoked", "Adaptiv Controller: complete")
         func.__doc__ = normalized_description
 
         # Provide a human-readable title for clients that render tool lists.
