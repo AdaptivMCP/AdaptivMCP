@@ -82,6 +82,7 @@ from github_mcp.workspace import (
     _workspace_path,  # noqa: F401
 )
 from github_mcp.http_routes.actions_compat import register_actions_compat_routes
+from github_mcp.http_routes.healthz import register_healthz_route
 
 
 
@@ -182,6 +183,7 @@ app = server.mcp.http_app(path="/sse", transport="sse")
 
 
 register_actions_compat_routes(app, server)
+register_healthz_route(app)
 
 
 def _cache_file_result(
