@@ -84,6 +84,22 @@ from github_mcp.workspace import (
 from github_mcp.http_routes.actions_compat import register_actions_compat_routes
 from github_mcp.http_routes.healthz import register_healthz_route
 from starlette.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+
+
+class _CacheControlMiddleware(BaseHTTPMiddleware):
+    """Prevent edge caching of streaming endpoints.
+
+    If edge caching is enabled too broadly on Render, /sse and /messages
+    can be cached and the ChatGPT connector may fail to connect or hang.
+    """
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith(("/sse", "/messages")):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
 
 
@@ -180,6 +196,7 @@ register_extra_tools_if_available()
 # and caused the public endpoint to return ``404 Not Found``. Using the SSE
 # transport keeps the documented ``/sse`` path working for existing clients.
 app = server.mcp.http_app(path="/sse", transport="sse")
+app.add_middleware(_CacheControlMiddleware)
 
 
 
