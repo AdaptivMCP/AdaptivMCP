@@ -18,17 +18,35 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
     for tool, _func in getattr(server, "_REGISTERED_MCP_TOOLS", []):
         schema = server._normalize_input_schema(tool)
+
+        annotations = getattr(tool, "annotations", None)
+        if hasattr(annotations, "model_dump"):
+            annotations = annotations.model_dump(exclude_none=True)
+        elif not isinstance(annotations, dict):
+            annotations = None
+
+        meta = getattr(tool, "meta", None)
+        if hasattr(meta, "model_dump"):
+            meta = meta.model_dump(exclude_none=True)
+        elif not isinstance(meta, dict):
+            meta = None
+
+        display_name = getattr(tool, "title", None)
+        if not display_name and isinstance(annotations, dict):
+            display_name = annotations.get("title")
+        if not display_name and isinstance(meta, dict):
+            display_name = meta.get("title") or meta.get("openai/title")
+        display_name = display_name or tool.name
+
         actions.append(
             {
                 "name": tool.name,
-                "display_name": getattr(tool, "title", None) or tool.name,
+                "display_name": display_name,
+                "title": display_name,
                 "description": tool.description,
                 "parameters": schema or {"type": "object", "properties": {}},
-                "annotations": (
-                    getattr(tool, "annotations", None).model_dump()
-                    if getattr(tool, "annotations", None)
-                    else None
-                ),
+                "annotations": annotations,
+                "meta": meta,
             }
         )
 

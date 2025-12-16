@@ -27,6 +27,7 @@ All tools are defined using a custom `mcp_tool` decorator. It wraps FastMCP's `@
 - Tags each tool as read or write.
 - Sets `meta.write_action` and `meta.auto_approved`.
 - Sets `ToolAnnotations.readOnlyHint` for read-only tools.
+- Adds OpenAI connector UI hints in `meta` (for example `openai/visibility` and `openai/toolInvocation/*`).
 - Registers each tool in a global list `_REGISTERED_MCP_TOOLS`.
 
 This registry powers:
