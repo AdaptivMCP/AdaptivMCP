@@ -83,6 +83,7 @@ from github_mcp.workspace import (
 )
 from github_mcp.http_routes.actions_compat import register_actions_compat_routes
 from github_mcp.http_routes.healthz import register_healthz_route
+from starlette.staticfiles import StaticFiles
 
 
 
@@ -181,6 +182,12 @@ register_extra_tools_if_available()
 app = server.mcp.http_app(path="/sse", transport="sse")
 
 
+
+try:
+    app.mount("/static", StaticFiles(directory="assets"), name="static")
+except Exception:
+    # Static assets are optional; failures should not prevent server startup.
+    pass
 
 register_actions_compat_routes(app, server)
 register_healthz_route(app)

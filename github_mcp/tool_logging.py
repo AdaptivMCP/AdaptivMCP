@@ -106,7 +106,7 @@ def _record_github_request(
     msg = f"GitHub API {method_s} {url_s} -> {status} ({duration_ms}ms)"
     web_url_val = log_extra.get("web_url")
     if isinstance(web_url_val, str) and web_url_val:
-        msg += f" | web: {web_url_val}"
+        msg += f" | web: <{web_url_val}>"
 
     GITHUB_LOGGER.info(msg, extra=log_extra)
 

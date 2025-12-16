@@ -7,6 +7,7 @@ from typing import Any
 
 from anyio import ClosedResourceError
 from fastmcp import FastMCP
+from mcp.types import Icon
 
 from github_mcp import http_clients as _http_clients
 from github_mcp.http_clients import _github_client_instance
@@ -73,7 +74,18 @@ _TOOL_EXAMPLES: dict[str, str] = {
     'update_files_and_open_pr': '{"full_name":"owner/repo","base_branch":"main","new_branch":"feature/my-change","files":[{"path":"README.md","content":"..."}],"title":"My change","body":"Why this change"}',
 }
 
-mcp = FastMCP('GitHub Fast MCP')
+mcp = FastMCP(
+    name="Adaptiv Controller – GitHub",
+    instructions=(
+        "Use these tools to browse, edit, and maintain GitHub repositories via the Adaptiv Controller.\n"
+        "Prefer readable tool outputs and keep responses concise."
+    ),
+    version="1.0.0",
+    icons=[
+        Icon(src="/static/logo/adaptiv-icon-128.png", mimeType="image/png", sizes=["128x128"]),
+        Icon(src="/static/logo/adaptiv-icon-256.png", mimeType="image/png", sizes=["256x256"]),
+    ],
+)
 
 # Suppress noisy tracebacks when SSE clients disconnect mid-response.
 from mcp.shared import session as mcp_shared_session  # noqa: E402
