@@ -10,6 +10,9 @@ dependencies = [
     "anyio>=4.7.0",
     "httpx[http2]>=0.28.1",
     "pydantic>=2.0.0",
+    "fastmcp>=2.13.1",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
 ]
 [build-system]
 requires = ["setuptools>=68.0"]
