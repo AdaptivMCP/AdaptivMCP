@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import time
+from typing import Any, Callable
+
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+from github_mcp.config import SERVER_START_TIME
+from github_mcp.exceptions import GitHubAuthError
+from github_mcp.http_clients import _get_github_token
+from github_mcp.metrics import _metrics_snapshot
+from github_mcp.server import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
+
+
+def _github_token_present() -> bool:
+    try:
+        return bool(_get_github_token())
+    except GitHubAuthError:
+        return False
+    except Exception:
+        # Be conservative: treat unexpected failures as missing tokens so that
+        # the health endpoint signals degraded state instead of crashing.
+        return False
+
+
+def _build_health_payload() -> dict[str, Any]:
+    github_token_present = _github_token_present()
+
+    uptime_seconds = max(0, int(time.time() - SERVER_START_TIME))
+
+    return {
+        "status": "ok" if github_token_present else "warning",
+        "uptime_seconds": uptime_seconds,
+        "github_token_present": github_token_present,
+        "controller": {
+            "repo": CONTROLLER_REPO,
+            "default_branch": CONTROLLER_DEFAULT_BRANCH,
+        },
+        "metrics": _metrics_snapshot(),
+    }
+
+
+def build_healthz_endpoint() -> Callable[[Request], JSONResponse]:
+    async def _endpoint(_: Request) -> JSONResponse:
+        return JSONResponse(_build_health_payload())
+
+    return _endpoint
+
+
+def register_healthz_route(app: Any) -> None:
+    """Register the /healthz route on the ASGI app."""
+
+    app.add_route("/healthz", build_healthz_endpoint(), methods=["GET"])
+
+
+__all__ = ["register_healthz_route"]

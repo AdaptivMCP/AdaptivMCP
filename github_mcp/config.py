@@ -42,73 +42,177 @@ GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
 # can be tuned via environment variables; set to 0 or a negative value to disable
 # truncation if a deployment prefers full logs at the cost of larger responses.
 #
-# For this controller we default to *no* machine-side truncation and let the host
-# environment enforce any transport constraints. Deployments that want smaller payloads
-# can still override these via environment variables.
-TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "0"))
-TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "0"))
-TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "0"))
+# Defaults are tuned to avoid huge tool payloads that can cause UI/network failures.
+# Set to 0 or a negative value to disable truncation if a deployment prefers full logs
+# at the cost of larger responses.
+TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
+TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
+TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "20000"))
 
 # Soft limit for run_command.command length to discourage huge inline scripts.
-RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "8000"))
+RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "20000"))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+LOG_STYLE = os.environ.get("LOG_STYLE", "color").lower()
+
+# Default to a compact, scannable format.
 LOG_FORMAT = os.environ.get(
     "LOG_FORMAT",
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format=LOG_FORMAT,
-)
+# Use a non-colored formatter for in-memory logs (these often show up in JSON
+# tool results and should stay plain text).
+LOG_FORMAT_PLAIN = os.environ.get("LOG_FORMAT_PLAIN", LOG_FORMAT)
+
+
+class _ColorFormatter(logging.Formatter):
+    """Level-colored formatter for stdout logs.
+
+    Render's log viewer can display ANSI sequences; if it doesn't, the output
+    will still remain readable.
+    """
+
+    _C = {
+        "DEBUG": "\x1b[36m",  # cyan
+        "INFO": "\x1b[32m",  # green
+        "WARNING": "\x1b[33m",  # yellow
+        "ERROR": "\x1b[31m",  # red
+        "CRITICAL": "\x1b[35m",  # magenta
+        "RESET": "\x1b[0m",
+    }
+
+    def __init__(self, fmt: str, *, use_color: bool) -> None:
+        super().__init__(fmt)
+        self._use_color = bool(use_color)
+
+    def format(self, record: logging.LogRecord) -> str:  # pragma: no cover - formatting
+        levelname = record.levelname
+        if self._use_color and levelname in self._C:
+            record.levelname = f"{self._C[levelname]}{levelname}{self._C['RESET']}"
+        try:
+            return super().format(record)
+        finally:
+            record.levelname = levelname
+
+
+def _configure_logging() -> None:
+    # Avoid reconfiguring during module reloads.
+    root = logging.getLogger()
+    if getattr(root, "_github_mcp_configured", False):
+        return
+
+    use_color = LOG_STYLE in {"color", "ansi", "colored"}
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(_ColorFormatter(LOG_FORMAT, use_color=use_color))
+
+    logging.basicConfig(
+        level=getattr(logging, LOG_LEVEL, logging.INFO),
+        handlers=[console_handler],
+        force=True,
+    )
+
+    # Reduce noisy framework logs in provider log streams.
+    for noisy in (
+        "uvicorn.access",
+        "mcp",
+        "mcp.server",
+        "mcp.server.lowlevel.server",
+    ):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+    setattr(root, "_github_mcp_configured", True)
+
+
+_configure_logging()
 
 BASE_LOGGER = logging.getLogger("github_mcp")
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
+
 ERROR_LOG_CAPACITY = int(os.environ.get("MCP_ERROR_LOG_CAPACITY", "200"))
+LOG_RECORD_CAPACITY = int(os.environ.get("MCP_LOG_RECORD_CAPACITY", "500"))
 
 
 class _InMemoryErrorLogHandler(logging.Handler):
-    """Capture recent error-level log records in memory for MCP tools.
-
-    This provides a lightweight alternative to provider-specific log viewers so
-    assistants can inspect the underlying server errors when tools keep failing
-    with limited context.
-    """
+    """Capture recent error-level log records in memory for MCP tools."""
 
     def __init__(self, capacity: int = 200) -> None:
         super().__init__(level=logging.ERROR)
-        self._records: deque[dict[str, object]] = deque(maxlen=max(1, capacity))
+        self._capacity = int(capacity)
+        self._formatter = logging.Formatter(LOG_FORMAT_PLAIN)
+        if self._capacity <= 0:
+            self._records: list[dict[str, object]] = []
+        else:
+            self._records = deque(maxlen=max(1, self._capacity))
 
     @property
     def records(self) -> list[dict[str, object]]:
-        """Return a snapshot of buffered error records."""
-
         return list(self._records)
 
-    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - trivial
+    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover
         try:
-            message = self.format(record)
+            message = self._formatter.format(record)
         except Exception:  # noqa: BLE001
             message = record.getMessage()
 
-        payload = {
-            "logger": record.name,
-            "level": record.levelname,
-            "message": message,
-            "created": record.created,
-            "tool_context": getattr(record, "tool_context", None),
-            "tool_error_type": getattr(record, "tool_error_type", None),
-            "tool_error_message": getattr(record, "tool_error_message", None),
-            "tool_error_origin": getattr(record, "tool_error_origin", None),
-            "tool_error_category": getattr(record, "tool_error_category", None),
-        }
-        self._records.append(payload)
+        self._records.append(
+            {
+                "logger": record.name,
+                "level": record.levelname,
+                "message": message,
+                "created": record.created,
+                "tool_context": getattr(record, "tool_context", None),
+                "tool_error_type": getattr(record, "tool_error_type", None),
+                "tool_error_message": getattr(record, "tool_error_message", None),
+                "tool_error_origin": getattr(record, "tool_error_origin", None),
+                "tool_error_category": getattr(record, "tool_error_category", None),
+            }
+        )
 
 
 ERROR_LOG_HANDLER = _InMemoryErrorLogHandler(capacity=ERROR_LOG_CAPACITY)
 BASE_LOGGER.addHandler(ERROR_LOG_HANDLER)
+
+
+class _InMemoryLogHandler(logging.Handler):
+    """Capture recent log records in memory for MCP diagnostics tools."""
+
+    def __init__(self, capacity: int = 500) -> None:
+        super().__init__(level=logging.INFO)
+        self._capacity = int(capacity)
+        self._formatter = logging.Formatter(LOG_FORMAT_PLAIN)
+        if self._capacity <= 0:
+            self._records: list[dict[str, object]] = []
+        else:
+            self._records = deque(maxlen=max(1, self._capacity))
+
+    @property
+    def records(self) -> list[dict[str, object]]:
+        return list(self._records)
+
+    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover
+        if not record.name.startswith("github_mcp"):
+            return
+
+        try:
+            message = self._formatter.format(record)
+        except Exception:  # noqa: BLE001
+            message = record.getMessage()
+
+        self._records.append(
+            {
+                "logger": record.name,
+                "level": record.levelname,
+                "message": message,
+                "created": record.created,
+            }
+        )
+
+
+LOG_RECORD_HANDLER = _InMemoryLogHandler(capacity=LOG_RECORD_CAPACITY)
+BASE_LOGGER.addHandler(LOG_RECORD_HANDLER)
 
 SERVER_START_TIME = time.time()
 
@@ -137,4 +241,6 @@ __all__ = [
     "WORKSPACE_BASE_DIR",
     "ERROR_LOG_HANDLER",
     "ERROR_LOG_CAPACITY",
+    "LOG_RECORD_HANDLER",
+    "LOG_RECORD_CAPACITY",
 ]

@@ -9,6 +9,7 @@ import sys
 import time
 from typing import Any, Dict, Optional
 import weakref
+from urllib.parse import urlencode
 
 import httpx
 
@@ -165,6 +166,24 @@ def _external_client_instance() -> httpx.AsyncClient:
 # ---------------------------------------------------------------------------
 
 
+def _github_api_url_for_logs(path: str, params: Optional[Dict[str, Any]] = None) -> str:
+    """Build an absolute GitHub API URL for logging.
+
+    We want stable, clickable links in provider logs even when a request fails
+    before an httpx.Response exists.
+    """
+
+    base = (GITHUB_API_BASE or 'https://api.github.com').rstrip('/')
+    normalized = path if path.startswith('/') else f'/{path}'
+    url = f'{base}{normalized}'
+    if params:
+        cleaned: Dict[str, Any] = {k: v for k, v in params.items() if v is not None}
+        qs = urlencode(cleaned, doseq=True)
+        if qs:
+            url = f'{url}?{qs}'
+    return url
+
+
 def _request_with_metrics(
     method: str,
     url: str,
@@ -181,7 +200,11 @@ def _request_with_metrics(
         client = client_factory()
     except GitHubAuthError:
         _record_github_request(
-            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True
+            method=method,
+            url=url,
+            status_code=None,
+            duration_ms=int((time.time() - start) * 1000),
+            error=True,
         )
         raise
 
@@ -189,7 +212,12 @@ def _request_with_metrics(
         response = client.request(method, url, **kwargs)
     except httpx.HTTPError as exc:  # pragma: no cover - network failures are hard to force
         _record_github_request(
-            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True
+            method=method,
+            url=url,
+            status_code=None,
+            duration_ms=int((time.time() - start) * 1000),
+            error=True,
+            exc=exc,
         )
         raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
     finally:
@@ -200,6 +228,8 @@ def _request_with_metrics(
         error_flag = response.status_code >= 400
 
     _record_github_request(
+        method=method,
+        url=url,
         status_code=response.status_code,
         duration_ms=int((time.time() - start) * 1000),
         error=error_flag,
@@ -229,6 +259,7 @@ async def _github_request(
 
     start = time.time()
     client_factory = client_factory or _github_client_instance
+    api_url_for_logs = _github_api_url_for_logs(path, params=params)
 
     # Unit tests run without live GitHub network access. Provide deterministic
     # synthetic responses for this repository so smoke tests can exercise the
@@ -275,7 +306,11 @@ async def _github_request(
         client = client_factory()
     except GitHubAuthError:
         _record_github_request(
-            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True
+            method=method,
+            url=api_url_for_logs,
+            status_code=None,
+            duration_ms=int((time.time() - start) * 1000),
+            error=True,
         )
         raise
 
@@ -283,12 +318,22 @@ async def _github_request(
         resp = await client.request(method, path, params=params, json=json_body, headers=headers)
     except httpx.TimeoutException as exc:
         _record_github_request(
-            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True, exc=exc
+            method=method,
+            url=api_url_for_logs,
+            status_code=None,
+            duration_ms=int((time.time() - start) * 1000),
+            error=True,
+            exc=exc,
         )
         raise
     except httpx.HTTPError as exc:  # pragma: no cover - defensive
         _record_github_request(
-            status_code=None, duration_ms=int((time.time() - start) * 1000), error=True, exc=exc
+            method=method,
+            url=api_url_for_logs,
+            status_code=None,
+            duration_ms=int((time.time() - start) * 1000),
+            error=True,
+            exc=exc,
         )
         raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
 
@@ -298,6 +343,8 @@ async def _github_request(
         error_flag = resp.status_code >= 400
 
     _record_github_request(
+        method=method,
+        url=api_url_for_logs,
         status_code=resp.status_code,
         duration_ms=duration_ms,
         error=error_flag,

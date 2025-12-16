@@ -145,7 +145,7 @@ The exact steps may change as Render evolves, but the high-level flow is:
 Typical configuration might look like:
 
 - Build command:
-  - `pip install -r requirements.txt`
+  - `pip install -r dev-requirements.txt`
 
 - Start command:
   - `uvicorn main:app --host 0.0.0.0 --port 8000`
@@ -249,7 +249,7 @@ Common issues and fixes:
 
 1. **MCP server fails to start**
    - Check Render logs for Python import errors or syntax errors.
-   - Ensure dependencies were installed (`pip install -r requirements.txt`).
+   - Ensure dependencies were installed (`pip install -r dev-requirements.txt`).
 
 2. **GitHub API calls fail with 401 or 403**
    - Verify `GITHUB_TOKEN` is set and has the required scopes.

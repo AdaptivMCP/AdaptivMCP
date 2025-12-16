@@ -20,8 +20,10 @@ def test_get_recent_server_errors_captures_structured_errors():
 
     result = main.get_recent_server_errors(limit=10)
 
-    assert result["limit"] == min(10, ERROR_LOG_CAPACITY)
-    assert result["capacity"] == ERROR_LOG_CAPACITY
+    expected_limit = 10 if ERROR_LOG_CAPACITY <= 0 else min(10, ERROR_LOG_CAPACITY)
+    assert result["limit"] == expected_limit
+    expected_capacity = None if ERROR_LOG_CAPACITY <= 0 else ERROR_LOG_CAPACITY
+    assert result["capacity"] == expected_capacity
     errors = result["errors"]
     assert isinstance(errors, list)
     assert errors, "expected at least one error record"

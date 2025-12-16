@@ -7,15 +7,9 @@ being pushed toward a particular working style. See ``docs/WORKFLOWS.md`` and ``
 for optional, non-binding examples of how the tools can fit together.
 """
 
-import asyncio
 import base64
-import json
-import os
-import re
-from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
-import jsonschema
 
 import github_mcp.server as server  # noqa: F401
 import github_mcp.tools_workspace as tools_workspace  # noqa: F401
@@ -23,24 +17,18 @@ from github_mcp import http_clients as _http_clients  # noqa: F401
 from github_mcp.config import (
     BASE_LOGGER,  # noqa: F401
     FETCH_FILES_CONCURRENCY,
-    FILE_CACHE_MAX_BYTES,  # noqa: F401
-    FILE_CACHE_MAX_ENTRIES,  # noqa: F401
-    GIT_AUTHOR_EMAIL,
-    GIT_AUTHOR_NAME,
-    GIT_COMMITTER_EMAIL,
-    GIT_COMMITTER_NAME,
     GITHUB_API_BASE,
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
+    FILE_CACHE_MAX_BYTES,  # noqa: F401
+    FILE_CACHE_MAX_ENTRIES,  # noqa: F401
     TOOL_STDERR_MAX_CHARS,  # noqa: F401
     TOOL_STDIO_COMBINED_MAX_CHARS,  # noqa: F401
     TOOL_STDOUT_MAX_CHARS,  # noqa: F401
     WORKSPACE_BASE_DIR,  # noqa: F401
-    ERROR_LOG_HANDLER,
-    ERROR_LOG_CAPACITY,
-)
+    )
 from github_mcp.exceptions import (
     GitHubAPIError,  # noqa: F401
     GitHubAuthError,
@@ -50,22 +38,17 @@ from github_mcp.exceptions import (
 from github_mcp.github_content import (
     _decode_github_content,
     _load_body_from_content_url,
-    _perform_github_commit,
-    _resolve_file_sha,
-    _verify_file_on_branch,
+    _resolve_file_sha,  # noqa: F401
 )
 from github_mcp.file_cache import (
-    bulk_get_cached,
     cache_payload,
-    cache_stats,
     clear_cache,
 )
 from github_mcp.http_clients import (
-    _external_client_instance,
+    _external_client_instance,  # noqa: F401
     _get_concurrency_semaphore,  # noqa: F401
-    _github_client_instance,
-    _http_client_github,
     _get_github_token,  # noqa: F401
+    _github_client_instance,  # noqa: F401
 )
 from github_mcp.metrics import (
     _METRICS,  # noqa: F401
@@ -74,26 +57,23 @@ from github_mcp.metrics import (
 )
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
-    COMPACT_METADATA_DEFAULT,
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
-    _ensure_write_allowed,
-    _find_registered_tool,
+    _ensure_write_allowed,  # noqa: F401
+    _structured_tool_error,  # noqa: F401
     _github_request,
-    _normalize_input_schema,
-    _structured_tool_error,
     mcp_tool,
     register_extra_tools_if_available,
+    COMPACT_METADATA_DEFAULT,
+    _find_registered_tool,
+    _normalize_input_schema,
 )
 from github_mcp.tools_workspace import commit_workspace, ensure_workspace_clone  # noqa: F401
 from github_mcp.utils import (
-    REPO_DEFAULTS,
-    _decode_zipped_job_logs,
     _effective_ref_for_repo,
     _normalize_repo_path,
     _with_numbered_lines,
     normalize_args,
-    _normalize_write_context,
 )
 from github_mcp.workspace import (
     _clone_repo,  # noqa: F401
@@ -101,15 +81,42 @@ from github_mcp.workspace import (
     _run_shell,  # noqa: F401
     _workspace_path,  # noqa: F401
 )
-from starlette.requests import Request
-from starlette.responses import JSONResponse
+from github_mcp.http_routes.actions_compat import register_actions_compat_routes
+from github_mcp.http_routes.healthz import register_healthz_route
 
 
 
+
+# Re-exported symbols used by helper modules and tests that import `main`.
+__all__ = [
+    "GitHubAPIError",
+    "GitHubAuthError",
+    "GitHubRateLimitError",
+    "WriteNotAuthorizedError",
+    "GITHUB_API_BASE",
+    "HTTPX_TIMEOUT",
+    "HTTPX_MAX_CONNECTIONS",
+    "HTTPX_MAX_KEEPALIVE",
+    "MAX_CONCURRENCY",
+    "FETCH_FILES_CONCURRENCY",
+    "CONTROLLER_REPO",
+    "CONTROLLER_DEFAULT_BRANCH",
+    "_github_request",
+    "get_recent_server_logs",
+    "_ensure_write_allowed",
+]
 # Exposed for tests that monkeypatch the external HTTP client used for sandbox: URLs.
 _http_client_external: httpx.AsyncClient | None = None
 
 LOGGER = BASE_LOGGER.getChild("main")
+
+# Keep selected symbols in main for tests/backwards-compat and for impl modules.
+_EXPORT_COMPAT = (
+    COMPACT_METADATA_DEFAULT,
+    _find_registered_tool,
+    _normalize_input_schema,
+    normalize_args,
+)
 
 
 async def _perform_github_commit_and_refresh_workspace(
@@ -121,42 +128,36 @@ async def _perform_github_commit_and_refresh_workspace(
     body_bytes: bytes,
     sha: Optional[str],
 ) -> Dict[str, Any]:
-    """Perform a Contents API commit and then refresh the workspace clone.
+    """Perform a Contents API commit and then refresh the workspace clone."""
+    from github_mcp.main_tools.workspace_sync import _perform_github_commit_and_refresh_workspace as _impl
+    return await _impl(full_name=full_name, path=path, message=message, branch=branch, body_bytes=body_bytes, sha=sha)
 
-    This keeps the long-lived workspace clone in sync with the branch when
-    writes happen directly via the GitHub Contents API. Workspace refresh
-    failures are logged but never fail the commit itself.
-    """
 
-    commit_result = await _perform_github_commit(
-        full_name=full_name,
+
+
+async def _perform_github_commit(
+    full_name: str,
+    *,
+    branch: str,
+    path: str,
+    message: str,
+    body_bytes: bytes,
+    sha: Optional[str],
+    committer: Optional[Dict[str, str]] = None,
+    author: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Compat wrapper for github_mcp.github_content._perform_github_commit."""
+    from github_mcp.github_content import _perform_github_commit as _impl
+    return await _impl(
+        full_name,
+        branch=branch,
         path=path,
         message=message,
         body_bytes=body_bytes,
-        branch=branch,
         sha=sha,
+        committer=committer,
+        author=author,
     )
-
-    try:
-        # Best-effort: do not break commits if workspace refresh fails.
-        await ensure_workspace_clone(
-            full_name=full_name,
-            ref=branch,
-            reset=True,
-        )
-    except Exception as exc:  # pragma: no cover - defensive logging only
-        LOGGER.debug(
-            "Failed to refresh workspace after commit",
-            extra={
-                "full_name": full_name,
-                "branch": branch,
-                "error": str(exc),
-            },
-        )
-
-    return commit_result
-
-
 def __getattr__(name: str):
     if name == "WRITE_ALLOWED":
         return server.WRITE_ALLOWED
@@ -180,38 +181,9 @@ register_extra_tools_if_available()
 app = server.mcp.http_app(path="/sse", transport="sse")
 
 
-def _serialize_actions_for_compatibility() -> list[dict[str, Any]]:
-    """Expose a stable actions listing for clients expecting /v1/actions.
 
-    The FastMCP server only exposes its MCP transport at ``/mcp`` by default.
-    Some clients (including the ChatGPT UI) attempt to refresh available
-    Actions using the OpenAI Actions-style ``/v1/actions`` endpoint. Provide a
-    lightweight JSON response that mirrors the MCP tool surface so those
-    clients receive a graceful payload instead of a 404.
-    """
-
-    actions: list[dict[str, Any]] = []
-    for tool, _func in server._REGISTERED_MCP_TOOLS:
-        schema = server._normalize_input_schema(tool)
-        actions.append(
-            {
-                "name": tool.name,
-                "display_name": getattr(tool, "title", None) or tool.name,
-                "description": tool.description,
-                "parameters": schema or {"type": "object", "properties": {}},
-                "annotations": getattr(tool, "annotations", None).model_dump() if getattr(tool, "annotations", None) else None,
-            }
-        )
-
-    return actions
-
-
-async def _actions_compatibility_endpoint(_: Request) -> JSONResponse:
-    return JSONResponse({"actions": _serialize_actions_for_compatibility()})
-
-
-app.add_route("/v1/actions", _actions_compatibility_endpoint, methods=["GET"])
-app.add_route("/actions", _actions_compatibility_endpoint, methods=["GET"])
+register_actions_compat_routes(app, server)
+register_healthz_route(app)
 
 
 def _cache_file_result(
@@ -344,122 +316,37 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 
 @server.mcp_tool(write_action=False)
 def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dict[str, Any]:
-    """Return recent tool-call events captured in-memory by the server wrappers."""
-    try:
-        limit_int = int(limit)
-    except Exception:
-        limit_int = 50
-    limit_int = max(1, min(200, limit_int))
-    events = list(getattr(server, "RECENT_TOOL_EVENTS", []))
-    if not include_success:
-        events = [e for e in events if e.get("event") != "tool_recent_ok"]
-    events = list(reversed(events))[:limit_int]
+    """Delegates to github_mcp.main_tools.observability.get_recent_tool_events."""
+    from github_mcp.main_tools.observability import get_recent_tool_events as _impl
+    return _impl(limit=limit, include_success=include_success)
 
-    # Plain-language summaries for UI surfaces.
-    narrative = []
-    for e in events:
-        msg = e.get("user_message")
-        if not msg:
-            tool = e.get("tool_name") or "tool"
-            ev = e.get("event") or "event"
-            repo = e.get("repo") or "-"
-            ref = e.get("ref") or "-"
-            dur = e.get("duration_ms")
-            loc = f"{repo}@{ref}" if ref not in {None, "", "-"} else repo
-            if ev == "tool_recent_start":
-                msg = f"Starting {tool} on {loc}."
-            elif ev == "tool_recent_ok":
-                msg = f"Finished {tool} on {loc}{(' in %sms' % dur) if isinstance(dur, int) else ''}."
-            else:
-                msg = f"{tool} event {ev} on {loc}."
-        narrative.append(msg)
-
-    transcript = "\n".join(narrative)
-
-    return {
-        "limit": limit_int,
-        "include_success": include_success,
-        "events": events,
-        "narrative": narrative,
-        "transcript": transcript,
-    }
 
 
 @server.mcp_tool(write_action=False)
 def get_recent_server_errors(limit: int = 50) -> Dict[str, Any]:
-    """Return recent server-side error logs for failed MCP tool calls.
+    """Delegates to github_mcp.main_tools.observability.get_recent_server_errors."""
+    from github_mcp.main_tools.observability import get_recent_server_errors as _impl
+    return _impl(limit=limit)
 
-    This surfaces the underlying MCP server error records so assistants can
-    debug misinputs instead of re-looping blindly.
+@server.mcp_tool(write_action=False)
+def get_recent_server_logs(limit: int = 100, min_level: str = "INFO") -> Dict[str, Any]:
+    """Return recent server-side logs captured in memory.
+
+    Use this when debugging tool behavior in environments where you cannot
+    access provider logs.
     """
 
-    try:
-        limit_int = int(limit)
-    except Exception:
-        limit_int = 50
-    limit_int = max(1, min(ERROR_LOG_CAPACITY, limit_int))
+    from github_mcp.main_tools.server_logs import get_recent_server_logs as _impl
 
-    records = getattr(ERROR_LOG_HANDLER, "records", [])
-    records = list(reversed(records))[:limit_int]
-
-    return {
-        "limit": limit_int,
-        "capacity": ERROR_LOG_CAPACITY,
-        "errors": records,
-    }
-
+    return _impl(limit=limit, min_level=min_level)
 
 # ------------------------------------------------------------------------------
 
 @mcp_tool(write_action=False)
 async def get_server_config() -> Dict[str, Any]:
-    """Return a safe summary of MCP connector and runtime settings."""
+    from github_mcp.main_tools.server_config import get_server_config as _impl
+    return await _impl()
 
-    return {
-        "write_allowed": server.WRITE_ALLOWED,
-        "github_api_base": GITHUB_API_BASE,
-        "http": {
-            "timeout": HTTPX_TIMEOUT,
-            "max_connections": HTTPX_MAX_CONNECTIONS,
-            "max_keepalive": HTTPX_MAX_KEEPALIVE,
-        },
-        "concurrency": {
-            "max_concurrency": MAX_CONCURRENCY,
-            "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
-        },
-        "approval_policy": {
-            "read_actions": {
-                "auto_approved": True,
-                "notes": "Read-only tools never require additional approval.",
-            },
-            "write_actions": {
-                "auto_approved": server.WRITE_ALLOWED,
-                "requires_authorization": not server.WRITE_ALLOWED,
-                "toggle_tool": "authorize_write_actions",
-                "notes": (
-                    "Most write-tagged tools stay gated until explicitly enabled "
-                    "for a session; set GITHUB_MCP_AUTO_APPROVE to trust the "
-                    "server by default. Workspace setup and non-mutating commands "
-                    "are allowed without flipping the gate unless they install "
-                    "dependencies or opt out of the temp venv."
-                ),
-            },
-        },
-        "git_identity": {
-            "author_name": GIT_AUTHOR_NAME,
-            "author_email": GIT_AUTHOR_EMAIL,
-            "committer_name": GIT_COMMITTER_NAME,
-            "committer_email": GIT_COMMITTER_EMAIL,
-        },
-        "sandbox": {
-            "sandbox_content_base_url_configured": bool(os.environ.get("SANDBOX_CONTENT_BASE_URL")),
-        },
-        "environment": {
-            "github_token_present": bool(
-                os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
-            ),
-        },
-    }
 
 
 @mcp_tool(
@@ -468,339 +355,26 @@ async def get_server_config() -> Dict[str, Any]:
     tags=["meta", "json", "validation"],
 )
 def validate_json_string(raw: str) -> Dict[str, Any]:
-    """Validate a JSON string and report parse status and errors."""
+    from github_mcp.main_tools.server_config import validate_json_string as _impl
+    return _impl(raw=raw)
 
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        context_window = 20
-        start = max(0, exc.pos - context_window)
-        end = min(len(raw), exc.pos + context_window)
-
-        line_start = raw.rfind("\n", 0, exc.pos) + 1
-        line_end = raw.find("\n", exc.pos)
-        if line_end == -1:
-            line_end = len(raw)
-
-        line_text = raw[line_start:line_end]
-        caret_prefix = " " * (exc.colno - 1)
-        pointer = f"{caret_prefix}^"
-
-        return {
-            "valid": False,
-            "error": exc.msg,
-            "line": exc.lineno,
-            "column": exc.colno,
-            "position": exc.pos,
-            "snippet": raw[start:end],
-            "line_snippet": line_text,
-            "pointer": pointer,
-        }
-
-    normalized = json.dumps(
-        parsed,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-
-    return {
-        "valid": True,
-        "parsed": parsed,
-        "parsed_type": type(parsed).__name__,
-        "normalized": normalized,
-        "normalized_pretty": json.dumps(
-            parsed,
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-        ),
-    }
 
 
 @mcp_tool(write_action=False)
 async def get_repo_defaults(
     full_name: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Return default configuration for a GitHub repository."""
+    from github_mcp.main_tools.server_config import get_repo_defaults as _impl
+    return await _impl(full_name=full_name)
 
-    repo = full_name or CONTROLLER_REPO
-
-    # Ask GitHub for the repository metadata so we can resolve its default
-    # branch instead of relying only on local config. Fall back to any
-    # configured defaults when the request cannot be made (for example, in
-    # hermetic test environments without a GitHub token).
-    try:
-        data = await _github_request("GET", f"/repos/{repo}")
-        payload = data.get("json") or {}
-        default_branch = payload.get("default_branch") or CONTROLLER_DEFAULT_BRANCH
-    except (GitHubAuthError, GitHubAPIError):
-        repo_defaults = REPO_DEFAULTS.get(repo)
-        default_branch = (repo_defaults or {}).get("default_branch", CONTROLLER_DEFAULT_BRANCH)
-
-    return {
-        "defaults": {
-            "full_name": repo,
-            "default_branch": default_branch,
-        }
-    }
 
 
 @mcp_tool(write_action=False)
 async def validate_environment() -> Dict[str, Any]:
     """Check GitHub-related environment settings and report problems."""
+    from github_mcp.main_tools.env import validate_environment as _impl
+    return await _impl()
 
-    checks: List[Dict[str, Any]] = []
-    status = "ok"
-
-    def add_check(
-        name: str, level: str, message: str, details: Optional[Dict[str, Any]] = None
-    ) -> None:
-        nonlocal status
-        if details is None:
-            details = {}
-        checks.append(
-            {
-                "name": name,
-                "level": level,
-                "message": message,
-                "details": details,
-            }
-        )
-        if level == "error":
-            status = "error"
-        elif level == "warning" and status != "error":
-            status = "warning"
-
-    # GitHub token presence/shape
-    raw_token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
-    token_env_var = (
-        "GITHUB_PAT"
-        if os.environ.get("GITHUB_PAT") is not None
-        else ("GITHUB_TOKEN" if os.environ.get("GITHUB_TOKEN") is not None else None)
-    )
-
-    if raw_token is None:
-        add_check(
-            "github_token",
-            "error",
-            "GITHUB_PAT or GITHUB_TOKEN is not set",
-            {"env_vars": ["GITHUB_PAT", "GITHUB_TOKEN"]},
-        )
-        token_ok = False
-    elif not raw_token.strip():
-        add_check(
-            "github_token",
-            "error",
-            "GitHub token environment variable is set but empty",
-            {"env_var": token_env_var} if token_env_var else {},
-        )
-        token_ok = False
-    else:
-        add_check(
-            "github_token",
-            "ok",
-            "GitHub token environment variable is set",
-            {"env_var": token_env_var, "length": len(raw_token)},
-        )
-        token_ok = True
-
-    # Controller repo/branch config
-    controller_repo = os.environ.get("GITHUB_MCP_CONTROLLER_REPO") or CONTROLLER_REPO
-    controller_branch = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") or CONTROLLER_DEFAULT_BRANCH
-
-    add_check(
-        "controller_branch_config",
-        "ok",
-        "Controller branch is configured",
-        {
-            "value": controller_branch,
-            "env_var": (
-                "GITHUB_MCP_CONTROLLER_BRANCH"
-                if os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") is not None
-                else None
-            ),
-        },
-    )
-
-    # Git identity env vars (presence).
-    identity_envs = {
-        "GIT_AUTHOR_NAME": os.environ.get("GIT_AUTHOR_NAME"),
-        "GIT_AUTHOR_EMAIL": os.environ.get("GIT_AUTHOR_EMAIL"),
-        "GIT_COMMITTER_NAME": os.environ.get("GIT_COMMITTER_NAME"),
-        "GIT_COMMITTER_EMAIL": os.environ.get("GIT_COMMITTER_EMAIL"),
-    }
-    missing_identity = [name for name, value in identity_envs.items() if not value]
-    if missing_identity:
-        add_check(
-            "git_identity_env",
-            "warning",
-            "Git identity env vars are not fully configured; defaults may be used for commits",
-            {"missing": missing_identity},
-        )
-    else:
-        add_check(
-            "git_identity_env",
-            "ok",
-            "Git identity env vars are configured",
-            {},
-        )
-
-    # HTTP / concurrency config (always informational; defaults are fine).
-    add_check(
-        "http_config",
-        "ok",
-        "HTTP client configuration resolved",
-        {
-            "github_api_base": GITHUB_API_BASE,
-            "timeout": HTTPX_TIMEOUT,
-            "max_connections": HTTPX_MAX_CONNECTIONS,
-            "max_keepalive": HTTPX_MAX_KEEPALIVE,
-        },
-    )
-    add_check(
-        "concurrency_config",
-        "ok",
-        "Concurrency settings resolved",
-        {
-            "max_concurrency": MAX_CONCURRENCY,
-            "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
-        },
-    )
-
-    # Remote validation for controller repo/branch, only if token is usable.
-    if token_ok:
-        repo_payload: Dict[str, Any] = {}
-        try:
-            repo_response = await _github_request("GET", f"/repos/{controller_repo}")
-            if isinstance(repo_response.get("json"), dict):
-                repo_payload = repo_response.get("json", {})
-        except Exception as exc:  # pragma: no cover - defensive
-            add_check(
-                "controller_repo_remote",
-                "error",
-                "Controller repository does not exist or is not accessible",
-                {
-                    "full_name": controller_repo,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                },
-            )
-        else:
-            add_check(
-                "controller_repo_remote",
-                "ok",
-                "Controller repository exists and is accessible",
-                {"full_name": controller_repo},
-            )
-
-            permissions = {}
-            if isinstance(repo_payload, dict):
-                permissions = repo_payload.get("permissions") or {}
-
-            push_allowed = permissions.get("push") if isinstance(permissions, dict) else None
-            if push_allowed is True:
-                add_check(
-                    "controller_repo_push_permission",
-                    "ok",
-                    "GitHub token can push to the controller repository",
-                    {"full_name": controller_repo},
-                )
-            elif push_allowed is False:
-                add_check(
-                    "controller_repo_push_permission",
-                    "error",
-                    "GitHub token lacks push permission to the controller repository; write tools will fail with 403 errors",
-                    {"full_name": controller_repo, "permissions": permissions},
-                )
-            else:
-                add_check(
-                    "controller_repo_push_permission",
-                    "warning",
-                    "Could not confirm push permission for the controller repository; ensure the token can push before using commit or push tools",
-                    {"full_name": controller_repo, "permissions": permissions},
-                )
-
-        try:
-            await _github_request(
-                "GET",
-                f"/repos/{controller_repo}/branches/{controller_branch}",
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            add_check(
-                "controller_branch_remote",
-                "error",
-                "Controller branch does not exist or is not accessible",
-                {
-                    "full_name": controller_repo,
-                    "branch": controller_branch,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                },
-            )
-        else:
-            add_check(
-                "controller_branch_remote",
-                "ok",
-                "Controller branch exists and is accessible",
-                {"full_name": controller_repo, "branch": controller_branch},
-            )
-
-        try:
-            pr_response = await _github_request(
-                "GET",
-                f"/repos/{controller_repo}/pulls",
-                params={"state": "open", "per_page": 1},
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            add_check(
-                "controller_pr_endpoint",
-                "warning",
-                "Pull request endpoint is not reachable; PR tools may fail with HTTP errors or timeouts",
-                {
-                    "full_name": controller_repo,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                },
-            )
-        else:
-            pr_json = pr_response.get("json")
-            open_sample_count = None
-            if isinstance(pr_json, list):
-                open_sample_count = len(pr_json)
-            add_check(
-                "controller_pr_endpoint",
-                "ok",
-                "Pull request endpoint is reachable",
-                {
-                    "full_name": controller_repo,
-                    "sample_open_count": open_sample_count,
-                },
-            )
-    else:
-        add_check(
-            "controller_remote_checks",
-            "warning",
-            "Skipped controller repo/branch remote validation because GitHub token is not configured",
-            {},
-        )
-
-    summary = {
-        "ok": sum(1 for c in checks if c["level"] == "ok"),
-        "warning": sum(1 for c in checks if c["level"] == "warning"),
-        "error": sum(1 for c in checks if c["level"] == "error"),
-    }
-
-    return {
-        "status": status,
-        "summary": summary,
-        "checks": checks,
-        "config": {
-            "controller_repo": controller_repo,
-            "controller_branch": controller_branch,
-            "github_api_base": GITHUB_API_BASE,
-        },
-    }
 
 
 @mcp_tool(write_action=True)
@@ -809,86 +383,21 @@ async def pr_smoke_test(
     base_branch: Optional[str] = None,
     draft: bool = True,
 ) -> Dict[str, Any]:
-    """Create a trivial branch with a one-line change and open a draft PR.
-
-    This is intended for diagnostics of PR tooling in the live environment.
-    """
-
-    defaults = await get_repo_defaults(full_name=full_name)
-    defaults_payload = defaults.get("defaults") or {}
-    repo = defaults_payload.get("full_name") or full_name or CONTROLLER_REPO
-    base = base_branch or defaults_payload.get("default_branch") or CONTROLLER_DEFAULT_BRANCH
-
-    import uuid
-
-    branch = f"mcp-pr-smoke-{uuid.uuid4().hex[:8]}"
-
-    await ensure_branch(full_name=repo, branch=branch, from_ref=base)
-
-    path = "mcp_pr_smoke_test.txt"
-    normalized_path = _normalize_repo_path(path)
-    content = f"MCP PR smoke test branch {branch}.\n"
-
-    await apply_text_update_and_commit(
-        full_name=repo,
-        path=normalized_path,
-        updated_content=content,
-        branch=branch,
-        message=f"MCP PR smoke test on {branch}",
-    )
-
-    pr = await create_pull_request(
-        full_name=repo,
-        title=f"MCP PR smoke test ({branch})",
-        head=branch,
-        base=base,
-        body="Automated MCP PR smoke test created by pr_smoke_test.",
-        draft=draft,
-    )
-
-    # Normalize the result so smoke-test callers can reliably see whether a PR
-    # was actually created and, if so, which URL/number to look at.
-    pr_json = pr.get("json") or {}
-    if not isinstance(pr_json, dict) or not pr_json.get("number"):
-        # Bubble through the structured error shape produced by
-        # ``create_pull_request`` so the caller can see status/message details.
-        return {
-            "status": "error",
-            "repository": repo,
-            "base": base,
-            "branch": branch,
-            "raw_response": pr,
-        }
-
-    return {
-        "status": "ok",
-        "repository": repo,
-        "base": base,
-        "branch": branch,
-        "pr_number": pr_json.get("number"),
-        "pr_url": pr_json.get("html_url"),
-    }
-
+    from github_mcp.main_tools.diagnostics import pr_smoke_test as _impl
+    return await _impl(full_name=full_name, base_branch=base_branch, draft=draft)
 
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
-    """Return the authenticated token's GitHub rate-limit document."""
-    return await _github_request("GET", "/rate_limit")
+    from github_mcp.main_tools.repositories import get_rate_limit as _impl
+    return await _impl()
+
 
 
 @mcp_tool(write_action=False)
 async def get_user_login() -> Dict[str, Any]:
-    """Return the login for the authenticated GitHub user."""
+    from github_mcp.main_tools.repositories import get_user_login as _impl
+    return await _impl()
 
-    data = await _github_request("GET", "/user")
-    login = None
-    if isinstance(data.get("json"), dict):
-        login = data["json"].get("login")
-    return {
-        "status_code": data.get("status_code"),
-        "login": login,
-        "user": data.get("json"),
-    }
 
 
 @mcp_tool(write_action=False)
@@ -898,26 +407,18 @@ async def list_repositories(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List repositories accessible to the authenticated user."""
+    from github_mcp.main_tools.repositories import list_repositories as _impl
+    return await _impl(affiliation=affiliation, visibility=visibility, per_page=per_page, page=page)
 
-    params: Dict[str, Any] = {"per_page": per_page, "page": page}
-    if affiliation:
-        params["affiliation"] = affiliation
-    if visibility:
-        params["visibility"] = visibility
-    return await _github_request("GET", "/user/repos", params=params)
 
 
 @mcp_tool(write_action=False)
 async def list_repositories_by_installation(
     installation_id: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
-    """List repositories accessible via a specific GitHub App installation."""
+    from github_mcp.main_tools.repositories import list_repositories_by_installation as _impl
+    return await _impl(installation_id=installation_id, per_page=per_page, page=page)
 
-    params = {"per_page": per_page, "page": page}
-    return await _github_request(
-        "GET", f"/user/installations/{installation_id}/repositories", params=params
-    )
 
 
 @mcp_tool(write_action=True)
@@ -947,184 +448,9 @@ async def create_repository(
     clone_to_workspace: bool = False,
     clone_ref: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create a new GitHub repository for the authenticated user or an organization.
+    from github_mcp.main_tools.repositories import create_repository as _impl
+    return await _impl(name=name, owner=owner, owner_type=owner_type, description=description, homepage=homepage, visibility=visibility, private=private, auto_init=auto_init, gitignore_template=gitignore_template, license_template=license_template, is_template=is_template, has_issues=has_issues, has_projects=has_projects, has_wiki=has_wiki, has_discussions=has_discussions, team_id=team_id, security_and_analysis=security_and_analysis, template_full_name=template_full_name, include_all_branches=include_all_branches, topics=topics, create_payload_overrides=create_payload_overrides, update_payload_overrides=update_payload_overrides, clone_to_workspace=clone_to_workspace, clone_ref=clone_ref)
 
-    Designed to match GitHub's "New repository" UI with a safe escape hatch:
-
-    - Use first-class params for common fields.
-    - Use create_payload_overrides and update_payload_overrides to pass any
-      additional GitHub REST fields without waiting for server updates.
-
-    Template-based creation is supported via template_full_name using:
-    POST /repos/{template_owner}/{template_repo}/generate
-    """
-
-    steps: List[str] = []
-    warnings: List[str] = []
-
-    try:
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError("name must be a non-empty string")
-        name = name.strip()
-
-        if "/" in name or name.endswith(".git"):
-            raise ValueError("name must not contain '/' and must not end with '.git'")
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", name):
-            raise ValueError(
-                "name must match [A-Za-z0-9][A-Za-z0-9_.-]{0,99} (max 100 chars)"
-            )
-
-        if visibility is not None and private is not None:
-            inferred_private = visibility != "public"
-            if inferred_private != private:
-                raise ValueError("visibility and private disagree")
-
-        if visibility is not None:
-            effective_private = visibility != "public"
-        elif private is not None:
-            effective_private = bool(private)
-        else:
-            effective_private = False
-
-        target_owner = owner.strip() if isinstance(owner, str) and owner.strip() else None
-        authenticated_login: Optional[str] = None
-
-        # Resolve the authenticated user (needed for auto owner and template generation).
-        if owner_type != "org" or template_full_name:
-            user = await _github_request("GET", "/user")
-            if isinstance(user.get("json"), dict):
-                authenticated_login = user["json"].get("login")
-            if not target_owner:
-                target_owner = authenticated_login
-
-        if owner_type == "org" and not target_owner:
-            raise ValueError("owner is required when owner_type='org'")
-
-        use_org_endpoint = False
-        if owner_type == "org":
-            use_org_endpoint = True
-        elif owner_type == "user":
-            use_org_endpoint = False
-            if target_owner and authenticated_login and target_owner != authenticated_login:
-                warnings.append(
-                    f"owner '{target_owner}' differs from authenticated user '{authenticated_login}'; using user endpoint"
-                )
-        else:
-            # auto: if caller provided an owner different from auth login, assume org.
-            if target_owner and authenticated_login and target_owner != authenticated_login:
-                use_org_endpoint = True
-
-        create_target_desc = (
-            f"{target_owner}/{name}" if target_owner else f"(authenticated-user)/{name}"
-        )
-        _ensure_write_allowed(f"create repository {create_target_desc}")
-
-        def _apply_overrides(
-            base: Dict[str, Any], overrides: Optional[Dict[str, Any]]
-        ) -> Dict[str, Any]:
-            if overrides and isinstance(overrides, dict):
-                base.update(overrides)
-            return base
-
-        created_resp: Dict[str, Any]
-        create_payload: Dict[str, Any]
-
-        if template_full_name:
-            if not isinstance(template_full_name, str) or "/" not in template_full_name:
-                raise ValueError("template_full_name must look like 'owner/repo'")
-            template_full_name = template_full_name.strip()
-
-            steps.append(
-                f"Creating repository from template {template_full_name} as {create_target_desc}."
-            )
-            create_payload = {
-                "owner": target_owner,
-                "name": name,
-                "description": description,
-                "private": effective_private,
-                "include_all_branches": bool(include_all_branches),
-            }
-            create_payload = _apply_overrides(create_payload, create_payload_overrides)
-            created_resp = await _github_request(
-                "POST", f"/repos/{template_full_name}/generate", json_body=create_payload
-            )
-        else:
-            endpoint = "/user/repos"
-            if use_org_endpoint:
-                endpoint = f"/orgs/{target_owner}/repos"
-
-            steps.append(f"Creating repository {create_target_desc} via {endpoint}.")
-            create_payload = {
-                "name": name,
-                "description": description,
-                "homepage": homepage,
-                "private": effective_private,
-                "auto_init": bool(auto_init),
-                "is_template": bool(is_template),
-                "has_issues": bool(has_issues),
-                "has_wiki": bool(has_wiki),
-            }
-            if visibility is not None:
-                create_payload["visibility"] = visibility
-            if gitignore_template:
-                create_payload["gitignore_template"] = gitignore_template
-            if license_template:
-                create_payload["license_template"] = license_template
-            if has_projects is not None:
-                create_payload["has_projects"] = bool(has_projects)
-            if has_discussions is not None:
-                create_payload["has_discussions"] = bool(has_discussions)
-            if team_id is not None:
-                create_payload["team_id"] = int(team_id)
-            if security_and_analysis is not None:
-                create_payload["security_and_analysis"] = security_and_analysis
-
-            create_payload = _apply_overrides(create_payload, create_payload_overrides)
-            created_resp = await _github_request("POST", endpoint, json_body=create_payload)
-
-        repo_json = created_resp.get("json") if isinstance(created_resp, dict) else None
-        full_name = repo_json.get("full_name") if isinstance(repo_json, dict) else None
-        if not isinstance(full_name, str) or not full_name:
-            if target_owner:
-                full_name = f"{target_owner}/{name}"
-
-        updated_resp = None
-        if update_payload_overrides and full_name:
-            steps.append(f"Applying post-create settings to {full_name}.")
-            updated_resp = await _github_request(
-                "PATCH", f"/repos/{full_name}", json_body=dict(update_payload_overrides)
-            )
-
-        topics_resp = None
-        if topics and full_name:
-            cleaned = [t.strip() for t in topics if isinstance(t, str) and t.strip()]
-            if cleaned:
-                steps.append(f"Setting topics on {full_name}: {', '.join(cleaned)}.")
-                topics_resp = await _github_request(
-                    "PUT",
-                    f"/repos/{full_name}/topics",
-                    json_body={"names": cleaned},
-                    headers={"Accept": "application/vnd.github+json"},
-                )
-
-        workspace_dir = None
-        if clone_to_workspace and full_name:
-            steps.append(f"Cloning {full_name}@{clone_ref or 'default'} into workspace.")
-            workspace_dir = await _clone_repo(full_name, ref=clone_ref)
-
-        return {
-            "full_name": full_name,
-            "repo": repo_json,
-            "created": created_resp,
-            "create_payload": create_payload,
-            "updated": updated_resp,
-            "topics": topics_resp,
-            "workspace_dir": workspace_dir,
-            "steps": steps,
-            "warnings": warnings,
-        }
-    except Exception as exc:
-        return _structured_tool_error(exc, context="create_repository")
 
 
 @mcp_tool(write_action=False)
@@ -1134,10 +460,10 @@ async def list_recent_issues(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """Return recent issues the user can access (includes PRs)."""
+    from github_mcp.main_tools.issues import list_recent_issues as _impl
+    return await _impl(filter=filter, state=state, per_page=per_page, page=page)
 
-    params = {"filter": filter, "state": state, "per_page": per_page, "page": page}
-    return await _github_request("GET", "/issues", params=params)
+
 
 
 @mcp_tool(write_action=False)
@@ -1149,110 +475,77 @@ async def list_repository_issues(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List issues for a specific repository (includes PRs)."""
+    from github_mcp.main_tools.issues import list_repository_issues as _impl
+    return await _impl(full_name=full_name, state=state, labels=labels, assignee=assignee, per_page=per_page, page=page)
 
-    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
-    if labels:
-        params["labels"] = ",".join(labels)
-    if assignee is not None:
-        params["assignee"] = assignee
 
-    return await _github_request("GET", f"/repos/{full_name}/issues", params=params)
 
 
 @mcp_tool(write_action=False)
 async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
-    """Fetch a GitHub issue."""
+    from github_mcp.main_tools.issues import fetch_issue as _impl
+    return await _impl(full_name=full_name, issue_number=issue_number)
 
-    return await _github_request("GET", f"/repos/{full_name}/issues/{issue_number}")
+
 
 
 @mcp_tool(write_action=False)
 async def fetch_issue_comments(
     full_name: str, issue_number: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
-    """Fetch comments for a GitHub issue."""
+    from github_mcp.main_tools.issues import fetch_issue_comments as _impl
+    return await _impl(full_name=full_name, issue_number=issue_number, per_page=per_page, page=page)
 
-    params = {"per_page": per_page, "page": page}
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/issues/{issue_number}/comments",
-        params=params,
-    )
+
 
 
 @mcp_tool(write_action=False)
 async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
-    """Fetch pull request details."""
+    from github_mcp.main_tools.pull_requests import fetch_pr as _impl
+    return await _impl(full_name=full_name, pull_number=pull_number)
 
-    return await _github_request("GET", f"/repos/{full_name}/pulls/{pull_number}")
 
 
 @mcp_tool(write_action=False)
 async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
-    """Get metadata for a pull request."""
+    from github_mcp.main_tools.pull_requests import get_pr_info as _impl
+    return await _impl(full_name=full_name, pull_number=pull_number)
 
-    data = await fetch_pr(full_name, pull_number)
-    pr = data.get("json") or {}
-    if isinstance(pr, dict):
-        summary = {
-            "title": pr.get("title"),
-            "state": pr.get("state"),
-            "draft": pr.get("draft"),
-            "merged": pr.get("merged"),
-            "user": pr.get("user", {}).get("login") if isinstance(pr.get("user"), dict) else None,
-            "head": pr.get("head", {}).get("ref") if isinstance(pr.get("head"), dict) else None,
-            "base": pr.get("base", {}).get("ref") if isinstance(pr.get("base"), dict) else None,
-        }
-    else:
-        summary = None
-    return {"status_code": data.get("status_code"), "summary": summary, "pr": pr}
 
 
 @mcp_tool(write_action=False)
 async def fetch_pr_comments(
     full_name: str, pull_number: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
-    """Fetch issue-style comments for a pull request."""
+    from github_mcp.main_tools.pull_requests import fetch_pr_comments as _impl
+    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
-    params = {"per_page": per_page, "page": page}
-    return await _github_request(
-        "GET", f"/repos/{full_name}/issues/{pull_number}/comments", params=params
-    )
 
 
 @mcp_tool(write_action=False)
 async def list_pr_changed_filenames(
     full_name: str, pull_number: int, per_page: int = 100, page: int = 1
 ) -> Dict[str, Any]:
-    """List files changed in a pull request."""
+    from github_mcp.main_tools.pull_requests import list_pr_changed_filenames as _impl
+    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
-    params = {"per_page": per_page, "page": page}
-    return await _github_request(
-        "GET", f"/repos/{full_name}/pulls/{pull_number}/files", params=params
-    )
 
 
 @mcp_tool(write_action=False)
 async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
-    """Get combined status for a commit or ref."""
+    from github_mcp.main_tools.pull_requests import get_commit_combined_status as _impl
+    return await _impl(full_name=full_name, ref=ref)
 
-    return await _github_request("GET", f"/repos/{full_name}/commits/{ref}/status")
 
 
 @mcp_tool(write_action=False)
 async def get_issue_comment_reactions(
     full_name: str, comment_id: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
-    """Fetch reactions for an issue comment."""
+    from github_mcp.main_tools.issues import get_issue_comment_reactions as _impl
+    return await _impl(full_name=full_name, comment_id=comment_id, per_page=per_page, page=page)
 
-    params = {"per_page": per_page, "page": page}
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/issues/comments/{comment_id}/reactions",
-        params=params,
-        headers={"Accept": "application/vnd.github.squirrel-girl+json"},
-    )
+
 
 
 @mcp_tool(write_action=False)
@@ -1292,125 +585,9 @@ def list_write_tools() -> Dict[str, Any]:
     This is intended for assistants to discover what they can do safely without
     reading the entire main.py.
     """
+    from github_mcp.main_tools.introspection import list_write_tools as _impl
+    return _impl()
 
-    tools = [
-        {
-            "name": "authorize_write_actions",
-            "category": "control",
-            "description": "Enable or disable write tools within this MCP session.",
-            "notes": "Call with approved=true before using any write tools.",
-        },
-        {
-            "name": "create_branch",
-            "category": "branch",
-            "description": "Create a new branch from a base ref.",
-            "notes": "Prefer ensure_branch unless you know the branch does not exist.",
-        },
-        {
-            "name": "ensure_branch",
-            "category": "branch",
-            "description": "Ensure a branch exists, creating it from a base ref if needed.",
-            "notes": "Safe default for preparing branches before commits or PRs.",
-        },
-        {
-            "name": "update_file_and_open_pr",
-            "category": "pr",
-            "description": "Fast path: commit one file and open a PR without cloning.",
-            "notes": "Use for tiny fixes like lint nits or typo corrections.",
-        },
-        {
-            "name": "create_pull_request",
-            "category": "pr",
-            "description": "Open a GitHub pull request between two branches.",
-            "notes": "Usually called indirectly by higher-level tools.",
-        },
-        {
-            "name": "update_files_and_open_pr",
-            "category": "pr",
-            "description": "Commit multiple files and open a PR in one call.",
-            "notes": "Use primarily for docs and multi-file updates.",
-        },
-        {
-            "name": "ensure_workspace_clone",
-            "category": "workspace",
-            "description": "Ensure a persistent workspace exists for a repo/ref.",
-            "notes": "Clones if missing and can optionally reset to the remote ref; now allowed without toggling write approval so assistants can set up quickly.",
-        },
-        {
-            "name": "run_command",
-            "category": "workspace",
-            "description": "Run an arbitrary shell command in a persistent workspace clone.",
-            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls; set mutating=true (or installing_dependencies=true/use_temp_venv=false) when a command will modify files or server state so gating applies only to those cases.",
-        },
-        {
-            "name": "commit_workspace",
-            "category": "workspace",
-            "description": "Commit and optionally push changes from the persistent workspace.",
-            "notes": "Stages changes, commits with a provided message, and can push to the effective branch.",
-        },
-        {
-            "name": "commit_workspace_files",
-            "category": "workspace",
-            "description": "Commit a specific list of files from the persistent workspace.",
-            "notes": "Use to avoid staging temporary artifacts while still pushing changes to the branch.",
-        },
-        {
-            "name": "run_tests",
-            "category": "workspace",
-            "description": "Run tests (default: pytest) inside the persistent workspace clone.",
-            "notes": "Preferred way to run tests; shares the persistent workspace with run_command and commit helpers. Mark mutating=true only when the test command will edit files so read-only runs stay ungated.",
-        },
-        {
-            "name": "trigger_workflow_dispatch",
-            "category": "workflow",
-            "description": "Trigger a GitHub Actions workflow via workflow_dispatch.",
-            "notes": "Use only when Joey explicitly asks to run a workflow.",
-        },
-        {
-            "name": "trigger_and_wait_for_workflow",
-            "category": "workflow",
-            "description": "Trigger a workflow and poll until completion or timeout.",
-            "notes": "Summarize the run result in your response.",
-        },
-        {
-            "name": "create_issue",
-            "category": "issue",
-            "description": "Open a GitHub issue with optional body, labels, and assignees.",
-            "notes": "Use to capture new work items or questions.",
-        },
-        {
-            "name": "update_issue",
-            "category": "issue",
-            "description": "Update fields on an existing GitHub issue.",
-            "notes": "Adjust scope, status, or ownership directly in the issue.",
-        },
-        {
-            "name": "comment_on_issue",
-            "category": "issue",
-            "description": "Post a comment on an existing GitHub issue.",
-            "notes": "Log progress updates and decisions.",
-        },
-        {
-            "name": "merge_pull_request",
-            "category": "pr",
-            "description": "Merge an existing PR using the chosen method.",
-            "notes": "Assistants should only merge when Joey explicitly requests it.",
-        },
-        {
-            "name": "close_pull_request",
-            "category": "pr",
-            "description": "Close an existing PR without merging.",
-            "notes": "Only when Joey asks to close a PR.",
-        },
-        {
-            "name": "comment_on_pull_request",
-            "category": "pr",
-            "description": "Post a comment on an existing PR.",
-            "notes": "Use for status, summaries, or test results if Joey likes that pattern.",
-        },
-    ]
-
-    return {"tools": tools}
 
 
 @mcp_tool(write_action=False)
@@ -1449,72 +626,9 @@ async def move_file(
     branch: str = "main",
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Move or rename a file within a repository on a single branch.
+    from github_mcp.main_tools.files import move_file as _impl
+    return await _impl(full_name=full_name, from_path=from_path, to_path=to_path, branch=branch, message=message)
 
-    This helper reads the source path at the given branch, writes its contents
-    to the destination path, and then deletes the original path using the same
-    commit/contents APIs as other file helpers.
-    """
-
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-
-    effective_branch = _effective_ref_for_repo(full_name, branch)
-
-    _ensure_write_allowed(
-        f"move_file from {from_path} to {to_path} in {full_name}@{effective_branch}",
-        target_ref=effective_branch,
-    )
-
-    if from_path == to_path:
-        raise ValueError("from_path and to_path must be different")
-
-    # Read the source file text first.
-    source = await _decode_github_content(full_name, from_path, effective_branch)
-    source_text = source.get("text")
-    if source_text is None:
-        raise GitHubAPIError("Source file contents missing or undecodable")
-
-    commit_message = message or f"Move {from_path} to {to_path}"
-
-    # 1) Write the destination file with the source contents.
-    write_result = await apply_text_update_and_commit(
-        full_name=full_name,
-        path=to_path,
-        updated_content=source_text,
-        branch=effective_branch,
-        message=commit_message + " (add new path)",
-    )
-
-    # 2) Delete the original path now that the destination exists.
-    delete_body = {
-        "message": commit_message + " (remove old path)",
-        "branch": effective_branch,
-    }
-    try:
-        delete_body["sha"] = await _resolve_file_sha(full_name, from_path, effective_branch)
-    except GitHubAPIError as exc:
-        msg = str(exc)
-        if "404" in msg:
-            delete_result = {"status": "noop", "reason": "source path missing"}
-        else:
-            raise
-    else:
-        delete_result = await _github_request(
-            "DELETE",
-            f"/repos/{full_name}/contents/{from_path}",
-            json=delete_body,
-        )
-
-    return {
-        "status": "moved",
-        "full_name": full_name,
-        "branch": effective_branch,
-        "from_path": from_path,
-        "to_path": to_path,
-        "write_result": write_result,
-        "delete_result": delete_result,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -1535,33 +649,9 @@ async def fetch_files(
     paths: List[str],
     ref: str = "main",
 ) -> Dict[str, Any]:
-    """Fetch multiple files concurrently with per-file error isolation."""
+    from github_mcp.main_tools.content_cache import fetch_files as _impl
+    return await _impl(full_name=full_name, paths=paths, ref=ref)
 
-    results: Dict[str, Any] = {}
-    sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
-
-    async def _fetch_single(p: str) -> None:
-        normalized_path = _normalize_repo_path(p)
-        async with sem:
-            try:
-                decoded = await _decode_github_content(full_name, normalized_path, ref)
-                cached = _cache_file_result(
-                    full_name=full_name,
-                    path=normalized_path,
-                    ref=ref,
-                    decoded=decoded,
-                )
-                results[p] = cached
-            except Exception as e:
-                # Use a consistent error envelope so controllers can rely on structure.
-                results[p] = _structured_tool_error(
-                    str(e),
-                    context="fetch_files",
-                    path=p,
-                )
-
-    await asyncio.gather(*[_fetch_single(p) for p in paths])
-    return {"files": results}
 
 
 @mcp_tool(
@@ -1578,20 +668,9 @@ async def get_cached_files(
     paths: List[str],
     ref: str = "main",
 ) -> Dict[str, Any]:
-    """Return cached file entries and list any missing paths."""
+    from github_mcp.main_tools.content_cache import get_cached_files as _impl
+    return await _impl(full_name=full_name, paths=paths, ref=ref)
 
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    normalized_paths = [_normalize_repo_path(p) for p in paths]
-    cached = bulk_get_cached(full_name, effective_ref, normalized_paths)
-    missing = [p for p in normalized_paths if p not in cached]
-
-    return {
-        "full_name": full_name,
-        "ref": effective_ref,
-        "files": cached,
-        "missing": missing,
-        "cache": cache_stats(),
-    }
 
 
 @mcp_tool(
@@ -1609,40 +688,9 @@ async def cache_files(
     ref: str = "main",
     refresh: bool = False,
 ) -> Dict[str, Any]:
-    """Fetch files and store them in the in-process cache."""
+    from github_mcp.main_tools.content_cache import cache_files as _impl
+    return await _impl(full_name=full_name, paths=paths, ref=ref, refresh=refresh)
 
-    results: Dict[str, Any] = {}
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    normalized_paths = [_normalize_repo_path(p) for p in paths]
-    cached_existing: Dict[str, Any] = {}
-    if not refresh:
-        cached_existing = bulk_get_cached(full_name, effective_ref, normalized_paths)
-
-    sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
-
-    async def _cache_single(p: str) -> None:
-        async with sem:
-            if not refresh and p in cached_existing:
-                results[p] = {**cached_existing[p], "cached": True}
-                return
-
-            decoded = await _decode_github_content(full_name, p, effective_ref)
-            cached = cache_payload(
-                full_name=full_name,
-                ref=effective_ref,
-                path=p,
-                decoded=decoded,
-            )
-            results[p] = {**cached, "cached": False}
-
-    await asyncio.gather(*[_cache_single(p) for p in normalized_paths])
-
-    return {
-        "full_name": full_name,
-        "ref": effective_ref,
-        "files": results,
-        "cache": cache_stats(),
-    }
 
 
 @mcp_tool(write_action=False)
@@ -1655,83 +703,9 @@ async def list_repository_tree(
     include_blobs: bool = True,
     include_trees: bool = True,
 ) -> Dict[str, Any]:
-    """List files and folders in a repository tree with optional filtering.
+    from github_mcp.main_tools.content_cache import list_repository_tree as _impl
+    return await _impl(full_name=full_name, ref=ref, path_prefix=path_prefix, recursive=recursive, max_entries=max_entries, include_blobs=include_blobs, include_trees=include_trees)
 
-    Args:
-        full_name: ``owner/repo`` string.
-        ref: Branch, tag, or commit SHA to inspect (default ``main``).
-        path_prefix: If set, only include entries whose paths start with this
-            prefix (useful for zooming into subdirectories without fetching a
-            huge response).
-        recursive: Whether to request a recursive tree (default ``True``).
-        max_entries: Maximum number of entries to return (default ``1000``).
-        include_blobs: Include files in the listing (default ``True``).
-        include_trees: Include directories in the listing (default ``True``).
-
-    The GitHub Trees API caps responses at 100,000 entries server side. This
-    tool applies an additional ``max_entries`` limit so assistants get a fast,
-    bounded listing. When ``truncated`` is true in the response, narrow the
-    ``path_prefix`` and call again.
-    """
-
-    if max_entries <= 0:
-        raise ValueError("max_entries must be a positive integer")
-
-    params = {"recursive": 1 if recursive else 0}
-    data = await _github_request("GET", f"/repos/{full_name}/git/trees/{ref}", params=params)
-
-    payload = data.get("json") or {}
-    tree = payload.get("tree")
-    if not isinstance(tree, list):
-        raise GitHubAPIError("Unexpected tree response from GitHub")
-
-    allowed_types = set()
-    if include_blobs:
-        allowed_types.add("blob")
-    if include_trees:
-        allowed_types.add("tree")
-    if not allowed_types:
-        return {
-            "entries": [],
-            "entry_count": 0,
-            "truncated": False,
-            "message": "Both blobs and trees were excluded; nothing to return.",
-        }
-
-    normalized_prefix = path_prefix.lstrip("/") if path_prefix else None
-
-    filtered_entries: List[Dict[str, Any]] = []
-    for entry in tree:
-        if not isinstance(entry, dict):
-            continue
-        entry_type = entry.get("type")
-        if entry_type not in allowed_types:
-            continue
-        path = entry.get("path")
-        if not isinstance(path, str):
-            continue
-        if normalized_prefix and not path.startswith(normalized_prefix):
-            continue
-
-        normalized_path = _normalize_repo_path(path)
-
-        filtered_entries.append(
-            {
-                "path": normalized_path,
-                "type": entry_type,
-                "mode": entry.get("mode"),
-                "size": entry.get("size"),
-                "sha": entry.get("sha"),
-            }
-        )
-
-    truncated = len(filtered_entries) > max_entries
-    return {
-        "ref": payload.get("sha") or ref,
-        "entry_count": len(filtered_entries),
-        "truncated": truncated,
-        "entries": filtered_entries[:max_entries],
-    }
 
 
 @mcp_tool(write_action=False)
@@ -1739,37 +713,16 @@ async def graphql_query(
     query: str,
     variables: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Execute a GitHub GraphQL query using the shared HTTP client and logging wrapper."""
+    from github_mcp.main_tools.querying import graphql_query as _impl
+    return await _impl(query=query, variables=variables)
 
-    payload = {"query": query, "variables": variables or {}}
-    result = await _github_request(
-        "POST",
-        "/graphql",
-        json_body=payload,
-    )
-    return result.get("json")
 
 
 @mcp_tool(write_action=False)
 async def fetch_url(url: str) -> Dict[str, Any]:
-    """Fetch an arbitrary HTTP/HTTPS URL via the shared external client."""
+    from github_mcp.main_tools.querying import fetch_url as _impl
+    return await _impl(url=url)
 
-    client = _external_client_instance()
-    async with _get_concurrency_semaphore():
-        try:
-            resp = await client.get(url)
-        except Exception as e:
-            return _structured_tool_error(
-                str(e),
-                context="fetch_url",
-                path=url,
-            )
-
-    return {
-        "status_code": resp.status_code,
-        "headers": dict(resp.headers),
-        "content": resp.text,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -1781,25 +734,9 @@ async def search(
     sort: Optional[str] = None,
     order: Optional[Literal["asc", "desc"]] = None,
 ) -> Dict[str, Any]:
-    """Perform GitHub search queries (code, repos, issues, commits, or users)."""
+    from github_mcp.main_tools.querying import search as _impl
+    return await _impl(query=query, search_type=search_type, per_page=per_page, page=page, sort=sort, order=order)
 
-    allowed_types = {"code", "repositories", "issues", "commits", "users"}
-    if search_type not in allowed_types:
-        raise ValueError(f"search_type must be one of {sorted(allowed_types)}")
-    if per_page <= 0:
-        raise ValueError("per_page must be > 0")
-    if page <= 0:
-        raise ValueError("page must be > 0")
-
-    params: Dict[str, Any] = {"q": query, "per_page": per_page, "page": page}
-    if sort:
-        params["sort"] = sort
-    if order is not None:
-        allowed_order = {"asc", "desc"}
-        if order not in allowed_order:
-            raise ValueError("order must be 'asc' or 'desc'")
-        params["order"] = order
-    return await _github_request("GET", f"/search/{search_type}", params=params)
 
 
 @mcp_tool(write_action=False)
@@ -1821,6 +758,13 @@ async def download_user_content(content_url: str) -> Dict[str, Any]:
     }
 
 
+def _decode_zipped_job_logs(content: bytes) -> str:
+    """Decode a zipped GitHub Actions job logs payload into a readable string."""
+    from github_mcp.utils import _decode_zipped_job_logs as _impl
+    return _impl(content)
+
+
+
 # ------------------------------------------------------------------------------
 # GitHub Actions tools
 # ------------------------------------------------------------------------------
@@ -1836,26 +780,9 @@ async def list_workflow_runs(
     page: int = 1,
 ) -> Dict[str, Any]:
     """List recent GitHub Actions workflow runs with optional filters."""
+    from github_mcp.main_tools.workflows import list_workflow_runs as _impl
+    return await _impl(full_name=full_name, branch=branch, status=status, event=event, per_page=per_page, page=page)
 
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-    if per_page <= 0:
-        raise ValueError("per_page must be > 0")
-    if page <= 0:
-        raise ValueError("page must be > 0")
-
-    params: Dict[str, Any] = {"per_page": per_page, "page": page}
-    if branch:
-        params["branch"] = branch
-    if status:
-        params["status"] = status
-    if event:
-        params["event"] = event
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/actions/runs",
-        params=params,
-    )
 
 
 @mcp_tool(write_action=False)
@@ -1871,71 +798,9 @@ async def list_recent_failures(
     cancelled, or timed out). It is intended as a navigation helper for CI
     debugging flows.
     """
+    from github_mcp.main_tools.workflows import list_recent_failures as _impl
+    return await _impl(full_name=full_name, branch=branch, limit=limit)
 
-    if limit <= 0:
-        raise ValueError("limit must be > 0")
-
-    # Fetch a bounded page of recent runs; callers can tune ``limit`` but
-    # results are further filtered to non-successful conclusions.
-    per_page = min(max(limit, 10), 50)
-
-    runs_resp = await list_workflow_runs(
-        full_name=full_name,
-        branch=branch,
-        per_page=per_page,
-        page=1,
-    )
-
-    runs_json = runs_resp.get("json") or {}
-    raw_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
-
-    failure_conclusions = {
-        "failure",
-        "cancelled",
-        "timed_out",
-        "action_required",
-        "startup_failure",
-    }
-
-    failures: List[Dict[str, Any]] = []
-    for run in raw_runs:
-        status = run.get("status")
-        conclusion = run.get("conclusion")
-
-        if conclusion in failure_conclusions:
-            include = True
-        elif status == "completed" and conclusion not in (None, "success", "neutral", "skipped"):
-            include = True
-        else:
-            include = False
-
-        if not include:
-            continue
-
-        failures.append(
-            {
-                "id": run.get("id"),
-                "name": run.get("name"),
-                "event": run.get("event"),
-                "status": status,
-                "conclusion": conclusion,
-                "head_branch": run.get("head_branch"),
-                "head_sha": run.get("head_sha"),
-                "created_at": run.get("created_at"),
-                "updated_at": run.get("updated_at"),
-                "html_url": run.get("html_url"),
-            }
-        )
-
-        if len(failures) >= limit:
-            break
-
-    return {
-        "full_name": full_name,
-        "branch": branch,
-        "limit": limit,
-        "runs": failures,
-    }
 
 
 @mcp_tool(
@@ -1950,51 +815,10 @@ async def list_tools(
     only_read: bool = False,
     name_prefix: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Lightweight tool catalog.
+    """Lightweight tool catalog."""
+    from github_mcp.main_tools.introspection import list_tools as _impl
+    return await _impl(only_write=only_write, only_read=only_read, name_prefix=name_prefix)
 
-    Args:
-        only_write: If True, return only write-tagged tools.
-        only_read: If True, return only read-tagged tools.
-        name_prefix: Optional prefix filter for tool names.
-
-    Notes:
-        - For schema/args: call describe_tool(include_parameters=true) and validate_tool_args.
-        - If you see tool-call JSON/schema errors: stop guessing and re-read the schema.
-    """
-
-    if only_write and only_read:
-        raise ValueError("only_write and only_read cannot both be true")
-
-    catalog = list_all_actions(include_parameters=False, compact=True)
-    tools = []
-    for entry in catalog.get("tools", []) or []:
-        name = entry.get("name")
-        if not isinstance(name, str):
-            continue
-        if name_prefix and not name.startswith(name_prefix):
-            continue
-
-        write_action = bool(entry.get("write_action"))
-        if only_write and not write_action:
-            continue
-        if only_read and write_action:
-            continue
-
-        tools.append(
-            {
-                "name": name,
-                "write_action": write_action,
-                "operation": entry.get("operation"),
-                "risk_level": entry.get("risk_level"),
-                "auto_approved": bool(entry.get("auto_approved")),
-            }
-        )
-
-    tools.sort(key=lambda t: t["name"])
-    return {
-        "write_actions_enabled": server.WRITE_ALLOWED,
-        "tools": tools,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -2014,100 +838,9 @@ def list_all_actions(
             set), shorten descriptions and omit tag metadata to keep responses
             compact.
     """
+    from github_mcp.main_tools.introspection import list_all_actions as _impl
+    return _impl(include_parameters=include_parameters, compact=compact)
 
-    compact_mode = COMPACT_METADATA_DEFAULT if compact is None else compact
-
-    tools: List[Dict[str, Any]] = []
-    seen_names: set[str] = set()
-
-    for tool, func in _REGISTERED_MCP_TOOLS:
-        name = getattr(tool, "name", None) or getattr(func, "__name__", None)
-        if not name:
-            continue
-        name_str = str(name)
-        if name_str in seen_names:
-            continue
-        seen_names.add(name_str)
-
-        meta = getattr(tool, "meta", {}) or {}
-        annotations = getattr(tool, "annotations", None)
-
-        description = getattr(tool, "description", None) or (func.__doc__ or "")
-        description = description.strip()
-
-        # In non-compact mode, prefer the full function docstring when it
-        # contains more detail than the MCP-level description. Some tools
-        # expose a short summary via tool.description but keep richer guidance
-        # in the underlying docstring.
-        if not compact_mode:
-            full_doc = (func.__doc__ or "").strip()
-            if full_doc and len(full_doc) > len(description):
-                description = full_doc
-
-        if compact_mode and description:
-            compact_description = description.splitlines()[0].strip() or description
-            max_length = 200
-            if len(compact_description) > max_length:
-                compact_description = f"{compact_description[: max_length - 3].rstrip()}..."
-            description = compact_description
-
-        tool_info: Dict[str, Any] = {
-            "name": name_str,
-            "write_action": bool(meta.get("write_action")),
-            "auto_approved": bool(meta.get("auto_approved")),
-            "read_only_hint": getattr(annotations, "readOnlyHint", None),
-        }
-
-        if description:
-            tool_info["description"] = description
-
-        if not compact_mode:
-            tool_info["tags"] = sorted(list(getattr(tool, "tags", []) or []))
-
-        if include_parameters:
-            # Surface a best-effort JSON schema for each tool so callers can
-            # reason about argument names and types. When the underlying MCP
-            # tool does not expose an explicit inputSchema, we still return a
-            # minimal object schema instead of ``null`` so downstream
-            # assistants can treat the presence of input_schema as a stable
-            # contract.
-            schema = _normalize_input_schema(tool)
-            if schema is None:
-                schema = {"type": "object", "properties": {}}
-            tool_info["input_schema"] = schema
-
-        tools.append(tool_info)
-
-    # Include this helper itself so describe_tool can inspect it.
-    if "list_all_actions" not in seen_names:
-        synthetic: Dict[str, Any] = {
-            "name": "list_all_actions",
-            "write_action": False,
-            "auto_approved": True,
-            "read_only_hint": True,
-            "description": "Enumerate every available MCP tool with read/write metadata.",
-        }
-        if not compact_mode:
-            synthetic["tags"] = ["meta"]
-        if include_parameters:
-            synthetic["input_schema"] = {
-                "type": "object",
-                "properties": {
-                    "include_parameters": {"type": "boolean"},
-                    "compact": {"type": ["boolean", "null"]},
-                },
-                "additionalProperties": False,
-            }
-        tools.append(synthetic)
-        seen_names.add("list_all_actions")
-
-    tools.sort(key=lambda entry: entry["name"])
-
-    return {
-        "write_actions_enabled": server.WRITE_ALLOWED,
-        "compact": compact_mode,
-        "tools": tools,
-    }
 
 
 @mcp_tool(
@@ -2137,102 +870,16 @@ async def describe_tool(
         include_parameters: When True, include the serialized input schema for
             each tool (equivalent to list_all_actions(include_parameters=True)).
     """
+    from github_mcp.main_tools.introspection import describe_tool as _impl
+    return await _impl(name=name, names=names, include_parameters=include_parameters)
 
-    if names is None or len(names) == 0:
-        if not name:
-            raise ValueError("describe_tool requires 'name' or 'names'.")
-        names = [name]
-    else:
-        # Normalize and deduplicate while preserving order.
-        seen = set()
-        normalized: List[str] = []
-        for candidate in names:
-            if not isinstance(candidate, str):
-                raise TypeError("names must be a list of strings.")
-            if candidate not in seen:
-                seen.add(candidate)
-                normalized.append(candidate)
-        if name and name not in seen:
-            normalized.insert(0, name)
-        names = normalized
-
-    if len(names) == 0:
-        raise ValueError("describe_tool requires at least one tool name.")
-    if len(names) > 10:
-        raise ValueError("describe_tool can return at most 10 tools per call.")
-
-    catalog = list_all_actions(include_parameters=include_parameters, compact=False)
-    tools_index = {entry.get("name"): entry for entry in catalog.get("tools", [])}
-
-    found: List[Dict[str, Any]] = []
-    missing: List[str] = []
-
-    for tool_name in names:
-        entry = tools_index.get(tool_name)
-        if entry is None:
-            missing.append(tool_name)
-        else:
-            found.append(entry)
-
-    if not found:
-        raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
-
-    result: Dict[str, Any] = {"tools": found}
-
-    # Preserve the legacy single-tool shape for backwards compatibility by
-    # mirroring the first tool's metadata at the top level.
-    first = found[0]
-    for key, value in first.items():
-        result.setdefault(key, value)
-
-    if missing:
-        result["missing_tools"] = sorted(set(missing))
-
-    return result
 
 
 def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
+    from github_mcp.main_tools.introspection import _validate_single_tool_args as _impl
+    return _impl(tool_name=tool_name, args=args)
 
-    found = _find_registered_tool(tool_name)
-    if found is None:
-        available = sorted(
-            set(
-                getattr(tool, "name", None) or getattr(func, "__name__", None)
-                for tool, func in _REGISTERED_MCP_TOOLS
-                if getattr(tool, "name", None) or getattr(func, "__name__", None)
-            )
-        )
-        raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
-
-    tool, _ = found
-    schema = _normalize_input_schema(tool)
-    if schema is None:
-        raise ValueError(f"Tool {tool_name!r} does not expose an input schema")
-
-    normalized_args = normalize_args(dict(args or {}))
-
-    # jsonschema can infer an appropriate validator for the schema version.
-    validator_cls = jsonschema.validators.validator_for(schema)
-    validator_cls.check_schema(schema)
-    validator = validator_cls(schema)
-
-    errors = [
-        {
-            "message": error.message,
-            "path": list(error.absolute_path),
-            "validator": error.validator,
-            "validator_value": error.validator_value,
-        }
-        for error in sorted(validator.iter_errors(normalized_args), key=str)
-    ]
-
-    return {
-        "tool": tool_name,
-        "valid": len(errors) == 0,
-        "errors": errors,
-        "schema": schema,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -2268,73 +915,18 @@ async def validate_tool_args(
         The first entry in results is mirrored at the top level (tool, valid,
         errors, schema) for backwards compatibility with existing callers.
     """
+    from github_mcp.main_tools.introspection import validate_tool_args as _impl
+    return await _impl(tool_name=tool_name, payload=payload, tool_names=tool_names)
 
-    # Legacy single-tool behavior when no batch list is provided.
-    if not tool_names:
-        if not tool_name:
-            raise ValueError("validate_tool_args requires 'tool_name' or 'tool_names'.")
-        return _validate_single_tool_args(tool_name, payload)
-
-    # Normalize and deduplicate the batch list while preserving order and
-    # ensuring an explicit tool_name (when provided) is included.
-    seen = set()
-    normalized: List[str] = []
-
-    for candidate in tool_names:
-        if not isinstance(candidate, str):
-            raise TypeError("tool_names must be a list of strings.")
-        if candidate not in seen:
-            seen.add(candidate)
-            normalized.append(candidate)
-
-    if tool_name and tool_name not in seen:
-        normalized.insert(0, tool_name)
-
-    if len(normalized) == 0:
-        raise ValueError("validate_tool_args requires at least one tool name.")
-    if len(normalized) > 10:
-        raise ValueError("validate_tool_args can validate at most 10 tools per call.")
-
-    results: List[Dict[str, Any]] = []
-    missing: List[str] = []
-
-    for name in normalized:
-        try:
-            result = _validate_single_tool_args(name, payload)
-        except ValueError as exc:
-            msg = str(exc)
-            if msg.startswith("Unknown tool ") and "Available tools:" in msg:
-                missing.append(name)
-                continue
-            raise
-        else:
-            results.append(result)
-
-    if not results:
-        raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
-
-    response: Dict[str, Any] = {"results": results}
-
-    # Preserve the legacy single-tool shape for backwards compatibility by
-    # mirroring the first result's metadata at the top level.
-    first = results[0]
-    for key, value in first.items():
-        response.setdefault(key, value)
-
-    if missing:
-        response["missing_tools"] = sorted(set(missing))
-
-    return response
 
 
 
 @mcp_tool(write_action=False)
 async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
     """Retrieve a specific workflow run including timing and conclusion."""
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/actions/runs/{run_id}",
-    )
+    from github_mcp.main_tools.workflows import get_workflow_run as _impl
+    return await _impl(full_name=full_name, run_id=run_id)
+
 
 
 @mcp_tool(write_action=False)
@@ -2345,20 +937,9 @@ async def list_workflow_run_jobs(
     page: int = 1,
 ) -> Dict[str, Any]:
     """List jobs within a workflow run, useful for troubleshooting failures."""
+    from github_mcp.main_tools.workflows import list_workflow_run_jobs as _impl
+    return await _impl(full_name=full_name, run_id=run_id, per_page=per_page, page=page)
 
-    if "/" not in full_name:
-        raise ValueError("full_name must be in 'owner/repo' format")
-    if per_page <= 0:
-        raise ValueError("per_page must be > 0")
-    if page <= 0:
-        raise ValueError("page must be > 0")
-
-    params = {"per_page": per_page, "page": page}
-    return await _github_request(
-        "GET",
-        f"/repos/{full_name}/actions/runs/{run_id}/jobs",
-        params=params,
-    )
 
 
 @mcp_tool(write_action=False)
@@ -2374,197 +955,17 @@ async def get_workflow_run_overview(
     failed jobs, and the longest jobs by duration so assistants can answer
     "what happened in this run?" with a single tool call.
     """
+    from github_mcp.main_tools.workflows import get_workflow_run_overview as _impl
+    return await _impl(full_name=full_name, run_id=run_id, max_jobs=max_jobs)
 
-    if max_jobs <= 0:
-        raise ValueError("max_jobs must be > 0")
-
-    run_resp = await get_workflow_run(full_name, run_id)
-    run_json = run_resp.get("json") if isinstance(run_resp, dict) else run_resp
-    if not isinstance(run_json, dict):
-        run_json = {}
-
-    run_summary: Dict[str, Any] = {
-        "id": run_json.get("id"),
-        "name": run_json.get("name"),
-        "event": run_json.get("event"),
-        "status": run_json.get("status"),
-        "conclusion": run_json.get("conclusion"),
-        "head_branch": run_json.get("head_branch"),
-        "head_sha": run_json.get("head_sha"),
-        "run_attempt": run_json.get("run_attempt"),
-        "created_at": run_json.get("created_at"),
-        "updated_at": run_json.get("updated_at"),
-        "html_url": run_json.get("html_url"),
-    }
-
-    def _parse_timestamp(value: Any) -> Optional[datetime]:
-        if not isinstance(value, str):
-            return None
-        try:
-            if value.endswith("Z"):
-                value = value[:-1] + "+00:00"
-            return datetime.fromisoformat(value)
-        except Exception:
-            return None
-
-    jobs: List[Dict[str, Any]] = []
-    failed_jobs: List[Dict[str, Any]] = []
-    jobs_with_duration: List[Dict[str, Any]] = []
-
-    failure_conclusions = {
-        "failure",
-        "cancelled",
-        "timed_out",
-        "action_required",
-        "startup_failure",
-    }
-
-    # Paginate through all jobs for the run up to max_jobs so we do not
-    # silently drop jobs when there are more than a single page. In tests we
-    # often stub list_workflow_run_jobs without real pagination, so we also
-    # break if a subsequent page returns the same job IDs as the previous one.
-    per_page = 100
-    page = 1
-    fetched = 0
-    last_page_job_ids: Optional[List[Any]] = None
-
-    while fetched < max_jobs:
-        remaining = max_jobs - fetched
-        page_per_page = per_page if remaining >= per_page else remaining
-
-        jobs_resp = await list_workflow_run_jobs(
-            full_name, run_id, per_page=page_per_page, page=page
-        )
-        jobs_json = jobs_resp.get("json") or {}
-        raw_jobs = jobs_json.get("jobs", []) if isinstance(jobs_json, dict) else []
-
-        # Stop if there are no more jobs.
-        if not raw_jobs:
-            break
-
-        # Defensive guard: if a subsequent page returns the exact same set of
-        # job IDs as the previous page, treat it as the end of the result set
-        # instead of looping forever (useful when tests stub out pagination).
-        page_job_ids = [job.get("id") for job in raw_jobs if isinstance(job, dict)]
-        if page_job_ids and last_page_job_ids is not None and page_job_ids == last_page_job_ids:
-            break
-        last_page_job_ids = page_job_ids
-
-        for job in raw_jobs:
-            if not isinstance(job, dict):
-                continue
-
-            status = job.get("status")
-            conclusion = job.get("conclusion")
-            started_at = job.get("started_at")
-            completed_at = job.get("completed_at")
-
-            start_dt = _parse_timestamp(started_at)
-            end_dt = _parse_timestamp(completed_at)
-            duration_seconds: Optional[float] = None
-            if start_dt and end_dt:
-                duration_seconds = max(0.0, (end_dt - start_dt).total_seconds())
-
-            normalized = {
-                "id": job.get("id"),
-                "name": job.get("name"),
-                "status": status,
-                "conclusion": conclusion,
-                "started_at": started_at,
-                "completed_at": completed_at,
-                "duration_seconds": duration_seconds,
-                "html_url": job.get("html_url"),
-            }
-            jobs.append(normalized)
-            fetched += 1
-
-            if duration_seconds is not None:
-                jobs_with_duration.append(normalized)
-
-            include_failure = False
-            if conclusion in failure_conclusions:
-                include_failure = True
-            elif status == "completed" and conclusion not in (
-                None,
-                "success",
-                "neutral",
-                "skipped",
-            ):
-                include_failure = True
-            if include_failure:
-                failed_jobs.append(normalized)
-
-            if fetched >= max_jobs:
-                break
-
-        if fetched >= max_jobs:
-            break
-
-        page += 1
-
-    longest_jobs = sorted(
-        jobs_with_duration,
-        key=lambda j: j.get("duration_seconds") or 0.0,
-        reverse=True,
-    )[:5]
-
-    summary_lines: list[str] = []
-
-    status = run_summary.get("status") or "unknown"
-    conclusion = run_summary.get("conclusion") or "unknown"
-    name = run_summary.get("name") or str(run_summary.get("id") or run_id)
-
-    summary_lines.append("Workflow run overview:")
-    summary_lines.append(f"- Name: {name}")
-    summary_lines.append(f"- Status: {status}")
-    summary_lines.append(f"- Conclusion: {conclusion}")
-    summary_lines.append(f"- Jobs: {len(jobs)} total, {len(failed_jobs)} failed")
-
-    if longest_jobs:
-        summary_lines.append("- Longest jobs by duration:")
-        for job in longest_jobs:
-            j_name = job.get("name") or job.get("id")
-            dur = job.get("duration_seconds")
-            if j_name is None or dur is None:
-                continue
-            summary_lines.append(f"  * {j_name}: {int(dur)}s")
-
-    return {
-        "full_name": full_name,
-        "run_id": run_id,
-        "run": run_summary,
-        "jobs": jobs,
-        "failed_jobs": failed_jobs,
-        "longest_jobs": longest_jobs,
-        "controller_log": summary_lines,
-    }
 
 
 @mcp_tool(write_action=False)
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     """Fetch raw logs for a GitHub Actions job without truncation."""
+    from github_mcp.main_tools.workflows import get_job_logs as _impl
+    return await _impl(full_name=full_name, job_id=job_id)
 
-    client = _http_client_github or _github_client_instance()
-    request = client.build_request(
-        "GET",
-        f"/repos/{full_name}/actions/jobs/{job_id}/logs",
-        headers={"Accept": "application/vnd.github+json"},
-    )
-    async with _get_concurrency_semaphore():
-        resp = await client.send(request, follow_redirects=True)
-    if resp.status_code >= 400:
-        raise GitHubAPIError(f"GitHub job logs error {resp.status_code}: {resp.text}")
-    content_type = resp.headers.get("Content-Type", "")
-    if "zip" in content_type.lower():
-        logs = _decode_zipped_job_logs(resp.content)
-    else:
-        logs = resp.text
-
-    return {
-        "status_code": resp.status_code,
-        "logs": logs,
-        "content_type": content_type,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -2575,50 +976,9 @@ async def wait_for_workflow_run(
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
     """Poll a workflow run until completion or timeout."""
+    from github_mcp.main_tools.workflows import wait_for_workflow_run as _impl
+    return await _impl(full_name=full_name, run_id=run_id, timeout_seconds=timeout_seconds, poll_interval_seconds=poll_interval_seconds)
 
-    client = _github_client_instance()
-    end_time = asyncio.get_event_loop().time() + timeout_seconds
-
-    while True:
-        async with _get_concurrency_semaphore():
-            resp = await client.get(
-                f"/repos/{full_name}/actions/runs/{run_id}",
-            )
-        if resp.status_code >= 400:
-            raise GitHubAPIError(f"GitHub workflow run error {resp.status_code}: {resp.text}")
-
-        data = resp.json()
-        status = data.get("status")
-        conclusion = data.get("conclusion")
-
-        if status == "completed":
-            summary_lines = [
-                "Workflow run finished:",
-                f"- Status: {status}",
-                f"- Conclusion: {conclusion}",
-            ]
-            return {
-                "status": status,
-                "conclusion": conclusion,
-                "run": data,
-                "controller_log": summary_lines,
-            }
-
-        if asyncio.get_event_loop().time() > end_time:
-            summary_lines = [
-                "Workflow run timed out while waiting for completion:",
-                f"- Last known status: {status}",
-                f"- Last known conclusion: {conclusion}",
-                f"- Timeout seconds: {timeout_seconds}",
-            ]
-            return {
-                "status": status,
-                "timeout": True,
-                "run": data,
-                "controller_log": summary_lines,
-            }
-
-        await asyncio.sleep(poll_interval_seconds)
 
 
 @mcp_tool(
@@ -2632,106 +992,9 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
     It is designed for assistants to call before doing any write work so
     they understand the current state of an issue.
     """
-    # Reuse the richer context helper so we see branches / PRs / labels, etc.
-    context = await open_issue_context(full_name=full_name, issue_number=issue_number)
-    issue = context.get("issue") or {}
-    if not isinstance(issue, dict):
-        issue = {}
+    from github_mcp.main_tools.issues import get_issue_overview as _impl
+    return await _impl(full_name=full_name, issue_number=issue_number)
 
-    def _normalize_labels(raw: Any) -> List[Dict[str, Any]]:
-        labels: List[Dict[str, Any]] = []
-        if isinstance(raw, list):
-            for item in raw:
-                if isinstance(item, dict):
-                    labels.append(
-                        {
-                            "name": str(item.get("name", "")),
-                            "color": item.get("color"),
-                        }
-                    )
-                elif isinstance(item, str):
-                    labels.append({"name": item})
-        return labels
-
-    def _normalize_user(raw: Any) -> Optional[Dict[str, Any]]:
-        if not isinstance(raw, dict):
-            return None
-        login = raw.get("login")
-        if not isinstance(login, str):
-            return None
-        return {"login": login, "html_url": raw.get("html_url")}
-
-    def _normalize_assignees(raw: Any) -> List[Dict[str, Any]]:
-        assignees: List[Dict[str, Any]] = []
-        if isinstance(raw, list):
-            for user in raw:
-                normalized = _normalize_user(user)
-                if normalized is not None:
-                    assignees.append(normalized)
-        return assignees
-
-    # Core issue fields
-    normalized_issue: Dict[str, Any] = {
-        "number": issue.get("number"),
-        "title": issue.get("title"),
-        "state": issue.get("state"),
-        "html_url": issue.get("html_url"),
-        "created_at": issue.get("created_at"),
-        "updated_at": issue.get("updated_at"),
-        "closed_at": issue.get("closed_at"),
-        "user": _normalize_user(issue.get("user")),
-        "assignees": _normalize_assignees(issue.get("assignees")),
-        "labels": _normalize_labels(issue.get("labels")),
-    }
-
-    body_text = issue.get("body") or ""
-
-    def _extract_checklist_items(text: str, source: str) -> List[Dict[str, Any]]:
-        items: List[Dict[str, Any]] = []
-        for raw_line in text.splitlines():
-            line = raw_line.lstrip()
-            if line.startswith("- [ ") or line.startswith("- [") or line.startswith("* ["):
-                checked = "[x]" in line.lower() or "[X]" in line
-                # Strip the leading marker (e.g. "- [ ]" / "- [x]")
-                after = line.split("]", 1)
-                description = after[1].strip() if len(after) > 1 else raw_line.strip()
-                if description:
-                    items.append(
-                        {
-                            "text": description,
-                            "checked": bool(checked),
-                            "source": source,
-                        }
-                    )
-        return items
-
-    checklist_items: List[Dict[str, Any]] = []
-    if body_text:
-        checklist_items.extend(_extract_checklist_items(body_text, source="issue_body"))
-
-    # Pull checklist items from comments as well, if available.
-    comments = context.get("comments")
-    if isinstance(comments, list):
-        for comment in comments:
-            if not isinstance(comment, dict):
-                continue
-            body = comment.get("body")
-            if not isinstance(body, str) or not body.strip():
-                continue
-            checklist_items.extend(_extract_checklist_items(body, source="comment"))
-
-    # Related branches / PRs are already computed by open_issue_context.
-    candidate_branches = context.get("candidate_branches") or []
-    open_prs = context.get("open_prs") or []
-    closed_prs = context.get("closed_prs") or []
-
-    return {
-        "issue": normalized_issue,
-        "candidate_branches": candidate_branches,
-        "open_prs": open_prs,
-        "closed_prs": closed_prs,
-        "checklist_items": checklist_items,
-    }
 
 
 @mcp_tool(write_action=True)
@@ -2749,32 +1012,9 @@ async def trigger_workflow_dispatch(
         ref: Git ref (branch, tag, or SHA) to run the workflow on.
         inputs: Optional input payload for workflows that declare inputs.
     """
-    _ensure_write_allowed(f"trigger workflow {workflow} on {full_name}@{ref}")
-    payload: Dict[str, Any] = {"ref": ref}
-    if inputs:
-        payload["inputs"] = inputs
-    client = _github_client_instance()
-    async with _get_concurrency_semaphore():
-        resp = await client.post(
-            f"/repos/{full_name}/actions/workflows/{workflow}/dispatches",
-            json=payload,
-        )
-    if resp.status_code not in (204, 201):
-        raise GitHubAPIError(f"GitHub workflow dispatch error {resp.status_code}: {resp.text}")
+    from github_mcp.main_tools.workflows import trigger_workflow_dispatch as _impl
+    return await _impl(full_name=full_name, workflow=workflow, ref=ref, inputs=inputs)
 
-    summary_lines = [
-        "Triggered workflow dispatch:",
-        f"- Repo: {full_name}",
-        f"- Workflow: {workflow}",
-        f"- Ref: {ref}",
-    ]
-    if inputs:
-        summary_lines.append(f"- Inputs keys: {sorted(inputs.keys())}")
-
-    return {
-        "status_code": resp.status_code,
-        "controller_log": summary_lines,
-    }
 
 
 @mcp_tool(write_action=True)
@@ -2787,39 +1027,9 @@ async def trigger_and_wait_for_workflow(
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
     """Trigger a workflow and block until it completes or hits timeout."""
+    from github_mcp.main_tools.workflows import trigger_and_wait_for_workflow as _impl
+    return await _impl(full_name=full_name, workflow=workflow, ref=ref, inputs=inputs, timeout_seconds=timeout_seconds, poll_interval_seconds=poll_interval_seconds)
 
-    _ensure_write_allowed(f"trigger+wait workflow {workflow} on {full_name}@{ref}")
-    await trigger_workflow_dispatch(full_name, workflow, ref, inputs)
-
-    runs = await list_workflow_runs(
-        full_name,
-        branch=ref,
-        per_page=1,
-        page=1,
-    )
-    workflow_runs = runs.get("json", {}).get("workflow_runs", [])
-    if not workflow_runs:
-        raise GitHubAPIError("No workflow runs found after dispatch")
-    run_id = workflow_runs[0]["id"]
-
-    result = await wait_for_workflow_run(full_name, run_id, timeout_seconds, poll_interval_seconds)
-
-    summary_lines = [
-        "Triggered workflow and waited for completion:",
-        f"- Repo: {full_name}",
-        f"- Workflow: {workflow}",
-        f"- Ref: {ref}",
-        f"- Run ID: {run_id}",
-    ]
-    result_log = result.get("controller_log")
-    if isinstance(result_log, list):
-        summary_lines.extend(result_log)
-
-    return {
-        "run_id": run_id,
-        "result": result,
-        "controller_log": summary_lines,
-    }
 
 
 # ------------------------------------------------------------------------------
@@ -2836,31 +1046,9 @@ async def list_pull_requests(
     per_page: int = 30,
     page: int = 1,
 ) -> Dict[str, Any]:
-    """List pull requests with optional head/base filters.
+    from github_mcp.main_tools.pull_requests import list_pull_requests as _impl
+    return await _impl(full_name=full_name, state=state, head=head, base=base, per_page=per_page, page=page)
 
-    Args:
-        full_name: "owner/repo" string.
-        state: One of 'open', 'closed', or 'all'.
-        head: Optional head filter of the form 'user:branch'.
-        base: Optional base branch filter.
-        per_page: Number of results per page (must be > 0).
-        page: Page number for pagination (must be > 0).
-    """
-
-    allowed_states = {"open", "closed", "all"}
-    if state not in allowed_states:
-        raise ValueError("state must be 'open', 'closed', or 'all'")
-    if per_page <= 0:
-        raise ValueError("per_page must be > 0")
-    if page <= 0:
-        raise ValueError("page must be > 0")
-
-    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
-    if head:
-        params["head"] = head
-    if base:
-        params["base"] = base
-    return await _github_request("GET", f"/repos/{full_name}/pulls", params=params)
 
 
 @mcp_tool(write_action=True)
@@ -2871,41 +1059,16 @@ async def merge_pull_request(
     commit_title: Optional[str] = None,
     commit_message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Merge a pull request using squash (default), merge, or rebase.
+    from github_mcp.main_tools.pull_requests import merge_pull_request as _impl
+    return await _impl(full_name=full_name, number=number, merge_method=merge_method, commit_title=commit_title, commit_message=commit_message)
 
-    Args:
-        full_name: "owner/repo" string.
-        number: Pull request number.
-        merge_method: One of 'merge', 'squash', or 'rebase'.
-        commit_title: Optional custom commit title.
-        commit_message: Optional custom commit message.
-    """
-
-    allowed_methods = {"merge", "squash", "rebase"}
-    if merge_method not in allowed_methods:
-        raise ValueError("merge_method must be 'merge', 'squash', or 'rebase'")
-
-    _ensure_write_allowed(f"merge PR #{number} in {full_name}")
-    payload: Dict[str, Any] = {"merge_method": merge_method}
-    if commit_title is not None:
-        payload["commit_title"] = commit_title
-    if commit_message is not None:
-        payload["commit_message"] = commit_message
-    return await _github_request(
-        "PUT", f"/repos/{full_name}/pulls/{number}/merge", json_body=payload
-    )
 
 
 @mcp_tool(write_action=True)
 async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
-    """Close a pull request without merging."""
+    from github_mcp.main_tools.pull_requests import close_pull_request as _impl
+    return await _impl(full_name=full_name, number=number)
 
-    _ensure_write_allowed(f"close PR #{number} in {full_name}")
-    return await _github_request(
-        "PATCH",
-        f"/repos/{full_name}/pulls/{number}",
-        json_body={"state": "closed"},
-    )
 
 
 @mcp_tool(write_action=True)
@@ -2914,14 +1077,9 @@ async def comment_on_pull_request(
     number: int,
     body: str,
 ) -> Dict[str, Any]:
-    """Post a comment on a pull request (issue API under the hood)."""
+    from github_mcp.main_tools.pull_requests import comment_on_pull_request as _impl
+    return await _impl(full_name=full_name, number=number, body=body)
 
-    _ensure_write_allowed(f"comment on PR #{number} in {full_name}")
-    return await _github_request(
-        "POST",
-        f"/repos/{full_name}/issues/{number}/comments",
-        json_body={"body": body},
-    )
 
 
 @mcp_tool(write_action=True)
@@ -2932,26 +1090,9 @@ async def create_issue(
     labels: Optional[List[str]] = None,
     assignees: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    # Create a GitHub issue with optional body, labels, and assignees.
-
-    if "/" not in full_name:
-        raise ValueError("full_name must be in owner/repo format")
-
-    _ensure_write_allowed(f"create issue in {full_name}: {title!r}")
-
-    payload: Dict[str, Any] = {"title": title}
-    if body is not None:
-        payload["body"] = body
-    if labels is not None:
-        payload["labels"] = labels
-    if assignees is not None:
-        payload["assignees"] = assignees
-
-    return await _github_request(
-        "POST",
-        f"/repos/{full_name}/issues",
-        json_body=payload,
-    )
+    """Create a GitHub issue in the given repository."""
+    from github_mcp.main_tools.issues import create_issue as _impl
+    return await _impl(full_name=full_name, title=title, body=body, labels=labels, assignees=assignees)
 
 
 @mcp_tool(write_action=True)
@@ -2964,35 +1105,9 @@ async def update_issue(
     labels: Optional[List[str]] = None,
     assignees: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    # Update fields on an existing GitHub issue.
-    if "/" not in full_name:
-        raise ValueError("full_name must be in owner/repo format")
-
-    _ensure_write_allowed(f"update issue #{issue_number} in {full_name}")
-
-    payload: Dict[str, Any] = {}
-    if title is not None:
-        payload["title"] = title
-    if body is not None:
-        payload["body"] = body
-    if state is not None:
-        allowed_states = {"open", "closed"}
-        if state not in allowed_states:
-            raise ValueError("state must be 'open' or 'closed'")
-        payload["state"] = state
-    if labels is not None:
-        payload["labels"] = labels
-    if assignees is not None:
-        payload["assignees"] = assignees
-
-    if not payload:
-        raise ValueError("At least one field must be provided to update_issue")
-
-    return await _github_request(
-        "PATCH",
-        f"/repos/{full_name}/issues/{issue_number}",
-        json_body=payload,
-    )
+    """Update fields on an existing GitHub issue."""
+    from github_mcp.main_tools.issues import update_issue as _impl
+    return await _impl(full_name=full_name, issue_number=issue_number, title=title, body=body, state=state, labels=labels, assignees=assignees)
 
 
 @mcp_tool(write_action=True)
@@ -3001,261 +1116,42 @@ async def comment_on_issue(
     issue_number: int,
     body: str,
 ) -> Dict[str, Any]:
-    # Post a comment on an issue.
-
-    if "/" not in full_name:
-        raise ValueError("full_name must be in owner/repo format")
-
-    _ensure_write_allowed(f"comment on issue #{issue_number} in {full_name}")
-
-    return await _github_request(
-        "POST",
-        f"/repos/{full_name}/issues/{issue_number}/comments",
-        json_body={"body": body},
-    )
+    """Post a comment on an issue."""
+    from github_mcp.main_tools.issues import comment_on_issue as _impl
+    return await _impl(full_name=full_name, issue_number=issue_number, body=body)
 
 
 @mcp_tool(write_action=False)
 async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Return an issue plus related branches and pull requests."""
+    from github_mcp.main_tools.issues import open_issue_context as _impl
+    return await _impl(full_name=full_name, issue_number=issue_number)
 
-    issue_resp = await fetch_issue(full_name, issue_number)
-    issue_json = issue_resp.get("json") if isinstance(issue_resp, dict) else issue_resp
-
-    branches_resp = await list_branches(full_name, per_page=100)
-    branches_json = branches_resp.get("json") or []
-    branch_names = [b.get("name") for b in branches_json if isinstance(b, dict)]
-
-    pattern = re.compile(rf"(?i)(?:^|[-_/]){re.escape(str(issue_number))}(?:$|[-_/])")
-    candidate_branches = [
-        name for name in branch_names if isinstance(name, str) and pattern.search(name)
-    ]
-
-    prs_resp = await list_pull_requests(full_name, state="all")
-    prs = prs_resp.get("json") or []
-
-    issue_str = str(issue_number)
-    open_prs: List[Dict[str, Any]] = []
-    closed_prs: List[Dict[str, Any]] = []
-    for pr in prs:
-        if not isinstance(pr, dict):
-            continue
-        branch_name = pr.get("head", {}).get("ref")
-        text = f"{pr.get('title', '')}\n{pr.get('body', '')}"
-        if issue_str in text or (isinstance(branch_name, str) and issue_str in branch_name):
-            target_list = open_prs if pr.get("state") == "open" else closed_prs
-            target_list.append(
-                {
-                    "number": pr.get("number"),
-                    "title": pr.get("title"),
-                    "state": pr.get("state"),
-                    "draft": pr.get("draft"),
-                    "html_url": pr.get("html_url"),
-                    "head": pr.get("head"),
-                    "base": pr.get("base"),
-                }
-            )
-
-    return {
-        "issue": issue_json,
-        "candidate_branches": candidate_branches,
-        "open_prs": open_prs,
-        "closed_prs": closed_prs,
-    }
 
 
 def _normalize_issue_payload(raw_issue: Any) -> Optional[Dict[str, Any]]:
-    issue = raw_issue
-    if isinstance(raw_issue, dict) and "json" in raw_issue:
-        issue = raw_issue.get("json")
-    if not isinstance(issue, dict):
-        return None
+    from github_mcp.main_tools.normalize import normalize_issue_payload as _impl
+    return _impl(raw_issue=raw_issue)
 
-    user = issue.get("user") if isinstance(issue.get("user"), dict) else None
-    labels = issue.get("labels") if isinstance(issue.get("labels"), list) else []
-
-    return {
-        "number": issue.get("number"),
-        "title": issue.get("title"),
-        "state": issue.get("state"),
-        "html_url": issue.get("html_url"),
-        "user": user.get("login") if user else None,
-        "labels": [lbl.get("name") for lbl in labels if isinstance(lbl, dict)],
-    }
 
 
 def _normalize_pr_payload(raw_pr: Any) -> Optional[Dict[str, Any]]:
-    pr = raw_pr
-    if isinstance(raw_pr, dict) and "json" in raw_pr:
-        pr = raw_pr.get("json")
-    if not isinstance(pr, dict):
-        return None
+    from github_mcp.main_tools.normalize import normalize_pr_payload as _impl
+    return _impl(raw_pr=raw_pr)
 
-    user = pr.get("user") if isinstance(pr.get("user"), dict) else None
-    head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
-    base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
-
-    return {
-        "number": pr.get("number"),
-        "title": pr.get("title"),
-        "state": pr.get("state"),
-        "draft": pr.get("draft"),
-        "merged": pr.get("merged"),
-        "html_url": pr.get("html_url"),
-        "user": user.get("login") if user else None,
-        "head_ref": head.get("ref"),
-        "base_ref": base.get("ref"),
-    }
 
 
 def _normalize_branch_summary(summary: Any) -> Optional[Dict[str, Any]]:
-    """Normalize get_branch_summary output into a compact shape.
+    from github_mcp.main_tools.normalize import normalize_branch_summary as _impl
+    return _impl(summary=summary)
 
-    Diff/compare data has been removed from the server; this helper focuses on PRs
-    and CI signals.
-    """
-
-    if not isinstance(summary, dict):
-        return None
-
-    def _simplify_prs(prs: Any) -> list[Dict[str, Any]]:
-        simplified: list[Dict[str, Any]] = []
-        if not isinstance(prs, list):
-            return simplified
-        for pr in prs:
-            if not isinstance(pr, dict):
-                continue
-            head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
-            base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
-            simplified.append(
-                {
-                    "number": pr.get("number"),
-                    "title": pr.get("title"),
-                    "state": pr.get("state"),
-                    "draft": pr.get("draft"),
-                    "html_url": pr.get("html_url"),
-                    "head_ref": head.get("ref"),
-                    "base_ref": base.get("ref"),
-                }
-            )
-        return simplified
-
-    latest_run = summary.get("latest_workflow_run")
-    latest_run_normalized = None
-    if isinstance(latest_run, dict):
-        latest_run_normalized = {
-            "id": latest_run.get("id"),
-            "status": latest_run.get("status"),
-            "conclusion": latest_run.get("conclusion"),
-            "html_url": latest_run.get("html_url"),
-            "head_branch": latest_run.get("head_branch"),
-        }
-
-    normalized = {
-        "branch": summary.get("branch"),
-        "base": summary.get("base"),
-        "open_prs": _simplify_prs(summary.get("open_prs")),
-        "closed_prs": _simplify_prs(summary.get("closed_prs")),
-        "latest_workflow_run": latest_run_normalized,
-    }
-
-    if all(value is None or value == [] for value in normalized.values()):
-        return None
-
-    return normalized
 
 
 @mcp_tool(write_action=False)
 async def resolve_handle(full_name: str, handle: str) -> Dict[str, Any]:
-    """Resolve a lightweight GitHub handle into issue, PR, or branch details.
+    from github_mcp.main_tools.handles import resolve_handle as _impl
+    return await _impl(full_name=full_name, handle=handle)
 
-    Examples:
-        - ``resolve_handle(full_name="owner/repo", handle="123")``
-        - ``resolve_handle(full_name="owner/repo", handle="#456")``
-        - ``resolve_handle(full_name="owner/repo", handle="pr:789")``
-        - ``resolve_handle(full_name="owner/repo", handle="feature/awesome")``
-    """
-
-    original_handle = handle
-    handle = handle.strip()
-    lower_handle = handle.lower()
-
-    resolved_kinds: list[str] = []
-    issue: Optional[Dict[str, Any]] = None
-    pull_request: Optional[Dict[str, Any]] = None
-    branch: Optional[Dict[str, Any]] = None
-
-    def _append_kind(name: str, value: Optional[Dict[str, Any]]):
-        if value is not None:
-            resolved_kinds.append(name)
-
-    async def _try_fetch_issue(number: int) -> Optional[Dict[str, Any]]:
-        try:
-            result = await fetch_issue(full_name, number)
-        except Exception:
-            return None
-        return _normalize_issue_payload(result)
-
-    async def _try_fetch_pr(number: int) -> Optional[Dict[str, Any]]:
-        try:
-            result = await fetch_pr(full_name, number)
-        except Exception:
-            return None
-        return _normalize_pr_payload(result)
-
-    async def _try_fetch_branch(name: str) -> Optional[Dict[str, Any]]:
-        try:
-            result = await get_branch_summary(full_name, name)
-        except Exception:
-            return None
-        return _normalize_branch_summary(result)
-
-    def _parse_int(value: str) -> Optional[int]:
-        value = value.strip()
-        if not value.isdigit():
-            return None
-        try:
-            return int(value)
-        except ValueError:
-            return None
-
-    number: Optional[int] = None
-
-    if lower_handle.startswith("issue:"):
-        number = _parse_int(handle.split(":", 1)[1])
-        if number is not None:
-            issue = await _try_fetch_issue(number)
-            _append_kind("issue", issue)
-    elif lower_handle.startswith("pr:"):
-        number = _parse_int(handle.split(":", 1)[1])
-        if number is not None:
-            pull_request = await _try_fetch_pr(number)
-            _append_kind("pull_request", pull_request)
-    else:
-        numeric_match = re.fullmatch(r"#?(\d+)", handle)
-        trailing_match = re.search(r"#(\d+)$", handle)
-        if numeric_match:
-            number = int(numeric_match.group(1))
-        elif trailing_match:
-            number = int(trailing_match.group(1))
-
-        if number is not None:
-            issue = await _try_fetch_issue(number)
-            _append_kind("issue", issue)
-
-            pull_request = await _try_fetch_pr(number)
-            _append_kind("pull_request", pull_request)
-        else:
-            branch = await _try_fetch_branch(handle)
-            _append_kind("branch", branch)
-
-    return {
-        "input": {"full_name": full_name, "handle": original_handle},
-        "issue": issue,
-        "pull_request": pull_request,
-        "branch": branch,
-        "resolved_kinds": resolved_kinds,
-    }
 
 
 # ------------------------------------------------------------------------------
@@ -3270,71 +1166,9 @@ async def create_branch(
     branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
-    """Create a new branch from a base ref.
+    from github_mcp.main_tools.branches import create_branch as _impl
+    return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
 
-    This uses the Git refs API. Prefer ``ensure_branch`` when you want an
-    idempotent flow.
-    """
-
-    _ensure_write_allowed(f"create branch {branch} from {from_ref} in {full_name}")
-
-    branch = branch.strip()
-    if not branch:
-        raise ValueError("branch must be non-empty")
-
-    # Conservative branch-name validation.
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", branch):
-        raise ValueError("branch contains invalid characters")
-    if ".." in branch or "@{" in branch:
-        raise ValueError("branch contains invalid ref sequence")
-    if branch.startswith("/") or branch.endswith("/"):
-        raise ValueError("branch must not start or end with '/'")
-    if branch.endswith(".lock"):
-        raise ValueError("branch must not end with '.lock'")
-
-    base_ref = _effective_ref_for_repo(full_name, from_ref)
-
-    client = _github_client_instance()
-
-    # Resolve base sha.
-    base_sha: Optional[str] = None
-    async with _get_concurrency_semaphore():
-        resp = await client.get(f"/repos/{full_name}/git/ref/heads/{base_ref}")
-    if resp.status_code == 200:
-        payload = resp.json() if hasattr(resp, "json") else {}
-        obj = payload.get("object") if isinstance(payload, dict) else None
-        if isinstance(obj, dict):
-            base_sha = obj.get("sha")
-    elif resp.status_code == 404:
-        # Try tags.
-        async with _get_concurrency_semaphore():
-            tag_resp = await client.get(f"/repos/{full_name}/git/ref/tags/{base_ref}")
-        if tag_resp.status_code == 200:
-            payload = tag_resp.json() if hasattr(tag_resp, "json") else {}
-            obj = payload.get("object") if isinstance(payload, dict) else None
-            if isinstance(obj, dict):
-                base_sha = obj.get("sha")
-    else:
-        raise GitHubAPIError(f"GitHub create_branch base ref error {resp.status_code}: {resp.text}")
-
-    # If base_sha still missing, allow direct SHA usage.
-    if base_sha is None:
-        if re.fullmatch(r"[0-9a-fA-F]{7,40}", from_ref.strip()):
-            base_sha = from_ref.strip()
-        else:
-            raise GitHubAPIError(f"Unable to resolve base ref {from_ref!r} in {full_name}")
-
-    new_ref = f"refs/heads/{branch}"
-    body = {"ref": new_ref, "sha": base_sha}
-
-    async with _get_concurrency_semaphore():
-        create_resp = await client.post(f"/repos/{full_name}/git/refs", json=body)
-
-    if create_resp.status_code == 201:
-        return {"status_code": create_resp.status_code, "json": create_resp.json()}
-
-    # 422 typically means the ref already exists.
-    raise GitHubAPIError(f"GitHub create_branch error {create_resp.status_code}: {create_resp.text}")
 
 @mcp_tool(write_action=True)
 async def ensure_branch(
@@ -3342,97 +1176,25 @@ async def ensure_branch(
     branch: str,
     from_ref: str = "main",
 ) -> Dict[str, Any]:
-    """Idempotently ensure a branch exists, creating it from ``from_ref``."""
+    from github_mcp.main_tools.branches import ensure_branch as _impl
+    return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
 
-    _ensure_write_allowed(f"ensure branch {branch} from {from_ref} in {full_name}")
-    client = _github_client_instance()
-    async with _get_concurrency_semaphore():
-        resp = await client.get(f"/repos/{full_name}/git/ref/heads/{branch}")
-    if resp.status_code == 404:
-        return await create_branch(full_name, branch, from_ref)
-    if resp.status_code >= 400:
-        raise GitHubAPIError(f"GitHub ensure_branch error {resp.status_code}: {resp.text}")
-    return {"status_code": resp.status_code, "json": resp.json()}
 
 
 @mcp_tool(write_action=False)
 async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
-    """Return PRs and latest workflow run for a branch."""
+    from github_mcp.main_tools.branches import get_branch_summary as _impl
+    return await _impl(full_name=full_name, branch=branch, base=base)
 
-    effective_branch = _effective_ref_for_repo(full_name, branch)
-    effective_base = _effective_ref_for_repo(full_name, base)
-
-    # Diff/compare tooling has been removed; branch summary focuses on PRs and CI.
-    compare_error: Optional[str] = None
-
-    owner: Optional[str] = None
-    if "/" in full_name:
-        owner = full_name.split("/", 1)[0]
-    head_param = f"{owner}:{effective_branch}" if owner else None
-
-    async def _safe_list_prs(state: str) -> Dict[str, Any]:
-        try:
-            return await list_pull_requests(
-                full_name, state=state, head=head_param, base=effective_base
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            return {"error": str(exc), "json": []}
-
-    open_prs_resp = await _safe_list_prs("open")
-    closed_prs_resp = await _safe_list_prs("closed")
-
-    open_prs = open_prs_resp.get("json") or []
-    closed_prs = closed_prs_resp.get("json") or []
-
-    workflow_error: Optional[str] = None
-    latest_workflow_run: Optional[Dict[str, Any]] = None
-    try:
-        runs_resp = await list_workflow_runs(full_name, branch=effective_branch, per_page=1)
-        runs_json = runs_resp.get("json") or {}
-        runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
-        if runs:
-            latest_workflow_run = runs[0]
-    except Exception as exc:
-        workflow_error = str(exc)
-
-    return {
-        "full_name": full_name,
-        "branch": effective_branch,
-        "base": effective_base,
-        "compare_error": compare_error,
-        "open_prs": open_prs,
-        "closed_prs": closed_prs,
-        "latest_workflow_run": latest_workflow_run,
-        "workflow_error": workflow_error,
-    }
 
 
 @mcp_tool(write_action=False)
 async def get_latest_branch_status(
     full_name: str, branch: str, base: str = "main"
 ) -> Dict[str, Any]:
-    """Return a normalized, assistant-friendly view of the latest status for a branch.
+    from github_mcp.main_tools.branches import get_latest_branch_status as _impl
+    return await _impl(full_name=full_name, branch=branch, base=base)
 
-    This wraps ``get_branch_summary`` and ``_normalize_branch_summary`` so controllers
-    and assistants can quickly answer questions like:
-
-      - "Is there an open PR for it?"
-      - "What was the latest workflow run and how did it finish?"
-    """
-
-    summary = await get_branch_summary(full_name, branch, base=base)
-    normalized = _normalize_branch_summary(summary)
-
-    # Always return a consistent shape so callers do not have to special-case
-    # "no data" situations; instead they can look at the ``normalized`` field
-    # and fall back to the raw summary if needed.
-    return {
-        "full_name": full_name,
-        "branch": summary.get("branch"),
-        "base": summary.get("base"),
-        "summary": summary,
-        "normalized": normalized,
-    }
 
 
 @mcp_tool(write_action=False)
@@ -3469,120 +1231,9 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
         Individual sections degrade gracefully: if one underlying call fails,
         its corresponding "*_error" field is populated instead of raising.
     """
+    from github_mcp.main_tools.dashboard import get_repo_dashboard as _impl
+    return await _impl(full_name=full_name, branch=branch)
 
-    # Resolve the effective branch using the same helper as other tools.
-    if branch is None:
-        # Fall back to the default branch when available.
-        defaults = await get_repo_defaults(full_name)
-        repo_defaults = defaults.get("defaults") or {}
-        effective_branch = repo_defaults.get("default_branch") or _effective_ref_for_repo(
-            full_name,
-            "main",
-        )
-    else:
-        effective_branch = _effective_ref_for_repo(full_name, branch)
-
-    # --- Repository metadata ---
-    repo_info: Optional[Dict[str, Any]] = None
-    repo_error: Optional[str] = None
-    try:
-        repo_resp = await get_repository(full_name)
-        repo_info = repo_resp.get("json") or {}
-    except Exception as exc:  # pragma: no cover - defensive
-        repo_error = str(exc)
-
-    # --- Open pull requests (small window) ---
-    pr_error: Optional[str] = None
-    open_prs: list[Dict[str, Any]] = []
-    try:
-        pr_resp = await list_pull_requests(
-            full_name,
-            state="open",
-            per_page=10,
-            page=1,
-        )
-        open_prs = pr_resp.get("json") or []
-    except Exception as exc:  # pragma: no cover - defensive
-        pr_error = str(exc)
-
-    # --- Open issues (excluding PRs) ---
-    issues_error: Optional[str] = None
-    open_issues: list[Dict[str, Any]] = []
-    try:
-        issues_resp = await list_repository_issues(
-            full_name,
-            state="open",
-            per_page=10,
-            page=1,
-        )
-        raw_issues = issues_resp.get("json") or []
-        # Filter out pull requests that show up in the issues API.
-        for item in raw_issues:
-            if isinstance(item, dict) and "pull_request" not in item:
-                open_issues.append(item)
-    except Exception as exc:  # pragma: no cover - defensive
-        issues_error = str(exc)
-
-    # --- Recent workflow runs on this branch ---
-    workflows_error: Optional[str] = None
-    workflow_runs: list[Dict[str, Any]] = []
-    try:
-        runs_resp = await list_workflow_runs(
-            full_name,
-            branch=effective_branch,
-            per_page=5,
-            page=1,
-        )
-        runs_json = runs_resp.get("json") or {}
-        workflow_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
-    except Exception as exc:  # pragma: no cover - defensive
-        workflows_error = str(exc)
-
-    # --- Top-level tree entries on the branch ---
-    tree_error: Optional[str] = None
-    top_level_tree: list[Dict[str, Any]] = []
-    try:
-        tree_resp = await list_repository_tree(
-            full_name,
-            ref=effective_branch,
-            recursive=False,
-            max_entries=200,
-        )
-        entries = tree_resp.get("entries") or []
-        for entry in entries:
-            if not isinstance(entry, dict):
-                continue
-            path = entry.get("path")
-            if not isinstance(path, str):
-                continue
-            # Keep only top-level entries (no slashes) for a compact view.
-            if "/" in path:
-                continue
-
-            normalized_path = _normalize_repo_path(path)
-            top_level_tree.append(
-                {
-                    "path": normalized_path,
-                    "type": entry.get("type"),
-                    "size": entry.get("size"),
-                }
-            )
-    except Exception as exc:  # pragma: no cover - defensive
-        tree_error = str(exc)
-
-    return {
-        "branch": effective_branch,
-        "repo": repo_info,
-        "repo_error": repo_error,
-        "pull_requests": open_prs,
-        "pull_requests_error": pr_error,
-        "issues": open_issues,
-        "issues_error": issues_error,
-        "workflows": workflow_runs,
-        "workflows_error": workflows_error,
-        "top_level_tree": top_level_tree,
-        "top_level_tree_error": tree_error,
-    }
 
 
 async def _build_default_pr_body(
@@ -3599,79 +1250,9 @@ async def _build_default_pr_body(
     underlying GitHub lookups fail, it falls back to partial information instead
     of raising and breaking the overall tool call.
     """
+    from github_mcp.main_tools.pull_requests import _build_default_pr_body as _impl
+    return await _impl(full_name=full_name, title=title, head=head, effective_base=effective_base, draft=draft)
 
-    lines: List[str] = []
-
-    # Summary
-    lines.append("## Summary")
-    lines.append("")
-    lines.append(f"- Title: {title}")
-    lines.append(f"- From: `{head}` → `{effective_base}`")
-    lines.append(f"- Status: {'Draft (still in progress)' if draft else 'Ready for review'}")
-    lines.append("")
-
-    # Change summary
-    lines.append("## Change summary")
-    lines.append("")
-    lines.append("- See the PR *Files changed* tab for the authoritative change list.")
-    lines.append("")
-
-    # CI & quality: look at recent workflow runs on this branch.
-    lines.append("## CI & quality")
-    lines.append("")
-    workflows: List[Dict[str, Any]] = []
-    try:
-        runs_resp = await list_workflow_runs(
-            full_name=full_name,
-            branch=head,
-            per_page=3,
-            page=1,
-        )
-        runs_json = runs_resp.get("json") if isinstance(runs_resp, dict) else None
-        if isinstance(runs_json, dict):
-            workflows = runs_json.get("workflow_runs") or []
-    except Exception:
-        workflows = []
-
-    if workflows:
-        latest = workflows[0] if isinstance(workflows[0], dict) else {}
-        name = latest.get("name") or latest.get("id")
-        status = latest.get("status") or "unknown"
-        conclusion = latest.get("conclusion") or "unknown"
-        url = latest.get("html_url")
-
-        lines.append(f"- Latest workflow: **{name}**")
-        lines.append(f"- Status: `{status}` / Conclusion: `{conclusion}`")
-        if url:
-            lines.append(f"- URL: {url}")
-    else:
-        lines.append("- No recent workflow runs found for this branch.")
-
-    lines.append("")
-    lines.append("## Testing")
-    lines.append("")
-    lines.append("- [ ] `pytest`")
-    lines.append("- [ ] Additional checks")
-    lines.append("- [ ] Not run (explain why)")
-    lines.append("")
-
-    lines.append("## Risks & rollout")
-    lines.append("")
-    lines.append("- Risk level: low/medium/high")
-    lines.append("- Rollback plan: describe how to revert if needed.")
-    lines.append("")
-
-    lines.append("## Reviewer checklist")
-    lines.append("")
-    lines.append("- [ ] Code style and readability")
-    lines.append("- [ ] Tests cover the main paths")
-    lines.append("- [ ] Breaking changes are documented")
-    lines.append("- [ ] CI is green or issues are understood")
-    lines.append("")
-
-    lines.append("<!-- Default PR body generated by chatgpt-mcp-github. Edit freely. -->")
-
-    return "\n".join(lines)
 
 
 @mcp_tool(write_action=True)
@@ -3689,52 +1270,9 @@ async def create_pull_request(
     controller repos honor the configured default branch even when callers
     supply a simple base name like "main".
     """
+    from github_mcp.main_tools.pull_requests import create_pull_request as _impl
+    return await _impl(full_name=full_name, title=title, head=head, base=base, body=body, draft=draft)
 
-    try:
-        effective_base = _effective_ref_for_repo(full_name, base)
-        _ensure_write_allowed(
-            f"create PR from {head} to {effective_base} in {full_name}"
-        )
-
-        effective_body = body
-        if effective_body is None or not str(effective_body).strip():
-            try:
-                effective_body = await _build_default_pr_body(
-                    full_name=full_name,
-                    title=title,
-                    head=head,
-                    effective_base=effective_base,
-                    draft=draft,
-                )
-            except Exception:
-                # If the helper fails for any reason, fall back to whatever the
-                # caller provided (including None) instead of blocking PR
-                # creation entirely.
-                effective_body = body
-
-        payload: Dict[str, Any] = {
-            "title": title,
-            "head": head,
-            "base": effective_base,
-            "draft": draft,
-        }
-        if effective_body is not None:
-            payload["body"] = effective_body
-
-        return await _github_request(
-            "POST",
-            f"/repos/{full_name}/pulls",
-            json_body=payload,
-        )
-    except Exception as exc:
-        # Include a lightweight path-style hint so callers can see which
-        # repository and head/base pair failed without scraping the message.
-        path_hint = f"{full_name} {head}->{base}"
-        return _structured_tool_error(
-            exc,
-            context="create_pull_request",
-            path=path_hint,
-        )
 
 @mcp_tool(write_action=True)
 async def open_pr_for_existing_branch(
@@ -3753,77 +1291,9 @@ async def open_pr_for_existing_branch(
 
     If this tool call is blocked upstream by OpenAI, use the workspace flow: `run_command` to create or reuse the PR.
     """
+    from github_mcp.main_tools.pull_requests import open_pr_for_existing_branch as _impl
+    return await _impl(full_name=full_name, branch=branch, base=base, title=title, body=body, draft=draft)
 
-    # Resolve the effective base branch using the same logic as other helpers.
-    effective_base = _effective_ref_for_repo(full_name, base)
-    pr_title = title or f"{branch} -> {effective_base}"
-
-    # GitHub's API expects the head in the form "owner:branch" when used
-    # with the head filter on the pulls listing endpoint.
-    owner, _repo = full_name.split("/", 1)
-    head_ref = f"{owner}:{branch}"
-
-    # 1) Check for an existing open PR for this head/base pair.
-    existing_json: Any = []
-    try:
-        existing_resp = await list_pull_requests(
-            full_name,
-            state="open",
-            head=head_ref,
-            base=effective_base,
-            per_page=10,
-            page=1,
-        )
-        existing_json = existing_resp.get("json") or []
-    except Exception as exc:
-        # If listing PRs fails for any reason, surface the structured error
-        # details back to the caller instead of silently claiming success.
-        return _structured_tool_error(exc, context="open_pr_for_existing_branch:list_pull_requests")
-
-    if isinstance(existing_json, list) and existing_json:
-        # Reuse the first matching PR, and normalize the shape so assistants can
-        # consistently see the PR number/URL.
-        pr_obj = existing_json[0]
-        if isinstance(pr_obj, dict):
-            return {
-                "status": "ok",
-                "reused_existing": True,
-                "pull_request": pr_obj,
-                "pr_number": pr_obj.get("number"),
-                "pr_url": pr_obj.get("html_url"),
-            }
-        return {
-            "status": "error",
-            "message": "Existing PR listing returned a non-dict entry",
-            "raw_entry": pr_obj,
-        }
-
-    # 2) No existing PR found; create a new one via the lower-level helper.
-    pr = await create_pull_request(
-        full_name=full_name,
-        title=pr_title,
-        head=branch,
-        base=effective_base,
-        body=body,
-        draft=draft,
-    )
-
-    pr_json = pr.get("json") or {}
-    if not isinstance(pr_json, dict) or not pr_json.get("number"):
-        # Bubble through the structured error shape so the caller can inspect
-        # status/message and decide how to recover.
-        return {
-            "status": "error",
-            "raw_response": pr,
-            "message": "create_pull_request did not return a PR document with a number",
-        }
-
-    return {
-        "status": "ok",
-        "pull_request": pr_json,
-        "pr_number": pr_json.get("number"),
-        "pr_url": pr_json.get("html_url"),
-    }
 
 
 @mcp_tool(write_action=True)
@@ -3837,123 +1307,9 @@ async def update_files_and_open_pr(
     draft: bool = False,
 ) -> Dict[str, Any]:
     """Commit multiple files, verify each, then open a PR in one call."""
+    from github_mcp.main_tools.pull_requests import update_files_and_open_pr as _impl
+    return await _impl(full_name=full_name, title=title, files=files, base_branch=base_branch, new_branch=new_branch, body=body, draft=draft)
 
-    current_path: Optional[str] = None
-    try:
-        effective_base = _effective_ref_for_repo(full_name, base_branch)
-
-        if not files:
-            raise ValueError("files must contain at least one item")
-
-        # 1) Ensure a dedicated branch exists
-        branch = new_branch or f"ally-{os.urandom(4).hex()}"
-        _ensure_write_allowed(
-            "update_files_and_open_pr %s %s" % (full_name, branch), target_ref=branch
-        )
-        await ensure_branch(full_name, branch, from_ref=effective_base)
-
-        commit_results: List[Dict[str, Any]] = []
-        verifications: List[Dict[str, Any]] = []
-
-        # 2) Commit each file, with verification
-        for f in files:
-            current_path = f.get("path")
-            if not current_path:
-                raise ValueError("Each file dict must include a 'path' key")
-
-            file_message = f.get("message") or title
-            file_content = f.get("content")
-            file_content_url = f.get("content_url")
-
-            if file_content is None and file_content_url is None:
-                raise ValueError(
-                    f"File entry for {current_path!r} must specify "
-                    "either 'content' or 'content_url'"
-                )
-            if file_content is not None and file_content_url is not None:
-                raise ValueError(
-                    f"File entry for {current_path!r} may not specify both "
-                    "'content' and 'content_url'"
-                )
-
-            # Load content
-            if file_content_url is not None:
-                try:
-                    body_bytes = await _load_body_from_content_url(
-                        file_content_url,
-                        context=(f"update_files_and_open_pr({full_name}/{current_path})"),
-                    )
-                except Exception as exc:
-                    return _structured_tool_error(
-                        exc,
-                        context="update_files_and_open_pr.load_content",
-                        path=current_path,
-                    )
-            else:
-                body_bytes = file_content.encode("utf-8")
-
-            # Resolve SHA and commit
-            try:
-                sha = await _resolve_file_sha(full_name, current_path, branch)
-                commit_result = await _perform_github_commit(
-                    full_name=full_name,
-                    path=current_path,
-                    message=file_message,
-                    branch=branch,
-                    body_bytes=body_bytes,
-                    sha=sha,
-                )
-            except Exception as exc:
-                return _structured_tool_error(
-                    exc,
-                    context="update_files_and_open_pr.commit_file",
-                    path=current_path,
-                )
-
-            commit_results.append(
-                {
-                    "path": current_path,
-                    "message": file_message,
-                    "result": commit_result,
-                }
-            )
-
-            # Post-commit verification for this file
-            try:
-                verification = await _verify_file_on_branch(full_name, current_path, branch)
-            except Exception as exc:
-                return _structured_tool_error(
-                    exc,
-                    context="update_files_and_open_pr.verify_file",
-                    path=current_path,
-                )
-
-            verifications.append(verification)
-
-        # 3) Open the PR
-        try:
-            pr = await create_pull_request(
-                full_name=full_name,
-                title=title,
-                head=branch,
-                base=effective_base,
-                body=body,
-                draft=draft,
-            )
-        except Exception as exc:
-            return _structured_tool_error(
-                exc, context="update_files_and_open_pr.create_pr", path=current_path
-            )
-
-        return {
-            "branch": branch,
-            "pull_request": pr,
-            "commits": commit_results,
-            "verifications": verifications,
-        }
-
-    except Exception as exc:
-        return _structured_tool_error(exc, context="update_files_and_open_pr", path=current_path)
 
 
 @mcp_tool(write_action=True)
@@ -3965,95 +1321,9 @@ async def create_file(
     branch: str = "main",
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create a new text file in a repository after normalizing path and branch.
+    from github_mcp.main_tools.files import create_file as _impl
+    return await _impl(full_name=full_name, path=path, content=content, branch=branch, message=message)
 
-    This helper performs a lightweight server-side preflight to normalize the
-    target branch and repository path before issuing any write to GitHub. The
-    call fails if the file already exists on the target branch.
-
-    Args:
-        full_name: "owner/repo" string.
-        path: Path of the file within the repository (normalized before write).
-        content: UTF-8 text content of the new file.
-        branch: Branch to commit to (default "main").
-        message: Optional commit message; if omitted, a default is derived.
-
-    Raises:
-        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
-
-    Returns:
-        A dict with:
-            - status: "created"
-            - full_name, path, branch
-            - message: The commit message used.
-            - commit: Raw commit response from GitHub.
-            - verification: A dict containing sha_before (always None),
-              sha_after and html_url from a fresh read of the file.
-
-    Raises:
-        ToolPreflightValidationError: If the branch/path combination fails
-            server-side normalization.
-    """
-
-    effective_branch, normalized_path = _normalize_write_context(
-        full_name=full_name,
-        branch=branch,
-        path=path,
-    )
-
-    _ensure_write_allowed(
-        "create_file %s %s" % (full_name, normalized_path),
-        target_ref=effective_branch,
-    )
-
-    # Ensure the file does not already exist.
-    try:
-        await _decode_github_content(full_name, normalized_path, effective_branch)
-    except GitHubAPIError as exc:
-        msg = str(exc)
-        if "404" in msg:
-            sha_before: Optional[str] = None
-        else:
-            raise
-    else:
-        raise GitHubAPIError(
-            f"File already exists at {normalized_path} on branch {effective_branch}"
-        )
-
-    body_bytes = content.encode("utf-8")
-    commit_message = message or f"Create {normalized_path}"
-
-    commit_result = await _perform_github_commit(
-        full_name=full_name,
-        path=normalized_path,
-        message=commit_message,
-        body_bytes=body_bytes,
-        branch=effective_branch,
-        sha=sha_before,
-    )
-
-    verified = await _decode_github_content(full_name, normalized_path, effective_branch)
-    json_blob = verified.get("json")
-    sha_after: Optional[str]
-    if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
-        sha_after = json_blob["sha"]
-    else:
-        sha_value = verified.get("sha")
-        sha_after = sha_value if isinstance(sha_value, str) else None
-
-    return {
-        "status": "created",
-        "full_name": full_name,
-        "path": normalized_path,
-        "branch": effective_branch,
-        "message": commit_message,
-        "commit": commit_result,
-        "verification": {
-            "sha_before": sha_before,
-            "sha_after": sha_after,
-            "html_url": verified.get("html_url"),
-        },
-    }
 
 
 @mcp_tool(write_action=True)
@@ -4064,116 +1334,11 @@ async def apply_text_update_and_commit(
     *,
     branch: str = "main",
     message: Optional[str] = None,
+    return_diff: bool = False,
 ) -> Dict[str, Any]:
-    """Apply a text update to a single file on a branch, then verify it.
+    from github_mcp.main_tools.files import apply_text_update_and_commit as _impl
+    return await _impl(full_name=full_name, path=path, updated_content=updated_content, branch=branch, message=message, return_diff=return_diff)
 
-    This is a lower-level building block for full-file replacement flows:
-
-    1. Read the current file text from GitHub.
-    2. Commit the provided updated_content via the Contents API on the target branch.
-    3. Re-read the file to verify the new SHA and contents landed.
-    4. Commit the full file contents (no patch/diff application).
-
-    It does NOT create a PR; callers are expected to open a PR separately
-    (for example using create_pull_request or update_files_and_open_pr) if
-    they want reviewable changes.
-
-    Args:
-        full_name: "owner/repo" string.
-        path: Path of the file within the repository (normalized before write).
-        updated_content: New full text for the file (UTF-8).
-        branch: Branch to commit to (default "main").
-        message: Commit message; if omitted, a simple "Update <path>" is used.
-
-    Raises:
-        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
-
-    Returns:
-        A dict with:
-            - status: "committed"
-            - full_name, path, branch
-            - message: commit message used
-            - commit: raw GitHub commit API response
-            - verification: {sha_before, sha_after, html_url}
-    """
-
-
-    effective_branch, normalized_path = _normalize_write_context(
-        full_name=full_name,
-        branch=branch,
-        path=path,
-    )
-
-    _ensure_write_allowed(
-        "apply_text_update_and_commit %s %s" % (full_name, normalized_path),
-        target_ref=effective_branch,
-    )
-
-    # 1) Read the current file state on the target branch, treating a 404 as a new file.
-    is_new_file = False
-
-    def _extract_sha(decoded: Dict[str, Any]) -> Optional[str]:
-        if not isinstance(decoded, dict):
-            return None
-        json_blob = decoded.get("json")
-        if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
-            return json_blob.get("sha")
-        sha_value = decoded.get("sha")
-        return sha_value if isinstance(sha_value, str) else None
-
-    try:
-        decoded = await _decode_github_content(full_name, normalized_path, effective_branch)
-        _old_text = decoded.get("text")
-        if not isinstance(_old_text, str):
-            raise GitHubAPIError("Decoded content is not text")
-        sha_before = _extract_sha(decoded)
-    except GitHubAPIError as exc:
-        msg = str(exc)
-        if "404" in msg:
-            # The GitHub Contents API returns 404 when the file does not yet exist.
-            # In that case we treat this as a creation rather than an update.
-            is_new_file = True
-            sha_before = None
-        else:
-            raise
-
-    body_bytes = updated_content.encode("utf-8")
-    if message is not None:
-        commit_message = message
-    elif is_new_file:
-        commit_message = f"Create {normalized_path}"
-    else:
-        commit_message = f"Update {normalized_path}"
-
-    # 2) Commit the new content via the GitHub Contents API.
-    commit_result = await _perform_github_commit(
-        full_name=full_name,
-        path=normalized_path,
-        message=commit_message,
-        body_bytes=body_bytes,
-        branch=effective_branch,
-        sha=sha_before,
-    )
-
-    # 3) Verify by reading the file again from the same branch.
-    verified = await _decode_github_content(full_name, normalized_path, effective_branch)
-    sha_after = _extract_sha(verified)
-
-    result: Dict[str, Any] = {
-        "status": "committed",
-        "full_name": full_name,
-        "path": normalized_path,
-        "branch": effective_branch,
-        "message": commit_message,
-        "commit": commit_result,
-        "verification": {
-            "sha_before": sha_before,
-            "sha_after": sha_after,
-            "html_url": verified.get("html_url"),
-        },
-    }
-
-    return result
 
 
 @mcp_tool(
@@ -4185,103 +1350,9 @@ async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
     #
     # This helper is read-only and safe to call before any write actions.
 
-    pr_resp = await fetch_pr(full_name, pull_number)
-    pr_json = pr_resp.get("json") or {}
-    if not isinstance(pr_json, dict):
-        pr_json = {}
+    from github_mcp.main_tools.pull_requests import get_pr_overview as _impl
+    return await _impl(full_name=full_name, pull_number=pull_number)
 
-    def _get_user(raw: Any) -> Optional[Dict[str, Any]]:
-        if not isinstance(raw, dict):
-            return None
-        login = raw.get("login")
-        if not isinstance(login, str):
-            return None
-        return {"login": login, "html_url": raw.get("html_url")}
-
-    pr_summary: Dict[str, Any] = {
-        "number": pr_json.get("number"),
-        "title": pr_json.get("title"),
-        "state": pr_json.get("state"),
-        "draft": pr_json.get("draft"),
-        "merged": pr_json.get("merged"),
-        "html_url": pr_json.get("html_url"),
-        "user": _get_user(pr_json.get("user")),
-        "created_at": pr_json.get("created_at"),
-        "updated_at": pr_json.get("updated_at"),
-        "closed_at": pr_json.get("closed_at"),
-        "merged_at": pr_json.get("merged_at"),
-    }
-
-    files: List[Dict[str, Any]] = []
-    try:
-        files_resp = await list_pr_changed_filenames(full_name, pull_number, per_page=100)
-        files_json = files_resp.get("json") or []
-        if isinstance(files_json, list):
-            for f in files_json:
-                if not isinstance(f, dict):
-                    continue
-                files.append(
-                    {
-                        "filename": f.get("filename"),
-                        "status": f.get("status"),
-                        "additions": f.get("additions"),
-                        "deletions": f.get("deletions"),
-                        "changes": f.get("changes"),
-                    }
-                )
-    except Exception:
-        files = []
-
-    status_checks: Optional[Dict[str, Any]] = None
-    head = pr_json.get("head")
-    head_sha = head.get("sha") if isinstance(head, dict) else None
-    if isinstance(head_sha, str):
-        try:
-            status_resp = await get_commit_combined_status(full_name, head_sha)
-            status_checks = status_resp.get("json") or {}
-        except Exception:
-            status_checks = None
-
-    workflow_runs: List[Dict[str, Any]] = []
-    head_ref = head.get("ref") if isinstance(head, dict) else None
-    if isinstance(head_ref, str):
-        try:
-            runs_resp = await list_workflow_runs(
-                full_name,
-                branch=head_ref,
-                per_page=5,
-                page=1,
-            )
-            runs_json = runs_resp.get("json") or {}
-            raw_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
-            for run in raw_runs:
-                if not isinstance(run, dict):
-                    continue
-                workflow_runs.append(
-                    {
-                        "id": run.get("id"),
-                        "name": run.get("name"),
-                        "event": run.get("event"),
-                        "status": run.get("status"),
-                        "conclusion": run.get("conclusion"),
-                        "head_branch": run.get("head_branch"),
-                        "head_sha": run.get("head_sha"),
-                        "html_url": run.get("html_url"),
-                        "created_at": run.get("created_at"),
-                        "updated_at": run.get("updated_at"),
-                    }
-                )
-        except Exception:
-            workflow_runs = []
-
-    return {
-        "repository": full_name,
-        "pull_number": pull_number,
-        "pr": pr_summary,
-        "files": files,
-        "status_checks": status_checks,
-        "workflow_runs": workflow_runs,
-    }
 
 
 @mcp_tool(
@@ -4301,42 +1372,5 @@ async def recent_prs_for_branch(
     # This is a composite navigation helper built on top of list_pull_requests.
     # It groups results into open and (optionally) closed sets so assistants can
     # find the PR(s) tied to a feature branch without guessing numbers.
-    if not full_name or "/" not in full_name:
-        raise ValueError("full_name must be of the form 'owner/repo'")
-    if not branch:
-        raise ValueError("branch must be a non-empty string")
-
-    owner, _repo = full_name.split("/", 1)
-    head_filter = f"{owner}:{branch}"
-
-    open_resp = await list_pull_requests(
-        full_name=full_name,
-        state="open",
-        head=head_filter,
-        per_page=per_page_open,
-        page=1,
-    )
-    open_raw = open_resp.get("json") or []
-    open_prs = [_normalize_pr_payload(pr) for pr in open_raw if isinstance(pr, dict)]
-    open_prs = [pr for pr in open_prs if pr is not None]
-
-    closed_prs: List[Dict[str, Any]] = []
-    if include_closed:
-        closed_resp = await list_pull_requests(
-            full_name=full_name,
-            state="closed",
-            head=head_filter,
-            per_page=per_page_closed,
-            page=1,
-        )
-        closed_raw = closed_resp.get("json") or []
-        closed_prs = [_normalize_pr_payload(pr) for pr in closed_raw if isinstance(pr, dict)]
-        closed_prs = [pr for pr in closed_prs if pr is not None]
-
-    return {
-        "full_name": full_name,
-        "branch": branch,
-        "head_filter": head_filter,
-        "open": open_prs,
-        "closed": closed_prs,
-    }
+    from github_mcp.main_tools.pull_requests import recent_prs_for_branch as _impl
+    return await _impl(full_name=full_name, branch=branch, include_closed=include_closed, per_page_open=per_page_open, per_page_closed=per_page_closed)

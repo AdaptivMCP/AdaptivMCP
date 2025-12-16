@@ -177,7 +177,7 @@ Actions:
 
 2. **Ensure project dependencies are installed in the workspace**
    - Use `terminal_command` to install dependencies inside the workspace, for example:
-     - `pip install -r requirements.txt`
+     - `pip install -r dev-requirements.txt`
    - The workspace itself persists on disk between related commands, but commands typically run inside a temporary virtual environment. Install only what is necessary for the current repo and avoid relying on global state across unrelated sessions.
 
 3. **Use smaller, focused commands for debugging**
