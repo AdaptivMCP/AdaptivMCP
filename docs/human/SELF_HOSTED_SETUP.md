@@ -153,6 +153,14 @@ Typical configuration might look like:
 Adjust these commands if the repo uses a different entrypoint or packaging model. The key requirement is that the process starts a FastMCP-compatible HTTP server.
 
 4. **Set environment variables**
+
+4. **Edge caching (Render)**
+   - This server uses long-lived SSE connections (`/sse`) and POST callbacks (`/messages`).
+   - These endpoints must **never** be cached. The server already emits `Cache-Control: no-store`, but
+     enabling aggressive edge caching can still break ChatGPT connectivity if misconfigured.
+   - Recommended Render setting: enable edge caching for **static assets only** (or disable edge caching).
+   - If you change edge caching settings, also **purge the edge cache** and refresh the connector in ChatGPT.
+
    - `GITHUB_TOKEN`: your token.
    - `GITHUB_MCP_CONTROLLER_REPO`: your controller repo full name (if different).
    - `GITHUB_MCP_CONTROLLER_BRANCH`: the default branch for the controller repo (`main` or a refactor branch).
@@ -208,8 +216,6 @@ Once your MCP server is live, you can connect it to ChatGPT as a custom MCP inte
    - Use a simple test assistant to call `get_server_config`.
    - Confirm that you can see the expected tools and metadata.
 
-3. **Create a controller (Adaptiv Controller instance)**
-   - Create a new custom GPT or assistant in ChatGPT.
 3. **Create a controller (Adaptiv Controller instance)**
    - Create a new custom GPT or assistant in ChatGPT.
    - Attach the MCP integration you just configured.

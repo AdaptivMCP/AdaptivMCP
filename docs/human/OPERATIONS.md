@@ -63,6 +63,10 @@ When someone reports "GitHub via Adaptiv Controller is broken":
 
 3. **Check hosting logs**
    - In Render (or your platform), open the logs for the MCP service.
+   - If you are using **Render Edge Caching**, confirm it is not caching dynamic endpoints.
+     Recommended: edge caching for **static assets only** (or disabled). Misconfigured caching can cause
+     ChatGPT to get stuck in a "Connecting to app" loop.
+   - In Render (or your platform), open the logs for the MCP service.
    - Look for:
      - Tracebacks or import errors at startup.
      - Repeated GitHub `401`, `403`, or `422` errors.
