@@ -47,4 +47,6 @@ jobs:
 
       - name: Tests
         run: |
+          # Ensure async-aware pytest plugins are discovered in CI.
+          unset PYTEST_DISABLE_PLUGIN_AUTOLOAD || true
           pytest -q
