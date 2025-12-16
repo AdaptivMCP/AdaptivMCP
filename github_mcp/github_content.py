@@ -112,6 +112,31 @@ async def _resolve_file_sha(full_name: str, path: str, branch: str) -> Optional[
         return None
 
 
+
+def _strip_large_fields_from_commit_response(response_json: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove large fields from GitHub Contents API responses.
+
+    The GitHub Contents write endpoints often return base64-encoded file bodies in
+    `response_json['content']['content']`. Returning that blob to ChatGPT can
+    explode tool payload sizes and cause client disconnects/network errors.
+
+    We keep the rest of the response (sha, html_url, commit sha, etc.).
+    """
+
+    if not isinstance(response_json, dict):
+        return response_json
+
+    cleaned: Dict[str, Any] = dict(response_json)
+    content = cleaned.get("content")
+    if isinstance(content, dict):
+        content_clean = dict(content)
+        content_clean.pop("content", None)
+        content_clean.pop("encoding", None)
+        cleaned["content"] = content_clean
+
+    return cleaned
+
+
 async def _perform_github_commit(
     full_name: str,
     *,
@@ -142,7 +167,7 @@ async def _perform_github_commit(
     )
     if not isinstance(result.get("json"), dict):
         raise GitHubAPIError("Unexpected commit response from GitHub")
-    return result["json"]
+    return _strip_large_fields_from_commit_response(result["json"])
 
 
 async def _load_body_from_content_url(content_url: str, *, context: str) -> bytes:

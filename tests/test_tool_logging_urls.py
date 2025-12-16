@@ -17,3 +17,9 @@ def test_derive_github_web_url_removes_quote_and_is_clickable():
     assert web is not None
     assert web.endswith('/blob/main/github_mcp/config.py')
     assert '"' not in web
+
+
+
+def test_sanitize_url_strips_unicode_trailing_quote():
+    raw = 'https://api.github.com/repos/o/r/contents/p.txt?ref=main”'
+    assert _sanitize_url_for_logs(raw).endswith('ref=main')
