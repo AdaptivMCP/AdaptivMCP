@@ -17,7 +17,42 @@ from github_mcp.config import GITHUB_LOGGER
 from github_mcp.metrics import _record_github_request as _record_github_request_metrics
 
 
+def _sanitize_url_for_logs(raw: str) -> str:
+    """Normalize URLs that may include stray quotes or extra tokens.
+
+    Some upstream loggers can append trailing quotes or protocol snippets.
+    This keeps derived links clickable in Render logs.
+    """
+
+    s = (raw or "").strip()
+    if not s:
+        return s
+
+    # If wrapped in angle brackets, keep the inner portion.
+    if s.startswith("<") and ">" in s:
+        s = s[1 : s.find(">")].strip()
+
+    # If there is whitespace, choose the first URL-like token.
+    tokens = s.split()
+    if len(tokens) > 1:
+        for tok in tokens:
+            if tok.startswith(("https://", "http://")):
+                s = tok
+                break
+        else:
+            s = tokens[0]
+
+    # Strip surrounding quotes and common trailing quotes.
+    s = s.strip('"')
+    s = s.strip("'")
+    while s and s[-1] in ('"', "'"):
+        s = s[:-1]
+    return s
+
+
+
 def _derive_github_web_url(api_url: str) -> Optional[str]:
+    api_url = _sanitize_url_for_logs(api_url)
     """Convert an api.github.com URL into a human-friendly github.com URL.
 
     Clicking raw GitHub API links in a browser frequently shows 404 (especially
@@ -47,6 +82,7 @@ def _derive_github_web_url(api_url: str) -> Optional[str]:
 
 
 def _shorten_api_url(api_url: str) -> str:
+    api_url = _sanitize_url_for_logs(api_url)
     for prefix in ("https://api.github.com", "http://api.github.com"):
         if api_url.startswith(prefix):
             return api_url[len(prefix) :]
@@ -100,6 +136,8 @@ def _record_github_request(
         log_extra.update(extra)
 
     # Human-friendly message.
+    if url:
+        url = _sanitize_url_for_logs(url)
     status = status_code if status_code is not None else "ERR"
     method_s = method or "?"
     url_s = _shorten_api_url(url or "")
