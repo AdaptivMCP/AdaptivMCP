@@ -84,22 +84,46 @@ from github_mcp.workspace import (
 from github_mcp.http_routes.actions_compat import register_actions_compat_routes
 from github_mcp.http_routes.healthz import register_healthz_route
 from starlette.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
 
 
-class _CacheControlMiddleware(BaseHTTPMiddleware):
-    """Prevent edge caching of streaming endpoints.
 
-    If edge caching is enabled too broadly on Render, /sse and /messages
-    can be cached and the ChatGPT connector may fail to connect or hang.
+
+class _CacheControlMiddleware:
+    """ASGI middleware to control Cache-Control headers safely for streaming.
+
+    Avoid BaseHTTPMiddleware here because it can interfere with streaming
+    responses (SSE).
+
+    - Never cache dynamic streaming endpoints: /sse and /messages
+    - Optionally cache static assets: /static/*
     """
 
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        path = request.url.path
-        if path.startswith(("/sse", "/messages")):
-            response.headers["Cache-Control"] = "no-store"
-        return response
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get('type') != 'http':
+            return await self.app(scope, receive, send)
+
+        path = scope.get('path', '') or ''
+
+        async def send_wrapper(message):
+            if message.get('type') == 'http.response.start':
+                headers = list(message.get('headers', []))
+                # Normalize: remove any existing Cache-Control header if we're overriding.
+                def _has_cache_control(hdrs):
+                    return any(k.lower() == b'cache-control' for k, _ in hdrs)
+
+                if path.startswith(('/sse', '/messages')):
+                    headers = [(k, v) for (k, v) in headers if k.lower() != b'cache-control']
+                    headers.append((b'cache-control', b'no-store'))
+                elif path.startswith('/static/'):
+                    if not _has_cache_control(headers):
+                        headers.append((b'cache-control', b'public, max-age=31536000, immutable'))
+                message['headers'] = headers
+            await send(message)
+
+        return await self.app(scope, receive, send_wrapper)
 
 
 
