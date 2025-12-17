@@ -23,6 +23,7 @@ from github_mcp.config import (
     RENDER_API_BASE,
     RENDER_API_KEY,
     RENDER_DEFAULT_RESOURCE,
+    RENDER_OWNER_ID,
 )
 from github_mcp.exceptions import UsageError
 
@@ -48,6 +49,55 @@ def _default_resource_list() -> Optional[List[str]]:
         return None
     val = str(RENDER_DEFAULT_RESOURCE).strip()
     return [val] if val else None
+
+
+_OWNER_ID_CACHE: str | None = None
+_OWNER_ID_CACHE_AT: float = 0.0
+_OWNER_ID_CACHE_TTL_SECONDS = 60 * 60  # 1 hour
+
+
+def _default_owner_id() -> str:
+    return (RENDER_OWNER_ID or "").strip()
+
+
+async def _resolve_owner_id(resource_id: str | None) -> str:
+    """Resolve ownerId required by Render log endpoints.
+
+    Priority:
+      1. RENDER_OWNER_ID env var
+      2. Cached lookup
+      3. GET /services/:id and read ownerId
+    """
+
+    env_owner = _default_owner_id()
+    if env_owner:
+        return env_owner
+
+    global _OWNER_ID_CACHE, _OWNER_ID_CACHE_AT
+    now = asyncio.get_running_loop().time()
+    if _OWNER_ID_CACHE and (now - _OWNER_ID_CACHE_AT) < _OWNER_ID_CACHE_TTL_SECONDS:
+        return _OWNER_ID_CACHE
+
+    rid = (resource_id or "").strip()
+    if not rid:
+        raise UsageError("ownerId is required (set RENDER_OWNER_ID or pass ownerId)")
+
+    try:
+        payload = await _render_get(f"/services/{rid}", params={})
+    except Exception as e:
+        raise UsageError(
+            f"Unable to resolve ownerId for resource {rid}. Set RENDER_OWNER_ID. ({e})"
+        )
+
+    owner_id = str(payload.get("ownerId") or "").strip() if isinstance(payload, dict) else ""
+    if not owner_id:
+        raise UsageError(
+            f"Render service lookup did not include ownerId for resource {rid}. Set RENDER_OWNER_ID."
+        )
+
+    _OWNER_ID_CACHE = owner_id
+    _OWNER_ID_CACHE_AT = now
+    return owner_id
 
 
 async def _render_get(path: str, *, params: Dict[str, Any]) -> Any:
@@ -81,6 +131,7 @@ async def _render_get(path: str, *, params: Dict[str, Any]) -> Any:
 
 async def list_render_logs(
     *,
+    ownerId: Optional[str] = None,
     resource: Optional[List[str]] = None,
     level: Optional[List[str]] = None,
     type: Optional[List[str]] = None,
@@ -94,12 +145,18 @@ async def list_render_logs(
 
     Parameters are passed through to the Render Public API.
 
-    If `resource` is omitted, RENDER_RESOURCE/RENDER_SERVICE_ID is used when set.
+    If `resource` is omitted, RENDER_RESOURCE/RENDER_SERVICE_ID is used when set. If `ownerId` is omitted, the tool uses RENDER_OWNER_ID or attempts to resolve it from the service id via GET /services/:id.
     """
 
     resource = resource or _default_resource_list()
 
+    rid = resource[0] if resource else None
+    owner_id = (str(ownerId).strip() if ownerId is not None else "")
+    if not owner_id:
+        owner_id = await _resolve_owner_id(rid)
+
     params: Dict[str, Any] = {
+        "ownerId": owner_id,
         "resource": _comma(resource),
         "level": _comma(level),
         "type": _comma(type),

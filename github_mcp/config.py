@@ -81,6 +81,7 @@ RENDER_API_BASE = os.environ.get("RENDER_API_BASE", "https://api.render.com/v1")
 RENDER_API_KEY = os.environ.get("RENDER_API_KEY") or os.environ.get("RENDER_API_TOKEN")
 # Default Render resource/service id for render_* observability tools.
 RENDER_DEFAULT_RESOURCE = os.environ.get("RENDER_RESOURCE") or os.environ.get("RENDER_SERVICE_ID")
+RENDER_OWNER_ID = os.environ.get("RENDER_OWNER_ID") or os.environ.get("RENDER_OWNER")
 
 # Base directory for persistent workspaces used by run_command and related tools.
 # This keeps cloned repositories stable across tool invocations so installations

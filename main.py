@@ -405,10 +405,11 @@ def get_recent_server_logs(limit: int = 100, min_level: str = "INFO") -> Dict[st
 
 @mcp_tool(
     write_action=False,
-    description="Fetch recent logs from Render for the configured service (requires RENDER_API_KEY).",
+    description="Fetch recent logs from Render (requires RENDER_API_KEY). Render /logs requires ownerId; pass ownerId or set RENDER_OWNER_ID; otherwise the tool will attempt to resolve it from the service id.",
     tags=["render", "observability", "logs"],
 )
 async def list_render_logs(
+    ownerId: Optional[str] = None,
     resource: Optional[List[str]] = None,
     level: Optional[List[str]] = None,
     type: Optional[List[str]] = None,
@@ -421,6 +422,7 @@ async def list_render_logs(
     from github_mcp.main_tools.render_observability import list_render_logs as _impl
 
     return await _impl(
+        ownerId=ownerId,
         resource=resource,
         level=level,
         type=type,
