@@ -148,8 +148,6 @@ def _tool_result_summary(tool_name: str, result: Any) -> str:
     short excerpts for high-signal tools like terminal_command.
     """
 
-    name = (tool_name or "").lower()
-
     # Many workspace tools return wrapper shapes like:
     #   {"repo_dir": ..., "result": {"exit_code":..., "stdout":..., ...}}
     # Unwrap nested shell results so summaries are meaningful.
@@ -191,62 +189,43 @@ def _tool_result_summary(tool_name: str, result: Any) -> str:
         "exit_code" in result or "stdout" in result or "stderr" in result
     ):
         exit_code = result.get("exit_code")
-        timed_out = bool(result.get("timed_out")) if "timed_out" in result else None
+        timed_out = bool(result.get("timed_out")) if "timed_out" in result else False
         stdout = str(result.get("stdout") or "")
         stderr = str(result.get("stderr") or "")
         so_tr = bool(result.get("stdout_truncated")) if "stdout_truncated" in result else False
         se_tr = bool(result.get("stderr_truncated")) if "stderr_truncated" in result else False
 
-        parts = []
-        if exit_code is not None:
-            parts.append(f"exit_code={exit_code}")
-        if timed_out is not None:
-            parts.append(f"timed_out={timed_out}")
-
-        def _count_lines(s: str) -> int:
-            return 0 if not s else (s.count("\n") + (0 if s.endswith("\n") else 1))
-
-        if stdout:
-            parts.append(f"stdout={_count_lines(stdout)} lines")
-        if stderr:
-            parts.append(f"stderr={_count_lines(stderr)} lines")
-        if so_tr:
-            parts.append("stdout_truncated=True")
-        if se_tr:
-            parts.append("stderr_truncated=True")
-
-        summary = ", ".join(parts) if parts else "completed"
-
-        # For terminal-like tools, include a short excerpt in detailed logs.
-        if name in {"terminal_command", "run_tests", "run_lint_suite", "run_quality_suite"}:
+        def _excerpt(label: str, s: str, *, truncated: bool) -> str:
+            if not s.strip():
+                return ""
             excerpt_lines = 18
+            lines = s.splitlines()[:excerpt_lines]
+            out = "\n".join(lines)
+            if truncated or len(s.splitlines()) > excerpt_lines:
+                out += f"\n…({label} truncated)…"
+            return f"{label}:\n" + out
 
-            out_excerpt = ""
-            if stdout.strip():
-                lines = stdout.splitlines()[:excerpt_lines]
-                out_excerpt = "\n".join(lines)
-                if so_tr or len(stdout.splitlines()) > excerpt_lines:
-                    out_excerpt += "\n…(stdout truncated)…"
+        blocks: list[str] = []
+        if timed_out:
+            blocks.append("Timed out while waiting for the command to finish.")
 
-            err_excerpt = ""
-            if stderr.strip():
-                lines = stderr.splitlines()[:excerpt_lines]
-                err_excerpt = "\n".join(lines)
-                if se_tr or len(stderr.splitlines()) > excerpt_lines:
-                    err_excerpt += "\n…(stderr truncated)…"
+        # Prefer human-readable output over raw stats.
+        response_block = _excerpt("Response", stdout, truncated=so_tr)
+        diag_label = "Diagnostics" if exit_code in (None, 0) else "Errors"
+        diagnostics_block = _excerpt(diag_label, stderr, truncated=se_tr)
 
-            blocks: list[str] = []
-            if out_excerpt:
-                blocks.append("stdout:\n" + out_excerpt)
-            if err_excerpt:
-                blocks.append("stderr:\n" + err_excerpt)
+        if response_block:
+            blocks.append(response_block)
+        if diagnostics_block:
+            blocks.append(diagnostics_block)
 
-            if blocks:
-                return summary + "\n" + "\n".join(blocks)
+        if not blocks:
+            return "completed"
 
-        return summary
+        return "\n".join(blocks)
 
     # Lists/collections.
+
     if isinstance(result, list):
         return f"items={len(result)}"
 
@@ -348,8 +327,6 @@ def _tool_user_message(
     result_summary: Optional[str] = None,
     error: Optional[str] = None,
 ) -> str:
-    scope = "write" if write_action else "read"
-
     phase_label = _tool_phase_label(tool_name, write_action=write_action, all_args=all_args)
 
     title = tool_title or _title_from_tool_name(tool_name)
@@ -370,24 +347,25 @@ def _tool_user_message(
     loc = f" on {location}" if location and location != "-" else ""
 
     if phase == "start":
-        msg = f"{phase_label} — I'm going to {title} ({scope}){loc}. {purpose}"
+        msg = f"{phase_label} — Starting {title}{loc}. {purpose}"
         if write_action:
-            msg += " This will modify repo state."
+            msg += " This will change repository files."
+        msg += f" Next: {next_step}"
         return msg
 
     if phase == "ok":
         dur = f" in {duration_ms}ms" if duration_ms is not None else ""
         rs = (result_summary or "").strip()
         rs = _clip(rs, max_chars=160) if rs else ""
-        extra = f" Result: {rs}." if rs else ""
-        return f"{phase_label} — Done: {title}{loc}{dur}.{extra} Next: {next_step}"
+        extra = f" Summary: {rs}." if rs else ""
+        return f"{phase_label} — {title}{loc} complete{dur}.{extra} Next: {next_step}"
 
     if phase == "error":
         dur = f" after {duration_ms}ms" if duration_ms is not None else ""
         suffix = f" Error: {error}." if error else ""
-        return f"{phase_label} — I hit an error while running {title}{loc}{dur}.{suffix} Next: {next_step}"
+        return f"{phase_label} — {title}{loc} failed{dur}.{suffix} Next: {next_step}"
 
-    return f"{title} ({scope}){loc}."
+    return f"{title}{loc}."
 
 
 def _tool_inputs_summary(tool_name: str, all_args: Mapping[str, Any] | None) -> str:
@@ -539,7 +517,6 @@ def _tool_detailed_message(
     internal stats/correlation IDs.
     """
 
-    scope = "write" if write_action else "read"
     title = tool_title or _title_from_tool_name(tool_name)
 
     phase_label = _tool_phase_label(tool_name, write_action=write_action, all_args=all_args)
@@ -560,7 +537,7 @@ def _tool_detailed_message(
     inputs = _tool_inputs_summary(tool_name, all_args)
 
     if phase == "start":
-        msg = f"Details — {phase_label} — Starting {title} ({scope}){loc}. {purpose}"
+        msg = f"Details — {phase_label} — Starting {title}{loc}. {purpose}"
         if inputs and inputs != "No inputs.":
             msg += f" Inputs: {inputs}."
         if write_action:
@@ -584,7 +561,7 @@ def _tool_detailed_message(
         msg += f" Next: {next_step}"
         return msg
 
-    return f"Details — {title} ({scope}){loc}."
+    return f"Details — {title}{loc}."
 
 
 def _register_with_fastmcp(
