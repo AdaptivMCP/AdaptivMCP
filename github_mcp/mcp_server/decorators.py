@@ -216,6 +216,133 @@ def _tool_user_message(
     return f"{title} ({scope}){loc}."
 
 
+def _tool_inputs_summary(tool_name: str, all_args: Mapping[str, Any] | None) -> str:
+    """Summarize user-relevant inputs without dumping raw stats/IDs.
+
+    This intentionally omits null/empty fields and internal correlation IDs.
+    """
+
+    all_args = dict(all_args or {})
+
+    # Remove internal/noise keys if present.
+    for k in [
+        "call_id",
+        "ownerId",
+        "owner_id",
+        "resource",
+        "clientIP",
+        "client_ip",
+        "requestID",
+        "request_id",
+        "args",
+    ]:
+        all_args.pop(k, None)
+
+    def pick(*keys: str):
+        for k in keys:
+            v = all_args.get(k)
+            if v is None:
+                continue
+            if isinstance(v, str) and not v.strip():
+                continue
+            if isinstance(v, (list, dict)) and not v:
+                continue
+            return v
+        return None
+
+    def fmt_kv(k: str, v: object) -> str:
+        if isinstance(v, str):
+            s = " ".join(v.strip().split())
+            if len(s) > 180:
+                s = s[:177] + "…"
+            return f"{k}={s!r}"
+        return f"{k}={v!r}"
+
+    # Tool-specific summaries.
+    if tool_name in {"search_workspace", "search"}:
+        q = pick("query", "q")
+        path = pick("path")
+        parts = []
+        if q is not None:
+            parts.append(fmt_kv("query", q))
+        if path is not None:
+            parts.append(fmt_kv("path", path))
+        return ", ".join(parts) if parts else "No inputs."
+
+    if tool_name in {"get_file_with_line_numbers", "get_file_slice", "get_file_contents"}:
+        path = pick("path")
+        start = pick("start_line", "start")
+        max_lines = pick("max_lines")
+        parts = []
+        if path is not None:
+            parts.append(fmt_kv("file", path))
+        if start is not None:
+            parts.append(fmt_kv("start_line", start))
+        if max_lines is not None:
+            parts.append(fmt_kv("max_lines", max_lines))
+        return ", ".join(parts) if parts else "No inputs."
+
+    if tool_name in {"terminal_command", "run_command"}:
+        cmd = pick("command")
+        timeout = pick("timeout_seconds")
+        use_temp = pick("use_temp_venv")
+        installing = pick("installing_dependencies")
+        parts = []
+        if cmd is not None:
+            parts.append(fmt_kv("command", cmd))
+        if timeout is not None:
+            parts.append(fmt_kv("timeout_seconds", timeout))
+        if use_temp is True:
+            parts.append("temp_venv=True")
+        if installing is True:
+            parts.append("install_deps=True")
+        return ", ".join(parts) if parts else "No inputs."
+
+    if "render" in tool_name and "log" in tool_name:
+        direction = pick("direction")
+        limit = pick("limit")
+        level = pick("level", "min_level")
+        text_filter = pick("text")
+        parts = []
+        if level is not None:
+            parts.append(fmt_kv("level", level))
+        if text_filter is not None:
+            parts.append(fmt_kv("filter", text_filter))
+        if direction is not None:
+            parts.append(fmt_kv("direction", direction))
+        if limit is not None:
+            parts.append(fmt_kv("limit", limit))
+        return ", ".join(parts) if parts else "No inputs."
+
+    if tool_name in {"apply_text_update_and_commit", "update_file_from_workspace"}:
+        path = pick("path")
+        message = pick("commit_message", "message")
+        parts = []
+        if path is not None:
+            parts.append(fmt_kv("file", path))
+        if message is not None:
+            parts.append(fmt_kv("message", message))
+        return ", ".join(parts) if parts else "No inputs."
+
+    # Generic fallback: include a small, cleaned set of keys.
+    cleaned: list[str] = []
+    for k in sorted(all_args.keys()):
+        v = all_args.get(k)
+        if v is None:
+            continue
+        if isinstance(v, str) and not v.strip():
+            continue
+        if isinstance(v, (list, dict)) and not v:
+            continue
+        if k in {"repo", "ref", "path", "full_name"}:
+            continue
+        cleaned.append(fmt_kv(k, v))
+        if len(cleaned) >= 6:
+            break
+
+    return ", ".join(cleaned) if cleaned else "No inputs."
+
+
 def _tool_detailed_message(
     tool_name: str,
     *,
@@ -231,53 +358,54 @@ def _tool_detailed_message(
     result_type: Optional[str] = None,
     error: Optional[str] = None,
 ) -> str:
+    """User-facing detailed log message.
+
+    Detailed logs should read like a professional progress narrative, not a dump of
+    internal stats/correlation IDs.
+    """
+
     scope = "write" if write_action else "read"
     title = tool_title or _title_from_tool_name(tool_name)
 
-    target = None
+    location = None
     if repo or ref or path:
-        target = repo or "-"
+        location = repo or "-"
         if ref:
-            target = f"{target}@{ref}"
+            location = f"{location}@{ref}"
         if path:
-            target = f"{target}:{path}"
+            location = f"{location}:{path}"
 
     narrative = _tool_narrative(tool_name, all_args)
     purpose = narrative["purpose"]
     next_step = narrative["next_step"]
 
-    parts: list[str] = [
-        f"Tool={title}",
-        f"scope={scope}",
-    ]
-    if target and target != "-":
-        parts.append(f"target={target}")
+    loc = f" on {location}" if location and location != "-" else ""
+    inputs = _tool_inputs_summary(tool_name, all_args)
 
     if phase == "start":
-        parts.append(f"inputs={arg_preview}")
-        parts.append(f"purpose={purpose}")
-        parts.append(f"next={next_step}")
-        return " | ".join(parts)
+        msg = f"Details — Starting {title} ({scope}){loc}. {purpose}"
+        if inputs and inputs != "No inputs.":
+            msg += f" Inputs: {inputs}."
+        if write_action:
+            msg += " This will modify repo state."
+        msg += f" Next: {next_step}"
+        return msg
 
     if phase == "ok":
-        if duration_ms is not None:
-            parts.append(f"duration_ms={duration_ms}")
-        if result_type:
-            parts.append(f"result_type={result_type}")
-        parts.append(f"next={next_step}")
-        return " | ".join(parts)
+        dur = f" Completed in {duration_ms}ms." if duration_ms is not None else ""
+        out = f" Output: {result_type}." if result_type else ""
+        return f"Details — Finished {title}{loc}.{dur}{out} Next: {next_step}"
 
     if phase == "error":
-        if duration_ms is not None:
-            parts.append(f"duration_ms={duration_ms}")
-        if error:
-            parts.append(f"error={error}")
-        parts.append(f"inputs={arg_preview}")
-        parts.append(f"next={next_step}")
-        return " | ".join(parts)
+        dur = f" After {duration_ms}ms." if duration_ms is not None else ""
+        err = f" Error: {error}." if error else ""
+        msg = f"Details — Failed {title}{loc}.{dur}{err}"
+        if inputs and inputs != "No inputs.":
+            msg += f" Inputs: {inputs}."
+        msg += f" Next: {next_step}"
+        return msg
 
-    parts.append(f"phase={phase}")
-    return " | ".join(parts)
+    return f"Details — {title} ({scope}){loc}."
 
 
 def _register_with_fastmcp(
