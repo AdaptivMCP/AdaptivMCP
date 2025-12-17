@@ -117,6 +117,11 @@ TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
 TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
 TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "20000"))
 
+# Upper bounds for unified diffs printed to stdout logs for write tools.
+# These are separate from TOOL_STDOUT_MAX_CHARS (tool return payload truncation).
+WRITE_DIFF_LOG_MAX_LINES = int(os.environ.get("WRITE_DIFF_LOG_MAX_LINES", "200"))
+WRITE_DIFF_LOG_MAX_CHARS = int(os.environ.get("WRITE_DIFF_LOG_MAX_CHARS", "20000"))
+
 # Soft limit for run_command.command length to discourage huge inline scripts.
 RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "20000"))
 

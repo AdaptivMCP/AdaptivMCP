@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import inspect
 import json
 from typing import Any, Dict, Mapping, Optional
@@ -454,24 +455,66 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     return None
 
 def _format_tool_args_preview(all_args: Mapping[str, Any], *, limit: int = 1200) -> str:
-    """Return a human-friendly, truncated snapshot of tool arguments.
+    """Return a single-line, truncated snapshot of tool arguments.
 
-    Avoid returning strings that contain literal ``\\n`` sequences (double-escaped
-    newlines) because those show up as `\\n` in client UIs and confuse assistants.
+    Render logs are easiest to read when tool args are compact and avoid embedding
+    huge blobs (file contents, patches, long commands). For those values we log a
+    short summary (length + checksum) and rely on dedicated diff logging for write
+    tools.
     """
 
     if not all_args:
         return "<no args>"
 
-    try:
-        preview = json.dumps(all_args, default=str, ensure_ascii=False)
-    except Exception:
-        preview = repr(all_args)
+    large_keys = {
+        "updated_content",
+        "content",
+        "body",
+        "patch",
+        "diff",
+        "command",
+        "stdout",
+        "stderr",
+        "controller_log",
+    }
 
-    # If json.dumps produced escaped control sequences, make them readable.
-    # Intentionally narrow (only \\n, \\r\\n, \\t) to avoid surprising transforms.
-    if isinstance(preview, str) and "\\n" in preview and "\n" not in preview:
-        preview = preview.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+    def _sha1_8(s: str) -> str:
+        return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()[:8]
+
+    def _summarize(value: Any, *, key: str | None = None, depth: int = 0) -> Any:
+        # Keep this strictly single-line friendly.
+        if value is None or isinstance(value, (bool, int, float)):
+            return value
+
+        if isinstance(value, (bytes, bytearray)):
+            return f"<bytes len={len(value)}>"
+
+        if isinstance(value, str):
+            # Always summarize large/sensitive keys or anything with whitespace control chars.
+            if key in large_keys or len(value) > 180 or any(c in value for c in ("\n", "\r", "\t")):
+                return f"<str len={len(value)} sha1={_sha1_8(value)}>"
+            return value
+
+        if isinstance(value, Mapping):
+            if depth >= 2:
+                return f"<dict keys={len(value)}>"
+            return {k: _summarize(v, key=str(k), depth=depth + 1) for k, v in value.items()}
+
+        if isinstance(value, (list, tuple)):
+            if depth >= 2:
+                return f"<list len={len(value)}>"
+            return [_summarize(v, depth=depth + 1) for v in value]
+
+        return str(value)
+
+    try:
+        safe_args = {k: _summarize(v, key=str(k), depth=0) for k, v in all_args.items()}
+        preview = json.dumps(safe_args, ensure_ascii=False, separators=(",", ":"))
+    except Exception:
+        preview = "<args preview unavailable>"
+
+    # Ensure it is a single line even if something slipped through.
+    preview = preview.replace("\r", " ").replace("\n", " ").replace("\t", " ")
 
     if len(preview) > limit:
         preview = f"{preview[:limit]}… (+{len(preview) - limit} chars)"

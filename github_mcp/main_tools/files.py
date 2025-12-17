@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from difflib import unified_diff
+import github_mcp.config as config
+from github_mcp.diff_utils import (
+    build_unified_diff,
+    colorize_unified_diff,
+    diff_stats,
+    truncate_diff,
+)
 
 from ._main import _main
 
@@ -65,15 +71,44 @@ async def create_file(
         sha_value = verified.get("sha")
         sha_after = sha_value if isinstance(sha_value, str) else None
 
+    # Render-log friendly diff logging (colored additions/removals).
+    full_diff = build_unified_diff(
+        "",
+        content,
+        fromfile=f"a/{normalized_path}",
+        tofile=f"b/{normalized_path}",
+    )
+    stats = diff_stats(full_diff)
+
+    try:
+        config.TOOLS_LOGGER.chat(
+            "Created %s (+%s -%s)",
+            normalized_path,
+            stats.added,
+            stats.removed,
+            extra={"repo": full_name, "path": normalized_path, "event": "write_diff_summary"},
+        )
+
+        if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and full_diff.strip():
+            truncated = truncate_diff(
+                full_diff,
+                max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
+                max_chars=config.WRITE_DIFF_LOG_MAX_CHARS,
+            )
+            colored = colorize_unified_diff(truncated)
+            config.TOOLS_LOGGER.detailed(
+                "Diff for %s\n%s",
+                normalized_path,
+                colored,
+                extra={"repo": full_name, "path": normalized_path, "event": "write_diff"},
+            )
+    except Exception:
+        # Diff logging should never break the tool.
+        pass
+
     diff_text: Optional[str] = None
     if return_diff:
-        diff_lines = unified_diff(
-            [],
-            content.splitlines(keepends=True),
-            fromfile=f"a/{normalized_path}",
-            tofile=f"b/{normalized_path}",
-        )
-        diff_text = "".join(diff_lines)
+        diff_text = full_diff
 
     return {
         "status": "created",
@@ -161,17 +196,47 @@ async def apply_text_update_and_commit(
     verified = await m._decode_github_content(full_name, normalized_path, effective_branch)
     sha_after = _extract_sha(verified)
 
+    # Render-log friendly diff logging (colored additions/removals).
+    before = old_text or ""
+    after = updated_content
+    full_diff = build_unified_diff(
+        before,
+        after,
+        fromfile=f"a/{normalized_path}",
+        tofile=f"b/{normalized_path}",
+    )
+    stats = diff_stats(full_diff)
+
+    # Minimal progress note (CHAT) + detailed colored diff when enabled.
+    try:
+        config.TOOLS_LOGGER.chat(
+            "Committed %s (+%s -%s)",
+            normalized_path,
+            stats.added,
+            stats.removed,
+            extra={"repo": full_name, "path": normalized_path, "event": "write_diff_summary"},
+        )
+
+        if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and full_diff.strip():
+            truncated = truncate_diff(
+                full_diff,
+                max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
+                max_chars=config.WRITE_DIFF_LOG_MAX_CHARS,
+            )
+            colored = colorize_unified_diff(truncated)
+            config.TOOLS_LOGGER.detailed(
+                "Diff for %s:\n%s",
+                normalized_path,
+                colored,
+                extra={"repo": full_name, "path": normalized_path, "event": "write_diff"},
+            )
+    except Exception:
+        # Diff logging should never break the tool.
+        pass
+
     diff_text: Optional[str] = None
     if return_diff:
-        before = old_text or ""
-        after = updated_content
-        diff_lines = unified_diff(
-            before.splitlines(keepends=True),
-            after.splitlines(keepends=True),
-            fromfile=f"a/{normalized_path}",
-            tofile=f"b/{normalized_path}",
-        )
-        diff_text = "".join(diff_lines)
+        diff_text = full_diff
 
     return {
         "status": "committed",
@@ -249,6 +314,48 @@ async def move_file(
             f"/repos/{full_name}/contents/{from_path}",
             json=delete_body,
         )
+
+
+    # Render-log friendly move/delete summaries.
+    try:
+        config.TOOLS_LOGGER.chat(
+            "Moved %s -> %s",
+            from_path,
+            to_path,
+            extra={"repo": full_name, "from_path": from_path, "to_path": to_path, "event": "write_move"},
+        )
+
+        # If we actually deleted the old path, also show the deletion diff.
+        if isinstance(delete_result, dict) and delete_result.get("status") != "noop":
+            delete_diff = build_unified_diff(
+                source_text,
+                "",
+                fromfile=f"a/{from_path}",
+                tofile=f"b/{from_path}",
+            )
+            stats = diff_stats(delete_diff)
+            config.TOOLS_LOGGER.chat(
+                "Removed %s (+%s -%s)",
+                from_path,
+                stats.added,
+                stats.removed,
+                extra={"repo": full_name, "path": from_path, "event": "write_diff_summary"},
+            )
+            if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and delete_diff.strip():
+                truncated = truncate_diff(
+                    delete_diff,
+                    max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
+                    max_chars=config.WRITE_DIFF_LOG_MAX_CHARS,
+                )
+                colored = colorize_unified_diff(truncated)
+                config.TOOLS_LOGGER.detailed(
+                    "Diff for %s (deleted)\n%s",
+                    from_path,
+                    colored,
+                    extra={"repo": full_name, "path": from_path, "event": "write_diff"},
+                )
+    except Exception:
+        pass
 
     return {
         "status": "moved",
