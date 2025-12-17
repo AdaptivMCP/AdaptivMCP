@@ -462,6 +462,19 @@ async def get_render_metrics(
 
 
 @mcp_tool(
+    write_action=False,
+    description=(
+        "Return a user-facing health summary for the current Render service (deployment status, key metrics, and warnings)."
+    ),
+    tags=["render", "health", "summary"],
+)
+async def get_render_health_summary(resourceId: Optional[str] = None) -> Dict[str, Any]:
+    from github_mcp.main_tools.render_observability import get_render_health_summary as _impl
+
+    return await _impl(resourceId=resourceId)
+
+
+@mcp_tool(
     write_action=True,
     description=(
         "Run a Render CLI command non-interactively (requires the Render CLI in the runtime and RENDER_API_KEY in env). "

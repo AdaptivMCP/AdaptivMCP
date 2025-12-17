@@ -166,6 +166,13 @@ async def _update_session_log_after_push(
 
     ci_run = await _try_get_ci_run_summary(full_name=full_name, branch=branch, head_sha=head_sha)
     render_excerpt = await _try_get_render_log_excerpt(head_sha)
+    render_health = None
+    try:
+        from github_mcp.main_tools.render_observability import get_render_health_summary as _health
+
+        render_health = await _health()
+    except Exception:
+        render_health = None
 
     ts_local = datetime.now(timezone.utc)
     try:
@@ -202,6 +209,37 @@ async def _update_session_log_after_push(
             md.append(f"- CI: {status} — {url}")
     else:
         md.append("- CI: pending / not available")
+
+    if render_health:
+        health_lines = []
+        window = render_health.get("window_minutes")
+        cpu = render_health.get("cpu_percent")
+        mem = render_health.get("memory_percent")
+        lat = render_health.get("http_latency_recent_max_ms")
+        req = render_health.get("http_requests_recent_max")
+        inst = render_health.get("instance_count")
+        if window is not None:
+            health_lines.append(f"Window: last {int(window)} minutes")
+        if cpu is not None:
+            health_lines.append(f"CPU: ~{float(cpu):.0f}% of limit")
+        if mem is not None:
+            health_lines.append(f"Memory: ~{float(mem):.0f}% of limit")
+        if lat is not None:
+            health_lines.append(f"HTTP latency peak: ~{float(lat):.0f}ms")
+        if req is not None:
+            health_lines.append(f"HTTP requests peak: ~{float(req):.0f}")
+        if inst is not None:
+            health_lines.append(f"Instances: ~{float(inst):.0f}")
+        warns = render_health.get("warnings")
+        if isinstance(warns, list):
+            for w in warns[:5]:
+                if isinstance(w, str) and w.strip():
+                    health_lines.append(f"Warning: {w.strip()}")
+        if health_lines:
+            md.append("- Deploy: Render health snapshot:")
+            md.append(format_bullets(health_lines, max_items=12) or "")
+    else:
+        md.append("- Deploy: Render health snapshot: not available")
 
     if render_excerpt:
         md.append("- Deploy: recent Render log excerpt:")

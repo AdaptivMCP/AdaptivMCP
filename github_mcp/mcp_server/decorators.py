@@ -92,6 +92,50 @@ def _summarize_command(command: str) -> str:
     return cmd
 
 
+def _tool_inputs_summary(tool_name: str, all_args: Mapping[str, Any] | None) -> str:
+    """Return a human-readable summary of tool inputs for detailed logs.
+
+    This should be safe to show to users (no secrets) and compact.
+    """
+
+    if not all_args:
+        return "No inputs."
+
+    # Redact obvious secret-bearing keys.
+    redact_keys = {
+        "api_key",
+        "token",
+        "access_token",
+        "refresh_token",
+        "secret",
+        "password",
+        "authorization",
+        "cookie",
+        "service_id",
+        "owner_id",
+    }
+
+    safe_args: dict[str, Any] = {}
+    for k, v in dict(all_args).items():
+        lk = str(k).lower()
+        if lk in redact_keys or any(t in lk for t in ("key", "secret", "token", "password")):
+            safe_args[str(k)] = "<redacted>"
+        else:
+            safe_args[str(k)] = v
+
+    # Tool-specific hints.
+    cmd = safe_args.get("command")
+    if isinstance(cmd, str):
+        return f"command={_summarize_command(cmd)}"
+
+    url = safe_args.get("url")
+    if isinstance(url, str):
+        return f"url={_clip(url, max_chars=220)}"
+
+    # Default: compact JSON-ish preview produced by schemas helper.
+    return _format_tool_args_preview(safe_args)
+
+
 def _tool_phase_label(
     tool_name: str, *, write_action: bool, all_args: Mapping[str, Any] | None
 ) -> str:
@@ -141,12 +185,160 @@ def _clip(text: str, *, max_chars: int) -> str:
     return text[: max(0, max_chars - 1)] + "…"
 
 
-def _tool_result_summary(tool_name: str, result: Any) -> str:
+# ------------------------------------------------------------------------------
+# Transport-safe tool results
+
+_CONTROL_CHAR_TABLE = {i: None for i in range(0, 32) if chr(i) not in ("\n", "\t")}
+
+
+def _sanitize_text(s: str, *, max_chars: int) -> str:
+    # Normalize and drop control characters that can confuse clients/log viewers.
+    s = (s or "").replace("\r", "")
+    try:
+        s = s.translate(_CONTROL_CHAR_TABLE)
+    except Exception:
+        pass
+    return _clip(s, max_chars=max_chars)
+
+
+def _sanitize_tool_result(
+    obj: Any,
+    *,
+    max_depth: int = 6,
+    max_list_items: int = 200,
+    max_dict_items: int = 200,
+    max_string_chars: int = 60000,
+    total_char_budget: int = 120000,
+) -> Any:
+    """Best-effort sanitize/truncate tool results for transport.
+
+    This defends against huge payloads, control characters, and non-JSONable objects
+    that can cause connector/network disconnects.
+    """
+
+    budget = [int(total_char_budget)]
+
+    def _needs_sanitization(x: Any, depth: int) -> bool:
+        """Return True if we must sanitize/copy to keep transport safe."""
+
+        if depth > max_depth:
+            return True
+
+        if x is None or isinstance(x, (bool, int, float)):
+            return False
+
+        if isinstance(x, (bytes, bytearray, memoryview)):
+            return True
+
+        if isinstance(x, str):
+            if x != x.replace("\r", ""):
+                return True
+            try:
+                if x.translate(_CONTROL_CHAR_TABLE) != x:
+                    return True
+            except Exception:
+                return True
+            if len(x) > max_string_chars:
+                return True
+            return False
+
+        if isinstance(x, dict):
+            if len(x) > max_dict_items:
+                return True
+            for k, v in x.items():
+                if not isinstance(k, str):
+                    return True
+                if _needs_sanitization(k, depth + 1):
+                    return True
+                if _needs_sanitization(v, depth + 1):
+                    return True
+            return False
+
+        if isinstance(x, list):
+            if len(x) > max_list_items:
+                return True
+            for v in x:
+                if _needs_sanitization(v, depth + 1):
+                    return True
+            return False
+
+        return True
+
+    # Fast path: preserve identity for already-safe JSON-shaped results.
+    try:
+        if isinstance(obj, (dict, list, str)) and not _needs_sanitization(obj, 0):
+            return obj
+    except Exception:
+        pass
+
+    def walk(x: Any, depth: int) -> Any:
+        if budget[0] <= 0:
+            return "…(truncated)…"
+        if depth > max_depth:
+            s = _sanitize_text(str(x), max_chars=min(max_string_chars, budget[0]))
+            budget[0] -= len(s)
+            return s
+
+        if x is None or isinstance(x, (bool, int, float)):
+            return x
+
+        if isinstance(x, bytes):
+            try:
+                x = x.decode("utf-8", errors="replace")
+            except Exception:
+                x = str(x)
+
+        if isinstance(x, str):
+            s = _sanitize_text(x, max_chars=min(max_string_chars, budget[0]))
+            budget[0] -= len(s)
+            return s
+
+        if isinstance(x, dict):
+            out: dict[str, Any] = {}
+            items = list(x.items())
+            for k, v in items[:max_dict_items]:
+                ks = _sanitize_text(str(k), max_chars=256)
+                out[ks] = walk(v, depth + 1)
+                if budget[0] <= 0:
+                    break
+            if len(items) > max_dict_items:
+                out["…"] = f"…({len(items) - max_dict_items} more keys)…"
+            return out
+
+        if isinstance(x, (list, tuple, set)):
+            seq = list(x)
+            out_list = [walk(v, depth + 1) for v in seq[:max_list_items]]
+            if len(seq) > max_list_items:
+                out_list.append(f"…({len(seq) - max_list_items} more items)…")
+            return out_list
+
+        s = _sanitize_text(str(x), max_chars=min(max_string_chars, budget[0]))
+        budget[0] -= len(s)
+        return s
+
+    return walk(obj, 0)
+
+
+def _tool_result_summary(tool_name: str, result: Any, *, verbosity: str = "detailed") -> str:
     """Summarize tool results for user-facing logs.
 
-    Avoid leaking internal IDs or dumping huge payloads. Detailed logs may include
-    short excerpts for high-signal tools like terminal_command.
+    - CHAT logs should be short and conversational.
+    - DETAILED logs can include small, high-signal excerpts (terminal output, diffs).
+
+    Avoid leaking internal IDs or dumping huge payloads.
     """
+
+    def _first_line(s: str, *, max_chars: int = 180) -> str:
+        s = (s or "").strip().replace("\r", "")
+        if not s:
+            return ""
+        line = s.splitlines()[0]
+        return _clip(line, max_chars=max_chars)
+
+    def _pipe_prefix(block: str, *, prefix: str = "│ ") -> str:
+        # Keep multi-line blocks readable even if the log viewer splits on newlines.
+        parts = (block or "").replace("\r", "").splitlines() or [""]
+        return "\n".join(prefix + ln for ln in parts)
 
     # Many workspace tools return wrapper shapes like:
     #   {"repo_dir": ..., "result": {"exit_code":..., "stdout":..., ...}}
@@ -159,7 +351,7 @@ def _tool_result_summary(tool_name: str, result: Any) -> str:
             or "stderr" in inner
             or ("error" in inner and inner.get("error"))
         ):
-            return _tool_result_summary(tool_name, inner)
+            return _tool_result_summary(tool_name, inner, verbosity=verbosity)
 
         # Common read-tool shapes.
         if isinstance(result.get("lines"), list):
@@ -175,6 +367,18 @@ def _tool_result_summary(tool_name: str, result: Any) -> str:
 
         if isinstance(result.get("logs"), list):
             return f"fetched {len(result.get('logs') or [])} log lines"
+
+        # Unified diffs from commit/update tools.
+        diff = result.get("diff") or result.get("unified_diff")
+        if isinstance(diff, str) and diff.strip():
+            if verbosity == "chat":
+                return "generated a patch (see detailed logs for the diff)"
+            diff_lines = diff.splitlines()
+            max_lines = 140
+            clipped = "\n".join(diff_lines[:max_lines])
+            if len(diff_lines) > max_lines:
+                clipped += "\n…(diff truncated)…"
+            return "diff:\n" + _pipe_prefix(clipped)
 
     # Common structured error shape.
     if isinstance(result, dict) and "error" in result and result.get("error"):
@@ -195,21 +399,34 @@ def _tool_result_summary(tool_name: str, result: Any) -> str:
         so_tr = bool(result.get("stdout_truncated")) if "stdout_truncated" in result else False
         se_tr = bool(result.get("stderr_truncated")) if "stderr_truncated" in result else False
 
+        if verbosity == "chat":
+            parts: list[str] = []
+            if timed_out:
+                parts.append("timed out")
+            r1 = _first_line(stdout)
+            e1 = _first_line(stderr)
+            if r1:
+                parts.append(f"Response: {r1}")
+            if e1:
+                label = "Diagnostics" if exit_code in (None, 0) else "Errors"
+                parts.append(f"{label}: {e1}")
+            return " | ".join(parts) if parts else "completed"
+
         def _excerpt(label: str, s: str, *, truncated: bool) -> str:
             if not s.strip():
                 return ""
             excerpt_lines = 18
-            lines = s.splitlines()[:excerpt_lines]
-            out = "\n".join(lines)
-            if truncated or len(s.splitlines()) > excerpt_lines:
+            raw_lines = s.replace("\r", "").splitlines()
+            view = raw_lines[:excerpt_lines]
+            out = "\n".join(view)
+            if truncated or len(raw_lines) > excerpt_lines:
                 out += f"\n…({label} truncated)…"
-            return f"{label}:\n" + out
+            return f"{label}:\n" + _pipe_prefix(out)
 
         blocks: list[str] = []
         if timed_out:
             blocks.append("Timed out while waiting for the command to finish.")
 
-        # Prefer human-readable output over raw stats.
         response_block = _excerpt("Response", stdout, truncated=so_tr)
         diag_label = "Diagnostics" if exit_code in (None, 0) else "Errors"
         diagnostics_block = _excerpt(diag_label, stderr, truncated=se_tr)
@@ -225,17 +442,19 @@ def _tool_result_summary(tool_name: str, result: Any) -> str:
         return "\n".join(blocks)
 
     # Lists/collections.
-
     if isinstance(result, list):
         return f"items={len(result)}"
 
     if isinstance(result, str):
+        if verbosity == "chat":
+            return (
+                _clip(result.strip().replace("\r", "").replace("\n", " "), max_chars=160) or "text"
+            )
         return f"text={len(result)} chars"
 
     if result is None:
         return "no result"
 
-    # Generic fallback.
     return f"type={type(result).__name__}"
 
 
@@ -318,181 +537,53 @@ def _tool_user_message(
     *,
     tool_title: str | None = None,
     all_args: Mapping[str, Any] | None = None,
-    write_action: bool,
-    repo: Optional[str],
-    ref: Optional[str],
-    path: Optional[str],
-    phase: str,
-    duration_ms: Optional[int] = None,
-    result_summary: Optional[str] = None,
-    error: Optional[str] = None,
+    write_action: bool = False,
+    repo: str | None = None,
+    ref: str | None = None,
+    path: str | None = None,
+    phase: str = "start",
+    duration_ms: int | None = None,
+    result_summary: str | None = None,
+    error: str | None = None,
 ) -> str:
+    """User-facing chat log message.
+
+    This intentionally reads like an assistant speaking to a human.
+    Avoid internal IDs/stats; focus on *what* is happening and *what comes next*.
+
+    Backwards-compatible with older call-sites that pass (tool_title, all_args, phase...).
+    """
+
     phase_label = _tool_phase_label(tool_name, write_action=write_action, all_args=all_args)
-
     title = tool_title or _title_from_tool_name(tool_name)
-
-    # Only include a target when we have something meaningful.
-    location = None
-    if repo or ref or path:
-        location = repo or "-"
-        if ref:
-            location = f"{location}@{ref}"
-        if path:
-            location = f"{location}:{path}"
 
     narrative = _tool_narrative(tool_name, all_args)
     purpose = narrative["purpose"]
     next_step = narrative["next_step"]
 
-    loc = f" on {location}" if location and location != "-" else ""
+    loc = ""
+    if repo and ref:
+        loc = f" on {repo}@{ref}"
+    elif repo:
+        loc = f" on {repo}"
+    if path:
+        loc += f":{path}"
 
-    if phase == "start":
-        msg = f"{phase_label} — Starting {title}{loc}. {purpose}"
-        if write_action:
-            msg += " This will change repository files."
-        msg += f" Next: {next_step}"
-        return msg
+    status = phase
 
-    if phase == "ok":
-        dur = f" in {duration_ms}ms" if duration_ms is not None else ""
-        rs = (result_summary or "").strip()
-        rs = _clip(rs, max_chars=160) if rs else ""
-        extra = f" Summary: {rs}." if rs else ""
-        return f"{phase_label} — {title}{loc} complete{dur}.{extra} Next: {next_step}"
+    if status == "start":
+        return f"{phase_label} — Starting {title}{loc}. {purpose} Next: {next_step}"
 
-    if phase == "error":
-        dur = f" after {duration_ms}ms" if duration_ms is not None else ""
-        suffix = f" Error: {error}." if error else ""
-        return f"{phase_label} — {title}{loc} failed{dur}.{suffix} Next: {next_step}"
+    if status == "ok":
+        summary = (result_summary or "").strip() or "done"
+        dur = f" ({duration_ms}ms)" if duration_ms is not None else ""
+        return f"{phase_label} — Finished {title}{loc}{dur}. {summary}. Next: {next_step}"
 
-    return f"{title}{loc}."
-
-
-def _tool_inputs_summary(tool_name: str, all_args: Mapping[str, Any] | None) -> str:
-    """Summarize user-relevant inputs without dumping raw stats/IDs.
-
-    This intentionally omits null/empty fields and internal correlation IDs.
-    """
-
-    all_args = dict(all_args or {})
-
-    # Remove internal/noise keys if present.
-    for k in [
-        "call_id",
-        "ownerId",
-        "owner_id",
-        "resource",
-        "clientIP",
-        "client_ip",
-        "requestID",
-        "request_id",
-        "args",
-    ]:
-        all_args.pop(k, None)
-
-    def pick(*keys: str):
-        for k in keys:
-            v = all_args.get(k)
-            if v is None:
-                continue
-            if isinstance(v, str) and not v.strip():
-                continue
-            if isinstance(v, (list, dict)) and not v:
-                continue
-            return v
-        return None
-
-    def fmt_kv(k: str, v: object) -> str:
-        if isinstance(v, str):
-            s = " ".join(v.strip().split())
-            if len(s) > 180:
-                s = s[:177] + "…"
-            return f"{k}={s!r}"
-        return f"{k}={v!r}"
-
-    # Tool-specific summaries.
-    if tool_name in {"search_workspace", "search"}:
-        q = pick("query", "q")
-        path = pick("path")
-        parts = []
-        if q is not None:
-            parts.append(fmt_kv("query", q))
-        if path is not None:
-            parts.append(fmt_kv("path", path))
-        return ", ".join(parts) if parts else "No inputs."
-
-    if tool_name in {"get_file_with_line_numbers", "get_file_slice", "get_file_contents"}:
-        path = pick("path")
-        start = pick("start_line", "start")
-        max_lines = pick("max_lines")
-        parts = []
-        if path is not None:
-            parts.append(fmt_kv("file", path))
-        if start is not None:
-            parts.append(fmt_kv("start_line", start))
-        if max_lines is not None:
-            parts.append(fmt_kv("max_lines", max_lines))
-        return ", ".join(parts) if parts else "No inputs."
-
-    if tool_name in {"terminal_command", "run_command"}:
-        cmd = pick("command")
-        timeout = pick("timeout_seconds")
-        use_temp = pick("use_temp_venv")
-        installing = pick("installing_dependencies")
-        parts = []
-        if cmd is not None:
-            parts.append(fmt_kv("command", cmd))
-        if timeout is not None:
-            parts.append(fmt_kv("timeout_seconds", timeout))
-        if use_temp is True:
-            parts.append("temp_venv=True")
-        if installing is True:
-            parts.append("install_deps=True")
-        return ", ".join(parts) if parts else "No inputs."
-
-    if "render" in tool_name and "log" in tool_name:
-        direction = pick("direction")
-        limit = pick("limit")
-        level = pick("level", "min_level")
-        text_filter = pick("text")
-        parts = []
-        if level is not None:
-            parts.append(fmt_kv("level", level))
-        if text_filter is not None:
-            parts.append(fmt_kv("filter", text_filter))
-        if direction is not None:
-            parts.append(fmt_kv("direction", direction))
-        if limit is not None:
-            parts.append(fmt_kv("limit", limit))
-        return ", ".join(parts) if parts else "No inputs."
-
-    if tool_name in {"apply_text_update_and_commit", "update_file_from_workspace"}:
-        path = pick("path")
-        message = pick("commit_message", "message")
-        parts = []
-        if path is not None:
-            parts.append(fmt_kv("file", path))
-        if message is not None:
-            parts.append(fmt_kv("message", message))
-        return ", ".join(parts) if parts else "No inputs."
-
-    # Generic fallback: include a small, cleaned set of keys.
-    cleaned: list[str] = []
-    for k in sorted(all_args.keys()):
-        v = all_args.get(k)
-        if v is None:
-            continue
-        if isinstance(v, str) and not v.strip():
-            continue
-        if isinstance(v, (list, dict)) and not v:
-            continue
-        if k in {"repo", "ref", "path", "full_name"}:
-            continue
-        cleaned.append(fmt_kv(k, v))
-        if len(cleaned) >= 6:
-            break
-
-    return ", ".join(cleaned) if cleaned else "No inputs."
+    err = (error or "unknown error").strip()
+    dur = f" ({duration_ms}ms)" if duration_ms is not None else ""
+    return (
+        f"{phase_label} — {title}{loc} failed{dur}: {_clip(err, max_chars=200)}. Next: {next_step}"
+    )
 
 
 def _tool_detailed_message(
@@ -735,6 +826,7 @@ def mcp_tool(
 
                 try:
                     result = await func(*args, **kwargs)
+                    result = _sanitize_tool_result(result)
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -1007,6 +1099,7 @@ def mcp_tool(
 
                 try:
                     result = func(*args, **kwargs)
+                    result = _sanitize_tool_result(result)
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
 

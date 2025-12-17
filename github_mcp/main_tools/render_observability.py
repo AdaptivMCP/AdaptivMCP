@@ -150,6 +150,9 @@ async def list_render_logs(
 
     resource = resource or _default_resource_list()
 
+    # Default to application logs. Platform request logs are noisy and not usually user-facing.
+    type = type or ["app"]
+
     rid = resource[0] if resource else None
     owner_id = str(ownerId).strip() if ownerId is not None else ""
     if not owner_id:
@@ -258,3 +261,104 @@ async def get_render_metrics(
             out["metrics"][metric] = res
 
     return out
+
+
+async def get_render_health_summary(
+    *,
+    resourceId: str | None = None,
+    minutes: int = 30,
+) -> dict[str, object]:
+    """Return a user-facing health summary for the Render service.
+
+    This is meant for assistants to self-tune (timeouts, concurrency) and to warn
+    before hitting resource limits.
+    """
+
+    import datetime as _dt
+
+    end = _dt.datetime.now(tz=_dt.timezone.utc)
+    start = end - _dt.timedelta(minutes=max(1, int(minutes)))
+
+    start_iso = start.isoformat()
+    end_iso = end.isoformat()
+
+    payload = await get_render_metrics(
+        metricTypes=[
+            "cpu_usage",
+            "cpu_limit",
+            "memory_usage",
+            "memory_limit",
+            "http_latency",
+            "http_request_count",
+            "instance_count",
+        ],
+        resourceId=resourceId,
+        startTime=start_iso,
+        endTime=end_iso,
+        resolution=max(30, min(300, int(minutes) * 2)),
+    )
+
+    metrics = payload.get("metrics") if isinstance(payload, dict) else None
+    metrics = metrics if isinstance(metrics, dict) else {}
+
+    def _series_last(m: dict) -> float | None:
+        data = (m or {}).get("data")
+        if not isinstance(data, list) or not data:
+            return None
+        try:
+            return float(data[-1].get("value"))
+        except Exception:
+            return None
+
+    def _series_max(m: dict) -> float | None:
+        data = (m or {}).get("data")
+        if not isinstance(data, list) or not data:
+            return None
+        vals: list[float] = []
+        for pt in data:
+            try:
+                vals.append(float(pt.get("value")))
+            except Exception:
+                pass
+        return max(vals) if vals else None
+
+    cpu_last = _series_last(metrics.get("cpu_usage", {}))
+    cpu_lim_last = _series_last(metrics.get("cpu_limit", {}))
+    mem_last = _series_last(metrics.get("memory_usage", {}))
+    mem_lim_last = _series_last(metrics.get("memory_limit", {}))
+
+    cpu_pct = (cpu_last / cpu_lim_last * 100.0) if cpu_last is not None and cpu_lim_last else None
+    mem_pct = (mem_last / mem_lim_last * 100.0) if mem_last is not None and mem_lim_last else None
+
+    latency_recent_max = _series_max(metrics.get("http_latency", {}))
+    req_recent_max = _series_max(metrics.get("http_request_count", {}))
+    inst_last = _series_last(metrics.get("instance_count", {}))
+
+    warnings: list[str] = []
+    if cpu_pct is not None and cpu_pct >= 85:
+        warnings.append(
+            f"CPU is high (~{cpu_pct:.0f}% of limit). Consider increasing timeouts or reducing concurrency."
+        )
+    if mem_pct is not None and mem_pct >= 85:
+        warnings.append(
+            f"Memory is high (~{mem_pct:.0f}% of limit). Consider reducing parallel work or caching less."
+        )
+    if latency_recent_max is not None and latency_recent_max >= 2000:
+        warnings.append(
+            f"HTTP latency is elevated (~{latency_recent_max:.0f}ms recent peak). Expect slower tool calls."
+        )
+
+    return {
+        "resourceId": payload.get("resourceId"),
+        "window_minutes": int(minutes),
+        "cpu_usage": cpu_last,
+        "cpu_limit": cpu_lim_last,
+        "cpu_percent": cpu_pct,
+        "memory_usage": mem_last,
+        "memory_limit": mem_lim_last,
+        "memory_percent": mem_pct,
+        "http_latency_recent_max_ms": latency_recent_max,
+        "http_requests_recent_max": req_recent_max,
+        "instance_count": inst_last,
+        "warnings": warnings,
+    }
