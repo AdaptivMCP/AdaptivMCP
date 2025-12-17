@@ -172,6 +172,7 @@ async def _ensure_workspace_selected(
     auto-selecting a workspace if one of these is present in env:
       - RENDER_WORKSPACE_ID
       - RENDER_WORKSPACE_NAME
+      - RENDER_OWNER_ID (Render-provided; treated as workspace id)
 
     Workspace selection is stored in a config file; we default it to a safe
     writable path if RENDER_CLI_CONFIG_PATH is not set.
@@ -191,10 +192,15 @@ async def _ensure_workspace_selected(
     if current.get("exit_code") == 0:
         return
 
-    ws = (env.get("RENDER_WORKSPACE_ID") or env.get("RENDER_WORKSPACE_NAME") or "").strip()
+    ws = (
+        env.get("RENDER_WORKSPACE_ID")
+        or env.get("RENDER_WORKSPACE_NAME")
+        or env.get("RENDER_OWNER_ID")
+        or ""
+    ).strip()
     if not ws:
         raise UsageError(
-            "Render CLI has no workspace selected. Set RENDER_WORKSPACE_ID (or RENDER_WORKSPACE_NAME) in env so the controller can auto-select it."
+            "Render CLI has no workspace selected. Set RENDER_WORKSPACE_ID (or RENDER_WORKSPACE_NAME) in env so the controller can auto-select it. If running on Render, RENDER_OWNER_ID will be used automatically when present."
         )
 
     set_res = await _run_cli_once(

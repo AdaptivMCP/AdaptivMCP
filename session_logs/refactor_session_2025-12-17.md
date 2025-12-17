@@ -37,3 +37,12 @@ Stabilization after the recent refactor.
 ### Verification
 - Lint + tests passed locally.
 
+## 2025-12-17 — Render workspace auto-detection on Render
+
+### Summary
+- Render CLI workspace selection now falls back to `RENDER_OWNER_ID` (provided by Render at runtime).
+- This makes `render_cli_command` usable out-of-the-box on Render without adding `RENDER_WORKSPACE_ID`.
+
+### Verification
+- Lint + tests passed.
+
