@@ -886,6 +886,41 @@ async def fetch_url(url: str) -> Dict[str, Any]:
     return await _impl(url=url)
 
 
+@mcp_tool(
+    write_action=False,
+    description=(
+        "Search the public web (DuckDuckGo HTML endpoint) and return titles, URLs, and snippets."
+    ),
+    tags=["web", "search"],
+)
+async def web_search(
+    query: str,
+    max_results: int = 8,
+    region: str = "us-en",
+    safe: Literal["off", "moderate", "strict"] = "moderate",
+) -> Dict[str, Any]:
+    from github_mcp.main_tools.web_browser import web_search as _impl
+
+    return await _impl(query=query, max_results=max_results, region=region, safe=safe)
+
+
+@mcp_tool(
+    write_action=False,
+    description=(
+        "Fetch a public web URL with conservative safety checks and optional HTML-to-text extraction."
+    ),
+    tags=["web", "fetch"],
+)
+async def web_fetch(
+    url: str,
+    max_chars: int = 80000,
+    strip_html: bool = True,
+) -> Dict[str, Any]:
+    from github_mcp.main_tools.web_browser import web_fetch as _impl
+
+    return await _impl(url=url, max_chars=max_chars, strip_html=strip_html)
+
+
 @mcp_tool(write_action=False)
 async def search(
     query: str,
