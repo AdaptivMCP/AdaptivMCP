@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import base64
+import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Literal, Protocol
+
+from github_mcp.config import (
+    GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_CHARS,
+    GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES,
+    GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES,
+)
 
 from main import (
     _decode_github_content,
@@ -36,7 +43,7 @@ async def get_file_slice(
     path: str,
     ref: str | None = None,
     start_line: int = 1,
-    max_lines: int = 200,
+    max_lines: int = GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES,
 ) -> Dict[str, Any]:
     """Fetch a line-range slice of a text file."""
 
@@ -90,13 +97,19 @@ async def get_file_with_line_numbers(
     path: str,
     ref: str | None = None,
     start_line: int = 1,
-    max_lines: int = 5000,
+    max_lines: int = GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES,
+    max_chars: int = GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_CHARS,
 ) -> Dict[str, Any]:
     """Return a line-numbered string and structured lines for a file slice.
 
-    Assistants are not allowed to change default max_lines.
+    This tool is user-facing and must stay bounded. By default it returns up to
+    200 lines (or less if max_chars is reached). Override max_lines/max_chars
+    explicitly when you truly need more context.
     """
 
+    hard_max = GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES
+    if hard_max > 0 and max_lines > hard_max:
+        max_lines = hard_max
     if start_line < 1:
         raise ValueError("start_line must be >= 1")
     if max_lines <= 0:
@@ -122,39 +135,67 @@ async def get_file_with_line_numbers(
             "has_more_below": False,
             "lines": [],
             "numbered_text": "",
+            "truncated": False,
         }
+    # Hard cap response size to avoid hangs/network errors (tunable via env defaults).
+    effective_max_chars = int(max_chars)
+    if effective_max_chars <= 0:
+        raise ValueError("max_chars must be > 0")
 
     start_idx = min(max(start_line - 1, 0), total_lines - 1)
-    end_idx = min(start_idx + max_lines, total_lines)
-
-    slice_lines = [{"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)]
+    end_idx_requested = min(start_idx + max_lines, total_lines)
 
     width = len(str(total_lines)) if total_lines > 0 else 1
-    numbered_text = "\n".join(
-        f"{entry['line']:>{width}}| {entry['text']}" for entry in slice_lines
-    )
+    slice_lines: list[dict[str, Any]] = []
+    numbered_lines: list[str] = []
+    char_count = 0
+    truncated = False
+
+    for i in range(start_idx, end_idx_requested):
+        entry = {"line": i + 1, "text": all_lines[i]}
+        rendered = f"{entry['line']:>{width}}| {entry['text']}"
+        # Account for newline separators too.
+        additional = len(rendered) + (1 if numbered_lines else 0)
+        if numbered_lines and (char_count + additional) > effective_max_chars:
+            truncated = True
+            break
+        slice_lines.append(entry)
+        numbered_lines.append(rendered)
+        char_count += additional
+
+    end_idx_actual = start_idx + len(slice_lines)
+    if end_idx_actual < end_idx_requested:
+        truncated = True
+
+    numbered_text = "\n".join(numbered_lines)
+    if truncated and numbered_text:
+        numbered_text = numbered_text + "\n… (truncated)"
 
     return {
         "full_name": full_name,
         "path": path,
         "ref": effective_ref,
         "start_line": start_idx + 1,
-        "end_line": end_idx,
+        "end_line": end_idx_actual,
         "max_lines": max_lines,
         "total_lines": total_lines,
         "has_more_above": start_idx > 0,
-        "has_more_below": end_idx < total_lines,
+        "has_more_below": end_idx_actual < total_lines,
         "lines": slice_lines,
         "numbered_text": numbered_text,
+        "truncated": truncated,
+        "max_chars": effective_max_chars,
+        "returned_chars": len(numbered_text),
     }
 
 
 async def open_file_context(
+
     full_name: str,
     path: str,
     ref: str | None = None,
     start_line: int | None = None,
-    max_lines: int = 200,
+    max_lines: int = GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES,
 ) -> Dict[str, Any]:
     """Fetch a bounded file slice with explicit line numbers and content list."""
 

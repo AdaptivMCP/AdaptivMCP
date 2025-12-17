@@ -472,7 +472,6 @@ def _format_tool_args_preview(all_args: Mapping[str, Any], *, limit: int = 1200)
         "body",
         "patch",
         "diff",
-        "command",
         "stdout",
         "stderr",
         "controller_log",
@@ -490,6 +489,13 @@ def _format_tool_args_preview(all_args: Mapping[str, Any], *, limit: int = 1200)
             return f"<bytes len={len(value)}>"
 
         if isinstance(value, str):
+            if key == "command":
+                sha = _sha1_8(value)
+                cleaned = value.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+                if len(cleaned) <= 200:
+                    return cleaned
+                head = cleaned[:160]
+                return f"{head}… (+{len(cleaned)-160} chars, sha1={sha})"
             # Always summarize large/sensitive keys or anything with whitespace control chars.
             if key in large_keys or len(value) > 180 or any(c in value for c in ("\n", "\r", "\t")):
                 return f"<str len={len(value)} sha1={_sha1_8(value)}>"

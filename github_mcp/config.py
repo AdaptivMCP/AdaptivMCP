@@ -83,12 +83,19 @@ RENDER_API_KEY = os.environ.get("RENDER_API_KEY") or os.environ.get("RENDER_API_
 RENDER_DEFAULT_RESOURCE = os.environ.get("RENDER_RESOURCE") or os.environ.get("RENDER_SERVICE_ID")
 RENDER_OWNER_ID = os.environ.get("RENDER_OWNER_ID") or os.environ.get("RENDER_OWNER")
 
-# Base directory for persistent workspaces used by run_command and related tools.
-# This keeps cloned repositories stable across tool invocations so installations
-# and edits survive until explicitly reset or deleted.
+# Base directory for persistent workspaces used by run_command/terminal_command and related tools.
+#
+# Defaults:
+# - Local dev: /tmp/mcp-github-workspaces
+# - Render:    /opt/render/project/.mcp-github-workspaces (keeps a stable clone across tool invocations)
+_DEFAULT_WORKSPACE_BASE_DIR = os.path.join(tempfile.gettempdir(), "mcp-github-workspaces")
+_RENDER_WORKSPACE_BASE_DIR = "/opt/render/project/.mcp-github-workspaces"
+if os.path.isdir("/opt/render/project"):
+    _DEFAULT_WORKSPACE_BASE_DIR = _RENDER_WORKSPACE_BASE_DIR
+
 WORKSPACE_BASE_DIR = os.environ.get(
     "MCP_WORKSPACE_BASE_DIR",
-    os.path.join(tempfile.gettempdir(), "mcp-github-workspaces"),
+    _DEFAULT_WORKSPACE_BASE_DIR,
 )
 
 HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", 150))
@@ -124,6 +131,14 @@ WRITE_DIFF_LOG_MAX_CHARS = int(os.environ.get("WRITE_DIFF_LOG_MAX_CHARS", "20000
 
 # Soft limit for run_command.command length to discourage huge inline scripts.
 RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "20000"))
+
+# Defaults for get_file_with_line_numbers tool payload sizing.
+# The tool accepts explicit max_lines/max_chars overrides; these env vars tune defaults
+# and an optional hard cap to prevent accidental huge responses.
+GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES = int(os.environ.get("GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES", "200"))
+GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_CHARS = int(os.environ.get("GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_CHARS", "20000"))
+# Set to 0 or a negative value to disable the hard max.
+GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES = int(os.environ.get("GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES", "20000"))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 LOG_STYLE = os.environ.get("LOG_STYLE", "color").lower()

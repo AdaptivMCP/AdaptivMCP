@@ -33,7 +33,7 @@ async def terminal_command(
     """Run a shell command inside the repo workspace and return its result.
 
     Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
-    persists across calls so installed dependencies and edits are reused."""
+    persists across calls; by default the tree is refreshed to the latest commit for the ref, while local edits are preserved when mutating=true."""
 
     env: Optional[Dict[str, str]] = None
     try:
@@ -64,7 +64,11 @@ async def terminal_command(
                 deps["ensure_write_allowed"](
                     f"terminal_command {command} in {full_name}@{effective_ref}"
                 )
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name,
+            ref=effective_ref,
+            preserve_changes=bool(mutating),
+        )
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
 

@@ -145,6 +145,8 @@ def _record_github_request(
     url_s = _shorten_api_url(url or "")
     msg = f"GitHub API {method_s} {url_s} -> {status} ({duration_ms}ms)"
     web_url_val = log_extra.get("web_url")
+    if web_url_val is not None:
+        web_url_val = _sanitize_url_for_logs(str(web_url_val))
     if isinstance(web_url_val, str) and web_url_val:
         # Avoid URLs being the last token on the line. Some log viewers include
         # trailing quotes/punctuation in the detected hyperlink target.

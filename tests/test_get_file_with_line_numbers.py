@@ -87,3 +87,49 @@ async def test_get_file_with_line_numbers_empty_file(monkeypatch: pytest.MonkeyP
     assert result["end_line"] == 0
     assert result["has_more_above"] is False
     assert result["has_more_below"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_file_with_line_numbers_default_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 400-line file; default should return a bounded slice (200 lines).
+    sample = "\n".join([f"line{i}" for i in range(1, 401)])
+
+    async def fake_decode(full_name: str, path: str, ref: str | None):
+        return {"text": sample}
+
+    monkeypatch.setattr(extra_tools, "_effective_ref_for_repo", lambda full_name, ref: "main")
+    monkeypatch.setattr(extra_tools, "_decode_github_content", fake_decode)
+
+    result = await GET_FILE_WITH_LINE_NUMBERS(
+        full_name="owner/repo",
+        path="big.txt",
+    )
+
+    assert result["start_line"] == 1
+    assert result["end_line"] == 200
+    assert result["total_lines"] == 400
+    assert result["has_more_below"] is True
+    assert result["truncated"] is False
+    assert len(result["lines"]) == 200
+
+
+@pytest.mark.asyncio
+async def test_get_file_with_line_numbers_max_chars_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
+    sample = "\n".join(["x" * 40 for _ in range(50)])
+
+    async def fake_decode(full_name: str, path: str, ref: str | None):
+        return {"text": sample}
+
+    monkeypatch.setattr(extra_tools, "_effective_ref_for_repo", lambda full_name, ref: "main")
+    monkeypatch.setattr(extra_tools, "_decode_github_content", fake_decode)
+
+    result = await GET_FILE_WITH_LINE_NUMBERS(
+        full_name="owner/repo",
+        path="wide.txt",
+        max_lines=50,
+        max_chars=120,
+    )
+
+    assert result["truncated"] is True
+    assert result["has_more_below"] in (True, False)
+    assert result["numbered_text"].endswith("… (truncated)")

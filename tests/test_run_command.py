@@ -276,8 +276,8 @@ async def test_clone_repo_reuses_persistent_workspace(monkeypatch, tmp_path):
     assert result["repo_dir"] == str(repo_dir)
     assert calls[0] == ("git fetch origin --prune", str(repo_dir))
     assert any(cmd == ("echo ok", str(repo_dir)) for cmd in calls)
-    assert not any(cmd.startswith("git reset") for cmd, _ in calls)
-    assert not any(cmd.startswith("git clean") for cmd, _ in calls)
+    assert any(cmd.startswith("git reset") for cmd, _ in calls)
+    assert any(cmd.startswith("git clean") for cmd, _ in calls)
 
 
 @pytest.mark.asyncio
@@ -395,6 +395,6 @@ async def test_terminal_command_and_commit_share_workspace(monkeypatch, tmp_path
 
     assert run_result["repo_dir"] == str(repo_dir)
     assert commit_result["repo_dir"] == str(repo_dir)
-    assert clone_calls == [True, True]
+    assert clone_calls == [False, True]
     assert "git add -A" in shell_commands
     assert any(cmd.startswith("git commit") for cmd in shell_commands)
