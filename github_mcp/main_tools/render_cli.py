@@ -219,6 +219,21 @@ async def _ensure_workspace_selected(
         raise UsageError(f"Failed to set Render CLI workspace ({ws}): {err}")
 
 
+_HELP_ROOT_FLAGS = {"--help", "-h", "--version", "-v"}
+
+
+def _should_inject_global_flags(args: List[str]) -> bool:
+    """Return True if we should auto-append global flags like --output/--confirm.
+
+    Render CLI has a quirk: `render --help --output json` errors because `--help`
+    at the root command level stops normal flag parsing. To keep the wrapper
+    usable for `--help`/`--version`, we skip injecting flags when the *first*
+    argument is a root help/version flag.
+    """
+
+    return not (args and args[0] in _HELP_ROOT_FLAGS)
+
+
 def _maybe_append_flag(args: List[str], flag: str, value: Optional[str] = None) -> List[str]:
     if flag in args:
         return args
@@ -260,10 +275,12 @@ async def run_render_cli(
 
     cli_args = list(args)
 
+    inject_flags = _should_inject_global_flags(cli_args)
+
     # Prefer non-interactive, parseable output.
-    if output:
+    if inject_flags and output:
         cli_args = _maybe_append_flag(cli_args, "--output", output)
-    if confirm:
+    if inject_flags and confirm:
         cli_args = _maybe_append_flag(cli_args, "--confirm")
 
     proc = await asyncio.create_subprocess_exec(
