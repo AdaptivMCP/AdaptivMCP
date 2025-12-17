@@ -46,3 +46,17 @@ Stabilization after the recent refactor.
 ### Verification
 - Lint + tests passed.
 
+## 2025-12-17 — Environment docs for Render CLI + access logs
+
+### Summary
+- Updated `.env.example` with the variables used by `render_cli_command` workspace auto-selection and CLI config paths.
+- Documented `UVICORN_ACCESS_LOG` (enabled by default; set to `0` to quiet HTTP access logs).
+
+### Where these variables are used
+- `github_mcp/main_tools/render_cli.py`:
+  - `RENDER_API_KEY` (required)
+  - `RENDER_WORKSPACE_ID` / `RENDER_WORKSPACE_NAME` / `RENDER_OWNER_ID` (workspace selection)
+  - `RENDER_CLI_CONFIG_PATH` / `RENDER_CLI_DIR` (CLI config/cache)
+- `Dockerfile`:
+  - `UVICORN_ACCESS_LOG` (uvicorn access-log toggle)
+
