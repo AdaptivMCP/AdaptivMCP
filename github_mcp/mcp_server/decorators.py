@@ -92,6 +92,146 @@ def _summarize_command(command: str) -> str:
     return cmd
 
 
+def _tool_phase_label(
+    tool_name: str, *, write_action: bool, all_args: Mapping[str, Any] | None
+) -> str:
+    """Classify tool activity into user-facing operating phases.
+
+    Assistants should follow the phases:
+      - Discovery
+      - Implementation
+      - Testing/Verification
+      - Commit/Push
+
+    This helper makes those phases visible in Render logs without requiring users
+    to understand tool names.
+    """
+
+    name = (tool_name or "").lower()
+
+    if name in {"run_tests", "run_lint_suite", "run_quality_suite"}:
+        return "Testing/Verification"
+
+    if "render" in name and ("log" in name or "metric" in name):
+        return "Verification"
+
+    if (
+        name.startswith("commit")
+        or "pull_request" in name
+        or name
+        in {
+            "create_pull_request",
+            "open_pr_for_existing_branch",
+            "update_files_and_open_pr",
+            "apply_text_update_and_commit",
+            "update_file_from_workspace",
+        }
+    ):
+        return "Commit/Push"
+
+    if write_action:
+        return "Implementation"
+
+    return "Discovery"
+
+
+def _clip(text: str, *, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    return text[: max(0, max_chars - 1)] + "…"
+
+
+def _tool_result_summary(tool_name: str, result: Any) -> str:
+    """Summarize tool results for user-facing logs.
+
+    Avoid leaking internal IDs or dumping huge payloads. Detailed logs may include
+    short excerpts for high-signal tools like terminal_command.
+    """
+
+    name = (tool_name or "").lower()
+
+    # Common structured error shape.
+    if isinstance(result, dict) and "error" in result and result.get("error"):
+        err = str(result.get("error"))
+        details = result.get("details")
+        if isinstance(details, dict) and details.get("exit_code") is not None:
+            return f"error={_clip(err, max_chars=120)}, exit_code={details.get('exit_code')}"
+        return f"error={_clip(err, max_chars=160)}"
+
+    # Terminal/shell results.
+    if isinstance(result, dict) and (
+        "exit_code" in result or "stdout" in result or "stderr" in result
+    ):
+        exit_code = result.get("exit_code")
+        timed_out = bool(result.get("timed_out")) if "timed_out" in result else None
+        stdout = str(result.get("stdout") or "")
+        stderr = str(result.get("stderr") or "")
+        so_tr = bool(result.get("stdout_truncated")) if "stdout_truncated" in result else False
+        se_tr = bool(result.get("stderr_truncated")) if "stderr_truncated" in result else False
+
+        parts = []
+        if exit_code is not None:
+            parts.append(f"exit_code={exit_code}")
+        if timed_out is not None:
+            parts.append(f"timed_out={timed_out}")
+
+        def _count_lines(s: str) -> int:
+            return 0 if not s else (s.count("\n") + (0 if s.endswith("\n") else 1))
+
+        if stdout:
+            parts.append(f"stdout={_count_lines(stdout)} lines")
+        if stderr:
+            parts.append(f"stderr={_count_lines(stderr)} lines")
+        if so_tr:
+            parts.append("stdout_truncated=True")
+        if se_tr:
+            parts.append("stderr_truncated=True")
+
+        summary = ", ".join(parts) if parts else "completed"
+
+        # For terminal-like tools, include a short excerpt in detailed logs.
+        if name in {"terminal_command", "run_tests", "run_lint_suite", "run_quality_suite"}:
+            excerpt_lines = 18
+
+            out_excerpt = ""
+            if stdout.strip():
+                lines = stdout.splitlines()[:excerpt_lines]
+                out_excerpt = "\n".join(lines)
+                if so_tr or len(stdout.splitlines()) > excerpt_lines:
+                    out_excerpt += "\n…(stdout truncated)…"
+
+            err_excerpt = ""
+            if stderr.strip():
+                lines = stderr.splitlines()[:excerpt_lines]
+                err_excerpt = "\n".join(lines)
+                if se_tr or len(stderr.splitlines()) > excerpt_lines:
+                    err_excerpt += "\n…(stderr truncated)…"
+
+            blocks: list[str] = []
+            if out_excerpt:
+                blocks.append("stdout:\n" + out_excerpt)
+            if err_excerpt:
+                blocks.append("stderr:\n" + err_excerpt)
+
+            if blocks:
+                return summary + "\n" + "\n".join(blocks)
+
+        return summary
+
+    # Lists/collections.
+    if isinstance(result, list):
+        return f"items={len(result)}"
+
+    if isinstance(result, str):
+        return f"text={len(result)} chars"
+
+    if result is None:
+        return "no result"
+
+    # Generic fallback.
+    return f"type={type(result).__name__}"
+
+
 def _tool_narrative(tool_name: str, all_args: Mapping[str, Any] | None) -> dict[str, str]:
     """Return user-facing purpose/next-step strings for a tool invocation.
 
@@ -177,9 +317,12 @@ def _tool_user_message(
     path: Optional[str],
     phase: str,
     duration_ms: Optional[int] = None,
+    result_summary: Optional[str] = None,
     error: Optional[str] = None,
 ) -> str:
     scope = "write" if write_action else "read"
+
+    phase_label = _tool_phase_label(tool_name, write_action=write_action, all_args=all_args)
 
     title = tool_title or _title_from_tool_name(tool_name)
 
@@ -199,19 +342,22 @@ def _tool_user_message(
     loc = f" on {location}" if location and location != "-" else ""
 
     if phase == "start":
-        msg = f"I'm going to {title} ({scope}){loc}. {purpose}"
+        msg = f"{phase_label} — I'm going to {title} ({scope}){loc}. {purpose}"
         if write_action:
             msg += " This will modify repo state."
         return msg
 
     if phase == "ok":
         dur = f" in {duration_ms}ms" if duration_ms is not None else ""
-        return f"Done: {title}{loc}{dur}. Next: {next_step}"
+        rs = (result_summary or "").strip()
+        rs = _clip(rs, max_chars=160) if rs else ""
+        extra = f" Result: {rs}." if rs else ""
+        return f"{phase_label} — Done: {title}{loc}{dur}.{extra} Next: {next_step}"
 
     if phase == "error":
         dur = f" after {duration_ms}ms" if duration_ms is not None else ""
         suffix = f" Error: {error}." if error else ""
-        return f"I hit an error while running {title}{loc}{dur}.{suffix} Next: {next_step}"
+        return f"{phase_label} — I hit an error while running {title}{loc}{dur}.{suffix} Next: {next_step}"
 
     return f"{title} ({scope}){loc}."
 
@@ -355,6 +501,7 @@ def _tool_detailed_message(
     phase: str,
     arg_preview: str,
     duration_ms: Optional[int] = None,
+    result_summary: Optional[str] = None,
     result_type: Optional[str] = None,
     error: Optional[str] = None,
 ) -> str:
@@ -366,6 +513,8 @@ def _tool_detailed_message(
 
     scope = "write" if write_action else "read"
     title = tool_title or _title_from_tool_name(tool_name)
+
+    phase_label = _tool_phase_label(tool_name, write_action=write_action, all_args=all_args)
 
     location = None
     if repo or ref or path:
@@ -383,7 +532,7 @@ def _tool_detailed_message(
     inputs = _tool_inputs_summary(tool_name, all_args)
 
     if phase == "start":
-        msg = f"Details — Starting {title} ({scope}){loc}. {purpose}"
+        msg = f"Details — {phase_label} — Starting {title} ({scope}){loc}. {purpose}"
         if inputs and inputs != "No inputs.":
             msg += f" Inputs: {inputs}."
         if write_action:
@@ -393,13 +542,15 @@ def _tool_detailed_message(
 
     if phase == "ok":
         dur = f" Completed in {duration_ms}ms." if duration_ms is not None else ""
-        out = f" Output: {result_type}." if result_type else ""
-        return f"Details — Finished {title}{loc}.{dur}{out} Next: {next_step}"
+        rs = (result_summary or "").strip()
+        rs = _clip(rs, max_chars=1200) if rs else ""
+        out = f" Result: {rs}." if rs else (f" Output: {result_type}." if result_type else "")
+        return f"Details — {phase_label} — Finished {title}{loc}.{dur}{out} Next: {next_step}"
 
     if phase == "error":
         dur = f" After {duration_ms}ms." if duration_ms is not None else ""
         err = f" Error: {error}." if error else ""
-        msg = f"Details — Failed {title}{loc}.{dur}{err}"
+        msg = f"Details — {phase_label} — Failed {title}{loc}.{dur}{err}"
         if inputs and inputs != "No inputs.":
             msg += f" Inputs: {inputs}."
         msg += f" Next: {next_step}"
@@ -717,6 +868,7 @@ def mcp_tool(
                         path=ctx["path"],
                         phase="ok",
                         duration_ms=duration_ms,
+                        result_summary=_tool_result_summary(tool_name, result),
                     ),
                     extra={
                         "event": "tool_chat",
@@ -743,6 +895,7 @@ def mcp_tool(
                         phase="ok",
                         arg_preview=ctx["arg_preview"],
                         duration_ms=duration_ms,
+                        result_summary=_tool_result_summary(tool_name, result),
                         result_type=result_type,
                     ),
                     extra={
@@ -988,6 +1141,7 @@ def mcp_tool(
                         path=ctx["path"],
                         phase="ok",
                         duration_ms=duration_ms,
+                        result_summary=_tool_result_summary(tool_name, result),
                     ),
                     extra={
                         "event": "tool_chat",
@@ -1014,6 +1168,7 @@ def mcp_tool(
                         phase="ok",
                         arg_preview=ctx["arg_preview"],
                         duration_ms=duration_ms,
+                        result_summary=_tool_result_summary(tool_name, result),
                         result_type=result_type,
                     ),
                     extra={

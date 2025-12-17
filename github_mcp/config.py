@@ -164,6 +164,15 @@ def _strip_wrapping_quotes(value: str) -> str:
 LOG_LEVEL = _strip_wrapping_quotes(os.environ.get("LOG_LEVEL", "INFO")).upper()
 LOG_STYLE = _strip_wrapping_quotes(os.environ.get("LOG_STYLE", "color")).lower()
 
+# Access logs (uvicorn.access) are noisy and often confuse users (GET/POST spam).
+# Default is disabled; set ENABLE_ACCESS_LOGS=1 to turn them on.
+ENABLE_ACCESS_LOGS = _strip_wrapping_quotes(os.environ.get("ENABLE_ACCESS_LOGS", "")).lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
 # Default to a compact, scannable format.
 LOG_FORMAT = _strip_wrapping_quotes(
     os.environ.get(
@@ -236,6 +245,12 @@ def _configure_logging() -> None:
         "httpcore",
     ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
+
+    if not ENABLE_ACCESS_LOGS:
+        access = logging.getLogger("uvicorn.access")
+        access.handlers.clear()
+        access.propagate = False
+        access.disabled = True
 
     setattr(root, "_github_mcp_configured", True)
 
