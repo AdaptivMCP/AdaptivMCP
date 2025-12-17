@@ -6,14 +6,8 @@ set -euo pipefail
 # both in CI and from the controller-managed temp venv.
 python -m pip install -r dev-requirements.txt
 
-echo "Running ruff..."
+echo "Running ruff format --check..."
+python -m ruff format --check .
+
+echo "Running ruff check..."
 python -m ruff check .
-
-echo "Running black --check..."
-python -m black --check .
-
-echo "Running isort --check-only..."
-python -m isort github_mcp tests main.py extra_tools.py --check-only
-
-echo "Running flake8..."
-python -m flake8 github_mcp tests main.py extra_tools.py

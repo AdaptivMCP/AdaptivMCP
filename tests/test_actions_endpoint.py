@@ -28,9 +28,9 @@ async def test_actions_endpoint_exposes_registered_tools():
     )
     assert apply_action is not None
     assert apply_action.get("title"), "expected actions endpoint to expose a title/display label"
-    assert (
-        apply_action["title"] != apply_action["name"]
-    ), "expected title to differ from raw tool name"
+    assert apply_action["title"] != apply_action["name"], (
+        "expected title to differ from raw tool name"
+    )
 
     meta = apply_action.get("meta") or {}
     assert "openai/toolInvocation/invoking" in meta

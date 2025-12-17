@@ -357,26 +357,20 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         write_action=False,
         description="Ping the MCP server extensions surface.",
         tags=["meta", "diagnostics"],
-    )(
-        ping_extensions
-    )  # type: ignore[arg-type]
+    )(ping_extensions)  # type: ignore[arg-type]
 
     # read/context helpers
     mcp_tool(
         write_action=False,
         description="Return a citation-friendly slice of a file.",
         tags=["github", "read", "files", "context"],
-    )(
-        get_file_slice
-    )  # type: ignore[arg-type]
+    )(get_file_slice)  # type: ignore[arg-type]
 
     mcp_tool(
         write_action=False,
         description=("Render a compact, line-numbered view of a file to simplify manual edits."),
         tags=["github", "read", "files", "ergonomics"],
-    )(
-        get_file_with_line_numbers
-    )  # type: ignore[arg-type]
+    )(get_file_with_line_numbers)  # type: ignore[arg-type]
 
     mcp_tool(
         write_action=False,
@@ -384,9 +378,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "Return a citation-friendly slice of a file with line numbers and content entries."
         ),
         tags=["github", "read", "files", "context"],
-    )(
-        open_file_context
-    )  # type: ignore[arg-type]
+    )(open_file_context)  # type: ignore[arg-type]
 
     # write actions
     mcp_tool(
@@ -396,9 +388,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "Use ensure_branch if you want to delete on a dedicated branch."
         ),
         tags=["github", "write", "files", "delete"],
-    )(
-        delete_file
-    )  # type: ignore[arg-type]
+    )(delete_file)  # type: ignore[arg-type]
 
     mcp_tool(
         write_action=True,
@@ -408,6 +398,4 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "first, then call this tool to sync it back to the branch."
         ),
         tags=["github", "write", "files"],
-    )(
-        update_file_from_workspace
-    )  # type: ignore[arg-type]
+    )(update_file_from_workspace)  # type: ignore[arg-type]

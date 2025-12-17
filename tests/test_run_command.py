@@ -188,13 +188,7 @@ async def test_run_shell_truncates_output_when_limits_exceeded(monkeypatch):
     monkeypatch.setattr(main, "TOOL_STDOUT_MAX_CHARS", 10)
     monkeypatch.setattr(main, "TOOL_STDERR_MAX_CHARS", 5)
 
-    cmd = (
-        "python - <<'PY'\n"
-        "import sys\n"
-        "sys.stdout.write('A' * 20)\n"
-        "sys.stderr.write('B' * 30)\n"
-        "PY"
-    )
+    cmd = "python - <<'PY'\nimport sys\nsys.stdout.write('A' * 20)\nsys.stderr.write('B' * 30)\nPY"
     result = await main._run_shell(cmd)
 
     assert result["stdout_truncated"] is True
@@ -211,13 +205,7 @@ async def test_run_shell_combined_truncation(monkeypatch):
     monkeypatch.setattr(main, "TOOL_STDERR_MAX_CHARS", 100)
     monkeypatch.setattr(main, "TOOL_STDIO_COMBINED_MAX_CHARS", 50)
 
-    cmd = (
-        "python - <<'PY'\n"
-        "import sys\n"
-        "sys.stdout.write('A' * 40)\n"
-        "sys.stderr.write('B' * 40)\n"
-        "PY"
-    )
+    cmd = "python - <<'PY'\nimport sys\nsys.stdout.write('A' * 40)\nsys.stderr.write('B' * 40)\nPY"
     result = await main._run_shell(cmd)
 
     assert len(result["stdout"]) + len(result["stderr"]) <= 50
@@ -236,13 +224,7 @@ async def test_run_shell_no_truncation_when_limits_disabled(monkeypatch):
     monkeypatch.setattr(main, "TOOL_STDOUT_MAX_CHARS", 0)
     monkeypatch.setattr(main, "TOOL_STDERR_MAX_CHARS", -1)
 
-    cmd = (
-        "python - <<'PY'\n"
-        "import sys\n"
-        "sys.stdout.write('A' * 20)\n"
-        "sys.stderr.write('B' * 30)\n"
-        "PY"
-    )
+    cmd = "python - <<'PY'\nimport sys\nsys.stdout.write('A' * 20)\nsys.stderr.write('B' * 30)\nPY"
     result = await main._run_shell(cmd)
 
     assert result["stdout_truncated"] is False
