@@ -124,6 +124,90 @@ def _ensure_render_cli_available() -> str:
     return _RENDER_CLI_PATH
 
 
+async def _run_cli_once(
+    render_bin: str,
+    args: List[str],
+    *,
+    env: Dict[str, str],
+    timeout_seconds: int = 30,
+    cwd: Optional[str] = None,
+) -> Dict[str, Any]:
+    proc = await asyncio.create_subprocess_exec(
+        render_bin,
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd,
+        env=env,
+    )
+
+    timed_out = False
+    try:
+        stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+    except TimeoutError:
+        timed_out = True
+        proc.kill()
+        stdout_b, stderr_b = await proc.communicate()
+
+    stdout = (stdout_b or b"").decode("utf-8", errors="replace")
+    stderr = (stderr_b or b"").decode("utf-8", errors="replace")
+
+    return {
+        "exit_code": proc.returncode,
+        "timed_out": timed_out,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+
+
+async def _ensure_workspace_selected(
+    *,
+    render_bin: str,
+    env: Dict[str, str],
+    timeout_seconds: int = 30,
+) -> None:
+    """Ensure the Render CLI has an active workspace selected.
+
+    The Render CLI requires a workspace to be set before most commands. We support
+    auto-selecting a workspace if one of these is present in env:
+      - RENDER_WORKSPACE_ID
+      - RENDER_WORKSPACE_NAME
+
+    Workspace selection is stored in a config file; we default it to a safe
+    writable path if RENDER_CLI_CONFIG_PATH is not set.
+    """
+
+    # Ensure config path is writable (Render containers may not have a real HOME).
+    if not env.get("RENDER_CLI_CONFIG_PATH"):
+        env["RENDER_CLI_CONFIG_PATH"] = "/tmp/render-cli/cli.yaml"
+
+    # First check if already set.
+    current = await _run_cli_once(
+        render_bin,
+        ["workspace", "current", "--output", "text", "--confirm"],
+        env=env,
+        timeout_seconds=timeout_seconds,
+    )
+    if current.get("exit_code") == 0:
+        return
+
+    ws = (env.get("RENDER_WORKSPACE_ID") or env.get("RENDER_WORKSPACE_NAME") or "").strip()
+    if not ws:
+        raise UsageError(
+            "Render CLI has no workspace selected. Set RENDER_WORKSPACE_ID (or RENDER_WORKSPACE_NAME) in env so the controller can auto-select it."
+        )
+
+    set_res = await _run_cli_once(
+        render_bin,
+        ["workspace", "set", ws, "--output", "text", "--confirm"],
+        env=env,
+        timeout_seconds=timeout_seconds,
+    )
+    if set_res.get("exit_code") != 0:
+        err = (set_res.get("stderr") or set_res.get("stdout") or "").strip()
+        raise UsageError(f"Failed to set Render CLI workspace ({ws}): {err}")
+
+
 def _maybe_append_flag(args: List[str], flag: str, value: Optional[str] = None) -> List[str]:
     if flag in args:
         return args
@@ -158,6 +242,10 @@ async def run_render_cli(
         )
 
     render_bin = _ensure_render_cli_available()
+
+    await _ensure_workspace_selected(
+        render_bin=render_bin, env=env, timeout_seconds=min(timeout_seconds, 30)
+    )
 
     cli_args = list(args)
 

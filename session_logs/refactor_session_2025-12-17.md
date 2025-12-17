@@ -27,3 +27,13 @@ Stabilization after the recent refactor.
 ### Next steps
 - Render CLI commands require `RENDER_API_KEY` (and service id) in env; configured on the Render service.
 
+## 2025-12-17 — Render CLI workspace auto-select
+
+### Summary
+- Render CLI tool now auto-selects a workspace before running commands.
+- Set `RENDER_WORKSPACE_ID` (or `RENDER_WORKSPACE_NAME`) in the Render service env so the CLI can run without manual `render workspace set`.
+- Workspace selection is persisted via `RENDER_CLI_CONFIG_PATH` (defaults to `/tmp/render-cli/cli.yaml`).
+
+### Verification
+- Lint + tests passed locally.
+
