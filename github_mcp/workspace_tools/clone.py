@@ -10,7 +10,9 @@ from github_mcp.server import (
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 @mcp_tool(write_action=True)
 async def ensure_workspace_clone(

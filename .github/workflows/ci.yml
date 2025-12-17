@@ -35,16 +35,18 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f pyproject.toml ]; then pip install .; fi
-          # Ensure CI tooling exists even if optional deps drift
-          python -m pip install -U pytest ruff
+          python -m pip install -r dev-requirements.txt
+          python -m pip install .
+
+      - name: Static checks
+        run: |
+          python scripts/check_no_tokenlike_strings.py
+          python scripts/check_docs_full_file_replacements.py
 
       - name: Lint
         run: |
-          ruff --version
-          ruff check .
+          bash scripts/run_lint.sh
 
       - name: Tests
         run: |
-          pytest -q
+          bash scripts/run_tests.sh

@@ -3,10 +3,9 @@ from typing import Any, Dict
 
 import pytest
 
-import main
-
-from github_mcp.exceptions import UsageError
 import github_mcp.main_tools.render_observability as ro
+import main
+from github_mcp.exceptions import UsageError
 
 
 @pytest.mark.asyncio

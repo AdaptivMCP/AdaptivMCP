@@ -7,8 +7,8 @@ import base64
 import os
 import sys
 import time
-from typing import Any, Dict, Optional
 import weakref
+from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 
 import httpx
@@ -173,14 +173,14 @@ def _github_api_url_for_logs(path: str, params: Optional[Dict[str, Any]] = None)
     before an httpx.Response exists.
     """
 
-    base = (GITHUB_API_BASE or 'https://api.github.com').rstrip('/')
-    normalized = path if path.startswith('/') else f'/{path}'
-    url = f'{base}{normalized}'
+    base = (GITHUB_API_BASE or "https://api.github.com").rstrip("/")
+    normalized = path if path.startswith("/") else f"/{path}"
+    url = f"{base}{normalized}"
     if params:
         cleaned: Dict[str, Any] = {k: v for k, v in params.items() if v is not None}
         qs = urlencode(cleaned, doseq=True)
         if qs:
-            url = f'{url}?{qs}'
+            url = f"{url}?{qs}"
     return url
 
 
@@ -265,14 +265,23 @@ async def _github_request(
     # synthetic responses for this repository so smoke tests can exercise the
     # controller flow without external calls.
     if os.environ.get("PYTEST_CURRENT_TEST") and "Proofgate-Revocations/chatgpt-mcp-github" in path:
-        if method.upper() == "GET" and path.rstrip("/") == "/repos/Proofgate-Revocations/chatgpt-mcp-github":
+        if (
+            method.upper() == "GET"
+            and path.rstrip("/") == "/repos/Proofgate-Revocations/chatgpt-mcp-github"
+        ):
             return {
                 "status_code": 200,
                 "headers": {},
                 "text": "",
-                "json": {"default_branch": "main", "full_name": "Proofgate-Revocations/chatgpt-mcp-github"},
+                "json": {
+                    "default_branch": "main",
+                    "full_name": "Proofgate-Revocations/chatgpt-mcp-github",
+                },
             }
-        if method.upper() == "GET" and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path:
+        if (
+            method.upper() == "GET"
+            and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path
+        ):
             return {
                 "status_code": 200,
                 "headers": {},
@@ -280,12 +289,20 @@ async def _github_request(
                 "json": {
                     "sha": "test-sha",
                     "tree": [
-                        {"path": "docs/start_session.md", "type": "blob", "mode": "100644", "size": 0},
+                        {
+                            "path": "docs/start_session.md",
+                            "type": "blob",
+                            "mode": "100644",
+                            "size": 0,
+                        },
                     ],
                     "truncated": False,
                 },
             }
-        if "Proofgate-Revocations/chatgpt-mcp-github/contents/docs/start_session.md" in path and method.upper() == "GET":
+        if (
+            "Proofgate-Revocations/chatgpt-mcp-github/contents/docs/start_session.md" in path
+            and method.upper() == "GET"
+        ):
             content_bytes = b"Sample doc content\n"
             encoded = base64.b64encode(content_bytes).decode()
             return {
@@ -294,12 +311,18 @@ async def _github_request(
                 "text": "",
                 "json": {"sha": "synthetic-sha", "content": encoded, "encoding": "base64"},
             }
-        if "Proofgate-Revocations/chatgpt-mcp-github/contents/" in path and method.upper() in {"PUT", "DELETE"}:
+        if "Proofgate-Revocations/chatgpt-mcp-github/contents/" in path and method.upper() in {
+            "PUT",
+            "DELETE",
+        }:
             return {
                 "status_code": 200,
                 "headers": {},
                 "text": "",
-                "json": {"content": {"sha": "synthetic-write-sha"}, "commit": {"sha": "synthetic-commit"}},
+                "json": {
+                    "content": {"sha": "synthetic-write-sha"},
+                    "commit": {"sha": "synthetic-commit"},
+                },
             }
 
     try:

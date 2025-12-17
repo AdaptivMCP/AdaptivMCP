@@ -14,7 +14,9 @@ class _StubTW:
     def _workspace_deps(self) -> Dict[str, Any]:
         return self._deps
 
-    def _resolve_full_name(self, full_name: Optional[str], *, owner: Optional[str], repo: Optional[str]) -> str:
+    def _resolve_full_name(
+        self, full_name: Optional[str], *, owner: Optional[str], repo: Optional[str]
+    ) -> str:
         return full_name or f"{owner}/{repo}"  # type: ignore[return-value]
 
     def _resolve_ref(self, ref: str, *, branch: Optional[str]) -> str:
@@ -25,7 +27,9 @@ class _StubTW:
 
 
 @pytest.mark.asyncio
-async def test_terminal_command_refreshes_tree_when_not_mutating(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_terminal_command_refreshes_tree_when_not_mutating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: Dict[str, Any] = {}
 
     async def clone_repo(full_name: str, *, ref: str, preserve_changes: bool) -> str:
@@ -37,7 +41,9 @@ async def test_terminal_command_refreshes_tree_when_not_mutating(monkeypatch: py
     async def prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
         return {"VIRTUAL_ENV": "/tmp/venv"}
 
-    async def run_shell(command: str, *, cwd: str, timeout_seconds: int, env: Dict[str, str] | None) -> Dict[str, Any]:
+    async def run_shell(
+        command: str, *, cwd: str, timeout_seconds: int, env: Dict[str, str] | None
+    ) -> Dict[str, Any]:
         return {"exit_code": 0, "stdout": "ok", "stderr": ""}
 
     deps = {
@@ -63,7 +69,9 @@ async def test_terminal_command_refreshes_tree_when_not_mutating(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_terminal_command_preserves_tree_when_mutating(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_terminal_command_preserves_tree_when_mutating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: Dict[str, Any] = {"ensure_called": False}
 
     async def clone_repo(full_name: str, *, ref: str, preserve_changes: bool) -> str:
@@ -73,7 +81,9 @@ async def test_terminal_command_preserves_tree_when_mutating(monkeypatch: pytest
     async def prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
         return {"VIRTUAL_ENV": "/tmp/venv"}
 
-    async def run_shell(command: str, *, cwd: str, timeout_seconds: int, env: Dict[str, str] | None) -> Dict[str, Any]:
+    async def run_shell(
+        command: str, *, cwd: str, timeout_seconds: int, env: Dict[str, str] | None
+    ) -> Dict[str, Any]:
         return {"exit_code": 0, "stdout": "ok", "stderr": ""}
 
     def ensure_write_allowed(*args: Any, **kwargs: Any) -> None:

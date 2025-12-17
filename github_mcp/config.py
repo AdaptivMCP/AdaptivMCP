@@ -22,25 +22,29 @@ CHAT_LEVEL = 25
 
 def _install_custom_log_levels() -> None:
     # Make them visible as logging.CHAT / logging.DETAILED, etc.
-    if not hasattr(logging, 'DETAILED'):
-        logging.addLevelName(DETAILED_LEVEL, 'DETAILED')
-        setattr(logging, 'DETAILED', DETAILED_LEVEL)
+    if not hasattr(logging, "DETAILED"):
+        logging.addLevelName(DETAILED_LEVEL, "DETAILED")
+        setattr(logging, "DETAILED", DETAILED_LEVEL)
 
-    if not hasattr(logging, 'CHAT'):
-        logging.addLevelName(CHAT_LEVEL, 'CHAT')
-        setattr(logging, 'CHAT', CHAT_LEVEL)
+    if not hasattr(logging, "CHAT"):
+        logging.addLevelName(CHAT_LEVEL, "CHAT")
+        setattr(logging, "CHAT", CHAT_LEVEL)
 
     # Add Logger helpers: logger.chat(...), logger.detailed(...)
-    if not hasattr(logging.Logger, 'detailed'):
+    if not hasattr(logging.Logger, "detailed"):
+
         def detailed(self: logging.Logger, msg, *args, **kwargs):
             if self.isEnabledFor(DETAILED_LEVEL):
                 self._log(DETAILED_LEVEL, msg, args, **kwargs)
+
         logging.Logger.detailed = detailed  # type: ignore[attr-defined]
 
-    if not hasattr(logging.Logger, 'chat'):
+    if not hasattr(logging.Logger, "chat"):
+
         def chat(self: logging.Logger, msg, *args, **kwargs):
             if self.isEnabledFor(CHAT_LEVEL):
                 self._log(CHAT_LEVEL, msg, args, **kwargs)
+
         logging.Logger.chat = chat  # type: ignore[attr-defined]
 
 
@@ -53,15 +57,15 @@ def _resolve_log_level(level_name: str | None) -> int:
         return logging.INFO
 
     # Numeric levels are allowed.
-    if name.lstrip('-').isdigit():
+    if name.lstrip("-").isdigit():
         try:
             return int(name)
         except Exception:
             return logging.INFO
 
-    if name == 'DETAILED':
+    if name == "DETAILED":
         return DETAILED_LEVEL
-    if name == 'CHAT':
+    if name == "CHAT":
         return CHAT_LEVEL
 
     return getattr(logging, name, logging.INFO)
@@ -135,13 +139,22 @@ RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "20000"))
 # Defaults for get_file_with_line_numbers tool payload sizing.
 # The tool accepts explicit max_lines/max_chars overrides; these env vars tune defaults
 # and an optional hard cap to prevent accidental huge responses.
-GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES = int(os.environ.get("GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES", "200"))
-GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_CHARS = int(os.environ.get("GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_CHARS", "20000"))
+GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES = int(
+    os.environ.get("GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES", "200")
+)
+if GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES <= 0:
+    # 0 is treated as misconfiguration; keep a safe default.
+    GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES = 200
+GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_CHARS = int(
+    os.environ.get("GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_CHARS", "20000")
+)
 # Set to 0 or a negative value to disable the hard max.
-GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES = int(os.environ.get("GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES", "20000"))
+GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES = int(
+    os.environ.get("GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES", "20000")
+)
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-LOG_STYLE = os.environ.get("LOG_STYLE", "color").lower()
+LOG_STYLE = os.environ.get("LOG_STYLE", "plain").lower()
 
 # Default to a compact, scannable format.
 LOG_FORMAT = os.environ.get(

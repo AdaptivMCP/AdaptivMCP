@@ -11,7 +11,9 @@ from github_mcp.server import (
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 @mcp_tool(write_action=False)
 async def list_workspace_files(
@@ -112,6 +114,8 @@ async def list_workspace_files(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="list_workspace_files")
+
+
 @mcp_tool(write_action=False)
 async def search_workspace(
     full_name: Optional[str] = None,
@@ -173,7 +177,11 @@ async def search_workspace(
 
         needle = query if case_sensitive else query.lower()
 
-        walk_iter = [(os.path.dirname(start), [], [os.path.basename(start)])] if single_file else os.walk(start)
+        walk_iter = (
+            [(os.path.dirname(start), [], [os.path.basename(start)])]
+            if single_file
+            else os.walk(start)
+        )
         for cur_dir, dirnames, filenames in walk_iter:
             dirnames[:] = [d for d in dirnames if d != ".git"]
             if not include_hidden:

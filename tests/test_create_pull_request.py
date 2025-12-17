@@ -89,7 +89,6 @@ async def test_create_pull_request_generates_default_body_when_missing(monkeypat
     def fake_ensure_write_allowed(context):
         return None
 
-
     async def fake_list_workflow_runs(full_name, branch=None, per_page=3, page=1):  # type: ignore[override]
         return {
             "json": {

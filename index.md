@@ -15,6 +15,7 @@ The server exposes tools for:
 - [Assistant handoff and behavior](docs/assistant/ASSISTANT_HANDOFF.md)
 - [Startup sequence for new sessions](docs/start_session.md)
 - [Detailed MCP tools reference](Detailed_Tools.md)
+- [Session logs](session_logs/)
 
 ## Documentation map
 

@@ -35,7 +35,6 @@ def _load_project_version(pyproject_path: Path | None = None) -> str:
     return "0.0.0"
 
 
-
 def _run_doctor() -> int:
     """Run basic environment checks and print a human-readable summary.
 

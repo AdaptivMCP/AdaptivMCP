@@ -1,5 +1,5 @@
 import main
-from github_mcp.config import ERROR_LOG_HANDLER, ERROR_LOG_CAPACITY
+from github_mcp.config import ERROR_LOG_CAPACITY, ERROR_LOG_HANDLER
 from github_mcp.server import _structured_tool_error
 
 

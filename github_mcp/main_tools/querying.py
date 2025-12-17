@@ -3,14 +3,10 @@ from __future__ import annotations
 import sys
 from typing import Any, Dict, Literal, Optional
 
-from github_mcp.http_clients import (
-    _external_client_instance as _default_external_client_instance,
-    _get_concurrency_semaphore as _default_get_concurrency_semaphore,
-)
-from github_mcp.server import (
-    _github_request as _default_github_request,
-    _structured_tool_error as _default_structured_tool_error,
-)
+from github_mcp.http_clients import _external_client_instance as _default_external_client_instance
+from github_mcp.http_clients import _get_concurrency_semaphore as _default_get_concurrency_semaphore
+from github_mcp.server import _github_request as _default_github_request
+from github_mcp.server import _structured_tool_error as _default_structured_tool_error
 
 
 def _resolve_main_helper(name: str, default):

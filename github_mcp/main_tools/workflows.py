@@ -53,7 +53,6 @@ async def list_recent_failures(
     if limit <= 0:
         raise ValueError("limit must be > 0")
 
-
     m = _main()
 
     per_page = min(max(limit, 10), 50)
@@ -166,8 +165,6 @@ async def get_workflow_run_overview(
     if max_jobs <= 0:
         raise ValueError("max_jobs must be > 0")
 
-
-
     m = _main()
 
     run_resp = await m.get_workflow_run(full_name, run_id)
@@ -230,11 +227,7 @@ async def get_workflow_run_overview(
             break
 
         page_job_ids = [job.get("id") for job in raw_jobs if isinstance(job, dict)]
-        if (
-            page_job_ids
-            and last_page_job_ids is not None
-            and page_job_ids == last_page_job_ids
-        ):
+        if page_job_ids and last_page_job_ids is not None and page_job_ids == last_page_job_ids:
             break
         last_page_job_ids = page_job_ids
 

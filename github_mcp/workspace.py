@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import shutil
 import sys
 import tempfile
-import re
 from typing import Any, Dict, Optional
 
 from . import config
@@ -26,6 +26,22 @@ TOKEN_PATTERNS = [
     (re.compile(r"\bghp_[A-Za-z0-9]{20,}\b"), "ghp_***"),
     (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"), "github_pat_***"),
 ]
+
+
+# Strip ANSI/control characters from command output so connector UIs don't
+# render escape sequences (spinners, colors, cursor controls) as random characters.
+_ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x1B]*(?:\x1B\\\\|\x07))")
+# Preserve \"\n\" and \"\t\"; normalize \"\r\" to newlines before stripping.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _sanitize_tty_output(value: str) -> str:
+    if not value:
+        return value
+    value = value.replace("\r\n", "\n").replace("\r", "\n")
+    value = _ANSI_ESCAPE_RE.sub("", value)
+    value = _CONTROL_CHARS_RE.sub("", value)
+    return value
 
 
 def _redact_sensitive(text: str) -> str:
@@ -68,7 +84,7 @@ async def _run_shell(
     if env is not None:
         proc_env.update(env)
 
-    start_new_session = os.name != 'nt'
+    start_new_session = os.name != "nt"
     proc = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
@@ -88,7 +104,7 @@ async def _run_shell(
         timed_out = True
         # Best-effort termination: kill the whole process group on POSIX so
         # child processes (e.g. pytest workers) don't keep pipes open.
-        if os.name != 'nt':
+        if os.name != "nt":
             import signal
 
             try:
@@ -111,11 +127,10 @@ async def _run_shell(
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=5)
         except Exception:
-            stdout_bytes, stderr_bytes = b'', b''
+            stdout_bytes, stderr_bytes = b"", b""
 
-
-    raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
-    raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
+    raw_stdout = _sanitize_tty_output(stdout_bytes.decode("utf-8", errors="replace"))
+    raw_stderr = _sanitize_tty_output(stderr_bytes.decode("utf-8", errors="replace"))
     stdout = _redact_sensitive(raw_stdout)
     stderr = _redact_sensitive(raw_stderr)
     stdout_truncated = False
@@ -191,6 +206,37 @@ async def _clone_repo(
                     f"Workspace fetch failed for {full_name}@{effective_ref}: {stderr}"
                 )
 
+            return workspace_dir
+
+        # If the workspace has local edits (tracked or untracked), avoid destructive
+        # refresh so a non-mutating terminal_command call cannot wipe in-progress work.
+        status = await run_shell("git status --porcelain", cwd=workspace_dir, timeout_seconds=60)
+        if status["exit_code"] != 0:
+            stderr = status.get("stderr", "") or status.get("stdout", "")
+            raise GitHubAPIError(
+                f"Workspace status failed for {full_name}@{effective_ref}: {stderr}"
+            )
+
+        dirty_lines: list[str] = []
+        for raw in (status.get("stdout", "") or "").splitlines():
+            raw = raw.rstrip()
+            if not raw:
+                continue
+            # Porcelain format: XY <path> (or ?? <path>)
+            path = raw[3:].strip() if len(raw) >= 4 else raw
+            if path == ".venv-mcp" or path.startswith(".venv-mcp/"):
+                continue
+            dirty_lines.append(raw)
+
+        if dirty_lines:
+            fetch_result = await run_shell(
+                "git fetch origin --prune", cwd=workspace_dir, timeout_seconds=300
+            )
+            if fetch_result["exit_code"] != 0:
+                stderr = fetch_result.get("stderr", "") or fetch_result.get("stdout", "")
+                raise GitHubAPIError(
+                    f"Workspace fetch failed for {full_name}@{effective_ref}: {stderr}"
+                )
             return workspace_dir
 
         refresh_steps = [

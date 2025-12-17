@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
 from ._main import _main
 
 
@@ -45,9 +44,13 @@ def _get_controller_revision_info() -> Dict[str, Any]:
     try:
         repo_root = _find_repo_root(Path(__file__).resolve())
         if repo_root is not None:
-            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_root, text=True).strip()
+            sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
+            ).strip()
             info["git_commit"] = sha
-            branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root, text=True).strip()
+            branch = subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root, text=True
+            ).strip()
             info["git_branch"] = branch
     except Exception:
         # Never fail env validation because git metadata is unavailable.

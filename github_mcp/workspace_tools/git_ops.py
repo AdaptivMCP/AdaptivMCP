@@ -1,9 +1,9 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
+import re
+import shlex
 import shutil
 import time
-import shlex
-import re
 from typing import Any, Dict, List, Optional
 
 from github_mcp.exceptions import GitHubAPIError
@@ -13,15 +13,18 @@ from github_mcp.server import (
 )
 
 from ._shared import (
-    _safe_branch_slug,
-    _run_shell_ok,
-    _diagnose_workspace_branch,
     _delete_branch_via_workspace,
+    _diagnose_workspace_branch,
+    _run_shell_ok,
+    _safe_branch_slug,
 )
+
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 @mcp_tool(write_action=True)
 async def workspace_create_branch(
@@ -94,6 +97,8 @@ async def workspace_create_branch(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_create_branch")
+
+
 @mcp_tool(write_action=True)
 async def workspace_delete_branch(
     full_name: Optional[str] = None,
@@ -178,6 +183,8 @@ async def workspace_delete_branch(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_delete_branch")
+
+
 @mcp_tool(write_action=True)
 async def workspace_self_heal_branch(
     full_name: Optional[str] = None,
@@ -297,7 +304,9 @@ async def workspace_self_heal_branch(
             }
 
         # Remove the local workspace dir for the mangled branch (forces a clean re-clone later).
-        mangled_workspace_dir = _tw()._workspace_path(full_name, _tw()._effective_ref_for_repo(full_name, branch))
+        mangled_workspace_dir = _tw()._workspace_path(
+            full_name, _tw()._effective_ref_for_repo(full_name, branch)
+        )
         if os.path.isdir(mangled_workspace_dir):
             shutil.rmtree(mangled_workspace_dir)
             step(
@@ -350,7 +359,9 @@ async def workspace_self_heal_branch(
         if new_branch:
             candidate = new_branch
         else:
-            candidate = f"heal/{_safe_branch_slug(branch, max_len=120)}-{_tw().uuid.uuid4().hex[:8]}"
+            candidate = (
+                f"heal/{_safe_branch_slug(branch, max_len=120)}-{_tw().uuid.uuid4().hex[:8]}"
+            )
         candidate = _safe_branch_slug(candidate)
 
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", candidate):
@@ -406,7 +417,9 @@ async def workspace_self_heal_branch(
 
             # Top-level entries (trim to keep responses small).
             try:
-                entries = [e for e in sorted(os.listdir(new_repo_dir)) if e not in {".git", ".venv-mcp"}]
+                entries = [
+                    e for e in sorted(os.listdir(new_repo_dir)) if e not in {".git", ".venv-mcp"}
+                ]
             except Exception:
                 entries = []
 

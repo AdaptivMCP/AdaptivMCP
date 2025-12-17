@@ -112,7 +112,6 @@ async def _resolve_file_sha(full_name: str, path: str, branch: str) -> Optional[
         return None
 
 
-
 def _strip_large_fields_from_commit_response(response_json: Dict[str, Any]) -> Dict[str, Any]:
     """Remove large fields from GitHub Contents API responses.
 

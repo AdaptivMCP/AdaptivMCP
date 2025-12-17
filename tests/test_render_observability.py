@@ -9,7 +9,9 @@ from github_mcp.exceptions import UsageError
 
 
 @pytest.mark.asyncio
-async def test_list_render_logs_builds_expected_query_params(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_list_render_logs_builds_expected_query_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: Dict[str, Any] = {}
 
     async def fake_get(path: str, *, params: Dict[str, Any]) -> Any:
@@ -56,7 +58,9 @@ async def test_get_render_metrics_calls_expected_endpoints(monkeypatch: pytest.M
 
     monkeypatch.setattr(ro, "_render_get", fake_get)
 
-    out = await ro.get_render_metrics(metricTypes=["cpu_usage", "http_latency", "http_request_count"], resourceId="srv-1")
+    out = await ro.get_render_metrics(
+        metricTypes=["cpu_usage", "http_latency", "http_request_count"], resourceId="srv-1"
+    )
 
     assert out["resourceId"] == "srv-1"
     assert set(out["metrics"].keys()) == {"cpu_usage", "http_latency", "http_request_count"}

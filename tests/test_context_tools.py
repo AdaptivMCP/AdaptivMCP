@@ -3,8 +3,6 @@ import pytest
 import main
 
 
-
-
 @pytest.mark.asyncio
 async def test_open_issue_context_collects_branches_and_prs(monkeypatch):
     async def fake_fetch_issue(full_name: str, issue_number: int):

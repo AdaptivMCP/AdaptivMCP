@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Literal, Protocol
 
@@ -10,7 +9,6 @@ from github_mcp.config import (
     GET_FILE_WITH_LINE_NUMBERS_DEFAULT_MAX_LINES,
     GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES,
 )
-
 from main import (
     _decode_github_content,
     _effective_ref_for_repo,
@@ -190,7 +188,6 @@ async def get_file_with_line_numbers(
 
 
 async def open_file_context(
-
     full_name: str,
     path: str,
     ref: str | None = None,
@@ -232,8 +229,7 @@ async def open_file_context(
         )
 
     content_entries = [
-        {"line": entry["line"], "text": entry["text"]}
-        for entry in slice_result.get("lines", [])
+        {"line": entry["line"], "text": entry["text"]} for entry in slice_result.get("lines", [])
     ]
 
     response: Dict[str, Any] = {
@@ -361,22 +357,26 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         write_action=False,
         description="Ping the MCP server extensions surface.",
         tags=["meta", "diagnostics"],
-    )(ping_extensions)  # type: ignore[arg-type]
+    )(
+        ping_extensions
+    )  # type: ignore[arg-type]
 
     # read/context helpers
     mcp_tool(
         write_action=False,
         description="Return a citation-friendly slice of a file.",
         tags=["github", "read", "files", "context"],
-    )(get_file_slice)  # type: ignore[arg-type]
+    )(
+        get_file_slice
+    )  # type: ignore[arg-type]
 
     mcp_tool(
         write_action=False,
-        description=(
-            "Render a compact, line-numbered view of a file to simplify manual edits."
-        ),
+        description=("Render a compact, line-numbered view of a file to simplify manual edits."),
         tags=["github", "read", "files", "ergonomics"],
-    )(get_file_with_line_numbers)  # type: ignore[arg-type]
+    )(
+        get_file_with_line_numbers
+    )  # type: ignore[arg-type]
 
     mcp_tool(
         write_action=False,
@@ -384,7 +384,9 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "Return a citation-friendly slice of a file with line numbers and content entries."
         ),
         tags=["github", "read", "files", "context"],
-    )(open_file_context)  # type: ignore[arg-type]
+    )(
+        open_file_context
+    )  # type: ignore[arg-type]
 
     # write actions
     mcp_tool(
@@ -394,7 +396,9 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "Use ensure_branch if you want to delete on a dedicated branch."
         ),
         tags=["github", "write", "files", "delete"],
-    )(delete_file)  # type: ignore[arg-type]
+    )(
+        delete_file
+    )  # type: ignore[arg-type]
 
     mcp_tool(
         write_action=True,
@@ -404,4 +408,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "first, then call this tool to sync it back to the branch."
         ),
         tags=["github", "write", "files"],
-    )(update_file_from_workspace)  # type: ignore[arg-type]
+    )(
+        update_file_from_workspace
+    )  # type: ignore[arg-type]

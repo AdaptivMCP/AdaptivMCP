@@ -29,7 +29,7 @@ def _int_env(name: str, default: int) -> int:
 # Default is intentionally large to avoid losing diagnostics during long
 # assistant-driven sessions. Set MCP_RECENT_TOOL_EVENTS_CAPACITY <= 0 to disable
 # truncation.
-RECENT_TOOL_EVENTS_CAPACITY = _int_env('MCP_RECENT_TOOL_EVENTS_CAPACITY', 5000)
+RECENT_TOOL_EVENTS_CAPACITY = _int_env("MCP_RECENT_TOOL_EVENTS_CAPACITY", 5000)
 
 if RECENT_TOOL_EVENTS_CAPACITY <= 0:
     RECENT_TOOL_EVENTS: Any = []  # list of dicts
@@ -56,22 +56,22 @@ def _record_recent_tool_event(event: dict) -> None:
         pass
 
 
-WRITE_ALLOWED = _env_flag('GITHUB_MCP_AUTO_APPROVE', False)
-COMPACT_METADATA_DEFAULT = _env_flag('GITHUB_MCP_COMPACT_METADATA', True)
+WRITE_ALLOWED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
+COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", True)
 CONTROLLER_REPO = os.environ.get(
-    'GITHUB_MCP_CONTROLLER_REPO', 'Proofgate-Revocations/chatgpt-mcp-github'
+    "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
 )
-CONTROLLER_DEFAULT_BRANCH = os.environ.get('GITHUB_MCP_CONTROLLER_BRANCH', 'main')
+CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main")
 
 # Canonical args examples shown in tool descriptions to reduce malformed tool calls.
 _TOOL_EXAMPLES: dict[str, str] = {
-    'run_command': '{"full_name":"owner/repo","ref":"main","command":"pytest"}',
-    'ensure_workspace_clone': '{"full_name":"owner/repo","ref":"feature-branch","reset":true}',
-    'get_workspace_file_contents': '{"full_name":"owner/repo","ref":"feature-branch","path":"path/to/file.py"}',
-    'set_workspace_file_contents': '{\"full_name\":\"owner/repo\",\"ref\":\"feature-branch\",\"path\":\"path/to/file.py\",\"content\":\"...\"}',
-    'fetch_files': '{"full_name":"owner/repo","ref":"main","paths":["main.py"]}',
-    'open_file_context': '{"full_name":"owner/repo","ref":"main","path":"main.py","start_line":1,"max_lines":200}',
-    'update_files_and_open_pr': '{"full_name":"owner/repo","base_branch":"main","new_branch":"feature/my-change","files":[{"path":"README.md","content":"..."}],"title":"My change","body":"Why this change"}',
+    "run_command": '{"full_name":"owner/repo","ref":"main","command":"pytest"}',
+    "ensure_workspace_clone": '{"full_name":"owner/repo","ref":"feature-branch","reset":true}',
+    "get_workspace_file_contents": '{"full_name":"owner/repo","ref":"feature-branch","path":"path/to/file.py"}',
+    "set_workspace_file_contents": '{"full_name":"owner/repo","ref":"feature-branch","path":"path/to/file.py","content":"..."}',
+    "fetch_files": '{"full_name":"owner/repo","ref":"main","paths":["main.py"]}',
+    "open_file_context": '{"full_name":"owner/repo","ref":"main","path":"main.py","start_line":1,"max_lines":200}',
+    "update_files_and_open_pr": '{"full_name":"owner/repo","base_branch":"main","new_branch":"feature/my-change","files":[{"path":"README.md","content":"..."}],"title":"My change","body":"Why this change"}',
 }
 
 mcp = FastMCP(
@@ -104,6 +104,6 @@ mcp_shared_session.BaseSession._send_response = _quiet_send_response
 
 
 async def _github_request(*args, **kwargs):
-    client_factory = getattr(sys.modules.get('main'), '_github_client_instance', None)
-    kwargs.setdefault('client_factory', client_factory or _github_client_instance)
+    client_factory = getattr(sys.modules.get("main"), "_github_client_instance", None)
+    kwargs.setdefault("client_factory", client_factory or _github_client_instance)
     return await _http_clients._github_request(*args, **kwargs)

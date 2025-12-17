@@ -18,7 +18,9 @@ async def test_perform_github_commit_refreshes_workspace(monkeypatch):
         }
         return {"ok": True}
 
-    async def fake_ensure_workspace_clone(*, full_name=None, ref="main", reset=False, owner=None, repo=None, branch=None):
+    async def fake_ensure_workspace_clone(
+        *, full_name=None, ref="main", reset=False, owner=None, repo=None, branch=None
+    ):
         calls["refresh"] = {
             "full_name": full_name,
             "ref": ref,

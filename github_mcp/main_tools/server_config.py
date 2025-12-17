@@ -66,7 +66,9 @@ async def get_server_config() -> Dict[str, Any]:
             "sandbox_content_base_url_configured": bool(os.environ.get("SANDBOX_CONTENT_BASE_URL")),
         },
         "environment": {
-            "github_token_present": bool(os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")),
+            "github_token_present": bool(
+                os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
+            ),
         },
     }
 

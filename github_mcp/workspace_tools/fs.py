@@ -9,7 +9,6 @@ from github_mcp.diff_utils import (
     diff_stats,
     truncate_diff,
 )
-
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
@@ -18,7 +17,9 @@ from github_mcp.server import (
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
@@ -32,6 +33,8 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if candidate == root or not candidate.startswith(root + os.sep):
         raise ValueError("path escapes repository root")
     return candidate
+
+
 def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
     abs_path = _workspace_safe_join(repo_dir, path)
     if not os.path.exists(abs_path):
@@ -61,6 +64,8 @@ def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
         "had_decoding_errors": had_errors,
         "size_bytes": len(data),
     }
+
+
 def _workspace_write_text(
     repo_dir: str,
     path: str,
@@ -87,6 +92,8 @@ def _workspace_write_text(
         "size_bytes": len(data),
         "encoding": "utf-8",
     }
+
+
 @mcp_tool(write_action=False)
 async def get_workspace_file_contents(
     full_name: Optional[str] = None,
@@ -111,6 +118,8 @@ async def get_workspace_file_contents(
         return info
     except Exception as exc:
         return _structured_tool_error(exc, context="get_workspace_file_contents")
+
+
 @mcp_tool(write_action=True)
 async def set_workspace_file_contents(
     full_name: Optional[str] = None,

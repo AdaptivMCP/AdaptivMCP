@@ -31,9 +31,7 @@ async def test_end_to_end_small_doc_edit_and_test_run() -> None:
     tree = await main.list_repository_tree(
         full_name, ref=base_ref, path_prefix="docs", recursive=False
     )
-    doc_paths = [
-        e["path"] for e in tree["entries"] if e["path"].endswith("start_session.md")
-    ]
+    doc_paths = [e["path"] for e in tree["entries"] if e["path"].endswith("start_session.md")]
     assert doc_paths, "expected to find docs/start_session.md in the tree"
     target_path = doc_paths[0]
 

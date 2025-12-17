@@ -1,7 +1,8 @@
 import importlib
 
-import main
 from starlette.testclient import TestClient
+
+import main
 
 
 def _client() -> TestClient:

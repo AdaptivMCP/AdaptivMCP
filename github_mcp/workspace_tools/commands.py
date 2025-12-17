@@ -13,7 +13,9 @@ from github_mcp.server import (
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 @mcp_tool(write_action=False)
 async def terminal_command(
@@ -33,7 +35,8 @@ async def terminal_command(
     """Run a shell command inside the repo workspace and return its result.
 
     Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
-    persists across calls; by default the tree is refreshed to the latest commit for the ref, while local edits are preserved when mutating=true."""
+    persists across calls; by default the tree is refreshed to the latest commit for the ref, while local edits are preserved when mutating=true.
+    """
 
     env: Optional[Dict[str, str]] = None
     try:
@@ -46,11 +49,7 @@ async def terminal_command(
                 f"run_command.command is too long ({len(command)} chars); "
                 "split it into smaller commands or check in a script into the repo and run it from the workspace."
             )
-        needs_write_gate = (
-            mutating
-            or installing_dependencies
-            or not use_temp_venv
-        )
+        needs_write_gate = mutating or installing_dependencies or not use_temp_venv
         if needs_write_gate:
             # Prefer scoped write gating so feature-branch work is allowed even
             # when global WRITE_ALLOWED is disabled.
@@ -84,7 +83,7 @@ async def terminal_command(
             preferred = os.path.join(repo_dir, "dev-requirements.txt")
             fallback = os.path.join(repo_dir, "requirements.txt")
             req_path = preferred if os.path.exists(preferred) else fallback
-            req_file = ("dev-requirements.txt" if os.path.exists(preferred) else "requirements.txt")
+            req_file = "dev-requirements.txt" if os.path.exists(preferred) else "requirements.txt"
             cmd_lower = command.lower()
             already_installing = ("pip install" in cmd_lower) or ("pip3 install" in cmd_lower)
             if (not already_installing) and os.path.exists(req_path):
@@ -136,6 +135,8 @@ async def terminal_command(
         return out
     except Exception as exc:
         return _structured_tool_error(exc, context="terminal_command")
+
+
 @mcp_tool(write_action=False)
 async def run_command(
     full_name: Optional[str] = None,

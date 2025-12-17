@@ -5,8 +5,10 @@ from github_mcp.server import (
     mcp_tool,
 )
 
+
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
 
 
@@ -15,11 +17,13 @@ TOKENLIKE_SCAN_COMMAND = (
     "python scripts/check_no_tokenlike_strings.py; "
     "else echo 'token scan skipped: scripts/check_no_tokenlike_strings.py not found'; fi"
 )
+
+
 @mcp_tool(write_action=False)
 async def run_tests(
     full_name: str,
     ref: str = "main",
-    test_command: str = "pytest",
+    test_command: str = "if [ -f scripts/run_tests.sh ]; then bash scripts/run_tests.sh; else python -m pytest; fi",
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
@@ -93,17 +97,19 @@ async def run_tests(
         "result": cmd_result,
         "controller_log": summary_lines,
     }
+
+
 @mcp_tool(write_action=False)
 async def run_quality_suite(
     full_name: str,
     ref: str = "main",
-    test_command: str = "pytest",
+    test_command: str = "if [ -f scripts/run_tests.sh ]; then bash scripts/run_tests.sh; else python -m pytest; fi",
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     mutating: bool = False,
-    lint_command: str = "ruff check .",
+    lint_command: str = "if [ -f scripts/run_lint.sh ]; then bash scripts/run_lint.sh; else python -m ruff check .; fi",
     run_tokenlike_scan: bool = True,
 ) -> Dict[str, Any]:
     """Run the standard quality/test suite for a repo/ref.
@@ -195,11 +201,13 @@ async def run_quality_suite(
 
     tests_result["controller_log"] = controller_log
     return tests_result
+
+
 @mcp_tool(write_action=False)
 async def run_lint_suite(
     full_name: str,
     ref: str = "main",
-    lint_command: str = "ruff check .",
+    lint_command: str = "if [ -f scripts/run_lint.sh ]; then bash scripts/run_lint.sh; else python -m ruff check .; fi",
     timeout_seconds: int = 600,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,

@@ -92,14 +92,14 @@ async def test_run_lint_suite_runs_scan_then_lint_and_forwards_arguments(monkeyp
 
     assert [c["command"] for c in calls] == [
         tools_workspace.TOKENLIKE_SCAN_COMMAND,
-        "ruff check .",
+        "if [ -f scripts/run_lint.sh ]; then bash scripts/run_lint.sh; else python -m ruff check .; fi",
     ]
 
     lint_call = calls[1]
     assert lint_call == {
         "full_name": "owner/repo",
         "ref": "feature-branch",
-        "command": "ruff check .",
+        "command": "if [ -f scripts/run_lint.sh ]; then bash scripts/run_lint.sh; else python -m ruff check .; fi",
         "timeout_seconds": 456,
         "workdir": "subdir",
         "use_temp_venv": False,
@@ -167,11 +167,12 @@ async def test_run_quality_suite_stops_on_lint_failure(monkeypatch):
 
     # Patch terminal_command and run_tests; quality suite uses run_lint_suite internally.
     monkeypatch.setattr(tools_workspace, "terminal_command", fake_terminal_command)
+
     # Swap in a failing lint by patching the function call site: monkeypatch run_lint_suite to use our lint failure.
     async def fake_run_lint_suite(**kwargs):
-        calls['lint'] += 1
+        calls["lint"] += 1
         # run_tokenlike_scan should already be False here
-        assert kwargs.get('run_tokenlike_scan') is False
+        assert kwargs.get("run_tokenlike_scan") is False
         return {"status": "failed", "result": {"exit_code": 7}, "marker": "from_lint"}
 
     monkeypatch.setattr(tools_workspace, "run_lint_suite", fake_run_lint_suite)

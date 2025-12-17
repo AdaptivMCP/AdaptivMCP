@@ -30,7 +30,6 @@ async def create_file(
     effective_branch = m._effective_ref_for_repo(full_name, branch)
     normalized_path = m._normalize_repo_path(path)
 
-
     m._ensure_write_allowed(
         "create_file %s %s" % (full_name, normalized_path),
         target_ref=effective_branch,
@@ -141,7 +140,6 @@ async def apply_text_update_and_commit(
 
     effective_branch = m._effective_ref_for_repo(full_name, branch)
     normalized_path = m._normalize_repo_path(path)
-
 
     m._ensure_write_allowed(
         "apply_text_update_and_commit %s %s" % (full_name, normalized_path),
@@ -315,14 +313,18 @@ async def move_file(
             json=delete_body,
         )
 
-
     # Render-log friendly move/delete summaries.
     try:
         config.TOOLS_LOGGER.chat(
             "Moved %s -> %s",
             from_path,
             to_path,
-            extra={"repo": full_name, "from_path": from_path, "to_path": to_path, "event": "write_move"},
+            extra={
+                "repo": full_name,
+                "from_path": from_path,
+                "to_path": to_path,
+                "event": "write_move",
+            },
         )
 
         # If we actually deleted the old path, also show the deletion diff.

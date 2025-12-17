@@ -4,9 +4,12 @@ from typing import Optional
 
 from github_mcp.exceptions import WriteNotAuthorizedError
 
+
 def _server():
     from github_mcp import server as _server_mod
+
     return _server_mod
+
 
 def _normalize_branch_ref(ref: Optional[str]) -> Optional[str]:
     """Normalize a ref/branch string to a bare branch name when possible.

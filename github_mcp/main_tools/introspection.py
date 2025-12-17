@@ -136,7 +136,9 @@ def list_write_tools() -> Dict[str, Any]:
     return {"tools": tools}
 
 
-def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
+def list_all_actions(
+    include_parameters: bool = False, compact: Optional[bool] = None
+) -> Dict[str, Any]:
     """Enumerate every available MCP tool with read/write metadata."""
 
     m = _main()
@@ -224,7 +226,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
     }
 
 
-
 async def list_tools(
     only_write: bool = False,
     only_read: bool = False,
@@ -266,6 +267,8 @@ async def list_tools(
         "write_actions_enabled": m.server.WRITE_ALLOWED,
         "tools": tools,
     }
+
+
 async def describe_tool(
     name: Optional[str] = None,
     names: Optional[List[str]] = None,

@@ -105,7 +105,11 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
                 )
             )
 
-        if context in {"create_pull_request", "open_pr_for_existing_branch", "update_files_and_open_pr"}:
+        if context in {
+            "create_pull_request",
+            "open_pr_for_existing_branch",
+            "update_files_and_open_pr",
+        }:
             steps.append(
                 mk(
                     "workspace_fallback",
@@ -117,7 +121,12 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
         return steps
 
     # Controller-origin errors.
-    steps.append(mk("controller", action="Assistant: the failure occurred inside the Adaptiv controller (tool execution)."))
+    steps.append(
+        mk(
+            "controller",
+            action="Assistant: the failure occurred inside the Adaptiv controller (tool execution).",
+        )
+    )
 
     if category == "validation":
         steps.append(
@@ -151,7 +160,11 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
             )
         )
 
-    if context in {"create_pull_request", "open_pr_for_existing_branch", "update_files_and_open_pr"}:
+    if context in {
+        "create_pull_request",
+        "open_pr_for_existing_branch",
+        "update_files_and_open_pr",
+    }:
         steps.append(
             mk(
                 "hint",

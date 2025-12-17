@@ -1,8 +1,8 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
+import re
 import shlex
 import sys
-import re
 from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
@@ -16,8 +16,10 @@ from github_mcp.workspace import (
     _run_shell,
 )
 
+
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
 
 
@@ -35,12 +37,18 @@ def _safe_branch_slug(value: str, *, max_len: int = 200) -> str:
     if not re.match(r"^[A-Za-z0-9]", cleaned):
         cleaned = f"b-{cleaned}"[:max_len]
     return cleaned
-async def _run_shell_ok(deps: Dict[str, Any], cmd: str, *, cwd: str, timeout_seconds: int) -> Dict[str, Any]:
+
+
+async def _run_shell_ok(
+    deps: Dict[str, Any], cmd: str, *, cwd: str, timeout_seconds: int
+) -> Dict[str, Any]:
     res = await deps["run_shell"](cmd, cwd=cwd, timeout_seconds=timeout_seconds)
     if res.get("exit_code", 0) != 0:
         stderr = res.get("stderr", "") or res.get("stdout", "")
         raise GitHubAPIError(f"Command failed: {cmd}: {stderr}")
     return res
+
+
 def _git_state_markers(repo_dir: str) -> Dict[str, bool]:
     git_dir = os.path.join(repo_dir, ".git")
     return {
@@ -50,6 +58,8 @@ def _git_state_markers(repo_dir: str) -> Dict[str, bool]:
         "cherry_pick_in_progress": os.path.exists(os.path.join(git_dir, "CHERRY_PICK_HEAD")),
         "revert_in_progress": os.path.exists(os.path.join(git_dir, "REVERT_HEAD")),
     }
+
+
 async def _diagnose_workspace_branch(
     deps: Dict[str, Any], *, repo_dir: str, expected_branch: str
 ) -> Dict[str, Any]:
@@ -70,9 +80,7 @@ async def _diagnose_workspace_branch(
         "git diff --name-only --diff-filter=U", cwd=repo_dir, timeout_seconds=60
     )
     conflicted_files = [
-        line.strip()
-        for line in (conflicted.get("stdout", "") or "").splitlines()
-        if line.strip()
+        line.strip() for line in (conflicted.get("stdout", "") or "").splitlines() if line.strip()
     ]
     diag["conflicted_files"] = conflicted_files
     diag["has_conflicts"] = bool(conflicted_files)
@@ -92,6 +100,8 @@ async def _diagnose_workspace_branch(
     diag["mangled"] = mangled
     diag["detached_or_wrong_branch"] = detached_or_wrong_branch
     return diag
+
+
 async def _delete_branch_via_workspace(
     deps: Dict[str, Any], *, full_name: str, branch: str
 ) -> Dict[str, Any]:
@@ -124,6 +134,8 @@ async def _delete_branch_via_workspace(
         "delete_remote": delete_remote,
         "delete_local": delete_local,
     }
+
+
 def _workspace_deps() -> Dict[str, Any]:
     main_module = sys.modules.get("main")
     return {
@@ -136,6 +148,8 @@ def _workspace_deps() -> Dict[str, Any]:
             main_module, "_ensure_write_allowed", _ensure_write_allowed
         ),
     }
+
+
 def _resolve_full_name(
     full_name: Optional[str], *, owner: Optional[str] = None, repo: Optional[str] = None
 ) -> str:
@@ -144,6 +158,8 @@ def _resolve_full_name(
     if isinstance(owner, str) and owner.strip() and isinstance(repo, str) and repo.strip():
         return f"{owner.strip()}/{repo.strip()}"
     return CONTROLLER_REPO
+
+
 def _resolve_ref(ref: str, *, branch: Optional[str] = None) -> str:
     if isinstance(branch, str) and branch.strip():
         return branch.strip()

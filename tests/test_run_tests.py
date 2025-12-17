@@ -69,7 +69,10 @@ async def test_run_tests_failed_exit_code_sets_failed_status(monkeypatch):
     result = await tools_workspace.run_tests(full_name="owner/repo")
 
     assert result["status"] == "failed"
-    assert result["command"] == "pytest"
+    assert (
+        result["command"]
+        == "if [ -f scripts/run_tests.sh ]; then bash scripts/run_tests.sh; else python -m pytest; fi"
+    )
     assert result["exit_code"] == 3
     assert result["result"]["stdout"] == "failing tests"
     assert result["result"]["stderr"] == "traceback"
@@ -87,7 +90,10 @@ async def test_run_tests_propagates_structured_error_from_terminal_command(monke
     result = await tools_workspace.run_tests(full_name="owner/repo")
 
     assert result["status"] == "failed"
-    assert result["command"] == "pytest"
+    assert (
+        result["command"]
+        == "if [ -f scripts/run_tests.sh ]; then bash scripts/run_tests.sh; else python -m pytest; fi"
+    )
     assert result["error"] is error_payload
 
 
@@ -103,7 +109,10 @@ async def test_run_tests_handles_unexpected_result_shape(monkeypatch):
     result = await tools_workspace.run_tests(full_name="owner/repo")
 
     assert result["status"] == "failed"
-    assert result["command"] == "pytest"
+    assert (
+        result["command"]
+        == "if [ -f scripts/run_tests.sh ]; then bash scripts/run_tests.sh; else python -m pytest; fi"
+    )
     error = result["error"]
     assert error["error"] == "UnexpectedResultShape"
     assert "unexpected result structure" in error["message"]

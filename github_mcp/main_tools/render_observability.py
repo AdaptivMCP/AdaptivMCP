@@ -11,9 +11,9 @@ All functions are read-only.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, List, Optional
 
-import asyncio
 import httpx
 
 from github_mcp.config import (
@@ -36,7 +36,7 @@ def _comma(values: Optional[List[str]]) -> Optional[str]:
 
 
 def _require_api_key() -> str:
-    key = (RENDER_API_KEY or '').strip()
+    key = (RENDER_API_KEY or "").strip()
     if not key:
         raise UsageError(
             "Render API access is not configured. Set RENDER_API_KEY (or RENDER_API_TOKEN)."
@@ -102,7 +102,7 @@ async def _resolve_owner_id(resource_id: str | None) -> str:
 
 async def _render_get(path: str, *, params: Dict[str, Any]) -> Any:
     api_key = _require_api_key()
-    base = (RENDER_API_BASE or 'https://api.render.com/v1').rstrip('/')
+    base = (RENDER_API_BASE or "https://api.render.com/v1").rstrip("/")
     url = f"{base}{path}"
 
     limits = httpx.Limits(
@@ -151,7 +151,7 @@ async def list_render_logs(
     resource = resource or _default_resource_list()
 
     rid = resource[0] if resource else None
-    owner_id = (str(ownerId).strip() if ownerId is not None else "")
+    owner_id = str(ownerId).strip() if ownerId is not None else ""
     if not owner_id:
         owner_id = await _resolve_owner_id(rid)
 
@@ -169,7 +169,7 @@ async def list_render_logs(
 
     params = {k: v for k, v in params.items() if v is not None and v != ""}
 
-    return await _render_get('/logs', params=params)
+    return await _render_get("/logs", params=params)
 
 
 _METRIC_ENDPOINTS: Dict[str, str] = {
@@ -202,23 +202,21 @@ async def get_render_metrics(
     dict keyed by metric type.
     """
 
-    rid = str(resourceId).strip() if resourceId is not None else ''
+    rid = str(resourceId).strip() if resourceId is not None else ""
     if not rid:
-        rid = str(RENDER_DEFAULT_RESOURCE or '').strip()
+        rid = str(RENDER_DEFAULT_RESOURCE or "").strip()
 
     if not rid:
         raise UsageError(
-            'resourceId is required (or set RENDER_SERVICE_ID / RENDER_RESOURCE in the environment)'
+            "resourceId is required (or set RENDER_SERVICE_ID / RENDER_RESOURCE in the environment)"
         )
 
     if not metricTypes:
-        raise UsageError('metricTypes must be a non-empty list')
+        raise UsageError("metricTypes must be a non-empty list")
 
     unknown = [m for m in metricTypes if m not in _METRIC_ENDPOINTS]
     if unknown:
-        raise UsageError(
-            f"Unknown metricTypes: {unknown}. Supported: {sorted(_METRIC_ENDPOINTS)}"
-        )
+        raise UsageError(f"Unknown metricTypes: {unknown}. Supported: {sorted(_METRIC_ENDPOINTS)}")
 
     params_base: Dict[str, Any] = {
         # Render metrics endpoints accept 'resource' (service id, instance id, etc.).

@@ -81,9 +81,7 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
             page=1,
         )
         runs_json = runs_resp.get("json") or {}
-        workflow_runs = (
-            runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
-        )
+        workflow_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
     except Exception as exc:  # pragma: no cover - defensive
         workflows_error = str(exc)
 

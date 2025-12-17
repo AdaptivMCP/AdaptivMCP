@@ -8,65 +8,65 @@ for optional, non-binding examples of how the tools can fit together.
 """
 
 import base64
-from typing import Any, Dict, List, Mapping, Optional, Literal
+from typing import Any, Dict, List, Literal, Mapping, Optional
+
 import httpx  # noqa: F401
+from starlette.staticfiles import StaticFiles
 
 import github_mcp.server as server  # noqa: F401
 import github_mcp.tools_workspace as tools_workspace  # noqa: F401
 from github_mcp import http_clients as _http_clients  # noqa: F401
+from github_mcp.config import BASE_LOGGER  # noqa: F401
+from github_mcp.config import FILE_CACHE_MAX_BYTES  # noqa: F401
+from github_mcp.config import FILE_CACHE_MAX_ENTRIES  # noqa: F401
+from github_mcp.config import TOOL_STDERR_MAX_CHARS  # noqa: F401
+from github_mcp.config import TOOL_STDIO_COMBINED_MAX_CHARS  # noqa: F401
+from github_mcp.config import TOOL_STDOUT_MAX_CHARS  # noqa: F401
+from github_mcp.config import WORKSPACE_BASE_DIR  # noqa: F401
 from github_mcp.config import (
-    BASE_LOGGER,  # noqa: F401
     FETCH_FILES_CONCURRENCY,
     GITHUB_API_BASE,
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
-    FILE_CACHE_MAX_BYTES,  # noqa: F401
-    FILE_CACHE_MAX_ENTRIES,  # noqa: F401
-    TOOL_STDERR_MAX_CHARS,  # noqa: F401
-    TOOL_STDIO_COMBINED_MAX_CHARS,  # noqa: F401
-    TOOL_STDOUT_MAX_CHARS,  # noqa: F401
-    WORKSPACE_BASE_DIR,  # noqa: F401
-    )
-from github_mcp.exceptions import (
-    GitHubAPIError,  # noqa: F401
-    GitHubAuthError,
-    GitHubRateLimitError,  # noqa: F401
-    WriteNotAuthorizedError,  # noqa: F401
 )
-from github_mcp.github_content import (
-    _decode_github_content,
-    _load_body_from_content_url,
-    _resolve_file_sha,  # noqa: F401
+from github_mcp.exceptions import GitHubAPIError  # noqa: F401
+from github_mcp.exceptions import GitHubRateLimitError  # noqa: F401
+from github_mcp.exceptions import WriteNotAuthorizedError  # noqa: F401
+from github_mcp.exceptions import (
+    GitHubAuthError,
 )
 from github_mcp.file_cache import (
     cache_payload,
     clear_cache,
 )
-from github_mcp.http_clients import (
-    _external_client_instance,  # noqa: F401
-    _get_concurrency_semaphore,  # noqa: F401
-    _get_github_token,  # noqa: F401
-    _github_client_instance,  # noqa: F401
+from github_mcp.github_content import _resolve_file_sha  # noqa: F401
+from github_mcp.github_content import (
+    _decode_github_content,
+    _load_body_from_content_url,
 )
-from github_mcp.metrics import (
-    _METRICS,  # noqa: F401
-    _metrics_snapshot,  # noqa: F401
-    _reset_metrics_for_tests,  # noqa: F401
-)
+from github_mcp.http_clients import _external_client_instance  # noqa: F401
+from github_mcp.http_clients import _get_concurrency_semaphore  # noqa: F401
+from github_mcp.http_clients import _get_github_token  # noqa: F401
+from github_mcp.http_clients import _github_client_instance  # noqa: F401
+from github_mcp.http_routes.actions_compat import register_actions_compat_routes
+from github_mcp.http_routes.healthz import register_healthz_route
+from github_mcp.metrics import _METRICS  # noqa: F401
+from github_mcp.metrics import _metrics_snapshot  # noqa: F401
+from github_mcp.metrics import _reset_metrics_for_tests  # noqa: F401
+from github_mcp.server import _REGISTERED_MCP_TOOLS  # noqa: F401
+from github_mcp.server import _ensure_write_allowed  # noqa: F401
+from github_mcp.server import _structured_tool_error  # noqa: F401
 from github_mcp.server import (
-    _REGISTERED_MCP_TOOLS,  # noqa: F401
+    COMPACT_METADATA_DEFAULT,
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
-    _ensure_write_allowed,  # noqa: F401
-    _structured_tool_error,  # noqa: F401
+    _find_registered_tool,
     _github_request,
+    _normalize_input_schema,
     mcp_tool,
     register_extra_tools_if_available,
-    COMPACT_METADATA_DEFAULT,
-    _find_registered_tool,
-    _normalize_input_schema,
 )
 from github_mcp.tools_workspace import commit_workspace, ensure_workspace_clone  # noqa: F401
 from github_mcp.utils import (
@@ -75,17 +75,10 @@ from github_mcp.utils import (
     _with_numbered_lines,
     normalize_args,
 )
-from github_mcp.workspace import (
-    _clone_repo,  # noqa: F401
-    _prepare_temp_virtualenv,  # noqa: F401
-    _run_shell,  # noqa: F401
-    _workspace_path,  # noqa: F401
-)
-from github_mcp.http_routes.actions_compat import register_actions_compat_routes
-from github_mcp.http_routes.healthz import register_healthz_route
-from starlette.staticfiles import StaticFiles
-
-
+from github_mcp.workspace import _clone_repo  # noqa: F401
+from github_mcp.workspace import _prepare_temp_virtualenv  # noqa: F401
+from github_mcp.workspace import _run_shell  # noqa: F401
+from github_mcp.workspace import _workspace_path  # noqa: F401
 
 
 class _CacheControlMiddleware:
@@ -102,32 +95,31 @@ class _CacheControlMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope.get('type') != 'http':
+        if scope.get("type") != "http":
             return await self.app(scope, receive, send)
 
-        path = scope.get('path', '') or ''
+        path = scope.get("path", "") or ""
 
         async def send_wrapper(message):
-            if message.get('type') == 'http.response.start':
-                headers = list(message.get('headers', []))
+            if message.get("type") == "http.response.start":
+                headers = list(message.get("headers", []))
+
                 # Normalize: remove any existing Cache-Control header if we're overriding.
                 def _has_cache_control(hdrs):
-                    return any(k.lower() == b'cache-control' for k, _ in hdrs)
+                    return any(k.lower() == b"cache-control" for k, _ in hdrs)
 
-                if path.startswith('/static/'):
+                if path.startswith("/static/"):
                     # Honor any explicit Cache-Control set upstream; otherwise make static assets cacheable.
                     if not _has_cache_control(headers):
-                        headers.append((b'cache-control', b'public, max-age=31536000, immutable'))
+                        headers.append((b"cache-control", b"public, max-age=31536000, immutable"))
                 else:
                     # Default to no-store for everything else so edge caching (or proxies) never cache dynamic endpoints.
-                    headers = [(k, v) for (k, v) in headers if k.lower() != b'cache-control']
-                    headers.append((b'cache-control', b'no-store'))
-                message['headers'] = headers
+                    headers = [(k, v) for (k, v) in headers if k.lower() != b"cache-control"]
+                    headers.append((b"cache-control", b"no-store"))
+                message["headers"] = headers
             await send(message)
 
         return await self.app(scope, receive, send_wrapper)
-
-
 
 
 # Re-exported symbols used by helper modules and tests that import `main`.
@@ -172,10 +164,18 @@ async def _perform_github_commit_and_refresh_workspace(
     sha: Optional[str],
 ) -> Dict[str, Any]:
     """Perform a Contents API commit and then refresh the workspace clone."""
-    from github_mcp.main_tools.workspace_sync import _perform_github_commit_and_refresh_workspace as _impl
-    return await _impl(full_name=full_name, path=path, message=message, branch=branch, body_bytes=body_bytes, sha=sha)
+    from github_mcp.main_tools.workspace_sync import (
+        _perform_github_commit_and_refresh_workspace as _impl,
+    )
 
-
+    return await _impl(
+        full_name=full_name,
+        path=path,
+        message=message,
+        branch=branch,
+        body_bytes=body_bytes,
+        sha=sha,
+    )
 
 
 async def _perform_github_commit(
@@ -191,6 +191,7 @@ async def _perform_github_commit(
 ) -> Dict[str, Any]:
     """Compat wrapper for github_mcp.github_content._perform_github_commit."""
     from github_mcp.github_content import _perform_github_commit as _impl
+
     return await _impl(
         full_name,
         branch=branch,
@@ -201,6 +202,8 @@ async def _perform_github_commit(
         committer=committer,
         author=author,
     )
+
+
 def __getattr__(name: str):
     if name == "WRITE_ALLOWED":
         return server.WRITE_ALLOWED
@@ -223,7 +226,6 @@ register_extra_tools_if_available()
 # transport keeps the documented ``/sse`` path working for existing clients.
 app = server.mcp.http_app(path="/sse", transport="sse")
 app.add_middleware(_CacheControlMiddleware)
-
 
 
 try:
@@ -372,6 +374,7 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
 def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dict[str, Any]:
     """Delegates to github_mcp.main_tools.observability.get_recent_tool_events."""
     from github_mcp.main_tools.observability import get_recent_tool_events as _impl
+
     return _impl(limit=limit, include_success=include_success)
 
 
@@ -383,6 +386,7 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dic
 def get_recent_server_errors(limit: int = 50) -> Dict[str, Any]:
     """Delegates to github_mcp.main_tools.observability.get_recent_server_errors."""
     from github_mcp.main_tools.observability import get_recent_server_errors as _impl
+
     return _impl(limit=limit)
 
 
@@ -455,13 +459,16 @@ async def get_render_metrics(
         endTime=endTime,
         resolution=resolution,
     )
+
+
 # ------------------------------------------------------------------------------
+
 
 @mcp_tool(write_action=False)
 async def get_server_config() -> Dict[str, Any]:
     from github_mcp.main_tools.server_config import get_server_config as _impl
-    return await _impl()
 
+    return await _impl()
 
 
 @mcp_tool(
@@ -471,8 +478,8 @@ async def get_server_config() -> Dict[str, Any]:
 )
 def validate_json_string(raw: str) -> Dict[str, Any]:
     from github_mcp.main_tools.server_config import validate_json_string as _impl
-    return _impl(raw=raw)
 
+    return _impl(raw=raw)
 
 
 @mcp_tool(write_action=False)
@@ -480,16 +487,16 @@ async def get_repo_defaults(
     full_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.server_config import get_repo_defaults as _impl
-    return await _impl(full_name=full_name)
 
+    return await _impl(full_name=full_name)
 
 
 @mcp_tool(write_action=False)
 async def validate_environment() -> Dict[str, Any]:
     """Check GitHub-related environment settings and report problems."""
     from github_mcp.main_tools.env import validate_environment as _impl
-    return await _impl()
 
+    return await _impl()
 
 
 @mcp_tool(write_action=True)
@@ -499,20 +506,22 @@ async def pr_smoke_test(
     draft: bool = True,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.diagnostics import pr_smoke_test as _impl
+
     return await _impl(full_name=full_name, base_branch=base_branch, draft=draft)
+
 
 @mcp_tool(write_action=False)
 async def get_rate_limit() -> Dict[str, Any]:
     from github_mcp.main_tools.repositories import get_rate_limit as _impl
-    return await _impl()
 
+    return await _impl()
 
 
 @mcp_tool(write_action=False)
 async def get_user_login() -> Dict[str, Any]:
     from github_mcp.main_tools.repositories import get_user_login as _impl
-    return await _impl()
 
+    return await _impl()
 
 
 @mcp_tool(write_action=False)
@@ -523,8 +532,8 @@ async def list_repositories(
     page: int = 1,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.repositories import list_repositories as _impl
-    return await _impl(affiliation=affiliation, visibility=visibility, per_page=per_page, page=page)
 
+    return await _impl(affiliation=affiliation, visibility=visibility, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
@@ -532,8 +541,8 @@ async def list_repositories_by_installation(
     installation_id: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.repositories import list_repositories_by_installation as _impl
-    return await _impl(installation_id=installation_id, per_page=per_page, page=page)
 
+    return await _impl(installation_id=installation_id, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=True)
@@ -564,8 +573,33 @@ async def create_repository(
     clone_ref: Optional[str] = None,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.repositories import create_repository as _impl
-    return await _impl(name=name, owner=owner, owner_type=owner_type, description=description, homepage=homepage, visibility=visibility, private=private, auto_init=auto_init, gitignore_template=gitignore_template, license_template=license_template, is_template=is_template, has_issues=has_issues, has_projects=has_projects, has_wiki=has_wiki, has_discussions=has_discussions, team_id=team_id, security_and_analysis=security_and_analysis, template_full_name=template_full_name, include_all_branches=include_all_branches, topics=topics, create_payload_overrides=create_payload_overrides, update_payload_overrides=update_payload_overrides, clone_to_workspace=clone_to_workspace, clone_ref=clone_ref)
 
+    return await _impl(
+        name=name,
+        owner=owner,
+        owner_type=owner_type,
+        description=description,
+        homepage=homepage,
+        visibility=visibility,
+        private=private,
+        auto_init=auto_init,
+        gitignore_template=gitignore_template,
+        license_template=license_template,
+        is_template=is_template,
+        has_issues=has_issues,
+        has_projects=has_projects,
+        has_wiki=has_wiki,
+        has_discussions=has_discussions,
+        team_id=team_id,
+        security_and_analysis=security_and_analysis,
+        template_full_name=template_full_name,
+        include_all_branches=include_all_branches,
+        topics=topics,
+        create_payload_overrides=create_payload_overrides,
+        update_payload_overrides=update_payload_overrides,
+        clone_to_workspace=clone_to_workspace,
+        clone_ref=clone_ref,
+    )
 
 
 @mcp_tool(write_action=False)
@@ -576,9 +610,8 @@ async def list_recent_issues(
     page: int = 1,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.issues import list_recent_issues as _impl
+
     return await _impl(filter=filter, state=state, per_page=per_page, page=page)
-
-
 
 
 @mcp_tool(write_action=False)
@@ -591,17 +624,22 @@ async def list_repository_issues(
     page: int = 1,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.issues import list_repository_issues as _impl
-    return await _impl(full_name=full_name, state=state, labels=labels, assignee=assignee, per_page=per_page, page=page)
 
-
+    return await _impl(
+        full_name=full_name,
+        state=state,
+        labels=labels,
+        assignee=assignee,
+        per_page=per_page,
+        page=page,
+    )
 
 
 @mcp_tool(write_action=False)
 async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
     from github_mcp.main_tools.issues import fetch_issue as _impl
+
     return await _impl(full_name=full_name, issue_number=issue_number)
-
-
 
 
 @mcp_tool(write_action=False)
@@ -609,23 +647,22 @@ async def fetch_issue_comments(
     full_name: str, issue_number: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.issues import fetch_issue_comments as _impl
+
     return await _impl(full_name=full_name, issue_number=issue_number, per_page=per_page, page=page)
-
-
 
 
 @mcp_tool(write_action=False)
 async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import fetch_pr as _impl
-    return await _impl(full_name=full_name, pull_number=pull_number)
 
+    return await _impl(full_name=full_name, pull_number=pull_number)
 
 
 @mcp_tool(write_action=False)
 async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import get_pr_info as _impl
-    return await _impl(full_name=full_name, pull_number=pull_number)
 
+    return await _impl(full_name=full_name, pull_number=pull_number)
 
 
 @mcp_tool(write_action=False)
@@ -633,8 +670,8 @@ async def fetch_pr_comments(
     full_name: str, pull_number: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import fetch_pr_comments as _impl
-    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
+    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
@@ -642,15 +679,15 @@ async def list_pr_changed_filenames(
     full_name: str, pull_number: int, per_page: int = 100, page: int = 1
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import list_pr_changed_filenames as _impl
-    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
+    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
 async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import get_commit_combined_status as _impl
-    return await _impl(full_name=full_name, ref=ref)
 
+    return await _impl(full_name=full_name, ref=ref)
 
 
 @mcp_tool(write_action=False)
@@ -658,9 +695,8 @@ async def get_issue_comment_reactions(
     full_name: str, comment_id: int, per_page: int = 30, page: int = 1
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.issues import get_issue_comment_reactions as _impl
+
     return await _impl(full_name=full_name, comment_id=comment_id, per_page=per_page, page=page)
-
-
 
 
 @mcp_tool(write_action=False)
@@ -701,8 +737,8 @@ def list_write_tools() -> Dict[str, Any]:
     reading the entire main.py.
     """
     from github_mcp.main_tools.introspection import list_write_tools as _impl
-    return _impl()
 
+    return _impl()
 
 
 @mcp_tool(write_action=False)
@@ -742,8 +778,10 @@ async def move_file(
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.files import move_file as _impl
-    return await _impl(full_name=full_name, from_path=from_path, to_path=to_path, branch=branch, message=message)
 
+    return await _impl(
+        full_name=full_name, from_path=from_path, to_path=to_path, branch=branch, message=message
+    )
 
 
 @mcp_tool(write_action=False)
@@ -765,8 +803,8 @@ async def fetch_files(
     ref: str = "main",
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.content_cache import fetch_files as _impl
-    return await _impl(full_name=full_name, paths=paths, ref=ref)
 
+    return await _impl(full_name=full_name, paths=paths, ref=ref)
 
 
 @mcp_tool(
@@ -784,8 +822,8 @@ async def get_cached_files(
     ref: str = "main",
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.content_cache import get_cached_files as _impl
-    return await _impl(full_name=full_name, paths=paths, ref=ref)
 
+    return await _impl(full_name=full_name, paths=paths, ref=ref)
 
 
 @mcp_tool(
@@ -804,8 +842,8 @@ async def cache_files(
     refresh: bool = False,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.content_cache import cache_files as _impl
-    return await _impl(full_name=full_name, paths=paths, ref=ref, refresh=refresh)
 
+    return await _impl(full_name=full_name, paths=paths, ref=ref, refresh=refresh)
 
 
 @mcp_tool(write_action=False)
@@ -819,8 +857,16 @@ async def list_repository_tree(
     include_trees: bool = True,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.content_cache import list_repository_tree as _impl
-    return await _impl(full_name=full_name, ref=ref, path_prefix=path_prefix, recursive=recursive, max_entries=max_entries, include_blobs=include_blobs, include_trees=include_trees)
 
+    return await _impl(
+        full_name=full_name,
+        ref=ref,
+        path_prefix=path_prefix,
+        recursive=recursive,
+        max_entries=max_entries,
+        include_blobs=include_blobs,
+        include_trees=include_trees,
+    )
 
 
 @mcp_tool(write_action=False)
@@ -829,15 +875,15 @@ async def graphql_query(
     variables: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.querying import graphql_query as _impl
-    return await _impl(query=query, variables=variables)
 
+    return await _impl(query=query, variables=variables)
 
 
 @mcp_tool(write_action=False)
 async def fetch_url(url: str) -> Dict[str, Any]:
     from github_mcp.main_tools.querying import fetch_url as _impl
-    return await _impl(url=url)
 
+    return await _impl(url=url)
 
 
 @mcp_tool(write_action=False)
@@ -850,8 +896,10 @@ async def search(
     order: Optional[Literal["asc", "desc"]] = None,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.querying import search as _impl
-    return await _impl(query=query, search_type=search_type, per_page=per_page, page=page, sort=sort, order=order)
 
+    return await _impl(
+        query=query, search_type=search_type, per_page=per_page, page=page, sort=sort, order=order
+    )
 
 
 @mcp_tool(write_action=False)
@@ -876,8 +924,8 @@ async def download_user_content(content_url: str) -> Dict[str, Any]:
 def _decode_zipped_job_logs(content: bytes) -> str:
     """Decode a zipped GitHub Actions job logs payload into a readable string."""
     from github_mcp.utils import _decode_zipped_job_logs as _impl
-    return _impl(content)
 
+    return _impl(content)
 
 
 # ------------------------------------------------------------------------------
@@ -896,8 +944,10 @@ async def list_workflow_runs(
 ) -> Dict[str, Any]:
     """List recent GitHub Actions workflow runs with optional filters."""
     from github_mcp.main_tools.workflows import list_workflow_runs as _impl
-    return await _impl(full_name=full_name, branch=branch, status=status, event=event, per_page=per_page, page=page)
 
+    return await _impl(
+        full_name=full_name, branch=branch, status=status, event=event, per_page=per_page, page=page
+    )
 
 
 @mcp_tool(write_action=False)
@@ -914,8 +964,8 @@ async def list_recent_failures(
     debugging flows.
     """
     from github_mcp.main_tools.workflows import list_recent_failures as _impl
-    return await _impl(full_name=full_name, branch=branch, limit=limit)
 
+    return await _impl(full_name=full_name, branch=branch, limit=limit)
 
 
 @mcp_tool(
@@ -932,8 +982,8 @@ async def list_tools(
 ) -> Dict[str, Any]:
     """Lightweight tool catalog."""
     from github_mcp.main_tools.introspection import list_tools as _impl
-    return await _impl(only_write=only_write, only_read=only_read, name_prefix=name_prefix)
 
+    return await _impl(only_write=only_write, only_read=only_read, name_prefix=name_prefix)
 
 
 @mcp_tool(write_action=False)
@@ -954,8 +1004,8 @@ def list_all_actions(
             compact.
     """
     from github_mcp.main_tools.introspection import list_all_actions as _impl
-    return _impl(include_parameters=include_parameters, compact=compact)
 
+    return _impl(include_parameters=include_parameters, compact=compact)
 
 
 @mcp_tool(
@@ -986,15 +1036,15 @@ async def describe_tool(
             each tool (equivalent to list_all_actions(include_parameters=True)).
     """
     from github_mcp.main_tools.introspection import describe_tool as _impl
-    return await _impl(name=name, names=names, include_parameters=include_parameters)
 
+    return await _impl(name=name, names=names, include_parameters=include_parameters)
 
 
 def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
     from github_mcp.main_tools.introspection import _validate_single_tool_args as _impl
-    return _impl(tool_name=tool_name, args=args)
 
+    return _impl(tool_name=tool_name, args=args)
 
 
 @mcp_tool(write_action=False)
@@ -1031,17 +1081,16 @@ async def validate_tool_args(
         errors, schema) for backwards compatibility with existing callers.
     """
     from github_mcp.main_tools.introspection import validate_tool_args as _impl
+
     return await _impl(tool_name=tool_name, payload=payload, tool_names=tool_names)
-
-
 
 
 @mcp_tool(write_action=False)
 async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
     """Retrieve a specific workflow run including timing and conclusion."""
     from github_mcp.main_tools.workflows import get_workflow_run as _impl
-    return await _impl(full_name=full_name, run_id=run_id)
 
+    return await _impl(full_name=full_name, run_id=run_id)
 
 
 @mcp_tool(write_action=False)
@@ -1053,8 +1102,8 @@ async def list_workflow_run_jobs(
 ) -> Dict[str, Any]:
     """List jobs within a workflow run, useful for troubleshooting failures."""
     from github_mcp.main_tools.workflows import list_workflow_run_jobs as _impl
-    return await _impl(full_name=full_name, run_id=run_id, per_page=per_page, page=page)
 
+    return await _impl(full_name=full_name, run_id=run_id, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
@@ -1071,16 +1120,16 @@ async def get_workflow_run_overview(
     "what happened in this run?" with a single tool call.
     """
     from github_mcp.main_tools.workflows import get_workflow_run_overview as _impl
-    return await _impl(full_name=full_name, run_id=run_id, max_jobs=max_jobs)
 
+    return await _impl(full_name=full_name, run_id=run_id, max_jobs=max_jobs)
 
 
 @mcp_tool(write_action=False)
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     """Fetch raw logs for a GitHub Actions job without truncation."""
     from github_mcp.main_tools.workflows import get_job_logs as _impl
-    return await _impl(full_name=full_name, job_id=job_id)
 
+    return await _impl(full_name=full_name, job_id=job_id)
 
 
 @mcp_tool(write_action=False)
@@ -1092,8 +1141,13 @@ async def wait_for_workflow_run(
 ) -> Dict[str, Any]:
     """Poll a workflow run until completion or timeout."""
     from github_mcp.main_tools.workflows import wait_for_workflow_run as _impl
-    return await _impl(full_name=full_name, run_id=run_id, timeout_seconds=timeout_seconds, poll_interval_seconds=poll_interval_seconds)
 
+    return await _impl(
+        full_name=full_name,
+        run_id=run_id,
+        timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+    )
 
 
 @mcp_tool(
@@ -1108,8 +1162,8 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
     they understand the current state of an issue.
     """
     from github_mcp.main_tools.issues import get_issue_overview as _impl
-    return await _impl(full_name=full_name, issue_number=issue_number)
 
+    return await _impl(full_name=full_name, issue_number=issue_number)
 
 
 @mcp_tool(write_action=True)
@@ -1128,8 +1182,8 @@ async def trigger_workflow_dispatch(
         inputs: Optional input payload for workflows that declare inputs.
     """
     from github_mcp.main_tools.workflows import trigger_workflow_dispatch as _impl
-    return await _impl(full_name=full_name, workflow=workflow, ref=ref, inputs=inputs)
 
+    return await _impl(full_name=full_name, workflow=workflow, ref=ref, inputs=inputs)
 
 
 @mcp_tool(write_action=True)
@@ -1143,8 +1197,15 @@ async def trigger_and_wait_for_workflow(
 ) -> Dict[str, Any]:
     """Trigger a workflow and block until it completes or hits timeout."""
     from github_mcp.main_tools.workflows import trigger_and_wait_for_workflow as _impl
-    return await _impl(full_name=full_name, workflow=workflow, ref=ref, inputs=inputs, timeout_seconds=timeout_seconds, poll_interval_seconds=poll_interval_seconds)
 
+    return await _impl(
+        full_name=full_name,
+        workflow=workflow,
+        ref=ref,
+        inputs=inputs,
+        timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+    )
 
 
 # ------------------------------------------------------------------------------
@@ -1162,8 +1223,10 @@ async def list_pull_requests(
     page: int = 1,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import list_pull_requests as _impl
-    return await _impl(full_name=full_name, state=state, head=head, base=base, per_page=per_page, page=page)
 
+    return await _impl(
+        full_name=full_name, state=state, head=head, base=base, per_page=per_page, page=page
+    )
 
 
 @mcp_tool(write_action=True)
@@ -1175,15 +1238,21 @@ async def merge_pull_request(
     commit_message: Optional[str] = None,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import merge_pull_request as _impl
-    return await _impl(full_name=full_name, number=number, merge_method=merge_method, commit_title=commit_title, commit_message=commit_message)
 
+    return await _impl(
+        full_name=full_name,
+        number=number,
+        merge_method=merge_method,
+        commit_title=commit_title,
+        commit_message=commit_message,
+    )
 
 
 @mcp_tool(write_action=True)
 async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import close_pull_request as _impl
-    return await _impl(full_name=full_name, number=number)
 
+    return await _impl(full_name=full_name, number=number)
 
 
 @mcp_tool(write_action=True)
@@ -1193,8 +1262,8 @@ async def comment_on_pull_request(
     body: str,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import comment_on_pull_request as _impl
-    return await _impl(full_name=full_name, number=number, body=body)
 
+    return await _impl(full_name=full_name, number=number, body=body)
 
 
 @mcp_tool(write_action=True)
@@ -1207,7 +1276,10 @@ async def create_issue(
 ) -> Dict[str, Any]:
     """Create a GitHub issue in the given repository."""
     from github_mcp.main_tools.issues import create_issue as _impl
-    return await _impl(full_name=full_name, title=title, body=body, labels=labels, assignees=assignees)
+
+    return await _impl(
+        full_name=full_name, title=title, body=body, labels=labels, assignees=assignees
+    )
 
 
 @mcp_tool(write_action=True)
@@ -1222,7 +1294,16 @@ async def update_issue(
 ) -> Dict[str, Any]:
     """Update fields on an existing GitHub issue."""
     from github_mcp.main_tools.issues import update_issue as _impl
-    return await _impl(full_name=full_name, issue_number=issue_number, title=title, body=body, state=state, labels=labels, assignees=assignees)
+
+    return await _impl(
+        full_name=full_name,
+        issue_number=issue_number,
+        title=title,
+        body=body,
+        state=state,
+        labels=labels,
+        assignees=assignees,
+    )
 
 
 @mcp_tool(write_action=True)
@@ -1233,6 +1314,7 @@ async def comment_on_issue(
 ) -> Dict[str, Any]:
     """Post a comment on an issue."""
     from github_mcp.main_tools.issues import comment_on_issue as _impl
+
     return await _impl(full_name=full_name, issue_number=issue_number, body=body)
 
 
@@ -1240,39 +1322,38 @@ async def comment_on_issue(
 async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Return an issue plus related branches and pull requests."""
     from github_mcp.main_tools.issues import open_issue_context as _impl
-    return await _impl(full_name=full_name, issue_number=issue_number)
 
+    return await _impl(full_name=full_name, issue_number=issue_number)
 
 
 def _normalize_issue_payload(raw_issue: Any) -> Optional[Dict[str, Any]]:
     from github_mcp.main_tools.normalize import normalize_issue_payload as _impl
-    return _impl(raw_issue=raw_issue)
 
+    return _impl(raw_issue=raw_issue)
 
 
 def _normalize_pr_payload(raw_pr: Any) -> Optional[Dict[str, Any]]:
     from github_mcp.main_tools.normalize import normalize_pr_payload as _impl
-    return _impl(raw_pr=raw_pr)
 
+    return _impl(raw_pr=raw_pr)
 
 
 def _normalize_branch_summary(summary: Any) -> Optional[Dict[str, Any]]:
     from github_mcp.main_tools.normalize import normalize_branch_summary as _impl
-    return _impl(summary=summary)
 
+    return _impl(summary=summary)
 
 
 @mcp_tool(write_action=False)
 async def resolve_handle(full_name: str, handle: str) -> Dict[str, Any]:
     from github_mcp.main_tools.handles import resolve_handle as _impl
-    return await _impl(full_name=full_name, handle=handle)
 
+    return await _impl(full_name=full_name, handle=handle)
 
 
 # ------------------------------------------------------------------------------
 # Branch / commit / PR helpers
 # ------------------------------------------------------------------------------
-
 
 
 @mcp_tool(write_action=True)
@@ -1282,6 +1363,7 @@ async def create_branch(
     from_ref: str = "main",
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.branches import create_branch as _impl
+
     return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
 
 
@@ -1292,15 +1374,15 @@ async def ensure_branch(
     from_ref: str = "main",
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.branches import ensure_branch as _impl
-    return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
 
+    return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
 
 
 @mcp_tool(write_action=False)
 async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
     from github_mcp.main_tools.branches import get_branch_summary as _impl
-    return await _impl(full_name=full_name, branch=branch, base=base)
 
+    return await _impl(full_name=full_name, branch=branch, base=base)
 
 
 @mcp_tool(write_action=False)
@@ -1308,8 +1390,8 @@ async def get_latest_branch_status(
     full_name: str, branch: str, base: str = "main"
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.branches import get_latest_branch_status as _impl
-    return await _impl(full_name=full_name, branch=branch, base=base)
 
+    return await _impl(full_name=full_name, branch=branch, base=base)
 
 
 @mcp_tool(write_action=False)
@@ -1347,8 +1429,8 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
         its corresponding "*_error" field is populated instead of raising.
     """
     from github_mcp.main_tools.dashboard import get_repo_dashboard as _impl
-    return await _impl(full_name=full_name, branch=branch)
 
+    return await _impl(full_name=full_name, branch=branch)
 
 
 async def _build_default_pr_body(
@@ -1366,8 +1448,10 @@ async def _build_default_pr_body(
     of raising and breaking the overall tool call.
     """
     from github_mcp.main_tools.pull_requests import _build_default_pr_body as _impl
-    return await _impl(full_name=full_name, title=title, head=head, effective_base=effective_base, draft=draft)
 
+    return await _impl(
+        full_name=full_name, title=title, head=head, effective_base=effective_base, draft=draft
+    )
 
 
 @mcp_tool(write_action=True)
@@ -1386,7 +1470,10 @@ async def create_pull_request(
     supply a simple base name like "main".
     """
     from github_mcp.main_tools.pull_requests import create_pull_request as _impl
-    return await _impl(full_name=full_name, title=title, head=head, base=base, body=body, draft=draft)
+
+    return await _impl(
+        full_name=full_name, title=title, head=head, base=base, body=body, draft=draft
+    )
 
 
 @mcp_tool(write_action=True)
@@ -1407,8 +1494,10 @@ async def open_pr_for_existing_branch(
     If this tool call is blocked upstream by OpenAI, use the workspace flow: `run_command` to create or reuse the PR.
     """
     from github_mcp.main_tools.pull_requests import open_pr_for_existing_branch as _impl
-    return await _impl(full_name=full_name, branch=branch, base=base, title=title, body=body, draft=draft)
 
+    return await _impl(
+        full_name=full_name, branch=branch, base=base, title=title, body=body, draft=draft
+    )
 
 
 @mcp_tool(write_action=True)
@@ -1423,8 +1512,16 @@ async def update_files_and_open_pr(
 ) -> Dict[str, Any]:
     """Commit multiple files, verify each, then open a PR in one call."""
     from github_mcp.main_tools.pull_requests import update_files_and_open_pr as _impl
-    return await _impl(full_name=full_name, title=title, files=files, base_branch=base_branch, new_branch=new_branch, body=body, draft=draft)
 
+    return await _impl(
+        full_name=full_name,
+        title=title,
+        files=files,
+        base_branch=base_branch,
+        new_branch=new_branch,
+        body=body,
+        draft=draft,
+    )
 
 
 @mcp_tool(write_action=True)
@@ -1437,8 +1534,10 @@ async def create_file(
     message: Optional[str] = None,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.files import create_file as _impl
-    return await _impl(full_name=full_name, path=path, content=content, branch=branch, message=message)
 
+    return await _impl(
+        full_name=full_name, path=path, content=content, branch=branch, message=message
+    )
 
 
 @mcp_tool(write_action=True)
@@ -1452,8 +1551,15 @@ async def apply_text_update_and_commit(
     return_diff: bool = False,
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.files import apply_text_update_and_commit as _impl
-    return await _impl(full_name=full_name, path=path, updated_content=updated_content, branch=branch, message=message, return_diff=return_diff)
 
+    return await _impl(
+        full_name=full_name,
+        path=path,
+        updated_content=updated_content,
+        branch=branch,
+        message=message,
+        return_diff=return_diff,
+    )
 
 
 @mcp_tool(
@@ -1466,8 +1572,8 @@ async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
     # This helper is read-only and safe to call before any write actions.
 
     from github_mcp.main_tools.pull_requests import get_pr_overview as _impl
-    return await _impl(full_name=full_name, pull_number=pull_number)
 
+    return await _impl(full_name=full_name, pull_number=pull_number)
 
 
 @mcp_tool(
@@ -1488,4 +1594,11 @@ async def recent_prs_for_branch(
     # It groups results into open and (optionally) closed sets so assistants can
     # find the PR(s) tied to a feature branch without guessing numbers.
     from github_mcp.main_tools.pull_requests import recent_prs_for_branch as _impl
-    return await _impl(full_name=full_name, branch=branch, include_closed=include_closed, per_page_open=per_page_open, per_page_closed=per_page_closed)
+
+    return await _impl(
+        full_name=full_name,
+        branch=branch,
+        include_closed=include_closed,
+        per_page_open=per_page_open,
+        per_page_closed=per_page_closed,
+    )

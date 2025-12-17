@@ -5,9 +5,8 @@ import inspect
 import json
 from typing import Any, Dict, Mapping, Optional
 
-from github_mcp.mcp_server.context import CONTROLLER_REPO, _TOOL_EXAMPLES
+from github_mcp.mcp_server.context import _TOOL_EXAMPLES, CONTROLLER_REPO
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
-
 
 _TITLE_TOKEN_MAP = {
     "api": "API",
@@ -40,6 +39,7 @@ def _title_from_tool_name(name: str) -> str:
         else:
             out.append(part.capitalize())
     return " ".join(out)
+
 
 def _stringify_annotation(annotation: Any) -> str:
     """Return a deterministic, LLM-friendly description of a parameter type."""
@@ -104,6 +104,7 @@ def _normalize_tool_description(
     ]
     return "\n".join([p for p in parts if p])
 
+
 def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
     """Placeholder for JSON Schema-based preflight validation.
 
@@ -116,6 +117,7 @@ def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
 
     # Intentionally a no-op: rely on the tools' own validation and tests.
     return None
+
 
 def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     if tool is None:
@@ -332,6 +334,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 try:
                     from typing import get_args, get_origin
                 except Exception:  # pragma: no cover
+
                     def get_args(_a):
                         return ()
 
@@ -342,70 +345,73 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 args = get_args(ann) or ()
 
                 # Optional/Union handling (focus on adding null).
-                if origin is None and hasattr(ann, '__origin__'):
-                    origin = getattr(ann, '__origin__', None)
-                    args = getattr(ann, '__args__', ()) or ()
+                if origin is None and hasattr(ann, "__origin__"):
+                    origin = getattr(ann, "__origin__", None)
+                    args = getattr(ann, "__args__", ()) or ()
 
-                if origin is not None and origin is getattr(__import__('typing'), 'Union', None):
+                if origin is not None and origin is getattr(__import__("typing"), "Union", None):
                     non_null = [a for a in args if a is not type(None)]  # noqa: E721
                     nullable = len(non_null) != len(args)
                     # If Union[T, None], keep the richer schema for T and add null.
                     if len(non_null) == 1:
                         schema = _annotation_to_schema(non_null[0])
                         if nullable:
-                            tv = schema.get('type')
+                            tv = schema.get("type")
                             if isinstance(tv, str):
-                                schema['type'] = sorted({tv, 'null'})
+                                schema["type"] = sorted({tv, "null"})
                             elif isinstance(tv, list):
-                                schema['type'] = sorted(set(tv + ['null']))
+                                schema["type"] = sorted(set(tv + ["null"]))
                             else:
-                                schema['type'] = ['null']
+                                schema["type"] = ["null"]
                         return schema
 
                     # For wider unions, degrade to a simple type union when possible.
                     types: set[str] = set()
                     for a in non_null:
                         frag = _annotation_to_schema(a)
-                        t = frag.get('type')
+                        t = frag.get("type")
                         if isinstance(t, str):
                             types.add(t)
                         elif isinstance(t, list):
                             types.update(t)
                     if nullable:
-                        types.add('null')
-                    return {'type': sorted(types)} if types else ({'type': ['null']} if nullable else {})
+                        types.add("null")
+                    return (
+                        {"type": sorted(types)}
+                        if types
+                        else ({"type": ["null"]} if nullable else {})
+                    )
 
                 # Containers: list/tuple/set and typing equivalents.
                 if origin in (list, tuple, set):
                     item_schema: Dict[str, Any] = {}
                     if args:
                         item_schema = _annotation_to_schema(args[0])
-                    out: Dict[str, Any] = {'type': 'array'}
+                    out: Dict[str, Any] = {"type": "array"}
                     if item_schema:
-                        out['items'] = item_schema
+                        out["items"] = item_schema
                     return out
 
                 if origin is dict:
-                    return {'type': 'object'}
+                    return {"type": "object"}
 
                 # Primitives
                 if ann in (str, bytes):
-                    return {'type': 'string'}
+                    return {"type": "string"}
                 if ann is int:
-                    return {'type': 'integer'}
+                    return {"type": "integer"}
                 if ann is float:
-                    return {'type': 'number'}
+                    return {"type": "number"}
                 if ann is bool:
-                    return {'type': 'boolean'}
+                    return {"type": "boolean"}
 
                 # Plain builtins
                 if ann in (list, tuple, set):
-                    return {'type': 'array'}
+                    return {"type": "array"}
                 if ann is dict:
-                    return {'type': 'object'}
+                    return {"type": "object"}
 
                 return {}
-
 
             for param_name, param in sig.parameters.items():
                 if param.kind in (
@@ -453,6 +459,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
         return None
 
     return None
+
 
 def _format_tool_args_preview(all_args: Mapping[str, Any], *, limit: int = 1200) -> str:
     """Return a single-line, truncated snapshot of tool arguments.

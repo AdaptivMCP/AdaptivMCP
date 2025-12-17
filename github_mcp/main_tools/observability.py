@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-import github_mcp.server as server
 import github_mcp.mcp_server.context as ctx
+import github_mcp.server as server
 from github_mcp.config import ERROR_LOG_CAPACITY, ERROR_LOG_HANDLER
-
 
 _LEVELS = {
     "CRITICAL": 50,
@@ -55,7 +54,9 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dic
             if ev == "tool_recent_start":
                 msg = f"Starting {tool} on {loc}."
             elif ev == "tool_recent_ok":
-                msg = f"Finished {tool} on {loc}{(' in %sms' % dur) if isinstance(dur, int) else ''}."
+                msg = (
+                    f"Finished {tool} on {loc}{(' in %sms' % dur) if isinstance(dur, int) else ''}."
+                )
             else:
                 msg = f"{tool} event {ev} on {loc}."
         narrative.append(msg)
@@ -66,7 +67,6 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dic
     total_recorded = getattr(ctx, "RECENT_TOOL_EVENTS_TOTAL", 0)
     if not isinstance(total_recorded, int) or total_recorded < total_available:
         total_recorded = total_available
-
 
     return {
         "limit": limit_int,

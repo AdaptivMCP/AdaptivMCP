@@ -114,7 +114,9 @@ async def test_get_file_with_line_numbers_default_bounds(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
-async def test_get_file_with_line_numbers_max_chars_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_file_with_line_numbers_max_chars_truncates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     sample = "\n".join(["x" * 40 for _ in range(50)])
 
     async def fake_decode(full_name: str, path: str, ref: str | None):

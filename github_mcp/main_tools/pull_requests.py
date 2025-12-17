@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from ._main import _main
 
+
 async def list_pull_requests(
     full_name: str,
     state: str = "open",
@@ -83,8 +84,6 @@ async def comment_on_pull_request(full_name: str, number: int, body: str) -> Dic
     )
 
 
-
-
 async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
     """Fetch pull request details."""
 
@@ -141,6 +140,8 @@ async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]
 
     m = _main()
     return await m._github_request("GET", f"/repos/{full_name}/commits/{ref}/status")
+
+
 async def _build_default_pr_body(
     *,
     full_name: str,
@@ -515,9 +516,7 @@ async def update_files_and_open_pr(
         }
 
     except Exception as exc:
-        return m._structured_tool_error(
-            exc, context="update_files_and_open_pr", path=current_path
-        )
+        return m._structured_tool_error(exc, context="update_files_and_open_pr", path=current_path)
 
 
 async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:

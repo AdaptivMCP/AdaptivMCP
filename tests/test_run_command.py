@@ -6,8 +6,6 @@ import pytest
 import main
 
 
-
-
 @pytest.mark.asyncio
 async def test_run_shell_returns_full_output():
     cmd = "python - <<'PY'\nimport sys\nsys.stdout.write('A' * 20)\nsys.stderr.write('B' * 30)\nPY"
@@ -17,6 +15,19 @@ async def test_run_shell_returns_full_output():
     assert result["stderr_truncated"] is False
     assert result["stdout"] == "A" * 20
     assert result["stderr"] == "B" * 30
+
+
+@pytest.mark.asyncio
+async def test_run_shell_strips_ansi_and_control_chars():
+    cmd = "python - <<'PY'\nimport sys\n# ANSI escape sequences + carriage returns are common in progress bars\nsys.stdout.write('\x1b[31mRED\x1b[0m')\nsys.stdout.write('\\r')\nsys.stdout.write('DONE')\n# include a bell/control byte (should be stripped)\nsys.stdout.write('\\x07')\nsys.stdout.write('\\n')\nsys.stdout.flush()\nPY"
+    result = await main._run_shell(cmd)
+
+    assert result["stdout_truncated"] is False
+    assert result["stderr_truncated"] is False
+    assert "\x1b" not in result["stdout"]
+    assert "\r" not in result["stdout"]
+    assert "RED" in result["stdout"]
+    assert "DONE" in result["stdout"]
 
 
 @pytest.mark.asyncio
@@ -274,10 +285,55 @@ async def test_clone_repo_reuses_persistent_workspace(monkeypatch, tmp_path):
     )
 
     assert result["repo_dir"] == str(repo_dir)
-    assert calls[0] == ("git fetch origin --prune", str(repo_dir))
+    assert calls[0] == ("git status --porcelain", str(repo_dir))
+    assert calls[1] == ("git fetch origin --prune", str(repo_dir))
     assert any(cmd == ("echo ok", str(repo_dir)) for cmd in calls)
     assert any(cmd.startswith("git reset") for cmd, _ in calls)
     assert any(cmd.startswith("git clean") for cmd, _ in calls)
+
+
+@pytest.mark.asyncio
+async def test_clone_repo_does_not_reset_when_dirty(monkeypatch, tmp_path):
+    """A non-mutating call should not wipe a dirty workspace (fetch only)."""
+
+    monkeypatch.setattr(main.server, "WRITE_ALLOWED", True)
+    workspace_root = tmp_path / "workspaces"
+    monkeypatch.setattr(main, "WORKSPACE_BASE_DIR", str(workspace_root))
+
+    repo_dir = workspace_root / "owner__repo" / "main"
+    repo_dir.mkdir(parents=True)
+    (repo_dir / ".git").mkdir()
+
+    calls: list[tuple[str, str | None]] = []
+
+    async def fake_run_shell(cmd, cwd=None, timeout_seconds=300, env=None):
+        calls.append((cmd, cwd))
+        if cmd == "git status --porcelain":
+            return {
+                "exit_code": 0,
+                "timed_out": False,
+                "stdout": " M sample.txt\n",
+                "stderr": "",
+                "stdout_truncated": False,
+                "stderr_truncated": False,
+            }
+        return {
+            "exit_code": 0,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": "",
+            "stdout_truncated": False,
+            "stderr_truncated": False,
+        }
+
+    monkeypatch.setattr(main, "_run_shell", fake_run_shell)
+
+    repo_path = await main._clone_repo("owner/repo", "main", preserve_changes=False)
+    assert repo_path == str(repo_dir)
+    assert ("git status --porcelain", str(repo_dir)) in calls
+    assert ("git fetch origin --prune", str(repo_dir)) in calls
+    assert not any(cmd.startswith("git reset") for cmd, _ in calls)
+    assert not any(cmd.startswith("git clean") for cmd, _ in calls)
 
 
 @pytest.mark.asyncio

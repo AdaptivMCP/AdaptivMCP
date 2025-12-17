@@ -7,14 +7,16 @@ from github_mcp.exceptions import UsageError
 
 
 @pytest.mark.asyncio
-async def test_list_render_logs_resolves_owner_from_service(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_list_render_logs_resolves_owner_from_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[tuple[str, Dict[str, Any]]] = []
 
     async def fake_render_get(path: str, *, params: Dict[str, Any]) -> Any:
         calls.append((path, dict(params)))
-        if path.startswith('/services/'):
+        if path.startswith("/services/"):
             return {"ownerId": "own-abc"}
-        if path == '/logs':
+        if path == "/logs":
             return [{"msg": "ok"}]
         raise AssertionError(f"unexpected path {path}")
 
@@ -42,7 +44,7 @@ async def test_list_render_logs_uses_env_ownerid(monkeypatch: pytest.MonkeyPatch
 
     async def fake_render_get(path: str, *, params: Dict[str, Any]) -> Any:
         calls.append((path, dict(params)))
-        if path == '/logs':
+        if path == "/logs":
             return []
         raise AssertionError("service lookup should not happen")
 

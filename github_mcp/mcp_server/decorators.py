@@ -32,7 +32,6 @@ from github_mcp.mcp_server.schemas import (
 )
 from github_mcp.metrics import _record_tool_call
 
-
 # OpenAI connector UI strings.
 # These appear in ChatGPT's Apps & Connectors UI while a tool is running.
 # Keep them short and specific.
@@ -40,7 +39,9 @@ OPENAI_INVOKING_MESSAGE = "Adaptiv Controller: running tool…"
 OPENAI_INVOKED_MESSAGE = "Adaptiv Controller: tool finished."
 
 
-def _bind_call_args(signature: Optional[inspect.Signature], args: tuple[Any, ...], kwargs: dict[str, Any]) -> Dict[str, Any]:
+def _bind_call_args(
+    signature: Optional[inspect.Signature], args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> Dict[str, Any]:
     if signature is None:
         return dict(kwargs)
     try:
@@ -200,8 +201,9 @@ def mcp_tool(
         tool_title = _title_from_tool_name(tool_name)
 
         llm_level = "advanced" if write_action else "basic"
-        normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
-
+        normalized_description = description or _normalize_tool_description(
+            func, signature, llm_level=llm_level
+        )
 
         tag_set = set(tags or [])
         tag_set.add("write" if write_action else "read")
@@ -280,7 +282,9 @@ def mcp_tool(
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
 
-                    _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=True)
+                    _record_tool_call(
+                        tool_name, write_action=write_action, duration_ms=duration_ms, errored=True
+                    )
                     _record_recent_tool_event(
                         {
                             "ts": time.time(),
@@ -355,7 +359,9 @@ def mcp_tool(
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=False)
+                _record_tool_call(
+                    tool_name, write_action=write_action, duration_ms=duration_ms, errored=False
+                )
                 result_type = type(result).__name__
 
                 _record_recent_tool_event(
@@ -500,7 +506,9 @@ def mcp_tool(
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
 
-                    _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=True)
+                    _record_tool_call(
+                        tool_name, write_action=write_action, duration_ms=duration_ms, errored=True
+                    )
 
                     _record_recent_tool_event(
                         {
@@ -576,7 +584,9 @@ def mcp_tool(
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=False)
+                _record_tool_call(
+                    tool_name, write_action=write_action, duration_ms=duration_ms, errored=False
+                )
                 result_type = type(result).__name__
 
                 _record_recent_tool_event(

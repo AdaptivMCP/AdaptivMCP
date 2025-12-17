@@ -2,9 +2,8 @@ from typing import Any, Dict
 
 import pytest
 
-import main
-
 import github_mcp.config as config
+import main
 
 
 @pytest.fixture(autouse=True)

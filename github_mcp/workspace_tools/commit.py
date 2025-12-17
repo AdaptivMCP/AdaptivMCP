@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Optional
 
 import github_mcp.config as config
 from github_mcp.diff_utils import colorize_unified_diff, diff_stats, truncate_diff
-
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
@@ -14,7 +13,9 @@ from github_mcp.server import (
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 def _slim_shell_result(result: Any, *, max_chars: int = 2000) -> Dict[str, Any]:
     """Return a small, connector-safe view of a run_shell result."""
@@ -70,7 +71,9 @@ async def commit_workspace(
         diff_before_commit = await deps["run_shell"](
             "git diff --cached --no-color", cwd=repo_dir, timeout_seconds=120
         )
-        diff_text = (diff_before_commit.get("stdout", "") if isinstance(diff_before_commit, dict) else "")
+        diff_text = (
+            diff_before_commit.get("stdout", "") if isinstance(diff_before_commit, dict) else ""
+        )
         status_lines = status_result.get("stdout", "").strip().splitlines()
         if not status_lines:
             raise GitHubAPIError("No changes to commit in workspace")
@@ -91,9 +94,9 @@ async def commit_workspace(
 
         # Keep tool responses small to avoid connector transport issues.
         rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
-        head_sha = (rev.get("stdout", "").strip() if isinstance(rev, dict) else "")
+        head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
         oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
-        head_summary = (oneline.get("stdout", "").strip() if isinstance(oneline, dict) else "")
+        head_summary = oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
 
         try:
             stats = diff_stats(diff_text)
@@ -102,7 +105,11 @@ async def commit_workspace(
                 len(status_lines),
                 stats.added,
                 stats.removed,
-                extra={"repo": full_name, "ref": effective_ref, "event": "workspace_commit_diff_summary"},
+                extra={
+                    "repo": full_name,
+                    "ref": effective_ref,
+                    "event": "workspace_commit_diff_summary",
+                },
             )
 
             if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and diff_text.strip():
@@ -115,7 +122,11 @@ async def commit_workspace(
                 config.TOOLS_LOGGER.detailed(
                     "Workspace commit diff\n%s",
                     colored,
-                    extra={"repo": full_name, "ref": effective_ref, "event": "workspace_commit_diff"},
+                    extra={
+                        "repo": full_name,
+                        "ref": effective_ref,
+                        "event": "workspace_commit_diff",
+                    },
                 )
         except Exception:
             pass
@@ -132,6 +143,8 @@ async def commit_workspace(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace")
+
+
 @mcp_tool(write_action=True)
 async def commit_workspace_files(
     full_name: Optional[str],
@@ -173,7 +186,11 @@ async def commit_workspace_files(
         diff_before_commit_files = await deps["run_shell"](
             "git diff --cached --no-color", cwd=repo_dir, timeout_seconds=120
         )
-        diff_text_files = (diff_before_commit_files.get("stdout", "") if isinstance(diff_before_commit_files, dict) else "")
+        diff_text_files = (
+            diff_before_commit_files.get("stdout", "")
+            if isinstance(diff_before_commit_files, dict)
+            else ""
+        )
         staged_files = staged_files_result.get("stdout", "").strip().splitlines()
         if not staged_files:
             raise GitHubAPIError("No staged changes to commit for provided files")
@@ -192,12 +209,11 @@ async def commit_workspace_files(
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
-
         # Keep tool responses small to avoid connector transport issues.
         rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
-        head_sha = (rev.get("stdout", "").strip() if isinstance(rev, dict) else "")
+        head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
         oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
-        head_summary = (oneline.get("stdout", "").strip() if isinstance(oneline, dict) else "")
+        head_summary = oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
 
         try:
             stats = diff_stats(diff_text_files)
@@ -206,7 +222,11 @@ async def commit_workspace_files(
                 len(staged_files),
                 stats.added,
                 stats.removed,
-                extra={"repo": full_name, "ref": effective_ref, "event": "workspace_commit_diff_summary"},
+                extra={
+                    "repo": full_name,
+                    "ref": effective_ref,
+                    "event": "workspace_commit_diff_summary",
+                },
             )
 
             if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and diff_text_files.strip():
@@ -219,11 +239,14 @@ async def commit_workspace_files(
                 config.TOOLS_LOGGER.detailed(
                     "Workspace commit diff\n%s",
                     colored,
-                    extra={"repo": full_name, "ref": effective_ref, "event": "workspace_commit_diff"},
+                    extra={
+                        "repo": full_name,
+                        "ref": effective_ref,
+                        "event": "workspace_commit_diff",
+                    },
                 )
         except Exception:
             pass
-
 
         return {
             "repo_dir": repo_dir,
@@ -237,6 +260,8 @@ async def commit_workspace_files(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace_files")
+
+
 @mcp_tool(write_action=False)
 async def get_workspace_changes_summary(
     full_name: str,
@@ -323,6 +348,8 @@ async def get_workspace_changes_summary(
         "summary": summary,
         "changes": changes,
     }
+
+
 @mcp_tool(write_action=False)
 async def build_pr_summary(
     full_name: str,
