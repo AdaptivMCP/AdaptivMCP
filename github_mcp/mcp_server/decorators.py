@@ -150,6 +150,34 @@ def _tool_result_summary(tool_name: str, result: Any) -> str:
 
     name = (tool_name or "").lower()
 
+    # Many workspace tools return wrapper shapes like:
+    #   {"repo_dir": ..., "result": {"exit_code":..., "stdout":..., ...}}
+    # Unwrap nested shell results so summaries are meaningful.
+    if isinstance(result, dict):
+        inner = result.get("result")
+        if isinstance(inner, dict) and (
+            "exit_code" in inner
+            or "stdout" in inner
+            or "stderr" in inner
+            or ("error" in inner and inner.get("error"))
+        ):
+            return _tool_result_summary(tool_name, inner)
+
+        # Common read-tool shapes.
+        if isinstance(result.get("lines"), list):
+            start_line = result.get("start_line")
+            end_line = result.get("end_line")
+            n = len(result.get("lines") or [])
+            if isinstance(start_line, int) and isinstance(end_line, int):
+                return f"read lines {start_line}-{end_line} ({n} lines)"
+            return f"read {n} lines"
+
+        if isinstance(result.get("results"), list):
+            return f"found {len(result.get('results') or [])} matches"
+
+        if isinstance(result.get("logs"), list):
+            return f"fetched {len(result.get('logs') or [])} log lines"
+
     # Common structured error shape.
     if isinstance(result, dict) and "error" in result and result.get("error"):
         err = str(result.get("error"))
