@@ -1,10 +1,12 @@
 # Split from github_mcp.tools_workspace (generated).
 import shlex
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import github_mcp.config as config
-from github_mcp.diff_utils import colorize_unified_diff, diff_stats, truncate_diff
+from github_mcp.diff_utils import colorize_unified_diff, truncate_diff
 from github_mcp.exceptions import GitHubAPIError
+from github_mcp.session_logs import append_session_log_entry, format_bullets
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
@@ -33,6 +35,222 @@ def _slim_shell_result(result: Any, *, max_chars: int = 2000) -> Dict[str, Any]:
     }
 
 
+# --- Session log automation ---
+
+
+def _format_status_summary(lines: List[str], *, max_items: int = 30) -> List[str]:
+    """Convert porcelain status lines or raw paths into user-facing bullets."""
+
+    out: List[str] = []
+    for raw in lines:
+        line = (raw or "").rstrip("\n")
+        if not line:
+            continue
+
+        label = "Updated"
+        path = line.strip()
+
+        # Porcelain: two status chars + space + path
+        if len(line) >= 4 and line[2] == " ":
+            code = line[:2]
+            path = line[3:].strip()
+            if code.strip() == "??":
+                label = "Added"
+            elif "A" in code:
+                label = "Added"
+            elif "D" in code:
+                label = "Deleted"
+            elif "R" in code:
+                label = "Renamed"
+            elif "M" in code:
+                label = "Updated"
+
+        if not path or path.startswith("session_logs/"):
+            continue
+
+        out.append(f"{label}: {path}")
+        if len(out) >= max_items:
+            break
+
+    return out
+
+
+async def _try_get_ci_run_summary(
+    full_name: str, branch: str, head_sha: str
+) -> Optional[Dict[str, str]]:
+    """Best-effort: find the most recent workflow run for a specific SHA."""
+
+    try:
+        from github_mcp.main_tools.workflows import list_workflow_runs
+
+        payload = await list_workflow_runs(full_name=full_name, branch=branch, per_page=10, page=1)
+        runs_json = payload.get("json") if isinstance(payload, dict) else None
+        runs = runs_json.get("workflow_runs") if isinstance(runs_json, dict) else None
+        if not isinstance(runs, list):
+            return None
+
+        for run in runs:
+            if not isinstance(run, dict):
+                continue
+            if (run.get("head_sha") or "").strip() == head_sha:
+                return {
+                    "status": str(run.get("status") or ""),
+                    "conclusion": str(run.get("conclusion") or ""),
+                    "html_url": str(run.get("html_url") or ""),
+                }
+    except Exception:
+        return None
+
+    return None
+
+
+async def _try_get_render_log_excerpt(head_sha: str, *, max_lines: int = 6) -> Optional[List[str]]:
+    """Best-effort: excerpt recent Render logs (requires RENDER_API_KEY)."""
+
+    try:
+        from github_mcp.main_tools.render_observability import list_render_logs
+
+        payload = await list_render_logs(limit=80, direction="backward")
+        if not isinstance(payload, list):
+            return None
+
+        sha7 = head_sha[:7]
+        lines: List[str] = []
+        for item in reversed(payload):
+            if not isinstance(item, dict):
+                continue
+            msg = str(item.get("message") or item.get("text") or item.get("log") or "").strip()
+            if not msg:
+                continue
+            low = msg.lower()
+            if sha7 and sha7 in msg:
+                lines.append(msg)
+            elif any(
+                k in low for k in ("deploy", "build", "starting", "pulling", "running", "live")
+            ):
+                lines.append(msg)
+            if len(lines) >= max_lines:
+                break
+
+        return lines or None
+    except Exception:
+        return None
+
+
+async def _update_session_log_after_push(
+    *,
+    deps: Dict[str, Any],
+    repo_dir: str,
+    full_name: str,
+    branch: str,
+    head_sha: str,
+    head_summary: str,
+    changed_lines: List[str],
+    commit_message: str,
+    session_summary: Optional[str],
+    verification: Optional[str],
+    next_steps: Optional[str],
+) -> Dict[str, Any]:
+    """Append a user-facing entry to the daily session log, then commit+push it."""
+
+    if commit_message.strip().lower().startswith("chore(session_logs):"):
+        return {"skipped": True, "reason": "session log commit"}
+
+    changed = _format_status_summary(changed_lines)
+    summary_text = (session_summary or "").strip() or commit_message.strip()
+
+    ci_run = await _try_get_ci_run_summary(full_name=full_name, branch=branch, head_sha=head_sha)
+    render_excerpt = await _try_get_render_log_excerpt(head_sha)
+
+    ts_local = datetime.now(timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+
+        ts_local = ts_local.astimezone(ZoneInfo("America/Toronto"))
+    except Exception:
+        pass
+
+    md: List[str] = [
+        f"## {ts_local.strftime('%Y-%m-%d %H:%M:%S %Z')} — Commit pushed",
+        f"**Repo:** `{full_name}`  ",
+        f"**Branch:** `{branch}`  ",
+        f"**Commit:** `{head_sha[:7]}` — {head_summary or commit_message.strip()}",
+        "",
+        "### Summary",
+        summary_text,
+        "",
+        "### Changed files",
+        format_bullets(changed) if changed else "- (No file list captured)",
+        "",
+        "### Verification",
+    ]
+
+    md.append(f"- {(verification or 'Not recorded').strip()}")
+
+    if ci_run and ci_run.get("html_url"):
+        status = ci_run.get("status") or "unknown"
+        conclusion = ci_run.get("conclusion")
+        url = ci_run.get("html_url")
+        if conclusion:
+            md.append(f"- CI: {status} / {conclusion} — {url}")
+        else:
+            md.append(f"- CI: {status} — {url}")
+    else:
+        md.append("- CI: pending / not available")
+
+    if render_excerpt:
+        md.append("- Deploy: recent Render log excerpt:")
+        md.append(format_bullets(render_excerpt, max_items=6) or "")
+    else:
+        md.append("- Deploy: pending / not available")
+
+    md.extend(["", "### Next steps"])
+    md.append(
+        (
+            next_steps
+            or "After CI is green, wait for the Render redeploy to complete, then verify behavior in the running service."
+        ).strip()
+    )
+
+    entry_md = "\n".join(md).rstrip() + "\n"
+
+    ctx = append_session_log_entry(repo_dir, entry_md)
+
+    add_log = await deps["run_shell"](
+        f"git add -- {ctx.rel_path}", cwd=repo_dir, timeout_seconds=60
+    )
+    if add_log["exit_code"] != 0:
+        return {"error": "git add session log failed", "details": _slim_shell_result(add_log)}
+
+    commit_msg = f"chore(session_logs): update for {head_sha[:7]}"
+    commit_cmd = f"git commit -m {shlex.quote(commit_msg)}"
+    commit_res = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=120)
+    if commit_res["exit_code"] != 0:
+        combined = (commit_res.get("stderr") or commit_res.get("stdout") or "").lower()
+        if "nothing to commit" in combined:
+            return {
+                "session_log_path": ctx.rel_path,
+                "skipped": True,
+                "reason": "no session log changes",
+            }
+        return {"error": "git commit session log failed", "details": _slim_shell_result(commit_res)}
+
+    push_cmd = f"git push origin HEAD:{branch}"
+    push_res = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=180)
+    if push_res["exit_code"] != 0:
+        return {"error": "git push session log failed", "details": _slim_shell_result(push_res)}
+
+    rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+    log_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
+
+    return {
+        "session_log_path": ctx.rel_path,
+        "session_log_commit_sha": log_sha,
+        "session_log_commit": _slim_shell_result(commit_res),
+        "session_log_push": _slim_shell_result(push_res),
+    }
+
+
 @mcp_tool(write_action=True)
 async def commit_workspace(
     full_name: Optional[str] = None,
@@ -40,6 +258,10 @@ async def commit_workspace(
     message: str = "Commit workspace changes",
     add_all: bool = True,
     push: bool = True,
+    update_session_log: Optional[bool] = None,
+    session_summary: Optional[str] = None,
+    verification: Optional[str] = None,
+    next_steps: Optional[str] = None,
     *,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
@@ -98,13 +320,31 @@ async def commit_workspace(
         oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
         head_summary = oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
 
+        session_log = None
+        if update_session_log is None:
+            update_session_log = bool(push)
+        if update_session_log and push:
+            try:
+                session_log = await _update_session_log_after_push(
+                    deps=deps,
+                    repo_dir=repo_dir,
+                    full_name=full_name,
+                    branch=effective_ref,
+                    head_sha=head_sha,
+                    head_summary=head_summary,
+                    changed_lines=status_lines,
+                    commit_message=message,
+                    session_summary=session_summary,
+                    verification=verification,
+                    next_steps=next_steps,
+                )
+            except Exception as _exc:
+                session_log = {"error": str(_exc)}
+
         try:
-            stats = diff_stats(diff_text)
             config.TOOLS_LOGGER.chat(
-                "Committed workspace changes (%s files) (+%s -%s)",
+                "Committed workspace changes (%s files).",
                 len(status_lines),
-                stats.added,
-                stats.removed,
                 extra={
                     "repo": full_name,
                     "ref": effective_ref,
@@ -140,6 +380,7 @@ async def commit_workspace(
             "commit_summary": head_summary,
             "commit": _slim_shell_result(commit_result),
             "push": _slim_shell_result(push_result) if push_result is not None else None,
+            "session_log": session_log,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace")
@@ -152,6 +393,10 @@ async def commit_workspace_files(
     ref: str = "main",
     message: str = "Commit selected workspace changes",
     push: bool = True,
+    update_session_log: Optional[bool] = None,
+    session_summary: Optional[str] = None,
+    verification: Optional[str] = None,
+    next_steps: Optional[str] = None,
     *,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
@@ -215,13 +460,32 @@ async def commit_workspace_files(
         oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
         head_summary = oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
 
+        session_log = None
+        if update_session_log is None:
+            update_session_log = bool(push)
+        if update_session_log and push:
+            try:
+                porcelain = [f" M {p}" for p in staged_files]
+                session_log = await _update_session_log_after_push(
+                    deps=deps,
+                    repo_dir=repo_dir,
+                    full_name=full_name,
+                    branch=effective_ref,
+                    head_sha=head_sha,
+                    head_summary=head_summary,
+                    changed_lines=porcelain,
+                    commit_message=message,
+                    session_summary=session_summary,
+                    verification=verification,
+                    next_steps=next_steps,
+                )
+            except Exception as _exc:
+                session_log = {"error": str(_exc)}
+
         try:
-            stats = diff_stats(diff_text_files)
             config.TOOLS_LOGGER.chat(
-                "Committed selected workspace changes (%s files) (+%s -%s)",
+                "Committed selected workspace changes (%s files).",
                 len(staged_files),
-                stats.added,
-                stats.removed,
                 extra={
                     "repo": full_name,
                     "ref": effective_ref,
@@ -257,6 +521,7 @@ async def commit_workspace_files(
             "commit_summary": head_summary,
             "commit": _slim_shell_result(commit_result),
             "push": _slim_shell_result(push_result) if push_result is not None else None,
+            "session_log": session_log,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace_files")

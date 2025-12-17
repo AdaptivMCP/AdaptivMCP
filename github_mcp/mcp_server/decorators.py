@@ -199,19 +199,19 @@ def _tool_user_message(
     loc = f" on {location}" if location and location != "-" else ""
 
     if phase == "start":
-        msg = f"Starting {title} ({scope}){loc}. {purpose}"
+        msg = f"I'm going to {title} ({scope}){loc}. {purpose}"
         if write_action:
             msg += " This will modify repo state."
         return msg
 
     if phase == "ok":
         dur = f" in {duration_ms}ms" if duration_ms is not None else ""
-        return f"Finished {title}{loc}{dur}. Next: {next_step}"
+        return f"Done: {title}{loc}{dur}. Next: {next_step}"
 
     if phase == "error":
         dur = f" after {duration_ms}ms" if duration_ms is not None else ""
         suffix = f" Error: {error}." if error else ""
-        return f"Failed {title}{loc}{dur}.{suffix} Next: {next_step}"
+        return f"I hit an error while running {title}{loc}{dur}.{suffix} Next: {next_step}"
 
     return f"{title} ({scope}){loc}."
 
