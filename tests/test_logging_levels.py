@@ -20,3 +20,10 @@ def test_logger_helpers_emit_expected_levels(caplog) -> None:
     levelnames = [rec.levelname for rec in caplog.records]
     assert "DETAILED" in levelnames
     assert "CHAT" in levelnames
+
+
+def test_strip_wrapping_quotes() -> None:
+    assert config._strip_wrapping_quotes('"abc"') == "abc"
+    assert config._strip_wrapping_quotes("'abc'") == "abc"
+    assert config._strip_wrapping_quotes("abc") == "abc"
+    assert config._strip_wrapping_quotes('  "abc"  ') == "abc"

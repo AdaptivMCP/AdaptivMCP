@@ -153,18 +153,28 @@ GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES = int(
     os.environ.get("GET_FILE_WITH_LINE_NUMBERS_HARD_MAX_LINES", "20000")
 )
 
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-LOG_STYLE = os.environ.get("LOG_STYLE", "plain").lower()
+
+def _strip_wrapping_quotes(value: str) -> str:
+    value = (value or "").strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        return value[1:-1]
+    return value
+
+
+LOG_LEVEL = _strip_wrapping_quotes(os.environ.get("LOG_LEVEL", "INFO")).upper()
+LOG_STYLE = _strip_wrapping_quotes(os.environ.get("LOG_STYLE", "color")).lower()
 
 # Default to a compact, scannable format.
-LOG_FORMAT = os.environ.get(
-    "LOG_FORMAT",
-    "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+LOG_FORMAT = _strip_wrapping_quotes(
+    os.environ.get(
+        "LOG_FORMAT",
+        "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
 )
 
 # Use a non-colored formatter for in-memory logs (these often show up in JSON
 # tool results and should stay plain text).
-LOG_FORMAT_PLAIN = os.environ.get("LOG_FORMAT_PLAIN", LOG_FORMAT)
+LOG_FORMAT_PLAIN = _strip_wrapping_quotes(os.environ.get("LOG_FORMAT_PLAIN", LOG_FORMAT))
 
 
 class _ColorFormatter(logging.Formatter):
