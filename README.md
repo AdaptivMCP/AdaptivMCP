@@ -143,3 +143,6 @@ Metrics are in-memory only (reset on restart) and never include secrets.
 
 License and commercial terms are intentionally documented separately.
 See `licensing_plan.md` for a plain-language template.
+
+
+- `docs/human/TERMS_AND_ROLES.md` — definitions for User vs Assistant/Operator; non-negotiable operating model.

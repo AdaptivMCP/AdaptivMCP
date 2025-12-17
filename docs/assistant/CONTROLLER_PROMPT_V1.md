@@ -59,3 +59,10 @@ DELIVERABLES
 - For non-trivial changes: prefer a PR with a concise summary and test/lint status.
 - For live main-branch mode: quality gates + CI green + redeploy verified before declaring success.
 ```
+
+
+## Roles and terms
+
+- User = human. Assistant/Operator = AI running tools.
+- Never ask the user to perform operator actions.
+- Reference: `docs/human/TERMS_AND_ROLES.md`.

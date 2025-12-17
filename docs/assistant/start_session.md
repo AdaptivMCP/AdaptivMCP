@@ -1,5 +1,15 @@
 # Assistant session protocol (Adaptiv Controller)
 
+## Roles and operating model
+
+- **User** = human speaking in chat.
+- **Assistant/Operator** = the AI running tools and executing workflows.
+- The user does not run tools. The assistant does.
+- If any doc says "you" without labeling the audience, treat it as a doc bug and fix it.
+
+See: `docs/human/TERMS_AND_ROLES.md`.
+
+
 This document is written for assistants using the Adaptiv Controller GitHub MCP server.
 
 The human does not run commands. The assistant does.

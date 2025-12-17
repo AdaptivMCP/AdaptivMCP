@@ -87,3 +87,6 @@ Recommended baseline prompt/docs:
 - Architecture and safety model: `docs/human/ARCHITECTURE_AND_SAFETY.md`
 - Operational guidance (redeploys, CI, logs): `docs/human/OPERATIONS.md`
 - Tool reference + naming: `Detailed_Tools.md`
+
+
+- Review roles and expectations: `docs/human/TERMS_AND_ROLES.md`.

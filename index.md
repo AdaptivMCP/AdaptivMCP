@@ -3,6 +3,8 @@
 This repo is the engine behind **Joey’s GitHub**: a self-hosted MCP server that exposes GitHub + a persistent workspace as tools.
 
 ## Docs
+- **Roles and terms:** `docs/human/TERMS_AND_ROLES.md`
+
 
 - Quick start: `GETTING_STARTED.md`
 - Product overview + contract: `README.md`
