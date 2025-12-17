@@ -34,7 +34,7 @@ Nothing in the MCP server enforces these preferences automatically. Instead, the
 ## Branch and PR habits
 
 - Branch names: use feat, fix, or chore prefixes with short, descriptive slugs.
-- Never push directly to main; always work on a feature branch and open a PR.
+- Default: do not push directly to main; work on a feature branch and open a PR. Exception: if explicitly instructed to operate in live main-branch mode for a controller repo, follow that instruction with stricter verification (tests/lint/CI/redeploy).
 
 ## Testing and tooling
 

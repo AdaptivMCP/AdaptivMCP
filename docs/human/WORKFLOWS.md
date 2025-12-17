@@ -1,174 +1,113 @@
-# Workflows
+# Operator workflows
 
-This document describes the recommended workflows for using this MCP GitHub server.
+This document is for humans operating the server and for assistants acting as engineers. It describes the expected workflows and the “quality gates” that keep deployments safe.
 
----
+## Core principles
 
-## 1. The default loop
+- The assistant runs the tools; humans do not execute MCP actions.
+- Prefer branch-first work + PR review.
+- Treat CI as the source of truth. On Render, deploys only occur after CI is green.
+- Render logs are user-facing: they should read like an assistant explaining what it’s doing.
 
-1. Create or ensure a branch.
-2. Make changes (code/tests/docs) behind that branch.
-3. Run lint/tests.
-4. Open a PR.
-5. Humans review + merge + delete the branch.
+## Workflow A: Standard branch-first development
 
----
+Use this for feature work on customer repos or any repo that is not the live controller engine.
 
-## 2. Full-file replacement edits (preferred)
+1. **Pre-flight**
+   - `get_server_config`
+   - `validate_environment`
+   - `list_all_actions(include_parameters=true)`
 
-This repo intentionally prefers full-file replacement edits over diff/patch editing tools.
+2. **Create or ensure a feature branch**
+   - `ensure_branch` / `create_branch`
 
-Reasoning:
+3. **Create/refresh workspace**
+   - `ensure_workspace_clone(full_name=..., ref=<branch>, reset=true)`
 
-- Git commits already provide diffs in GitHub.
-- Patch application in JSON strings is brittle and prone to escaping issues.
-- Full-file replacement is simpler, faster, and easier to validate.
+4. **Discovery and implementation**
+   - Inspect with `get_file_slice` / `get_file_with_line_numbers`
+   - Edit with `terminal_command` in the workspace
 
-Preferred tool paths:
+5. **Quality gates**
+   - `run_lint_suite`
+   - `run_tests`
+   - `run_quality_suite` (recommended prior to PR)
 
-- Workspace path (recommended for most work):
-  - `ensure_workspace_clone` → edit files locally → `commit_workspace` / `commit_workspace_files`
-- Contents API path (when you intentionally own the whole file content):
-  - `get_file_contents` (or `get_file_slice`) → generate updated full text → `apply_text_update_and_commit`
+6. **Commit and push**
+   - `commit_workspace` / `commit_workspace_files`
 
-Avoid:
+7. **Open PR**
+   - `build_pr_summary` → `open_pr_for_existing_branch`
 
-- Diff/patch editing tools for modifying files.
-- Embedding large shell/Python patch scripts inside `terminal_command` arguments.
+## Workflow B: Live main-branch mode (controller repo)
 
----
+This is a special workflow used when the repo being edited is the controller engine itself (this repository) and you explicitly decide to ship directly to `main`.
 
-## 3. PR creation and review
+**Rule:** treat every push as a production deploy.
 
-Before opening a PR:
+1. **Pre-flight**
+   - `validate_environment` (confirm revision metadata)
+   - `list_render_logs` (confirm the service is running and logs are readable)
 
-1. Run tests and any relevant CLI checks via `run_quality_suite` (default quality gate), `run_lint_suite` (lint/type checks), or `terminal_command` / `run_tests`.
-2. Summarize what changed and why.
-3. Include in the PR body:
-   - Summary of changes.
-   - Motivation and context.
-   - Tests run and results.
-   - Known limitations or follow ups.
+2. **Work in a clean workspace**
+   - `ensure_workspace_clone(full_name=<controller repo>, ref=main, reset=true)`
 
-Humans typically review, merge, and delete branches.
+3. **Implement changes**
+   - Keep changes small and scoped.
+   - Prefer workspace edits over large patch payloads.
 
----
+4. **Run quality gates locally**
+   - `run_lint_suite`
+   - `run_quality_suite`
 
-## 4. Workspace usage
+5. **Commit + push to main**
+   - `commit_workspace` / `commit_workspace_files`
 
-Assistants SHOULD avoid using `terminal_command` to embed large shell/Python scripts to modify files. This is brittle because those scripts must be embedded inside JSON strings and are easy to mis-escape.
+6. **Wait for CI, then redeploy**
+   - Confirm GitHub Actions is green (workflows complete).
+   - Render redeploy starts after CI. Full start after redeploy typically takes several minutes.
 
-Use `terminal_command`, `run_quality_suite`, and `run_lint_suite` primarily for:
+7. **Verify the running service**
+   - Poll `list_render_logs(limit=100, direction='backward')` roughly every 60 seconds.
+   - You should see:
+     - the new revision booting
+     - the service reaching a steady state
+     - tool calls producing clean, user-facing logs
 
-- Tests (`pytest`, linters, type checkers) via `run_quality_suite` for the default suite, or `terminal_command` for custom invocations.
-- Lint/static analysis via `run_lint_suite` when you want a consistent entry point.
-- Small shell commands (`ls`, `grep`, diagnostics).
+If CI is red, the service will not auto-redeploy and the server will remain on the previous healthy revision.
 
----
+## Session logs workflow
 
-## 5. Repository specific workflows
+Session logs are repo-local Markdown files under `session_logs/`.
 
-This section describes common workflows for this controller repo itself, `Proofgate-Revocations/chatgpt-mcp-github`.
+Expectations:
 
-### 5.1 Updating docs
+- Every meaningful commit should leave a readable audit trail in session logs.
+- Entries should answer:
+  - What changed?
+  - Why did it change?
+  - How was it tested?
+  - What should be verified after deploy?
 
-1. Create a docs branch from `main` (for example `docs/update-handoff-and-workflows`).
-2. Use `terminal_command` to inspect and edit `docs/**`.
-3. Keep changes focused and incremental.
-4. Run any documentation tooling or linters if present.
-5. Use `commit_workspace` to commit changes to the docs branch.
+In this repo, workspace commit helpers automatically append a structured session entry after successful commits.
 
-### 5.2 Updating the controller contract
+## Render operations (quick reference)
 
-1. Create a dedicated branch for contract changes.
-2. Update the contract source and related docs.
-3. Ensure that version numbers and compatibility notes are updated.
-4. Run tests and schema validation as appropriate.
-5. Open a PR and flag it as a contract change.
+### Read logs
 
-### 5.3 Adjusting server configuration or defaults
+- Use `list_render_logs` (requires `RENDER_API_KEY`).
+- Render’s `/logs` endpoint requires an `ownerId`.
+  - Set `RENDER_OWNER_ID` in env, or pass `ownerId=`.
 
-1. Create a branch for configuration changes.
-2. Update configuration files, `.env.example`, and relevant docs.
-3. If Docker or deployment manifests are updated, keep them in sync with documentation like `docs/human/SELF_HOSTED_SETUP.md` and `docs/human/SELF_HOSTING_DOCKER.md`.
-4. Run a local or staging deployment if possible and verify `healthz` and basic workflows.
-5. Open a PR with a clear explanation of configuration changes.
+### Find Render owner/workspace id
 
----
+If you only have a Render service id (`srv-...`):
 
-## 6. Multi repository workflows
+- Use `render_cli_command` and fetch service details in JSON, then read `ownerId`.
+  - Example args: `['services', 'get', '<SERVICE_ID>']`
 
-When using this controller against multiple repositories:
+### Confirm a redeploy
 
-- Use repository scoped tools and be explicit about `full_name` when necessary.
-- Keep branches and issues separate per repo.
-- Summarize cross repo changes in PRs and issues where appropriate.
+- Watch for a new boot sequence in `list_render_logs`.
+- Confirm `/healthz` reports expected controller defaults.
 
----
-
-### 6.1 Creating a new repository
-
-Use `create_repository` when an assistant needs to create a brand new repo (personal or org).
-
-Recommended flow
-
-1. Bootstrap:
-   - `get_server_config` and `validate_environment`
-   - `list_write_tools`
-   - If `write_allowed` is false and you need this tool, call `authorize_write_actions`.
-
-2. Create the repository:
-
-   Example (org repo, initialize with README + topics):
-
-   - Tool: `create_repository`
-   - Args:
-     - `name`: `my-new-repo`
-     - `owner`: `my-org`
-     - `owner_type`: `org`
-     - `description`: `Short description`
-     - `visibility`: `private`
-     - `auto_init`: `true`
-     - `topics`: `["mcp", "automation"]`
-
-3. Advanced settings:
-   - For any GitHub REST fields not exposed as first-class params, pass them via:
-     - `create_payload_overrides` (sent to the create endpoint)
-     - `update_payload_overrides` (sent to `PATCH /repos/{owner}/{repo}`)
-
-4. Optional:
-   - Set `clone_to_workspace=true` to clone the repo into the server workspace.
-
-Notes
-
-- Template repos are supported via `template_full_name` (uses `POST /repos/{template}/generate`).
-- The tool returns a plain-language `steps` log suitable for UI surfaces.
-
----
-
-## 7. Troubleshooting and stuck workflows
-
-When a workflow stalls or fails repeatedly:
-
-1. Stop repeating the same failing tool call.
-2. Summarize the errors and outputs you have seen.
-3. Re read relevant docs and the controller contract.
-4. Use `validate_tool_args` and `validate_environment` to rule out schema and configuration issues.
-   - For PR problems specifically, check the `controller_pr_endpoint` check in `validate_environment`.
-5. Check branch and issue state with `get_branch_summary` and `open_issue_context`.
-6. When PR tooling itself seems broken (for example repeated timeouts from `create_pull_request`), run `pr_smoke_test` to exercise the full branch + commit + PR path in the live environment.
-7. Propose smaller, more observable next steps.
-
-### 7.x Self-healing a mangled workspace branch
-
-If a workspace clone becomes inconsistent mid-flow (for example: wrong branch checked out, merge/rebase in progress, conflicts stuck, repeated git errors), use:
-
-- `workspace_self_heal_branch(full_name=..., branch=...)`
-
-This tool returns a plain-language `steps` log describing exactly what happened (diagnosis, deletion/reset, new branch name, fresh clone path) and a small repo `snapshot` so the assistant can quickly rebuild context on the new branch.
-
-For UI-friendly observability of long workflows, combine it with:
-
-- `get_recent_tool_events(limit=20, include_success=true)` which returns `narrative` strings derived from `user_message`.
-
-Remember that this file is the engine side playbook. Personal controllers can adjust tone, verbosity, and other stylistic choices, but they should not contradict the safety and workflow rules documented here.

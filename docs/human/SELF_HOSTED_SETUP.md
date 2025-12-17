@@ -283,7 +283,7 @@ If you get stuck, open a GitHub issue in your controller repo, describe your env
 For installation, upgrades, and rollbacks specifically:
 
 - Use this document (`SELF_HOSTED_SETUP.md`) for initial deployment and high-level configuration.
-- Use `docs/UPGRADE_NOTES.md` for guidance on moving between versions (staging vs production, tagging, and rollback strategies).
+- Use `docs/human/UPGRADE_NOTES.md` for guidance on moving between versions (staging vs production, tagging, and rollback strategies).
 
 In short:
 
@@ -293,7 +293,7 @@ In short:
 
 Once your self-hosted MCP server is running and wired into ChatGPT, you can:
 
-- Iterate on your controller prompt and workflows (see `docs/WORKFLOWS.md`).
+- Iterate on your controller prompt and workflows (see `docs/human/WORKFLOWS.md`).
 - Extend the server with additional tools via `extra_tools.py`.
 - Tighten or relax policies by adjusting your controller instructions and when you enable `WRITE_ALLOWED`.
 
@@ -302,6 +302,26 @@ Because this server is self-hosted, you retain full control over:
 - Which repositories and branches the controller can access.
 - When destructive operations are allowed.
 - How logs, metrics, and observability are configured in your hosting environment.
+
+
+
+## 9.5 Optional: Render observability + web browser tools
+
+If you deploy on Render and want assistants to be able to see deploy context without leaving the chat:
+
+- Set `RENDER_API_KEY` and (recommended) `RENDER_SERVICE_ID` and `RENDER_OWNER_ID`.
+- The server exposes:
+  - `list_render_logs` (read)
+  - `get_render_metrics` (read)
+  - `render_cli_command` (write-gated; can trigger deploys/restarts)
+
+If you want assistants to be able to look up external documentation and validate facts:
+
+- The server exposes:
+  - `web_search`
+  - `web_fetch`
+
+These tools are enabled server-side and are available to any assistant that connects to the MCP server.
 
 
 ## 10. Versioning and CLI checks
@@ -327,6 +347,6 @@ In future releases:
 
 - Update `pyproject.toml` and `CHANGELOG.md` together.
 - Tag the release in Git (for example `v1.0.1`, `v1.1.0`).
-- Follow `docs/UPGRADE_NOTES.md` for staging → production rollout.
+- Follow `docs/human/UPGRADE_NOTES.md` for staging → production rollout.
 
 Treat these version indicators as a single source of truth for which Adaptiv Controller build is deployed.

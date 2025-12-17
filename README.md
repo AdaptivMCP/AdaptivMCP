@@ -12,20 +12,22 @@ There are two layers:
 
 Important role clarity:
 
-- **The assistant uses the tools.** The human user does not “run the controller” or execute MCP actions.
+- **The assistant uses the tools.** Humans do not “run commands”; the assistant does.
 - When something fails, the assistant must decide whether it’s:
   - a **tool/engine issue** (this server),
-  - a **GitHub issue** (auth, permissions, rate limiting), or
-  - a **host/client issue** (ChatGPT/OpenAI tool-call layer).
+  - a **GitHub issue** (auth, permissions, rate limiting),
+  - or a **host/client issue** (ChatGPT/OpenAI tool-call layer).
 
 This repo’s docs are the contract for how the engine behaves.
 
 ## Quick links
 
 - Session startup protocol: `docs/start_session.md`
+- Assistant session protocol: `docs/assistant/start_session.md`
 - Assistant handoff: `docs/assistant/ASSISTANT_HANDOFF.md`
 - Assistant playbook: `docs/assistant/ASSISTANT_HAPPY_PATHS.md`
 - Operator workflows: `docs/human/WORKFLOWS.md`
+- Operations runbook: `docs/human/OPERATIONS.md`
 - Self-hosting (Render / general): `docs/human/SELF_HOSTED_SETUP.md`
 - Self-hosting (Docker): `docs/human/SELF_HOSTING_DOCKER.md`
 - Architecture & safety: `docs/human/ARCHITECTURE_AND_SAFETY.md`
@@ -35,36 +37,76 @@ This repo’s docs are the contract for how the engine behaves.
 
 ### GitHub tools
 
-- Read: repository metadata, trees, files, issues/PRs, diffs, workflow runs, logs, search.
-- Write (gated): branches, commits, patches, PR creation/updates, comments, selected workspace actions.
+- Read: repository metadata, trees, files, issues/PRs, workflow runs, logs, search.
+- Write (gated): branches, commits, PR creation/updates, comments, selected workspace actions.
 
 ### Workspace tools
 
 Workspace tools operate in a persistent clone on the server (for example on Render):
 
 - `ensure_workspace_clone`
-- `run_command`
+- `terminal_command` *(formerly `run_command`; alias preserved)*
 - `run_tests`, `run_lint_suite`, `run_quality_suite`
 - `commit_workspace`, `commit_workspace_files`
 - `workspace_self_heal_branch` (recover from a mangled workspace branch)
-- `get_recent_tool_events` (diagnostics; includes plain-language `narrative`)
-
-Note: `run_command` output is token-redacted (GitHub tokens are masked in stdout/stderr).
 
 These are what make “act like a real engineer” possible: install deps, run tests, debug CI, and keep changes reviewable.
 
-### Workspace sync after Contents-API commits
+### User-facing assistant logs (Render / stdout)
 
-When you use single-file or multi-file write helpers that commit via the GitHub Contents API (for example `create_file`, `apply_text_update_and_commit`, `apply_patch_and_commit`, or `update_files_and_open_pr`), the server automatically refreshes the corresponding workspace clone for that repository and branch after each successful commit.
+This server is designed so **Render logs feel like an assistant talking to the user**.
 
-This keeps subsequent workspace-based commands (`run_command`, `run_tests`, `run_quality_suite`, and related tools) aligned with the remote branch without requiring a manual reclone step after every Contents-API write.
+- `CHAT`: what the assistant would say in a normal chat (“Here’s what I’m doing next…”).
+- `INFO`: concise progress updates and important decisions.
+- `DETAILED`: deep diagnostics, tool parameters, and (bounded) file diffs.
+
+For write tools that modify files, the server prints a **colored unified diff** at `DETAILED` level (green additions / red deletions), bounded by `WRITE_DIFF_LOG_MAX_LINES` and `WRITE_DIFF_LOG_MAX_CHARS`.
+
+Related env vars:
+
+- `LOG_LEVEL` (supports `CHAT` and `DETAILED` in addition to standard levels)
+- `LOG_STYLE` (`plain` or `color`)
+- `UVICORN_ACCESS_LOG` (enable/disable GET/POST access lines)
+
+### Session logs (repo-local)
+
+Assistants keep a durable per-repo log in `session_logs/`.
+
+- Sessions are Markdown files like `session_logs/refactor_session_YYYY-MM-DD.md`.
+- Commit/push helpers append a structured entry after successful workspace commits so “what happened” is visible in the repo history.
+
+### Render integration
+
+This server can optionally surface Render deployment context via tools:
+
+- `list_render_logs` (reads Render logs; requires `RENDER_API_KEY` and an owner/workspace id)
+- `get_render_metrics` (basic Render metrics)
+- `render_cli_command` (executes the Render CLI; write-gated because it can deploy/restart)
+
+Render env vars are documented in `.env.example`.
+
+### Web browser tools
+
+This server includes a small, assistant-usable web browser layer:
+
+- `web_search` (DuckDuckGo HTML endpoint)
+- `web_fetch` (fetch a URL with optional HTML-to-text extraction)
+
+These tools exist to help assistants refresh documentation, chase down package behavior, and validate external facts.
 
 ## Safety model in one page
 
+Default posture:
+
 - **Branch-first work**: do not develop directly on the default branch; use a feature branch and open a PR.
-- **Write gate**: tools tagged as write actions are controlled by `WRITE_ALLOWED` and `authorize_write_actions`.
+- **Write gate**: tools tagged as write actions are controlled by server policy and `authorize_write_actions`.
 - **Auditability**: changes are committed to Git and reviewed via PRs.
-- **Minimize payload risk**: prefer file slices and diffs over giant blobs; clamp command output when needed.
+- **Minimize payload risk**: prefer file slices over giant blobs; clamp command output when needed.
+
+Controller mode override:
+
+- For this repo (the live controller engine), you may intentionally run in **main-branch mode** when explicitly instructed.
+  In that mode, treat every push as a production deploy: keep changes small, run quality gates locally, and confirm CI + redeploy before declaring success.
 
 Details: `docs/human/ARCHITECTURE_AND_SAFETY.md` and `docs/human/WORKFLOWS.md`.
 
@@ -86,14 +128,6 @@ When you see “improperly coded JSON” or a tool call does not execute, treat 
 4. **GitHub API error**
    - Symptoms: 401/403/422/429 or rate-limit messaging.
    - Fix: token scopes, repo permissions, branch protections, retry/backoff.
-
-Operator checklist for any report of “tools are missing” or “it’s acting weird” (tool events include `user_message` for UI-friendly logs):
-
-- `get_recent_tool_events(limit=50, include_success=true)`
-- `get_server_config`
-- `list_all_actions(include_parameters=true)`
-- `validate_environment`
-- `/healthz`
 
 ## Health and observability
 
