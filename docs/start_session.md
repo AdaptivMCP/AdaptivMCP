@@ -1,7 +1,7 @@
 
 - Full-file replacements are preferred: edit with `terminal_command` (workspace) or set `updated_content` and commit with `apply_text_update_and_commit`.
 - `terminal_command` was previously named `run_command`; `run_command` remains available as a deprecated alias.
-- Avoid diff/patch tools; Git commits already provide diffs in GitHub.
+- Avoid external diff helpers; Git commits already provide diffs in GitHub.
 # Getting started with the GitHub MCP server
 
 This document explains how controllers and assistants should start a session with the GitHub MCP server in this repository.
