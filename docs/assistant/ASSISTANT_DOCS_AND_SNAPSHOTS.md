@@ -136,7 +136,7 @@ Practical guidelines for prompts:
 
 - Quality
   - Prefer running tests and formatters on feature branches, and treat test failures as first class signals.
-  - Use patch based edits for large or critical files, and keep diffs reviewable.
+  - Make small, reviewable edits for large or critical files.
   - Build JSON payloads yourself and run `validate_tool_args` or `validate_json_string` before write-tagged or complex calls.
 
 - Human ergonomics
@@ -171,7 +171,7 @@ After making changes:
 I use the usual branch and PR flow for docs:
 
 - I create or reuse a feature branch.
-- I use text or patch based tools to update markdown files.
+- I use the file editing tools to update markdown files.
 - I keep changes focused and reviewable.
 - I refresh my workspace after each commit before running tests or lint: once I have used `commit_workspace` or `commit_workspace_files` to push changes, I call `ensure_workspace_clone` again with `reset=true` on the same branch before any forward-moving action such as `run_tests`, `run_lint_suite`, or further edits.
 - When I am ready to open a PR, I use `build_pr_summary` with the repo `full_name`, my feature branch `ref`, and a short human-written title/body plus summaries of changed files and quality results. I then render the resulting structured `title` and `body` into the PR description via the appropriate PR tool so descriptions stay consistent across assistants.
@@ -221,7 +221,7 @@ Large files and structured payloads are common when you are driving a controller
 For large files:
 
 - Use `get_file_slice` to read only the region you care about instead of the entire file.
-- Use `get_file_with_line_numbers` when you need exact line references for citations or for line-based patch tools; copy the ranges directly instead of hand-numbering snippets.
+- Use `get_file_with_line_numbers` when you need exact line references for citations or for line-based edits; copy the ranges directly instead of hand-numbering snippets.
 - Use `download_user_content` when you need to pull bytes for an example or test fixture without writing a file back to the repo. It accepts:
   - `sandbox:/` paths and absolute server paths.
   - Absolute `http(s)` URLs.
@@ -250,7 +250,7 @@ Most tool call failures come from malformed JSON, stray escape sequences, or str
   3. Avoid `\n` escapes inside values unless the tool explicitly expects them; prefer literal newlines or arrays.
   4. Run `validate_tool_args` (or `validate_json_string` for big blobs) before write-tagged tools to catch stray quotes. Default to pre-validating JSON so assistants are never waiting for host-side parse errors to reveal malformed payloads.
 - Prefer real newlines or arrays of lines instead of `\n`-filled strings when the tool accepts them.
-  - For patch tools, use multiline strings or `sections` arrays rather than sprinkling `\n` escapes.
+  - When a tool accepts multiline strings or `sections` arrays, prefer those over sprinkling `\n` escapes.
 - Escape double quotes only inside JSON string values.
   - ✅ `{ "text": "He said \"hello\" before leaving." }`
   - ❌ `{ "text": "He said "hello" before leaving." }`
