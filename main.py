@@ -434,12 +434,12 @@ async def list_render_logs(
 
 @mcp_tool(
     write_action=False,
-    description="Fetch basic Render service metrics for a resource (requires RENDER_API_KEY).",
+    description="Fetch basic Render service metrics (defaults to RENDER_SERVICE_ID when resourceId is omitted; requires RENDER_API_KEY).",
     tags=["render", "observability", "metrics"],
 )
 async def get_render_metrics(
-    resourceId: str,
     metricTypes: List[str],
+    resourceId: Optional[str] = None,
     startTime: Optional[str] = None,
     endTime: Optional[str] = None,
     resolution: Optional[int] = None,
@@ -447,8 +447,8 @@ async def get_render_metrics(
     from github_mcp.main_tools.render_observability import get_render_metrics as _impl
 
     return await _impl(
-        resourceId=resourceId,
         metricTypes=metricTypes,
+        resourceId=resourceId,
         startTime=startTime,
         endTime=endTime,
         resolution=resolution,

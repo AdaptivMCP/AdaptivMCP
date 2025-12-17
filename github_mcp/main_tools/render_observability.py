@@ -131,13 +131,13 @@ _METRIC_ENDPOINTS: Dict[str, str] = {
 
 async def get_render_metrics(
     *,
-    resourceId: str,
     metricTypes: List[str],
+    resourceId: Optional[str] = None,
     startTime: Optional[str] = None,
     endTime: Optional[str] = None,
     resolution: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Fetch one or more Render metrics for a resource.
+    """Fetch one or more Render metrics for a resource. If resourceId is omitted, uses RENDER_SERVICE_ID / RENDER_RESOURCE when set.
 
     `metricTypes` values must be keys in `_METRIC_ENDPOINTS`.
 
@@ -145,8 +145,14 @@ async def get_render_metrics(
     dict keyed by metric type.
     """
 
-    if not resourceId or not str(resourceId).strip():
-        raise UsageError('resourceId is required')
+    rid = str(resourceId).strip() if resourceId is not None else ''
+    if not rid:
+        rid = str(RENDER_DEFAULT_RESOURCE or '').strip()
+
+    if not rid:
+        raise UsageError(
+            'resourceId is required (or set RENDER_SERVICE_ID / RENDER_RESOURCE in the environment)'
+        )
 
     if not metricTypes:
         raise UsageError('metricTypes must be a non-empty list')
@@ -159,7 +165,7 @@ async def get_render_metrics(
 
     params_base: Dict[str, Any] = {
         # Render metrics endpoints accept 'resource' (service id, instance id, etc.).
-        "resource": str(resourceId).strip(),
+        "resource": rid,
         "startTime": startTime,
         "endTime": endTime,
     }
@@ -179,7 +185,7 @@ async def get_render_metrics(
     )
 
     out: Dict[str, Any] = {
-        "resourceId": str(resourceId).strip(),
+        "resourceId": rid,
         "startTime": startTime,
         "endTime": endTime,
         "resolution": resolution,
