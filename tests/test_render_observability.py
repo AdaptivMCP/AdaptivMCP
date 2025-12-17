@@ -44,3 +44,28 @@ async def test_list_render_logs_builds_expected_query_params(monkeypatch: pytest
 async def test_get_render_metrics_rejects_unknown_metric_types() -> None:
     with pytest.raises(UsageError):
         await ro.get_render_metrics(metricTypes=["not_a_metric"], resourceId="srv-1")
+
+
+@pytest.mark.asyncio
+async def test_get_render_metrics_calls_expected_endpoints(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    async def fake_get(path: str, *, params: Dict[str, Any]) -> Any:
+        calls.append((path, dict(params)))
+        return {"ok": True, "path": path, "params": dict(params)}
+
+    monkeypatch.setattr(ro, "_render_get", fake_get)
+
+    out = await ro.get_render_metrics(metricTypes=["cpu_usage", "http_latency", "http_request_count"], resourceId="srv-1")
+
+    assert out["resourceId"] == "srv-1"
+    assert set(out["metrics"].keys()) == {"cpu_usage", "http_latency", "http_request_count"}
+
+    paths = [c[0] for c in calls]
+    assert "/metrics/cpu" in paths
+    assert "/metrics/http-latency" in paths
+    assert "/metrics/http-requests" in paths
+
+    # http-latency should include a quantile (default p95)
+    latency_call = [c for c in calls if c[0] == "/metrics/http-latency"][0]
+    assert latency_call[1]["quantile"] == "0.95"

@@ -176,12 +176,12 @@ _METRIC_ENDPOINTS: Dict[str, str] = {
     # Monitoring > Metrics endpoints in Render Public API reference.
     "cpu_usage": "/metrics/cpu",
     "cpu_limit": "/metrics/cpu-limit",
-    "memory": "/metrics/memory",
+    "cpu_target": "/metrics/cpu-target",
+    "memory_usage": "/metrics/memory",
     "memory_limit": "/metrics/memory-limit",
+    "memory_target": "/metrics/memory-target",
     "http_latency": "/metrics/http-latency",
-    "http_request_count": "/metrics/http-request-count",
-    "http_throughput": "/metrics/http-throughput",
-    "bandwidth": "/metrics/bandwidth",
+    "http_request_count": "/metrics/http-requests",
     "instance_count": "/metrics/instance-count",
 }
 
@@ -234,7 +234,11 @@ async def get_render_metrics(
     params_base = {k: v for k, v in params_base.items() if v is not None and v != ""}
 
     async def fetch_one(metric: str) -> Any:
-        return await _render_get(_METRIC_ENDPOINTS[metric], params=dict(params_base))
+        params = dict(params_base)
+        # Render requires a quantile for http-latency; default to p95.
+        if metric == "http_latency" and "quantile" not in params:
+            params["quantile"] = "0.95"
+        return await _render_get(_METRIC_ENDPOINTS[metric], params=params)
 
     results = await asyncio.gather(
         *(fetch_one(m) for m in metricTypes),
