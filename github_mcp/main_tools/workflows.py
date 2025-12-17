@@ -1,3 +1,8 @@
+"""GitHub Actions workflow/run/job tools.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import asyncio

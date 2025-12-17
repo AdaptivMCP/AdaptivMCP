@@ -1,3 +1,8 @@
+"""Branch tools and branch status helpers.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import re

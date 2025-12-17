@@ -1,3 +1,8 @@
+"""Issue tools and issue context helpers.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import re

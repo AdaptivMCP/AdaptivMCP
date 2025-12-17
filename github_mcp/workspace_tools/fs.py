@@ -1,3 +1,8 @@
+"""Workspace file read/write primitives.
+
+Workspace-backed tools (clone, run commands, commit, and suites).
+"""
+
 # Split from github_mcp.tools_workspace (generated).
 import os
 from typing import Any, Dict, Optional

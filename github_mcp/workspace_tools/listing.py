@@ -1,3 +1,8 @@
+"""Workspace listing/search tools.
+
+Workspace-backed tools (clone, run commands, commit, and suites).
+"""
+
 # Split from github_mcp.tools_workspace (generated).
 import os
 import re

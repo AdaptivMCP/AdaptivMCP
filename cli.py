@@ -1,3 +1,9 @@
+"""CLI entry point.
+
+Provides a small, stable command-line interface used by CI and operators,
+including version reporting and basic local diagnostics.
+"""
+
 from __future__ import annotations
 
 import argparse

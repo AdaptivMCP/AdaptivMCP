@@ -1,3 +1,8 @@
+"""Workspace quality suites (tests, lint, combined quality).
+
+Workspace-backed tools (clone, run commands, commit, and suites).
+"""
+
 # Split from github_mcp.tools_workspace (generated).
 from typing import Any, Dict, List, Optional
 

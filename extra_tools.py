@@ -1,3 +1,10 @@
+"""Optional/extra MCP tools.
+
+Defines additional tools that are not part of the minimal GitHub surface but
+are useful for maintenance and power users. These tools still follow the same
+write-gating and logging rules as core tools.
+"""
+
 from __future__ import annotations
 
 import base64

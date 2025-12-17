@@ -1,3 +1,8 @@
+"""Render CLI wrapper for non-interactive commands.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import asyncio

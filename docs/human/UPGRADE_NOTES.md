@@ -4,9 +4,9 @@ This document explains how to install new versions of the Adaptiv Controller Git
 
 You should read this together with:
 
-- `docs/SELF_HOSTED_SETUP.md` – initial deployment and configuration.
-- `docs/WORKFLOWS.md` – how assistants are expected to behave when using this server.
-- `docs/ARCHITECTURE_AND_SAFETY.md` – the safety model, default branches, and write gating.
+- `docs/human/SELF_HOSTED_SETUP.md` – initial deployment and configuration.
+- `docs/human/WORKFLOWS.md` – how assistants are expected to behave when using this server.
+- `docs/human/ARCHITECTURE_AND_SAFETY.md` – the safety model, default branches, and write gating.
 
 This guide focuses specifically on **version changes** and deployment practices for the 1.0 line and beyond.
 
@@ -27,7 +27,7 @@ python cli.py --version
 
 For the 1.0 release you should see `1.0.0`. If the reported version and `CHANGELOG.md` disagree with the tag or branch you believe is deployed, stop and resolve that mismatch before doing further work.
 
-> Assistants using this server must run `python cli.py --version` at the start of a new ChatGPT session (see `docs/WORKFLOWS.md`) and refresh key docs from `main` so they are aligned with the version you actually have deployed.
+> Assistants using this server must run `python cli.py --version` at the start of a new ChatGPT session (see `docs/human/WORKFLOWS.md`) and refresh key docs from `main` so they are aligned with the version you actually have deployed.
 
 ---
 
@@ -191,7 +191,7 @@ When running on Render (or similar PaaS providers):
    - Differences should be intentional (for example different GitHub tokens, different controller repos or branches).
 
 6. **Document your rollback plan**
-   - In your internal runbook (or in `docs/OPERATIONS.md`), write down exactly how to change the deployed tag/branch and redeploy.
+   - In your internal runbook (or in `docs/human/OPERATIONS.md`), write down exactly how to change the deployed tag/branch and redeploy.
    - Practice a rollback at least once in a non-critical environment.
 
 ---
@@ -207,4 +207,4 @@ In particular, revisit this document when you:
 - Add staging environments, canary deployments, or blue/green strategies.
 - Adjust write policies or workspace settings in ways that affect upgrades or rollbacks.
 
-Treat `docs/UPGRADE_NOTES.md` as the single source of truth for how to move between versions of the Adaptiv Controller GitHub MCP server safely.
+Treat `docs/human/UPGRADE_NOTES.md` as the single source of truth for how to move between versions of the Adaptiv Controller GitHub MCP server safely.

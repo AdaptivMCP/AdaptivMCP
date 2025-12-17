@@ -1,3 +1,8 @@
+"""Error types and structured error rendering.
+
+MCP server framework: tool registry, schemas, context, and write gating.
+"""
+
 from __future__ import annotations
 
 import asyncio

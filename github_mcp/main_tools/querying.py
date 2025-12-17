@@ -1,3 +1,8 @@
+"""Search and query helpers (GitHub search, GraphQL wrappers).
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import sys

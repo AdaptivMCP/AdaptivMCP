@@ -86,8 +86,8 @@ pip install -r dev-requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-From here, they follow the normal self-hosting docs (`docs/SELF_HOSTED_SETUP.md`,
-`docs/SELF_HOSTING_DOCKER.md`) to deploy to Render or another platform and connect the
+From here, they follow the normal self-hosting docs (`docs/human/SELF_HOSTED_SETUP.md`,
+`docs/human/SELF_HOSTING_DOCKER.md`) to deploy to Render or another platform and connect the
 MCP server to their controller.
 
 ## 5. Licensing and terms

@@ -1,3 +1,8 @@
+"""Workspace commit/push tools and session-log appenders.
+
+Workspace-backed tools (clone, run commands, commit, and suites).
+"""
+
 # Split from github_mcp.tools_workspace (generated).
 import shlex
 from datetime import datetime, timezone

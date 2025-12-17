@@ -1,3 +1,8 @@
+"""Lightweight handle resolution (issue/PR/branch handles).
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import re

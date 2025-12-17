@@ -1,3 +1,8 @@
+"""Tool event capture and user-facing progress narratives.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict

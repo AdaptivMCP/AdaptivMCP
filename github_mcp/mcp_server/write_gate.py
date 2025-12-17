@@ -1,3 +1,8 @@
+"""Write authorization gate and enforcement helpers.
+
+MCP server framework: tool registry, schemas, context, and write gating.
+"""
+
 from __future__ import annotations
 
 from typing import Optional

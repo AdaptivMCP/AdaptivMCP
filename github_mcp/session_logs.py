@@ -1,3 +1,10 @@
+"""Session log helpers.
+
+Creates and appends durable, repo-local session logs under `session_logs/`.
+Used by commit helpers and workflows to maintain an auditable narrative of
+what changed, why it changed, and how it was verified.
+"""
+
 from __future__ import annotations
 
 import os

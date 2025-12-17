@@ -245,7 +245,7 @@ When you deploy this server, keep the following in mind:
   - `terminal_command` and `run_tests` operate in a persistent clone of your repo so installs and edits survive between calls.
   - Output is truncated according to configured caps, with explicit flags when truncation occurs.
 
-For more detail, see `docs/ARCHITECTURE_AND_SAFETY.md`.
+For more detail, see `docs/human/ARCHITECTURE_AND_SAFETY.md`.
 
 ---
 

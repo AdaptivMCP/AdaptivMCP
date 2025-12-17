@@ -1,3 +1,8 @@
+"""Dashboard-style repo summaries for quick triage.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional

@@ -1,3 +1,8 @@
+"""Request/tool execution context for logging and scoping.
+
+MCP server framework: tool registry, schemas, context, and write gating.
+"""
+
 from __future__ import annotations
 
 import os

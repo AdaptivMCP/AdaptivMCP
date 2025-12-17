@@ -1,3 +1,8 @@
+"""Server configuration and validation tools.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import json

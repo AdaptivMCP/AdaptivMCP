@@ -1,3 +1,8 @@
+"""Web search/fetch tools for external documentation lookups.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import re

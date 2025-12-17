@@ -1,3 +1,8 @@
+"""Health check endpoint registration.
+
+HTTP routes exposed alongside MCP (healthz, compat endpoints).
+"""
+
 from __future__ import annotations
 
 import time

@@ -1,3 +1,8 @@
+"""Workspace refresh helpers (sync after commits and writes).
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import sys

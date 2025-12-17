@@ -1,3 +1,8 @@
+"""Content caching tools and cache inspection.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 import asyncio

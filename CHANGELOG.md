@@ -1,45 +1,43 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this repository are documented here.
 
-This project follows semantic versioning (MAJOR.MINOR.PATCH).
+The changelog is intentionally **operator-facing**:
 
-## [1.0.0] - Initial 1.0 release
+- What changed in the engine.
+- What behavior changed for assistants/controllers.
+- What operators must update (env vars, CI, deployment).
 
-### Versioning and release metadata
+## Unreleased
 
-- Lock project version to `1.0.0` in `pyproject.toml`.
-- Introduce `CHANGELOG.md` as the canonical source of human-readable release notes.
-- Define `1.0.0` as the baseline for subsequent 1.x releases.
+### Added
 
-### Controller guidance and assistant behavior
+- Render observability tools:
+  - `list_render_logs`, `get_render_metrics`.
+- Render CLI tool:
+  - `render_cli_command` (non-interactive wrapper).
+- Web browser tools:
+  - `web_search`, `web_fetch`.
+- Repo-local session logs:
+  - `session_logs/` directory + helpers that append durable commit/session notes.
+- User-facing progress logs:
+  - `get_recent_tool_events`, `get_recent_server_logs`, `get_recent_server_errors`.
+- Workspace quality gates:
+  - `run_tests`, `run_lint_suite`, `run_quality_suite`.
 
-- Document the tool surface, safety model, and assistant expectations for Adaptiv Controller directly in repository docs.
-- Require assistants to treat the published docs as the authoritative source of truth and to avoid inventing parallel "doc contracts".
-- Encode expectations for branch-based, patch-driven, PR-focused workflows and strict JSON/tool schema usage.
+### Changed
 
-### Core tooling and safety model
+- Documentation refresh:
+  - Canonical workflow docs moved under `docs/human/`.
+  - Assistant playbooks refreshed under `docs/assistant/`.
+- Tool naming guidance:
+  - `terminal_command` is the primary workspace command runner.
 
-- Maintain strong write gating using `WRITE_ALLOWED` and the `authorize_write_actions` tool.
-- Provide high-level GitHub tools for reading and writing repos (branches, commits, diffs, PRs, issues) with verification and read-after-write checks.
-- Support workspace execution via `run_command` and `run_tests` for installing dependencies, running linters, and executing test suites in a persistent workspace.
+### Deprecated
 
-### CI, CLI, and health
+- `run_command` remains as a compatibility alias for `terminal_command`.
+- `fetch_url` remains as a compatibility wrapper; prefer `web_fetch` for internet access.
 
-- Add a minimal `cli.py` that reads the project version from `pyproject.toml` and exposes a stable `python cli.py --version` entry point.
-- Configure GitHub Actions CI (`.github/workflows/ci.yml`) to run `pytest -q` and a `python cli.py --version` smoke check on pushes and PRs.
-- Expose `/healthz` with process health, controller configuration, and an in-memory metrics snapshot for MCP tools and GitHub client usage.
+## 1.0.0
 
-### Documentation and workflows
-
-- Update `README.md` to describe the Adaptiv Controller GitHub Kit, versioning, and CI expectations.
-- Flesh out `docs/SELF_HOSTED_SETUP.md` with a self-hosted deployment guide and a dedicated section on versioning and CLI checks.
-- Flesh out `docs/UPGRADE_NOTES.md` as the source of truth for install, upgrade, and rollback flows (staging first, tags/branches, Render guidance).
-- Update `docs/WORKFLOWS.md` so every new ChatGPT session:
-  - Uses `run_command` to run `python cli.py --version` and confirm the server version (1.0.0 for this release).
-  - Refreshes key docs from `main` (ASSISTANT_HANDOFF, WORKFLOWS, ARCHITECTURE_AND_SAFETY, ASSISTANT_DOCS_AND_SNAPSHOTS, SELF_HOSTED_SETUP).
-- Maintain `ASSISTANT_HANDOFF.md` as the living handoff document for assistants, ensuring new chats can re-sync with the project state and expectations.
-
-### Test suite
-
-- Keep the test suite green on `main` (currently 86 tests) covering repo helpers, JSON validation, and core behaviors.
+- Initial 1.0 release of the Adaptiv Controller GitHub MCP server.

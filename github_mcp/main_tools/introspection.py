@@ -1,3 +1,8 @@
+"""Tool discovery and schema inspection helpers.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional

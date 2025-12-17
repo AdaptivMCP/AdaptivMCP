@@ -1,132 +1,205 @@
-# Detailed MCP tools reference
+# Tool reference (developer-facing)
 
-This document explains how to use the `chatgpt-mcp-github` MCP server tools together in real workflows.
+This document is a human-friendly index of the MCP tool surface exposed by this server.
 
-## Editing policy (important)
+**Source of truth:** the runtime tools `list_all_actions` and `describe_tool`.
 
-- **Preferred edit style:** full-file replacement.
-  - Use **workspace editing** (`set_workspace_file_contents` + `commit_workspace_files`) or **GitHub commit helper** (`apply_text_update_and_commit`).
-- **Diff/patch editing is discouraged:** `apply_patch_and_commit` exists only for rare cases where a full replacement is impractical.
-- **Diffs are still useful for information:** PR review (`get_pr_overview`, GitHub UI) and previews (`build_unified_diff`) are allowed.
-
-## Quick tool discovery
-
-- `list_tools` → quick list of tools + read/write flags.
-- `describe_tool` / `validate_tool_args` → schemas and safe preflight.
-
-## Recommended workflows
-
-### 1) Standard file change (full replacement)
-
-1. Create or reuse a branch:
-   - `ensure_branch` (or workspace equivalent: `workspace_create_branch`).
-2. Read the file (avoid huge payloads):
-   - `open_file_context` / `get_file_with_line_numbers` / `get_file_contents`.
-3. Replace the file:
-   - Workspace path (preferred for multi-file edits): `set_workspace_file_contents`.
-   - Single-file GitHub helper: `apply_text_update_and_commit`.
-4. Validate:
-   - `run_quality_suite` (or `run_lint_suite` + `run_tests`).
-5. Open or reuse PR:
-   - `open_pr_for_existing_branch` (idempotent) or `update_files_and_open_pr`.
-
-### 2) Workspace-heavy change (refactor / formatting)
-
-1. `ensure_workspace_clone`
-2. Run commands as if on a local machine:
-   - `terminal_command` (note: `run_command` is a deprecated alias)
-3. Inspect what changed:
-   - `get_workspace_changes_summary`
-4. Commit:
-   - `commit_workspace` or `commit_workspace_files`
-5. Validate and open PR:
-   - `run_quality_suite` → `open_pr_for_existing_branch`
-
-### 3) Self-heal a mangled workspace branch
-
-If the workspace clone is in a bad state (wrong branch, conflicts, half-merge, etc.), use:
-
-- `workspace_self_heal_branch`
-
-It can reset to `main`, optionally delete the mangled branch, create a fresh branch, and return plain-language step logs for UI rendering.
-
-### 4) CI triage
-
-- Find runs: `list_workflow_runs` / `list_recent_failures`
-- Summarize a run: `get_workflow_run_overview`
-- Drill into jobs: `list_workflow_run_jobs` → `get_job_logs`
-- Wait for completion: `wait_for_workflow_run`
-
-### 5) Plain-language tool logs for UI / debugging
-
-- `get_recent_tool_events` → recent tool calls (success + failure)
-- `get_recent_server_errors` → recent failed tool-call error records
-
-## Tool catalog (grouped)
-
-### Environment & server
-
-- `validate_environment` — validate GitHub token, repo/branch defaults, and permissions.
-- `get_server_config` — safe summary of server settings (timeouts, concurrency, git identity).
-- `get_rate_limit` — GitHub API rate limiting.
-- `get_user_login` — authenticated user.
-
-### Repository & search
-
-- `get_repository` — repository metadata.
-- `list_repository_tree` — server-side tree listing.
-- `search` — GitHub search (code/issues/commits/users/etc.).
-- `fetch_url` — fetch an external HTTPS URL.
-
-### Workspace
-
-- `ensure_workspace_clone` — persistent clone for a repo/ref.
-- `terminal_command` — run shell commands in the workspace.
-- `get_workspace_file_contents` — read a file from the workspace.
-- `set_workspace_file_contents` — write a file (full replacement) in the workspace.
-- `get_workspace_changes_summary` — summarize workspace changes.
-- `commit_workspace` / `commit_workspace_files` — commit workspace changes.
-
-### Files (GitHub API)
-
-- `get_file_contents` / `fetch_files` — fetch file(s) from GitHub.
-- `create_file` — create a new file.
-- `apply_text_update_and_commit` — update a file by replacing full contents.
-- `apply_patch_and_commit` — apply a unified diff patch (discouraged for normal editing).
-- `move_file` — rename/move a path.
-- `delete_file` — delete a file.
-- `update_file_from_workspace` — push a workspace-edited file back to GitHub.
-
-### Branches & PRs
-
-- `create_branch` / `ensure_branch` — create branches via GitHub API.
-- `workspace_create_branch` / `workspace_delete_branch` — branch ops via git in workspace.
-- `get_branch_summary` / `get_latest_branch_status` — ahead/behind + PR/CI snapshot.
-- `create_pull_request` — open a PR.
-- `open_pr_for_existing_branch` — idempotent PR open/reuse for an existing branch.
-- `get_pr_info` / `get_pr_overview` — PR metadata + file/CI summary.
-- `list_pr_changed_filenames` — list changed files.
-- `comment_on_pull_request` / `close_pull_request` / `merge_pull_request` — PR lifecycle.
-
-### Issues
-
-- `list_recent_issues` / `list_repository_issues` — list issues.
-- `fetch_issue` / `fetch_issue_comments` — raw issue + comments.
-- `create_issue` / `update_issue` / `comment_on_issue` — issue lifecycle.
-- `get_issue_overview` / `open_issue_context` / `resolve_handle` — navigation helpers.
-
-### GitHub Actions
-
-- `list_workflow_runs` / `get_workflow_run` — run metadata.
-- `trigger_workflow_dispatch` / `trigger_and_wait_for_workflow` — dispatch workflows.
-
-### Repository creation
-
-- `create_repository` — create a new repo (supports templates and payload overrides to match GitHub’s "New repository" UI).
+Tool names are stable; schemas may evolve. When in doubt, call `describe_tool`.
 
 ---
 
-## Notes
+## Logging contract (user-facing)
 
-- When unsure about write safety or parameter shapes: use `validate_tool_args` then `describe_tool`.
-- Prefer `run_quality_suite` before opening a PR so CI failures are caught early.
+- Log lines are meant to read like an assistant talking to a user.
+- `CHAT` / `INFO` should answer: *what is happening, why, and what happens next*.
+- `DETAILED` can include diffs, command output, and deep context.
+- Avoid leaking internal IDs, raw JSON blobs, stack traces, or token-like data into user-facing logs.
+
+## Server + tool introspection
+
+| Tool | Summary |
+|---|---|
+| `get_server_config` | GET Server Config. |
+| `validate_environment` | Check GitHub-related environment settings and report problems. |
+| `list_tools` | List available MCP tools with basic read/write metadata. Use describe_tool (or list_all_actions with include_parameters=true) when you need full schemas. |
+| `list_all_actions` | Enumerate every available MCP tool with read/write metadata. |
+| `describe_tool` | Return metadata and optional schema for one or more tools. Prefer this over manually scanning list_all_actions in long sessions. |
+| `validate_tool_args` | Validate candidate payload(s) against tool input schemas without running them. |
+| `validate_json_string` | Validate a JSON string and return a normalized form. |
+| `get_rate_limit` | GET Rate Limit. |
+| `ping_extensions` | Ping the MCP server extensions surface. |
+
+## Write gate
+
+| Tool | Summary |
+|---|---|
+| `authorize_write_actions` | Allow or block tools marked write_action=True for this server. |
+| `list_write_tools` | Describe write-capable tools exposed by this server. |
+
+## GitHub: repositories + browsing
+
+| Tool | Summary |
+|---|---|
+| `get_repository` | Look up repository metadata (topics, default branch, permissions). |
+| `get_repo_defaults` | GET Repo Defaults. |
+| `get_repo_dashboard` | Return a compact, multi-signal dashboard for a repository. |
+| `list_repositories` | List Repositories. |
+| `list_repositories_by_installation` | List Repositories BY Installation. |
+| `list_branches` | Enumerate branches for a repository with GitHub-style pagination. |
+| `get_branch_summary` | GET Branch Summary. |
+| `get_latest_branch_status` | GET Latest Branch Status. |
+| `get_commit_combined_status` | GET Commit Combined Status. |
+| `list_repository_tree` | List Repository Tree. |
+| `list_repository_issues` | List Repository Issues. |
+| `list_recent_issues` | List Recent Issues. |
+| `get_user_login` | GET User Login. |
+
+## GitHub: files (read)
+
+| Tool | Summary |
+|---|---|
+| `get_file_contents` | Fetch a single file from GitHub and decode base64 to UTF-8 text. |
+| `get_file_slice` | Return a citation-friendly slice of a file. |
+| `get_file_with_line_numbers` | Render a compact, line-numbered view of a file to simplify manual edits. |
+| `open_file_context` | Return a citation-friendly slice of a file with line numbers and content entries. |
+| `fetch_files` | Fetch Files. |
+| `get_cached_files` | Return cached file payloads for a repository/ref without re-fetching from GitHub. Entries persist for the lifetime of the server process until evicted by size or entry caps. |
+| `cache_files` | Fetch one or more files and persist them in the server-side cache so assistants can recall them without repeating GitHub reads. Use refresh=true to bypass existing cache entries. |
+
+## GitHub: files (write)
+
+| Tool | Summary |
+|---|---|
+| `create_file` | Create File. |
+| `delete_file` | Delete a file from a GitHub repository using the Contents API. Use ensure_branch if you want to delete on a dedicated branch. |
+| `move_file` | Move File. |
+| `update_files_and_open_pr` | Commit multiple files, verify each, then open a PR in one call. |
+| `apply_text_update_and_commit` | Apply Text Update AND Commit. |
+| `update_file_from_workspace` | Update a single file in a GitHub repository from the persistent workspace checkout. Use terminal_command to edit the workspace file first, then call this tool to sync it back to the branch. |
+
+## GitHub: branches
+
+| Tool | Summary |
+|---|---|
+| `create_branch` | Create Branch. |
+| `ensure_branch` | Ensure Branch. |
+| `recent_prs_for_branch` | Return recent pull requests associated with a branch, grouped by state. |
+| `workspace_create_branch` | Create a branch using the workspace (git), optionally pushing to origin. |
+| `workspace_delete_branch` | Delete a non-default branch using the workspace clone. |
+| `workspace_self_heal_branch` | Detect a mangled workspace branch and recover to a fresh branch. |
+
+## GitHub: issues
+
+| Tool | Summary |
+|---|---|
+| `create_issue` | Create a GitHub issue in the given repository. |
+| `fetch_issue` | Fetch Issue. |
+| `fetch_issue_comments` | Fetch Issue Comments. |
+| `open_issue_context` | Return an issue plus related branches and pull requests. |
+| `update_issue` | Update fields on an existing GitHub issue. |
+| `comment_on_issue` | Post a comment on an issue. |
+| `get_issue_overview` | Return a high-level overview of an issue, including related branches, pull requests, and checklist items, so assistants can decide what to do next. |
+| `get_issue_comment_reactions` | GET Issue Comment Reactions. |
+
+## GitHub: pull requests
+
+| Tool | Summary |
+|---|---|
+| `create_pull_request` | Open a pull request from ``head`` into ``base``. |
+| `open_pr_for_existing_branch` | Open a pull request for an existing branch into a base branch. |
+| `fetch_pr` | Fetch PR. |
+| `fetch_pr_comments` | Fetch PR Comments. |
+| `comment_on_pull_request` | Comment ON Pull Request. |
+| `get_pr_info` | GET PR Info. |
+| `get_pr_overview` | Return a compact overview of a pull request, including files and CI status. |
+| `list_pull_requests` | List Pull Requests. |
+| `list_pr_changed_filenames` | List PR Changed Filenames. |
+| `merge_pull_request` | Merge Pull Request. |
+| `close_pull_request` | Close Pull Request. |
+| `get_pr_reactions` | Fetch reactions for a GitHub pull request. |
+| `get_pr_review_comment_reactions` | Fetch reactions for a pull request review comment. |
+| `build_pr_summary` | Build a normalized JSON summary for a pull request description. |
+
+## GitHub Actions
+
+| Tool | Summary |
+|---|---|
+| `list_workflow_runs` | List recent GitHub Actions workflow runs with optional filters. |
+| `get_workflow_run` | Retrieve a specific workflow run including timing and conclusion. |
+| `get_workflow_run_overview` | Summarize a GitHub Actions workflow run for CI triage. |
+| `list_workflow_run_jobs` | List jobs within a workflow run, useful for troubleshooting failures. |
+| `get_job_logs` | Fetch raw logs for a GitHub Actions job without truncation. |
+| `list_recent_failures` | List recent failed or cancelled GitHub Actions workflow runs. |
+| `trigger_workflow_dispatch` | Trigger a workflow dispatch event on the given ref. |
+| `trigger_and_wait_for_workflow` | Trigger a workflow and block until it completes or hits timeout. |
+| `wait_for_workflow_run` | Poll a workflow run until completion or timeout. |
+
+## Workspace: clone + inspection
+
+| Tool | Summary |
+|---|---|
+| `ensure_workspace_clone` | Ensure a persistent workspace clone exists for a repo/ref. |
+| `list_workspace_files` | List files in the workspace clone (bounded, no shell). |
+| `search_workspace` | Search text files in the workspace clone (bounded, no shell). |
+| `get_workspace_file_contents` | Read a file from the persistent workspace clone (no shell). |
+| `get_workspace_changes_summary` | Summarize modified, added, deleted, renamed, and untracked files in the workspace. |
+
+## Workspace: write + git
+
+| Tool | Summary |
+|---|---|
+| `set_workspace_file_contents` | Replace a workspace file's contents by writing the full file text. |
+| `terminal_command` | Run a shell command inside the repo workspace and return its result. |
+| `run_command` | Deprecated alias for terminal_command. |
+| `commit_workspace` | Commit workspace changes and optionally push them. |
+| `commit_workspace_files` | Commit and optionally push specific files from the persistent workspace. |
+
+## Workspace: quality suites
+
+| Tool | Summary |
+|---|---|
+| `run_tests` | Run the project's test command in the persistent workspace and summarize the result. |
+| `run_lint_suite` | Run the lint or static-analysis command in the workspace. |
+| `run_quality_suite` | Run the standard quality/test suite for a repo/ref. |
+
+## Render
+
+| Tool | Summary |
+|---|---|
+| `list_render_logs` | Fetch recent logs from Render (requires RENDER_API_KEY). Render /logs requires ownerId; pass ownerId or set RENDER_OWNER_ID; otherwise the tool will attempt to resolve it from the service id. |
+| `get_render_metrics` | Fetch basic Render service metrics (defaults to RENDER_SERVICE_ID when resourceId is omitted; requires RENDER_API_KEY). |
+| `render_cli_command` | Run a Render CLI command non-interactively (requires the Render CLI in the runtime and RENDER_API_KEY in env). Args are passed as a list, e.g. ['deploy', 'list', '--service', '<SERVICE_ID>']. |
+
+## Web browser
+
+| Tool | Summary |
+|---|---|
+| `web_search` | Search the public web (DuckDuckGo HTML endpoint) and return titles, URLs, and snippets. |
+| `web_fetch` | Fetch a public web URL with conservative safety checks and optional HTML-to-text extraction. |
+| `fetch_url` | Fetch URL. |
+
+## Utilities
+
+| Tool | Summary |
+|---|---|
+| `download_user_content` | Download user-provided content (sandbox/local/http) with base64 encoding. |
+| `resolve_handle` | Resolve Handle. |
+| `search` | Search. |
+| `graphql_query` | Graphql Query. |
+| `create_repository` | Create Repository. |
+| `pr_smoke_test` | PR Smoke Test. |
+
+## In-memory logs + diagnostics
+
+| Tool | Summary |
+|---|---|
+| `get_recent_tool_events` | List recent tool invocation events captured in memory. |
+| `get_recent_server_logs` | Return recent server-side logs captured in memory (useful when provider logs are unavailable). |
+| `get_recent_server_errors` | List recent server-side errors captured in memory. |
+
+---
+
+## Notes on compatibility aliases
+
+- `run_command` is a deprecated alias for `terminal_command` (kept for older controller prompts).
+- `fetch_url` is a compatibility wrapper; prefer `web_fetch` for internet access.

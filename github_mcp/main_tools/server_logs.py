@@ -1,3 +1,8 @@
+"""In-memory log buffer tools for environments without provider logs.
+
+Tool implementations for the main MCP surface.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict
