@@ -204,12 +204,9 @@ def _openai_is_consequential(
     if name == "render_cli_command" or "render-cli" in tag_set:
         return True
 
-    if name in {
-        "workspace_create_branch",
-        "workspace_delete_branch",
-        "workspace_self_heal_branch",
-    }:
-        return True
+    if name.startswith("workspace_"):
+        # Workspace helpers are intentionally ungated so setup flows remain fast.
+        return False
 
     if "push" in name or any(t in {"push", "git-push", "git_push"} or "push" in t for t in tag_set):
         return True
