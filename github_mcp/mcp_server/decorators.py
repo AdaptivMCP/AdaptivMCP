@@ -202,7 +202,10 @@ def _openai_is_consequential(
         return True
 
     if name == "render_cli_command" or "render-cli" in tag_set:
-        return True
+        # Render CLI should only be gated when auto-approve is disabled; when
+        # WRITE_ALLOWED is on, treat it as non-consequential so the connector
+        # does not block actions/tool calls behind the write gate.
+        return not server.WRITE_ALLOWED
 
     if name.startswith("workspace_"):
         # Workspace helpers are intentionally ungated so setup flows remain fast.
