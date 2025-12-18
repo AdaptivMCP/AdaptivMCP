@@ -13,20 +13,7 @@ from typing import Any, Dict, Optional
 from . import config
 from .exceptions import GitHubAPIError
 from .http_clients import _get_github_token
-
-TOKEN_PATTERNS = [
-    (
-        re.compile(r"https://x-access-token:([^@/\s]+)@github\.com/"),  # tokenlike-allow
-        "https://x-access-token:***@github.com/",  # tokenlike-allow
-    ),
-    (
-        re.compile(r"x-access-token:([^@\s]+)@github\.com"),
-        "x-access-token:***@github.com",  # tokenlike-allow
-    ),
-    (re.compile(r"\bghp_[A-Za-z0-9]{20,}\b"), "ghp_***"),
-    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"), "github_pat_***"),
-]
-
+from .redaction import redact_sensitive_text
 
 # Strip ANSI/control characters from command output so connector UIs don't
 # render escape sequences (spinners, colors, cursor controls) as random characters.
@@ -47,16 +34,12 @@ def _sanitize_tty_output(value: str) -> str:
 def _redact_sensitive(text: str) -> str:
     if not text:
         return text
-    redacted = text
-    for pat, repl in TOKEN_PATTERNS:
-        redacted = pat.sub(repl, redacted)
     try:
         tok = _get_github_token()
-        if tok and isinstance(tok, str):
-            redacted = redacted.replace(tok, "***")
+        extras = [tok] if tok else []
     except Exception:
-        pass
-    return redacted
+        extras = []
+    return redact_sensitive_text(text, extra_values=extras)
 
 
 async def _run_shell(

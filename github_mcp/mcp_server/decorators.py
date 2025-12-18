@@ -31,6 +31,7 @@ from github_mcp.mcp_server.schemas import (
     _title_from_tool_name,
 )
 from github_mcp.metrics import _record_tool_call
+from github_mcp.redaction import redact_sensitive_text
 
 # OpenAI connector UI strings.
 # These appear in ChatGPT's Apps & Connectors UI while a tool is running.
@@ -121,19 +122,21 @@ def _tool_inputs_summary(tool_name: str, all_args: Mapping[str, Any] | None) -> 
         if lk in redact_keys or any(t in lk for t in ("key", "secret", "token", "password")):
             safe_args[str(k)] = "<redacted>"
         else:
-            safe_args[str(k)] = v
+            safe_args[str(k)] = (
+                redact_sensitive_text(str(v)) if isinstance(v, str) else v
+            )
 
     # Tool-specific hints.
     cmd = safe_args.get("command")
     if isinstance(cmd, str):
-        return f"command={_summarize_command(cmd)}"
+        return redact_sensitive_text(f"command={_summarize_command(cmd)}")
 
     url = safe_args.get("url")
     if isinstance(url, str):
-        return f"url={_clip(url, max_chars=220)}"
+        return redact_sensitive_text(f"url={_clip(url, max_chars=220)}")
 
     # Default: compact JSON-ish preview produced by schemas helper.
-    return _format_tool_args_preview(safe_args)
+    return redact_sensitive_text(_format_tool_args_preview(safe_args))
 
 
 def _tool_phase_label(
@@ -177,6 +180,40 @@ def _tool_phase_label(
         return "Implementation"
 
     return "Discovery"
+
+
+def _openai_is_consequential(
+    tool_name: str,
+    tags: Iterable[str] | None,
+    *,
+    write_action: bool,
+    ui_consequential: bool | None = None,
+) -> bool:
+    """Classify tools for connector UI gating (Apps & Connectors)."""
+
+    if ui_consequential is not None:
+        return bool(ui_consequential)
+
+    name = (tool_name or "").lower()
+    tag_set = {str(t).lower() for t in (tags or [])}
+
+    if name in {"web_fetch", "web_search"} or "web" in tag_set:
+        return True
+
+    if name == "render_cli_command" or "render-cli" in tag_set:
+        return True
+
+    if name in {
+        "workspace_create_branch",
+        "workspace_delete_branch",
+        "workspace_self_heal_branch",
+    }:
+        return True
+
+    if "push" in name or any(t in {"push", "git-push", "git_push"} or "push" in t for t in tag_set):
+        return True
+
+    return False
 
 
 def _clip(text: str, *, max_chars: int) -> str:
@@ -663,12 +700,13 @@ def _register_with_fastmcp(
     description: Optional[str],
     tags: set[str],
     write_action: bool,
+    openai_is_consequential: bool,
     visibility: str = "public",
 ) -> Any:
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
     meta: dict[str, Any] = {
         "write_action": bool(write_action),
-        "auto_approved": bool(not write_action),
+        "auto_approved": bool(not openai_is_consequential),
         "visibility": visibility,
         # OpenAI connector UI metadata (Apps & Connectors).
         #
@@ -677,13 +715,15 @@ def _register_with_fastmcp(
         "openai/visibility": visibility,
         "openai/toolInvocation/invoking": OPENAI_INVOKING_MESSAGE,
         "openai/toolInvocation/invoked": OPENAI_INVOKED_MESSAGE,
+        "openai/isConsequential": bool(openai_is_consequential),
+        "x-openai-isConsequential": bool(openai_is_consequential),
     }
     if title:
         # Helpful for UIs that support a distinct display label.
         meta["title"] = title
         meta["openai/title"] = title
     annotations = {
-        "readOnlyHint": bool(not write_action),
+        "readOnlyHint": bool(not openai_is_consequential),
         "title": title or _title_from_tool_name(name),
     }
 
@@ -714,6 +754,7 @@ def mcp_tool(
     tags: Optional[Iterable[str]] = None,
     description: str | None = None,
     visibility: str = "public",
+    ui_consequential: bool | None = None,
     **_ignored: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator used across the repo to register an MCP tool.
@@ -1305,6 +1346,10 @@ def mcp_tool(
         except Exception:
             pass
 
+        openai_is_consequential = _openai_is_consequential(
+            tool_name, tag_set, write_action=write_action, ui_consequential=ui_consequential
+        )
+
         _register_with_fastmcp(
             wrapper,
             name=tool_name,
@@ -1312,6 +1357,7 @@ def mcp_tool(
             description=normalized_description,
             tags=tag_set,
             write_action=write_action,
+            openai_is_consequential=openai_is_consequential,
             visibility=tool_visibility,
         )
 

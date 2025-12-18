@@ -43,6 +43,16 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
             display_name = meta.get("title") or meta.get("openai/title")
         display_name = display_name or tool.name
 
+        is_consequential = None
+        if isinstance(meta, dict):
+            is_consequential = meta.get("x-openai-isConsequential")
+            if is_consequential is None:
+                is_consequential = meta.get("openai/isConsequential")
+        if is_consequential is None and isinstance(annotations, dict):
+            is_consequential = annotations.get("isConsequential")
+        if is_consequential is not None:
+            is_consequential = bool(is_consequential)
+
         actions.append(
             {
                 "name": tool.name,
@@ -52,6 +62,8 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "parameters": schema or {"type": "object", "properties": {}},
                 "annotations": annotations,
                 "meta": meta,
+                "x-openai-isConsequential": is_consequential,
+                "isConsequential": is_consequential,
             }
         )
 
