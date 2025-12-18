@@ -1,0 +1,30 @@
+# Render Blueprint (Infrastructure as Code)
+# Docs:
+# - Blueprint spec reference: https://render.com/docs/blueprint-spec
+# - Blueprints overview: https://render.com/docs/infrastructure-as-code
+#
+# Notes:
+# - This file is only applied when the service is created/managed via Render "New > Blueprint".
+# - This repo already installs essential OS tools (git, ripgrep, shellcheck, curl, ca-certificates)
+#   in the Dockerfile.
+
+services:
+  - type: web
+    name: chatgpt-mcp-github
+    runtime: docker
+    branch: main
+
+    # Use the repo-root Dockerfile by default.
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./
+
+    # The Dockerfile's CMD already runs uvicorn and respects $PORT.
+    # dockerCommand can be set here if you need to override CMD/ENTRYPOINT.
+
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MCP_WORKSPACE_BASE_DIR
+        value: /workspace
+      - key: UVICORN_ACCESS_LOG
+        value: "1"
