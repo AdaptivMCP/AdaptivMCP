@@ -3,6 +3,23 @@
 This repository is a self-hosted GitHub MCP (Model Context Protocol) server.
 It exposes a safe, engineering-oriented tool surface so an assistant (for example a ChatGPT custom GPT) can work on GitHub repos using normal software practices: branches, diffs, tests/linters, and pull requests.
 
+## Canonical operating model
+
+**Roles**
+- User (human): sets goals, reviews outcomes.
+- Assistant (operator): runs tools, does the work, reports progress.
+
+**Places**
+- Remote repo: shared source of truth.
+- Workspace: the assistant's PC (persistent clone on the service).
+- Logs: user-facing status feed.
+
+**Required phases**
+Discovery -> Implementation -> Testing/verification -> Commit+push -> Summary
+
+**Tool default**
+Use `terminal_command` as the primary way to work (like a local dev machine). Higher-level workspace file tools exist for precise, deterministic edits.
+
 ## How to read this repo
 
 There are two layers:
@@ -50,7 +67,7 @@ Workspace tools operate in a persistent clone on the server (for example on Rend
 - `commit_workspace`, `commit_workspace_files`
 - `workspace_self_heal_branch` (recover from a mangled workspace branch)
 
-These are what make “act like a real engineer” possible: install deps, run tests, debug CI, and keep changes reviewable.
+These are what make "act like a real engineer" possible: edit files, run tests/linters, debug CI, and keep changes reviewable.
 
 ### User-facing assistant logs (Render / stdout)
 
@@ -94,12 +111,19 @@ This server includes a small, assistant-usable web browser layer:
 
 These tools exist to help assistants refresh documentation, chase down package behavior, and validate external facts.
 
+## Quality suites (no runtime installs)
+
+Runtime dependency installs are intentionally avoided. The service environment is prepared at deploy time.
+
+- `scripts/run_lint.sh` should only lint/format-check.
+- `scripts/run_tests.sh` should only run tests.
+
 ## Safety model in one page
 
 Default posture:
 
 - **Branch-first work**: do not develop directly on the default branch; use a feature branch and open a PR.
-- **Write gate**: tools tagged as write actions are controlled by server policy and `authorize_write_actions`.
+- **Write gate**: approvals should happen at remote-risk boundaries (push, web, Render CLI).
 - **Auditability**: changes are committed to Git and reviewed via PRs.
 - **Minimize payload risk**: prefer file slices over giant blobs; clamp command output when needed.
 
@@ -127,13 +151,13 @@ When you see “improperly coded JSON” or a tool call does not execute, treat 
 
 4. **GitHub API error**
    - Symptoms: 401/403/422/429 or rate-limit messaging.
-   - Fix: token scopes, repo permissions, branch protections, retry/backoff.
+   - Fix: auth scopes, repo permissions, branch protections, retry/backoff.
 
 ## Health and observability
 
 The server exposes:
 
-- `/healthz` – small JSON health payload (uptime, controller defaults, token-present signal, in-memory metrics snapshot).
+- `/healthz` – small JSON health payload (uptime, controller defaults, auth-present signal, in-memory metrics snapshot).
 - `/sse` – MCP transport endpoint.
 - `/static` – static assets (connector icons, branding).
 
