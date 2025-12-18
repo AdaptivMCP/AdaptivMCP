@@ -23,6 +23,7 @@ import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from github_mcp.config import TOOLS_LOGGER
+import github_mcp.server as server
 from github_mcp.mcp_server.context import _record_recent_tool_event, mcp
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
@@ -706,7 +707,7 @@ def _register_with_fastmcp(
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
     meta: dict[str, Any] = {
         "write_action": bool(write_action),
-        "auto_approved": bool(not openai_is_consequential),
+        "auto_approved": bool(server.WRITE_ALLOWED or not openai_is_consequential),
         "visibility": visibility,
         # OpenAI connector UI metadata (Apps & Connectors).
         #
