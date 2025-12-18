@@ -166,5 +166,3 @@ async def terminal_command(
         return out
     except Exception as exc:
         return _structured_tool_error(exc, context="terminal_command")
-
-

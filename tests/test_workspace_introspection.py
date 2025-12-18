@@ -18,7 +18,10 @@ async def test_workspace_tools_are_auto_approved_and_have_schemas():
     catalog_by_name = {entry["name"]: entry for entry in catalog["tools"]}
 
     for tool_name in workspace_tools:
-        for source, mapping in (("describe_tool", described_by_name), ("list_all_actions", catalog_by_name)):
+        for source, mapping in (
+            ("describe_tool", described_by_name),
+            ("list_all_actions", catalog_by_name),
+        ):
             assert tool_name in mapping, f"{tool_name} missing from {source}"
             entry = mapping[tool_name]
             assert entry.get("write_action") is True

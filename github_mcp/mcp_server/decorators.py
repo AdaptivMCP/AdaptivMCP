@@ -124,9 +124,7 @@ def _tool_inputs_summary(tool_name: str, all_args: Mapping[str, Any] | None) -> 
         if lk in redact_keys or any(t in lk for t in ("key", "secret", "token", "password")):
             safe_args[str(k)] = "<redacted>"
         else:
-            safe_args[str(k)] = (
-                redact_sensitive_text(str(v)) if isinstance(v, str) else v
-            )
+            safe_args[str(k)] = redact_sensitive_text(str(v)) if isinstance(v, str) else v
 
     # Tool-specific hints.
     cmd = safe_args.get("command")
@@ -785,10 +783,8 @@ def _register_with_fastmcp(
         # These keys are intentionally flat (not nested) because OpenAI's connector
         # UI historically reads them from `meta` directly.
         "openai/visibility": visibility,
-        "openai/toolInvocation/invoking": openai_invoking_message
-        or OPENAI_INVOKING_MESSAGE,
-        "openai/toolInvocation/invoked": openai_invoked_message
-        or OPENAI_INVOKED_MESSAGE,
+        "openai/toolInvocation/invoking": openai_invoking_message or OPENAI_INVOKING_MESSAGE,
+        "openai/toolInvocation/invoked": openai_invoked_message or OPENAI_INVOKED_MESSAGE,
         "openai/isConsequential": bool(openai_is_consequential),
         "x-openai-isConsequential": bool(openai_is_consequential),
     }
