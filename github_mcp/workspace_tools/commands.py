@@ -111,12 +111,38 @@ async def terminal_command(
             timeout_seconds=timeout_seconds,
             env=env,
         )
+
+        # User-facing aliases.
+        # Keep legacy keys (stdout/stderr) for compatibility, but provide clearer names
+        # for assistants and UIs that want human-readable labels.
+        if isinstance(result, dict):
+            stdout = str(result.get("stdout") or "")
+            stderr = str(result.get("stderr") or "")
+            exit_code = result.get("exit_code")
+            # Prefer not to overwrite if upstream already set them.
+            result.setdefault("response", stdout)
+            # stderr is often useful diagnostics even on success; we split it to keep labels clear.
+            if exit_code in (None, 0):
+                result.setdefault("diagnostics", stderr)
+                result.setdefault("errors", "")
+            else:
+                result.setdefault("diagnostics", "")
+                result.setdefault("errors", stderr)
+
         out: Dict[str, Any] = {
             "repo_dir": repo_dir,
             "workdir": workdir,
             "install": install_result,
             "result": result,
         }
+
+        # Top-level convenience fields (small, compatible with existing payload sizes).
+        if isinstance(result, dict):
+            out["exit_code"] = result.get("exit_code")
+            out["timed_out"] = result.get("timed_out", False)
+            out["response"] = result.get("response")
+            out["diagnostics"] = result.get("diagnostics")
+            out["errors"] = result.get("errors")
 
         # If a python dependency is missing, nudge the assistant to rerun with deps installation.
         if (
