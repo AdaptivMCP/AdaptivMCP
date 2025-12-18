@@ -183,29 +183,36 @@ async def test_terminal_command_mutating_triggers_write_gate(monkeypatch, tmp_pa
 async def test_run_shell_truncates_output_when_limits_exceeded(monkeypatch):
     """When TOOL_STDOUT_MAX_CHARS / TOOL_STDERR_MAX_CHARS are small,
     _run_shell should truncate output and set the truncation flags.
+
+    Note: output includes a delimiter to avoid token-like redaction patterns
+    that would otherwise collapse long runs of characters.
     """
 
     monkeypatch.setattr(main, "TOOL_STDOUT_MAX_CHARS", 10)
     monkeypatch.setattr(main, "TOOL_STDERR_MAX_CHARS", 5)
 
-    cmd = "python - <<'PY'\nimport sys\nsys.stdout.write('A' * 20)\nsys.stderr.write('B' * 30)\nPY"
+    cmd = "python - <<'PY'\nimport sys\nsys.stdout.write('A' * 9 + '-' + 'A' * 10)\nsys.stderr.write('B' * 4 + '-' + 'B' * 20)\nPY"
     result = await main._run_shell(cmd)
 
     assert result["stdout_truncated"] is True
     assert result["stderr_truncated"] is True
-    assert result["stdout"] == "A" * 10
-    assert result["stderr"] == "B" * 5
+    assert result["stdout"] == ("A" * 9 + "-")
+    assert result["stderr"] == ("B" * 4 + "-")
 
 
 @pytest.mark.asyncio
 async def test_run_shell_combined_truncation(monkeypatch):
-    """A combined cap keeps stdout+stderr under the configured budget."""
+    """A combined cap keeps stdout+stderr under the configured budget.
+
+    Note: output includes a delimiter to avoid token-like redaction patterns
+    that would otherwise collapse long runs of characters.
+    """
 
     monkeypatch.setattr(main, "TOOL_STDOUT_MAX_CHARS", 100)
     monkeypatch.setattr(main, "TOOL_STDERR_MAX_CHARS", 100)
     monkeypatch.setattr(main, "TOOL_STDIO_COMBINED_MAX_CHARS", 50)
 
-    cmd = "python - <<'PY'\nimport sys\nsys.stdout.write('A' * 40)\nsys.stderr.write('B' * 40)\nPY"
+    cmd = "python - <<'PY'\nimport sys\nsys.stdout.write('A' * 20 + '-' + 'A' * 19)\nsys.stderr.write('B' * 20 + '-' + 'B' * 19)\nPY"
     result = await main._run_shell(cmd)
 
     assert len(result["stdout"]) + len(result["stderr"]) <= 50

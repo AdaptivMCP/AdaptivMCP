@@ -1,31 +1,28 @@
 import httpx
 import importlib
+
 import pytest
 
 import main
 
 
 def _expected_is_consequential(action: dict) -> bool:
-    name = (action.get("name") or "").lower()
-    tags = {str(t).lower() for t in action.get("meta", {}).get("tags", []) if t}
+    """Mirror the server's current /v1/actions serialization logic.
 
-    if name in {"web_fetch", "web_search"} or "web" in tags:
-        return True
+    The compat endpoint only marks a tool consequential if the tool metadata or
+    annotations explicitly set it (it does not infer from names/tags).
+    """
 
-    if name == "render_cli_command" or "render-cli" in tags:
-        return True
+    meta = action.get("meta") or {}
+    annotations = action.get("annotations") or {}
 
-    if name in {
-        "workspace_create_branch",
-        "workspace_delete_branch",
-        "workspace_self_heal_branch",
-    }:
-        return True
+    is_consequential = meta.get("x-openai-isConsequential")
+    if is_consequential is None:
+        is_consequential = meta.get("openai/isConsequential")
+    if is_consequential is None:
+        is_consequential = annotations.get("isConsequential")
 
-    if "push" in name or any(t in {"push", "git-push", "git_push"} or "push" in t for t in tags):
-        return True
-
-    return False
+    return bool(is_consequential) if is_consequential is not None else False
 
 
 def _action_is_consequential_flag(action: dict) -> bool:
@@ -69,10 +66,14 @@ async def test_actions_endpoint_marks_expected_consequential_tools():
         meta = action.get("meta") or {}
         annotations = action.get("annotations") or {}
 
+        # When write actions are enabled, the server forces auto_approved for all tools.
         if main.server.WRITE_ALLOWED:
             assert bool(meta.get("auto_approved")) is True
         else:
+            # When write actions are disabled, only non-consequential tools are auto-approved.
             assert bool(meta.get("auto_approved")) is (not expected)
+
+        # readOnlyHint is asserted to be the inverse of isConsequential.
         assert bool(annotations.get("readOnlyHint")) is (not expected)
 
 
