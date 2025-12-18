@@ -797,7 +797,7 @@ def _register_with_fastmcp(
         meta["title"] = title
         meta["openai/title"] = title
     annotations = {
-        "readOnlyHint": bool(not openai_is_consequential),
+        "readOnlyHint": bool(not write_action),
         "title": title or _title_from_tool_name(name),
     }
 
