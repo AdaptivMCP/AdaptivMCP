@@ -703,6 +703,8 @@ def _register_with_fastmcp(
     write_action: bool,
     openai_is_consequential: bool,
     visibility: str = "public",
+    openai_invoking_message: Optional[str] = None,
+    openai_invoked_message: Optional[str] = None,
 ) -> Any:
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
     meta: dict[str, Any] = {
@@ -714,8 +716,10 @@ def _register_with_fastmcp(
         # These keys are intentionally flat (not nested) because OpenAI's connector
         # UI historically reads them from `meta` directly.
         "openai/visibility": visibility,
-        "openai/toolInvocation/invoking": OPENAI_INVOKING_MESSAGE,
-        "openai/toolInvocation/invoked": OPENAI_INVOKED_MESSAGE,
+        "openai/toolInvocation/invoking": openai_invoking_message
+        or OPENAI_INVOKING_MESSAGE,
+        "openai/toolInvocation/invoked": openai_invoked_message
+        or OPENAI_INVOKED_MESSAGE,
         "openai/isConsequential": bool(openai_is_consequential),
         "x-openai-isConsequential": bool(openai_is_consequential),
     }
@@ -1360,6 +1364,8 @@ def mcp_tool(
             write_action=write_action,
             openai_is_consequential=openai_is_consequential,
             visibility=tool_visibility,
+            openai_invoking_message=invoking_msg,
+            openai_invoked_message=invoked_msg,
         )
 
         return wrapper
