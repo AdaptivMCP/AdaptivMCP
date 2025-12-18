@@ -4,8 +4,9 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1
 
 # Install minimal system dependencies (git for workspace clones, plus tools for assistant workflows)
+# Note: Render CLI installer requires `unzip`.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ripgrep shellcheck curl ca-certificates \
+    && apt-get install -y --no-install-recommends git ripgrep shellcheck curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Create and use the app directory
@@ -29,4 +30,4 @@ ENV MCP_WORKSPACE_BASE_DIR=/workspace \
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "if [ "${UVICORN_ACCESS_LOG:-1}" = "0" ]; then ACCESS="--no-access-log"; else ACCESS="--access-log"; fi; uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} $ACCESS"]
+CMD ["sh", "-c", "if [ \"${UVICORN_ACCESS_LOG:-1}\" = \"0\" ]; then ACCESS=\"--no-access-log\"; else ACCESS=\"--access-log\"; fi; uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} $ACCESS"]
