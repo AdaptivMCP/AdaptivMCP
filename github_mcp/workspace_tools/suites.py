@@ -52,7 +52,7 @@ async def run_tests(
     )
 
     if isinstance(result, dict) and "error" in result:
-        # Structured error from run_command (e.g. auth/clone failure).
+        # Structured error from terminal_command (e.g. auth/clone failure).
         return {
             "status": "failed",
             "command": test_command,
@@ -65,7 +65,7 @@ async def run_tests(
         }
 
     if not isinstance(result, dict) or "result" not in result:
-        # Unexpected shape from run_command.
+        # Unexpected shape from terminal_command.
         return {
             "status": "failed",
             "command": test_command,
@@ -75,7 +75,7 @@ async def run_tests(
                 "raw_result": result,
             },
             "controller_log": [
-                "Test run failed because run_command returned an unexpected result shape.",
+                "Test run failed because terminal_command returned an unexpected result shape.",
                 f"- Command: {test_command}",
             ],
         }
@@ -298,7 +298,7 @@ async def run_lint_suite(
                 "raw_result": result,
             },
             "controller_log": [
-                "Lint run failed because run_command returned an unexpected result shape.",
+                "Lint run failed because terminal_command returned an unexpected result shape.",
                 f"- Command: {lint_command}",
             ],
         }

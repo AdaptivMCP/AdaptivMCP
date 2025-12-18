@@ -2,7 +2,7 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_run_command_adds_dependency_hint_on_module_not_found(monkeypatch, tmp_path):
+async def test_terminal_command_adds_dependency_hint_on_module_not_found(monkeypatch, tmp_path):
     from github_mcp import tools_workspace as tw
 
     async def fake_clone_repo(full_name, ref, preserve_changes=True):
@@ -39,7 +39,7 @@ async def test_run_command_adds_dependency_hint_on_module_not_found(monkeypatch,
     )
     monkeypatch.setattr(tw, "_effective_ref_for_repo", lambda full_name, ref: ref)
 
-    res = await tw.run_command(
+    res = await tw.terminal_command(
         full_name="owner/repo", ref="main", command="python -c 'x'", use_temp_venv=True
     )
 
@@ -51,7 +51,7 @@ async def test_run_command_adds_dependency_hint_on_module_not_found(monkeypatch,
 
 
 @pytest.mark.asyncio
-async def test_run_command_installs_requirements_when_requested(monkeypatch, tmp_path):
+async def test_terminal_command_installs_requirements_when_requested(monkeypatch, tmp_path):
     from github_mcp import tools_workspace as tw
 
     (tmp_path / "dev-requirements.txt").write_text("pytest\n", encoding="utf-8")
@@ -90,7 +90,7 @@ async def test_run_command_installs_requirements_when_requested(monkeypatch, tmp
     )
     monkeypatch.setattr(tw, "_effective_ref_for_repo", lambda full_name, ref: ref)
 
-    res = await tw.run_command(
+    res = await tw.terminal_command(
         full_name="owner/repo",
         ref="main",
         command="pytest -q",
@@ -104,7 +104,7 @@ async def test_run_command_installs_requirements_when_requested(monkeypatch, tmp
 
 
 @pytest.mark.asyncio
-async def test_run_command_skips_auto_install_if_command_installs(monkeypatch, tmp_path):
+async def test_terminal_command_skips_auto_install_if_command_installs(monkeypatch, tmp_path):
     from github_mcp import tools_workspace as tw
 
     (tmp_path / "dev-requirements.txt").write_text("pytest\n", encoding="utf-8")
@@ -144,7 +144,7 @@ async def test_run_command_skips_auto_install_if_command_installs(monkeypatch, t
     monkeypatch.setattr(tw, "_effective_ref_for_repo", lambda full_name, ref: ref)
 
     cmd = "python -m pip install -r dev-requirements.txt && pytest -q"
-    res = await tw.run_command(
+    res = await tw.terminal_command(
         full_name="owner/repo",
         ref="main",
         command=cmd,

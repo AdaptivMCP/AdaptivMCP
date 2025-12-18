@@ -65,7 +65,7 @@ def list_write_tools() -> Dict[str, Any]:
             "notes": "Clones if missing and can optionally reset to the remote ref; now allowed without toggling write approval so assistants can set up quickly.",
         },
         {
-            "name": "run_command",
+            "name": "terminal_command",
             "category": "workspace",
             "description": "Run an arbitrary shell command in a persistent workspace clone.",
             "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls; set mutating=true (or installing_dependencies=true/use_temp_venv=false) when a command will modify files or server state so gating applies only to those cases.",
@@ -86,7 +86,7 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "run_tests",
             "category": "workspace",
             "description": "Run tests (default: pytest) inside the persistent workspace clone.",
-            "notes": "Preferred way to run tests; shares the persistent workspace with run_command and commit helpers. Mark mutating=true only when the test command will edit files so read-only runs stay ungated.",
+            "notes": "Preferred way to run tests; shares the persistent workspace with terminal_command and commit helpers. Mark mutating=true only when the test command will edit files so read-only runs stay ungated.",
         },
         {
             "name": "trigger_workflow_dispatch",

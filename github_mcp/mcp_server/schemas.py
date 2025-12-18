@@ -181,9 +181,9 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     if schema is not None:
         props = schema.setdefault("properties", {})
 
-        # run_command: allow ref to be string or null so callers can pass
+        # terminal_command: allow ref to be string or null so callers can pass
         # None and rely on controller defaults without tripping JSON Schema.
-        if name == "run_command":
+        if name == "terminal_command":
             ref_prop = props.get("ref")
             if isinstance(ref_prop, dict):
                 existing_type = ref_prop.get("type")

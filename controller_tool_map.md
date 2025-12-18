@@ -93,7 +93,6 @@ To discover the live tool surface at runtime, use the tools themselves: `list_al
 |---|---:|---:|---|
 | `ensure_workspace_clone` | `github_mcp/workspace_tools/clone.py` | 23 | Ensure a persistent workspace clone exists for a repo/ref. |
 | `terminal_command` | `github_mcp/workspace_tools/commands.py` | 26 | Run a shell command inside the repo workspace and return its result. |
-| `run_command` | `github_mcp/workspace_tools/commands.py` | 146 | Deprecated alias for terminal_command. |
 | `commit_workspace` | `github_mcp/workspace_tools/commit.py` | 260 | Commit workspace changes and optionally push them. |
 | `commit_workspace_files` | `github_mcp/workspace_tools/commit.py` | 395 | Commit and optionally push specific files from the persistent workspace. |
 | `get_workspace_changes_summary` | `github_mcp/workspace_tools/commit.py` | 536 | Summarize modified, added, deleted, renamed, and untracked files in the workspace. |

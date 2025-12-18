@@ -35,7 +35,7 @@ The changelog is intentionally **operator-facing**:
 
 ### Deprecated
 
-- `run_command` remains as a compatibility alias for `terminal_command`.
+- Removed the deprecated `run_command` alias; use `terminal_command` for workspace shell access.
 - `fetch_url` remains as a compatibility wrapper; prefer `web_fetch` for internet access.
 
 ## 1.0.0

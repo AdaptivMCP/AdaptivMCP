@@ -70,7 +70,7 @@ CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main
 
 # Canonical args examples shown in tool descriptions to reduce malformed tool calls.
 _TOOL_EXAMPLES: dict[str, str] = {
-    "run_command": '{"full_name":"owner/repo","ref":"main","command":"pytest"}',
+    "terminal_command": '{"full_name":"owner/repo","ref":"main","command":"pytest"}',
     "ensure_workspace_clone": '{"full_name":"owner/repo","ref":"feature-branch","reset":true}',
     "get_workspace_file_contents": '{"full_name":"owner/repo","ref":"feature-branch","path":"path/to/file.py"}',
     "set_workspace_file_contents": '{"full_name":"owner/repo","ref":"feature-branch","path":"path/to/file.py","content":"..."}',
