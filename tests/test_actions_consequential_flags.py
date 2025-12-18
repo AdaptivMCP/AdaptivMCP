@@ -1,4 +1,5 @@
 import httpx
+import importlib
 import pytest
 
 import main
@@ -68,5 +69,35 @@ async def test_actions_endpoint_marks_expected_consequential_tools():
         meta = action.get("meta") or {}
         annotations = action.get("annotations") or {}
 
-        assert bool(meta.get("auto_approved")) is (not expected)
+        if main.server.WRITE_ALLOWED:
+            assert bool(meta.get("auto_approved")) is True
+        else:
+            assert bool(meta.get("auto_approved")) is (not expected)
         assert bool(annotations.get("readOnlyHint")) is (not expected)
+
+
+@pytest.mark.anyio
+async def test_actions_endpoint_auto_approves_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
+
+    updated_main = importlib.reload(main)
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=updated_main.app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/v1/actions")
+
+        assert response.status_code == 200
+        actions = response.json().get("actions") or []
+        assert actions, "expected at least one action in compatibility listing"
+
+        for action in actions:
+            meta = action.get("meta") or {}
+            assert bool(meta.get("auto_approved")) is True
+    finally:
+        monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
+        importlib.reload(main)

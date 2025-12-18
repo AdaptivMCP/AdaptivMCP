@@ -33,8 +33,13 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         meta = getattr(tool, "meta", None)
         if hasattr(meta, "model_dump"):
             meta = meta.model_dump(exclude_none=True)
-        elif not isinstance(meta, dict):
+        elif isinstance(meta, dict):
+            meta = dict(meta)
+        else:
             meta = None
+
+        if isinstance(meta, dict) and getattr(server, "WRITE_ALLOWED", False):
+            meta["auto_approved"] = True
 
         display_name = getattr(tool, "title", None)
         if not display_name and isinstance(annotations, dict):
