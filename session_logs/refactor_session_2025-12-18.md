@@ -25,3 +25,24 @@ Update tests to match current actions flags and redaction-aware truncation
 ### Next steps
 After CI is green, wait for the Render redeploy to complete, then verify behavior in the running service.
 
+## 2025-12-18 14:56:47 EST — Commit pushed
+**Repo:** `Proofgate-Revocations/chatgpt-mcp-github`  
+**Branch:** `main`  
+**Commit:** `<redact` — cb79908 Add Render Blueprint (render.yaml) for Docker deployment
+
+### Summary
+Add Render Blueprint (render.yaml) for Docker deployment
+
+### Changed files
+- Added: render.yaml
+
+### Verification
+- Not recorded
+- CI: pending / not available
+- Deploy: Render health snapshot:
+- Window: last 30 minutes
+- Deploy: pending / not available
+
+### Next steps
+After CI is green, wait for the Render redeploy to complete, then verify behavior in the running service.
+
