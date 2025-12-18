@@ -60,3 +60,39 @@ Stabilization after the recent refactor.
 - `Dockerfile`:
   - `UVICORN_ACCESS_LOG` (uvicorn access-log toggle)
 
+## 2025-12-17 23:08:13 EST — Commit pushed
+**Repo:** `Proofgate-Revocations/chatgpt-mcp-github`  
+**Branch:** `main`  
+**Commit:** `1a291d9` — 1a291d9 Add user-facing response/diagnostics/errors aliases to terminal_command output
+
+### Summary
+## Discovery
+Render logs were showing tool outputs using internal field names (stdout/stderr) and phrasing that isn't user-friendly.
+
+## Implementation
+- Updated `terminal_command` output payload to include user-facing aliases:
+  - `response` (alias for stdout)
+  - `diagnostics` (stderr when exit_code=0)
+  - `errors` (stderr when exit_code!=0)
+- Added small top-level convenience fields (`response`, `diagnostics`, `errors`, `exit_code`, `timed_out`) so UIs and assistants can display results cleanly without digging into nested structures.
+- Preserved backwards compatibility by keeping `stdout` and `stderr` unchanged.
+
+## Why this matters
+This is the foundation for making Render logs and UI tool outputs readable to humans, without leaking low-level program details.
+
+### Changed files
+- Updated: github_mcp/workspace_tools/commands.py
+
+### Verification
+- - `run_quality_suite` passed (ruff + token scan + pytest).
+- Manual smoke: `terminal_command` now returns `response/diagnostics/errors` fields in addition to stdout/stderr.
+- CI: pending / not available
+- Deploy: Render health snapshot:
+- Window: last 30 minutes
+- Deploy: pending / not available
+
+### Next steps
+- Update the tool narrative strings in `mcp_server/decorators.py` to be full, user-facing sentences by log level.
+- Implement automatic session log creation (`session_logs/refactor_session_<date>.md`) and append commit diffs to that log after each commit/push.
+- Wire Render health/metrics into assistant-facing logs and add higher-level orchestration actions.
+
