@@ -87,6 +87,9 @@ def _normalize_tool_description(
                 optional.append(name)
 
     scope = "write" if llm_level == "advanced" else "read"
+    # Make scope visible even when UIs show only the first line.
+    base = base[:-1] if base.endswith((".", "!", "?")) else base
+    base = f"{base} ({scope})."
     required_summary = f"Required: {', '.join(required)}." if required else ""
     optional_summary = f"Optional: {', '.join(optional)}." if optional else ""
 
@@ -100,7 +103,6 @@ def _normalize_tool_description(
 
     parts = [
         base,
-        f"Scope: {scope}.",
         required_summary,
         optional_summary,
         alias_summary,
