@@ -281,34 +281,6 @@ async def terminal_command(
     )
 
 
-async def run_command(
-    full_name: str,
-    ref: str = "main",
-    command: str = "pytest",
-    timeout_seconds: int = 300,
-    workdir: Optional[str] = None,
-    use_temp_venv: bool = True,
-    installing_dependencies: bool = False,
-    mutating: bool = False,
-) -> Dict[str, Any]:
-    """Thin wrapper around github_mcp.tools_workspace.terminal_command (via run_command alias).
-
-    Tests import run_command from main so this helper forwards to the
-    workspace tool while still allowing monkeypatching of internal
-    dependencies like _clone_repo and _run_shell on the main module.
-    """
-    return await tools_workspace.run_command(
-        full_name=full_name,
-        ref=ref,
-        command=command,
-        timeout_seconds=timeout_seconds,
-        workdir=workdir,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        mutating=mutating,
-    )
-
-
 async def run_tests(
     full_name: str,
     ref: str = "main",
@@ -1563,7 +1535,7 @@ async def open_pr_for_existing_branch(
         the same head/base pair, it will return that existing PR instead of failing
         or creating a duplicate.
 
-    If this tool call is blocked upstream by OpenAI, use the workspace flow: `run_command` to create or reuse the PR.
+    If this tool call is blocked upstream by OpenAI, use the workspace flow: `terminal_command` to create or reuse the PR.
     """
     from github_mcp.main_tools.pull_requests import open_pr_for_existing_branch as _impl
 

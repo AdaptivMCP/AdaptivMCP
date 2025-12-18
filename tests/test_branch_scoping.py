@@ -49,7 +49,7 @@ def test_effective_ref_for_repo_non_controller(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.asyncio
-async def test_run_command_uses_controller_default_branch(
+async def test_terminal_command_uses_controller_default_branch(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
@@ -87,7 +87,7 @@ async def test_run_command_uses_controller_default_branch(
     monkeypatch.setattr(main, "_run_shell", fake_run_shell)
     monkeypatch.setattr(main, "_ensure_write_allowed", fake_ensure_write_allowed)
 
-    await main.run_command(
+    await main.terminal_command(
         full_name="owner/controller",
         ref="main",  # should be remapped to CONTROLLER_DEFAULT_BRANCH
         command="echo hi",

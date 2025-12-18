@@ -118,8 +118,8 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
             steps.append(
                 mk(
                     "workspace_fallback",
-                    tool="run_command",
-                    action="Assistant: create the PR from the workspace using run_command (GitHub API call via python/curl).",
+                    tool="terminal_command",
+                    action="Assistant: create the PR from the workspace using terminal_command (GitHub API call via python/curl).",
                 )
             )
 
@@ -146,10 +146,10 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
         steps.append(
             mk(
                 "timeout",
-                tool="run_command",
+                tool="terminal_command",
                 action=(
                     "Assistant: retry with a higher timeout_seconds or split into smaller steps "
-                    "(workspace run_command is best for long operations)."
+                    "(workspace terminal_command is best for long operations)."
                 ),
             )
         )
@@ -174,7 +174,7 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
             mk(
                 "hint",
                 action=(
-                    "Assistant: if PR creation is blocked upstream, use run_command in the workspace to call the GitHub PR API. "
+                    "Assistant: if PR creation is blocked upstream, use terminal_command in the workspace to call the GitHub PR API. "
                     "Avoid token-like strings in tool inputs; use <REDACTED> placeholders."
                 ),
             )

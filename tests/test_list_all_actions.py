@@ -52,8 +52,8 @@ def test_list_all_actions_compact_mode_truncates_descriptions():
     expanded = main.list_all_actions(include_parameters=False, compact=False)
     compact = main.list_all_actions(include_parameters=False, compact=True)
 
-    expanded_tool = next(tool for tool in expanded["tools"] if tool["name"] == "run_command")
-    compact_tool = next(tool for tool in compact["tools"] if tool["name"] == "run_command")
+    expanded_tool = next(tool for tool in expanded["tools"] if tool["name"] == "terminal_command")
+    compact_tool = next(tool for tool in compact["tools"] if tool["name"] == "terminal_command")
 
     assert compact["compact"] is True
     assert "tags" not in compact_tool

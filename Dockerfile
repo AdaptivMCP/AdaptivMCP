@@ -24,7 +24,7 @@ COPY . .
 # Install the Render CLI (optional; used by render_cli tool and terminal_command)
 RUN curl -fsSL https://raw.githubusercontent.com/render-oss/cli/main/bin/install.sh | sh
 
-# Default workspace base dir for run_command / run_tests and default log level
+# Default workspace base dir for terminal_command / run_tests and default log level
 ENV MCP_WORKSPACE_BASE_DIR=/workspace \
     LOG_LEVEL=INFO
 

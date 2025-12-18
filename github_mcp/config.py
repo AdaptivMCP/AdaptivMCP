@@ -87,7 +87,7 @@ RENDER_API_KEY = os.environ.get("RENDER_API_KEY") or os.environ.get("RENDER_API_
 RENDER_DEFAULT_RESOURCE = os.environ.get("RENDER_RESOURCE") or os.environ.get("RENDER_SERVICE_ID")
 RENDER_OWNER_ID = os.environ.get("RENDER_OWNER_ID") or os.environ.get("RENDER_OWNER")
 
-# Base directory for persistent workspaces used by run_command/terminal_command and related tools.
+# Base directory for persistent workspaces used by terminal_command and related tools.
 #
 # Defaults:
 # - Local dev: /tmp/mcp-github-workspaces
@@ -133,7 +133,7 @@ TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHAR
 WRITE_DIFF_LOG_MAX_LINES = int(os.environ.get("WRITE_DIFF_LOG_MAX_LINES", "200"))
 WRITE_DIFF_LOG_MAX_CHARS = int(os.environ.get("WRITE_DIFF_LOG_MAX_CHARS", "20000"))
 
-# Soft limit for run_command.command length to discourage huge inline scripts.
+# Soft limit for terminal_command.command length to discourage huge inline scripts.
 RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "20000"))
 
 # Defaults for get_file_with_line_numbers tool payload sizing.

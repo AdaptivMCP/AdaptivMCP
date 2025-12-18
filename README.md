@@ -62,7 +62,7 @@ This repo’s docs are the contract for how the engine behaves.
 Workspace tools operate in a persistent clone on the server (for example on Render):
 
 - `ensure_workspace_clone`
-- `terminal_command` *(formerly `run_command`; alias preserved)*
+- `terminal_command` (workspace shell gateway)
 - `run_tests`, `run_lint_suite`, `run_quality_suite`
 - `commit_workspace`, `commit_workspace_files`
 - `workspace_self_heal_branch` (recover from a mangled workspace branch)

@@ -7,7 +7,7 @@ These docs are the source of truth for expectations and constraints.
 ## Editing preferences
 
 - Full-file replacements are preferred: edit with `terminal_command` (workspace) or set `updated_content` and commit with `apply_text_update_and_commit`.
-- `terminal_command` was previously named `run_command`; `run_command` remains available as a deprecated alias.
+- `terminal_command` is the workspace shell gateway for tests/linters/diagnostics.
 - Avoid embedding large patch scripts inside JSON strings. If you need complex edits, do them in the workspace and commit normally.
 
 ## Recommended startup sequence

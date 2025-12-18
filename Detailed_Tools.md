@@ -150,7 +150,6 @@ Tool names are stable; schemas may evolve. When in doubt, call `describe_tool`.
 |---|---|
 | `set_workspace_file_contents` | Replace a workspace file's contents by writing the full file text. |
 | `terminal_command` | Run a shell command inside the repo workspace and return its result. |
-| `run_command` | Deprecated alias for terminal_command. |
 | `commit_workspace` | Commit workspace changes and optionally push them. |
 | `commit_workspace_files` | Commit and optionally push specific files from the persistent workspace. |
 
@@ -201,5 +200,5 @@ Tool names are stable; schemas may evolve. When in doubt, call `describe_tool`.
 
 ## Notes on compatibility aliases
 
-- `run_command` is a deprecated alias for `terminal_command` (kept for older controller prompts).
+- The workspace shell entrypoint is `terminal_command`.
 - `fetch_url` is a compatibility wrapper; prefer `web_fetch` for internet access.

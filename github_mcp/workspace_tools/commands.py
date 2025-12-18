@@ -51,7 +51,7 @@ async def terminal_command(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         if len(command) > RUN_COMMAND_MAX_CHARS:
             raise ValueError(
-                f"run_command.command is too long ({len(command)} chars); "
+                f"terminal_command.command is too long ({len(command)} chars); "
                 "split it into smaller commands or check in a script into the repo and run it from the workspace."
             )
         needs_write_gate = mutating or installing_dependencies or not use_temp_venv
@@ -168,43 +168,3 @@ async def terminal_command(
         return _structured_tool_error(exc, context="terminal_command")
 
 
-@mcp_tool(write_action=False)
-async def run_command(
-    full_name: Optional[str] = None,
-    ref: str = "main",
-    command: str = "pytest",
-    timeout_seconds: int = 300,
-    workdir: Optional[str] = None,
-    use_temp_venv: bool = True,
-    installing_dependencies: bool = False,
-    mutating: bool = False,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Deprecated alias for terminal_command.
-
-    Use terminal_command for a clearer "terminal/PC gateway" mental model.
-    """
-
-    out = await terminal_command(
-        full_name=full_name,
-        ref=ref,
-        command=command,
-        timeout_seconds=timeout_seconds,
-        workdir=workdir,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        mutating=mutating,
-        owner=owner,
-        repo=repo,
-        branch=branch,
-    )
-    if isinstance(out, dict):
-        log = out.get("controller_log")
-        if not isinstance(log, list):
-            log = []
-        log.insert(0, "run_command is deprecated; use terminal_command instead.")
-        out["controller_log"] = log
-    return out

@@ -610,7 +610,6 @@ def _tool_narrative(tool_name: str, all_args: Mapping[str, Any] | None) -> dict[
 
     elif tool_name in {
         "terminal_command",
-        "run_command",
         "run_tests",
         "run_lint_suite",
         "run_quality_suite",
