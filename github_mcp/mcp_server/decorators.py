@@ -20,11 +20,12 @@ import functools
 import inspect
 import time
 import uuid
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
 
 from github_mcp.config import TOOLS_LOGGER
 import github_mcp.server as server
 from github_mcp.mcp_server.context import _record_recent_tool_event, mcp
+from github_mcp.mcp_server.errors import ToolInputValidationError
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
@@ -32,7 +33,7 @@ from github_mcp.mcp_server.schemas import (
     _title_from_tool_name,
 )
 from github_mcp.metrics import _record_tool_call
-from github_mcp.redaction import redact_sensitive_text
+from github_mcp.redaction import TOKEN_PATTERNS, redact_sensitive_text
 
 # OpenAI connector UI strings.
 # These appear in ChatGPT's Apps & Connectors UI while a tool is running.
@@ -138,6 +139,75 @@ def _tool_inputs_summary(tool_name: str, all_args: Mapping[str, Any] | None) -> 
 
     # Default: compact JSON-ish preview produced by schemas helper.
     return redact_sensitive_text(_format_tool_args_preview(safe_args))
+
+
+def _contains_token_like(text: str) -> bool:
+    try:
+        return any(pat.search(text or "") for pat, _ in TOKEN_PATTERNS)
+    except Exception:
+        return False
+
+
+def _format_token_path(path: Sequence[str]) -> str:
+    return " → ".join(path) if path else "<root>"
+
+
+def _find_token_like_inputs(obj: Any, path: Optional[list[str]] = None) -> list[str]:
+    """Return argument paths that contain token-like strings."""
+
+    findings: list[str] = []
+    path = path or []
+
+    def _safe_segment(seg: Any) -> str:
+        seg_str = str(seg)
+        return "<redacted>" if _contains_token_like(seg_str) else seg_str
+
+    if isinstance(obj, str):
+        if _contains_token_like(obj):
+            findings.append(_format_token_path(path))
+        return findings
+
+    if isinstance(obj, Mapping):
+        for k, v in obj.items():
+            key_segment = _safe_segment(k)
+            if _contains_token_like(str(k)):
+                findings.append(_format_token_path(path + [key_segment]))
+            findings.extend(_find_token_like_inputs(v, path + [key_segment]))
+        return findings
+
+    if isinstance(obj, Sequence) and not isinstance(obj, (bytes, bytearray, memoryview)):
+        for idx, v in enumerate(obj):
+            findings.extend(_find_token_like_inputs(v, path + [str(idx)]))
+        return findings
+
+    return findings
+
+
+def _ensure_no_tokenlike_inputs(tool_name: str, all_args: Mapping[str, Any] | None) -> None:
+    """Raise when tool inputs contain token-like secrets."""
+
+    token_paths = _find_token_like_inputs(all_args or {})
+    if not token_paths:
+        return
+
+    unique_paths: list[str] = []
+    for p in token_paths:
+        if p not in unique_paths:
+            unique_paths.append(p)
+
+    max_paths = 3
+    display_paths = ", ".join(unique_paths[:max_paths])
+    if len(unique_paths) > max_paths:
+        display_paths += f", …({len(unique_paths) - max_paths} more)…"
+
+    raise ToolInputValidationError(
+        tool_name=tool_name,
+        message=(
+            "Token-like strings detected in tool inputs. Do not include secrets in tool calls; "
+            "use placeholders like <REDACTED> instead."
+        ),
+        field=display_paths or None,
+    )
 
 
 def _tool_phase_label(
@@ -793,6 +863,7 @@ def mcp_tool(
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 call_id = str(uuid.uuid4())
                 all_args = _bind_call_args(signature, args, kwargs)
+                _ensure_no_tokenlike_inputs(tool_name, all_args)
                 ctx = _extract_context(all_args)
 
                 start = time.perf_counter()
@@ -1066,6 +1137,7 @@ def mcp_tool(
             def wrapper(*args: Any, **kwargs: Any) -> Any:
                 call_id = str(uuid.uuid4())
                 all_args = _bind_call_args(signature, args, kwargs)
+                _ensure_no_tokenlike_inputs(tool_name, all_args)
                 ctx = _extract_context(all_args)
 
                 start = time.perf_counter()
