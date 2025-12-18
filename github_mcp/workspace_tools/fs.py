@@ -125,7 +125,7 @@ async def get_workspace_file_contents(
         return _structured_tool_error(exc, context="get_workspace_file_contents")
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def set_workspace_file_contents(
     full_name: Optional[str] = None,
     ref: str = "main",

@@ -19,7 +19,7 @@ def _tw():
     return tw
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def ensure_workspace_clone(
     full_name: Optional[str] = None,
     ref: str = "main",

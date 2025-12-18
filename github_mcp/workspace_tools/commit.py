@@ -294,7 +294,7 @@ async def _update_session_log_after_push(
     }
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def commit_workspace(
     full_name: Optional[str] = None,
     ref: str = "main",
@@ -316,10 +316,11 @@ async def commit_workspace(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        _tw()._ensure_write_allowed(
-            f"commit_workspace for {full_name}@{effective_ref}",
-            target_ref=effective_ref,
-        )
+        if push:
+            _tw()._ensure_write_allowed(
+                f"commit_workspace for {full_name}@{effective_ref}",
+                target_ref=effective_ref,
+            )
         deps = _tw()._workspace_deps()
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
@@ -429,7 +430,7 @@ async def commit_workspace(
         return _structured_tool_error(exc, context="commit_workspace")
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def commit_workspace_files(
     full_name: Optional[str],
     files: List[str],
@@ -454,10 +455,11 @@ async def commit_workspace_files(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        _tw()._ensure_write_allowed(
-            f"commit_workspace_files for {full_name}@{effective_ref}",
-            target_ref=effective_ref,
-        )
+        if push:
+            _tw()._ensure_write_allowed(
+                f"commit_workspace_files for {full_name}@{effective_ref}",
+                target_ref=effective_ref,
+            )
         deps = _tw()._workspace_deps()
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
