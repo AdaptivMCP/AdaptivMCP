@@ -67,3 +67,24 @@ Docker: install unzip for Render CLI installer
 ### Next steps
 After CI is green, wait for the Render redeploy to complete, then verify behavior in the running service.
 
+## 2025-12-18 15:18:30 EST — Commit pushed
+**Repo:** `Proofgate-Revocations/chatgpt-mcp-github`  
+**Branch:** `main`  
+**Commit:** `<redact` — 488c1a0 Blueprint: add health check and persistent workspace disk
+
+### Summary
+Blueprint: add health check and persistent workspace disk
+
+### Changed files
+- Updated: render.yaml
+
+### Verification
+- Not recorded
+- CI: pending / not available
+- Deploy: Render health snapshot:
+- Window: last 30 minutes
+- Deploy: pending / not available
+
+### Next steps
+After CI is green, wait for the Render redeploy to complete, then verify behavior in the running service.
+
