@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 import main
+from github_mcp.mcp_server.schemas import _title_from_tool_name
 
 
 @pytest.mark.anyio
@@ -36,3 +37,6 @@ async def test_actions_endpoint_exposes_registered_tools():
     assert "openai/toolInvocation/invoking" in meta
     assert "openai/toolInvocation/invoked" in meta
     assert "openai/visibility" in meta
+    expected_title = _title_from_tool_name("apply_text_update_and_commit")
+    assert meta["openai/toolInvocation/invoking"] == f"Adaptiv: {expected_title}"
+    assert meta["openai/toolInvocation/invoked"] == f"Adaptiv: {expected_title} done"
