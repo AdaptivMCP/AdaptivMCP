@@ -88,3 +88,27 @@ Blueprint: add health check and persistent workspace disk
 ### Next steps
 After CI is green, wait for the Render redeploy to complete, then verify behavior in the running service.
 
+## 2025-12-18 18:18:22 EST — Commit pushed
+**Repo:** `Proofgate-Revocations/chatgpt-mcp-github`  
+**Branch:** `ci/redaction-scan`  
+**Commit:** `<redact` — d11d42e Remove token-like string scanner; format touched files
+
+### Summary
+Remove token-like string scanner; format touched files
+
+### Changed files
+- Updated: github_mcp/mcp_server/decorators.py
+- Updated: github_mcp/workspace_tools/commands.py
+- Updated: scripts/check_no_tokenlike_strings.py
+- Updated: tests/test_workspace_introspection.py
+
+### Verification
+- Not recorded
+- CI: pending / not available
+- Deploy: Render health snapshot:
+- Window: last 30 minutes
+- Deploy: pending / not available
+
+### Next steps
+After CI is green, wait for the Render redeploy to complete, then verify behavior in the running service.
+
