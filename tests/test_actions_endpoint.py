@@ -1,5 +1,9 @@
+import os
+
 import httpx
 import pytest
+
+os.environ.setdefault("GITHUB_MCP_COMPACT_METADATA", "0")
 
 import main
 from github_mcp.mcp_server.schemas import _title_from_tool_name

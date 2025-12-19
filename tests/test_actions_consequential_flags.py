@@ -3,6 +3,10 @@ import importlib
 import httpx
 import pytest
 
+import os
+
+os.environ.setdefault("GITHUB_MCP_COMPACT_METADATA", "0")
+
 import main
 
 
