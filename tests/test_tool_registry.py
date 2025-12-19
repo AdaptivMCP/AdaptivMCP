@@ -24,3 +24,19 @@ async def test_registered_tools_match_fastmcp_registry():
     reg_names = _registered_names()
 
     assert mcp_names == reg_names
+
+
+@pytest.mark.asyncio
+async def test_registered_tools_expose_input_schema_in_runtime_listing():
+    tools = await server.mcp.get_tools()
+
+    if isinstance(tools, dict):
+        tool_objects = tools.values()
+    else:
+        tool_objects = tools
+
+    for tool in tool_objects:
+        schema = getattr(tool, "parameters", None)
+        assert isinstance(schema, dict)
+        assert schema.get("type") == "object"
+        assert "properties" in schema
