@@ -716,22 +716,34 @@ def _register_with_fastmcp(
     openai_invoking_message: Optional[str] = None,
     openai_invoked_message: Optional[str] = None,
 ) -> Any:
+    compact_metadata = bool(getattr(server, "COMPACT_METADATA_DEFAULT", False))
+
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
+    #
+    # In compact mode, keep the metadata surface minimal to avoid connector
+    # prompts on every call. Expanded metadata (including OpenAI-specific
+    # hints) can be re-enabled via the ``GITHUB_MCP_COMPACT_METADATA`` flag.
     meta: dict[str, Any] = {
         "write_action": bool(write_action),
         "auto_approved": bool(server.WRITE_ALLOWED or not openai_is_consequential),
         "visibility": visibility,
-        # OpenAI connector UI metadata (Apps & Connectors).
-        #
-        # These keys are intentionally flat (not nested) because OpenAI's connector
-        # UI historically reads them from `meta` directly.
-        "openai/visibility": visibility,
-        "openai/toolInvocation/invoking": openai_invoking_message or OPENAI_INVOKING_MESSAGE,
-        "openai/toolInvocation/invoked": openai_invoked_message or OPENAI_INVOKED_MESSAGE,
-        "openai/isConsequential": bool(openai_is_consequential),
-        "x-openai-isConsequential": bool(openai_is_consequential),
     }
-    if title:
+    if not compact_metadata:
+        meta.update(
+            {
+                # OpenAI connector UI metadata (Apps & Connectors).
+                # These keys are intentionally flat (not nested) because
+                # OpenAI's connector UI historically reads them from `meta` directly.
+                "openai/visibility": visibility,
+                "openai/toolInvocation/invoking": openai_invoking_message
+                or OPENAI_INVOKING_MESSAGE,
+                "openai/toolInvocation/invoked": openai_invoked_message
+                or OPENAI_INVOKED_MESSAGE,
+                "openai/isConsequential": bool(openai_is_consequential),
+                "x-openai-isConsequential": bool(openai_is_consequential),
+            }
+        )
+    if title and not compact_metadata:
         # Helpful for UIs that support a distinct display label.
         meta["title"] = title
         meta["openai/title"] = title
