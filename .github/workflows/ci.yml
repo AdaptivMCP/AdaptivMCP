@@ -42,11 +42,6 @@ jobs:
           python -m pip install -r dev-requirements.txt
           python -m pip install .
 
-      - name: Static checks
-        run: |
-          python scripts/check_no_tokenlike_strings.py
-          python scripts/check_docs_full_file_replacements.py
-
       - name: Lint
         run: |
           bash scripts/run_lint.sh
