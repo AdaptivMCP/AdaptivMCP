@@ -24,7 +24,7 @@ async def test_workspace_tools_are_auto_approved_and_have_schemas():
         ):
             assert tool_name in mapping, f"{tool_name} missing from {source}"
             entry = mapping[tool_name]
-            assert entry.get("write_action") is True
+            assert entry.get("write_action") is False
             assert entry.get("auto_approved") is True
             schema = entry.get("input_schema")
             assert isinstance(schema, dict), f"{tool_name} schema missing in {source}"

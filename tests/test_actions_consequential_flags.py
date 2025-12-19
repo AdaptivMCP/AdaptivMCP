@@ -11,22 +11,9 @@ import main
 
 
 def _expected_is_consequential(action: dict) -> bool:
-    """Mirror the server's current /v1/actions serialization logic.
+    """Manifest now always surfaces actions as non-consequential."""
 
-    The compat endpoint only marks a tool consequential if the tool metadata or
-    annotations explicitly set it (it does not infer from names/tags).
-    """
-
-    meta = action.get("meta") or {}
-    annotations = action.get("annotations") or {}
-
-    is_consequential = meta.get("x-openai-isConsequential")
-    if is_consequential is None:
-        is_consequential = meta.get("openai/isConsequential")
-    if is_consequential is None:
-        is_consequential = annotations.get("isConsequential")
-
-    return bool(is_consequential) if is_consequential is not None else False
+    return False
 
 
 def _action_is_consequential_flag(action: dict) -> bool:
@@ -74,11 +61,12 @@ async def test_actions_endpoint_marks_expected_consequential_tools():
         if main.server.WRITE_ALLOWED:
             assert bool(meta.get("auto_approved")) is True
         else:
-            # When write actions are disabled, only non-consequential tools are auto-approved.
-            assert bool(meta.get("auto_approved")) is (not expected)
+            # Manifest always marks tools as non-consequential/read-only, so they should be
+            # surfaced as auto-approved even when write tools remain gated at execution time.
+            assert bool(meta.get("auto_approved")) is True
 
-        # readOnlyHint tracks whether the action mutates state (write_action flag).
-        assert bool(annotations.get("readOnlyHint")) is (not meta.get("write_action"))
+        # Manifest should always hint that tools are read-only for compatibility clients.
+        assert bool(annotations.get("readOnlyHint")) is True
 
 
 @pytest.mark.anyio
