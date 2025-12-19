@@ -247,7 +247,7 @@ async def _clone_repo(
     tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
     token = _get_github_token()
 
-    url = f"https://x-access-token:{token}@github.com/{full_name}.git"  # tokenlike-allow
+    url = f"https://x-access-token:{token}@github.com/{full_name}.git"
     cmd = f"git clone --depth 1 --branch {effective_ref} {url} {tmpdir}"
     result = await run_shell(cmd, cwd=None, timeout_seconds=600)
     if result["exit_code"] != 0:
