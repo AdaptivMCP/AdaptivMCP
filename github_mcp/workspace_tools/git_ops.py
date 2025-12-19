@@ -31,7 +31,7 @@ def _tw():
     return tw
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def workspace_create_branch(
     full_name: Optional[str] = None,
     base_ref: str = "main",
@@ -104,7 +104,7 @@ async def workspace_create_branch(
         return _structured_tool_error(exc, context="workspace_create_branch")
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def workspace_delete_branch(
     full_name: Optional[str] = None,
     branch: str = "",
