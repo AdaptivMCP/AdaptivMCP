@@ -33,6 +33,7 @@ from github_mcp.mcp_server.schemas import (
     _title_from_tool_name,
 )
 from github_mcp.metrics import _record_tool_call
+from github_mcp.mcp_server.privacy import strip_location_metadata
 from github_mcp.redaction import redact_sensitive_text
 
 # OpenAI connector UI strings.
@@ -712,6 +713,9 @@ def _register_with_fastmcp(
         # Helpful for UIs that support a distinct display label.
         meta["title"] = title
         meta["openai/title"] = title
+
+    # Drop any user-provided metadata that could leak location details.
+    meta = strip_location_metadata(meta)
     annotations = {
         "readOnlyHint": bool(not write_action),
         "title": title or _title_from_tool_name(name),
