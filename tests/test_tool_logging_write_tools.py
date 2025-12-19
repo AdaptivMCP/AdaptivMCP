@@ -89,6 +89,6 @@ async def test_apply_text_update_and_commit_logging_shape(
     assert isinstance(success.duration_ms, int) and success.duration_ms >= 0
     assert success.write_action is True
     assert "write" in success.tags
-    assert success.repo == "Proofgate-Revocations/chatgpt-mcp-github"
-    assert success.path == "file.txt"
+    assert success.repo is None
+    assert success.path is None
     assert "updated_content" in success.arg_keys

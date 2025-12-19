@@ -55,33 +55,14 @@ def _bind_call_args(
 
 
 def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
-    repo = None
-    if isinstance(all_args.get("full_name"), str):
-        repo = all_args["full_name"]
-    elif isinstance(all_args.get("owner"), str) and isinstance(all_args.get("repo"), str):
-        repo = f"{all_args['owner']}/{all_args['repo']}"
-
-    ref = None
-    for key in ("ref", "branch", "base_ref", "head_ref"):
-        val = all_args.get(key)
-        if isinstance(val, str):
-            ref = val
-            break
-
-    path = None
-    for key in ("path", "file_path"):
-        val = all_args.get(key)
-        if isinstance(val, str):
-            path = val
-            break
-
     arg_keys = sorted([k for k in all_args.keys()])
     arg_preview = _format_tool_args_preview(all_args)
 
     return {
-        "repo": repo,
-        "ref": ref,
-        "path": path,
+        # Repo/ref/path tracking intentionally disabled to avoid leaking location data.
+        "repo": None,
+        "ref": None,
+        "path": None,
         "arg_keys": arg_keys,
         "arg_count": len(all_args),
         "arg_preview": arg_preview,
@@ -609,29 +590,19 @@ def _tool_user_message(
     purpose = narrative["purpose"]
     next_step = narrative["next_step"]
 
-    loc = ""
-    if repo and ref:
-        loc = f" on {repo}@{ref}"
-    elif repo:
-        loc = f" on {repo}"
-    if path:
-        loc += f":{path}"
-
     status = phase
 
     if status == "start":
-        return f"{phase_label} — Starting {title}{loc}. {purpose} Next: {next_step}"
+        return f"{phase_label} — Starting {title}. {purpose} Next: {next_step}"
 
     if status == "ok":
         summary = (result_summary or "").strip() or "done"
         dur = f" ({duration_ms}ms)" if duration_ms is not None else ""
-        return f"{phase_label} — Finished {title}{loc}{dur}. {summary}. Next: {next_step}"
+        return f"{phase_label} — Finished {title}{dur}. {summary}. Next: {next_step}"
 
     err = (error or "unknown error").strip()
     dur = f" ({duration_ms}ms)" if duration_ms is not None else ""
-    return (
-        f"{phase_label} — {title}{loc} failed{dur}: {_clip(err, max_chars=200)}. Next: {next_step}"
-    )
+    return f"{phase_label} — {title} failed{dur}: {_clip(err, max_chars=200)}. Next: {next_step}"
 
 
 def _tool_detailed_message(
@@ -660,23 +631,14 @@ def _tool_detailed_message(
 
     phase_label = _tool_phase_label(tool_name, write_action=write_action, all_args=all_args)
 
-    location = None
-    if repo or ref or path:
-        location = repo or "-"
-        if ref:
-            location = f"{location}@{ref}"
-        if path:
-            location = f"{location}:{path}"
-
     narrative = _tool_narrative(tool_name, all_args)
     purpose = narrative["purpose"]
     next_step = narrative["next_step"]
 
-    loc = f" on {location}" if location and location != "-" else ""
     inputs = _tool_inputs_summary(tool_name, all_args)
 
     if phase == "start":
-        msg = f"Details — {phase_label} — Starting {title}{loc}. {purpose}"
+        msg = f"Details — {phase_label} — Starting {title}. {purpose}"
         if inputs and inputs != "No inputs.":
             msg += f" Inputs: {inputs}."
         if write_action:
@@ -689,18 +651,18 @@ def _tool_detailed_message(
         rs = (result_summary or "").strip()
         rs = _clip(rs, max_chars=1200) if rs else ""
         out = f" Result: {rs}." if rs else (f" Output: {result_type}." if result_type else "")
-        return f"Details — {phase_label} — Finished {title}{loc}.{dur}{out} Next: {next_step}"
+        return f"Details — {phase_label} — Finished {title}.{dur}{out} Next: {next_step}"
 
     if phase == "error":
         dur = f" After {duration_ms}ms." if duration_ms is not None else ""
         err = f" Error: {error}." if error else ""
-        msg = f"Details — {phase_label} — Failed {title}{loc}.{dur}{err}"
+        msg = f"Details — {phase_label} — Failed {title}.{dur}{err}"
         if inputs and inputs != "No inputs.":
             msg += f" Inputs: {inputs}."
         msg += f" Next: {next_step}"
         return msg
 
-    return f"Details — {title}{loc}."
+    return f"Details — {title}."
 
 
 def _register_with_fastmcp(
