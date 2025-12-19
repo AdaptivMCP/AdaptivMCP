@@ -447,7 +447,7 @@ async def get_render_health_summary(resourceId: Optional[str] = None) -> Dict[st
 
 
 @mcp_tool(
-    write_action=True,
+    write_action=False,
     description=(
         "Run a Render CLI command non-interactively (requires the Render CLI in the runtime and RENDER_API_KEY in env). "
         "Args are passed as a list, e.g. ['deploy', 'list', '--service', '<SERVICE_ID>']."
@@ -508,7 +508,7 @@ async def validate_environment() -> Dict[str, Any]:
     return await _impl()
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def pr_smoke_test(
     full_name: Optional[str] = None,
     base_branch: Optional[str] = None,
@@ -1299,7 +1299,7 @@ async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
     return await _impl(full_name=full_name, number=number)
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def comment_on_pull_request(
     full_name: str,
     number: int,
@@ -1350,7 +1350,7 @@ async def update_issue(
     )
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def comment_on_issue(
     full_name: str,
     issue_number: int,
@@ -1400,7 +1400,7 @@ async def resolve_handle(full_name: str, handle: str) -> Dict[str, Any]:
 # ------------------------------------------------------------------------------
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def create_branch(
     full_name: str,
     branch: str,
@@ -1411,7 +1411,7 @@ async def create_branch(
     return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def ensure_branch(
     full_name: str,
     branch: str,
