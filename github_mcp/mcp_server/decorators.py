@@ -185,6 +185,10 @@ def _openai_is_consequential(
     name = (tool_name or "").lower()
     tag_set = {str(t).lower() for t in (tags or [])}
 
+    if name.startswith("workspace_"):
+        # Workspace helpers are intentionally ungated so setup flows remain fast.
+        return False
+
     if name in {"web_fetch", "web_search"} or "web" in tag_set:
         return True
 
@@ -198,10 +202,6 @@ def _openai_is_consequential(
         # Treat all write actions as consequential so the connector surfaces
         # approval prompts unless the server explicitly allows writes.
         return True
-
-    if name.startswith("workspace_"):
-        # Workspace helpers are intentionally ungated so setup flows remain fast.
-        return False
 
     if "push" in name or any(t in {"push", "git-push", "git_push"} or "push" in t for t in tag_set):
         return True

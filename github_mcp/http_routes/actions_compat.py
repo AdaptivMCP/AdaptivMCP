@@ -38,6 +38,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         else:
             meta = None
 
+        if meta is None:
+            meta = {}
+
         if isinstance(meta, dict) and getattr(server, "WRITE_ALLOWED", False):
             meta["auto_approved"] = True
             meta["openai/isConsequential"] = False
@@ -49,6 +52,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         if not display_name and isinstance(meta, dict):
             display_name = meta.get("title") or meta.get("openai/title")
         display_name = display_name or tool.name
+        tool_title = display_name or _title_from_tool_name(tool.name)
 
         is_consequential = None
         if isinstance(meta, dict):
@@ -64,6 +68,13 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 annotations["isConsequential"] = False
         elif is_consequential is not None:
             is_consequential = bool(is_consequential)
+
+        # Ensure compatibility metadata is present even when compact metadata is
+        # enabled at registration time.
+        meta.setdefault("openai/visibility", meta.get("visibility", "public"))
+        meta.setdefault("visibility", meta.get("openai/visibility", "public"))
+        meta.setdefault("openai/toolInvocation/invoking", f"Adaptiv: {tool_title}")
+        meta.setdefault("openai/toolInvocation/invoked", f"Adaptiv: {tool_title} done")
 
         actions.append(
             {
@@ -95,3 +106,4 @@ def register_actions_compat_routes(app: Any, server: Any) -> None:
     endpoint = build_actions_endpoint(server)
     app.add_route("/v1/actions", endpoint, methods=["GET"])
     app.add_route("/actions", endpoint, methods=["GET"])
+from github_mcp.mcp_server.schemas import _title_from_tool_name
