@@ -194,6 +194,13 @@ def _openai_is_consequential(
     if ui_consequential is not None:
         return bool(ui_consequential)
 
+    # When the controller is running with auto-approve enabled, treat all tools
+    # as non-consequential so the connector skips prompting altogether. The
+    # write gate (`authorize_write_actions`) is effectively bypassed in this
+    # mode, so the UI should mirror that behavior.
+    if server.WRITE_ALLOWED:
+        return False
+
     name = (tool_name or "").lower()
     tag_set = {str(t).lower() for t in (tags or [])}
 
@@ -731,6 +738,7 @@ def _register_with_fastmcp(
     annotations = {
         "readOnlyHint": bool(not write_action),
         "title": title or _title_from_tool_name(name),
+        "isConsequential": bool(openai_is_consequential),
     }
 
     tool_obj = mcp.tool(

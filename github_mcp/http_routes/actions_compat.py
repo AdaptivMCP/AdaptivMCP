@@ -40,6 +40,8 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
 
         if isinstance(meta, dict) and getattr(server, "WRITE_ALLOWED", False):
             meta["auto_approved"] = True
+            meta["openai/isConsequential"] = False
+            meta["x-openai-isConsequential"] = False
 
         display_name = getattr(tool, "title", None)
         if not display_name and isinstance(annotations, dict):
@@ -55,7 +57,12 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 is_consequential = meta.get("openai/isConsequential")
         if is_consequential is None and isinstance(annotations, dict):
             is_consequential = annotations.get("isConsequential")
-        if is_consequential is not None:
+
+        if getattr(server, "WRITE_ALLOWED", False):
+            is_consequential = False
+            if isinstance(annotations, dict):
+                annotations["isConsequential"] = False
+        elif is_consequential is not None:
             is_consequential = bool(is_consequential)
 
         actions.append(
