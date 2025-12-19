@@ -28,6 +28,18 @@ _TITLE_TOKEN_MAP = {
     "github": "GitHub",
 }
 
+_LOCATION_TOKENS = (
+    "location",
+    "timezone",
+    "geo",
+    "geolocation",
+    "latitude",
+    "longitude",
+    "lat",
+    "lon",
+    "coord",
+)
+
 
 def _title_from_tool_name(name: str) -> str:
     parts = [p for p in (name or "").strip().split("_") if p]
@@ -126,9 +138,63 @@ def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
     return None
 
 
+def _blank_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": True,
+    }
+
+
+def _is_location_key(key: Any) -> bool:
+    key_l = str(key).lower()
+    return any(tok in key_l for tok in _LOCATION_TOKENS)
+
+
+def _strip_location_from_schema(schema: Dict[str, Any] | None) -> Dict[str, Any]:
+    if not isinstance(schema, dict):
+        return _blank_schema()
+
+    try:
+        cleaned: Dict[str, Any] = json.loads(json.dumps(schema))
+    except Exception:
+        cleaned = dict(schema)
+
+    def _scrub(node: Any) -> Any:
+        if isinstance(node, dict):
+            props = node.get("properties")
+            if isinstance(props, Mapping):
+                node["properties"] = {
+                    key: _scrub(val)
+                    for key, val in props.items()
+                    if not _is_location_key(key)
+                }
+
+            required = node.get("required")
+            if isinstance(required, list):
+                node["required"] = [r for r in required if not _is_location_key(r)]
+
+            for key, val in list(node.items()):
+                if key in {"properties", "required"}:
+                    continue
+                if _is_location_key(key):
+                    node.pop(key, None)
+                    continue
+                node[key] = _scrub(val)
+            return node
+
+        if isinstance(node, list):
+            return [_scrub(item) for item in node]
+
+        return node
+
+    return _scrub(cleaned)
+
+
 def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     if tool is None:
-        return None
+        return _blank_schema()
 
     name = getattr(tool, "name", None)
 
@@ -151,31 +217,35 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     # every tool to be fully annotated.
     if schema is None:
         if name == "list_workflow_runs":
-            return {
-                "type": "object",
-                "properties": {
-                    "full_name": {"type": "string"},
-                    "branch": {"type": ["string", "null"]},
-                    "status": {"type": ["string", "null"]},
-                    "event": {"type": ["string", "null"]},
-                    "per_page": {"type": "integer", "minimum": 1},
-                    "page": {"type": "integer", "minimum": 1},
-                },
-                "required": ["full_name"],
-                "additionalProperties": True,
-            }
+            return _strip_location_from_schema(
+                {
+                    "type": "object",
+                    "properties": {
+                        "full_name": {"type": "string"},
+                        "branch": {"type": ["string", "null"]},
+                        "status": {"type": ["string", "null"]},
+                        "event": {"type": ["string", "null"]},
+                        "per_page": {"type": "integer", "minimum": 1},
+                        "page": {"type": "integer", "minimum": 1},
+                    },
+                    "required": ["full_name"],
+                    "additionalProperties": True,
+                }
+            )
 
         if name == "list_recent_failures":
-            return {
-                "type": "object",
-                "properties": {
-                    "full_name": {"type": "string"},
-                    "branch": {"type": ["string", "null"]},
-                    "limit": {"type": "integer"},
-                },
-                "required": ["full_name"],
-                "additionalProperties": True,
-            }
+            return _strip_location_from_schema(
+                {
+                    "type": "object",
+                    "properties": {
+                        "full_name": {"type": "string"},
+                        "branch": {"type": ["string", "null"]},
+                        "limit": {"type": "integer"},
+                    },
+                    "required": ["full_name"],
+                    "additionalProperties": True,
+                }
+            )
 
     # At this point we have either a concrete schema from the MCP layer or
     # None. When a schema is present, we sometimes need to tweak it slightly
@@ -303,7 +373,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
             if isinstance(limit_prop, dict):
                 limit_prop.pop("minimum", None)
 
-        return schema
+        return _strip_location_from_schema(schema) or _blank_schema()
 
     # As a final fallback, derive a best-effort JSON schema from the
     # registered function's Python signature so that describe_tool and
@@ -313,7 +383,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     try:
         import inspect as _inspect
     except Exception:  # extremely defensive
-        return None
+        return _blank_schema()
 
     try:
         # Find the Python function associated with this tool so we can inspect
@@ -456,16 +526,18 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
 
                 properties[param_name] = prop
 
-            return {
-                "type": "object",
-                "properties": properties,
-                "required": required or [],
-                "additionalProperties": True,
-            }
+            return _strip_location_from_schema(
+                {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required or [],
+                    "additionalProperties": True,
+                }
+            )
     except Exception:  # extremely defensive
-        return None
+        return _blank_schema()
 
-    return None
+    return _blank_schema()
 
 
 def _format_tool_args_preview(all_args: Mapping[str, Any], *, limit: int = 1200) -> str:
