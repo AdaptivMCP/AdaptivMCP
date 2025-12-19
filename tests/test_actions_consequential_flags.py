@@ -1,6 +1,6 @@
-import httpx
 import importlib
 
+import httpx
 import pytest
 
 import main
@@ -99,6 +99,39 @@ async def test_actions_endpoint_auto_approves_when_enabled(
         for action in actions:
             meta = action.get("meta") or {}
             assert bool(meta.get("auto_approved")) is True
+    finally:
+        monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
+        importlib.reload(main)
+
+
+@pytest.mark.anyio
+async def test_actions_endpoint_skips_consequential_gating_when_auto_approved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
+
+    updated_main = importlib.reload(main)
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=updated_main.app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/v1/actions")
+
+        assert response.status_code == 200
+        actions = response.json().get("actions") or []
+        assert actions, "expected at least one action in compatibility listing"
+
+        for action in actions:
+            meta = action.get("meta") or {}
+            annotations = action.get("annotations") or {}
+
+            # All tools should present as non-consequential to the connector UI
+            # when auto-approve is enabled so the UI stops prompting.
+            assert meta.get("openai/isConsequential") is False
+            assert meta.get("x-openai-isConsequential") is False
+            assert annotations.get("isConsequential") is False
     finally:
         monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
         importlib.reload(main)
