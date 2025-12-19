@@ -29,6 +29,7 @@ from github_mcp.mcp_server.errors import ToolInputValidationError
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
+    _normalize_input_schema,
     _normalize_tool_description,
     _title_from_tool_name,
 )
@@ -730,6 +731,13 @@ def _register_with_fastmcp(
         meta=meta,
         annotations=annotations,
     )
+
+    try:
+        tool_obj.parameters = _normalize_input_schema(tool_obj)
+    except Exception:
+        # Schema population should never block registration; fall back to
+        # FastMCP defaults if normalization fails.
+        pass
 
     # Keep registry stable: replace existing entry with the same name.
     _REGISTERED_MCP_TOOLS[:] = [

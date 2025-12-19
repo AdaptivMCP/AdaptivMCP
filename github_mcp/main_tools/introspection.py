@@ -142,7 +142,7 @@ def list_write_tools() -> Dict[str, Any]:
 
 
 def list_all_actions(
-    include_parameters: bool = False, compact: Optional[bool] = None
+    include_parameters: bool = True, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
     """Enumerate every available MCP tool with read/write metadata."""
 

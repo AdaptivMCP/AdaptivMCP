@@ -1016,7 +1016,7 @@ async def list_recent_failures(
     write_action=False,
     description=(
         "List available MCP tools with basic read/write metadata. "
-        "Use describe_tool (or list_all_actions with include_parameters=true) when you need full schemas."
+        "Schemas are included by default; use describe_tool to zoom in on specific tools or trim response sizes."
     ),
 )
 async def list_tools(
@@ -1032,7 +1032,7 @@ async def list_tools(
 
 @mcp_tool(write_action=False)
 def list_all_actions(
-    include_parameters: bool = False, compact: Optional[bool] = None
+    include_parameters: bool = True, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
     """Enumerate every available MCP tool with read/write metadata.
 
@@ -1042,7 +1042,8 @@ def list_all_actions(
 
     Args:
         include_parameters: When ``True``, include the serialized input schema
-            for each tool to clarify argument names and types.
+            for each tool to clarify argument names and types. Defaults to
+            ``True`` because this controller is optimized for AI operators.
         compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA=1`` is
             set), shorten descriptions and omit tag metadata to keep responses
             compact.
