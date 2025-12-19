@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from github_mcp.mcp_server.privacy import strip_location_metadata
 
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     """Expose a stable actions listing for clients expecting /v1/actions.
@@ -75,6 +76,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         meta.setdefault("visibility", meta.get("openai/visibility", "public"))
         meta.setdefault("openai/toolInvocation/invoking", f"Adaptiv: {tool_title}")
         meta.setdefault("openai/toolInvocation/invoked", f"Adaptiv: {tool_title} done")
+        meta = strip_location_metadata(meta)
 
         actions.append(
             {
