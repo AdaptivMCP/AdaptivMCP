@@ -36,9 +36,6 @@ _workspace_deps = _shared._workspace_deps
 _resolve_full_name = _shared._resolve_full_name
 _resolve_ref = _shared._resolve_ref
 
-# compatibility constants
-TOKENLIKE_SCAN_COMMAND = _suites.TOKENLIKE_SCAN_COMMAND
-
 # tools
 ensure_workspace_clone = _clone.ensure_workspace_clone
 
@@ -84,7 +81,6 @@ __all__ = [
     "_workspace_deps",
     "_resolve_full_name",
     "_resolve_ref",
-    "TOKENLIKE_SCAN_COMMAND",
     "ensure_workspace_clone",
     "get_workspace_file_contents",
     "set_workspace_file_contents",

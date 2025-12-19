@@ -73,8 +73,8 @@ async def test_actions_endpoint_marks_expected_consequential_tools():
             # When write actions are disabled, only non-consequential tools are auto-approved.
             assert bool(meta.get("auto_approved")) is (not expected)
 
-        # readOnlyHint is asserted to be the inverse of isConsequential.
-        assert bool(annotations.get("readOnlyHint")) is (not expected)
+        # readOnlyHint tracks whether the action mutates state (write_action flag).
+        assert bool(annotations.get("readOnlyHint")) is (not meta.get("write_action"))
 
 
 @pytest.mark.anyio
