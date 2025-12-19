@@ -689,6 +689,11 @@ def _register_with_fastmcp(
         "write_action": bool(write_action),
         "auto_approved": bool(server.WRITE_ALLOWED or not openai_is_consequential),
         "visibility": visibility,
+        # These hint the connector/UI about whether a tool mutates state. Keep
+        # them even in compact metadata mode so read actions surface as READ
+        # instead of WRITE in clients that rely on OpenAI-flavored fields.
+        "openai/isConsequential": bool(openai_is_consequential),
+        "x-openai-isConsequential": bool(openai_is_consequential),
     }
     if not compact_metadata:
         meta.update(
@@ -701,8 +706,6 @@ def _register_with_fastmcp(
                 or OPENAI_INVOKING_MESSAGE,
                 "openai/toolInvocation/invoked": openai_invoked_message
                 or OPENAI_INVOKED_MESSAGE,
-                "openai/isConsequential": bool(openai_is_consequential),
-                "x-openai-isConsequential": bool(openai_is_consequential),
             }
         )
     if title and not compact_metadata:
