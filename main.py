@@ -778,7 +778,7 @@ async def list_branches(
     return await _github_request("GET", f"/repos/{full_name}/branches", params=params)
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def move_file(
     full_name: str,
     from_path: str,
@@ -1210,7 +1210,7 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
     return await _impl(full_name=full_name, issue_number=issue_number)
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def trigger_workflow_dispatch(
     full_name: str,
     workflow: str,
@@ -1230,7 +1230,7 @@ async def trigger_workflow_dispatch(
     return await _impl(full_name=full_name, workflow=workflow, ref=ref, inputs=inputs)
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def trigger_and_wait_for_workflow(
     full_name: str,
     workflow: str,
@@ -1292,7 +1292,7 @@ async def merge_pull_request(
     )
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import close_pull_request as _impl
 
@@ -1326,7 +1326,7 @@ async def create_issue(
     )
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def update_issue(
     full_name: str,
     issue_number: int,
@@ -1498,7 +1498,7 @@ async def _build_default_pr_body(
     )
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def create_pull_request(
     full_name: str,
     title: str,
@@ -1520,7 +1520,7 @@ async def create_pull_request(
     )
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def open_pr_for_existing_branch(
     full_name: str,
     branch: str,
@@ -1544,7 +1544,7 @@ async def open_pr_for_existing_branch(
     )
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def update_files_and_open_pr(
     full_name: str,
     title: str,
@@ -1568,7 +1568,7 @@ async def update_files_and_open_pr(
     )
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def create_file(
     full_name: str,
     path: str,
@@ -1584,7 +1584,7 @@ async def create_file(
     )
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def apply_text_update_and_commit(
     full_name: str,
     path: str,
