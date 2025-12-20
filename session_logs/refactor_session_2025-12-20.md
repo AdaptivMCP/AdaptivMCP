@@ -26,3 +26,24 @@ Fix write gating + actions metadata; make write_action optional
 ### Next steps
 After CI is green, wait for the Render redeploy to complete, then verify behavior in the running service.
 
+## 2025-12-20 08:00:51 EST — Commit pushed
+**Repo:** `Proofgate-Revocations/chatgpt-mcp-github`  
+**Branch:** `backup/main-before-reset-20251219-050935`  
+**Commit:** `<redact` — e942545 Reduce token-like placeholders; shorten SHAs in logs to avoid upstream redaction
+
+### Summary
+Reduce token-like placeholders; shorten SHAs in logs to avoid upstream redaction
+
+### Changed files
+- Updated: github_mcp/redaction.py
+
+### Verification
+- Not recorded
+- CI: pending / not available
+- Deploy: Render health snapshot:
+- Window: last 30 minutes
+- Deploy: pending / not available
+
+### Next steps
+After CI is green, wait for the Render redeploy to complete, then verify behavior in the running service.
+
