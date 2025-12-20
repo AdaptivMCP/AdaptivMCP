@@ -21,6 +21,9 @@ def test_compact_metadata_includes_consequential_flags(monkeypatch: pytest.Monke
         meta = target.get("meta") or {}
         annotations = target.get("annotations") or {}
 
+        assert target.get("auto_approved") is True
+        assert target.get("write_action") is False
+        assert target.get("read_only_hint") is True
         assert meta.get("write_action") is False
         assert meta.get("openai/isConsequential") is False
         assert meta.get("x-openai-isConsequential") is False

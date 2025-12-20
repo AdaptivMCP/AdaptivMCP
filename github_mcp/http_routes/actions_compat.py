@@ -141,6 +141,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "parameters": schema or {"type": "object", "properties": {}},
                 "annotations": annotations,
                 "meta": meta,
+                "write_action": bool(write_tool),
+                "auto_approved": auto_approved,
+                "read_only_hint": not bool(is_consequential),
                 "x-openai-isConsequential": bool(is_consequential),
                 "isConsequential": bool(is_consequential),
             }
