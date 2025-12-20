@@ -99,13 +99,6 @@ In this repo, workspace commit helpers automatically append a structured session
 - Render’s `/logs` endpoint requires an `ownerId`.
   - Set `RENDER_OWNER_ID` in env, or pass `ownerId=`.
 
-### Find Render owner/workspace id
-
-If you only have a Render service id (`srv-...`):
-
-- Use `render_cli_command` and fetch service details in JSON, then read `ownerId`.
-  - Example args: `['services', 'get', '<SERVICE_ID>']`
-
 ### Confirm a redeploy
 
 - Watch for a new boot sequence in `list_render_logs`.

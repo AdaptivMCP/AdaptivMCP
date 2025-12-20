@@ -14,7 +14,6 @@ To discover the live tool surface at runtime, use the tools themselves: `list_al
 | `get_recent_server_logs` | `main.py` | 398 | Return recent server-side logs captured in memory. |
 | `list_render_logs` | `main.py` | 415 |  |
 | `get_render_metrics` | `main.py` | 446 |  |
-| `render_cli_command` | `main.py` | 472 |  |
 | `get_server_config` | `main.py` | 492 |  |
 | `validate_json_string` | `main.py` | 503 |  |
 | `get_repo_defaults` | `main.py` | 510 |  |

@@ -167,7 +167,6 @@ Tool names are stable; schemas may evolve. When in doubt, call `describe_tool`.
 |---|---|
 | `list_render_logs` | Fetch recent logs from Render (requires RENDER_API_KEY). Render /logs requires ownerId; pass ownerId or set RENDER_OWNER_ID; otherwise the tool will attempt to resolve it from the service id. |
 | `get_render_metrics` | Fetch basic Render service metrics (defaults to RENDER_SERVICE_ID when resourceId is omitted; requires RENDER_API_KEY). |
-| `render_cli_command` | Run a Render CLI command non-interactively (requires the Render CLI in the runtime and RENDER_API_KEY in env). Args are passed as a list, e.g. ['deploy', 'list', '--service', '<SERVICE_ID>']. |
 
 ## Web browser
 

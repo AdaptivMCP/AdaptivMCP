@@ -98,7 +98,6 @@ This server can optionally surface Render deployment context via tools:
 
 - `list_render_logs` (reads Render logs; requires `RENDER_API_KEY` and an owner/workspace id)
 - `get_render_metrics` (basic Render metrics)
-- `render_cli_command` (executes the Render CLI; write-gated because it can deploy/restart)
 
 Render env vars are documented in `.env.example`.
 
@@ -123,7 +122,7 @@ Runtime dependency installs are intentionally avoided. The service environment i
 Default posture:
 
 - **Branch-first work**: do not develop directly on the default branch; use a feature branch and open a PR.
-- **Write gate**: approvals should happen at remote-risk boundaries (push, web, Render CLI).
+- **Write gate**: approvals should happen at remote-risk boundaries (push, web).
 - **Auditability**: changes are committed to Git and reviewed via PRs.
 - **Minimize payload risk**: prefer file slices over giant blobs; clamp command output when needed.
 
