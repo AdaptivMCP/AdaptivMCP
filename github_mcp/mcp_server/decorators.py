@@ -172,39 +172,21 @@ def _openai_is_consequential(
     write_action: bool = False,
     ui_consequential: bool | None = None,
 ) -> bool:
-    """Classify tools for connector UI gating (Apps & Connectors)."""
+    """Connector UI gating: prompt only for selected VCS actions when auto-approve is off."""
 
     if ui_consequential is not None:
         return bool(ui_consequential)
 
-    auto_approve_on = bool(getattr(server, "AUTO_APPROVE_ENABLED", False))
+    if bool(getattr(server, "AUTO_APPROVE_ENABLED", False)):
+        return False
 
     name = (tool_name or "").lower()
     tag_set = {str(t).lower() for t in (tags or [])}
 
-    if name.startswith("workspace_"):
-        # Workspace helpers are intentionally ungated so setup flows remain fast.
-        return False
+    def has(word: str) -> bool:
+        return (word in name) or any(word in t for t in tag_set)
 
-    if name in {"web_fetch", "web_search"} or "web" in tag_set:
-        return True
-
-    if name == "render_cli_command" or "render-cli" in tag_set:
-        # Render CLI should only be gated when auto-approve is disabled; when
-        # WRITE_ALLOWED is on, treat it as non-consequential so the connector
-        # does not block actions/tool calls behind the write gate.
-        return not server.WRITE_ALLOWED
-
-    if write_action:
-        # Auto-approve bypasses most prompts, but write-tagged tools still need
-        # to prompt when auto-approve is disabled.
-        return not auto_approve_on
-
-    if "push" in name or any(t in {"push", "git-push", "git_push"} or "push" in t for t in tag_set):
-        return True
-
-    return False
-
+    return has("commit") or has("push")
 
 def _clip(text: str, *, max_chars: int) -> str:
     if len(text) <= max_chars:
