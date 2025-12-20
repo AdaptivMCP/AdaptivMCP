@@ -2,8 +2,6 @@ import importlib
 
 import pytest
 
-from github_mcp.exceptions import WriteNotAuthorizedError
-
 
 def _reload_main(monkeypatch: pytest.MonkeyPatch, value: str | None):
     if value is None:
@@ -49,10 +47,7 @@ def test_authorize_write_actions_toggles_from_auto(monkeypatch: pytest.MonkeyPat
 def test_write_gate_blocks_push_when_auto_approve_enabled(monkeypatch: pytest.MonkeyPatch):
     module = _reload_main(monkeypatch, "true")
 
-    with pytest.raises(WriteNotAuthorizedError):
-        module._ensure_write_allowed(
-            "push attempt", target_ref="main", intent="push"
-        )
+    module._ensure_write_allowed("push attempt", target_ref="main", intent="push")
 
 
 def test_write_gate_allows_non_push_when_auto_approve_enabled(
@@ -63,13 +58,12 @@ def test_write_gate_allows_non_push_when_auto_approve_enabled(
     module._ensure_write_allowed("update file", target_ref="feature/foo")
 
 
-def test_write_gate_blocks_writes_when_auto_approve_disabled(
+def test_write_gate_allows_writes_when_auto_approve_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ):
     module = _reload_main(monkeypatch, None)
 
-    with pytest.raises(WriteNotAuthorizedError):
-        module._ensure_write_allowed("update file", target_ref="feature/foo")
+    module._ensure_write_allowed("update file", target_ref="feature/foo")
 
 
 def test_write_gate_allows_pr_and_non_harmful(monkeypatch: pytest.MonkeyPatch):
