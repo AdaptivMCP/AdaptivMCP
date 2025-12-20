@@ -31,7 +31,6 @@ This document is a high-level snapshot of the Adaptiv Controller GitHub MCP serv
 ### Render integration
 
 - `list_render_logs` + `get_render_metrics` for observability.
-- `render_cli_command` to run Render CLI commands non-interactively (write-gated).
 
 ### Web browser
 

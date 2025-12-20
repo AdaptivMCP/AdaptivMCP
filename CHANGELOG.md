@@ -14,8 +14,6 @@ The changelog is intentionally **operator-facing**:
 
 - Render observability tools:
   - `list_render_logs`, `get_render_metrics`.
-- Render CLI tool:
-  - `render_cli_command` (non-interactive wrapper).
 - Web browser tools:
   - `web_search`, `web_fetch`.
 - Repo-local session logs:

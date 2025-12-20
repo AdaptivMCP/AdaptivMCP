@@ -446,30 +446,6 @@ async def get_render_health_summary(resourceId: Optional[str] = None) -> Dict[st
     return await _impl(resourceId=resourceId)
 
 
-@mcp_tool(
-    write_action=False,
-    description=(
-        "Run a Render CLI command non-interactively (requires the Render CLI in the runtime and RENDER_API_KEY in env). "
-        "Args are passed as a list, e.g. ['deploy', 'list', '--service', '<SERVICE_ID>']."
-    ),
-    tags=["render", "cli"],
-)
-async def render_cli_command(
-    args: List[str],
-    output: str = "json",
-    confirm: bool = True,
-    timeout_seconds: int = 120,
-) -> Dict[str, Any]:
-    from github_mcp.main_tools.render_cli import run_render_cli as _impl
-
-    return await _impl(
-        args=args,
-        output=output,
-        confirm=confirm,
-        timeout_seconds=timeout_seconds,
-    )
-
-
 # ------------------------------------------------------------------------------
 
 

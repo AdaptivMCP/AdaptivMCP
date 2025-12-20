@@ -303,7 +303,6 @@ If you deploy on Render and want assistants to be able to see deploy context wit
 - The server exposes:
   - `list_render_logs` (read)
   - `get_render_metrics` (read)
-  - `render_cli_command` (write-gated; can trigger deploys/restarts)
 
 If you want assistants to be able to look up external documentation and validate facts:
 

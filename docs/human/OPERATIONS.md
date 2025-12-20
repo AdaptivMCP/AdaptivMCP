@@ -25,17 +25,11 @@ If both are set, the server prefers `GITHUB_PAT`.
 
 ### Render integration (optional)
 
-If you want Render observability and CLI tools, set:
+If you want Render observability tools, set:
 
 - `RENDER_API_KEY` (required for Render API calls)
 - `RENDER_SERVICE_ID` (strongly recommended; used to resolve defaults)
 - `RENDER_OWNER_ID` (required by Render `/logs`; avoids extra lookups)
-
-Optional convenience settings:
-
-- `RENDER_WORKSPACE_ID` / `RENDER_WORKSPACE_NAME` (for `render_cli_command` workspace selection)
-- `RENDER_CLI_CONFIG_PATH` (where the CLI stores its selected workspace)
-- `RENDER_CLI_DIR` (where the server caches the CLI binary)
 
 See `.env.example` for the complete list.
 
@@ -78,12 +72,7 @@ Preferred verification loop:
 
 Render’s `/logs` endpoint requires an `ownerId`.
 
-If you don’t know it:
-
-- Use `render_cli_command` to fetch service details and read the `ownerId` field.
-  - Example: `args=['services', 'get', '<RENDER_SERVICE_ID>']`
-
-If the CLI is not available, use the Render API directly (or set `RENDER_OWNER_ID` once and keep it stable).
+If you don’t know it, use the Render API directly (or set `RENDER_OWNER_ID` once and keep it stable).
 
 ## 4) Render log UX guidelines
 
