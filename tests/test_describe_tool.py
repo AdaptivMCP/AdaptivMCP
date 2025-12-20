@@ -1,6 +1,7 @@
-import pytest
+import json
 
 import main
+import pytest
 
 
 @pytest.mark.asyncio
@@ -14,6 +15,15 @@ async def test_describe_tool_returns_single_tool_with_schema():
     # Multi-tool API always includes a tools list with at least one entry.
     assert isinstance(result.get("tools"), list)
     assert any(entry.get("name") == "run_tests" for entry in result["tools"])
+
+
+@pytest.mark.asyncio
+async def test_describe_tool_strips_internal_meta_fields():
+    result = await main.describe_tool("get_server_config")
+
+    serialized = json.dumps(result)
+
+    assert "\"_meta\"" not in serialized
 
 
 @pytest.mark.asyncio

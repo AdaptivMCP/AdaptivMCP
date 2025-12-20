@@ -1,4 +1,5 @@
 import importlib
+import json
 
 import pytest
 
@@ -27,3 +28,11 @@ def test_compact_metadata_includes_consequential_flags(monkeypatch: pytest.Monke
     finally:
         monkeypatch.delenv("GITHUB_MCP_COMPACT_METADATA", raising=False)
         importlib.reload(main_module)
+
+
+def test_actions_strip_internal_meta_fields() -> None:
+    import main as main_module
+
+    actions = serialize_actions_for_compatibility(main_module)
+
+    assert all("_meta" not in json.dumps(action) for action in actions)
