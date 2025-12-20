@@ -74,7 +74,7 @@ The **canonical tool list and schemas** can be inspected at runtime with:
 
 Tools that modify state are write-gated.
 
-- Default behavior is controlled by `GITHUB_MCP_AUTO_APPROVE`.
+- Default behavior starts with write actions blocked until explicitly authorized.
   - When false/unset: write tools require an explicit `authorize_write_actions(approved=True)`.
   - When true: write tools are allowed by default, but can be disabled per session.
 

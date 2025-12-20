@@ -73,9 +73,6 @@ def _is_high_risk(tool: Any) -> bool:
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
 
-    # Auto-approve toggles whether the connector should prompt for writes.
-    auto_approve_on = bool(getattr(server, "AUTO_APPROVE_ENABLED", False))
-
     for tool, _func in getattr(server, "_REGISTERED_MCP_TOOLS", []):
         schema = server._normalize_input_schema(tool)
 
@@ -96,13 +93,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         write_tool = _is_write_tool(tool)
         high_risk = _is_high_risk(tool)
 
-        # Consequential policy:
-        # - Auto approve ON  => prompt for high-risk (web/push/commit) only
-        # - Auto approve OFF => prompt for write tools and any explicitly high-risk tool
-        if auto_approve_on:
-            is_consequential = bool(high_risk)
-        else:
-            is_consequential = bool(write_tool or high_risk)
+        # Consequential policy: prompt for write tools and any explicitly
+        # high-risk tool.
+        is_consequential = bool(write_tool or high_risk)
 
         # Auto-approval is per-action: only consequential actions should ever
         # request confirmation from the UI.

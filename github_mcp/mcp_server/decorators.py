@@ -172,13 +172,10 @@ def _openai_is_consequential(
     write_action: bool = False,
     ui_consequential: bool | None = None,
 ) -> bool:
-    """Connector UI gating: prompt only for selected VCS actions when auto-approve is off."""
+    """Connector UI gating for tools that mutate state."""
 
     if ui_consequential is not None:
         return bool(ui_consequential)
-
-    if bool(getattr(server, "AUTO_APPROVE_ENABLED", False)):
-        return False
 
     name = (tool_name or "").lower()
     tag_set = {str(t).lower() for t in (tags or [])}
@@ -186,7 +183,7 @@ def _openai_is_consequential(
     def has(word: str) -> bool:
         return (word in name) or any(word in t for t in tag_set)
 
-    return has("commit") or has("push")
+    return bool(write_action or has("commit") or has("push"))
 
 def _clip(text: str, *, max_chars: int) -> str:
     if len(text) <= max_chars:
@@ -660,7 +657,6 @@ def _register_with_fastmcp(
     compact_metadata = bool(getattr(server, "COMPACT_METADATA_DEFAULT", False))
 
     # Surface accurate consequential/readOnly hints for connector clients.
-    # AUTO_APPROVE_ENABLED and _openai_is_consequential determine whether a UI prompt appears.
     manifest_is_consequential = bool(openai_is_consequential)
 
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
@@ -670,7 +666,7 @@ def _register_with_fastmcp(
     # hints) can be re-enabled via the ``GITHUB_MCP_COMPACT_METADATA`` flag.
     meta: dict[str, Any] = {
         "write_action": bool(write_action),
-        "auto_approved": bool(getattr(server, "AUTO_APPROVE_ENABLED", False)),
+        "auto_approved": not manifest_is_consequential,
         "visibility": visibility,
         # These hint the connector/UI about whether a tool mutates state. Keep
         # them even in compact metadata mode so read actions surface as READ

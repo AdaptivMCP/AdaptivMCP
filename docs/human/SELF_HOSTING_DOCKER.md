@@ -69,7 +69,6 @@ GITHUB_MCP_CONTROLLER_BRANCH=main
 
 # true   = write tools are allowed by default
 
-GITHUB_MCP_AUTO_APPROVE=false
 
 # Workspace base directory inside the container.
 

@@ -58,7 +58,7 @@ Recommended initial setup:
 1. **Create a staging service**
    - In Render, create a Web Service for staging (for example `adaptiv-controller-github-mcp-staging`).
    - Point it at your repo (or fork) on a branch such as `main` or `staging`.
-   - Configure environment variables (`GITHUB_TOKEN`, `GITHUB_MCP_CONTROLLER_REPO`, `GITHUB_MCP_CONTROLLER_BRANCH`, `GITHUB_MCP_AUTO_APPROVE`, HTTP tuning knobs).
+   - Configure environment variables (`GITHUB_TOKEN`, `GITHUB_MCP_CONTROLLER_REPO`, `GITHUB_MCP_CONTROLLER_BRANCH`, HTTP tuning knobs).
 
 2. **Create a production service**
    - Duplicate the staging service’s configuration into a second Web Service (for example `adaptiv-controller-github-mcp-prod`).

@@ -27,10 +27,8 @@ def _ensure_write_allowed(
     tests and tooling continue to exercise the expected code paths.
 
     Policy summary:
-    * Auto-approve ON: allow everything. The UI should only prompt for
-      push-style or web tools.
-    * Auto-approve OFF: allow everything but expect the UI to prompt for any
-      write-tagged tools. Non-harmful metadata edits remain prompt-free.
+    * Write-tagged tools are expected to prompt unless explicitly approved via
+      the write gate. Non-harmful metadata edits remain prompt-free.
     * PR flows are never write-gated.
     """
 

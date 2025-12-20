@@ -54,9 +54,8 @@ async def get_server_config() -> Dict[str, Any]:
                 "toggle_tool": "authorize_write_actions",
                 "notes": (
                     "Most write-tagged tools stay gated until explicitly enabled "
-                    "for a session; set GITHUB_MCP_AUTO_APPROVE to trust the "
-                    "server by default. Workspace setup and non-mutating commands "
-                    "are allowed without flipping the gate unless they install "
+                    "for a session. Workspace setup and non-mutating commands are "
+                    "allowed without flipping the gate unless they install "
                     "dependencies or opt out of the temp venv."
                 ),
             },
