@@ -177,12 +177,7 @@ def _openai_is_consequential(
     if ui_consequential is not None:
         return bool(ui_consequential)
 
-    # When the controller is running with auto-approve enabled, treat all tools
-    # as non-consequential so the connector skips prompting altogether. The
-    # write gate (`authorize_write_actions`) is effectively bypassed in this
-    # mode, so the UI should mirror that behavior.
-    if server.WRITE_ALLOWED:
-        return False
+    auto_approve_on = bool(getattr(server, "AUTO_APPROVE_ENABLED", False))
 
     name = (tool_name or "").lower()
     tag_set = {str(t).lower() for t in (tags or [])}
@@ -201,9 +196,9 @@ def _openai_is_consequential(
         return not server.WRITE_ALLOWED
 
     if write_action:
-        # Treat all write actions as consequential so the connector surfaces
-        # approval prompts unless the server explicitly allows writes.
-        return True
+        # Auto-approve bypasses most prompts, but write-tagged tools still need
+        # to prompt when auto-approve is disabled.
+        return not auto_approve_on
 
     if "push" in name or any(t in {"push", "git-push", "git_push"} or "push" in t for t in tag_set):
         return True

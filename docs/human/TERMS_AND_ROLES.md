@@ -69,6 +69,12 @@ If auto-approve (write gate) is enabled, the assistant is expected to:
 
 without requiring the user to set redundant env variables.
 
+Current write-gate behavior:
+
+- Auto-approve ON: all tools flow without prompts except push-like commits (terminal_push and API commit helpers), which remain blocked; web tools stay gated.
+- Auto-approve OFF: anything that could be a write from terminal/actions is blocked; non-harmful metadata writes (comments, labels, PR updates) remain allowed.
+- PR helpers are never gated by the write gate.
+
 ### 4) No role ambiguity
 
 When documentation says "you":

@@ -74,7 +74,8 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
 
     # In this codebase, server.WRITE_ALLOWED is currently tied to GITHUB_MCP_AUTO_APPROVE.
-    auto_approve_on = bool(getattr(server, "WRITE_ALLOWED", False))
+    auto_approve_on = bool(getattr(server, "AUTO_APPROVE_ENABLED", False))
+    write_allowed = bool(getattr(server, "WRITE_ALLOWED", False))
 
     for tool, _func in getattr(server, "_REGISTERED_MCP_TOOLS", []):
         schema = server._normalize_input_schema(tool)
@@ -97,19 +98,19 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         high_risk = _is_high_risk(tool)
 
         # Consequential policy:
-        # - Auto approve ON  => prompt for nothing
+        # - Auto approve ON  => prompt for high-risk (web/push/commit) only
         # - Auto approve OFF => prompt for write tools and any explicitly high-risk tool
         if auto_approve_on:
-            is_consequential = False
+            is_consequential = bool(high_risk)
         else:
             is_consequential = bool(write_tool or high_risk)
 
         # Set compatibility metadata fields used by clients.
-        meta["auto_approved"] = auto_approve_on
+        meta["auto_approved"] = write_allowed
 
         # The controller contract: write_action reflects whether writes are auto-approved
         # in this session (global), not whether a particular tool is a write tool.
-        meta["write_action"] = auto_approve_on
+        meta["write_action"] = write_allowed
 
         meta["openai/isConsequential"] = bool(is_consequential)
         meta["x-openai-isConsequential"] = bool(is_consequential)
