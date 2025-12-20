@@ -38,6 +38,12 @@ _LOCATION_TOKENS = (
     "lat",
     "lon",
     "coord",
+    "ip",
+    "ipaddress",
+    "ip_address",
+    "clientip",
+    "client_ip",
+    "remote_addr",
 )
 
 
