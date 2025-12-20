@@ -9,22 +9,26 @@ def test_strip_location_from_schema_removes_location_fields():
         "properties": {
             "query": {"type": "string"},
             "location": {"type": "string"},
+            "ip_address": {"type": "string"},
             "metadata": {
                 "type": "object",
                 "properties": {
                     "timezone": {"type": "string"},
+                    "clientIp": {"type": "string"},
                     "note": {"type": "string"},
                 },
-                "required": ["timezone"],
+                "required": ["timezone", "clientIp"],
             },
         },
-        "required": ["location", "query"],
+        "required": ["location", "query", "ip_address"],
     }
 
     cleaned = schemas._strip_location_from_schema(raw)
 
     assert "location" not in cleaned["properties"]
+    assert "ip_address" not in cleaned["properties"]
     assert "timezone" not in cleaned["properties"]["metadata"]["properties"]
+    assert "clientIp" not in cleaned["properties"]["metadata"]["properties"]
     assert cleaned["required"] == ["query"]
     assert cleaned["properties"]["metadata"]["required"] == []
 
