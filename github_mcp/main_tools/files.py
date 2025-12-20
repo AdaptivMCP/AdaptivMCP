@@ -38,6 +38,7 @@ async def create_file(
     m._ensure_write_allowed(
         "create_file %s %s" % (full_name, normalized_path),
         target_ref=effective_branch,
+        intent="push",
     )
 
     # Ensure the file does not already exist.
@@ -149,6 +150,7 @@ async def apply_text_update_and_commit(
     m._ensure_write_allowed(
         "apply_text_update_and_commit %s %s" % (full_name, normalized_path),
         target_ref=effective_branch,
+        intent="push",
     )
 
     is_new_file = False
@@ -276,6 +278,7 @@ async def move_file(
     m._ensure_write_allowed(
         f"move_file from {from_path} to {to_path} in {full_name}@{effective_branch}",
         target_ref=effective_branch,
+        intent="push",
     )
 
     from_path = m._normalize_repo_path(from_path)

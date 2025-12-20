@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import re
 from typing import Any, Optional
 
 from github_mcp.mcp_server.decorators import mcp_tool
@@ -42,6 +43,7 @@ async def terminal_command(
         timeout_seconds=timeout_seconds,
         use_temp_venv=use_temp_venv,
         mutating=mutating,
+        write_intent="write",
     )
 
 
@@ -81,4 +83,5 @@ async def terminal_push(
         timeout_seconds=timeout_seconds,
         use_temp_venv=use_temp_venv,
         mutating=True,
+        write_intent="push",
     )

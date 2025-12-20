@@ -148,6 +148,7 @@ async def run_in_workspace(
     workdir: Optional[str] = None,
     use_temp_venv: bool = False,
     mutating: bool = False,
+    write_intent: str = "write",
 ) -> Dict[str, Any]:
     """Run a shell command inside the persistent workspace clone.
 
@@ -158,6 +159,12 @@ async def run_in_workspace(
     - Pushing to GitHub should be done via a dedicated write-gated tool.
     """
     deps = _workspace_deps()
+
+    if mutating:
+        deps["ensure_write_allowed"](
+            f"terminal_command in workspace ({command[:80]})",
+            intent=write_intent,
+        )
     resolved_full_name = _resolve_full_name(full_name)
     resolved_ref = _resolve_ref(ref)
 

@@ -1,19 +1,14 @@
 import importlib
 
-import httpx
-import pytest
-
 import os
 
 os.environ.setdefault("GITHUB_MCP_COMPACT_METADATA", "0")
 
+import importlib
+import httpx
+import pytest
+
 import main
-
-
-def _expected_is_consequential(action: dict) -> bool:
-    """Manifest now always surfaces actions as non-consequential."""
-
-    return False
 
 
 def _action_is_consequential_flag(action: dict) -> bool:
@@ -35,95 +30,43 @@ def _action_is_consequential_flag(action: dict) -> bool:
 
 
 @pytest.mark.anyio
-async def test_actions_endpoint_marks_expected_consequential_tools():
+async def test_actions_mark_web_and_push_as_consequential_when_auto_approve_on(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
+    updated_main = importlib.reload(main)
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=updated_main.app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/v1/actions")
+
+        assert response.status_code == 200
+        actions = response.json().get("actions") or []
+        flags = {a["name"]: _action_is_consequential_flag(a) for a in actions}
+
+        assert flags.get("web_fetch") is True
+        assert flags.get("terminal_push") is True
+        assert flags.get("create_pull_request") is False
+    finally:
+        monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
+        importlib.reload(main)
+
+
+@pytest.mark.anyio
+async def test_actions_mark_writes_when_auto_approve_off():
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=main.app), base_url="http://testserver"
     ) as client:
         response = await client.get("/v1/actions")
 
     assert response.status_code == 200
-    data = response.json()
-    actions = data.get("actions") or []
-    assert actions, "expected at least one action in compatibility listing"
+    actions = response.json().get("actions") or []
+    flags = {a["name"]: _action_is_consequential_flag(a) for a in actions}
 
-    expected_flags = {a["name"]: _expected_is_consequential(a) for a in actions}
-    actual_flags = {a["name"]: _action_is_consequential_flag(a) for a in actions}
-
-    assert actual_flags == expected_flags
-
-    for action in actions:
-        name = action["name"]
-        expected = expected_flags[name]
-        meta = action.get("meta") or {}
-        annotations = action.get("annotations") or {}
-
-        # When write actions are enabled, the server forces auto_approved for all tools.
-        if main.server.WRITE_ALLOWED:
-            assert bool(meta.get("auto_approved")) is True
-        else:
-            # Manifest always marks tools as non-consequential/read-only, so they should be
-            # surfaced as auto-approved even when write tools remain gated at execution time.
-            assert bool(meta.get("auto_approved")) is True
-
-        # Manifest should always hint that tools are read-only for compatibility clients.
-        assert bool(annotations.get("readOnlyHint")) is True
-
-
-@pytest.mark.anyio
-async def test_actions_endpoint_auto_approves_when_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
-
-    updated_main = importlib.reload(main)
-
-    try:
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=updated_main.app),
-            base_url="http://testserver",
-        ) as client:
-            response = await client.get("/v1/actions")
-
-        assert response.status_code == 200
-        actions = response.json().get("actions") or []
-        assert actions, "expected at least one action in compatibility listing"
-
-        for action in actions:
-            meta = action.get("meta") or {}
-            assert bool(meta.get("auto_approved")) is True
-    finally:
-        monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
-        importlib.reload(main)
-
-
-@pytest.mark.anyio
-async def test_actions_endpoint_skips_consequential_gating_when_auto_approved(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
-
-    updated_main = importlib.reload(main)
-
-    try:
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=updated_main.app),
-            base_url="http://testserver",
-        ) as client:
-            response = await client.get("/v1/actions")
-
-        assert response.status_code == 200
-        actions = response.json().get("actions") or []
-        assert actions, "expected at least one action in compatibility listing"
-
-        for action in actions:
-            meta = action.get("meta") or {}
-            annotations = action.get("annotations") or {}
-
-            # All tools should present as non-consequential to the connector UI
-            # when auto-approve is enabled so the UI stops prompting.
-            assert meta.get("openai/isConsequential") is False
-            assert meta.get("x-openai-isConsequential") is False
-            assert annotations.get("isConsequential") is False
-    finally:
-        monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
-        importlib.reload(main)
+    assert flags.get("web_fetch") is True
+    assert flags.get("terminal_push") is True
+    # PR flow should remain ungated
+    assert flags.get("create_pull_request") is False

@@ -2,6 +2,8 @@ import importlib
 
 import pytest
 
+from github_mcp.exceptions import WriteNotAuthorizedError
+
 
 def _reload_main(monkeypatch: pytest.MonkeyPatch, value: str | None):
     if value is None:
@@ -17,6 +19,7 @@ def _reload_main(monkeypatch: pytest.MonkeyPatch, value: str | None):
 def test_write_allowed_defaults_false(monkeypatch: pytest.MonkeyPatch):
     module = _reload_main(monkeypatch, None)
     assert module.WRITE_ALLOWED is False
+    assert module.AUTO_APPROVE_ENABLED is False
 
 
 @pytest.mark.parametrize("value", ["1", "true", "TRUE", "Yes", "on", "y"])
@@ -41,6 +44,41 @@ def test_authorize_write_actions_toggles_from_auto(monkeypatch: pytest.MonkeyPat
     result = module.authorize_write_actions(approved=False)
     assert result["write_allowed"] is False
     assert module.WRITE_ALLOWED is False
+
+
+def test_write_gate_blocks_push_when_auto_approve_enabled(monkeypatch: pytest.MonkeyPatch):
+    module = _reload_main(monkeypatch, "true")
+
+    with pytest.raises(WriteNotAuthorizedError):
+        module._ensure_write_allowed(
+            "push attempt", target_ref="main", intent="push"
+        )
+
+
+def test_write_gate_allows_non_push_when_auto_approve_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _reload_main(monkeypatch, "true")
+
+    module._ensure_write_allowed("update file", target_ref="feature/foo")
+
+
+def test_write_gate_blocks_writes_when_auto_approve_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _reload_main(monkeypatch, None)
+
+    with pytest.raises(WriteNotAuthorizedError):
+        module._ensure_write_allowed("update file", target_ref="feature/foo")
+
+
+def test_write_gate_allows_pr_and_non_harmful(monkeypatch: pytest.MonkeyPatch):
+    module = _reload_main(monkeypatch, None)
+
+    module._ensure_write_allowed(
+        "comment on issue", target_ref=None, intent="non_harm"
+    )
+    module._ensure_write_allowed("create pr", target_ref="main", intent="pr")
 
 
 @pytest.mark.asyncio
