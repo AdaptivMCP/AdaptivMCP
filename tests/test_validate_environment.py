@@ -53,7 +53,7 @@ async def test_validate_environment_happy_path(monkeypatch: pytest.MonkeyPatch) 
     module = _reload_main_with_env(
         monkeypatch,
         {
-            "GITHUB_PAT": "ghp_exampletoken",
+            "GITHUB_PAT": "example_token_value",
             "GIT_AUTHOR_NAME": "Ally",
             "GIT_AUTHOR_EMAIL": "ally@example.com",
             "GIT_COMMITTER_NAME": "Ally",
@@ -100,7 +100,7 @@ async def test_validate_environment_missing_push_permission(
     module = _reload_main_with_env(
         monkeypatch,
         {
-            "GITHUB_PAT": "ghp_exampletoken",
+            "GITHUB_PAT": "example_token_value",
             "GIT_AUTHOR_NAME": "Ally",
             "GIT_AUTHOR_EMAIL": "ally@example.com",
             "GIT_COMMITTER_NAME": "Ally",

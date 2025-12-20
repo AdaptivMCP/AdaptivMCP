@@ -283,7 +283,7 @@ async def _update_session_log_after_push(
     if push_res["exit_code"] != 0:
         return {"error": "git push session log failed", "details": _slim_shell_result(push_res)}
 
-    rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+    rev = await deps["run_shell"]("git rev-parse --short=12 HEAD", cwd=repo_dir, timeout_seconds=60)
     log_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
 
     return {
@@ -360,7 +360,7 @@ async def commit_workspace(
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         # Keep tool responses small to avoid connector transport issues.
-        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+        rev = await deps["run_shell"]("git rev-parse --short=12 HEAD", cwd=repo_dir, timeout_seconds=60)
         head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
         oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
         head_summary = oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
@@ -502,7 +502,7 @@ async def commit_workspace_files(
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         # Keep tool responses small to avoid connector transport issues.
-        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+        rev = await deps["run_shell"]("git rev-parse --short=12 HEAD", cwd=repo_dir, timeout_seconds=60)
         head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
         oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
         head_summary = oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""

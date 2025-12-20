@@ -17,8 +17,8 @@ def _reload_main_with_token(monkeypatch: pytest.MonkeyPatch, value: str | None):
 
 
 def test_get_github_token_strips_whitespace(monkeypatch: pytest.MonkeyPatch):
-    module = _reload_main_with_token(monkeypatch, "  ghp_exampletoken  \n")
-    assert module._get_github_token() == "ghp_exampletoken"
+    module = _reload_main_with_token(monkeypatch, "  example_token_value  \n")
+    assert module._get_github_token() == "example_token_value"
 
 
 @pytest.mark.parametrize("value", ["", " ", "\t\n  \t"])
