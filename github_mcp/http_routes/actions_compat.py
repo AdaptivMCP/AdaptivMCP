@@ -6,7 +6,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from github_mcp.mcp_server.privacy import strip_location_metadata
-from github_mcp.mcp_server.schemas import _title_from_tool_name
+from github_mcp.mcp_server.schemas import _strip_internal_meta_fields, _title_from_tool_name
 
 
 # Tools that should be treated as "high-risk" actions.
@@ -135,6 +135,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         meta.setdefault("openai/toolInvocation/invoking", f"Adaptiv: {tool_title}")
         meta.setdefault("openai/toolInvocation/invoked", f"Adaptiv: {tool_title} done")
         meta = strip_location_metadata(meta)
+        meta = _strip_internal_meta_fields(meta)
+
+        schema = _strip_internal_meta_fields(schema)
 
         actions.append(
             {

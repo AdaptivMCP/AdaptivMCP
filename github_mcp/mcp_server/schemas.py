@@ -76,6 +76,27 @@ def _stringify_annotation(annotation: Any) -> str:
     return str(annotation)
 
 
+def _strip_internal_meta_fields(node: Any) -> Any:
+    """Remove FastMCP/Pydantic helper metadata ("_meta") from schemas.
+
+    Some tool schemas can surface internal `_meta` keys that are not part of
+    the public contract. These should never leak to callers (describe_tool,
+    list_all_actions, actions endpoints), so we recursively drop them here.
+    """
+
+    if isinstance(node, dict):
+        return {
+            key: _strip_internal_meta_fields(val)
+            for key, val in node.items()
+            if key != "_meta"
+        }
+
+    if isinstance(node, list):
+        return [_strip_internal_meta_fields(item) for item in node]
+
+    return node
+
+
 def _normalize_tool_description(
     func, signature: Optional[inspect.Signature], *, llm_level: str
 ) -> str:
@@ -378,6 +399,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
 
         # Final normalization: always surface an object schema shape.
         if isinstance(schema, dict):
+            schema = _strip_internal_meta_fields(schema)
             if schema.get("type") is None:
                 schema["type"] = "object"
             schema.setdefault("properties", {})
