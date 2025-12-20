@@ -218,6 +218,18 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
         elif isinstance(raw_schema, dict):
             schema = dict(raw_schema)
 
+    # FastMCP tools may surface their schema under ``parameters`` instead of
+    # ``inputSchema``. Prefer that when an explicit inputSchema is absent so
+    # callers still receive the full argument contract instead of empty
+    # metadata stubs.
+    if schema is None:
+        parameters = getattr(tool, "parameters", None)
+        if parameters is not None:
+            if hasattr(parameters, "model_dump"):
+                schema = parameters.model_dump()
+            elif isinstance(parameters, dict):
+                schema = dict(parameters)
+
     # that do not currently expose an inputSchema via the MCP layer. This
     # keeps describe_tool and validate_tool_args useful without requiring
     # every tool to be fully annotated.

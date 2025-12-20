@@ -52,3 +52,24 @@ def test_normalize_input_schema_always_returns_schema():
     assert result["type"] == "object"
     assert result["properties"] == {"query": {"type": "string"}}
     assert result["required"] == []
+
+
+def test_normalize_input_schema_prefers_parameters_attribute():
+    class DummyTool:
+        name = "dummy_tool"
+        parameters = {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "location": {"type": "string"},
+            },
+            "required": ["query"],
+        }
+
+    tool = types.SimpleNamespace(**DummyTool.__dict__)
+
+    result = schemas._normalize_input_schema(tool)
+
+    assert result["type"] == "object"
+    assert set(result["properties"]) == {"query"}
+    assert result["required"] == ["query"]
