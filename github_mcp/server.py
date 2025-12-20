@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from github_mcp.mcp_server.context import (  # noqa: F401
     _TOOL_EXAMPLES,
-    AUTO_APPROVE_ENABLED,
     COMPACT_METADATA_DEFAULT,
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
@@ -38,7 +37,6 @@ from github_mcp.mcp_server.write_gate import _ensure_write_allowed
 from github_mcp.utils import _env_flag  # noqa: F401
 
 __all__ = [
-    "AUTO_APPROVE_ENABLED",
     "COMPACT_METADATA_DEFAULT",
     "CONTROLLER_DEFAULT_BRANCH",
     "CONTROLLER_REPO",

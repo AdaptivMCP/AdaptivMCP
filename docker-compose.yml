@@ -18,7 +18,6 @@ services:
       # -----------------------------------------------------------------
       GITHUB_MCP_CONTROLLER_REPO: "${GITHUB_MCP_CONTROLLER_REPO}"
       GITHUB_MCP_CONTROLLER_BRANCH: "${GITHUB_MCP_CONTROLLER_BRANCH}"
-      GITHUB_MCP_AUTO_APPROVE: "${GITHUB_MCP_AUTO_APPROVE}"
 
       # -----------------------------------------------------------------
       # Workspace and execution configuration

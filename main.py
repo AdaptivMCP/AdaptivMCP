@@ -207,15 +207,12 @@ async def _perform_github_commit(
 def __getattr__(name: str):
     if name == "WRITE_ALLOWED":
         return server.WRITE_ALLOWED
-    if name == "AUTO_APPROVE_ENABLED":
-        return server.AUTO_APPROVE_ENABLED
     raise AttributeError(name)
 
 
-# Recalculate write gate on import to honor updated environment variables when
-# ``main`` is reloaded in tests.
-server.AUTO_APPROVE_ENABLED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
-server.WRITE_ALLOWED = server.AUTO_APPROVE_ENABLED
+# Recalculate write gate on import so tests can reload ``main`` cleanly.
+server.AUTO_APPROVE_ENABLED = False
+server.WRITE_ALLOWED = False
 
 register_extra_tools_if_available()
 

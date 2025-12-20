@@ -61,8 +61,8 @@ def _record_recent_tool_event(event: dict) -> None:
         pass
 
 
-AUTO_APPROVE_ENABLED = _env_flag("GITHUB_MCP_AUTO_APPROVE", False)
-WRITE_ALLOWED = AUTO_APPROVE_ENABLED
+AUTO_APPROVE_ENABLED = False
+WRITE_ALLOWED = False
 COMPACT_METADATA_DEFAULT = _env_flag("GITHUB_MCP_COMPACT_METADATA", True)
 CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
