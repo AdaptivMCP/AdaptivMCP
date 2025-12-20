@@ -11,10 +11,8 @@ import sys
 from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
-from github_mcp.server import (
-    CONTROLLER_REPO,
-    _ensure_write_allowed,
-)
+from github_mcp.mcp_server.context import CONTROLLER_REPO
+from github_mcp.mcp_server.write_gate import _ensure_write_allowed
 from github_mcp.workspace import (
     _clone_repo,
     _prepare_temp_virtualenv,

@@ -9,21 +9,28 @@ from github_mcp.mcp_server.privacy import strip_location_metadata
 from github_mcp.mcp_server.schemas import _title_from_tool_name
 
 
-# Tools that should be treated as "high-risk" and prompt even when auto-approve is ON.
+# Tools that should be treated as "high-risk" actions.
+#
+# Policy:
+# - When auto-approve is ON: do not prompt for anything (isConsequential=False).
+# - When auto-approve is OFF: prompt only for actions that can change external state.
+#
+# We treat web browsing and pushing/committing to GitHub as external-state changes.
 HIGH_RISK_TOOL_NAMES: Set[str] = {
     # Web browsing
     "web_search",
     "web_fetch",
-    # Dedicated push tool
+
+    # Workspace push-to-GitHub
     "terminal_push",
-    # If you have other push helpers, add them here as well.
 }
 
 # Tools that create commits via GitHub API (treat like "push/ship-to-GitHub").
-# Add/adjust names here to match your repo tool surface.
+# Note: PR creation itself can be non-consequential, but if the tool commits files
+# via API it should still be treated as consequential when auto-approve is OFF.
 GITHUB_API_COMMIT_TOOL_NAMES: Set[str] = {
     "apply_text_update_and_commit",
-    "update_files_and_open_pr",  # if this writes files via API (commit) + opens PR
+    "update_files_and_open_pr",
 }
 
 
@@ -90,16 +97,20 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         high_risk = _is_high_risk(tool)
 
         # Consequential policy:
-        # - Auto approve ON  => prompt only for high-risk (web/push/github-api-commit)
-        # - Auto approve OFF => prompt for ALL write tools + high-risk
+        # - Auto approve ON  => prompt for nothing
+        # - Auto approve OFF => prompt for write tools and any explicitly high-risk tool
         if auto_approve_on:
-            is_consequential = high_risk
+            is_consequential = False
         else:
-            is_consequential = high_risk or write_tool
+            is_consequential = bool(write_tool or high_risk)
 
         # Set compatibility metadata fields used by clients.
         meta["auto_approved"] = auto_approve_on
-        meta["write_action"] = bool(is_consequential)
+
+        # The controller contract: write_action reflects whether writes are auto-approved
+        # in this session (global), not whether a particular tool is a write tool.
+        meta["write_action"] = auto_approve_on
+
         meta["openai/isConsequential"] = bool(is_consequential)
         meta["x-openai-isConsequential"] = bool(is_consequential)
 

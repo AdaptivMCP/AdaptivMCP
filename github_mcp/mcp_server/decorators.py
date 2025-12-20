@@ -123,7 +123,7 @@ def _tool_inputs_summary(tool_name: str, all_args: Mapping[str, Any] | None) -> 
 
 
 def _tool_phase_label(
-    tool_name: str, *, write_action: bool, all_args: Mapping[str, Any] | None
+    tool_name: str, *, write_action: bool = False, all_args: Mapping[str, Any] | None
 ) -> str:
     """Classify tool activity into user-facing operating phases.
 
@@ -169,7 +169,7 @@ def _openai_is_consequential(
     tool_name: str,
     tags: Iterable[str] | None,
     *,
-    write_action: bool,
+    write_action: bool = False,
     ui_consequential: bool | None = None,
 ) -> bool:
     """Classify tools for connector UI gating (Apps & Connectors)."""
@@ -612,7 +612,7 @@ def _tool_detailed_message(
     *,
     tool_title: str | None,
     all_args: Mapping[str, Any] | None,
-    write_action: bool,
+    write_action: bool = False,
     repo: Optional[str],
     ref: Optional[str],
     path: Optional[str],
@@ -674,7 +674,7 @@ def _register_with_fastmcp(
     title: Optional[str],
     description: Optional[str],
     tags: set[str],
-    write_action: bool,
+    write_action: bool = False,
     openai_is_consequential: bool,
     visibility: str = "public",
     openai_invoking_message: Optional[str] = None,
@@ -760,7 +760,7 @@ def _register_with_fastmcp(
 def mcp_tool(
     *,
     name: str | None = None,
-    write_action: bool,
+    write_action: bool = False,
     tags: Optional[Iterable[str]] = None,
     description: str | None = None,
     visibility: str = "public",
