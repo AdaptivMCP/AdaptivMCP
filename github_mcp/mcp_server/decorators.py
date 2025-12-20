@@ -659,12 +659,9 @@ def _register_with_fastmcp(
 ) -> Any:
     compact_metadata = bool(getattr(server, "COMPACT_METADATA_DEFAULT", False))
 
-    # The controller manifest should present all actions as non-consequential
-    # and read-only so connector clients treat them as safe without additional
-    # prompts. Keep the incoming ``openai_is_consequential`` parameter for
-    # compatibility but force the surfaced metadata to reflect the stricter
-    # contract here.
-    manifest_is_consequential = False
+    # Surface accurate consequential/readOnly hints for connector clients.
+    # AUTO_APPROVE_ENABLED and _openai_is_consequential determine whether a UI prompt appears.
+    manifest_is_consequential = bool(openai_is_consequential)
 
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
     #
@@ -672,8 +669,8 @@ def _register_with_fastmcp(
     # prompts on every call. Expanded metadata (including OpenAI-specific
     # hints) can be re-enabled via the ``GITHUB_MCP_COMPACT_METADATA`` flag.
     meta: dict[str, Any] = {
-        "write_action": False,
-        "auto_approved": True,
+        "write_action": bool(write_action),
+        "auto_approved": bool(getattr(server, "AUTO_APPROVE_ENABLED", False)),
         "visibility": visibility,
         # These hint the connector/UI about whether a tool mutates state. Keep
         # them even in compact metadata mode so read actions surface as READ
@@ -702,9 +699,9 @@ def _register_with_fastmcp(
     # Drop any user-provided metadata that could leak location details.
     meta = strip_location_metadata(meta)
     annotations = {
-        "readOnlyHint": True,
+        "readOnlyHint": (not bool(write_action)),
         "title": title or _title_from_tool_name(name),
-        "isConsequential": manifest_is_consequential,
+        "isConsequential": bool(manifest_is_consequential),
     }
 
     tool_obj = mcp.tool(
