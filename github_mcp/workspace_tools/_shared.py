@@ -141,6 +141,58 @@ async def _delete_branch_via_workspace(
     }
 
 
+async def run_in_workspace(
+    *,
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    command: str = "pytest",
+    timeout_seconds: int = 300,
+    workdir: Optional[str] = None,
+    use_temp_venv: bool = False,
+    mutating: bool = False,
+) -> Dict[str, Any]:
+    """Run a shell command inside the persistent workspace clone.
+
+    This is a small shared wrapper used by workspace tools.
+
+    Notes:
+    - Workspace mutations (editing files, git add/commit) are permitted without UI prompts.
+    - Pushing to GitHub should be done via a dedicated write-gated tool.
+    """
+    deps = _workspace_deps()
+    resolved_full_name = _resolve_full_name(full_name)
+    resolved_ref = _resolve_ref(ref)
+
+    # Always preserve workspace edits between calls.
+    try:
+        repo_dir = await deps["clone_repo"](
+            resolved_full_name, ref=resolved_ref, preserve_changes=True
+        )
+    except TypeError:
+        # Backwards-compat if clone_repo signature differs.
+        repo_dir = await deps["clone_repo"](resolved_full_name, ref=resolved_ref)
+
+    env: Optional[Dict[str, str]] = None
+    if use_temp_venv:
+        env = await deps["prepare_temp_virtualenv"](repo_dir)
+
+    cwd = repo_dir
+    if workdir:
+        cwd = os.path.join(repo_dir, workdir)
+
+    result = await deps["run_shell"](
+        command,
+        cwd=cwd,
+        timeout_seconds=timeout_seconds,
+        env=env,
+    )
+    return {
+        "repo_dir": repo_dir,
+        "workdir": workdir,
+        "result": result,
+    }
+
+
 def _workspace_deps() -> Dict[str, Any]:
     main_module = sys.modules.get("main")
     return {
