@@ -50,4 +50,3 @@ Nothing in the MCP server enforces these preferences automatically. Instead, the
 
 - During multi-step tasks (for example creating a branch, updating code, running tests, and opening a PR), provide brief inline updates as you go instead of only at the end.
 - Each update should say what you just did, what you learned (for example test results or CI state), and what you plan to do next.
-- Unless I explicitly ask you to stop, treat my review of your PR as the main gate: create a branch, do the necessary edits and tests, open a PR, and let me decide whether to merge or request follow-ups.
