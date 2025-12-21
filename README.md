@@ -9,7 +9,6 @@ The server exposes:
 
 - `/healthz` – small JSON health payload (uptime, controller defaults, token-present signal, in-memory metrics snapshot).
 - `/sse` – MCP transport endpoint.
-- `/static` – static assets (connector icons, branding).
 
 Metrics are in-memory only (reset on restart) and never include secrets.
 
