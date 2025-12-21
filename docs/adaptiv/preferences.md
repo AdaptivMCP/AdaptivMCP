@@ -6,7 +6,7 @@
 
 ## Branch and PR habits
 
-- Branch names: use prefixes with short descriptions.
+- Branch names: use Ally-Workspace
 - Never push directly to main, unless directed by the user;
 
 ## Testing and tooling
