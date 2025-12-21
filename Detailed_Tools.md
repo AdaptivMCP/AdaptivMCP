@@ -4,7 +4,7 @@ This document explains how to use the MCP server tools.
 
 ## Recommended workflows
 
-### 1) Anything Github related
+### 1) Anything related to making Github changes that edit files / commit / push
 
 - Use render_shell
 - Use API calls only for information the user asks for
