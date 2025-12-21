@@ -1,18 +1,6 @@
 # Detailed MCP tools reference
 
-This document explains how to use the MCP server tools.
-
-## Recommended workflows
-
-### 1) Anything related to making Github changes that requires repo info / data, editing files / commit / push
-
-- Use `render_shell` / `terminal_command` to interact with cloned repository.
-- Use GitHub API tools only for information the user asks for
-
-### 2) Plain-language tool logs for UI / debugging
-
-- `get_recent_tool_events` → recent tool calls (success + failure)
-- `get_recent_server_errors` → recent failed tool-call error records
+This document explains how each tool in the MCP server tools.
 
 ## Tool catalog (grouped)
 
