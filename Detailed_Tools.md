@@ -4,7 +4,7 @@ This document explains how to use the `chatgpt-mcp-github` MCP server tools toge
 
 ## Editing policy (important)
 
-- **Preferred edit style:** full-file replacement.
+- **Preferred edit style:** diff first.
   - Use **workspace editing** (`set_workspace_file_contents` + `commit_workspace_files`) or **GitHub commit helper** (`apply_text_update_and_commit`).
 - **Diff/patch editing is discouraged:** `apply_patch_and_commit` exists only for rare cases where a full replacement is impractical.
 - **Diffs are still useful for information:** PR review (`get_pr_overview`, GitHub UI) and previews (`build_unified_diff`) are allowed.
