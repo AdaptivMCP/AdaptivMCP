@@ -4,7 +4,6 @@ This module is the entry point for the GitHub Model Context Protocol server
 used by ChatGPT connectors. It lists the tools, arguments, and behaviors in a
 single place so an assistant can decide how to interact with the server without
 being pushed toward a particular working style.
-for optional, non-binding examples of how the tools can fit together.
 """
 
 import base64
