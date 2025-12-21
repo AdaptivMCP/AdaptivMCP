@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import re
 from typing import Any, Dict, Mapping, Optional
 
 from github_mcp.mcp_server.context import CONTROLLER_REPO, _TOOL_EXAMPLES
@@ -23,6 +24,46 @@ _TITLE_TOKEN_MAP = {
     "gh": "GH",
     "github": "GitHub",
 }
+
+_SENSITIVE_PATTERNS = [
+    (
+        re.compile(r"https://x-access-token:([^@/\s]+)@github\.com/"),
+        "https://x-access-token:***@github.com/",
+    ),
+    (re.compile(r"x-access-token:([^@\s]+)@github\.com"), "x-access-token:***@github.com"),
+    (re.compile(r"\bghp_[A-Za-z0-9]{20,}\b"), "ghp_***"),
+    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"), "github_pat_***"),
+]
+
+
+def _redact_sensitive_text(text: str) -> str:
+    """Redact token-like substrings from metadata destined for LLMs."""
+
+    if not isinstance(text, str):
+        return text
+
+    redacted = text
+    for pat, repl in _SENSITIVE_PATTERNS:
+        redacted = pat.sub(repl, redacted)
+    return redacted
+
+
+def _sanitize_metadata_value(value: Any) -> Any:
+    """Best-effort deep redaction for schemas and tool metadata."""
+
+    if isinstance(value, str):
+        return _redact_sensitive_text(value)
+
+    if isinstance(value, Mapping):
+        return {k: _sanitize_metadata_value(v) for k, v in value.items()}
+
+    if isinstance(value, list):
+        return [_sanitize_metadata_value(v) for v in value]
+
+    if isinstance(value, tuple):
+        return tuple(_sanitize_metadata_value(v) for v in value)
+
+    return value
 
 
 def _title_from_tool_name(name: str) -> str:
@@ -102,7 +143,8 @@ def _normalize_tool_description(
         default_summary,
         example_summary,
     ]
-    return "\n".join([p for p in parts if p])
+    description = "\n".join([p for p in parts if p])
+    return _redact_sensitive_text(description)
 
 def _preflight_tool_args(tool: Any, raw_args: Mapping[str, Any]) -> None:
     """Placeholder for JSON Schema-based preflight validation.
@@ -142,7 +184,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     # every tool to be fully annotated.
     if schema is None:
         if name == "list_workflow_runs":
-            return {
+            schema = {
                 "type": "object",
                 "properties": {
                     "full_name": {"type": "string"},
@@ -155,9 +197,10 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 "required": ["full_name"],
                 "additionalProperties": True,
             }
+            return _sanitize_metadata_value(schema)
 
         if name == "list_recent_failures":
-            return {
+            schema = {
                 "type": "object",
                 "properties": {
                     "full_name": {"type": "string"},
@@ -167,6 +210,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 "required": ["full_name"],
                 "additionalProperties": True,
             }
+            return _sanitize_metadata_value(schema)
 
     # At this point we have either a concrete schema from the MCP layer or
     # None. When a schema is present, we sometimes need to tweak it slightly
@@ -294,7 +338,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
             if isinstance(limit_prop, dict):
                 limit_prop.pop("minimum", None)
 
-        return schema
+        return _sanitize_metadata_value(schema)
 
     # As a final fallback, derive a best-effort JSON schema from the
     # registered function's Python signature so that describe_tool and
@@ -443,12 +487,14 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
 
                 properties[param_name] = prop
 
-            return {
-                "type": "object",
-                "properties": properties,
-                "required": required or [],
-                "additionalProperties": True,
-            }
+            return _sanitize_metadata_value(
+                {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required or [],
+                    "additionalProperties": True,
+                }
+            )
     except Exception:  # extremely defensive
         return None
 
@@ -509,12 +555,14 @@ def _format_tool_args_preview(all_args: Mapping[str, Any], *, limit: int = 1200)
 
     try:
         safe_args = {k: _summarize(v, key=str(k), depth=0) for k, v in all_args.items()}
+        safe_args = _sanitize_metadata_value(safe_args)
         preview = json.dumps(safe_args, ensure_ascii=False, separators=(",", ":"))
     except Exception:
         preview = "<args preview unavailable>"
 
     # Ensure it is a single line even if something slipped through.
     preview = preview.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    preview = _redact_sensitive_text(preview)
 
     if len(preview) > limit:
         preview = f"{preview[:limit]}… (+{len(preview) - limit} chars)"
