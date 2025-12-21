@@ -81,9 +81,3 @@ This document explains how to use the `chatgpt-mcp-github` MCP server tools toge
 
 - `create_repository` — create a new repo (supports templates and payload overrides to match GitHub’s "New repository" UI).
 
----
-
-## Notes
-
-- When unsure about write safety or parameter shapes: use `validate_tool_args` then `describe_tool`.
-- Prefer `run_quality_suite` before opening a PR so CI failures are caught early.
