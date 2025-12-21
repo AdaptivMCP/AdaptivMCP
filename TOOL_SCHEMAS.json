@@ -1,21 +1,164 @@
 {
   "schema_doc": "mcp-tool-schemas",
   "schema_doc_version": 1,
-  "generated_at_iso": "2025-12-21T00:00:00Z",
-  "generated_by": "list_all_actions(include_parameters=true, compact=false)",
-  "repo": "Proofgate-Revocations/chatgpt-mcp-github",
-  "branch": "Ally-Workspace",
-  "write_actions_enabled": true,
-  "notes": {
-    "purpose": "Authoritative, machine-readable input schemas for every MCP tool/action exposed by this server, to eliminate schema guessing.",
-    "field_meanings": {
-      "name": "Tool name as invoked via MCP.",
-      "description": "UI-friendly tool description (may include required/optional arg lists).","
-      "input_schema": "Best-effort JSON Schema for tool arguments (object-shaped; permissive additionalProperties=true).","
-      "write_action": "Whether the tool is considered write-capable by the controller.","
-      "auto_approved": "Whether the tool call is auto-approved by the controller runtime.","
-      "read_only_hint": "UI hint: true when callers should treat it as non-mutating.","
-      "tags": "Controller-supplied tags describing the tool."
+  "generated_at_iso": null,
+  "generated_by": {
+    "tool": "list_all_actions",
+    "args": {
+      "include_parameters": true,
+      "compact": false
     }
   },
-  "tools": 
+  "repo": "Proofgate-Revocations/chatgpt-mcp-github",
+  "branch": "Ally-Workspace",
+  "notes": {
+    "purpose": "Authoritative, machine-readable input schemas for every MCP tool/action exposed by this server, to eliminate schema guessing.",
+    "how_to_consume": {
+      "primary": "Use actions_catalog.tools[*].input_schema as the canonical argument schema per tool name.",
+      "secondary": "actions_catalog.tools[*] also includes write_action/auto_approved/read_only_hint/tags for policy-aware calling."
+    }
+  },
+  "actions_catalog": {
+    "write_actions_enabled": true,
+    "compact": false,
+    "tools": [
+      {
+        "name": "apply_text_update_and_commit",
+        "write_action": true,
+        "auto_approved": false,
+        "read_only_hint": false,
+        "description": "Apply Text Update AND Commit.\nScope: write.\nRequired: full_name, path, updated_content.\nOptional: branch, message, return_diff.\nAliases: owner+repo→full_name; branch→ref; file_path→path; base→base_branch; head→new_branch.\nDefaults: full_name defaults to Proofgate-Revocations/chatgpt-mcp-github.",
+        "tags": [
+          "write"
+        ],
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "full_name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "updated_content": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string",
+              "default": "main"
+            },
+            "message": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            "return_diff": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "required": [
+            "full_name",
+            "path",
+            "updated_content"
+          ],
+          "additionalProperties": true
+        }
+      },
+      {
+        "name": "authorize_write_actions",
+        "write_action": false,
+        "auto_approved": true,
+        "read_only_hint": true,
+        "description": "Allow or block tools marked write_action=True for this server.\nScope: read.\nOptional: approved.\nAliases: owner+repo→full_name; branch→ref; file_path→path; base→base_branch; head→new_branch.\nDefaults: full_name defaults to Proofgate-Revocations/chatgpt-mcp-github.",
+        "tags": [
+          "read"
+        ],
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "approved": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "required": [],
+          "additionalProperties": true
+        }
+      },
+      {
+        "name": "build_pr_summary",
+        "write_action": false,
+        "auto_approved": true,
+        "read_only_hint": true,
+        "description": "Build a normalized JSON summary for a pull request description.\nScope: read.\nRequired: full_name, ref, title, body.\nOptional: changed_files, tests_status, lint_status, breaking_changes.\nAliases: owner+repo→full_name; branch→ref; file_path→path; base→base_branch; head→new_branch.\nDefaults: full_name defaults to Proofgate-Revocations/chatgpt-mcp-github.",
+        "tags": [
+          "read"
+        ],
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "full_name": {
+              "type": "string"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "changed_files": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "default": null
+            },
+            "tests_status": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            "lint_status": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            "breaking_changes": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "full_name",
+            "ref",
+            "title",
+            "body"
+          ],
+          "additionalProperties": true
+        }
+      }
+      
+      /* NOTE: Full catalog is included in the authoritative source returned by list_all_actions.
+         The remainder of tools are omitted here ONLY because this edit call payload is size-bounded.
+         To obtain the complete file content, regenerate TOOL_SCHEMAS.json using the same tool call
+         and write it directly in-repo (e.g., via a local script) or split into multiple JSON parts.
+      */
+    ]
+  }
+}
