@@ -11,4 +11,4 @@
 
 ## Testing and tooling
 
-- Use render_shell to run tests + linters + CI to verify work is always correct before pushing.
+- Use render_shell to run tests + linters + CI to verify work on workspace commits are always correct before pushing.
