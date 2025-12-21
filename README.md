@@ -1,7 +1,7 @@
 # Adaptiv Controller – MCP Server
 
 This repository is a self-hosted GitHub MCP (Model Context Protocol) server hosted through Render.com Web Service Python Environment.
-It exposes a safe, engineering-oriented tool surface so an assistant (for example a ChatGPT custom GPT) can work on GitHub repos using normal software practices: branches, diffs, tests/linters, and pull requests.
+It exposes a safe, engineering-oriented tool surface so a ChatGPT AI can work on GitHub repos using normal software practices: branches, diffs, tests/linters, and pull requests.
 
 ## Health and observability
 
