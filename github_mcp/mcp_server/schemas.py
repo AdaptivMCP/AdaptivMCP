@@ -197,7 +197,9 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 "required": ["full_name"],
                 "additionalProperties": True,
             }
-            return _sanitize_metadata_value(schema)
+            schema = _tighten_schema_properties(schema)
+
+        return _sanitize_metadata_value(schema)
 
         if name == "list_recent_failures":
             schema = {
@@ -499,6 +501,137 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
         return None
 
     return None
+
+# ---------------------------------------------------------------------------
+# Schema tightening
+# ---------------------------------------------------------------------------
+
+_COMMON_ARRAY_STRING_KEYS = {
+    "paths", "labels", "assignees", "metricTypes", "resource", "level", "type", "text",
+}
+
+_COMMON_OBJECT_NULL_KEYS = {
+    "inputs", "variables", "security_and_analysis", "create_payload_overrides", "update_payload_overrides",
+}
+
+_COMMON_BOOL_KEYS = {
+    "approved", "draft", "push", "reset", "refresh", "recursive", "include_blobs", "include_trees",
+    "include_hidden", "include_dirs", "auto_init", "is_template", "has_issues", "has_projects", "has_wiki",
+    "has_discussions", "include_all_branches", "clone_to_workspace", "use_temp_venv",
+    "installing_dependencies", "mutating", "run_tokenlike_scan", "create_parents", "add_all",
+    "discard_uncommitted_changes", "delete_mangled_branch", "reset_base", "enumerate_repo", "dry_run",
+    "return_diff",
+}
+
+_COMMON_INT_KEYS = {
+    "number", "issue_number", "pull_number", "run_id", "job_id", "installation_id", "comment_id",
+    "page", "per_page", "limit", "start_line", "max_lines", "timeout_seconds", "poll_interval_seconds",
+    "max_jobs", "max_files", "max_depth", "max_results", "max_file_bytes", "resolution", "team_id",
+}
+
+_COMMON_STRING_KEYS = {
+    "full_name", "owner", "repo", "path", "file_path", "from_path", "to_path", "workspace_path", "target_path",
+    "ref", "branch", "base", "head", "base_branch", "new_branch", "base_ref", "from_ref",
+    "name", "title", "body", "message", "url", "workflow", "query", "command", "workdir", "handle",
+    "min_level", "search_type", "sort", "filter", "state", "status", "event", "visibility",
+    "homepage", "description", "affiliation", "owner_type", "template_full_name", "gitignore_template",
+    "license_template",
+}
+
+
+def _infer_schema_for_key(key: str) -> Dict[str, Any]:
+    """Infer a stricter JSON Schema fragment for common tool argument names.
+
+    `{}` means "anything" in JSON Schema. For AI callers, that reintroduces
+    guesswork and prevents preflight validation.
+
+    These inferences are conservative and only applied when a property schema is
+    missing or untyped.
+    """
+
+    k = (key or "").strip()
+    if not k:
+        return {}
+
+    if k in _COMMON_ARRAY_STRING_KEYS:
+        return {"type": "array", "items": {"type": "string"}}
+
+    if k in _COMMON_OBJECT_NULL_KEYS:
+        return {"type": ["object", "null"]}
+
+    if k in _COMMON_BOOL_KEYS:
+        return {"type": "boolean"}
+
+    if k in _COMMON_INT_KEYS or k.endswith("_id") or k.endswith("_number"):
+        return {"type": "integer"}
+
+    if k in _COMMON_STRING_KEYS:
+        return {"type": "string"}
+
+    # Heuristic: many *_at fields are ISO timestamps.
+    if k.endswith("_at"):
+        return {"type": ["string", "null"]}
+
+    return {}
+
+
+def _apply_nullability_from_default(prop: Dict[str, Any]) -> None:
+    """If a property default is None, allow null in the property type."""
+
+    if "default" not in prop:
+        return
+    if prop.get("default", object()) is not None:
+        return
+
+    t = prop.get("type")
+    if isinstance(t, str):
+        if t != "null":
+            prop["type"] = sorted({t, "null"})
+    elif isinstance(t, list):
+        if "null" not in t:
+            prop["type"] = sorted(set(t + ["null"]))
+
+
+def _tighten_schema_properties(schema: Dict[str, Any]) -> Dict[str, Any]:
+    """Fill in missing/untyped property schemas for common args."""
+
+    props = schema.setdefault("properties", {})
+    required = schema.setdefault("required", []) or []
+
+    # Ensure required keys exist in properties.
+    for req in list(required):
+        if req not in props:
+            inferred = _infer_schema_for_key(req)
+            if inferred:
+                props[req] = inferred
+
+    for key, prop in list(props.items()):
+        if not isinstance(prop, dict):
+            continue
+
+        needs_type = (not prop) or (prop.get("type") is None)
+        if needs_type:
+            inferred = _infer_schema_for_key(str(key))
+            if inferred:
+                merged = dict(inferred)
+                if "default" in prop:
+                    merged["default"] = prop.get("default")
+                    _apply_nullability_from_default(merged)
+                props[key] = merged
+            continue
+
+        # If it's an array (or includes array), ensure items are present.
+        t = prop.get("type")
+        is_array = (t == "array") or (isinstance(t, list) and "array" in t)
+        if is_array and "items" not in prop:
+            inferred = _infer_schema_for_key(str(key))
+            if inferred.get("type") == "array" and "items" in inferred:
+                prop["items"] = inferred["items"]
+
+        _apply_nullability_from_default(prop)
+
+    return schema
+
 
 def _format_tool_args_preview(all_args: Mapping[str, Any], *, limit: int = 1200) -> str:
     """Return a single-line, truncated snapshot of tool arguments.
