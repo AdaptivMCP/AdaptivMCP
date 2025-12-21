@@ -47,6 +47,7 @@ set_workspace_file_contents = _fs.set_workspace_file_contents
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace
 
+render_shell = _commands.render_shell
 terminal_command = _commands.terminal_command
 run_command = _commands.run_command
 
@@ -87,6 +88,7 @@ __all__ = [
     'set_workspace_file_contents',
     'list_workspace_files',
     'search_workspace',
+    'render_shell',
     'terminal_command',
     'run_command',
     'workspace_create_branch',
