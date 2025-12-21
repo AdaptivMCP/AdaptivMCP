@@ -1,0 +1,21 @@
+{
+  "schema_doc": "mcp-tool-schemas",
+  "schema_doc_version": 1,
+  "generated_at_iso": "2025-12-21T00:00:00Z",
+  "generated_by": "list_all_actions(include_parameters=true, compact=false)",
+  "repo": "Proofgate-Revocations/chatgpt-mcp-github",
+  "branch": "Ally-Workspace",
+  "write_actions_enabled": true,
+  "notes": {
+    "purpose": "Authoritative, machine-readable input schemas for every MCP tool/action exposed by this server, to eliminate schema guessing.",
+    "field_meanings": {
+      "name": "Tool name as invoked via MCP.",
+      "description": "UI-friendly tool description (may include required/optional arg lists).","
+      "input_schema": "Best-effort JSON Schema for tool arguments (object-shaped; permissive additionalProperties=true).","
+      "write_action": "Whether the tool is considered write-capable by the controller.","
+      "auto_approved": "Whether the tool call is auto-approved by the controller runtime.","
+      "read_only_hint": "UI hint: true when callers should treat it as non-mutating.","
+      "tags": "Controller-supplied tags describing the tool."
+    }
+  },
+  "tools": 
