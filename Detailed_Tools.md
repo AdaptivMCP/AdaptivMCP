@@ -8,48 +8,12 @@ This document explains how to use the `chatgpt-mcp-github` MCP server tools toge
 
 ## Recommended workflows
 
-### 1) Standard file change (full replacement)
+### 1) Anything Github related
 
-1. Create or reuse a branch:
-   - `ensure_branch` (or workspace equivalent: `workspace_create_branch`).
-2. Read the file (avoid huge payloads):
-   - `open_file_context` / `get_file_with_line_numbers` / `get_file_contents`.
-3. Replace the file:
-   - Workspace path (preferred for multi-file edits): `set_workspace_file_contents`.
-   - Single-file GitHub helper: `apply_text_update_and_commit`.
-4. Validate:
-   - `run_quality_suite` (or `run_lint_suite` + `run_tests`).
-5. Open or reuse PR:
-   - `open_pr_for_existing_branch` (idempotent) or `update_files_and_open_pr`.
+- Use render_shell
+- Use API calls only for information the user asks for
 
-### 2) Workspace-heavy change (refactor / formatting)
-
-1. `ensure_workspace_clone`
-2. Run commands as if on a local machine:
-   - `terminal_command` (note: `run_command` is a deprecated alias)
-3. Inspect what changed:
-   - `get_workspace_changes_summary`
-4. Commit:
-   - `commit_workspace` or `commit_workspace_files`
-5. Validate and open PR:
-   - `run_quality_suite` → `open_pr_for_existing_branch`
-
-### 3) Self-heal a mangled workspace branch
-
-If the workspace clone is in a bad state (wrong branch, conflicts, half-merge, etc.), use:
-
-- `workspace_self_heal_branch`
-
-It can reset to `main`, optionally delete the mangled branch, create a fresh branch, and return plain-language step logs for UI rendering.
-
-### 4) CI triage
-
-- Find runs: `list_workflow_runs` / `list_recent_failures`
-- Summarize a run: `get_workflow_run_overview`
-- Drill into jobs: `list_workflow_run_jobs` → `get_job_logs`
-- Wait for completion: `wait_for_workflow_run`
-
-### 5) Plain-language tool logs for UI / debugging
+### 2) Plain-language tool logs for UI / debugging
 
 - `get_recent_tool_events` → recent tool calls (success + failure)
 - `get_recent_server_errors` → recent failed tool-call error records
