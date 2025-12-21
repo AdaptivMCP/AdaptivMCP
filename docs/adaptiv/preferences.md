@@ -21,25 +21,21 @@ Nothing in the MCP server enforces these preferences automatically. Instead, the
 - Communication tone – how formal or informal you want commit messages, PR descriptions, and assistant explanations to be.
 - Progress and communication – how often you want inline updates during multi-step work, and whether the assistant should keep going by default.
 
-## Example outline
-
 # My Adaptiv preferences
 
 ## Coding style
 
-- Primary languages I care about.
-- Follow the linters and formatters already configured in the repo.
+- Primary languages I care about: Python
 - Prefer small, focused changes with clear diffs over huge multi file rewrites.
 
 ## Branch and PR habits
 
 - Branch names: use feat, fix, or chore prefixes with short, descriptive slugs.
-- Never push directly to main; always work on a feature branch and open a PR.
+- Never push directly to main, unless directed by the user; always work on a feature branch and open a PR.
 
 ## Testing and tooling
 
-- Run the standard test command before asking me to review a PR when it is practical to do so.
-- If tests or lint fail, summarize the failure and suggest a follow up plan instead of hiding it.
+- Use render_shell to run tests + linters + CI to verify work is always correct before pushing.
 
 ## Communication
 
