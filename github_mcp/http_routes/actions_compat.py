@@ -35,7 +35,11 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         if not display_name and isinstance(annotations, dict):
             display_name = annotations.get("title")
         if not display_name and isinstance(meta, dict):
-            display_name = meta.get("title") or meta.get("openai/title")
+            display_name = (
+                meta.get("title")
+                or meta.get("openai/title")
+                or meta.get("chatgpt.com/title")
+            )
         display_name = display_name or tool.name
 
         actions.append(

@@ -136,18 +136,20 @@ def _register_with_fastmcp(
         "write_action": bool(write_action),
         "auto_approved": bool(not write_action),
         "visibility": visibility,
-        # OpenAI connector UI metadata (Apps & Connectors).
-        #
-        # These keys are intentionally flat (not nested) because OpenAI's connector
-        # UI historically reads them from `meta` directly.
-        "openai/visibility": visibility,
-        "openai/toolInvocation/invoking": OPENAI_INVOKING_MESSAGE,
-        "openai/toolInvocation/invoked": OPENAI_INVOKED_MESSAGE,
     }
+
+    for domain_prefix in ("openai", "chatgpt.com"):
+        # Connector UI metadata (Apps & Connectors). These keys are intentionally
+        # flat (not nested) because the UI historically reads them directly from
+        # `meta`.
+        meta[f"{domain_prefix}/visibility"] = visibility
+        meta[f"{domain_prefix}/toolInvocation/invoking"] = OPENAI_INVOKING_MESSAGE
+        meta[f"{domain_prefix}/toolInvocation/invoked"] = OPENAI_INVOKED_MESSAGE
     if title:
         # Helpful for UIs that support a distinct display label.
         meta["title"] = title
-        meta["openai/title"] = title
+        for domain_prefix in ("openai", "chatgpt.com"):
+            meta[f"{domain_prefix}/title"] = title
     annotations = {
         "readOnlyHint": bool(not write_action),
         "title": title or _title_from_tool_name(name),
