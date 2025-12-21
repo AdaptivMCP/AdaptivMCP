@@ -1,10 +1,6 @@
 # Detailed MCP tools reference
 
-This document explains how to use the MCP server tools together in real workflows.
-
-## Editing policy (important)
-
-- **Preferred edit style:** diff first.
+This document explains how to use the MCP server tools.
 
 ## Recommended workflows
 
