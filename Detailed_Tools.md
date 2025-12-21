@@ -1,6 +1,6 @@
 # Detailed MCP tools reference
 
-This document explains how to use the `chatgpt-mcp-github` MCP server tools together in real workflows.
+This document explains how to use the MCP server tools together in real workflows.
 
 ## Editing policy (important)
 
