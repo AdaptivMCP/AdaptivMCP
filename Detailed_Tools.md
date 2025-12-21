@@ -81,6 +81,7 @@ It can reset to `main`, optionally delete the mangled branch, create a fresh bra
 ### Workspace
 
 - `ensure_workspace_clone` — persistent clone for a repo/ref.
+- `render_shell` — Render-centric shell command that clones from the default branch, optionally creates a new branch, then runs a command in the workspace.
 - `terminal_command` — run shell commands in the workspace.
 - `get_workspace_file_contents` — read a file from the workspace.
 - `set_workspace_file_contents` — write a file (full replacement) in the workspace.

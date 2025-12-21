@@ -68,7 +68,7 @@ from github_mcp.server import (
     _find_registered_tool,
     _normalize_input_schema,
 )
-from github_mcp.tools_workspace import commit_workspace, ensure_workspace_clone  # noqa: F401
+from github_mcp.tools_workspace import commit_workspace, ensure_workspace_clone, render_shell  # noqa: F401
 from github_mcp.utils import (
     _effective_ref_for_repo,
     _normalize_repo_path,

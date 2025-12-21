@@ -15,6 +15,83 @@ def _tw():
     from github_mcp import tools_workspace as tw
     return tw
 
+
+@mcp_tool(write_action=True)
+async def render_shell(
+    full_name: Optional[str] = None,
+    *,
+    command: str = "echo hello Render",
+    create_branch: Optional[str] = None,
+    push_new_branch: bool = True,
+    ref: str = "main",
+    branch: Optional[str] = None,
+    timeout_seconds: int = 300,
+    workdir: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+    mutating: bool = False,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Render-focused shell entry point for interacting with GitHub workspaces.
+
+    The tool intentionally mirrors the Render deployment model by always
+    operating through the server-side workspace clone. It ensures the workspace
+    is cloned from the default branch (or a provided ref), optionally creates a
+    fresh branch from that ref, and then executes the supplied shell command
+    inside the clone.
+    """
+
+    try:
+        deps = _tw()._workspace_deps()
+        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
+
+        base_ref = _tw()._resolve_ref(ref, branch=branch)
+        if not base_ref:
+            base_ref = _tw()._default_branch_for_repo(full_name)
+        effective_ref = _tw()._effective_ref_for_repo(full_name, base_ref)
+
+        _tw()._ensure_write_allowed(
+            f"render_shell {command} in {full_name}@{effective_ref}",
+            target_ref=effective_ref,
+        )
+
+        branch_creation: Optional[Dict[str, Any]] = None
+        target_ref = effective_ref
+
+        if create_branch:
+            branch_creation = await _tw().workspace_create_branch(
+                full_name=full_name,
+                base_ref=effective_ref,
+                new_branch=create_branch,
+                push=push_new_branch,
+            )
+            target_ref = create_branch
+
+        command_result = await _tw().terminal_command(
+            full_name=full_name,
+            ref=target_ref,
+            command=command,
+            timeout_seconds=timeout_seconds,
+            workdir=workdir,
+            use_temp_venv=use_temp_venv,
+            installing_dependencies=installing_dependencies,
+            mutating=mutating,
+            owner=owner,
+            repo=repo,
+            branch=target_ref,
+        )
+
+        return {
+            "full_name": full_name,
+            "base_ref": effective_ref,
+            "target_ref": target_ref,
+            "branch": branch_creation,
+            "command": command_result,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="render_shell")
+
 @mcp_tool(write_action=False)
 async def terminal_command(
     full_name: Optional[str] = None,
