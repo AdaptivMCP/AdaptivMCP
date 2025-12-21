@@ -22,7 +22,7 @@ This document explains how to use the `chatgpt-mcp-github` MCP server tools toge
 
 ### Environment & server
 
-- `validate_environment` — validate GitHub token, repo/branch defaults, and permissions.
+- `validate_environment` — validate GitHub authentication, repo/branch defaults, and permissions.
 - `get_server_config` — safe summary of server settings (timeouts, concurrency, git identity).
 - `get_rate_limit` — GitHub API rate limiting.
 - `get_user_login` — authenticated user.
