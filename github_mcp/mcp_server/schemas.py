@@ -197,11 +197,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 "required": ["full_name"],
                 "additionalProperties": True,
             }
-            schema = _tighten_schema_properties(schema)
-
-        return _sanitize_metadata_value(schema)
-
-        if name == "list_recent_failures":
+        elif name == "list_recent_failures":
             schema = {
                 "type": "object",
                 "properties": {
@@ -212,6 +208,9 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
                 "required": ["full_name"],
                 "additionalProperties": True,
             }
+
+        if schema is not None:
+            schema = _tighten_schema_properties(schema)
             return _sanitize_metadata_value(schema)
 
     # At this point we have either a concrete schema from the MCP layer or
