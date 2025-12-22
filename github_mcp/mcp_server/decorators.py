@@ -22,7 +22,6 @@ import json
 import inspect
 import time
 import uuid
-import sys
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from github_mcp.config import TOOLS_LOGGER
@@ -36,7 +35,7 @@ from github_mcp.mcp_server.schemas import (
     _title_from_tool_name,
 )
 from github_mcp.metrics import _record_tool_call
-from github_mcp.redaction import redact_structured, redact_text
+from github_mcp.redaction import redact_text
 from github_mcp.side_effects import (
     SideEffectClass,
     compute_write_action_flag,
