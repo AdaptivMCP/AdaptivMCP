@@ -31,6 +31,7 @@ from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
     _normalize_input_schema,
     _normalize_tool_description,
+    _sanitize_metadata_value,
     _title_from_tool_name,
 )
 from github_mcp.metrics import _record_tool_call
@@ -166,26 +167,6 @@ def _register_with_fastmcp(
         annotations=annotations,
     )
 
-
-
-    # Replace generic visibility labels with a schema-derived identifier so the
-    # connector UI displays the active schema rather than a static value like "public".
-    # Format: schema:<tool_name>:<sha1-10>
-    try:
-        schema = _normalize_input_schema(tool_obj) or {"type": "object", "properties": {}}
-        normalized = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        schema_fingerprint = hashlib.sha1(normalized.encode("utf-8", errors="replace")).hexdigest()[:10]
-        schema_visibility = f"schema:{name}:{schema_fingerprint}"
-
-        tool_obj.meta["visibility"] = schema_visibility
-        for domain_prefix in ("openai", "chatgpt.com"):
-            tool_obj.meta[f"{domain_prefix}/visibility"] = schema_visibility
-
-        # Keep the approval flag consistent with the global write gate.
-    except Exception:
-        # Never fail tool registration over UI metadata.
-        pass
-
     # Keep registry stable: replace existing entry with the same name.
     _REGISTERED_MCP_TOOLS[:] = [
         (t, f)
@@ -193,6 +174,43 @@ def _register_with_fastmcp(
         if (getattr(t, "name", None) or getattr(f, "__name__", None)) != name
     ]
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
+
+    # Replace generic visibility labels with a schema-derived identifier so the
+    # connector UI displays the active schema rather than a static value like "public".
+    # Format: schema:<tool_name>:<sha1-10>
+    schema: Dict[str, Any] | None = None
+    sanitized_schema: Dict[str, Any] | None = None
+    try:
+        schema = _normalize_input_schema(tool_obj) or {"type": "object", "properties": {}}
+        sanitized_schema = _sanitize_metadata_value(schema)
+        normalized = json.dumps(
+            sanitized_schema, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        schema_fingerprint = hashlib.sha1(normalized.encode("utf-8", errors="replace")).hexdigest()[:10]
+        schema_visibility = f"schema:{name}:{schema_fingerprint}"
+
+        tool_obj.meta["visibility"] = schema_visibility
+        for domain_prefix in ("openai", "chatgpt.com"):
+            tool_obj.meta[f"{domain_prefix}/visibility"] = schema_visibility
+
+    except Exception:
+        # Never fail tool registration over UI metadata.
+        pass
+    finally:
+        # Always surface machine-readable schemas and the active write gate state
+        # to ChatGPT so connectors don't block safe operations.
+        sanitized_schema = sanitized_schema or _sanitize_metadata_value(
+            schema or {"type": "object", "properties": {}}
+        )
+
+        tool_obj.meta["schema"] = sanitized_schema
+        tool_obj.meta["input_schema"] = sanitized_schema
+        tool_obj.meta["write_allowed"] = WRITE_ALLOWED
+
+        for domain_prefix in ("openai", "chatgpt.com"):
+            tool_obj.meta[f"{domain_prefix}/schema"] = sanitized_schema
+            tool_obj.meta[f"{domain_prefix}/input_schema"] = sanitized_schema
+            tool_obj.meta[f"{domain_prefix}/write_allowed"] = WRITE_ALLOWED
 
     return tool_obj
 
