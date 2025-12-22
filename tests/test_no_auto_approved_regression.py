@@ -3,6 +3,8 @@ import pytest
 from github_mcp.main_tools.server_config import get_server_config
 from github_mcp.http_routes.actions_compat import serialize_actions_for_compatibility
 
+import github_mcp.server as server
+
 
 def _contains_key(obj, key: str) -> bool:
     if isinstance(obj, dict):
