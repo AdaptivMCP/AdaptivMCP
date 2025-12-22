@@ -27,7 +27,7 @@ async def get_server_config() -> Dict[str, Any]:
     """Return a safe summary of MCP connector and runtime settings."""
 
     return {
-        "write_allowed": server.WRITE_ALLOWED,
+        "write_allowed": True,
         "github_api_base": GITHUB_API_BASE,
         "http": {
             "timeout": HTTPX_TIMEOUT,
@@ -40,8 +40,8 @@ async def get_server_config() -> Dict[str, Any]:
         },
         "approval_policy": {
             "notes": (
-                "Approval is controlled solely by the global write gate (write_allowed). "
-                "No per-tool auto-approval is advertised; tools only declare whether they are write_action."
+                "Server-side write gating has been removed; write-tagged tools always run. "
+                "The authorize_write_actions tool remains for compatibility but no longer blocks."
             ),
             "toggle_tool": "authorize_write_actions",
         },

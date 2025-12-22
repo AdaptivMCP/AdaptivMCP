@@ -58,7 +58,11 @@ def _record_recent_tool_event(event: dict) -> None:
         pass
 
 
-WRITE_ALLOWED = _env_flag('GITHUB_MCP_AUTO_APPROVE', False)
+# Server-side write gating is disabled; writes are always allowed. The
+# environment variable remains only for backwards compatibility but is ignored
+# in favor of a hardcoded True value so server-side blocks cannot be
+# reintroduced accidentally.
+WRITE_ALLOWED = True
 COMPACT_METADATA_DEFAULT = _env_flag('GITHUB_MCP_COMPACT_METADATA', True)
 CONTROLLER_REPO = os.environ.get(
     'GITHUB_MCP_CONTROLLER_REPO', 'Proofgate-Revocations/chatgpt-mcp-github'
