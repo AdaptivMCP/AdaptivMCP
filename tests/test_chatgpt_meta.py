@@ -71,6 +71,19 @@ def test_register_with_fastmcp_surfaces_schema_and_write_gate():
         decorators._REGISTERED_MCP_TOOLS[:] = original_registry
 
 
+def test_normalize_input_schema_tightens_required_properties():
+    tool = types.SimpleNamespace(
+        name="list_repositories",
+        inputSchema={"type": "object", "required": ["full_name"], "properties": {}},
+    )
+
+    schema = schemas._normalize_input_schema(tool)
+
+    assert schema["type"] == "object"
+    assert schema["properties"]["full_name"]["type"] == "string"
+    assert "full_name" in schema["required"]
+
+
 def test_sanitize_metadata_value_handles_unserializable_types():
     payload = {
         "token": "https://x-access-token:abc123@github.com/",
