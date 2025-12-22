@@ -243,6 +243,8 @@ class _InMemoryErrorLogHandler(logging.Handler):
             "level": record.levelname,
             "message": message,
             "created": record.created,
+            "tool_name": getattr(record, "tool_name", None),
+            "call_id": getattr(record, "call_id", None),
             "tool_context": redact_text(getattr(record, "tool_context", None)),
             "tool_error_type": getattr(record, "tool_error_type", None),
             "tool_error_message": redact_text(getattr(record, "tool_error_message", None)),
@@ -287,6 +289,17 @@ class _InMemoryLogHandler(logging.Handler):
             "level": record.levelname,
             "message": redact_text(message),
             "created": record.created,
+            "tool_name": getattr(record, "tool_name", None),
+            "call_id": getattr(record, "call_id", None),
+            "repo": getattr(record, "repo", None),
+            "ref": getattr(record, "ref", None),
+            "path": getattr(record, "path", None),
+            "status": getattr(record, "status", None),
+            "write_action": getattr(record, "write_action", None),
+            "duration_ms": getattr(record, "duration_ms", None),
+            "tags": getattr(record, "tags", None),
+            "error_category": getattr(record, "error_category", None),
+            "error_origin": getattr(record, "error_origin", None),
         }
 
         self._records.append(redact_structured(payload))
