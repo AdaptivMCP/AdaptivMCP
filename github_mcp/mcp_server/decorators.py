@@ -22,6 +22,7 @@ import json
 import inspect
 import time
 import uuid
+import sys
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from github_mcp.config import TOOLS_LOGGER
@@ -35,6 +36,12 @@ from github_mcp.mcp_server.schemas import (
     _title_from_tool_name,
 )
 from github_mcp.metrics import _record_tool_call
+from github_mcp.redaction import redact_structured, redact_text
+from github_mcp.side_effects import (
+    SideEffectClass,
+    compute_write_action_flag,
+    resolve_side_effect_class,
+)
 
 
 # OpenAI connector UI strings.
@@ -42,6 +49,15 @@ from github_mcp.metrics import _record_tool_call
 # Keep them short and specific.
 OPENAI_INVOKING_MESSAGE = "Adaptiv Controller: running tool…"
 OPENAI_INVOKED_MESSAGE = "Adaptiv Controller: tool finished."
+
+
+def _current_write_allowed() -> bool:
+    try:
+        import github_mcp.server as server_mod
+
+        return bool(getattr(server_mod, "WRITE_ALLOWED", WRITE_ALLOWED))
+    except Exception:
+        return bool(WRITE_ALLOWED)
 
 
 def _bind_call_args(signature: Optional[inspect.Signature], args: tuple[Any, ...], kwargs: dict[str, Any]) -> Dict[str, Any]:
@@ -76,7 +92,7 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
             break
 
     arg_keys = sorted([k for k in all_args.keys()])
-    arg_preview = _format_tool_args_preview(all_args)
+    arg_preview = redact_text(_format_tool_args_preview(all_args))
 
     return {
         "repo": repo,
@@ -133,12 +149,14 @@ def _register_with_fastmcp(
     description: Optional[str],
     tags: set[str],
     write_action: bool,
+    side_effect: SideEffectClass,
     visibility: str = "public",
 ) -> Any:
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
     meta: dict[str, Any] = {
         "write_action": bool(write_action),
         "visibility": visibility,
+        "side_effects": side_effect.value,
     }
 
     for domain_prefix in ("openai", "chatgpt.com"):
@@ -148,13 +166,14 @@ def _register_with_fastmcp(
         meta[f"{domain_prefix}/visibility"] = visibility
         meta[f"{domain_prefix}/toolInvocation/invoking"] = OPENAI_INVOKING_MESSAGE
         meta[f"{domain_prefix}/toolInvocation/invoked"] = OPENAI_INVOKED_MESSAGE
+        meta[f"{domain_prefix}/side_effects"] = side_effect.value
     if title:
         # Helpful for UIs that support a distinct display label.
         meta["title"] = title
         for domain_prefix in ("openai", "chatgpt.com"):
             meta[f"{domain_prefix}/title"] = title
     annotations = {
-        "readOnlyHint": bool(not write_action),
+        "readOnlyHint": bool(side_effect is SideEffectClass.READ_ONLY),
         "title": title or _title_from_tool_name(name),
     }
 
@@ -205,12 +224,15 @@ def _register_with_fastmcp(
 
         tool_obj.meta["schema"] = sanitized_schema
         tool_obj.meta["input_schema"] = sanitized_schema
-        tool_obj.meta["write_allowed"] = WRITE_ALLOWED
+        tool_obj.meta["write_allowed"] = _current_write_allowed()
 
         for domain_prefix in ("openai", "chatgpt.com"):
             tool_obj.meta[f"{domain_prefix}/schema"] = sanitized_schema
             tool_obj.meta[f"{domain_prefix}/input_schema"] = sanitized_schema
-            tool_obj.meta[f"{domain_prefix}/write_allowed"] = WRITE_ALLOWED
+            tool_obj.meta[f"{domain_prefix}/write_allowed"] = _current_write_allowed()
+
+    tool_obj.__side_effect_class__ = side_effect
+    fn.__side_effect_class__ = side_effect
 
     return tool_obj
 
@@ -241,12 +263,16 @@ def mcp_tool(
         tool_visibility = _ignored.get("visibility", visibility)
         tool_title = _title_from_tool_name(tool_name)
 
-        llm_level = "advanced" if write_action else "basic"
+        side_effect = resolve_side_effect_class(tool_name)
+
+        def _write_action_flag() -> bool:
+            return compute_write_action_flag(side_effect, write_allowed=_current_write_allowed())
+
+        llm_level = "advanced" if side_effect is not SideEffectClass.READ_ONLY else "basic"
         normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
 
-
         tag_set = set(tags or [])
-        tag_set.add("write" if write_action else "read")
+        tag_set.add("write" if side_effect is not SideEffectClass.READ_ONLY else "read")
 
         if asyncio.iscoroutinefunction(func):
 
@@ -255,6 +281,7 @@ def mcp_tool(
                 call_id = str(uuid.uuid4())
                 all_args = _bind_call_args(signature, args, kwargs)
                 ctx = _extract_context(all_args)
+                write_action = _write_action_flag()
 
                 start = time.perf_counter()
 
@@ -475,6 +502,7 @@ def mcp_tool(
                 call_id = str(uuid.uuid4())
                 all_args = _bind_call_args(signature, args, kwargs)
                 ctx = _extract_context(all_args)
+                write_action = _write_action_flag()
 
                 start = time.perf_counter()
 
@@ -712,13 +740,47 @@ def mcp_tool(
             title=tool_title,
             description=normalized_description,
             tags=tag_set,
-            write_action=write_action,
+            write_action=_write_action_flag(),
+            side_effect=side_effect,
             visibility=tool_visibility,
         )
 
         return wrapper
 
     return decorator
+
+
+def refresh_registered_tool_metadata(write_allowed: Optional[bool] = None) -> None:
+    """Refresh tool metadata when the global write gate changes."""
+
+    allowed = _current_write_allowed() if write_allowed is None else bool(write_allowed)
+    try:
+        import github_mcp.server as server_mod
+
+        server_mod.WRITE_ALLOWED = allowed
+        server_mod._WRITE_ALLOWED_INITIALIZED = True
+    except Exception:
+        pass
+    for tool_obj, func in list(_REGISTERED_MCP_TOOLS):
+        try:
+            tool_name = getattr(tool_obj, "name", None) or getattr(func, "__name__", "")
+            side_effect = getattr(tool_obj, "__side_effect_class__", None) or resolve_side_effect_class(
+                tool_name
+            )
+            write_flag = compute_write_action_flag(side_effect, write_allowed=allowed)
+        except Exception:
+            continue
+
+        try:
+            tool_obj.meta["write_action"] = write_flag
+            tool_obj.meta["write_allowed"] = allowed
+            tool_obj.meta["side_effects"] = side_effect.value
+            for domain_prefix in ("openai", "chatgpt.com"):
+                tool_obj.meta[f"{domain_prefix}/write_allowed"] = allowed
+                tool_obj.meta[f"{domain_prefix}/side_effects"] = side_effect.value
+        except Exception:
+            # Metadata refresh should never break tool execution.
+            continue
 
 
 def register_extra_tools_if_available() -> None:

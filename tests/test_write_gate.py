@@ -1,7 +1,7 @@
 import pytest
 
 import github_mcp.server as server
-from github_mcp.exceptions import WriteNotAuthorizedError
+from github_mcp.exceptions import WriteApprovalRequiredError
 from github_mcp.mcp_server import write_gate
 
 
@@ -9,7 +9,7 @@ from github_mcp.mcp_server import write_gate
 def test_unapproved_writes_always_blocked(monkeypatch, target_ref):
     monkeypatch.setattr(server, "WRITE_ALLOWED", False)
 
-    with pytest.raises(WriteNotAuthorizedError):
+    with pytest.raises(WriteApprovalRequiredError):
         write_gate._ensure_write_allowed("write attempt", target_ref=target_ref)
 
 

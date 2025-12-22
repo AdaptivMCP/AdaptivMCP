@@ -21,6 +21,10 @@ class WriteNotAuthorizedError(Exception):
     pass
 
 
+class WriteApprovalRequiredError(WriteNotAuthorizedError):
+    code = "WRITE_APPROVAL_REQUIRED"
+
+
 class ToolPreflightValidationError(Exception):
     """Raised when server-side tool argument preflight fails.
 
@@ -47,6 +51,7 @@ __all__ = [
     "GitHubAuthError",
     "GitHubRateLimitError",
     "WriteNotAuthorizedError",
+    "WriteApprovalRequiredError",
     "ToolPreflightValidationError",
     "UsageError",
 ]

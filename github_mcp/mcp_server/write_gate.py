@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from github_mcp.exceptions import WriteNotAuthorizedError
+from github_mcp.exceptions import WriteApprovalRequiredError
 
 
 def _server():
@@ -25,8 +25,8 @@ def _ensure_write_allowed(context: str, *, target_ref: Optional[str] = None) -> 
     """
 
     if not _server().WRITE_ALLOWED:
-        raise WriteNotAuthorizedError(
-            "Write-tagged tools are currently disabled; call authorize_write_actions "
+        raise WriteApprovalRequiredError(
+            "Write-tagged tools require approval; call authorize_write_actions "
             f"to enable them for this session (context: {context})."
         )
 

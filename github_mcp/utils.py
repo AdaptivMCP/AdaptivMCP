@@ -25,14 +25,16 @@ def _effective_ref_for_repo(full_name: str, ref: str | None) -> str:
     # Allow tests (and callers) to override controller settings by monkeypatching
     # the main module without needing to import this helper directly.
     main_module = sys.modules.get("main")
-    controller_repo = getattr(main_module, "CONTROLLER_REPO", CONTROLLER_REPO)
-    controller_default_branch = getattr(
+    controller_repo_main = getattr(main_module, "CONTROLLER_REPO", CONTROLLER_REPO)
+    controller_default_branch_main = getattr(
         main_module, "CONTROLLER_DEFAULT_BRANCH", CONTROLLER_DEFAULT_BRANCH
     )
 
-    if full_name == controller_repo:
+    if full_name in {controller_repo_main, CONTROLLER_REPO}:
         if not ref or ref == "main":
-            return controller_default_branch
+            if full_name == controller_repo_main:
+                return controller_default_branch_main
+            return CONTROLLER_DEFAULT_BRANCH
         return ref
 
     if ref:
