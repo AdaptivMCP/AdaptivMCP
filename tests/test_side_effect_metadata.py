@@ -1,11 +1,8 @@
 import github_mcp.server as server
 from github_mcp.mcp_server.decorators import refresh_registered_tool_metadata
 from github_mcp.main_tools import introspection
-import github_mcp.server as server
 from github_mcp import config
-from github_mcp.main_tools import introspection
 from github_mcp.mcp_server.context import _record_recent_tool_event
-from github_mcp.mcp_server.decorators import refresh_registered_tool_metadata
 
 
 

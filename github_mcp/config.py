@@ -8,6 +8,8 @@ import tempfile
 import time
 from collections import deque
 
+from github_mcp.redaction import redact_structured, redact_text
+
 # Custom log levels
 # ------------------------------------------------------------------------------
 #
@@ -328,4 +330,3 @@ __all__ = [
     "LOG_RECORD_HANDLER",
     "LOG_RECORD_CAPACITY",
 ]
-from github_mcp.redaction import redact_structured, redact_text

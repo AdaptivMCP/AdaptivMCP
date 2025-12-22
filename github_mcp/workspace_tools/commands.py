@@ -43,7 +43,6 @@ async def render_shell(
     """
 
     try:
-        deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
 
         base_ref = _tw()._resolve_ref(ref, branch=branch)
@@ -91,6 +90,7 @@ async def render_shell(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="render_shell")
+
 
 @mcp_tool(write_action=False)
 async def terminal_command(
@@ -209,6 +209,8 @@ async def terminal_command(
         return out
     except Exception as exc:
         return _structured_tool_error(exc, context="terminal_command")
+
+
 @mcp_tool(write_action=False)
 async def run_command(
     full_name: Optional[str] = None,
