@@ -39,22 +39,11 @@ async def get_server_config() -> Dict[str, Any]:
             "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
         },
         "approval_policy": {
-            "read_actions": {
-                "auto_approved": True,
-                "notes": "Read-only tools never require additional approval.",
-            },
-            "write_actions": {
-                "auto_approved": server.WRITE_ALLOWED,
-                "requires_authorization": not server.WRITE_ALLOWED,
-                "toggle_tool": "authorize_write_actions",
-                "notes": (
-                    "Most write-tagged tools stay gated until explicitly enabled "
-                    "for a session; set GITHUB_MCP_AUTO_APPROVE to trust the "
-                    "server by default. Workspace setup and non-mutating commands "
-                    "are allowed without flipping the gate unless they install "
-                    "dependencies or opt out of the temp venv."
-                ),
-            },
+            "notes": (
+                "Approval is controlled solely by the global write gate (write_allowed). "
+                "No per-tool auto-approval is advertised; tools only declare whether they are write_action."
+            ),
+            "toggle_tool": "authorize_write_actions",
         },
         "git_identity": {
             "author_name": GIT_AUTHOR_NAME,
@@ -149,3 +138,4 @@ async def get_repo_defaults(full_name: Optional[str] = None) -> Dict[str, Any]:
             "default_branch": default_branch,
         }
     }
+
