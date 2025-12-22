@@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from github_mcp.config import TOOLS_LOGGER
 from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, mcp
+from github_mcp.mcp_server.errors import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
@@ -182,7 +183,7 @@ def _register_with_fastmcp(
         description=description,
         tags=tags,
         meta=meta,
-        annotations=annotations,
+        annotations=_sanitize_metadata_value(annotations),
     )
 
     # Keep registry stable: replace existing entry with the same name.
@@ -349,6 +350,9 @@ def mcp_tool(
                     duration_ms = int((time.perf_counter() - start) * 1000)
 
                     _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=True)
+                    structured_error = _structured_tool_error(exc, context=tool_name, path=ctx["path"])
+                    error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
+
                     _record_recent_tool_event(
                         {
                             "ts": time.time(),
@@ -362,6 +366,8 @@ def mcp_tool(
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
+                            "error_category": error_info.get("category"),
+                            "error_origin": error_info.get("origin"),
                             "user_message": _tool_user_message(
                                 tool_name,
                                 write_action=write_action,
@@ -398,6 +404,8 @@ def mcp_tool(
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
+                            "error_category": error_info.get("category"),
+                            "error_origin": error_info.get("origin"),
                         },
                     )
 
@@ -418,9 +426,11 @@ def mcp_tool(
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
+                            "error_category": error_info.get("category"),
+                            "error_origin": error_info.get("origin"),
                         },
                     )
-                    raise
+                    return structured_error
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
                 _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=False)
@@ -571,6 +581,9 @@ def mcp_tool(
 
                     _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=True)
 
+                    structured_error = _structured_tool_error(exc, context=tool_name, path=ctx["path"])
+                    error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
+
                     _record_recent_tool_event(
                         {
                             "ts": time.time(),
@@ -584,6 +597,8 @@ def mcp_tool(
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
+                            "error_category": error_info.get("category"),
+                            "error_origin": error_info.get("origin"),
                             "user_message": _tool_user_message(
                                 tool_name,
                                 write_action=write_action,
@@ -620,6 +635,8 @@ def mcp_tool(
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
+                            "error_category": error_info.get("category"),
+                            "error_origin": error_info.get("origin"),
                         },
                     )
 
@@ -640,9 +657,11 @@ def mcp_tool(
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
+                            "error_category": error_info.get("category"),
+                            "error_origin": error_info.get("origin"),
                         },
                     )
-                    raise
+                    return structured_error
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
                 _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=False)
