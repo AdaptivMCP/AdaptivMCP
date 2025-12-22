@@ -9,6 +9,7 @@ import jsonschema
 
 from github_mcp.config import BASE_LOGGER
 from github_mcp.exceptions import WriteNotAuthorizedError
+from github_mcp.mcp_server.context import WRITE_ALLOWED
 
 
 @dataclass(frozen=True)
@@ -186,6 +187,7 @@ def _structured_tool_error(
             "tool_error_path": path,
             "tool_error_origin": origin,
             "tool_error_category": category,
+            "tool_write_allowed": WRITE_ALLOWED,
         },
     )
 
@@ -195,6 +197,7 @@ def _structured_tool_error(
         "context": context,
         "origin": origin,
         "category": category,
+        "write_allowed": WRITE_ALLOWED,
         "actor": "assistant",
         "user_can_invoke_tools": False,
         "next_steps": _tool_error_next_steps(context=context, origin=origin, category=category),

@@ -51,8 +51,16 @@ def _redact_sensitive_text(text: str) -> str:
 def _sanitize_metadata_value(value: Any) -> Any:
     """Best-effort deep redaction for schemas and tool metadata."""
 
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+
     if isinstance(value, str):
         return _redact_sensitive_text(value)
+
+    if isinstance(value, set):
+        # Sets are not JSON-serializable; convert to a stable list so metadata
+        # never blocks serialization.
+        return [_sanitize_metadata_value(v) for v in value]
 
     if isinstance(value, Mapping):
         return {k: _sanitize_metadata_value(v) for k, v in value.items()}
@@ -62,6 +70,15 @@ def _sanitize_metadata_value(value: Any) -> Any:
 
     if isinstance(value, tuple):
         return tuple(_sanitize_metadata_value(v) for v in value)
+
+    # Fallback: make sure unrecognized types (e.g., datetime objects) never
+    # break metadata rendering. Preserve a readable string representation so
+    # ChatGPT can still understand the payload.
+    try:
+        json.dumps(value)
+        return value
+    except Exception:
+        return str(value)
 
     return value
 
