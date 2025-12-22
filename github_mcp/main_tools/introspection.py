@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import jsonschema
 
+from github_mcp.mcp_server.context import WRITE_ALLOWED
 from github_mcp.utils import normalize_args
 
 from ._main import _main
@@ -175,7 +176,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         tool_info: Dict[str, Any] = {
             "name": name_str,
             "write_action": bool(meta.get("write_action")),
-            "auto_approved": bool(meta.get("auto_approved")),
+            "auto_approved": bool((not bool(meta.get("write_action"))) or WRITE_ALLOWED),
             "read_only_hint": getattr(annotations, "readOnlyHint", None),
         }
 
