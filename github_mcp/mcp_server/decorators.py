@@ -137,7 +137,6 @@ def _register_with_fastmcp(
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
     meta: dict[str, Any] = {
         "write_action": bool(write_action),
-        "auto_approved": bool((not write_action) or WRITE_ALLOWED),
         "visibility": visibility,
     }
 
@@ -183,7 +182,6 @@ def _register_with_fastmcp(
             tool_obj.meta[f"{domain_prefix}/visibility"] = schema_visibility
 
         # Keep the approval flag consistent with the global write gate.
-        tool_obj.meta["auto_approved"] = bool((not write_action) or WRITE_ALLOWED)
     except Exception:
         # Never fail tool registration over UI metadata.
         pass
