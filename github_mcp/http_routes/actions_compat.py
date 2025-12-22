@@ -5,6 +5,21 @@ from typing import Any, Callable, Dict, List
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from github_mcp.mcp_server.schemas import _sanitize_metadata_value
+
+_FORBIDDEN_META_KEYS = {
+    "auto_approved",
+    "openai/auto_approved",
+    "chatgpt.com/auto_approved",
+}
+
+
+def _sanitize_actions_meta(meta: Any) -> Any:
+    if not isinstance(meta, dict):
+        return meta
+    meta = {k: v for k, v in meta.items() if k not in _FORBIDDEN_META_KEYS}
+    return _sanitize_metadata_value(meta)
+
 
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     """Expose a stable actions listing for clients expecting /v1/actions.
@@ -30,6 +45,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
             meta = meta.model_dump(exclude_none=True)
         elif not isinstance(meta, dict):
             meta = None
+
+        annotations = _sanitize_metadata_value(annotations)
+        meta = _sanitize_actions_meta(meta)
 
         display_name = getattr(tool, "title", None)
         if not display_name and isinstance(annotations, dict):
