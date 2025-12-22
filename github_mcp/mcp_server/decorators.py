@@ -17,16 +17,19 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import hashlib
+import json
 import inspect
 import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from github_mcp.config import TOOLS_LOGGER
-from github_mcp.mcp_server.context import _record_recent_tool_event, mcp
+from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, mcp
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
+    _normalize_input_schema,
     _normalize_tool_description,
     _title_from_tool_name,
 )
@@ -134,7 +137,7 @@ def _register_with_fastmcp(
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
     meta: dict[str, Any] = {
         "write_action": bool(write_action),
-        "auto_approved": bool(not write_action),
+        "auto_approved": bool((not write_action) or WRITE_ALLOWED),
         "visibility": visibility,
     }
 
@@ -163,6 +166,27 @@ def _register_with_fastmcp(
         meta=meta,
         annotations=annotations,
     )
+
+
+
+    # Replace generic visibility labels with a schema-derived identifier so the
+    # connector UI displays the active schema rather than a static value like "public".
+    # Format: schema:<tool_name>:<sha1-10>
+    try:
+        schema = _normalize_input_schema(tool_obj) or {"type": "object", "properties": {}}
+        normalized = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        schema_fingerprint = hashlib.sha1(normalized.encode("utf-8", errors="replace")).hexdigest()[:10]
+        schema_visibility = f"schema:{name}:{schema_fingerprint}"
+
+        tool_obj.meta["visibility"] = schema_visibility
+        for domain_prefix in ("openai", "chatgpt.com"):
+            tool_obj.meta[f"{domain_prefix}/visibility"] = schema_visibility
+
+        # Keep the approval flag consistent with the global write gate.
+        tool_obj.meta["auto_approved"] = bool((not write_action) or WRITE_ALLOWED)
+    except Exception:
+        # Never fail tool registration over UI metadata.
+        pass
 
     # Keep registry stable: replace existing entry with the same name.
     _REGISTERED_MCP_TOOLS[:] = [
