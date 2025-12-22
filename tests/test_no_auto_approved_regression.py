@@ -1,5 +1,9 @@
-import github_mcp.server as server
+import pytest
+
+from github_mcp.main_tools.server_config import get_server_config
 from github_mcp.http_routes.actions_compat import serialize_actions_for_compatibility
+
+import github_mcp.server as server
 
 
 def _contains_key(obj, key: str) -> bool:
@@ -12,8 +16,9 @@ def _contains_key(obj, key: str) -> bool:
     return False
 
 
-def test_server_config_does_not_advertise_auto_approved():
-    cfg = server.get_server_config()
+@pytest.mark.asyncio
+async def test_server_config_does_not_advertise_auto_approved():
+    cfg = await get_server_config()
     assert not _contains_key(cfg, "auto_approved")
 
 
