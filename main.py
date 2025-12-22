@@ -32,6 +32,7 @@ from github_mcp.exceptions import (
     GitHubAPIError,  # noqa: F401
     GitHubAuthError,
     GitHubRateLimitError,  # noqa: F401
+    WriteApprovalRequiredError,  # noqa: F401
     WriteNotAuthorizedError,  # noqa: F401
 )
 from github_mcp.github_content import (
@@ -54,6 +55,7 @@ from github_mcp.metrics import (
     _metrics_snapshot,  # noqa: F401
     _reset_metrics_for_tests,  # noqa: F401
 )
+from github_mcp.mcp_server.decorators import refresh_registered_tool_metadata
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
     CONTROLLER_DEFAULT_BRANCH,
@@ -134,6 +136,7 @@ __all__ = [
     "GitHubAPIError",
     "GitHubAuthError",
     "GitHubRateLimitError",
+    "WriteApprovalRequiredError",
     "WriteNotAuthorizedError",
     "GITHUB_API_BASE",
     "HTTPX_TIMEOUT",
@@ -206,9 +209,11 @@ def __getattr__(name: str):
     raise AttributeError(name)
 
 
-# Recalculate write gate on import to honor updated environment variables when
-# ``main`` is reloaded in tests.
-server.WRITE_ALLOWED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
+# Recalculate write gate on first import to honor updated environment variables when
+# ``main`` is reloaded in tests without clobbering runtime toggles.
+if not getattr(server, "_WRITE_ALLOWED_INITIALIZED", False):
+    server.WRITE_ALLOWED = server._env_flag("GITHUB_MCP_AUTO_APPROVE", False)
+    server._WRITE_ALLOWED_INITIALIZED = True
 
 register_extra_tools_if_available()
 
@@ -356,6 +361,10 @@ def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
     """Allow or block tools marked write_action=True for this server."""
 
     server.WRITE_ALLOWED = bool(approved)
+    import github_mcp.mcp_server.context as _ctx
+
+    _ctx.WRITE_ALLOWED = server.WRITE_ALLOWED
+    refresh_registered_tool_metadata(server.WRITE_ALLOWED)
     return {"write_allowed": server.WRITE_ALLOWED}
 
 

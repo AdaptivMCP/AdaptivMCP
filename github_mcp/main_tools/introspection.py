@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import jsonschema
 
+from github_mcp.mcp_server.decorators import refresh_registered_tool_metadata
+from github_mcp.side_effects import SideEffectClass, compute_write_action_flag, resolve_side_effect_class
 from github_mcp.utils import normalize_args
 
 from ._main import _main
@@ -143,6 +145,8 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
     tools: List[Dict[str, Any]] = []
     seen_names: set[str] = set()
 
+    refresh_registered_tool_metadata(m.WRITE_ALLOWED)
+
     for tool, func in m._REGISTERED_MCP_TOOLS:
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
         if not name:
@@ -170,10 +174,22 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
                 compact_description = f"{compact_description[: max_length - 3].rstrip()}..."
             description = compact_description
 
+        try:
+            side_effect = getattr(tool, "__side_effect_class__", None) or resolve_side_effect_class(name_str)
+        except Exception:
+            meta_side_effect = meta.get("side_effects")
+            try:
+                side_effect = SideEffectClass(meta_side_effect)
+            except Exception:
+                side_effect = SideEffectClass.READ_ONLY
+
+        write_action = compute_write_action_flag(side_effect, write_allowed=m.server.WRITE_ALLOWED)
+
         tool_info: Dict[str, Any] = {
             "name": name_str,
-            "write_action": bool(meta.get("write_action")),
+            "write_action": write_action,
             "read_only_hint": getattr(annotations, "readOnlyHint", None),
+            "side_effects": side_effect.value,
         }
 
         if description:
@@ -196,6 +212,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             "write_action": False,
             "read_only_hint": True,
             "description": "Enumerate every available MCP tool with read/write metadata.",
+            "side_effects": SideEffectClass.READ_ONLY.value,
         }
         if not compact_mode:
             synthetic["tags"] = ["meta"]

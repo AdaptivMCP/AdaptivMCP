@@ -8,7 +8,8 @@ from typing import Any, Dict, Optional
 import jsonschema
 
 from github_mcp.config import BASE_LOGGER
-from github_mcp.exceptions import WriteNotAuthorizedError
+from github_mcp.exceptions import WriteApprovalRequiredError, WriteNotAuthorizedError
+from github_mcp.redaction import redact_text
 from github_mcp.mcp_server.context import WRITE_ALLOWED
 
 
@@ -56,6 +57,8 @@ def _classify_tool_error_origin(message: str) -> str:
 
 
 def _classify_tool_error_category(exc: BaseException, message: str) -> str:
+    if isinstance(exc, WriteApprovalRequiredError):
+        return "write_approval_required"
     if isinstance(exc, WriteNotAuthorizedError):
         return "write_not_authorized"
     if isinstance(exc, (jsonschema.ValidationError, ToolInputValidationError, ValueError)):
@@ -117,6 +120,18 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
 
         return steps
 
+    if category == "write_approval_required":
+        steps.append(
+            mk(
+                "approval",
+                action=(
+                    "Assistant: this operation needs approval. Call authorize_write_actions(approved=true) before retrying the tool."
+                ),
+            )
+        )
+
+        return steps
+
     # Controller-origin errors.
     steps.append(mk("controller", action="Assistant: the failure occurred inside the Adaptiv controller (tool execution)."))
 
@@ -172,6 +187,7 @@ def _structured_tool_error(
     """Build a concise serializable error payload for MCP clients."""
 
     message = _summarize_exception(exc)
+    message = redact_text(message)
     origin = _classify_tool_error_origin(message)
     category = _classify_tool_error_category(exc, message)
 
@@ -202,6 +218,10 @@ def _structured_tool_error(
         "user_can_invoke_tools": False,
         "next_steps": _tool_error_next_steps(context=context, origin=origin, category=category),
     }
+    if getattr(exc, "code", None):
+        error["code"] = getattr(exc, "code")
+    if isinstance(exc, WriteApprovalRequiredError):
+        error["approval_required"] = True
     if path:
         error["path"] = path
     return {"error": error}
