@@ -234,6 +234,7 @@ def _normalize_input_schema(tool: Any) -> Optional[Dict[str, Any]]:
     # None. When a schema is present, we sometimes need to tweak it slightly
     # for backwards compatibility with the controller's expectations.
     if schema is not None:
+        schema = _tighten_schema_properties(schema)
         props = schema.setdefault("properties", {})
 
         # run_command: allow ref to be string or null so callers can pass
