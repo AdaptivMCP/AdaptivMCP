@@ -4,11 +4,9 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import jsonschema
 
-from github_mcp.mcp_server.context import WRITE_ALLOWED
 from github_mcp.utils import normalize_args
 
 from ._main import _main
-
 
 def list_write_tools() -> Dict[str, Any]:
     """Describe write-capable tools exposed by this server.
@@ -136,7 +134,6 @@ def list_write_tools() -> Dict[str, Any]:
 
     return {"tools": tools}
 
-
 def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
     """Enumerate every available MCP tool with read/write metadata."""
 
@@ -176,7 +173,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         tool_info: Dict[str, Any] = {
             "name": name_str,
             "write_action": bool(meta.get("write_action")),
-            "auto_approved": bool((not bool(meta.get("write_action"))) or WRITE_ALLOWED),
             "read_only_hint": getattr(annotations, "readOnlyHint", None),
         }
 
@@ -198,7 +194,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         synthetic: Dict[str, Any] = {
             "name": "list_all_actions",
             "write_action": False,
-            "auto_approved": True,
             "read_only_hint": True,
             "description": "Enumerate every available MCP tool with read/write metadata.",
         }
@@ -223,8 +218,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         "compact": compact_mode,
         "tools": tools,
     }
-
-
 
 async def list_tools(
     only_write: bool = False,
@@ -257,7 +250,6 @@ async def list_tools(
                 "write_action": write_action,
                 "operation": entry.get("operation"),
                 "risk_level": entry.get("risk_level"),
-                "auto_approved": bool(entry.get("auto_approved")),
             }
         )
 
@@ -323,7 +315,6 @@ async def describe_tool(
 
     return result
 
-
 def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
 
@@ -367,7 +358,6 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         "errors": errors,
         "schema": schema,
     }
-
 
 async def validate_tool_args(
     tool_name: Optional[str] = None,
