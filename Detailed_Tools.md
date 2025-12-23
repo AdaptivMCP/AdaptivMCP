@@ -1,6 +1,8 @@
 # Detailed MCP tools reference
 
-This document explains how each tool in the MCP server tools.
+**Policy:** This reference is subordinate to [`POLICY.md`](./POLICY.md). It must not redefine controller behavior.
+
+This document provides a concise tool catalog grouped by function.
 
 ## Tool catalog (grouped)
 
@@ -64,4 +66,3 @@ This document explains how each tool in the MCP server tools.
 ### Repository creation
 
 - `create_repository` — create a new repo (supports templates and payload overrides to match GitHub’s "New repository" UI).
-
