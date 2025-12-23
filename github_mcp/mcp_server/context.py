@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 import sys
+import time
+import contextvars
 from collections import deque
-from typing import Any
+from typing import Any, Optional
 
 from anyio import ClosedResourceError
 from fastmcp import FastMCP
@@ -23,6 +25,33 @@ def _int_env(name: str, default: int) -> int:
         return int(value)
     except Exception:
         return default
+
+
+# Per-request context (populated by ASGI middleware).
+# These are intentionally best-effort: if missing, tool execution still proceeds.
+REQUEST_SESSION_ID: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "github_mcp.request_session_id", default=None
+)
+REQUEST_MESSAGE_ID: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "github_mcp.request_message_id", default=None
+)
+REQUEST_PATH: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "github_mcp.request_path", default=None
+)
+REQUEST_RECEIVED_AT: contextvars.ContextVar[float] = contextvars.ContextVar(
+    "github_mcp.request_received_at", default=0.0
+)
+
+
+def get_request_context() -> dict[str, Any]:
+    """Return the current best-effort request context for logs/dedupe."""
+
+    return {
+        "session_id": REQUEST_SESSION_ID.get(),
+        "message_id": REQUEST_MESSAGE_ID.get(),
+        "path": REQUEST_PATH.get(),
+        "received_at": REQUEST_RECEIVED_AT.get(),
+    }
 
 
 # Recent tool-call events (used by get_recent_tool_events).
