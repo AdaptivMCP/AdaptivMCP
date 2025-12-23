@@ -7,6 +7,9 @@ being pushed toward a particular working style.
 """
 
 import base64
+import json
+import time
+from urllib.parse import parse_qs
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
 
@@ -56,6 +59,12 @@ from github_mcp.metrics import (
     _reset_metrics_for_tests,  # noqa: F401
 )
 from github_mcp.mcp_server.decorators import refresh_registered_tool_metadata
+from github_mcp.mcp_server.context import (
+    REQUEST_MESSAGE_ID,
+    REQUEST_PATH,
+    REQUEST_RECEIVED_AT,
+    REQUEST_SESSION_ID,
+)
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
     CONTROLLER_DEFAULT_BRANCH,
@@ -128,6 +137,92 @@ class _CacheControlMiddleware:
 
         return await self.app(scope, receive, send_wrapper)
 
+
+
+class _RequestContextMiddleware:
+    """ASGI middleware that extracts stable identifiers for dedupe and logging.
+
+    For POST /messages, we capture:
+      - `session_id` from the query string
+      - MCP JSON-RPC `id` from the request body
+
+    These values are stored in contextvars and consumed by the tool decorator
+    to suppress duplicate tool invocations caused by upstream retries.
+
+    We avoid BaseHTTPMiddleware to preserve streaming semantics.
+    """
+
+    def __init__(self, app, *, max_body_bytes: int = 262144):
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope.get('type') != 'http':
+            return await self.app(scope, receive, send)
+
+        path = scope.get('path', '') or ''
+
+        # Reset context for this request.
+        REQUEST_PATH.set(path)
+        REQUEST_RECEIVED_AT.set(time.time())
+        REQUEST_SESSION_ID.set(None)
+        REQUEST_MESSAGE_ID.set(None)
+
+        # Parse query string for session_id.
+        try:
+            raw_qs = (scope.get('query_string') or b'').decode('utf-8', errors='ignore')
+            qs = parse_qs(raw_qs)
+            session_id = (qs.get('session_id') or [None])[0]
+            if session_id:
+                REQUEST_SESSION_ID.set(str(session_id))
+        except Exception:
+            pass
+
+        # Only parse JSON body for POST /messages.
+        if path.endswith('/messages') and scope.get('method') == 'POST':
+            body_chunks: list[bytes] = []
+            total = 0
+            more_body = True
+
+            async def _drain_body():
+                nonlocal more_body, total
+                while more_body:
+                    msg = await receive()
+                    if msg.get('type') != 'http.request':
+                        continue
+                    chunk = msg.get('body', b'') or b''
+                    if chunk:
+                        body_chunks.append(chunk)
+                        total += len(chunk)
+                        if total > self.max_body_bytes:
+                            break
+                    more_body = bool(msg.get('more_body'))
+
+            # Drain once, then replay to downstream app.
+            await _drain_body()
+            body = b''.join(body_chunks)
+            try:
+                if body and total <= self.max_body_bytes:
+                    payload = json.loads(body.decode('utf-8', errors='replace'))
+                    msg_id = payload.get('id')
+                    if msg_id is not None:
+                        REQUEST_MESSAGE_ID.set(str(msg_id))
+            except Exception:
+                pass
+
+            # Replay the drained body to downstream consumers.
+            replayed = False
+
+            async def receive_replay():
+                nonlocal replayed
+                if replayed:
+                    return {'type': 'http.request', 'body': b'', 'more_body': False}
+                replayed = True
+                return {'type': 'http.request', 'body': body, 'more_body': False}
+
+            return await self.app(scope, receive_replay, send)
+
+        return await self.app(scope, receive, send)
 
 
 
@@ -227,6 +322,7 @@ register_extra_tools_if_available()
 # transport keeps the documented ``/sse`` path working for existing clients.
 app = server.mcp.http_app(path="/sse", transport="sse")
 app.add_middleware(_CacheControlMiddleware)
+app.add_middleware(_RequestContextMiddleware)
 
 
 
