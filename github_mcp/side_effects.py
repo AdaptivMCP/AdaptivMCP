@@ -21,8 +21,10 @@ TOOL_SIDE_EFFECTS: Dict[str, SideEffectClass] = {
     "close_pull_request": SideEffectClass.REMOTE_MUTATION,
     "comment_on_issue": SideEffectClass.REMOTE_MUTATION,
     "comment_on_pull_request": SideEffectClass.REMOTE_MUTATION,
-    "commit_workspace": SideEffectClass.LOCAL_MUTATION,
-    "commit_workspace_files": SideEffectClass.LOCAL_MUTATION,
+    # Workspace commit tools can push to origin; treat as remote mutations so they
+    # always trigger connector UI approval.
+    "commit_workspace": SideEffectClass.REMOTE_MUTATION,
+    "commit_workspace_files": SideEffectClass.REMOTE_MUTATION,
     "create_branch": SideEffectClass.REMOTE_MUTATION,
     "create_file": SideEffectClass.REMOTE_MUTATION,
     "create_issue": SideEffectClass.REMOTE_MUTATION,
@@ -129,12 +131,21 @@ def resolve_side_effect_class(tool_name: str) -> SideEffectClass:
 
 
 def compute_write_action_flag(side_effect: SideEffectClass, *, write_allowed: bool) -> bool:
+    """Return whether a tool should be flagged as requiring connector UI approval.
+
+    Policy:
+    - READ_ONLY: never prompts.
+    - REMOTE_MUTATION ("hard writes"): always prompts.
+    - LOCAL_MUTATION: never prompts; enforcement is server-side via the write gate
+      and the WRITE_ALLOWED environment toggle.
+    """
+
     if side_effect is SideEffectClass.READ_ONLY:
         return False
     if side_effect is SideEffectClass.REMOTE_MUTATION:
         return True
-    # LOCAL_MUTATION: require approval only when global write is disallowed.
-    return not write_allowed
+    # LOCAL_MUTATION
+    return False
 
 
 __all__ = [
