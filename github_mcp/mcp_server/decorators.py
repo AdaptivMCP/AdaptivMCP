@@ -71,33 +71,23 @@ def _bind_call_args(signature: Optional[inspect.Signature], args: tuple[Any, ...
 
 
 def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
-    repo = None
-    if isinstance(all_args.get("full_name"), str):
-        repo = all_args["full_name"]
-    elif isinstance(all_args.get("owner"), str) and isinstance(all_args.get("repo"), str):
-        repo = f"{all_args['owner']}/{all_args['repo']}"
-
-    ref = None
-    for key in ("ref", "branch", "base_ref", "head_ref"):
-        val = all_args.get(key)
-        if isinstance(val, str):
-            ref = val
-            break
-
-    path = None
-    for key in ("path", "file_path"):
-        val = all_args.get(key)
-        if isinstance(val, str):
-            path = val
-            break
+    location_keys = {
+        "full_name",
+        "owner",
+        "repo",
+        "path",
+        "file_path",
+        "ref",
+        "branch",
+        "base_ref",
+        "head_ref",
+    }
 
     arg_keys = sorted([k for k in all_args.keys()])
-    arg_preview = redact_text(_format_tool_args_preview(all_args))
+    sanitized_args = {k: v for k, v in all_args.items() if k not in location_keys}
+    arg_preview = redact_text(_format_tool_args_preview(sanitized_args))
 
     return {
-        "repo": repo,
-        "ref": ref,
-        "path": path,
         "arg_keys": arg_keys,
         "arg_count": len(all_args),
         "arg_preview": arg_preview,
@@ -108,37 +98,28 @@ def _tool_user_message(
     tool_name: str,
     *,
     write_action: bool,
-    repo: Optional[str],
-    ref: Optional[str],
-    path: Optional[str],
     phase: str,
     duration_ms: Optional[int] = None,
     error: Optional[str] = None,
 ) -> str:
     scope = "write" if write_action else "read"
 
-    location = repo or "-"
-    if ref:
-        location = f"{location}@{ref}"
-    if path:
-        location = f"{location}:{path}"
-
     if phase == "start":
-        msg = f"Starting {tool_name} ({scope}) on {location}."
+        msg = f"Starting {tool_name} ({scope})."
         if write_action:
             msg += " This will modify repo state."
         return msg
 
     if phase == "ok":
         dur = f" in {duration_ms}ms" if duration_ms is not None else ""
-        return f"Finished {tool_name} on {location}{dur}."
+        return f"Finished {tool_name}{dur}."
 
     if phase == "error":
         dur = f" after {duration_ms}ms" if duration_ms is not None else ""
         suffix = f" ({error})" if error else ""
-        return f"Failed {tool_name} on {location}{dur}.{suffix}"
+        return f"Failed {tool_name}{dur}.{suffix}"
 
-    return f"{tool_name} ({scope}) on {location}."
+    return f"{tool_name} ({scope})."
 
 
 def _register_with_fastmcp(
@@ -272,7 +253,6 @@ def mcp_tool(
         normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
 
         tag_set = set(tags or [])
-        tag_set.add("write" if side_effect is not SideEffectClass.READ_ONLY else "read")
 
         if asyncio.iscoroutinefunction(func):
 
@@ -292,15 +272,9 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "write_action": write_action,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "user_message": _tool_user_message(
                             tool_name,
                             write_action=write_action,
-                            repo=ctx["repo"],
-                            ref=ctx["ref"],
-                            path=ctx["path"],
                             phase="start",
                         ),
                     }
@@ -310,9 +284,6 @@ def mcp_tool(
                     _tool_user_message(
                         tool_name,
                         write_action=write_action,
-                        repo=ctx["repo"],
-                        ref=ctx["ref"],
-                        path=ctx["path"],
                         phase="start",
                     ),
                     extra={
@@ -321,9 +292,6 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "write_action": write_action,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                     },
                 )
 
@@ -336,9 +304,6 @@ def mcp_tool(
                         "write_action": write_action,
                         "tags": sorted(tag_set),
                         "call_id": call_id,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "arg_keys": ctx["arg_keys"],
                         "arg_count": ctx["arg_count"],
                     },
@@ -350,7 +315,7 @@ def mcp_tool(
                     duration_ms = int((time.perf_counter() - start) * 1000)
 
                     _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=True)
-                    structured_error = _structured_tool_error(exc, context=tool_name, path=ctx["path"])
+                    structured_error = _structured_tool_error(exc, context=tool_name, path=None)
                     error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
 
                     _record_recent_tool_event(
@@ -360,9 +325,6 @@ def mcp_tool(
                             "tool_name": tool_name,
                             "call_id": call_id,
                             "write_action": write_action,
-                            "repo": ctx["repo"],
-                            "ref": ctx["ref"],
-                            "path": ctx["path"],
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
@@ -371,9 +333,6 @@ def mcp_tool(
                             "user_message": _tool_user_message(
                                 tool_name,
                                 write_action=write_action,
-                                repo=ctx["repo"],
-                                ref=ctx["ref"],
-                                path=ctx["path"],
                                 phase="error",
                                 duration_ms=duration_ms,
                                 error=f"{exc.__class__.__name__}: {exc}",
@@ -385,9 +344,6 @@ def mcp_tool(
                         _tool_user_message(
                             tool_name,
                             write_action=write_action,
-                            repo=ctx["repo"],
-                            ref=ctx["ref"],
-                            path=ctx["path"],
                             phase="error",
                             duration_ms=duration_ms,
                             error=f"{exc.__class__.__name__}: {exc}",
@@ -398,9 +354,6 @@ def mcp_tool(
                             "tool_name": tool_name,
                             "call_id": call_id,
                             "write_action": write_action,
-                            "repo": ctx["repo"],
-                            "ref": ctx["ref"],
-                            "path": ctx["path"],
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
@@ -418,9 +371,6 @@ def mcp_tool(
                             "write_action": write_action,
                             "tags": sorted(tag_set),
                             "call_id": call_id,
-                            "repo": ctx["repo"],
-                            "ref": ctx["ref"],
-                            "path": ctx["path"],
                             "arg_keys": ctx["arg_keys"],
                             "arg_count": ctx["arg_count"],
                             "duration_ms": duration_ms,
@@ -443,17 +393,11 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "write_action": write_action,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "duration_ms": duration_ms,
                         "result_type": result_type,
                         "user_message": _tool_user_message(
                             tool_name,
                             write_action=write_action,
-                            repo=ctx["repo"],
-                            ref=ctx["ref"],
-                            path=ctx["path"],
                             phase="ok",
                             duration_ms=duration_ms,
                         ),
@@ -464,9 +408,6 @@ def mcp_tool(
                     _tool_user_message(
                         tool_name,
                         write_action=write_action,
-                        repo=ctx["repo"],
-                        ref=ctx["ref"],
-                        path=ctx["path"],
                         phase="ok",
                         duration_ms=duration_ms,
                     ),
@@ -476,9 +417,6 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "write_action": write_action,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "duration_ms": duration_ms,
                     },
                 )
@@ -492,9 +430,6 @@ def mcp_tool(
                         "write_action": write_action,
                         "tags": sorted(tag_set),
                         "call_id": call_id,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "arg_keys": ctx["arg_keys"],
                         "arg_count": ctx["arg_count"],
                         "duration_ms": duration_ms,
@@ -522,15 +457,9 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "write_action": write_action,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "user_message": _tool_user_message(
                             tool_name,
                             write_action=write_action,
-                            repo=ctx["repo"],
-                            ref=ctx["ref"],
-                            path=ctx["path"],
                             phase="start",
                         ),
                     }
@@ -540,9 +469,6 @@ def mcp_tool(
                     _tool_user_message(
                         tool_name,
                         write_action=write_action,
-                        repo=ctx["repo"],
-                        ref=ctx["ref"],
-                        path=ctx["path"],
                         phase="start",
                     ),
                     extra={
@@ -551,9 +477,6 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "write_action": write_action,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                     },
                 )
 
@@ -566,9 +489,6 @@ def mcp_tool(
                         "write_action": write_action,
                         "tags": sorted(tag_set),
                         "call_id": call_id,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "arg_keys": ctx["arg_keys"],
                         "arg_count": ctx["arg_count"],
                     },
@@ -581,7 +501,7 @@ def mcp_tool(
 
                     _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=True)
 
-                    structured_error = _structured_tool_error(exc, context=tool_name, path=ctx["path"])
+                    structured_error = _structured_tool_error(exc, context=tool_name, path=None)
                     error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
 
                     _record_recent_tool_event(
@@ -591,9 +511,6 @@ def mcp_tool(
                             "tool_name": tool_name,
                             "call_id": call_id,
                             "write_action": write_action,
-                            "repo": ctx["repo"],
-                            "ref": ctx["ref"],
-                            "path": ctx["path"],
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
@@ -602,9 +519,6 @@ def mcp_tool(
                             "user_message": _tool_user_message(
                                 tool_name,
                                 write_action=write_action,
-                                repo=ctx["repo"],
-                                ref=ctx["ref"],
-                                path=ctx["path"],
                                 phase="error",
                                 duration_ms=duration_ms,
                                 error=f"{exc.__class__.__name__}: {exc}",
@@ -616,9 +530,6 @@ def mcp_tool(
                         _tool_user_message(
                             tool_name,
                             write_action=write_action,
-                            repo=ctx["repo"],
-                            ref=ctx["ref"],
-                            path=ctx["path"],
                             phase="error",
                             duration_ms=duration_ms,
                             error=f"{exc.__class__.__name__}: {exc}",
@@ -629,9 +540,6 @@ def mcp_tool(
                             "tool_name": tool_name,
                             "call_id": call_id,
                             "write_action": write_action,
-                            "repo": ctx["repo"],
-                            "ref": ctx["ref"],
-                            "path": ctx["path"],
                             "duration_ms": duration_ms,
                             "error_type": exc.__class__.__name__,
                             "error_message": str(exc),
@@ -649,9 +557,6 @@ def mcp_tool(
                             "write_action": write_action,
                             "tags": sorted(tag_set),
                             "call_id": call_id,
-                            "repo": ctx["repo"],
-                            "ref": ctx["ref"],
-                            "path": ctx["path"],
                             "arg_keys": ctx["arg_keys"],
                             "arg_count": ctx["arg_count"],
                             "duration_ms": duration_ms,
@@ -674,17 +579,11 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "write_action": write_action,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "duration_ms": duration_ms,
                         "result_type": result_type,
                         "user_message": _tool_user_message(
                             tool_name,
                             write_action=write_action,
-                            repo=ctx["repo"],
-                            ref=ctx["ref"],
-                            path=ctx["path"],
                             phase="ok",
                             duration_ms=duration_ms,
                         ),
@@ -695,9 +594,6 @@ def mcp_tool(
                     _tool_user_message(
                         tool_name,
                         write_action=write_action,
-                        repo=ctx["repo"],
-                        ref=ctx["ref"],
-                        path=ctx["path"],
                         phase="ok",
                         duration_ms=duration_ms,
                     ),
@@ -707,9 +603,6 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "write_action": write_action,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "duration_ms": duration_ms,
                     },
                 )
@@ -723,9 +616,6 @@ def mcp_tool(
                         "write_action": write_action,
                         "tags": sorted(tag_set),
                         "call_id": call_id,
-                        "repo": ctx["repo"],
-                        "ref": ctx["ref"],
-                        "path": ctx["path"],
                         "arg_keys": ctx["arg_keys"],
                         "arg_count": ctx["arg_count"],
                         "duration_ms": duration_ms,

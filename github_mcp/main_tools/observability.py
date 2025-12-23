@@ -48,16 +48,13 @@ def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dic
         if not msg:
             tool = e.get("tool_name") or "tool"
             ev = e.get("event") or "event"
-            repo = e.get("repo") or "-"
-            ref = e.get("ref") or "-"
             dur = e.get("duration_ms")
-            loc = f"{repo}@{ref}" if ref not in {None, "", "-"} else repo
             if ev == "tool_recent_start":
-                msg = f"Starting {tool} on {loc}."
+                msg = f"Starting {tool}."
             elif ev == "tool_recent_ok":
-                msg = f"Finished {tool} on {loc}{(' in %sms' % dur) if isinstance(dur, int) else ''}."
+                msg = f"Finished {tool}{(' in %sms' % dur) if isinstance(dur, int) else ''}."
             else:
-                msg = f"{tool} event {ev} on {loc}."
+                msg = f"{tool} event {ev}."
         narrative.append(msg)
 
     transcript = "\n".join(narrative)
