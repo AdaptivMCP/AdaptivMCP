@@ -260,6 +260,7 @@ def _register_with_fastmcp(
         "write_action": bool(write_action),
         "visibility": visibility,
         "side_effects": _ui_side_effect(side_effect).value,
+        "readOnlyHint": bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY),
     }
 
     for domain_prefix in ("openai", "chatgpt.com"):
@@ -270,6 +271,8 @@ def _register_with_fastmcp(
         meta[f"{domain_prefix}/toolInvocation/invoking"] = OPENAI_INVOKING_MESSAGE
         meta[f"{domain_prefix}/toolInvocation/invoked"] = OPENAI_INVOKED_MESSAGE
         meta[f"{domain_prefix}/side_effects"] = _ui_side_effect(side_effect).value
+        meta[f"{domain_prefix}/write_action"] = bool(write_action)
+        meta[f"{domain_prefix}/readOnlyHint"] = bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY)
     if title:
         # Helpful for UIs that support a distinct display label.
         meta["title"] = title
@@ -758,7 +761,9 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
             if side_effect is not None:
                 recomputed = compute_write_action_flag(side_effect, write_allowed=effective_write_allowed)
                 tool_obj.meta["write_action"] = bool(recomputed)
+                tool_obj.meta["readOnlyHint"] = bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY)
                 for domain_prefix in ("openai", "chatgpt.com"):
                     tool_obj.meta[f"{domain_prefix}/write_action"] = bool(recomputed)
+                    tool_obj.meta[f"{domain_prefix}/readOnlyHint"] = bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY)
         except Exception:
             continue
