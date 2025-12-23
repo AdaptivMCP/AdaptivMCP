@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import shlex
 import sys
 import tempfile
 import re
@@ -158,10 +159,24 @@ async def _run_shell(
 
 def _workspace_path(full_name: str, ref: str) -> str:
     repo_key = full_name.replace("/", "__")
-    ref_key = ref.replace("/", "__")
+
+    # refs can include slashes (feature/foo), tags (v1.2.3), or SHAs.
+    # We sanitize to avoid path traversal and keep workspaces under base_dir.
+    ref_key = re.sub(r"[^A-Za-z0-9_.-]+", "__", ref)
+
     main_module = sys.modules.get("main")
     base_dir = getattr(main_module, "WORKSPACE_BASE_DIR", config.WORKSPACE_BASE_DIR)
-    return os.path.join(base_dir, repo_key, ref_key)
+
+    workspace_dir = os.path.join(base_dir, repo_key, ref_key)
+
+    # Defensive: ensure the resolved path stays within the configured base_dir.
+    base_real = os.path.realpath(base_dir)
+    workspace_real = os.path.realpath(workspace_dir)
+    if not (workspace_real == base_real or workspace_real.startswith(base_real + os.sep)):
+        raise GitHubAPIError(f"Unsafe workspace path resolved for ref={ref!r}")
+
+    return workspace_dir
+
 
 
 async def _clone_repo(
@@ -193,9 +208,10 @@ async def _clone_repo(
 
             return workspace_dir
 
+        q_ref = shlex.quote(effective_ref)
         refresh_steps = [
             ("git fetch origin --prune", 300),
-            (f"git reset --hard origin/{effective_ref}", 120),
+            (f"git reset --hard origin/{q_ref}", 120),
             (
                 "git clean -fdx --exclude .venv-mcp",
                 120,
@@ -219,7 +235,10 @@ async def _clone_repo(
     token = _get_github_token()
 
     url = f"https://x-access-token:{token}@github.com/{full_name}.git"  # tokenlike-allow
-    cmd = f"git clone --depth 1 --branch {effective_ref} {url} {tmpdir}"
+    q_ref = shlex.quote(effective_ref)
+    q_url = shlex.quote(url)
+    q_tmpdir = shlex.quote(tmpdir)
+    cmd = f"git clone --depth 1 --branch {q_ref} {q_url} {q_tmpdir}"
     result = await run_shell(cmd, cwd=None, timeout_seconds=600)
     if result["exit_code"] != 0:
         stderr = result.get("stderr", "")
