@@ -7,7 +7,7 @@ import base64
 import os
 import sys
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 import weakref
 from urllib.parse import urlencode
 
@@ -29,7 +29,9 @@ _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.
     weakref.WeakKeyDictionary()
 )
 _http_client_github: Optional[httpx.AsyncClient] = None
+_http_client_github_loop: Optional[asyncio.AbstractEventLoop] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
+_http_client_external_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
 class _GitHubClientProtocol:
@@ -103,6 +105,57 @@ def _get_concurrency_semaphore() -> asyncio.Semaphore:
     return semaphore
 
 
+def _active_event_loop() -> asyncio.AbstractEventLoop:
+    """Return the active asyncio event loop, tolerant of missing running loop."""
+
+    try:
+        return asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.get_event_loop()
+
+
+def _refresh_async_client(
+    client: Optional[httpx.AsyncClient],
+    *,
+    client_loop: Optional[asyncio.AbstractEventLoop],
+    rebuild: Callable[[], httpx.AsyncClient],
+) -> Tuple[httpx.AsyncClient, asyncio.AbstractEventLoop]:
+    """Return a loop-safe AsyncClient, rebuilding if necessary.
+
+    The underlying event loop may change after idle periods in connector
+    environments. Recreate the client when the loop differs or the client is
+    already closed so outbound requests stay bound to the active loop.
+    """
+
+    loop = _active_event_loop()
+
+    needs_refresh = client is None
+    if not needs_refresh:
+        try:
+            if client.is_closed:
+                needs_refresh = True
+        except Exception:
+            needs_refresh = True
+
+    if not needs_refresh and client_loop is not None and client_loop is not loop:
+        needs_refresh = True
+
+    if not needs_refresh:
+        return client, client_loop or loop
+
+    try:
+        if client is not None and not getattr(client, "is_closed", False):
+            if client_loop is not None and not client_loop.is_closed():
+                client_loop.create_task(client.aclose())
+            else:
+                client.close()
+    except Exception:
+        pass
+
+    fresh_client = rebuild()
+    return fresh_client, loop
+
+
 # ---------------------------------------------------------------------------
 # Client factories
 # ---------------------------------------------------------------------------
@@ -117,8 +170,9 @@ def _build_default_client() -> httpx.Client:
 def _github_client_instance() -> httpx.AsyncClient:
     """Singleton async client for GitHub API requests."""
 
-    global _http_client_github
-    if _http_client_github is None:
+    global _http_client_github, _http_client_github_loop
+
+    def _build_client() -> httpx.AsyncClient:
         token: Optional[str]
         try:
             token = _get_github_token()
@@ -133,31 +187,41 @@ def _github_client_instance() -> httpx.AsyncClient:
         if token:
             headers["Authorization"] = f"Bearer {token}"
 
-        _http_client_github = httpx.AsyncClient(
+        return httpx.AsyncClient(
             base_url=GITHUB_API_BASE,
             timeout=HTTPX_TIMEOUT,
             limits=http_limits,
             headers=headers,
             verify=False,
         )
+
+    _http_client_github, _http_client_github_loop = _refresh_async_client(
+        _http_client_github, client_loop=_http_client_github_loop, rebuild=_build_client
+    )
     return _http_client_github
 
 
 def _external_client_instance() -> httpx.AsyncClient:
     """Singleton async client for non-GitHub HTTP requests."""
 
-    global _http_client_external
+    global _http_client_external, _http_client_external_loop
     main_module = sys.modules.get("main")
     patched_client = getattr(main_module, "_http_client_external", None) if main_module else None
     if patched_client is not None:
         _http_client_external = patched_client
 
-    if _http_client_external is None:
+    def _build_client() -> httpx.AsyncClient:
         http_limits = httpx.Limits(
             max_connections=HTTPX_MAX_CONNECTIONS,
             max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
         )
-        _http_client_external = httpx.AsyncClient(timeout=HTTPX_TIMEOUT, limits=http_limits)
+        return httpx.AsyncClient(timeout=HTTPX_TIMEOUT, limits=http_limits)
+
+    _http_client_external, _http_client_external_loop = _refresh_async_client(
+        _http_client_external,
+        client_loop=_http_client_external_loop,
+        rebuild=_build_client,
+    )
     return _http_client_external
 
 
