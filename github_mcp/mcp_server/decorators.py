@@ -723,13 +723,42 @@ def mcp_tool(
     return decorator
 
 
+def register_extra_tools_if_available() -> None:
+    """Register optional extra tools (if the optional module is present).
+
+    This symbol is part of the server's public import surface (see github_mcp.server).
+    """
+
+    try:
+        from extra_tools import register_extra_tools  # type: ignore
+
+        register_extra_tools(mcp_tool)
+    except Exception:
+        # Extra tools are strictly optional.
+        return None
+
+
+
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
-    """Refresh connector-facing metadata for all registered tools."""
+    """Refresh connector-facing metadata for registered tools.
+
+    Recomputes write_allowed + write_action when the write gate is toggled.
+    `_write_allowed` is accepted for backwards compatibility.
+    """
+
+    effective_write_allowed = _current_write_allowed() if _write_allowed is None else bool(_write_allowed)
 
     for tool_obj, _fn in list(_REGISTERED_MCP_TOOLS):
         try:
-            tool_obj.meta["write_allowed"] = _current_write_allowed()
+            tool_obj.meta["write_allowed"] = effective_write_allowed
             for domain_prefix in ("openai", "chatgpt.com"):
-                tool_obj.meta[f"{domain_prefix}/write_allowed"] = _current_write_allowed()
+                tool_obj.meta[f"{domain_prefix}/write_allowed"] = effective_write_allowed
+
+            side_effect = getattr(tool_obj, "__side_effect_class__", None)
+            if side_effect is not None:
+                recomputed = compute_write_action_flag(side_effect, write_allowed=effective_write_allowed)
+                tool_obj.meta["write_action"] = bool(recomputed)
+                for domain_prefix in ("openai", "chatgpt.com"):
+                    tool_obj.meta[f"{domain_prefix}/write_action"] = bool(recomputed)
         except Exception:
-            pass
+            continue
