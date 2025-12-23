@@ -222,6 +222,8 @@ def _structured_tool_error(
         error["code"] = getattr(exc, "code")
     if isinstance(exc, WriteApprovalRequiredError):
         error["approval_required"] = True
+    if getattr(exc, "write_gate", None):
+        error["write_gate"] = getattr(exc, "write_gate")
     if path:
         error["path"] = path
     return {"error": error}
