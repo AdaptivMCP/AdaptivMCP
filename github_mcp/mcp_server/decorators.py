@@ -58,6 +58,14 @@ OPENAI_INVOKING_MESSAGE = "Adaptiv Controller: running tool…"
 OPENAI_INVOKED_MESSAGE = "Adaptiv Controller: tool finished."
 
 
+def _ui_side_effect(side_effect: SideEffectClass) -> SideEffectClass:
+    # UI-only policy: LOCAL_MUTATION should not trigger approval prompts.
+    if side_effect is SideEffectClass.LOCAL_MUTATION:
+        return SideEffectClass.READ_ONLY
+    return side_effect
+
+
+
 def _current_write_allowed() -> bool:
     try:
         import github_mcp.server as server_mod
@@ -140,6 +148,9 @@ _DEDUPE_MAX_ENTRIES = 2048
 
 # key -> (expires_at, asyncio.Future)
 _DEDUPE_INFLIGHT: dict[str, tuple[float, asyncio.Future]] = {}
+
+# key -> (expires_at, result)
+_DEDUPE_RESULTS: dict[str, tuple[float, Any]] = {}
 _DEDUPE_LOCK = asyncio.Lock()
 
 
@@ -195,11 +206,20 @@ async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]
         for k in expired:
             _DEDUPE_INFLIGHT.pop(k, None)
 
+        expired_r = [k for k, (exp, _) in _DEDUPE_RESULTS.items() if exp <= now]
+        for k in expired_r:
+            _DEDUPE_RESULTS.pop(k, None)
+
         # Cap size.
         if len(_DEDUPE_INFLIGHT) > _DEDUPE_MAX_ENTRIES:
             # Drop oldest by expiry.
             for k, _ in sorted(_DEDUPE_INFLIGHT.items(), key=lambda kv: kv[1][0])[: max(1, len(_DEDUPE_INFLIGHT) - _DEDUPE_MAX_ENTRIES)]:
                 _DEDUPE_INFLIGHT.pop(k, None)
+
+        cached = _DEDUPE_RESULTS.get(key)
+        if cached is not None:
+            _exp, cached_result = cached
+            return cached_result
 
         entry = _DEDUPE_INFLIGHT.get(key)
         if entry is not None:
@@ -212,6 +232,8 @@ async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]
     try:
         result = await coro_factory()
         fut.set_result(result)
+        async with _DEDUPE_LOCK:
+            _DEDUPE_RESULTS[key] = (time.time() + _DEDUPE_TTL_SECONDS, result)
         return result
     except Exception as exc:
         # Propagate to all waiters, then evict.
@@ -237,7 +259,7 @@ def _register_with_fastmcp(
     meta: dict[str, Any] = {
         "write_action": bool(write_action),
         "visibility": visibility,
-        "side_effects": side_effect.value,
+        "side_effects": _ui_side_effect(side_effect).value,
     }
 
     for domain_prefix in ("openai", "chatgpt.com"):
@@ -247,14 +269,14 @@ def _register_with_fastmcp(
         meta[f"{domain_prefix}/visibility"] = visibility
         meta[f"{domain_prefix}/toolInvocation/invoking"] = OPENAI_INVOKING_MESSAGE
         meta[f"{domain_prefix}/toolInvocation/invoked"] = OPENAI_INVOKED_MESSAGE
-        meta[f"{domain_prefix}/side_effects"] = side_effect.value
+        meta[f"{domain_prefix}/side_effects"] = _ui_side_effect(side_effect).value
     if title:
         # Helpful for UIs that support a distinct display label.
         meta["title"] = title
         for domain_prefix in ("openai", "chatgpt.com"):
             meta[f"{domain_prefix}/title"] = title
     annotations = {
-        "readOnlyHint": bool(side_effect is SideEffectClass.READ_ONLY),
+        "readOnlyHint": bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY),
         "title": title or _title_from_tool_name(name),
     }
 
