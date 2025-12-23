@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+import re
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from github_mcp.exceptions import GitHubAPIError
@@ -369,7 +370,22 @@ async def wait_for_workflow_run(
     m = _main()
 
     client = m._github_client_instance()
-    end_time = asyncio.get_event_loop().time() + timeout_seconds
+    loop = asyncio.get_running_loop()
+
+    # Defensive parameter validation to avoid tight loops or negative timeouts
+    try:
+        timeout_seconds = int(timeout_seconds)
+    except Exception:
+        timeout_seconds = 900
+    timeout_seconds = max(1, timeout_seconds)
+
+    try:
+        poll_interval_seconds = int(poll_interval_seconds)
+    except Exception:
+        poll_interval_seconds = 10
+    poll_interval_seconds = max(1, poll_interval_seconds)
+
+    end_time = loop.time() + timeout_seconds
 
     while True:
         async with m._get_concurrency_semaphore():
@@ -396,7 +412,7 @@ async def wait_for_workflow_run(
                 "controller_log": summary_lines,
             }
 
-        if asyncio.get_event_loop().time() > end_time:
+        if loop.time() > end_time:
             summary_lines = [
                 "Workflow run timed out while waiting for completion:",
                 f"- Last known status: {status}",
@@ -467,17 +483,74 @@ async def trigger_and_wait_for_workflow(
     m._ensure_write_allowed(f"trigger+wait workflow {workflow} on {full_name}@{ref}")
     await trigger_workflow_dispatch(full_name, workflow, ref, inputs)
 
-    runs = await m.list_workflow_runs(
-        full_name=full_name,
-        branch=ref,
-        per_page=1,
-        page=1,
-    )
-    workflow_runs = runs.get("json", {}).get("workflow_runs", [])
-    if not workflow_runs:
-        raise GitHubAPIError("No workflow runs found after dispatch")
+    # The dispatch API does not return a run id. Poll for the run we just triggered.
+    dispatched_at = datetime.now(timezone.utc)
 
-    run_id = workflow_runs[0]["id"]
+    # Branch filter only works for branch names. For tags/SHAs we must query without the branch param.
+    is_sha = bool(re.fullmatch(r"[0-9a-fA-F]{40}", ref))
+    branch_filter: Optional[str] = None if is_sha else ref
+
+    poll_deadline = asyncio.get_running_loop().time() + 60
+    run_id: Optional[int] = None
+
+    while asyncio.get_running_loop().time() < poll_deadline and run_id is None:
+        runs = await m.list_workflow_runs(
+            full_name=full_name,
+            branch=branch_filter,
+            event="workflow_dispatch",
+            per_page=30,
+            page=1,
+        )
+        workflow_runs = runs.get("json", {}).get("workflow_runs", [])
+
+        # Prefer runs created after we dispatched (allow small clock skew).
+        cutoff = dispatched_at - timedelta(seconds=10)
+
+        def _parse_created(value: Any) -> Optional[datetime]:
+            if not isinstance(value, str):
+                return None
+            try:
+                if value.endswith("Z"):
+                    value = value[:-1] + "+00:00"
+                dt = datetime.fromisoformat(value)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            except Exception:
+                return None
+
+        candidates: List[Dict[str, Any]] = []
+        for run in workflow_runs or []:
+            if not isinstance(run, dict):
+                continue
+            if run.get("event") != "workflow_dispatch":
+                continue
+
+            # Ensure this is the workflow we triggered.
+            path = (run.get("path") or "")
+            if workflow.endswith(('.yml', '.yaml')) and path and path != workflow:
+                continue
+
+            created_at = _parse_created(run.get("created_at"))
+            if created_at is not None and created_at < cutoff:
+                continue
+
+            # If a branch filter is used, head_branch should match. Otherwise, fall back to ref match.
+            if branch_filter and run.get("head_branch") not in (None, branch_filter):
+                continue
+
+            candidates.append(run)
+
+        if candidates:
+            # Pick the most recent matching run.
+            candidates.sort(key=lambda r: _parse_created(r.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+            run_id = candidates[0].get("id")
+            break
+
+        await asyncio.sleep(2)
+
+    if run_id is None:
+        raise GitHubAPIError("No matching workflow run found after dispatch")
 
     result = await wait_for_workflow_run(
         full_name,
