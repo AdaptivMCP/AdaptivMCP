@@ -112,20 +112,21 @@ GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
 # can be tuned via environment variables; set to 0 or a negative value to disable
 # truncation if a deployment prefers full logs at the cost of larger responses.
 #
-# Defaults are tuned to avoid huge tool payloads that can cause UI/network failures.
-# Set to 0 or a negative value to disable truncation if a deployment prefers full logs
-# at the cost of larger responses.
-TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "12000"))
-TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "12000"))
-TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "20000"))
+# Defaults now prefer no truncation so the connector can relay the complete
+# output unless a deployment explicitly opts into bounds via environment
+# variables.
+TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "0"))
+TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "0"))
+TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "0"))
 
 # Upper bounds for unified diffs printed to stdout logs for write tools.
 # These are separate from TOOL_STDOUT_MAX_CHARS (tool return payload truncation).
-WRITE_DIFF_LOG_MAX_LINES = int(os.environ.get("WRITE_DIFF_LOG_MAX_LINES", "200"))
-WRITE_DIFF_LOG_MAX_CHARS = int(os.environ.get("WRITE_DIFF_LOG_MAX_CHARS", "20000"))
+WRITE_DIFF_LOG_MAX_LINES = int(os.environ.get("WRITE_DIFF_LOG_MAX_LINES", "0"))
+WRITE_DIFF_LOG_MAX_CHARS = int(os.environ.get("WRITE_DIFF_LOG_MAX_CHARS", "0"))
 
 # Soft limit for run_command.command length to discourage huge inline scripts.
-RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "20000"))
+# Defaults to unbounded unless overridden by deployment configuration.
+RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "0"))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 LOG_STYLE = os.environ.get("LOG_STYLE", "color").lower()

@@ -76,13 +76,16 @@ def truncate_diff(diff_text: str, *, max_lines: int, max_chars: int) -> str:
     if not diff_text:
         return diff_text
 
+    if max_lines <= 0 and max_chars <= 0:
+        return diff_text
+
     lines = diff_text.splitlines()
-    if len(lines) > max_lines:
+    if max_lines > 0 and len(lines) > max_lines:
         kept = lines[:max_lines]
         kept.append(f"… (+{len(lines) - max_lines} lines)")
         diff_text = "\n".join(kept)
 
-    if len(diff_text) > max_chars:
+    if max_chars > 0 and len(diff_text) > max_chars:
         diff_text = f"{diff_text[:max_chars]}… (+{len(diff_text) - max_chars} chars)"
 
     return diff_text

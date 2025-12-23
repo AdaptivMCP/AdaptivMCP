@@ -119,7 +119,7 @@ async def terminal_command(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        if len(command) > RUN_COMMAND_MAX_CHARS:
+        if RUN_COMMAND_MAX_CHARS > 0 and len(command) > RUN_COMMAND_MAX_CHARS:
             raise ValueError(
                 f"run_command.command is too long ({len(command)} chars); "
                 "split it into smaller commands or check in a script into the repo and run it from the workspace."

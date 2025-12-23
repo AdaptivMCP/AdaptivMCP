@@ -18,8 +18,8 @@ async def list_workspace_files(
     full_name: Optional[str] = None,
     ref: str = "main",
     path: str = "",
-    max_files: int = 500,
-    max_depth: int = 20,
+    max_files: Optional[int] = None,
+    max_depth: Optional[int] = None,
     include_hidden: bool = False,
     include_dirs: bool = False,
     *,
@@ -27,7 +27,7 @@ async def list_workspace_files(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """List files in the workspace clone (bounded, no shell)."""
+    """List files in the workspace clone without default truncation."""
 
     try:
         deps = _tw()._workspace_deps()
@@ -70,7 +70,7 @@ async def list_workspace_files(
         for cur_dir, dirnames, filenames in os.walk(start):
             rel_dir = os.path.relpath(cur_dir, root)
             depth = 0 if rel_dir == os.curdir else rel_dir.count(os.sep) + 1
-            if depth > max_depth:
+            if max_depth is not None and max_depth > 0 and depth > max_depth:
                 dirnames[:] = []
                 continue
 
@@ -84,7 +84,7 @@ async def list_workspace_files(
                     if not include_hidden and os.path.basename(rp).startswith("."):
                         continue
                     out.append(rp)
-                    if len(out) >= max_files:
+                    if max_files is not None and max_files > 0 and len(out) >= max_files:
                         truncated = True
                         break
                 if truncated:
@@ -95,7 +95,7 @@ async def list_workspace_files(
                     continue
                 rp = os.path.relpath(os.path.join(cur_dir, f), root)
                 out.append(rp)
-                if len(out) >= max_files:
+                if max_files is not None and max_files > 0 and len(out) >= max_files:
                     truncated = True
                     break
             if truncated:
@@ -120,8 +120,8 @@ async def search_workspace(
     path: str = "",
     use_regex: bool = False,
     case_sensitive: bool = False,
-    max_results: int = 100,
-    max_file_bytes: int = 1_000_000,
+    max_results: Optional[int] = None,
+    max_file_bytes: Optional[int] = None,
     include_hidden: bool = False,
     *,
     owner: Optional[str] = None,
@@ -190,7 +190,7 @@ async def search_workspace(
                     files_skipped += 1
                     continue
 
-                if st.st_size > max_file_bytes:
+                if max_file_bytes is not None and max_file_bytes > 0 and st.st_size > max_file_bytes:
                     files_skipped += 1
                     continue
 
@@ -225,7 +225,7 @@ async def search_workspace(
                                     "text": line.rstrip("\n")[:400],
                                 }
                             )
-                            if len(results) >= max_results:
+                            if max_results is not None and max_results > 0 and len(results) >= max_results:
                                 truncated = True
                                 break
                 except OSError:
