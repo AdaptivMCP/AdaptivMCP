@@ -16,7 +16,6 @@ _CREDENTIAL_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\b(?:rndr|render)[A-Za-z0-9_-]{16,}\b", re.IGNORECASE), "render_token_***"),
     # Generic bearer/API tokens
     (re.compile(r"\bBearer\s+[A-Za-z0-9._\-+/]{20,}\b", re.IGNORECASE), "Bearer ***"),
-    (re.compile(r"\b[A-Za-z0-9]{32,}\b"), "***"),
 )
 
 

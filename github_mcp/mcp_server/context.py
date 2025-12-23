@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import sys
-import time
 import contextvars
 from collections import deque
 from typing import Any, Optional
@@ -15,6 +14,10 @@ from github_mcp import http_clients as _http_clients
 from github_mcp.http_clients import _github_client_instance
 from github_mcp.redaction import redact_structured
 from github_mcp.utils import _env_flag
+
+# Diagnostics toggles
+GITHUB_MCP_DIAGNOSTICS = _env_flag('GITHUB_MCP_DIAGNOSTICS', True)
+GITHUB_MCP_RECORD_RECENT_EVENTS = _env_flag('GITHUB_MCP_RECORD_RECENT_EVENTS', True)
 
 
 def _int_env(name: str, default: int) -> int:
@@ -72,6 +75,9 @@ RECENT_TOOL_EVENTS_DROPPED = 0
 
 def _record_recent_tool_event(event: dict) -> None:
     """Best-effort in-memory event buffer for debugging recent tool calls."""
+
+    if not GITHUB_MCP_RECORD_RECENT_EVENTS:
+        return None
 
     global RECENT_TOOL_EVENTS_TOTAL, RECENT_TOOL_EVENTS_DROPPED
     try:
