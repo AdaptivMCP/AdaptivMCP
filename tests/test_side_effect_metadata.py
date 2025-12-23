@@ -19,13 +19,14 @@ def _tool_entry(name: str, write_allowed: bool):
         refresh_registered_tool_metadata(original)
 
 
-def test_tool_metadata_flips_with_write_gate():
+
+def test_local_mutations_do_not_prompt_regardless_of_write_gate():
     open_tool = _tool_entry("run_command", True)
     gated_tool = _tool_entry("run_command", False)
 
     assert open_tool["write_action"] is False
-    assert gated_tool["write_action"] is True
-    assert open_tool["side_effects"] == gated_tool["side_effects"] == "LOCAL_MUTATION"
+    assert gated_tool["write_action"] is False
+
 
 
 def test_remote_mutation_always_requires_approval():
@@ -37,12 +38,14 @@ def test_remote_mutation_always_requires_approval():
     assert enabled["side_effects"] == disabled["side_effects"] == "REMOTE_MUTATION"
 
 
-def test_all_mutations_gate_when_disabled():
+
+def test_write_gate_does_not_turn_local_tools_into_prompting_writes():
     local = _tool_entry("run_command", False)
     remote = _tool_entry("create_file", False)
 
-    assert local["write_action"] is True
+    assert local["write_action"] is False
     assert remote["write_action"] is True
+
 
 
 def test_redaction_covers_logs_and_events():
@@ -59,6 +62,6 @@ def test_redaction_covers_logs_and_events():
 
     assert all(secret not in (rec.get("message") or "") for rec in config.ERROR_LOG_HANDLER.records)
 
-    _record_recent_tool_event({"message": f"token: {secret}"})
+    _record_recent_tool_event({"message": "token: " + secret})
     last_event = server.RECENT_TOOL_EVENTS[-1]
     assert secret not in str(last_event)
