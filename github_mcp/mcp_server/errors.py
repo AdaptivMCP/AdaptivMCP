@@ -10,7 +10,7 @@ import jsonschema
 from github_mcp.config import BASE_LOGGER
 from github_mcp.exceptions import WriteApprovalRequiredError, WriteNotAuthorizedError
 from github_mcp.redaction import redact_text
-from github_mcp.mcp_server.context import WRITE_ALLOWED
+from github_mcp.mcp_server.context import WRITE_ALLOWED, GITHUB_MCP_DIAGNOSTICS
 
 
 @dataclass(frozen=True)
@@ -194,8 +194,9 @@ def _structured_tool_error(
     if origin == "openai_platform":
         category = "openai_block"
 
-    BASE_LOGGER.exception(
-        "Tool error",
+    if GITHUB_MCP_DIAGNOSTICS:
+        BASE_LOGGER.exception(
+            "Tool error",
         extra={
             "tool_context": context,
             "tool_error_type": exc.__class__.__name__,
