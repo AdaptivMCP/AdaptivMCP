@@ -5,7 +5,6 @@ import os
 import sys
 from typing import Any, Dict, Optional
 
-import github_mcp.server as server
 from github_mcp.config import (
     FETCH_FILES_CONCURRENCY,
     GIT_AUTHOR_EMAIL,
