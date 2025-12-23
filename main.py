@@ -212,7 +212,7 @@ def __getattr__(name: str):
 # Recalculate write gate on first import to honor updated environment variables when
 # ``main`` is reloaded in tests without clobbering runtime toggles.
 if not getattr(server, "_WRITE_ALLOWED_INITIALIZED", False):
-    server.WRITE_ALLOWED = True
+    server.WRITE_ALLOWED = server.WRITE_ALLOWED if hasattr(server, "WRITE_ALLOWED") else True
     server._WRITE_ALLOWED_INITIALIZED = True
 
 register_extra_tools_if_available()
@@ -358,14 +358,9 @@ async def commit_workspace_files(
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Backwards-compatible stub (server-side blocks removed).
+    """Toggle server-side write allowance for soft write tools."""
 
-    The controller always allows write-tagged tools. This tool preserves the
-    historical API surface but forces WRITE_ALLOWED to True regardless of the
-    requested value so downstream callers cannot reintroduce a block.
-    """
-
-    server.WRITE_ALLOWED = True
+    server.WRITE_ALLOWED = bool(approved)
     import github_mcp.mcp_server.context as _ctx
 
     _ctx.WRITE_ALLOWED = server.WRITE_ALLOWED

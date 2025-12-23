@@ -53,6 +53,7 @@ async def render_shell(
         _tw()._ensure_write_allowed(
             f"render_shell {command} in {full_name}@{effective_ref}",
             target_ref=effective_ref,
+            write_kind="soft_write",
         )
 
         branch_creation: Optional[Dict[str, Any]] = None

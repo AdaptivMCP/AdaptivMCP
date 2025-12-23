@@ -17,6 +17,7 @@ from github_mcp.config import (
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
 )
+import github_mcp.server as server
 from github_mcp.exceptions import GitHubAPIError, GitHubAuthError
 from github_mcp.server import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO, _github_request
 from github_mcp.utils import REPO_DEFAULTS
@@ -26,7 +27,7 @@ async def get_server_config() -> Dict[str, Any]:
     """Return a safe summary of MCP connector and runtime settings."""
 
     return {
-        "write_allowed": True,
+        "write_allowed": bool(server.WRITE_ALLOWED),
         "github_api_base": GITHUB_API_BASE,
         "http": {
             "timeout": HTTPX_TIMEOUT,
@@ -39,8 +40,8 @@ async def get_server_config() -> Dict[str, Any]:
         },
         "approval_policy": {
             "notes": (
-                "Server-side write gating has been removed; write-tagged tools always run. "
-                "The authorize_write_actions tool remains for compatibility but no longer blocks."
+                "Soft write tools follow the WRITE_ALLOWED toggle; hard writes always request UI approval. "
+                "Use authorize_write_actions(approved=true) after the user confirms write access."
             ),
             "toggle_tool": "authorize_write_actions",
         },

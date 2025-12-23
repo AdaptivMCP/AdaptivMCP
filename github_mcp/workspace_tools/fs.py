@@ -144,10 +144,12 @@ async def set_workspace_file_contents(
             deps["ensure_write_allowed"](
                 f"set_workspace_file_contents {path} for {full_name}@{effective_ref}",
                 target_ref=effective_ref,
+                write_kind="soft_write",
             )
         except TypeError:
             deps["ensure_write_allowed"](
-                f"set_workspace_file_contents {path} for {full_name}@{effective_ref}"
+                f"set_workspace_file_contents {path} for {full_name}@{effective_ref}",
+                write_kind="soft_write",
             )
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)

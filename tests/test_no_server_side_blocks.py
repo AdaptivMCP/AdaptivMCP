@@ -11,8 +11,8 @@ async def test_server_config_always_allows_writes(monkeypatch):
 
     cfg = await get_server_config()
 
-    assert cfg["write_allowed"] is True
-    assert "removed" in cfg["approval_policy"]["notes"].lower()
+    assert cfg["write_allowed"] is False
+    assert "approval" in cfg["approval_policy"]["notes"].lower()
 
 
 def test_actions_listing_retains_tools(monkeypatch):
