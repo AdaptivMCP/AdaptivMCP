@@ -16,8 +16,13 @@ def test_register_with_fastmcp_adds_chatgpt_meta():
 
         vis = tool_obj.meta["chatgpt.com/visibility"]
         assert isinstance(vis, str)
-        assert vis.startswith("schema:sample_tool:")
-        assert len(vis.split(":")[-1]) == 10
+        assert vis == "public"
+
+        schema_vis = tool_obj.meta["chatgpt.com/schema_visibility"]
+        assert isinstance(schema_vis, str)
+        assert schema_vis.startswith("schema:sample_tool:")
+        assert len(schema_vis.split(":")[-1]) == 10
+        assert tool_obj.meta["chatgpt.com/schema_fingerprint"] == schema_vis.split(":")[-1]
         assert (
             tool_obj.meta["chatgpt.com/toolInvocation/invoking"]
             == decorators.OPENAI_INVOKING_MESSAGE

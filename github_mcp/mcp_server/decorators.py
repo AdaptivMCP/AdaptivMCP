@@ -300,8 +300,9 @@ def _register_with_fastmcp(
     ]
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
 
-    # Replace generic visibility labels with a schema-derived identifier so the
-    # connector UI displays the active schema rather than a static value like "public".
+    # Compute a schema fingerprint and surface it via metadata for debugging.
+    # Do NOT overwrite visibility: some clients/gates treat non-standard visibility
+    # values as requiring approval, which can cause UI prompts for every tool.
     # Format: schema:<tool_name>:<sha1-10>
     schema: Dict[str, Any] | None = None
     sanitized_schema: Dict[str, Any] | None = None
@@ -314,9 +315,11 @@ def _register_with_fastmcp(
         schema_fingerprint = hashlib.sha1(normalized.encode("utf-8", errors="replace")).hexdigest()[:10]
         schema_visibility = f"schema:{name}:{schema_fingerprint}"
 
-        tool_obj.meta["visibility"] = schema_visibility
+        tool_obj.meta["schema_visibility"] = schema_visibility
+        tool_obj.meta["schema_fingerprint"] = schema_fingerprint
         for domain_prefix in ("openai", "chatgpt.com"):
-            tool_obj.meta[f"{domain_prefix}/visibility"] = schema_visibility
+            tool_obj.meta[f"{domain_prefix}/schema_visibility"] = schema_visibility
+            tool_obj.meta[f"{domain_prefix}/schema_fingerprint"] = schema_fingerprint
 
     except Exception:
         # Never fail tool registration over UI metadata.
