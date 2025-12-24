@@ -32,16 +32,37 @@ def _server():
 def _build_decision(
     *, write_kind: WriteKind, target_ref: Optional[str] = None, approved: Optional[bool] = None
 ) -> WriteGateDecision:
+    """Compute gate state.
+
+    Semantics:
+    - READs are not gated here (callers should not invoke this for read-only tools).
+    - HARD_WRITE always requires explicit approval.
+    - SOFT_WRITE is allowed when either:
+        a) WRITE_ALLOWED is true (auto-approve on), or
+        b) the caller supplies approved=True (manual approval path).
+
+    This ensures soft writes can still proceed when auto-approve is off, but only
+    with explicit approval.
+    """
+
     server_mod = _server()
     write_allowed = bool(getattr(server_mod, "WRITE_ALLOWED", False))
 
-    # HARD_WRITE always requires UI approval. SOFT_WRITE inherits the global toggle.
-    effective_approval = bool(write_allowed if approved is None else approved)
+    approved_flag = bool(approved) if approved is not None else False
 
+    if write_kind == "hard_write":
+        return WriteGateDecision(
+            write_kind=write_kind,
+            write_allowed=write_allowed,
+            approved=approved_flag,
+            target_ref=target_ref,
+        )
+
+    # soft_write
     return WriteGateDecision(
         write_kind=write_kind,
         write_allowed=write_allowed,
-        approved=effective_approval if write_kind == "hard_write" else effective_approval and write_allowed,
+        approved=(write_allowed or approved_flag),
         target_ref=target_ref,
     )
 
