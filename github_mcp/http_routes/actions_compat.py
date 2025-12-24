@@ -9,7 +9,6 @@ from github_mcp.mcp_server.schemas import _sanitize_metadata_value
 
 _FORBIDDEN_META_KEYS = {
     "auto_approved",
-    "openai/auto_approved",
     "chatgpt.com/auto_approved",
 }
 
@@ -55,7 +54,6 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         if not display_name and isinstance(meta, dict):
             display_name = (
                 meta.get("title")
-                or meta.get("openai/title")
                 or meta.get("chatgpt.com/title")
             )
         display_name = display_name or tool.name

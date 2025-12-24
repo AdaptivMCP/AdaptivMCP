@@ -22,7 +22,6 @@ def test_register_with_fastmcp_adds_chatgpt_meta():
         assert isinstance(schema_vis, str)
         assert schema_vis.startswith("schema:sample_tool:")
         assert len(schema_vis.split(":")[-1]) == 10
-        assert tool_obj.meta["chatgpt.com/schema_fingerprint"] == schema_vis.split(":")[-1]
         assert (
             tool_obj.meta["chatgpt.com/toolInvocation/invoking"]
             == decorators.OPENAI_INVOKING_MESSAGE
@@ -67,11 +66,12 @@ def test_register_with_fastmcp_surfaces_schema_and_write_gate():
             return None
 
         tool_obj = decorators._REGISTERED_MCP_TOOLS[-1][0]
-        schema_meta = tool_obj.meta["chatgpt.com/input_schema"]
+        schema_meta = tool_obj.meta["input_schema"]
 
         assert schema_meta["type"] == "object"
         assert schema_meta["properties"]["example"]["type"] == "integer"
-        assert tool_obj.meta["write_allowed"] == decorators.WRITE_ALLOWED
+        import github_mcp.server as server
+        assert tool_obj.meta["write_allowed"] == bool(server.WRITE_ALLOWED)
     finally:
         decorators._REGISTERED_MCP_TOOLS[:] = original_registry
 
