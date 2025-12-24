@@ -12,7 +12,6 @@ from mcp.types import Icon
 
 from github_mcp import http_clients as _http_clients
 from github_mcp.http_clients import _github_client_instance
-from github_mcp.redaction import redact_structured
 from github_mcp.utils import _env_flag
 
 # Diagnostics toggles
@@ -81,7 +80,6 @@ def _record_recent_tool_event(event: dict) -> None:
 
     global RECENT_TOOL_EVENTS_TOTAL, RECENT_TOOL_EVENTS_DROPPED
     try:
-        event = redact_structured(event)
         RECENT_TOOL_EVENTS_TOTAL += 1
         if isinstance(RECENT_TOOL_EVENTS, deque):
             maxlen = RECENT_TOOL_EVENTS.maxlen

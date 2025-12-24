@@ -81,7 +81,7 @@ def test_write_gate_does_not_turn_local_tools_into_prompting_writes():
 
 
 
-def test_redaction_covers_logs_and_events():
+def test_owner_logs_and_events_are_unmodified():
     secret = "ghp_" + "a" * 30
     config.ERROR_LOG_HANDLER.records.clear()
 
@@ -93,8 +93,8 @@ def test_redaction_covers_logs_and_events():
 
     config.BASE_LOGGER.error("leaked secret %s", secret)
 
-    assert all(secret not in (rec.get("message") or "") for rec in config.ERROR_LOG_HANDLER.records)
+    assert any(secret in (rec.get("message") or "") for rec in config.ERROR_LOG_HANDLER.records)
 
     _record_recent_tool_event({"message": "token: " + secret})
     last_event = server.RECENT_TOOL_EVENTS[-1]
-    assert secret not in str(last_event)
+    assert secret in str(last_event)
