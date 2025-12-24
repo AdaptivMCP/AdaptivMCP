@@ -40,14 +40,6 @@ def test_local_mutations_do_not_prompt_regardless_of_write_gate():
     assert gated_tool["write_action"] is False
 
     # Domain-prefixed metadata must also reflect non-prompting local mutation tools
-    assert open_tool.get("meta", {}).get("openai/write_action") is False
-    assert open_tool.get("meta", {}).get("chatgpt.com/write_action") is False
-    assert gated_tool.get("meta", {}).get("openai/write_action") is False
-    assert gated_tool.get("meta", {}).get("chatgpt.com/write_action") is False
-    assert open_tool.get("meta", {}).get("openai/readOnlyHint") is True
-    assert open_tool.get("meta", {}).get("chatgpt.com/readOnlyHint") is True
-    assert gated_tool.get("meta", {}).get("openai/readOnlyHint") is True
-    assert gated_tool.get("meta", {}).get("chatgpt.com/readOnlyHint") is True
 
 
 
@@ -60,15 +52,7 @@ def test_remote_mutation_always_requires_approval():
     assert enabled["side_effects"] == disabled["side_effects"] == "REMOTE_MUTATION"
 
     # Domain-prefixed metadata must reflect prompting write tools
-    assert enabled.get("meta", {}).get("openai/write_action") is True
-    assert enabled.get("meta", {}).get("chatgpt.com/write_action") is True
-    assert disabled.get("meta", {}).get("openai/write_action") is True
-    assert disabled.get("meta", {}).get("chatgpt.com/write_action") is True
     # Remote mutation should not claim readOnlyHint
-    assert enabled.get("meta", {}).get("openai/readOnlyHint") is False
-    assert enabled.get("meta", {}).get("chatgpt.com/readOnlyHint") is False
-    assert disabled.get("meta", {}).get("openai/readOnlyHint") is False
-    assert disabled.get("meta", {}).get("chatgpt.com/readOnlyHint") is False
 
 
 

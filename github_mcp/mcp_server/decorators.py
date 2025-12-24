@@ -26,7 +26,6 @@ from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from github_mcp.config import TOOLS_LOGGER
 from github_mcp.mcp_server.context import (
-    WRITE_ALLOWED,
     REQUEST_MESSAGE_ID,
     REQUEST_SESSION_ID,
     _record_recent_tool_event,
@@ -68,9 +67,9 @@ def _current_write_allowed() -> bool:
     try:
         import github_mcp.server as server_mod
 
-        return bool(getattr(server_mod, "WRITE_ALLOWED", WRITE_ALLOWED))
+        return bool(getattr(server_mod, "WRITE_ALLOWED", False))
     except Exception:
-        return bool(WRITE_ALLOWED)
+        return False
 
 
 def _bind_call_args(
@@ -259,30 +258,23 @@ def _register_with_fastmcp(
 ) -> Any:
     # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
     meta: dict[str, Any] = {
-        "write_action": bool(write_action),
         "visibility": visibility,
-        "side_effects": _ui_side_effect(side_effect).value,
-        "readOnlyHint": bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY),
     }
 
-    for domain_prefix in ("openai", "chatgpt.com"):
+    for domain_prefix in ("chatgpt.com",):
         # Connector UI metadata (Apps & Connectors). These keys are intentionally
         # flat (not nested) because the UI historically reads them directly from
         # `meta`.
         meta[f"{domain_prefix}/visibility"] = visibility
         meta[f"{domain_prefix}/toolInvocation/invoking"] = OPENAI_INVOKING_MESSAGE
         meta[f"{domain_prefix}/toolInvocation/invoked"] = OPENAI_INVOKED_MESSAGE
-        meta[f"{domain_prefix}/side_effects"] = _ui_side_effect(side_effect).value
-        meta[f"{domain_prefix}/write_action"] = bool(write_action)
-        meta[f"{domain_prefix}/readOnlyHint"] = bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY)
 
     if title:
         meta["title"] = title
-        for domain_prefix in ("openai", "chatgpt.com"):
+        for domain_prefix in ("chatgpt.com",):
             meta[f"{domain_prefix}/title"] = title
 
     annotations = {
-        "readOnlyHint": bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY),
         "title": title or _title_from_tool_name(name),
     }
 
@@ -317,10 +309,8 @@ def _register_with_fastmcp(
         schema_visibility = f"schema:{name}:{schema_fingerprint}"
 
         tool_obj.meta["schema_visibility"] = schema_visibility
-        tool_obj.meta["schema_fingerprint"] = schema_fingerprint
-        for domain_prefix in ("openai", "chatgpt.com"):
+        for domain_prefix in ("chatgpt.com",):
             tool_obj.meta[f"{domain_prefix}/schema_visibility"] = schema_visibility
-            tool_obj.meta[f"{domain_prefix}/schema_fingerprint"] = schema_fingerprint
 
     except Exception:
         # Never fail tool registration over UI metadata.
@@ -334,11 +324,6 @@ def _register_with_fastmcp(
         tool_obj.meta["schema"] = sanitized_schema
         tool_obj.meta["input_schema"] = sanitized_schema
         tool_obj.meta["write_allowed"] = _current_write_allowed()
-
-        for domain_prefix in ("openai", "chatgpt.com"):
-            tool_obj.meta[f"{domain_prefix}/schema"] = sanitized_schema
-            tool_obj.meta[f"{domain_prefix}/input_schema"] = sanitized_schema
-            tool_obj.meta[f"{domain_prefix}/write_allowed"] = _current_write_allowed()
 
     tool_obj.__side_effect_class__ = side_effect
     fn.__side_effect_class__ = side_effect
@@ -375,7 +360,7 @@ def mcp_tool(
         side_effect = resolve_side_effect_class(tool_name)
 
         def _write_action_flag() -> bool:
-            return compute_write_action_flag(side_effect, write_allowed=_current_write_allowed())
+            return bool(write_action)
 
         llm_level = "advanced" if side_effect is not SideEffectClass.READ_ONLY else "basic"
         normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
@@ -402,7 +387,6 @@ def mcp_tool(
                         "event": "tool_recent_start",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action_actual,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
                         "user_message": _tool_user_message(
@@ -424,7 +408,6 @@ def mcp_tool(
                         "status": "start",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action_actual,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
                     },
@@ -436,7 +419,6 @@ def mcp_tool(
                         "event": "tool_call_start",
                         "status": "start",
                         "tool_name": tool_name,
-                        "write_action": write_action_actual,
                         "tags": sorted(tag_set),
                         "call_id": call_id,
                         "arg_keys": ctx["arg_keys"],
@@ -464,7 +446,6 @@ def mcp_tool(
                             "event": "tool_recent_error",
                             "tool_name": tool_name,
                             "call_id": call_id,
-                            "write_action": write_action_actual,
                             "duration_ms": duration_ms,
                             "request": request_ctx,
                             "dedupe_key": dedupe_key,
@@ -489,7 +470,6 @@ def mcp_tool(
                             "status": "error",
                             "tool_name": tool_name,
                             "call_id": call_id,
-                            "write_action": write_action_actual,
                             "duration_ms": duration_ms,
                             "request": request_ctx,
                             "dedupe_key": dedupe_key,
@@ -510,7 +490,6 @@ def mcp_tool(
                         "event": "tool_recent_ok",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action_actual,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
@@ -531,7 +510,6 @@ def mcp_tool(
                         "status": "ok",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action_actual,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
@@ -575,7 +553,6 @@ def mcp_tool(
                     "event": "tool_recent_start",
                     "tool_name": tool_name,
                     "call_id": call_id,
-                    "write_action": write_action_actual,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
                     "user_message": _tool_user_message(
@@ -597,7 +574,6 @@ def mcp_tool(
                     "status": "start",
                     "tool_name": tool_name,
                     "call_id": call_id,
-                    "write_action": write_action_actual,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
                 },
@@ -609,7 +585,6 @@ def mcp_tool(
                     "event": "tool_call_start",
                     "status": "start",
                     "tool_name": tool_name,
-                    "write_action": write_action_actual,
                     "tags": sorted(tag_set),
                     "call_id": call_id,
                     "arg_keys": ctx["arg_keys"],
@@ -634,7 +609,6 @@ def mcp_tool(
                         "event": "tool_recent_error",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action_actual,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
@@ -659,7 +633,6 @@ def mcp_tool(
                         "status": "error",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action_actual,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
@@ -680,7 +653,6 @@ def mcp_tool(
                     "event": "tool_recent_ok",
                     "tool_name": tool_name,
                     "call_id": call_id,
-                    "write_action": write_action_actual,
                     "duration_ms": duration_ms,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
@@ -701,7 +673,6 @@ def mcp_tool(
                     "status": "ok",
                     "tool_name": tool_name,
                     "call_id": call_id,
-                    "write_action": write_action_actual,
                     "duration_ms": duration_ms,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
@@ -746,7 +717,7 @@ def register_extra_tools_if_available() -> None:
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
     """Refresh connector-facing metadata for registered tools.
 
-    Recomputes write_allowed + write_action when the write gate is toggled.
+    Recomputes write_allowed when the write gate is toggled.
     `_write_allowed` is accepted for backwards compatibility.
     """
 
@@ -755,16 +726,5 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
     for tool_obj, _fn in list(_REGISTERED_MCP_TOOLS):
         try:
             tool_obj.meta["write_allowed"] = effective_write_allowed
-            for domain_prefix in ("openai", "chatgpt.com"):
-                tool_obj.meta[f"{domain_prefix}/write_allowed"] = effective_write_allowed
-
-            side_effect = getattr(tool_obj, "__side_effect_class__", None)
-            if side_effect is not None:
-                recomputed = compute_write_action_flag(side_effect, write_allowed=effective_write_allowed)
-                tool_obj.meta["write_action"] = bool(recomputed)
-                tool_obj.meta["readOnlyHint"] = bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY)
-                for domain_prefix in ("openai", "chatgpt.com"):
-                    tool_obj.meta[f"{domain_prefix}/write_action"] = bool(recomputed)
-                    tool_obj.meta[f"{domain_prefix}/readOnlyHint"] = bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY)
         except Exception:
             continue

@@ -36,7 +36,7 @@ async def workspace_create_branch(
 ) -> Dict[str, Any]:
     """Create a branch using the workspace (git), optionally pushing to origin.
 
-    This exists because some direct GitHub-API branch-creation calls can be blocked upstream.
+    This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
     """
 
     try:

@@ -535,7 +535,7 @@ _COMMON_BOOL_KEYS = {
     "approved", "draft", "push", "reset", "refresh", "recursive", "include_blobs", "include_trees",
     "include_hidden", "include_dirs", "auto_init", "is_template", "has_issues", "has_projects", "has_wiki",
     "has_discussions", "include_all_branches", "clone_to_workspace", "use_temp_venv",
-    "installing_dependencies", "mutating", "run_tokenlike_scan", "create_parents", "add_all",
+    "installing_dependencies", "mutating", "create_parents", "add_all",
     "discard_uncommitted_changes", "delete_mangled_branch", "reset_base", "enumerate_repo", "dry_run",
     "return_diff",
 }
