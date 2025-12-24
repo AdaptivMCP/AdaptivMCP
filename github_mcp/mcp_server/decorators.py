@@ -357,7 +357,13 @@ def mcp_tool(
         tool_visibility = _ignored.get("visibility", visibility)
         tool_title = _title_from_tool_name(tool_name)
 
-        side_effect = resolve_side_effect_class(tool_name)
+        # Side-effect classification is dynamic. `write_action=True` is reserved for
+        # remote GitHub mutations (hard writes). Local mutations should keep
+        # write_action=False and are gated server-side via WRITE_ALLOWED.
+        if bool(write_action):
+            side_effect = SideEffectClass.REMOTE_MUTATION
+        else:
+            side_effect = resolve_side_effect_class(tool_name)
 
         def _write_action_flag() -> bool:
             return bool(write_action)
