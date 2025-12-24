@@ -308,7 +308,7 @@ async def open_pr_for_existing_branch(
     the same head/base pair, it will return that existing PR instead of failing
     or creating a duplicate.
 
-    If this tool call is blocked upstream by OpenAI, use the workspace flow: `run_command` to create or reuse the PR.
+    If this tool call fails in the hosted environment, use the workspace flow: `run_command` to create or reuse the PR.
     """
 
     m = _main()
