@@ -9,7 +9,6 @@ import jsonschema
 
 from github_mcp.config import BASE_LOGGER
 from github_mcp.exceptions import WriteApprovalRequiredError, WriteNotAuthorizedError
-from github_mcp.redaction import redact_text
 from github_mcp.mcp_server.context import WRITE_ALLOWED, GITHUB_MCP_DIAGNOSTICS
 
 
@@ -90,12 +89,12 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
             mk(
                 "openai",
                 action=(
-                    "Assistant: this tool call was blocked upstream by OpenAI before it reached the Adaptiv controller. "
-                    "Do NOT include token-like strings in tool inputs; use placeholders like <REDACTED>."
+                    "Assistant: this tool call was blocked upstream by OpenAI before it reached the controller. "
+                    "Avoid embedding token-like strings or secrets in tool inputs; use placeholders like <MASKED>."
                 ),
                 what_to_do=(
-                    "Assistant: Do not ask the user to change anything. Rephrase the tool call to comply with OpenAI tool rules. "
-                    "If it is still blocked, use the workspace fallback tool for this operation."
+                    "Assistant: rephrase the tool call to comply with upstream tool rules. "
+                    "If it is still blocked, use a workspace fallback tool for this operation."
                 ),
             )
         )
@@ -124,16 +123,13 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
         steps.append(
             mk(
                 "approval",
-                action=(
-                    "Assistant: this operation needs approval. Call authorize_write_actions(approved=true) before retrying the tool."
-                ),
+                action="Assistant: this operation needs approval. Call authorize_write_actions(approved=true) before retrying the tool.",
             )
         )
-
         return steps
 
     # Controller-origin errors.
-    steps.append(mk("controller", action="Assistant: the failure occurred inside the Adaptiv controller (tool execution)."))
+    steps.append(mk("controller", action="Assistant: the failure occurred inside the controller (tool execution)."))
 
     if category == "validation":
         steps.append(
@@ -156,28 +152,6 @@ def _tool_error_next_steps(*, context: str, origin: str, category: str) -> list[
             )
         )
 
-    if context in {"create_branch", "ensure_branch"}:
-        steps.append(
-            mk(
-                "hint",
-                action=(
-                    "Assistant: if branch creation is blocked upstream, use workspace_create_branch instead of create_branch. "
-                    "Avoid token-like strings in tool inputs; use <REDACTED> placeholders."
-                ),
-            )
-        )
-
-    if context in {"create_pull_request", "open_pr_for_existing_branch", "update_files_and_open_pr"}:
-        steps.append(
-            mk(
-                "hint",
-                action=(
-                    "Assistant: if PR creation is blocked upstream, use run_command in the workspace to call the GitHub PR API. "
-                    "Avoid token-like strings in tool inputs; use <REDACTED> placeholders."
-                ),
-            )
-        )
-
     return steps
 
 
@@ -187,7 +161,6 @@ def _structured_tool_error(
     """Build a concise serializable error payload for MCP clients."""
 
     message = _summarize_exception(exc)
-    message = redact_text(message)
     origin = _classify_tool_error_origin(message)
     category = _classify_tool_error_category(exc, message)
 
@@ -197,16 +170,16 @@ def _structured_tool_error(
     if GITHUB_MCP_DIAGNOSTICS:
         BASE_LOGGER.exception(
             "Tool error",
-        extra={
-            "tool_context": context,
-            "tool_error_type": exc.__class__.__name__,
-            "tool_error_message": message,
-            "tool_error_path": path,
-            "tool_error_origin": origin,
-            "tool_error_category": category,
-            "tool_write_allowed": WRITE_ALLOWED,
-        },
-    )
+            extra={
+                "tool_context": context,
+                "tool_error_type": exc.__class__.__name__,
+                "tool_error_message": message,
+                "tool_error_path": path,
+                "tool_error_origin": origin,
+                "tool_error_category": category,
+                "tool_write_allowed": WRITE_ALLOWED,
+            },
+        )
 
     error: Dict[str, Any] = {
         "error": exc.__class__.__name__,

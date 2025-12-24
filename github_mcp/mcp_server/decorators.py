@@ -3,7 +3,7 @@
 This module provides the `mcp_tool` decorator used across the repo.
 
 Goals:
-- Register tools with FastMCP while *returning a callable function* (so tools can
+- Register tools with FastMCP while returning a callable function (so tools can
   call each other directly without dealing with FastMCP objects).
 - Emit stable, testable log records for every tool call.
 - Record a compact in-memory narrative of recent tool executions.
@@ -18,8 +18,8 @@ from __future__ import annotations
 import asyncio
 import functools
 import hashlib
-import json
 import inspect
+import json
 import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional
@@ -43,7 +43,6 @@ from github_mcp.mcp_server.schemas import (
     _title_from_tool_name,
 )
 from github_mcp.metrics import _record_tool_call
-from github_mcp.redaction import redact_text
 from github_mcp.side_effects import (
     SideEffectClass,
     compute_write_action_flag,
@@ -65,7 +64,6 @@ def _ui_side_effect(side_effect: SideEffectClass) -> SideEffectClass:
     return side_effect
 
 
-
 def _current_write_allowed() -> bool:
     try:
         import github_mcp.server as server_mod
@@ -75,7 +73,11 @@ def _current_write_allowed() -> bool:
         return bool(WRITE_ALLOWED)
 
 
-def _bind_call_args(signature: Optional[inspect.Signature], args: tuple[Any, ...], kwargs: dict[str, Any]) -> Dict[str, Any]:
+def _bind_call_args(
+    signature: Optional[inspect.Signature],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Dict[str, Any]:
     if signature is None:
         return dict(kwargs)
     try:
@@ -100,7 +102,7 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
 
     arg_keys = sorted([k for k in all_args.keys()])
     sanitized_args = {k: v for k, v in all_args.items() if k not in location_keys}
-    arg_preview = redact_text(_format_tool_args_preview(sanitized_args))
+    arg_preview = _format_tool_args_preview(sanitized_args)
 
     return {
         "arg_keys": arg_keys,
@@ -141,7 +143,7 @@ def _tool_user_message(
 #
 # Some hosting stacks / clients will retry POST /messages for the same logical MCP
 # request. Without a stable upstream identifier, those retries can cause tools to
-# run multiple times. We dedupe *read-only* calls (and any write calls that provide
+# run multiple times. We dedupe read-only calls (and any write calls that provide
 # an explicit message id) within a short TTL.
 _DEDUPE_TTL_SECONDS = 10.0
 _DEDUPE_MAX_ENTRIES = 2048
@@ -155,7 +157,7 @@ _DEDUPE_LOCK = asyncio.Lock()
 
 
 def _stable_request_id() -> Optional[str]:
-    """Return a stable id for the *current inbound request* when available."""
+    """Return a stable id for the current inbound request when available."""
 
     # Prefer message id from MCP JSON body (set by ASGI middleware).
     msg_id = REQUEST_MESSAGE_ID.get()
@@ -201,7 +203,7 @@ async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]
     now = time.time()
 
     async with _DEDUPE_LOCK:
-        # Clean expired / too-old entries.
+        # Clean expired entries.
         expired = [k for k, (exp, _) in _DEDUPE_INFLIGHT.items() if exp <= now]
         for k in expired:
             _DEDUPE_INFLIGHT.pop(k, None)
@@ -212,8 +214,9 @@ async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]
 
         # Cap size.
         if len(_DEDUPE_INFLIGHT) > _DEDUPE_MAX_ENTRIES:
-            # Drop oldest by expiry.
-            for k, _ in sorted(_DEDUPE_INFLIGHT.items(), key=lambda kv: kv[1][0])[: max(1, len(_DEDUPE_INFLIGHT) - _DEDUPE_MAX_ENTRIES)]:
+            for k, _ in sorted(_DEDUPE_INFLIGHT.items(), key=lambda kv: kv[1][0])[: max(
+                1, len(_DEDUPE_INFLIGHT) - _DEDUPE_MAX_ENTRIES
+            )]:
                 _DEDUPE_INFLIGHT.pop(k, None)
 
         cached = _DEDUPE_RESULTS.get(key)
@@ -236,7 +239,6 @@ async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]
             _DEDUPE_RESULTS[key] = (time.time() + _DEDUPE_TTL_SECONDS, result)
         return result
     except Exception as exc:
-        # Propagate to all waiters, then evict.
         fut.set_exception(exc)
         raise
     finally:
@@ -273,11 +275,12 @@ def _register_with_fastmcp(
         meta[f"{domain_prefix}/side_effects"] = _ui_side_effect(side_effect).value
         meta[f"{domain_prefix}/write_action"] = bool(write_action)
         meta[f"{domain_prefix}/readOnlyHint"] = bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY)
+
     if title:
-        # Helpful for UIs that support a distinct display label.
         meta["title"] = title
         for domain_prefix in ("openai", "chatgpt.com"):
             meta[f"{domain_prefix}/title"] = title
+
     annotations = {
         "readOnlyHint": bool(_ui_side_effect(side_effect) is SideEffectClass.READ_ONLY),
         "title": title or _title_from_tool_name(name),
@@ -301,8 +304,6 @@ def _register_with_fastmcp(
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
 
     # Compute a schema fingerprint and surface it via metadata for debugging.
-    # Do NOT overwrite visibility: some clients/gates treat non-standard visibility
-    # values as requiring approval, which can cause UI prompts for every tool.
     # Format: schema:<tool_name>:<sha1-10>
     schema: Dict[str, Any] | None = None
     sanitized_schema: Dict[str, Any] | None = None
@@ -325,8 +326,7 @@ def _register_with_fastmcp(
         # Never fail tool registration over UI metadata.
         pass
     finally:
-        # Always surface machine-readable schemas and the active write gate state
-        # to ChatGPT so connectors don't block safe operations.
+        # Always surface machine-readable schemas and the active write gate state.
         sanitized_schema = sanitized_schema or _sanitize_metadata_value(
             schema or {"type": "object", "properties": {}}
         )
@@ -389,12 +389,12 @@ def mcp_tool(
                 call_id = str(uuid.uuid4())
                 all_args = _bind_call_args(signature, args, kwargs)
                 ctx = _extract_context(all_args)
-                write_action = _write_action_flag()
+                write_action_actual = _write_action_flag()
 
                 start = time.perf_counter()
 
                 request_ctx = get_request_context()
-                dedupe_key = _dedupe_key(tool_name, write_action=write_action, args_preview=ctx["arg_preview"])
+                dedupe_key = _dedupe_key(tool_name, write_action=write_action_actual, args_preview=ctx["arg_preview"])
 
                 _record_recent_tool_event(
                     {
@@ -402,12 +402,12 @@ def mcp_tool(
                         "event": "tool_recent_start",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action,
+                        "write_action": write_action_actual,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
                         "user_message": _tool_user_message(
                             tool_name,
-                            write_action=write_action,
+                            write_action=write_action_actual,
                             phase="start",
                         ),
                     }
@@ -416,7 +416,7 @@ def mcp_tool(
                 TOOLS_LOGGER.chat(
                     _tool_user_message(
                         tool_name,
-                        write_action=write_action,
+                        write_action=write_action_actual,
                         phase="start",
                     ),
                     extra={
@@ -424,7 +424,7 @@ def mcp_tool(
                         "status": "start",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action,
+                        "write_action": write_action_actual,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
                     },
@@ -436,7 +436,7 @@ def mcp_tool(
                         "event": "tool_call_start",
                         "status": "start",
                         "tool_name": tool_name,
-                        "write_action": write_action,
+                        "write_action": write_action_actual,
                         "tags": sorted(tag_set),
                         "call_id": call_id,
                         "arg_keys": ctx["arg_keys"],
@@ -454,7 +454,7 @@ def mcp_tool(
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
 
-                    _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=True)
+                    _record_tool_call(tool_name, write_action=write_action_actual, duration_ms=duration_ms, errored=True)
                     structured_error = _structured_tool_error(exc, context=tool_name, path=None)
                     error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
 
@@ -464,7 +464,7 @@ def mcp_tool(
                             "event": "tool_recent_error",
                             "tool_name": tool_name,
                             "call_id": call_id,
-                            "write_action": write_action,
+                            "write_action": write_action_actual,
                             "duration_ms": duration_ms,
                             "request": request_ctx,
                             "dedupe_key": dedupe_key,
@@ -474,7 +474,7 @@ def mcp_tool(
                             "error_origin": error_info.get("origin"),
                             "user_message": _tool_user_message(
                                 tool_name,
-                                write_action=write_action,
+                                write_action=write_action_actual,
                                 phase="error",
                                 duration_ms=duration_ms,
                                 error=f"{exc.__class__.__name__}: {exc}",
@@ -489,7 +489,7 @@ def mcp_tool(
                             "status": "error",
                             "tool_name": tool_name,
                             "call_id": call_id,
-                            "write_action": write_action,
+                            "write_action": write_action_actual,
                             "duration_ms": duration_ms,
                             "request": request_ctx,
                             "dedupe_key": dedupe_key,
@@ -501,7 +501,7 @@ def mcp_tool(
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
 
-                _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=False)
+                _record_tool_call(tool_name, write_action=write_action_actual, duration_ms=duration_ms, errored=False)
 
                 result_type = type(result).__name__
                 _record_recent_tool_event(
@@ -510,14 +510,14 @@ def mcp_tool(
                         "event": "tool_recent_ok",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action,
+                        "write_action": write_action_actual,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
                         "result_type": result_type,
                         "user_message": _tool_user_message(
                             tool_name,
-                            write_action=write_action,
+                            write_action=write_action_actual,
                             phase="ok",
                             duration_ms=duration_ms,
                         ),
@@ -531,7 +531,7 @@ def mcp_tool(
                         "status": "ok",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action,
+                        "write_action": write_action_actual,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
@@ -562,10 +562,10 @@ def mcp_tool(
             call_id = str(uuid.uuid4())
             all_args = _bind_call_args(signature, args, kwargs)
             ctx = _extract_context(all_args)
-            write_action = _write_action_flag()
+            write_action_actual = _write_action_flag()
 
             request_ctx = get_request_context()
-            dedupe_key = _dedupe_key(tool_name, write_action=write_action, args_preview=ctx["arg_preview"])
+            dedupe_key = _dedupe_key(tool_name, write_action=write_action_actual, args_preview=ctx["arg_preview"])
 
             start = time.perf_counter()
 
@@ -575,12 +575,12 @@ def mcp_tool(
                     "event": "tool_recent_start",
                     "tool_name": tool_name,
                     "call_id": call_id,
-                    "write_action": write_action,
+                    "write_action": write_action_actual,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
                     "user_message": _tool_user_message(
                         tool_name,
-                        write_action=write_action,
+                        write_action=write_action_actual,
                         phase="start",
                     ),
                 }
@@ -589,7 +589,7 @@ def mcp_tool(
             TOOLS_LOGGER.chat(
                 _tool_user_message(
                     tool_name,
-                    write_action=write_action,
+                    write_action=write_action_actual,
                     phase="start",
                 ),
                 extra={
@@ -597,7 +597,7 @@ def mcp_tool(
                     "status": "start",
                     "tool_name": tool_name,
                     "call_id": call_id,
-                    "write_action": write_action,
+                    "write_action": write_action_actual,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
                 },
@@ -609,7 +609,7 @@ def mcp_tool(
                     "event": "tool_call_start",
                     "status": "start",
                     "tool_name": tool_name,
-                    "write_action": write_action,
+                    "write_action": write_action_actual,
                     "tags": sorted(tag_set),
                     "call_id": call_id,
                     "arg_keys": ctx["arg_keys"],
@@ -624,7 +624,7 @@ def mcp_tool(
             except Exception as exc:
                 duration_ms = int((time.perf_counter() - start) * 1000)
 
-                _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=True)
+                _record_tool_call(tool_name, write_action=write_action_actual, duration_ms=duration_ms, errored=True)
                 structured_error = _structured_tool_error(exc, context=tool_name, path=None)
                 error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
 
@@ -634,7 +634,7 @@ def mcp_tool(
                         "event": "tool_recent_error",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action,
+                        "write_action": write_action_actual,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
@@ -644,7 +644,7 @@ def mcp_tool(
                         "error_origin": error_info.get("origin"),
                         "user_message": _tool_user_message(
                             tool_name,
-                            write_action=write_action,
+                            write_action=write_action_actual,
                             phase="error",
                             duration_ms=duration_ms,
                             error=f"{exc.__class__.__name__}: {exc}",
@@ -659,7 +659,7 @@ def mcp_tool(
                         "status": "error",
                         "tool_name": tool_name,
                         "call_id": call_id,
-                        "write_action": write_action,
+                        "write_action": write_action_actual,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
@@ -671,7 +671,7 @@ def mcp_tool(
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
-            _record_tool_call(tool_name, write_action=write_action, duration_ms=duration_ms, errored=False)
+            _record_tool_call(tool_name, write_action=write_action_actual, duration_ms=duration_ms, errored=False)
 
             result_type = type(result).__name__
             _record_recent_tool_event(
@@ -680,14 +680,14 @@ def mcp_tool(
                     "event": "tool_recent_ok",
                     "tool_name": tool_name,
                     "call_id": call_id,
-                    "write_action": write_action,
+                    "write_action": write_action_actual,
                     "duration_ms": duration_ms,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
                     "result_type": result_type,
                     "user_message": _tool_user_message(
                         tool_name,
-                        write_action=write_action,
+                        write_action=write_action_actual,
                         phase="ok",
                         duration_ms=duration_ms,
                     ),
@@ -701,7 +701,7 @@ def mcp_tool(
                     "status": "ok",
                     "tool_name": tool_name,
                     "call_id": call_id,
-                    "write_action": write_action,
+                    "write_action": write_action_actual,
                     "duration_ms": duration_ms,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
@@ -740,9 +740,7 @@ def register_extra_tools_if_available() -> None:
 
         register_extra_tools(mcp_tool)
     except Exception:
-        # Extra tools are strictly optional.
         return None
-
 
 
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:

@@ -8,8 +8,6 @@ import tempfile
 import time
 from collections import deque
 
-from github_mcp.redaction import redact_structured, redact_text
-
 # Custom log levels
 # ------------------------------------------------------------------------------
 #
@@ -169,7 +167,7 @@ class _ColorFormatter(logging.Formatter):
         if self._use_color and levelname in self._C:
             record.levelname = f"{self._C[levelname]}{levelname}{self._C['RESET']}"
         try:
-            return redact_text(super().format(record))
+            return super().format(record)
         finally:
             record.levelname = levelname
 
@@ -237,8 +235,6 @@ class _InMemoryErrorLogHandler(logging.Handler):
         except Exception:  # noqa: BLE001
             message = record.getMessage()
 
-        message = redact_text(message)
-
         payload = {
             "logger": record.name,
             "level": record.levelname,
@@ -246,14 +242,14 @@ class _InMemoryErrorLogHandler(logging.Handler):
             "created": record.created,
             "tool_name": getattr(record, "tool_name", None),
             "call_id": getattr(record, "call_id", None),
-            "tool_context": redact_text(getattr(record, "tool_context", None)),
+            "tool_context": getattr(record, "tool_context", None),
             "tool_error_type": getattr(record, "tool_error_type", None),
-            "tool_error_message": redact_text(getattr(record, "tool_error_message", None)),
+            "tool_error_message": getattr(record, "tool_error_message", None),
             "tool_error_origin": getattr(record, "tool_error_origin", None),
             "tool_error_category": getattr(record, "tool_error_category", None),
         }
 
-        self._records.append(redact_structured(payload))
+        self._records.append(payload)
 
 
 ERROR_LOG_HANDLER = _InMemoryErrorLogHandler(capacity=ERROR_LOG_CAPACITY)
@@ -288,7 +284,7 @@ class _InMemoryLogHandler(logging.Handler):
         payload = {
             "logger": record.name,
             "level": record.levelname,
-            "message": redact_text(message),
+            "message": message,
             "created": record.created,
             "tool_name": getattr(record, "tool_name", None),
             "call_id": getattr(record, "call_id", None),
@@ -303,7 +299,7 @@ class _InMemoryLogHandler(logging.Handler):
             "error_origin": getattr(record, "error_origin", None),
         }
 
-        self._records.append(redact_structured(payload))
+        self._records.append(payload)
 
 
 LOG_RECORD_HANDLER = _InMemoryLogHandler(capacity=LOG_RECORD_CAPACITY)
