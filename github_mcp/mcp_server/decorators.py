@@ -99,6 +99,26 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
+    """Emit a single machine-parseable JSON record for tool lifecycle events."""
+    try:
+        safe = _sanitize_metadata_value(dict(payload))
+        raw = json.dumps(
+            safe, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        TOOLS_LOGGER.detailed(
+            f"[tool json] {raw}",
+            extra={
+                "event": "tool_json",
+                "status": payload.get("status"),
+                "tool_name": payload.get("tool_name"),
+                "call_id": payload.get("call_id"),
+            },
+        )
+    except Exception:
+        return
+
+
 def _tool_user_message(
     tool_name: str,
     *,
@@ -152,7 +172,9 @@ def _stable_request_id() -> Optional[str]:
     return None
 
 
-def _dedupe_key(tool_name: str, *, ui_write_action: bool, args_preview: str) -> Optional[str]:
+def _dedupe_key(
+    tool_name: str, *, ui_write_action: bool, args_preview: str
+) -> Optional[str]:
     """Compute a dedupe key or return None when dedupe is disabled."""
     stable = _stable_request_id()
     if not stable:
@@ -169,11 +191,15 @@ def _dedupe_key(tool_name: str, *, ui_write_action: bool, args_preview: str) -> 
         "ui_write": bool(ui_write_action),
         "args": args_preview,
     }
-    normalized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    normalized = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha1(normalized.encode("utf-8", errors="replace")).hexdigest()
 
 
-async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]) -> Any:
+async def _maybe_dedupe_call(
+    key: Optional[str], coro_factory: Callable[[], Any]
+) -> Any:
     """Best-effort dedupe wrapper.
 
     IMPORTANT: never await while holding _DEDUPE_LOCK.
@@ -198,9 +224,9 @@ async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]
 
         # Cap size.
         if len(_DEDUPE_INFLIGHT) > _DEDUPE_MAX_ENTRIES:
-            for k, _ in sorted(_DEDUPE_INFLIGHT.items(), key=lambda kv: kv[1][0])[: max(
-                1, len(_DEDUPE_INFLIGHT) - _DEDUPE_MAX_ENTRIES
-            )]:
+            for k, _ in sorted(_DEDUPE_INFLIGHT.items(), key=lambda kv: kv[1][0])[
+                : max(1, len(_DEDUPE_INFLIGHT) - _DEDUPE_MAX_ENTRIES)
+            ]:
                 _DEDUPE_INFLIGHT.pop(k, None)
 
         cached = _DEDUPE_RESULTS.get(key)
@@ -248,10 +274,12 @@ def _register_with_fastmcp(
     remote_write: bool,
     visibility: str = "public",
 ) -> Any:
-    meta: dict[str, Any] = {"visibility": visibility}
+    read_only_hint = bool(side_effect is SideEffectClass.READ_ONLY and not remote_write)
+    meta: dict[str, Any] = {"visibility": visibility, "read_only_hint": read_only_hint}
 
     for domain_prefix in ("chatgpt.com",):
         meta[f"{domain_prefix}/visibility"] = visibility
+        meta[f"{domain_prefix}/read_only_hint"] = read_only_hint
         meta[f"{domain_prefix}/toolInvocation/invoking"] = OPENAI_INVOKING_MESSAGE
         meta[f"{domain_prefix}/toolInvocation/invoked"] = OPENAI_INVOKED_MESSAGE
 
@@ -261,6 +289,9 @@ def _register_with_fastmcp(
             meta[f"{domain_prefix}/title"] = title
 
     annotations = {"title": title or _title_from_tool_name(name)}
+    if read_only_hint:
+        annotations["readOnlyHint"] = True
+        annotations["read_only_hint"] = True
 
     tool_obj = mcp.tool(
         fn,
@@ -283,12 +314,17 @@ def _register_with_fastmcp(
     schema: Dict[str, Any] | None = None
     sanitized_schema: Dict[str, Any] | None = None
     try:
-        schema = _normalize_input_schema(tool_obj) or {"type": "object", "properties": {}}
+        schema = _normalize_input_schema(tool_obj) or {
+            "type": "object",
+            "properties": {},
+        }
         sanitized_schema = _sanitize_metadata_value(schema)
         normalized = json.dumps(
             sanitized_schema, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
-        schema_fingerprint = hashlib.sha1(normalized.encode("utf-8", errors="replace")).hexdigest()[:10]
+        schema_fingerprint = hashlib.sha1(
+            normalized.encode("utf-8", errors="replace")
+        ).hexdigest()[:10]
         schema_visibility = f"schema:{name}:{schema_fingerprint}"
         tool_obj.meta["schema_visibility"] = schema_visibility
         for domain_prefix in ("chatgpt.com",):
@@ -302,7 +338,9 @@ def _register_with_fastmcp(
         for domain_prefix in ("chatgpt.com",):
             tool_obj.meta[f"{domain_prefix}/schema_fingerprint"] = schema_fingerprint
             tool_obj.meta[f"{domain_prefix}/schema_name"] = name
-            tool_obj.meta[f"{domain_prefix}/schema_title"] = title or _title_from_tool_name(name)
+            tool_obj.meta[f"{domain_prefix}/schema_title"] = (
+                title or _title_from_tool_name(name)
+            )
             if description:
                 tool_obj.meta[f"{domain_prefix}/schema_description"] = description
     except Exception:
@@ -353,7 +391,11 @@ def mcp_tool(
 
         # Remote mutations should still be classified as REMOTE_MUTATION.
         remote_write = bool(write_action)
-        side_effect = SideEffectClass.REMOTE_MUTATION if remote_write else resolve_side_effect_class(tool_name)
+        side_effect = (
+            SideEffectClass.REMOTE_MUTATION
+            if remote_write
+            else resolve_side_effect_class(tool_name)
+        )
 
         # Option C UI prompt behavior:
         # - Only remote mutations may prompt
@@ -368,7 +410,9 @@ def mcp_tool(
             else "read_only"
         )
 
-        llm_level = "advanced" if side_effect is not SideEffectClass.READ_ONLY else "basic"
+        llm_level = (
+            "advanced" if side_effect is not SideEffectClass.READ_ONLY else "basic"
+        )
         normalized_description = description or _normalize_tool_description(
             func, signature, llm_level=llm_level
         )
@@ -386,7 +430,9 @@ def mcp_tool(
                 start = time.perf_counter()
                 request_ctx = get_request_context()
                 dedupe_key = _dedupe_key(
-                    tool_name, ui_write_action=ui_write_action, args_preview=ctx["arg_preview"]
+                    tool_name,
+                    ui_write_action=ui_write_action,
+                    args_preview=ctx["arg_preview"],
                 )
 
                 _record_recent_tool_event(
@@ -404,7 +450,9 @@ def mcp_tool(
                 )
 
                 TOOLS_LOGGER.chat(
-                    _tool_user_message(tool_name, write_action=ui_write_action, phase="start"),
+                    _tool_user_message(
+                        tool_name, write_action=ui_write_action, phase="start"
+                    ),
                     extra={
                         "event": "tool_chat",
                         "status": "start",
@@ -430,6 +478,23 @@ def mcp_tool(
                     },
                 )
 
+                _log_tool_json_event(
+                    {
+                        "event": "tool_call.start",
+                        "status": "start",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "request": request_ctx,
+                        "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "arg_keys": ctx["arg_keys"],
+                        "arg_count": ctx["arg_count"],
+                    }
+                )
+
                 async def _run() -> Any:
                     return await func(*args, **kwargs)
 
@@ -437,10 +502,21 @@ def mcp_tool(
                     result = await _maybe_dedupe_call(dedupe_key, _run)
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
-                    _record_tool_call(tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=True)
+                    _record_tool_call(
+                        tool_name,
+                        write_kind=write_kind,
+                        duration_ms=duration_ms,
+                        errored=True,
+                    )
 
-                    structured_error = _structured_tool_error(exc, context=tool_name, path=None)
-                    error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
+                    structured_error = _structured_tool_error(
+                        exc, context=tool_name, path=None
+                    )
+                    error_info = (
+                        structured_error.get("error", {})
+                        if isinstance(structured_error, dict)
+                        else {}
+                    )
 
                     _record_recent_tool_event(
                         {
@@ -452,11 +528,13 @@ def mcp_tool(
                             "request": request_ctx,
                             "dedupe_key": dedupe_key,
                             "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
-                        "write_allowed": _current_write_allowed(),
-                        "error_type": exc.__class__.__name__,
-                            "error_message": str(error_info.get("message") or exc.__class__.__name__),
+                            "side_effects": side_effect.value,
+                            "remote_write": bool(remote_write),
+                            "write_allowed": _current_write_allowed(),
+                            "error_type": exc.__class__.__name__,
+                            "error_message": str(
+                                error_info.get("message") or exc.__class__.__name__
+                            ),
                             "error_category": error_info.get("category"),
                             "error_origin": error_info.get("origin"),
                             "user_message": _tool_user_message(
@@ -480,16 +558,41 @@ def mcp_tool(
                             "request": request_ctx,
                             "dedupe_key": dedupe_key,
                             "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
-                        "write_allowed": _current_write_allowed(),
-                        "error_type": exc.__class__.__name__,
+                            "side_effects": side_effect.value,
+                            "remote_write": bool(remote_write),
+                            "write_allowed": _current_write_allowed(),
+                            "error_type": exc.__class__.__name__,
                         },
+                    )
+
+                    _log_tool_json_event(
+                        {
+                            "event": "tool_call.error",
+                            "status": "error",
+                            "tool_name": tool_name,
+                            "call_id": call_id,
+                            "duration_ms": duration_ms,
+                            "request": request_ctx,
+                            "dedupe_key": dedupe_key,
+                            "write_kind": write_kind,
+                            "side_effects": side_effect.value,
+                            "remote_write": bool(remote_write),
+                            "write_allowed": _current_write_allowed(),
+                            "error_type": exc.__class__.__name__,
+                            "error_message": str(error_info.get("message") or exc),
+                            "error_category": error_info.get("category"),
+                            "error_origin": error_info.get("origin"),
+                        }
                     )
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=False)
+                _record_tool_call(
+                    tool_name,
+                    write_kind=write_kind,
+                    duration_ms=duration_ms,
+                    errored=False,
+                )
 
                 result_type = type(result).__name__
                 _record_recent_tool_event(
@@ -507,7 +610,10 @@ def mcp_tool(
                         "write_allowed": _current_write_allowed(),
                         "result_type": result_type,
                         "user_message": _tool_user_message(
-                            tool_name, write_action=ui_write_action, phase="ok", duration_ms=duration_ms
+                            tool_name,
+                            write_action=ui_write_action,
+                            phase="ok",
+                            duration_ms=duration_ms,
                         ),
                     }
                 )
@@ -529,6 +635,24 @@ def mcp_tool(
                         "result_type": result_type,
                     },
                 )
+
+                _log_tool_json_event(
+                    {
+                        "event": "tool_call.ok",
+                        "status": "ok",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "duration_ms": duration_ms,
+                        "request": request_ctx,
+                        "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "result_type": result_type,
+                    }
+                )
+
                 return result
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -556,7 +680,11 @@ def mcp_tool(
             ctx = _extract_context(all_args)
 
             request_ctx = get_request_context()
-            dedupe_key = _dedupe_key(tool_name, ui_write_action=ui_write_action, args_preview=ctx["arg_preview"])
+            dedupe_key = _dedupe_key(
+                tool_name,
+                ui_write_action=ui_write_action,
+                args_preview=ctx["arg_preview"],
+            )
             start = time.perf_counter()
 
             _record_recent_tool_event(
@@ -567,12 +695,16 @@ def mcp_tool(
                     "call_id": call_id,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
-                    "user_message": _tool_user_message(tool_name, write_action=ui_write_action, phase="start"),
+                    "user_message": _tool_user_message(
+                        tool_name, write_action=ui_write_action, phase="start"
+                    ),
                 }
             )
 
             TOOLS_LOGGER.chat(
-                _tool_user_message(tool_name, write_action=ui_write_action, phase="start"),
+                _tool_user_message(
+                    tool_name, write_action=ui_write_action, phase="start"
+                ),
                 extra={
                     "event": "tool_chat",
                     "status": "start",
@@ -598,14 +730,42 @@ def mcp_tool(
                 },
             )
 
+            _log_tool_json_event(
+                {
+                    "event": "tool_call.start",
+                    "status": "start",
+                    "tool_name": tool_name,
+                    "call_id": call_id,
+                    "request": request_ctx,
+                    "dedupe_key": dedupe_key,
+                    "write_kind": write_kind,
+                    "side_effects": side_effect.value,
+                    "remote_write": bool(remote_write),
+                    "write_allowed": _current_write_allowed(),
+                    "arg_keys": ctx["arg_keys"],
+                    "arg_count": ctx["arg_count"],
+                }
+            )
+
             try:
                 result = func(*args, **kwargs)
             except Exception as exc:
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=True)
+                _record_tool_call(
+                    tool_name,
+                    write_kind=write_kind,
+                    duration_ms=duration_ms,
+                    errored=True,
+                )
 
-                structured_error = _structured_tool_error(exc, context=tool_name, path=None)
-                error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
+                structured_error = _structured_tool_error(
+                    exc, context=tool_name, path=None
+                )
+                error_info = (
+                    structured_error.get("error", {})
+                    if isinstance(structured_error, dict)
+                    else {}
+                )
 
                 _record_recent_tool_event(
                     {
@@ -616,8 +776,14 @@ def mcp_tool(
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
                         "error_type": exc.__class__.__name__,
-                        "error_message": str(error_info.get("message") or exc.__class__.__name__),
+                        "error_message": str(
+                            error_info.get("message") or exc.__class__.__name__
+                        ),
                         "error_category": error_info.get("category"),
                         "error_origin": error_info.get("origin"),
                         "user_message": _tool_user_message(
@@ -640,13 +806,39 @@ def mcp_tool(
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
                         "error_type": exc.__class__.__name__,
                     },
+                )
+
+                _log_tool_json_event(
+                    {
+                        "event": "tool_call.error",
+                        "status": "error",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "duration_ms": duration_ms,
+                        "request": request_ctx,
+                        "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "error_type": exc.__class__.__name__,
+                        "error_message": str(error_info.get("message") or exc),
+                        "error_category": error_info.get("category"),
+                        "error_origin": error_info.get("origin"),
+                    }
                 )
                 raise
 
             duration_ms = int((time.perf_counter() - start) * 1000)
-            _record_tool_call(tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=False)
+            _record_tool_call(
+                tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=False
+            )
 
             result_type = type(result).__name__
             _record_recent_tool_event(
@@ -658,9 +850,16 @@ def mcp_tool(
                     "duration_ms": duration_ms,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
+                    "write_kind": write_kind,
+                    "side_effects": side_effect.value,
+                    "remote_write": bool(remote_write),
+                    "write_allowed": _current_write_allowed(),
                     "result_type": result_type,
                     "user_message": _tool_user_message(
-                        tool_name, write_action=ui_write_action, phase="ok", duration_ms=duration_ms
+                        tool_name,
+                        write_action=ui_write_action,
+                        phase="ok",
+                        duration_ms=duration_ms,
                     ),
                 }
             )
@@ -675,9 +874,31 @@ def mcp_tool(
                     "duration_ms": duration_ms,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
+                    "write_kind": write_kind,
+                    "side_effects": side_effect.value,
+                    "remote_write": bool(remote_write),
+                    "write_allowed": _current_write_allowed(),
                     "result_type": result_type,
                 },
             )
+
+            _log_tool_json_event(
+                {
+                    "event": "tool_call.ok",
+                    "status": "ok",
+                    "tool_name": tool_name,
+                    "call_id": call_id,
+                    "duration_ms": duration_ms,
+                    "request": request_ctx,
+                    "dedupe_key": dedupe_key,
+                    "write_kind": write_kind,
+                    "side_effects": side_effect.value,
+                    "remote_write": bool(remote_write),
+                    "write_allowed": _current_write_allowed(),
+                    "result_type": result_type,
+                }
+            )
+
             return result
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -711,7 +932,9 @@ def register_extra_tools_if_available() -> None:
 
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
     """Refresh connector-facing metadata for registered tools."""
-    effective_write_allowed = _current_write_allowed() if _write_allowed is None else bool(_write_allowed)
+    effective_write_allowed = (
+        _current_write_allowed() if _write_allowed is None else bool(_write_allowed)
+    )
 
     for tool_obj, fn in list(_REGISTERED_MCP_TOOLS):
         try:
@@ -719,7 +942,9 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
 
             side_effect = getattr(fn, "__side_effect_class__", None)
             if not isinstance(side_effect, SideEffectClass):
-                side_effect = resolve_side_effect_class(getattr(tool_obj, "name", "tool"))
+                side_effect = resolve_side_effect_class(
+                    getattr(tool_obj, "name", "tool")
+                )
 
             tool_obj.meta["ui_write_action"] = False
         except Exception:

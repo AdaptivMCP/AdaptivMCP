@@ -5,7 +5,6 @@ from github_mcp import config
 from github_mcp.mcp_server.context import _record_recent_tool_event
 
 
-
 def _tool_entry(name: str, write_allowed: bool):
     original = server.WRITE_ALLOWED
     try:
@@ -32,14 +31,12 @@ def _tool_entry(name: str, write_allowed: bool):
         refresh_registered_tool_metadata(original)
 
 
-
 def test_local_mutations_do_not_prompt_regardless_of_write_gate():
     open_tool = _tool_entry("run_command", True)
     gated_tool = _tool_entry("run_command", False)
 
     assert open_tool["write_action"] is False
     assert gated_tool["write_action"] is False
-
 
 
 def test_remote_mutation_never_prompts_via_ui():
@@ -57,14 +54,12 @@ def test_remote_mutation_never_prompts_via_ui():
     assert disabled.get("meta", {}).get("write_allowed") is False
 
 
-
 def test_write_gate_does_not_turn_local_tools_into_prompting_writes():
     local = _tool_entry("run_command", False)
     remote = _tool_entry("create_file", False)
 
     assert local["write_action"] is False
     assert remote["write_action"] is False
-
 
 
 def test_owner_logs_and_events_are_unmodified():
@@ -79,7 +74,9 @@ def test_owner_logs_and_events_are_unmodified():
 
     config.BASE_LOGGER.error("leaked secret %s", secret)
 
-    assert any(secret in (rec.get("message") or "") for rec in config.ERROR_LOG_HANDLER.records)
+    assert any(
+        secret in (rec.get("message") or "") for rec in config.ERROR_LOG_HANDLER.records
+    )
 
     _record_recent_tool_event({"message": "token: " + secret})
     last_event = server.RECENT_TOOL_EVENTS[-1]

@@ -9,7 +9,9 @@ def test_register_with_fastmcp_adds_chatgpt_meta():
 
     try:
 
-        @decorators.mcp_tool(name="sample_tool", write_action=False, description="test tool")
+        @decorators.mcp_tool(
+            name="sample_tool", write_action=False, description="test tool"
+        )
         def _sample_tool() -> None:
             return None
 
@@ -62,7 +64,9 @@ def test_register_with_fastmcp_surfaces_schema_and_write_gate():
 
     try:
 
-        @decorators.mcp_tool(name="schema_test_tool", write_action=False, description="demo")
+        @decorators.mcp_tool(
+            name="schema_test_tool", write_action=False, description="demo"
+        )
         def _schema_test_tool(example: int, note: str | None = None) -> None:
             return None
 
