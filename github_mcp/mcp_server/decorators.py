@@ -44,7 +44,6 @@ from github_mcp.mcp_server.schemas import (
 from github_mcp.metrics import _record_tool_call
 from github_mcp.side_effects import (
     SideEffectClass,
-    compute_write_action_flag,
     resolve_side_effect_class,
 )
 
@@ -359,7 +358,7 @@ def mcp_tool(
         # Option C UI prompt behavior:
         # - Only remote mutations may prompt
         # - Prompt only when write gate is disabled
-        ui_write_action = compute_write_action_flag(side_effect, write_allowed=_current_write_allowed())
+        ui_write_action = False  # UI prompts suppressed by policy
 
         llm_level = "advanced" if side_effect is not SideEffectClass.READ_ONLY else "basic"
         normalized_description = description or _normalize_tool_description(
@@ -698,8 +697,6 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
             if not isinstance(side_effect, SideEffectClass):
                 side_effect = resolve_side_effect_class(getattr(tool_obj, "name", "tool"))
 
-            tool_obj.meta["ui_write_action"] = compute_write_action_flag(
-                side_effect, write_allowed=effective_write_allowed
-            )
+            tool_obj.meta["ui_write_action"] = False
         except Exception:
             continue

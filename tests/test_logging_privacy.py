@@ -4,7 +4,6 @@ import pytest
 
 import github_mcp.mcp_server.context as ctx
 from github_mcp.mcp_server import decorators
-from github_mcp import side_effects
 
 
 @pytest.fixture(autouse=True)
@@ -13,7 +12,6 @@ def _restore_registry_and_events():
     original_events = list(getattr(ctx, "RECENT_TOOL_EVENTS", []))
     original_total = getattr(ctx, "RECENT_TOOL_EVENTS_TOTAL", 0)
     original_dropped = getattr(ctx, "RECENT_TOOL_EVENTS_DROPPED", 0)
-    original_side_effects = dict(side_effects.TOOL_SIDE_EFFECTS)
     try:
         if hasattr(ctx.RECENT_TOOL_EVENTS, "clear"):
             ctx.RECENT_TOOL_EVENTS.clear()
@@ -22,8 +20,6 @@ def _restore_registry_and_events():
         ctx.RECENT_TOOL_EVENTS_TOTAL = 0
         ctx.RECENT_TOOL_EVENTS_DROPPED = 0
         decorators._REGISTERED_MCP_TOOLS[:] = []
-        for name in ("privacy_tool", "event_tool", "tag_tool"):
-            side_effects.TOOL_SIDE_EFFECTS[name] = side_effects.SideEffectClass.READ_ONLY
         yield
     finally:
         decorators._REGISTERED_MCP_TOOLS[:] = original_registry
@@ -34,8 +30,6 @@ def _restore_registry_and_events():
             ctx.RECENT_TOOL_EVENTS[:] = original_events
         ctx.RECENT_TOOL_EVENTS_TOTAL = original_total
         ctx.RECENT_TOOL_EVENTS_DROPPED = original_dropped
-        side_effects.TOOL_SIDE_EFFECTS.clear()
-        side_effects.TOOL_SIDE_EFFECTS.update(original_side_effects)
 
 
 def test_tool_logs_do_not_include_location(caplog: pytest.LogCaptureFixture):

@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Mapping, Optional
 import jsonschema
 
 from github_mcp.mcp_server.decorators import refresh_registered_tool_metadata
-from github_mcp.side_effects import SideEffectClass, compute_write_action_flag, resolve_side_effect_class
+from github_mcp.side_effects import SideEffectClass, resolve_side_effect_class
 from github_mcp.utils import normalize_args
 
 from ._main import _main
@@ -186,7 +186,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             except Exception:
                 side_effect = SideEffectClass.READ_ONLY
 
-        write_action = compute_write_action_flag(side_effect, write_allowed=m.server.WRITE_ALLOWED)
+        write_action = False  # UI prompts suppressed by policy
 
         tool_info: Dict[str, Any] = {
             "name": name_str,
