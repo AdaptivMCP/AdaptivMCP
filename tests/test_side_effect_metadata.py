@@ -16,6 +16,7 @@ def _tool_entry(name: str, write_allowed: bool):
 
         # Attach FastMCP meta so we can regression-test connector-facing keys
         from github_mcp.main_tools._main import _main
+
         m = _main()
         tool_obj = None
         for t, _f in m._REGISTERED_MCP_TOOLS:
@@ -39,20 +40,23 @@ def test_local_mutations_do_not_prompt_regardless_of_write_gate():
     assert open_tool["write_action"] is False
     assert gated_tool["write_action"] is False
 
-    # Domain-prefixed metadata must also reflect non-prompting local mutation tools
 
 
-
-def test_remote_mutation_always_requires_approval():
+def test_remote_mutation_prompts_only_when_gate_disabled():
     enabled = _tool_entry("create_file", True)
     disabled = _tool_entry("create_file", False)
 
-    assert enabled["write_action"] is True
+    # Option C: when write gate is enabled, remote write tools should not prompt.
+    assert enabled["write_action"] is False
+
+    # When write gate is disabled, UI approval is required.
     assert disabled["write_action"] is True
+
     assert enabled["side_effects"] == disabled["side_effects"] == "REMOTE_MUTATION"
 
-    # Domain-prefixed metadata must reflect prompting write tools
-    # Remote mutation should not claim readOnlyHint
+    # Verify FastMCP meta has the write gate state.
+    assert enabled.get("meta", {}).get("write_allowed") is True
+    assert disabled.get("meta", {}).get("write_allowed") is False
 
 
 
