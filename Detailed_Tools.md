@@ -1,7 +1,5 @@
 # Detailed MCP tools reference
 
-**Policy:** This reference is subordinate to [`POLICY.md`](./POLICY.md). It must not redefine controller behavior.
-
 This document provides a concise tool catalog grouped by function.
 
 ## Tool catalog (grouped)
