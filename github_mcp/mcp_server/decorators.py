@@ -294,6 +294,18 @@ def _register_with_fastmcp(
         tool_obj.meta["schema_visibility"] = schema_visibility
         for domain_prefix in ("chatgpt.com",):
             tool_obj.meta[f"{domain_prefix}/schema_visibility"] = schema_visibility
+        # Machine-readable schema identifiers
+        tool_obj.meta["schema_fingerprint"] = schema_fingerprint
+        tool_obj.meta["schema_name"] = name
+        tool_obj.meta["schema_title"] = title or _title_from_tool_name(name)
+        if description:
+            tool_obj.meta["schema_description"] = description
+        for domain_prefix in ("chatgpt.com",):
+            tool_obj.meta[f"{domain_prefix}/schema_fingerprint"] = schema_fingerprint
+            tool_obj.meta[f"{domain_prefix}/schema_name"] = name
+            tool_obj.meta[f"{domain_prefix}/schema_title"] = title or _title_from_tool_name(name)
+            if description:
+                tool_obj.meta[f"{domain_prefix}/schema_description"] = description
     except Exception:
         pass
     finally:
@@ -307,6 +319,11 @@ def _register_with_fastmcp(
         tool_obj.meta["write_allowed"] = wa
         tool_obj.meta["remote_write"] = bool(remote_write)
         tool_obj.meta["ui_write_action"] = bool(ui_write_action)
+
+        # Side-effect classification is used for both humans and machines.
+        tool_obj.meta["side_effects"] = side_effect.value
+        for domain_prefix in ("chatgpt.com",):
+            tool_obj.meta[f"{domain_prefix}/side_effects"] = side_effect.value
 
     tool_obj.__side_effect_class__ = side_effect
     fn.__side_effect_class__ = side_effect
