@@ -37,6 +37,9 @@ async def run_tests(
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
+        owner=owner,
+        repo=repo,
+        branch=branch,
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -116,6 +119,9 @@ async def run_lint_suite(
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
         mutating=mutating,
+        owner=owner,
+        repo=repo,
+        branch=branch,
     )
 
 
@@ -130,6 +136,10 @@ async def run_quality_suite(
     installing_dependencies: bool = False,
     mutating: bool = False,
     lint_command: str = "ruff check .",
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run lint and tests for a repo/ref.
 
