@@ -17,11 +17,17 @@ class WriteGateDecision:
 
     @property
     def approval_required(self) -> bool:
-        return self.write_kind == "hard_write" or not self.write_allowed
+        """
+        Option C semantics:
+        - When WRITE_ALLOWED is enabled at the server level, writes are considered authorized.
+        - Approval is only required when the server disables writes.
+        """
+        return not self.write_allowed
 
     @property
     def allowed(self) -> bool:
         return self.approved or not self.approval_required
+
 
 def _server():
     from github_mcp import server as _server_mod
@@ -30,35 +36,24 @@ def _server():
 
 
 def _build_decision(
-    *, write_kind: WriteKind, target_ref: Optional[str] = None, approved: Optional[bool] = None
+    *,
+    write_kind: WriteKind,
+    target_ref: Optional[str] = None,
+    approved: Optional[bool] = None,
 ) -> WriteGateDecision:
-    """Compute gate state.
-
-    Semantics:
-    - READs are not gated here (callers should not invoke this for read-only tools).
-    - HARD_WRITE always requires explicit approval.
-    - SOFT_WRITE is allowed when either:
-        a) WRITE_ALLOWED is true (auto-approve on), or
-        b) the caller supplies approved=True (manual approval path).
-
-    This ensures soft writes can still proceed when auto-approve is off, but only
-    with explicit approval.
     """
+    Compute gate state.
 
+    Option C semantics:
+    - READs are not gated here (callers should not invoke this for read-only tools).
+    - When WRITE_ALLOWED is true (auto-approve on), both SOFT_WRITE and HARD_WRITE are treated as approved.
+    - When WRITE_ALLOWED is false, writes require explicit approval via approved=True.
+    """
     server_mod = _server()
     write_allowed = bool(getattr(server_mod, "WRITE_ALLOWED", False))
 
     approved_flag = bool(approved) if approved is not None else False
 
-    if write_kind == "hard_write":
-        return WriteGateDecision(
-            write_kind=write_kind,
-            write_allowed=write_allowed,
-            approved=approved_flag,
-            target_ref=target_ref,
-        )
-
-    # soft_write
     return WriteGateDecision(
         write_kind=write_kind,
         write_allowed=write_allowed,
@@ -89,8 +84,8 @@ def _ensure_write_allowed(
         "approved": decision.approved,
     }
 
-    reason = "UI approval is required" if decision.write_kind == "hard_write" else "Write actions are currently disabled"
-    msg = f"{context}: {reason}."
+    # Under Option C, reaching here implies WRITE_ALLOWED is false and approved was not granted.
+    msg = f"{context}: UI approval is required."
 
     exc = WriteApprovalRequiredError(msg)
     setattr(exc, "write_gate", gate_info)
