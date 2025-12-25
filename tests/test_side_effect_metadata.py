@@ -42,15 +42,13 @@ def test_local_mutations_do_not_prompt_regardless_of_write_gate():
 
 
 
-def test_remote_mutation_prompts_only_when_gate_disabled():
+def test_remote_mutation_never_prompts_via_ui():
     enabled = _tool_entry("create_file", True)
     disabled = _tool_entry("create_file", False)
 
-    # Option C: when write gate is enabled, remote write tools should not prompt.
+    # UI prompts are suppressed globally; authorization is enforced server-side.
     assert enabled["write_action"] is False
-
-    # When write gate is disabled, UI approval is required.
-    assert disabled["write_action"] is True
+    assert disabled["write_action"] is False
 
     assert enabled["side_effects"] == disabled["side_effects"] == "REMOTE_MUTATION"
 
@@ -65,7 +63,7 @@ def test_write_gate_does_not_turn_local_tools_into_prompting_writes():
     remote = _tool_entry("create_file", False)
 
     assert local["write_action"] is False
-    assert remote["write_action"] is True
+    assert remote["write_action"] is False
 
 
 
