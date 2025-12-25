@@ -48,19 +48,9 @@ from github_mcp.side_effects import (
     resolve_side_effect_class,
 )
 
-
 # OpenAI connector UI strings.
-# These appear in ChatGPT's Apps & Connectors UI while a tool is running.
-# Keep them short and specific.
 OPENAI_INVOKING_MESSAGE = "Adaptiv Controller: running tool…"
 OPENAI_INVOKED_MESSAGE = "Adaptiv Controller: tool finished."
-
-
-def _ui_side_effect(side_effect: SideEffectClass) -> SideEffectClass:
-    # UI-only policy: LOCAL_MUTATION should not trigger approval prompts.
-    if side_effect is SideEffectClass.LOCAL_MUTATION:
-        return SideEffectClass.READ_ONLY
-    return side_effect
 
 
 def _current_write_allowed() -> bool:
@@ -139,11 +129,6 @@ def _tool_user_message(
 
 
 # Best-effort dedupe for duplicated upstream requests.
-#
-# Some hosting stacks / clients will retry POST /messages for the same logical MCP
-# request. Without a stable upstream identifier, those retries can cause tools to
-# run multiple times. We dedupe read-only calls (and any write calls that provide
-# an explicit message id) within a short TTL.
 _DEDUPE_TTL_SECONDS = 10.0
 _DEDUPE_MAX_ENTRIES = 2048
 
@@ -157,14 +142,10 @@ _DEDUPE_LOCK = asyncio.Lock()
 
 def _stable_request_id() -> Optional[str]:
     """Return a stable id for the current inbound request when available."""
-
-    # Prefer message id from MCP JSON body (set by ASGI middleware).
     msg_id = REQUEST_MESSAGE_ID.get()
     if msg_id:
         return msg_id
 
-    # Some clients do not include an explicit id; in that case we only dedupe
-    # read-only calls keyed off the session_id, tool name and args.
     sess_id = REQUEST_SESSION_ID.get()
     if sess_id:
         return sess_id
@@ -172,23 +153,21 @@ def _stable_request_id() -> Optional[str]:
     return None
 
 
-def _dedupe_key(tool_name: str, *, write_action: bool, args_preview: str) -> Optional[str]:
+def _dedupe_key(tool_name: str, *, ui_write_action: bool, args_preview: str) -> Optional[str]:
     """Compute a dedupe key or return None when dedupe is disabled."""
-
     stable = _stable_request_id()
     if not stable:
         return None
 
-    # Always dedupe READ_ONLY. For write actions, only dedupe when we have an
-    # explicit per-message id (not just session id), so we don't suppress
-    # intentional repeated writes.
-    if write_action and not REQUEST_MESSAGE_ID.get():
+    # Always dedupe READ_ONLY. For UI-write actions (connector approvals), only dedupe when
+    # we have an explicit per-message id, so we don't suppress intentional repeated writes.
+    if ui_write_action and not REQUEST_MESSAGE_ID.get():
         return None
 
     payload = {
         "id": stable,
         "tool": tool_name,
-        "write": bool(write_action),
+        "ui_write": bool(ui_write_action),
         "args": args_preview,
     }
     normalized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -199,23 +178,17 @@ async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]
     """Best-effort dedupe wrapper.
 
     IMPORTANT: never await while holding _DEDUPE_LOCK.
-
-    Behavior:
-    - If key is None: run call.
-    - If a result is cached within TTL: return it.
-    - If a call is in-flight for the same key: await its future.
-    - Otherwise: create a future, run the call, resolve future, cache result.
     """
-
     if not key:
         return await coro_factory()
 
     now = time.time()
 
     fut: asyncio.Future | None = None
+    entry_exists = False
 
     async with _DEDUPE_LOCK:
-        # Clean expired entries.
+        # Clean expired inflight/results.
         expired = [k for k, (exp, _) in _DEDUPE_INFLIGHT.items() if exp <= now]
         for k in expired:
             _DEDUPE_INFLIGHT.pop(k, None)
@@ -238,13 +211,14 @@ async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]
 
         entry = _DEDUPE_INFLIGHT.get(key)
         if entry is not None:
+            entry_exists = True
             _, fut = entry
         else:
             fut = asyncio.get_running_loop().create_future()
             _DEDUPE_INFLIGHT[key] = (now + _DEDUPE_TTL_SECONDS, fut)
 
     # Await outside the lock.
-    if entry is not None:
+    if entry_exists and fut is not None:
         return await fut
 
     try:
@@ -270,19 +244,14 @@ def _register_with_fastmcp(
     title: Optional[str],
     description: Optional[str],
     tags: set[str],
-    write_action: bool,
+    ui_write_action: bool,
     side_effect: SideEffectClass,
+    remote_write: bool,
     visibility: str = "public",
 ) -> Any:
-    # FastMCP supports `meta` and `annotations`; tests and UI rely on these.
-    meta: dict[str, Any] = {
-        "visibility": visibility,
-    }
+    meta: dict[str, Any] = {"visibility": visibility}
 
     for domain_prefix in ("chatgpt.com",):
-        # Connector UI metadata (Apps & Connectors). These keys are intentionally
-        # flat (not nested) because the UI historically reads them directly from
-        # `meta`.
         meta[f"{domain_prefix}/visibility"] = visibility
         meta[f"{domain_prefix}/toolInvocation/invoking"] = OPENAI_INVOKING_MESSAGE
         meta[f"{domain_prefix}/toolInvocation/invoked"] = OPENAI_INVOKED_MESSAGE
@@ -292,9 +261,7 @@ def _register_with_fastmcp(
         for domain_prefix in ("chatgpt.com",):
             meta[f"{domain_prefix}/title"] = title
 
-    annotations = {
-        "title": title or _title_from_tool_name(name),
-    }
+    annotations = {"title": title or _title_from_tool_name(name)}
 
     tool_obj = mcp.tool(
         fn,
@@ -305,7 +272,7 @@ def _register_with_fastmcp(
         annotations=_sanitize_metadata_value(annotations),
     )
 
-    # Keep registry stable: replace existing entry with the same name.
+    # Keep registry stable.
     _REGISTERED_MCP_TOOLS[:] = [
         (t, f)
         for (t, f) in _REGISTERED_MCP_TOOLS
@@ -313,8 +280,7 @@ def _register_with_fastmcp(
     ]
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
 
-    # Compute a schema fingerprint and surface it via metadata for debugging.
-    # Format: schema:<tool_name>:<sha1-10>
+    # Schema fingerprint for debugging.
     schema: Dict[str, Any] | None = None
     sanitized_schema: Dict[str, Any] | None = None
     try:
@@ -325,23 +291,22 @@ def _register_with_fastmcp(
         )
         schema_fingerprint = hashlib.sha1(normalized.encode("utf-8", errors="replace")).hexdigest()[:10]
         schema_visibility = f"schema:{name}:{schema_fingerprint}"
-
         tool_obj.meta["schema_visibility"] = schema_visibility
         for domain_prefix in ("chatgpt.com",):
             tool_obj.meta[f"{domain_prefix}/schema_visibility"] = schema_visibility
-
     except Exception:
-        # Never fail tool registration over UI metadata.
         pass
     finally:
-        # Always surface machine-readable schemas and the active write gate state.
         sanitized_schema = sanitized_schema or _sanitize_metadata_value(
             schema or {"type": "object", "properties": {}}
         )
-
         tool_obj.meta["schema"] = sanitized_schema
         tool_obj.meta["input_schema"] = sanitized_schema
-        tool_obj.meta["write_allowed"] = _current_write_allowed()
+
+        wa = _current_write_allowed()
+        tool_obj.meta["write_allowed"] = wa
+        tool_obj.meta["remote_write"] = bool(remote_write)
+        tool_obj.meta["ui_write_action"] = bool(ui_write_action)
 
     tool_obj.__side_effect_class__ = side_effect
     fn.__side_effect_class__ = side_effect
@@ -358,11 +323,7 @@ def mcp_tool(
     visibility: str = "public",
     **_ignored: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Decorator used across the repo to register an MCP tool.
-
-    Returns a function wrapper (not the FastMCP tool object) to preserve
-    intra-module calls.
-    """
+    """Decorator used across the repo to register an MCP tool."""
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         try:
@@ -371,23 +332,22 @@ def mcp_tool(
             signature = None
 
         tool_name = name or getattr(func, "__name__", "tool")
-
         tool_visibility = _ignored.get("visibility", visibility)
         tool_title = _title_from_tool_name(tool_name)
 
-        # Side-effect classification is dynamic. `write_action=True` is reserved for
-        # remote GitHub mutations (hard writes). Local mutations should keep
-        # write_action=False and are gated server-side via WRITE_ALLOWED.
-        if bool(write_action):
-            side_effect = SideEffectClass.REMOTE_MUTATION
-        else:
-            side_effect = resolve_side_effect_class(tool_name)
+        # Remote mutations should still be classified as REMOTE_MUTATION.
+        remote_write = bool(write_action)
+        side_effect = SideEffectClass.REMOTE_MUTATION if remote_write else resolve_side_effect_class(tool_name)
 
-        def _write_action_flag() -> bool:
-            return bool(write_action)
+        # Option C UI prompt behavior:
+        # - Only remote mutations may prompt
+        # - Prompt only when write gate is disabled
+        ui_write_action = compute_write_action_flag(side_effect, write_allowed=_current_write_allowed())
 
         llm_level = "advanced" if side_effect is not SideEffectClass.READ_ONLY else "basic"
-        normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
+        normalized_description = description or _normalize_tool_description(
+            func, signature, llm_level=llm_level
+        )
 
         tag_set = set(tags or [])
 
@@ -398,12 +358,12 @@ def mcp_tool(
                 call_id = str(uuid.uuid4())
                 all_args = _bind_call_args(signature, args, kwargs)
                 ctx = _extract_context(all_args)
-                write_action_actual = _write_action_flag()
 
                 start = time.perf_counter()
-
                 request_ctx = get_request_context()
-                dedupe_key = _dedupe_key(tool_name, write_action=write_action_actual, args_preview=ctx["arg_preview"])
+                dedupe_key = _dedupe_key(
+                    tool_name, ui_write_action=ui_write_action, args_preview=ctx["arg_preview"]
+                )
 
                 _record_recent_tool_event(
                     {
@@ -414,19 +374,13 @@ def mcp_tool(
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
                         "user_message": _tool_user_message(
-                            tool_name,
-                            write_action=write_action_actual,
-                            phase="start",
+                            tool_name, write_action=ui_write_action, phase="start"
                         ),
                     }
                 )
 
                 TOOLS_LOGGER.chat(
-                    _tool_user_message(
-                        tool_name,
-                        write_action=write_action_actual,
-                        phase="start",
-                    ),
+                    _tool_user_message(tool_name, write_action=ui_write_action, phase="start"),
                     extra={
                         "event": "tool_chat",
                         "status": "start",
@@ -459,8 +413,8 @@ def mcp_tool(
                     result = await _maybe_dedupe_call(dedupe_key, _run)
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
+                    _record_tool_call(tool_name, write_action=ui_write_action, duration_ms=duration_ms, errored=True)
 
-                    _record_tool_call(tool_name, write_action=write_action_actual, duration_ms=duration_ms, errored=True)
                     structured_error = _structured_tool_error(exc, context=tool_name, path=None)
                     error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
 
@@ -479,7 +433,7 @@ def mcp_tool(
                             "error_origin": error_info.get("origin"),
                             "user_message": _tool_user_message(
                                 tool_name,
-                                write_action=write_action_actual,
+                                write_action=ui_write_action,
                                 phase="error",
                                 duration_ms=duration_ms,
                                 error=f"{exc.__class__.__name__}: {exc}",
@@ -500,12 +454,10 @@ def mcp_tool(
                             "error_type": exc.__class__.__name__,
                         },
                     )
-
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-
-                _record_tool_call(tool_name, write_action=write_action_actual, duration_ms=duration_ms, errored=False)
+                _record_tool_call(tool_name, write_action=ui_write_action, duration_ms=duration_ms, errored=False)
 
                 result_type = type(result).__name__
                 _record_recent_tool_event(
@@ -519,10 +471,7 @@ def mcp_tool(
                         "dedupe_key": dedupe_key,
                         "result_type": result_type,
                         "user_message": _tool_user_message(
-                            tool_name,
-                            write_action=write_action_actual,
-                            phase="ok",
-                            duration_ms=duration_ms,
+                            tool_name, write_action=ui_write_action, phase="ok", duration_ms=duration_ms
                         ),
                     }
                 )
@@ -540,7 +489,6 @@ def mcp_tool(
                         "result_type": result_type,
                     },
                 )
-
                 return result
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -549,26 +497,26 @@ def mcp_tool(
                 title=tool_title,
                 description=normalized_description,
                 tags=tag_set,
-                write_action=_write_action_flag(),
+                ui_write_action=ui_write_action,
                 side_effect=side_effect,
+                remote_write=remote_write,
                 visibility=tool_visibility,
             )
+
             wrapper.__mcp_visibility__ = tool_visibility
-            wrapper.__mcp_write_action__ = _write_action_flag()
+            wrapper.__mcp_remote_write__ = remote_write
+            wrapper.__mcp_write_action__ = ui_write_action  # UI prompt flag
 
             return wrapper
 
-        # Sync functions.
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             call_id = str(uuid.uuid4())
             all_args = _bind_call_args(signature, args, kwargs)
             ctx = _extract_context(all_args)
-            write_action_actual = _write_action_flag()
 
             request_ctx = get_request_context()
-            dedupe_key = _dedupe_key(tool_name, write_action=write_action_actual, args_preview=ctx["arg_preview"])
-
+            dedupe_key = _dedupe_key(tool_name, ui_write_action=ui_write_action, args_preview=ctx["arg_preview"])
             start = time.perf_counter()
 
             _record_recent_tool_event(
@@ -579,20 +527,12 @@ def mcp_tool(
                     "call_id": call_id,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
-                    "user_message": _tool_user_message(
-                        tool_name,
-                        write_action=write_action_actual,
-                        phase="start",
-                    ),
+                    "user_message": _tool_user_message(tool_name, write_action=ui_write_action, phase="start"),
                 }
             )
 
             TOOLS_LOGGER.chat(
-                _tool_user_message(
-                    tool_name,
-                    write_action=write_action_actual,
-                    phase="start",
-                ),
+                _tool_user_message(tool_name, write_action=ui_write_action, phase="start"),
                 extra={
                     "event": "tool_chat",
                     "status": "start",
@@ -622,8 +562,8 @@ def mcp_tool(
                 result = func(*args, **kwargs)
             except Exception as exc:
                 duration_ms = int((time.perf_counter() - start) * 1000)
+                _record_tool_call(tool_name, write_action=ui_write_action, duration_ms=duration_ms, errored=True)
 
-                _record_tool_call(tool_name, write_action=write_action_actual, duration_ms=duration_ms, errored=True)
                 structured_error = _structured_tool_error(exc, context=tool_name, path=None)
                 error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
 
@@ -642,7 +582,7 @@ def mcp_tool(
                         "error_origin": error_info.get("origin"),
                         "user_message": _tool_user_message(
                             tool_name,
-                            write_action=write_action_actual,
+                            write_action=ui_write_action,
                             phase="error",
                             duration_ms=duration_ms,
                             error=f"{exc.__class__.__name__}: {exc}",
@@ -663,12 +603,10 @@ def mcp_tool(
                         "error_type": exc.__class__.__name__,
                     },
                 )
-
                 raise
 
             duration_ms = int((time.perf_counter() - start) * 1000)
-
-            _record_tool_call(tool_name, write_action=write_action_actual, duration_ms=duration_ms, errored=False)
+            _record_tool_call(tool_name, write_action=ui_write_action, duration_ms=duration_ms, errored=False)
 
             result_type = type(result).__name__
             _record_recent_tool_event(
@@ -682,10 +620,7 @@ def mcp_tool(
                     "dedupe_key": dedupe_key,
                     "result_type": result_type,
                     "user_message": _tool_user_message(
-                        tool_name,
-                        write_action=write_action_actual,
-                        phase="ok",
-                        duration_ms=duration_ms,
+                        tool_name, write_action=ui_write_action, phase="ok", duration_ms=duration_ms
                     ),
                 }
             )
@@ -703,7 +638,6 @@ def mcp_tool(
                     "result_type": result_type,
                 },
             )
-
             return result
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -712,24 +646,21 @@ def mcp_tool(
             title=tool_title,
             description=normalized_description,
             tags=tag_set,
-            write_action=_write_action_flag(),
+            ui_write_action=ui_write_action,
             side_effect=side_effect,
+            remote_write=remote_write,
             visibility=tool_visibility,
         )
         wrapper.__mcp_visibility__ = tool_visibility
-        wrapper.__mcp_write_action__ = _write_action_flag()
-
+        wrapper.__mcp_remote_write__ = remote_write
+        wrapper.__mcp_write_action__ = ui_write_action  # UI prompt flag
         return wrapper
 
     return decorator
 
 
 def register_extra_tools_if_available() -> None:
-    """Register optional extra tools (if the optional module is present).
-
-    This symbol is part of the server's public import surface (see github_mcp.server).
-    """
-
+    """Register optional extra tools (if the optional module is present)."""
     try:
         from extra_tools import register_extra_tools  # type: ignore
 
@@ -739,16 +670,19 @@ def register_extra_tools_if_available() -> None:
 
 
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
-    """Refresh connector-facing metadata for registered tools.
-
-    Recomputes write_allowed when the write gate is toggled.
-    `_write_allowed` is accepted for backwards compatibility.
-    """
-
+    """Refresh connector-facing metadata for registered tools."""
     effective_write_allowed = _current_write_allowed() if _write_allowed is None else bool(_write_allowed)
 
-    for tool_obj, _fn in list(_REGISTERED_MCP_TOOLS):
+    for tool_obj, fn in list(_REGISTERED_MCP_TOOLS):
         try:
             tool_obj.meta["write_allowed"] = effective_write_allowed
+
+            side_effect = getattr(fn, "__side_effect_class__", None)
+            if not isinstance(side_effect, SideEffectClass):
+                side_effect = resolve_side_effect_class(getattr(tool_obj, "name", "tool"))
+
+            tool_obj.meta["ui_write_action"] = compute_write_action_flag(
+                side_effect, write_allowed=effective_write_allowed
+            )
         except Exception:
             continue
