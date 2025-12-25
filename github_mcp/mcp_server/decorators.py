@@ -196,10 +196,23 @@ def _dedupe_key(tool_name: str, *, write_action: bool, args_preview: str) -> Opt
 
 
 async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]) -> Any:
+    """Best-effort dedupe wrapper.
+
+    IMPORTANT: never await while holding _DEDUPE_LOCK.
+
+    Behavior:
+    - If key is None: run call.
+    - If a result is cached within TTL: return it.
+    - If a call is in-flight for the same key: await its future.
+    - Otherwise: create a future, run the call, resolve future, cache result.
+    """
+
     if not key:
         return await coro_factory()
 
     now = time.time()
+
+    fut: asyncio.Future | None = None
 
     async with _DEDUPE_LOCK:
         # Clean expired entries.
@@ -226,19 +239,24 @@ async def _maybe_dedupe_call(key: Optional[str], coro_factory: Callable[[], Any]
         entry = _DEDUPE_INFLIGHT.get(key)
         if entry is not None:
             _, fut = entry
-            return await fut
+        else:
+            fut = asyncio.get_running_loop().create_future()
+            _DEDUPE_INFLIGHT[key] = (now + _DEDUPE_TTL_SECONDS, fut)
 
-        fut: asyncio.Future = asyncio.get_running_loop().create_future()
-        _DEDUPE_INFLIGHT[key] = (now + _DEDUPE_TTL_SECONDS, fut)
+    # Await outside the lock.
+    if entry is not None:
+        return await fut
 
     try:
         result = await coro_factory()
-        fut.set_result(result)
+        if fut is not None and not fut.done():
+            fut.set_result(result)
         async with _DEDUPE_LOCK:
             _DEDUPE_RESULTS[key] = (time.time() + _DEDUPE_TTL_SECONDS, result)
         return result
     except Exception as exc:
-        fut.set_exception(exc)
+        if fut is not None and not fut.done():
+            fut.set_exception(exc)
         raise
     finally:
         async with _DEDUPE_LOCK:
