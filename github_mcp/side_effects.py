@@ -82,18 +82,15 @@ def resolve_side_effect_class(tool_or_name: Any) -> SideEffectClass:
 
 
 def compute_write_action_flag(side_effect: SideEffectClass, *, write_allowed: bool) -> bool:
-    """Whether the tool should be flagged as requiring connector UI approval."""
+    """Whether the tool should be flagged as requiring connector UI approval.
 
-    # UX rule: only remote mutations should prompt.
-    # If writes are globally disabled, always prompt when a remote mutation is attempted.
-    if side_effect is SideEffectClass.REMOTE_MUTATION:
-        return True
+    Option C semantics:
+    - Only REMOTE_MUTATION may require connector UI approval.
+    - When the server write gate is enabled (write_allowed=True), writes are treated as
+      authorized and should not prompt.
+    """
 
-    # Soft writes and reads do not prompt.
-    # (write_allowed is accepted so callers can pass it without branching; it may be used
-    # for future policy adjustments.)
-    _ = write_allowed
-    return False
+    return (side_effect is SideEffectClass.REMOTE_MUTATION) and (not bool(write_allowed))
 
 
 __all__ = [
