@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Dynamic side-effect classification.
 
 This controller is operated by a single owner.
@@ -16,6 +14,8 @@ Important UX rule:
 - Only REMOTE_MUTATION should trigger the connector UI approval prompt.
   Soft-write approval is enforced server-side via the write gate.
 """
+
+from __future__ import annotations
 
 from enum import Enum
 from typing import Any
@@ -84,8 +84,16 @@ def resolve_side_effect_class(tool_or_name: Any) -> SideEffectClass:
 def compute_write_action_flag(side_effect: SideEffectClass, *, write_allowed: bool) -> bool:
     """Whether the tool should be flagged as requiring connector UI approval."""
 
-    # Only hard writes (remote GitHub mutations) should prompt.
-    return side_effect is SideEffectClass.REMOTE_MUTATION
+    # UX rule: only remote mutations should prompt.
+    # If writes are globally disabled, always prompt when a remote mutation is attempted.
+    if side_effect is SideEffectClass.REMOTE_MUTATION:
+        return True
+
+    # Soft writes and reads do not prompt.
+    # (write_allowed is accepted so callers can pass it without branching; it may be used
+    # for future policy adjustments.)
+    _ = write_allowed
+    return False
 
 
 __all__ = [
