@@ -58,12 +58,37 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
     Best-effort extraction of an input schema from an MCP tool object.
 
     We support multiple likely attribute names to avoid tight coupling to one framework version.
+
+    Compatibility:
+    - If schema has required fields but omits them from properties, we tighten the schema by
+      adding default properties entries (type=string). This matches existing expectations in tests.
     """
+
+    def _tighten_required_properties(schema: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            if schema.get("type") != "object":
+                return schema
+
+            props = schema.get("properties")
+            if not isinstance(props, dict):
+                props = {}
+                schema["properties"] = props
+
+            req = schema.get("required")
+            if isinstance(req, list):
+                for name in req:
+                    if isinstance(name, str) and name not in props:
+                        props[name] = {"type": "string"}
+        except Exception:
+            return schema
+
+        return schema
+
     for attr in ("input_schema", "inputSchema", "schema", "parameters"):
         try:
             val = getattr(tool_obj, attr, None)
             if isinstance(val, dict):
-                return val
+                return _tighten_required_properties(val)
         except Exception:
             continue
 
@@ -74,7 +99,7 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
             for k in ("input_schema", "schema", "parameters"):
                 v = meta.get(k)
                 if isinstance(v, dict):
-                    return v
+                    return _tighten_required_properties(v)
     except Exception:
         pass
 
@@ -84,7 +109,7 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
 def _truncate_str(s: str) -> str:
     if len(s) <= _MAX_STR_LEN:
         return s
-    return s[: _MAX_STR_LEN] + "…(truncated)"
+    return s[:_MAX_STR_LEN] + "…(truncated)"
 
 
 def _sanitize_metadata_value(value: Any, *, _depth: int = 0) -> Any:
@@ -145,3 +170,48 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
             return _truncate_str(str(args))
         except Exception:
             return "<unprintable_args>"
+
+
+# ---------------------------------------------------------------------------
+# Backwards-compatible helpers
+# ---------------------------------------------------------------------------
+
+
+def _stringify_annotation(annotation: Any) -> str:
+    """Return a stable string for a type annotation.
+
+    This helper is part of the public compatibility surface and must never raise.
+    """
+    if annotation is None:
+        return "None"
+    if annotation is inspect.Signature.empty:
+        return ""
+    try:
+        return str(annotation)
+    except Exception:
+        return f"<{type(annotation).__name__}>"
+
+
+def _preflight_tool_args(
+    tool_name: str,
+    args: Mapping[str, Any],
+    *,
+    compact: bool = True,
+) -> Dict[str, Any]:
+    """Prepare tool args for display/logging.
+
+    Policy:
+    - No redaction.
+    - Ensure JSON-serializable, bounded output.
+    """
+    try:
+        payload = {
+            "tool": tool_name,
+            "args": _sanitize_metadata_value(dict(args)),
+        }
+        if compact:
+            raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            return {"tool": tool_name, "preview": _truncate_str(raw)}
+        return payload
+    except Exception:
+        return {"tool": tool_name, "preview": "<unprintable_args>"}
