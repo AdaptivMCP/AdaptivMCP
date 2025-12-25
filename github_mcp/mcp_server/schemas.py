@@ -4,6 +4,11 @@ Schema + metadata helpers.
 Project policy:
 - No custom token redaction.
 - Still enforce JSON-serializable metadata and bounded previews to keep logs stable.
+
+Note on log stability:
+- Tool args and metadata are frequently embedded into log lines and UI previews.
+- To prevent accidental multi-line log entries, we normalize string values to a single line
+  (\r/\n/\t collapse + control-char removal) before truncation.
 """
 
 from __future__ import annotations
@@ -18,6 +23,19 @@ _MAX_STR_LEN = 2000
 _MAX_LIST_ITEMS = 100
 _MAX_DICT_ITEMS = 200
 _MAX_DEPTH = 6
+
+
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _single_line(s: str) -> str:
+    """Normalize a string for safe log/UI embedding."""
+    # Normalize newlines/tabs to spaces
+    s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    # Drop remaining control chars
+    s = _CONTROL_CHARS_RE.sub("", s)
+    # Collapse whitespace runs
+    return " ".join(s.split())
 
 
 def _title_from_tool_name(name: str) -> str:
@@ -126,7 +144,7 @@ def _sanitize_metadata_value(value: Any, *, _depth: int = 0) -> Any:
     if isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
-        return _truncate_str(value)
+        return _truncate_str(_single_line(value))
 
     if isinstance(value, Mapping):
         out: Dict[str, Any] = {}
@@ -134,8 +152,8 @@ def _sanitize_metadata_value(value: Any, *, _depth: int = 0) -> Any:
             if i >= _MAX_DICT_ITEMS:
                 out["…"] = f"(truncated after {_MAX_DICT_ITEMS} keys)"
                 break
-            key = str(k)
-            out[_truncate_str(key)] = _sanitize_metadata_value(v, _depth=_depth + 1)
+            key = _truncate_str(_single_line(str(k)))
+            out[key] = _sanitize_metadata_value(v, _depth=_depth + 1)
         return out
 
     if isinstance(value, (list, tuple, set)):
@@ -149,7 +167,7 @@ def _sanitize_metadata_value(value: Any, *, _depth: int = 0) -> Any:
 
     # Fallback: stringify
     try:
-        return _truncate_str(str(value))
+        return _truncate_str(_single_line(str(value)))
     except Exception:
         return f"<{type(value).__name__}>"
 
@@ -163,11 +181,11 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     try:
         sanitized = _sanitize_metadata_value(dict(args))
         raw = json.dumps(sanitized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        return _truncate_str(raw)
+        return _truncate_str(_single_line(raw))
     except Exception:
         # Worst-case fallback
         try:
-            return _truncate_str(str(args))
+            return _truncate_str(_single_line(str(args)))
         except Exception:
             return "<unprintable_args>"
 
@@ -211,7 +229,7 @@ def _preflight_tool_args(
         }
         if compact:
             raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            return {"tool": tool_name, "preview": _truncate_str(raw)}
+            return {"tool": tool_name, "preview": _truncate_str(_single_line(raw))}
         return payload
     except Exception:
         return {"tool": tool_name, "preview": "<unprintable_args>"}
