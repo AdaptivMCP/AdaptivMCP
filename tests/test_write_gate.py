@@ -11,13 +11,30 @@ def test_soft_write_allowed_when_enabled(monkeypatch):
     write_gate._ensure_write_allowed("soft write", write_kind="soft_write")
 
 
+def test_hard_write_allowed_when_enabled(monkeypatch):
+    monkeypatch.setattr(server, "WRITE_ALLOWED", True)
+
+    write_gate._ensure_write_allowed("hard write", write_kind="hard_write")
+
+
+def test_write_gate_allows_explicit_approval_when_disabled(monkeypatch):
+    monkeypatch.setattr(server, "WRITE_ALLOWED", False)
+
+    write_gate._ensure_write_allowed("approved soft", write_kind="soft_write", approved=True)
+    write_gate._ensure_write_allowed("approved hard", write_kind="hard_write", approved=True)
+
+
 @pytest.mark.parametrize("write_kind", ["soft_write", "hard_write"])
 @pytest.mark.parametrize("target_ref", [None, "refs/heads/main", "feature/foo"])
 def test_write_gate_blocks_without_approval(monkeypatch, write_kind, target_ref):
     monkeypatch.setattr(server, "WRITE_ALLOWED", False)
 
     with pytest.raises(WriteApprovalRequiredError) as excinfo:
-        write_gate._ensure_write_allowed("write attempt", target_ref=target_ref, write_kind=write_kind)
+        write_gate._ensure_write_allowed(
+            "write attempt",
+            target_ref=target_ref,
+            write_kind=write_kind,
+        )
 
     gate = getattr(excinfo.value, "write_gate")
     assert gate["write_kind"] == write_kind
