@@ -8,6 +8,7 @@ def test_register_with_fastmcp_adds_chatgpt_meta():
     original_registry = list(decorators._REGISTERED_MCP_TOOLS)
 
     try:
+
         @decorators.mcp_tool(name="sample_tool", write_action=False, description="test tool")
         def _sample_tool() -> None:
             return None
@@ -71,6 +72,7 @@ def test_register_with_fastmcp_surfaces_schema_and_write_gate():
         assert schema_meta["type"] == "object"
         assert schema_meta["properties"]["example"]["type"] == "integer"
         import github_mcp.server as server
+
         assert tool_obj.meta["write_allowed"] == bool(server.WRITE_ALLOWED)
     finally:
         decorators._REGISTERED_MCP_TOOLS[:] = original_registry
@@ -98,6 +100,7 @@ def test_sanitize_metadata_value_handles_unserializable_types():
 
     sanitized = schemas._sanitize_metadata_value(payload)
 
-    assert sanitized["token"] == "https://x-access-token:***@github.com/"
+    # Project policy: no custom redaction. Token-like strings are preserved as-is.
+    assert sanitized["token"] == "https://x-access-token:abc123@github.com/"
     assert isinstance(sanitized["set_data"], list)
     assert isinstance(sanitized["custom"], str)
