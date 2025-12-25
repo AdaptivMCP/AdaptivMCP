@@ -40,8 +40,9 @@ async def get_server_config() -> Dict[str, Any]:
         },
         "approval_policy": {
             "notes": (
-                "Soft write tools follow the WRITE_ALLOWED toggle; hard writes always request UI approval. "
-                "Use authorize_write_actions(approved=true) after the user confirms write access."
+                "Soft and hard write tools follow the WRITE_ALLOWED toggle. "
+                "When WRITE_ALLOWED is enabled, write-capable tools are authorized; "
+                "when disabled, write-capable tools require explicit approval."
             ),
             "toggle_tool": "authorize_write_actions",
         },
@@ -116,26 +117,33 @@ async def get_repo_defaults(full_name: Optional[str] = None) -> Dict[str, Any]:
 
     main_mod = sys.modules.get("main")
     controller_repo = getattr(main_mod, "CONTROLLER_REPO", CONTROLLER_REPO)
-    controller_default_branch = getattr(
-        main_mod, "CONTROLLER_DEFAULT_BRANCH", CONTROLLER_DEFAULT_BRANCH
-    )
+    controller_default_branch = getattr(main_mod, "CONTROLLER_DEFAULT_BRANCH", CONTROLLER_DEFAULT_BRANCH)
 
-    repo = full_name or controller_repo
+    if full_name is None:
+        full_name = controller_repo
 
-    request_fn = getattr(main_mod, "_github_request", _github_request)
+    # Repo-specific defaults. Fall back to global defaults when not configured.
+    defaults = REPO_DEFAULTS.get(full_name) or {}
 
-    try:
-        data = await request_fn("GET", f"/repos/{repo}")
-        payload = data.get("json") or {}
-        default_branch = payload.get("default_branch") or controller_default_branch
-    except (GitHubAuthError, GitHubAPIError):
-        repo_defaults = REPO_DEFAULTS.get(repo)
-        default_branch = (repo_defaults or {}).get("default_branch", controller_default_branch)
+    # Determine default branch. Prefer configured controller default branch for the controller repo.
+    if full_name == controller_repo:
+        default_branch = controller_default_branch
+    else:
+        # Fetch from GitHub if not present in defaults.
+        default_branch = defaults.get("default_branch")
+        if not default_branch:
+            try:
+                # Minimal request for repo metadata
+                repo_info = await _github_request("GET", f"/repos/{full_name}")
+                default_branch = repo_info.get("default_branch") if isinstance(repo_info, dict) else None
+            except GitHubAuthError:
+                # If auth is missing/invalid, fall back to a common convention
+                default_branch = "main"
+            except GitHubAPIError:
+                default_branch = "main"
 
     return {
-        "defaults": {
-            "full_name": repo,
-            "default_branch": default_branch,
-        }
+        "full_name": full_name,
+        "default_branch": default_branch or "main",
+        "defaults": defaults,
     }
-
