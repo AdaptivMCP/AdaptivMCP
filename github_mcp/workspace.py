@@ -89,6 +89,8 @@ async def _run_shell(
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
+    stdout = (raw_stdout)
+    stderr = (raw_stderr)
     stdout_truncated = False
     stderr_truncated = False
 
