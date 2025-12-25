@@ -40,6 +40,7 @@ def _current_write_allowed() -> bool:
 
     NOTE: must not import github_mcp.server at module import time (circular).
     """
+
     try:
         import sys
 
@@ -55,6 +56,7 @@ def _current_write_allowed() -> bool:
 
 def _summarize_exception(exc: BaseException) -> str:
     """Create a short human-readable message."""
+
     if isinstance(exc, jsonschema.ValidationError):
         path = list(exc.path)
         base_message = exc.message or exc.__class__.__name__
@@ -68,6 +70,7 @@ def _summarize_exception(exc: BaseException) -> str:
 
 def _classify_category(exc: BaseException, message: str) -> str:
     """Best-effort category for client UX and retry logic."""
+
     if isinstance(exc, WriteApprovalRequiredError):
         return "write_approval_required"
     if isinstance(exc, WriteNotAuthorizedError):
@@ -92,6 +95,7 @@ def _classify_category(exc: BaseException, message: str) -> str:
 
 def _next_steps(*, category: str) -> list[dict[str, Any]]:
     """Return structured guidance for the assistant."""
+
     def mk(kind: str, **kwargs: Any) -> dict[str, Any]:
         base: dict[str, Any] = {
             "kind": kind,
@@ -152,6 +156,7 @@ def _structured_tool_error(
     exc: BaseException, *, context: str, path: Optional[str] = None
 ) -> Dict[str, Any]:
     """Build a serializable payload for MCP clients."""
+
     message = _summarize_exception(exc)
     category = _classify_category(exc, message)
     write_allowed = _current_write_allowed()
