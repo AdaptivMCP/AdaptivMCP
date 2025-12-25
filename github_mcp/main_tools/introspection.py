@@ -10,6 +10,7 @@ from github_mcp.utils import normalize_args
 
 from ._main import _main
 
+
 def list_write_tools() -> Dict[str, Any]:
     """Describe write-capable tools exposed by this server.
 
@@ -58,13 +59,13 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "ensure_workspace_clone",
             "category": "workspace",
             "description": "Ensure a persistent workspace exists for a repo/ref.",
-            "notes": "Clones if missing and can optionally reset to the remote ref; now allowed without toggling write approval so assistants can set up quickly.",
+            "notes": "Clones if missing and can optionally reset to the remote ref.",
         },
         {
             "name": "run_command",
             "category": "workspace",
             "description": "Run an arbitrary shell command in a persistent workspace clone.",
-            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls; set mutating=true (or installing_dependencies=true/use_temp_venv=false) when a command will modify files or server state so gating applies only to those cases.",
+            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls.",
         },
         {
             "name": "commit_workspace",
@@ -82,7 +83,7 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "run_tests",
             "category": "workspace",
             "description": "Run tests (default: pytest) inside the persistent workspace clone.",
-            "notes": "Preferred way to run tests; shares the persistent workspace with run_command and commit helpers. Mark mutating=true only when the test command will edit files so read-only runs stay ungated.",
+            "notes": "Preferred way to run tests; shares the persistent workspace with run_command and commit helpers.",
         },
         {
             "name": "trigger_workflow_dispatch",
@@ -135,6 +136,8 @@ def list_write_tools() -> Dict[str, Any]:
     ]
 
     return {"tools": tools}
+
+
 
 def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
     """Enumerate every available MCP tool with read/write metadata."""
@@ -236,6 +239,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         "tools": tools,
     }
 
+
 async def list_tools(
     only_write: bool = False,
     only_read: bool = False,
@@ -276,6 +280,8 @@ async def list_tools(
         "write_actions_enabled": m.server.WRITE_ALLOWED,
         "tools": tools,
     }
+
+
 async def describe_tool(
     name: Optional[str] = None,
     names: Optional[List[str]] = None,
@@ -332,6 +338,8 @@ async def describe_tool(
 
     return result
 
+
+
 def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
 
@@ -375,6 +383,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         "errors": errors,
         "schema": schema,
     }
+
 
 async def validate_tool_args(
     tool_name: Optional[str] = None,
