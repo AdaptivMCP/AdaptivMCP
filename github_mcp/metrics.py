@@ -32,7 +32,7 @@ def _reset_metrics_for_tests() -> None:
 def _record_tool_call(
     tool_name: str,
     *,
-    write_action: bool,
+    write_kind: str,
     duration_ms: int,
     errored: bool,
 ) -> None:
@@ -47,7 +47,7 @@ def _record_tool_call(
         },
     )
     bucket["calls_total"] += 1
-    if write_action:
+    if write_kind != "read_only":
         bucket["write_calls_total"] += 1
     bucket["latency_ms_sum"] += max(0, int(duration_ms))
     if errored:

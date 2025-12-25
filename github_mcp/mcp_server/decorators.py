@@ -360,6 +360,14 @@ def mcp_tool(
         # - Prompt only when write gate is disabled
         ui_write_action = False  # UI prompts suppressed by policy
 
+        write_kind = (
+            "hard_write"
+            if side_effect is SideEffectClass.REMOTE_MUTATION
+            else "soft_write"
+            if side_effect is SideEffectClass.LOCAL_MUTATION
+            else "read_only"
+        )
+
         llm_level = "advanced" if side_effect is not SideEffectClass.READ_ONLY else "basic"
         normalized_description = description or _normalize_tool_description(
             func, signature, llm_level=llm_level
@@ -429,7 +437,7 @@ def mcp_tool(
                     result = await _maybe_dedupe_call(dedupe_key, _run)
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
-                    _record_tool_call(tool_name, write_action=ui_write_action, duration_ms=duration_ms, errored=True)
+                    _record_tool_call(tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=True)
 
                     structured_error = _structured_tool_error(exc, context=tool_name, path=None)
                     error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
@@ -443,8 +451,12 @@ def mcp_tool(
                             "duration_ms": duration_ms,
                             "request": request_ctx,
                             "dedupe_key": dedupe_key,
-                            "error_type": exc.__class__.__name__,
-                            "error_message": str(exc),
+                            "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "error_type": exc.__class__.__name__,
+                            "error_message": str(error_info.get("message") or exc.__class__.__name__),
                             "error_category": error_info.get("category"),
                             "error_origin": error_info.get("origin"),
                             "user_message": _tool_user_message(
@@ -467,13 +479,17 @@ def mcp_tool(
                             "duration_ms": duration_ms,
                             "request": request_ctx,
                             "dedupe_key": dedupe_key,
-                            "error_type": exc.__class__.__name__,
+                            "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "error_type": exc.__class__.__name__,
                         },
                     )
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(tool_name, write_action=ui_write_action, duration_ms=duration_ms, errored=False)
+                _record_tool_call(tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=False)
 
                 result_type = type(result).__name__
                 _record_recent_tool_event(
@@ -485,6 +501,10 @@ def mcp_tool(
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
                         "result_type": result_type,
                         "user_message": _tool_user_message(
                             tool_name, write_action=ui_write_action, phase="ok", duration_ms=duration_ms
@@ -502,6 +522,10 @@ def mcp_tool(
                         "duration_ms": duration_ms,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
                         "result_type": result_type,
                     },
                 )
@@ -578,7 +602,7 @@ def mcp_tool(
                 result = func(*args, **kwargs)
             except Exception as exc:
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(tool_name, write_action=ui_write_action, duration_ms=duration_ms, errored=True)
+                _record_tool_call(tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=True)
 
                 structured_error = _structured_tool_error(exc, context=tool_name, path=None)
                 error_info = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
@@ -593,7 +617,7 @@ def mcp_tool(
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
                         "error_type": exc.__class__.__name__,
-                        "error_message": str(exc),
+                        "error_message": str(error_info.get("message") or exc.__class__.__name__),
                         "error_category": error_info.get("category"),
                         "error_origin": error_info.get("origin"),
                         "user_message": _tool_user_message(
@@ -622,7 +646,7 @@ def mcp_tool(
                 raise
 
             duration_ms = int((time.perf_counter() - start) * 1000)
-            _record_tool_call(tool_name, write_action=ui_write_action, duration_ms=duration_ms, errored=False)
+            _record_tool_call(tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=False)
 
             result_type = type(result).__name__
             _record_recent_tool_event(
