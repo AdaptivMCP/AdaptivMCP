@@ -28,7 +28,7 @@ class ToolDecorator(Protocol):
 def ping_extensions() -> str:
     """Simple ping used for diagnostics."""
 
-    return "pong from extra_tools.py"
+    return "Adaptiv Connected."
 
 
 async def get_file_slice(
