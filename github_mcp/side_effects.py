@@ -2,23 +2,26 @@
 
 This controller is operated by a single owner.
 
-We avoid a static tool-name map; instead, classification is derived from tool
-registration attributes (preferred) and lightweight heuristics.
+We classify tools into side-effect buckets used for:
+- observability (logs, recent events)
+- server-side write gating (soft vs hard writes)
+
+Important UX rule:
+- Client/UI approval prompts are explicitly suppressed for this server.
+  Approval is enforced server-side via the write gate, not via connector UI.
 
 SideEffectClass:
 - READ_ONLY: no mutations.
 - LOCAL_MUTATION: local workspace/server mutations ("soft writes").
 - REMOTE_MUTATION: GitHub mutations ("hard writes").
-
-Important UX rule:
-- Only REMOTE_MUTATION should trigger the connector UI approval prompt.
-  Soft-write approval is enforced server-side via the write gate.
 """
 
 from __future__ import annotations
 
 from enum import Enum
 from typing import Any
+
+from github_mcp.utils import _env_flag
 
 
 class SideEffectClass(str, Enum):
@@ -27,12 +30,17 @@ class SideEffectClass(str, Enum):
     REMOTE_MUTATION = "REMOTE_MUTATION"
 
 
+# When enabled (default), never advertise UI approval prompts.
+# The server write gate remains the source of truth for authorization.
+SUPPRESS_UI_PROMPTS = _env_flag("GITHUB_MCP_SUPPRESS_UI_PROMPTS", True)
+
+
 def resolve_side_effect_class(tool_or_name: Any) -> SideEffectClass:
     """Resolve side-effect class dynamically.
 
     Resolution order:
     1) Explicit ``__side_effect_class__`` override on tool/func.
-    2) ``__mcp_write_action__`` when present (write_action=True => REMOTE_MUTATION).
+    2) ``__mcp_remote_write__`` when present (remote_write=True => REMOTE_MUTATION).
     3) Name heuristic for local-only helpers.
     4) Default READ_ONLY.
     """
@@ -50,11 +58,11 @@ def resolve_side_effect_class(tool_or_name: Any) -> SideEffectClass:
             except Exception:
                 pass
 
-    # 2) write_action flag.
-    wa = getattr(tool_or_name, "__mcp_write_action__", None)
-    if wa is None:
-        wa = getattr(getattr(tool_or_name, "__wrapped__", None), "__mcp_write_action__", None)
-    if wa is True:
+    # 2) Explicit remote-write flag.
+    rw = getattr(tool_or_name, "__mcp_remote_write__", None)
+    if rw is None:
+        rw = getattr(getattr(tool_or_name, "__wrapped__", None), "__mcp_remote_write__", None)
+    if rw is True:
         return SideEffectClass.REMOTE_MUTATION
 
     # 3) name heuristic.
@@ -82,19 +90,24 @@ def resolve_side_effect_class(tool_or_name: Any) -> SideEffectClass:
 
 
 def compute_write_action_flag(side_effect: SideEffectClass, *, write_allowed: bool) -> bool:
-    """Whether the tool should be flagged as requiring connector UI approval.
+    """Whether a tool should be flagged as requiring *client/UI* approval.
 
-    Option C semantics:
-    - Only REMOTE_MUTATION may require connector UI approval.
-    - When the server write gate is enabled (write_allowed=True), writes are treated as
-      authorized and should not prompt.
+    This server intentionally suppresses connector UI prompts.
+    Authorization is enforced server-side (write gate) and is surfaced as a
+    structured Adaptiv error when blocked.
     """
 
+    if SUPPRESS_UI_PROMPTS:
+        return False
+
+    # Legacy fallback (kept for completeness): only remote mutations may prompt, and only when
+    # the server write gate is disabled.
     return (side_effect is SideEffectClass.REMOTE_MUTATION) and (not bool(write_allowed))
 
 
 __all__ = [
     "SideEffectClass",
+    "SUPPRESS_UI_PROMPTS",
     "compute_write_action_flag",
     "resolve_side_effect_class",
 ]
