@@ -15,34 +15,6 @@ from . import config
 from .exceptions import GitHubAPIError
 from .http_clients import _get_github_token
 
-TOKEN_PATTERNS = [
-    (
-        re.compile(r"https://x-access-token:([^@/\s]+)@github\.com/"),  # tokenlike-allow
-        "https://x-access-token:***@github.com/",  # tokenlike-allow
-    ),
-    (
-        re.compile(r"x-access-token:([^@\s]+)@github\.com"),
-        "x-access-token:***@github.com",  # tokenlike-allow
-    ),
-    (re.compile(r"\bghp_[A-Za-z0-9]{20,}\b"), "ghp_***"),
-    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"), "github_pat_***"),
-]
-
-
-def _redact_sensitive(text: str) -> str:
-    if not text:
-        return text
-    redacted = text
-    for pat, repl in TOKEN_PATTERNS:
-        redacted = pat.sub(repl, redacted)
-    try:
-        tok = _get_github_token()
-        if tok and isinstance(tok, str):
-            redacted = redacted.replace(tok, "***")
-    except Exception:
-        pass
-    return redacted
-
 
 async def _run_shell(
     cmd: str,
@@ -117,8 +89,6 @@ async def _run_shell(
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
-    stdout = _redact_sensitive(raw_stdout)
-    stderr = _redact_sensitive(raw_stderr)
     stdout_truncated = False
     stderr_truncated = False
 
