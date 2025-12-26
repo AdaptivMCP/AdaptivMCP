@@ -64,16 +64,17 @@ def _normalize_repo_path(path: str) -> str:
     if not isinstance(path, str):
         raise ToolPreflightValidationError("<server>", "path must be a string")
 
-    normalized = path.lstrip("/")
+    normalized = path.strip().replace("\\", "/").lstrip("/")
     while "//" in normalized:
         normalized = normalized.replace("//", "/")
 
-    parts = normalized.split("/")
+    parts = [part for part in normalized.split("/") if part not in ("", ".")]
     if any(part == ".." for part in parts):
         raise ToolPreflightValidationError(
             "<server>", f"Invalid path {path!r}: parent-directory segments are not allowed."
         )
 
+    normalized = "/".join(parts)
     if not normalized:
         raise ToolPreflightValidationError(
             "<server>", "Path must not be empty after normalization."
@@ -85,7 +86,8 @@ def _normalize_repo_path(path: str) -> str:
 def _normalize_branch(full_name: str, branch: str | None) -> str:
     """Normalize a branch name while honoring controller defaults."""
 
-    effective = _effective_ref_for_repo(full_name, branch or "main")
+    normalized_branch = branch.strip() if isinstance(branch, str) else None
+    effective = _effective_ref_for_repo(full_name, normalized_branch)
 
     # Let higher layers decide whether writes to the default branch are allowed.
     # The normalizer only ensures we have a stable, explicit ref.
