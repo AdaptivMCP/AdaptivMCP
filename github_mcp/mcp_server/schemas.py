@@ -130,6 +130,14 @@ def _truncate_str(s: str) -> str:
     return s[:_MAX_STR_LEN] + "…(truncated)"
 
 
+def _normalize_and_truncate(s: str) -> str:
+    """Normalize strings without scanning unbounded payloads."""
+    if len(s) > _MAX_STR_LEN:
+        head = s[:_MAX_STR_LEN]
+        return _single_line(head) + "…(truncated)"
+    return _single_line(s)
+
+
 def _sanitize_metadata_value(value: Any, *, _depth: int = 0) -> Any:
     """
     Convert arbitrary values into a JSON-serializable, bounded structure.
@@ -144,7 +152,7 @@ def _sanitize_metadata_value(value: Any, *, _depth: int = 0) -> Any:
     if isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
-        return _truncate_str(_single_line(value))
+        return _normalize_and_truncate(value)
 
     if isinstance(value, Mapping):
         out: Dict[str, Any] = {}
