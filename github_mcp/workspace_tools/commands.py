@@ -3,7 +3,6 @@ import os
 import re
 from typing import Any, Dict, Optional
 
-from github_mcp.config import RUN_COMMAND_MAX_CHARS
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
@@ -113,11 +112,6 @@ async def terminal_command(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        if RUN_COMMAND_MAX_CHARS > 0 and len(command) > RUN_COMMAND_MAX_CHARS:
-            raise ValueError(
-                f"run_command.command is too long ({len(command)} chars); "
-                "split it into smaller commands or check in a script into the repo and run it from the workspace."
-            )
         needs_write_gate = (
             mutating
             or installing_dependencies
