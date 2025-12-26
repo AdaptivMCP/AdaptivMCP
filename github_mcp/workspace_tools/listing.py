@@ -19,6 +19,7 @@ async def list_workspace_files(
     ref: str = "main",
     path: str = "",
     max_files: Optional[int] = None,
+    max_results: Optional[int] = None,
     max_depth: Optional[int] = None,
     include_hidden: bool = False,
     include_dirs: bool = False,
@@ -28,6 +29,13 @@ async def list_workspace_files(
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """List files in the workspace clone without default truncation."""
+
+    # Alias: many clients use max_results instead of max_files.
+    if max_results is not None:
+        if max_files is None:
+            max_files = max_results
+        elif max_files != max_results:
+            raise ValueError("max_files and max_results must match when both are provided.")
 
     try:
         deps = _tw()._workspace_deps()
@@ -112,6 +120,8 @@ async def list_workspace_files(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="list_workspace_files")
+
+
 @mcp_tool(write_action=False)
 async def search_workspace(
     full_name: Optional[str] = None,
