@@ -439,7 +439,10 @@ async def trigger_workflow_dispatch(
 
     m = _main()
 
-    m._ensure_write_allowed(f"trigger workflow {workflow} on {full_name}@{ref}")
+    m._ensure_write_allowed(
+        f"trigger workflow {workflow} on {full_name}@{ref}",
+        write_kind="hard_write",
+    )
     payload: Dict[str, Any] = {"ref": ref}
     if inputs:
         payload["inputs"] = inputs
@@ -480,7 +483,10 @@ async def trigger_and_wait_for_workflow(
 
     m = _main()
 
-    m._ensure_write_allowed(f"trigger+wait workflow {workflow} on {full_name}@{ref}")
+    m._ensure_write_allowed(
+        f"trigger+wait workflow {workflow} on {full_name}@{ref}",
+        write_kind="hard_write",
+    )
     await trigger_workflow_dispatch(full_name, workflow, ref, inputs)
 
     # The dispatch API does not return a run id. Poll for the run we just triggered.

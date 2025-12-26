@@ -23,7 +23,7 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "authorize_write_actions",
             "category": "control",
             "description": "Enable or disable write tools within this MCP session.",
-            "notes": "Call with approved=true before using any write tools.",
+            "notes": "Call with approved=true to auto-approve soft writes; hard writes still require approval.",
         },
         {
             "name": "create_branch",

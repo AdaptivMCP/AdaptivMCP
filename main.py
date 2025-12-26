@@ -454,7 +454,7 @@ async def commit_workspace_files(
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Toggle server-side write allowance for soft write tools."""
+    """Toggle server-side auto-approval for soft write tools."""
 
     server.WRITE_ALLOWED = bool(approved)
     import github_mcp.mcp_server.context as _ctx
