@@ -744,7 +744,7 @@ def mcp_tool(
                             "side_effects": side_effect.value,
                             "remote_write": bool(remote_write),
                             "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
+                            "ui_prompt_required": bool(effective_ui_write_action),
                             "error_type": exc.__class__.__name__,
                             "error_message": str(
                                 error_info.get("message") or exc.__class__.__name__
@@ -761,6 +761,36 @@ def mcp_tool(
                         }
                     )
 
+                    TOOLS_LOGGER.error(
+                        _tool_user_message(
+                            tool_name,
+                            write_action=effective_ui_write_action,
+                            phase="error",
+                            duration_ms=duration_ms,
+                            error=f"{exc.__class__.__name__}: {exc}",
+                        ),
+                        extra={
+                            "event": "tool_call_error",
+                            "status": "error",
+                            "tool_name": tool_name,
+                            "call_id": call_id,
+                            "duration_ms": duration_ms,
+                            "request": request_ctx,
+                            "dedupe_key": dedupe_key,
+                            "write_kind": write_kind,
+                            "side_effects": side_effect.value,
+                            "remote_write": bool(remote_write),
+                            "write_allowed": _current_write_allowed(),
+                            "ui_prompt_required": bool(effective_ui_write_action),
+                            "tool_error_type": exc.__class__.__name__,
+                            "tool_error_message": str(error_info.get("message") or exc),
+                            "tool_error_category": error_info.get("category"),
+                            "tool_error_origin": error_info.get("origin"),
+                            "tool_error_code": error_info.get("code"),
+                            "tool_error_retryable": error_info.get("retryable"),
+                        },
+                    )
+
                     TOOLS_LOGGER.detailed(
                         f"[tool error] tool={tool_name} | call_id={call_id}",
                         extra={
@@ -775,8 +805,13 @@ def mcp_tool(
                             "side_effects": side_effect.value,
                             "remote_write": bool(remote_write),
                             "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                            "error_type": exc.__class__.__name__,
+                            "ui_prompt_required": bool(effective_ui_write_action),
+                            "tool_error_type": exc.__class__.__name__,
+                            "tool_error_message": str(error_info.get("message") or exc),
+                            "tool_error_category": error_info.get("category"),
+                            "tool_error_origin": error_info.get("origin"),
+                            "tool_error_code": error_info.get("code"),
+                            "tool_error_retryable": error_info.get("retryable"),
                         },
                     )
 
@@ -793,7 +828,7 @@ def mcp_tool(
                             "side_effects": side_effect.value,
                             "remote_write": bool(remote_write),
                             "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
+                            "ui_prompt_required": bool(effective_ui_write_action),
                             "error_type": exc.__class__.__name__,
                             "error_message": str(error_info.get("message") or exc),
                             "error_category": error_info.get("category"),
@@ -966,7 +1001,7 @@ def mcp_tool(
                     "side_effects": side_effect.value,
                     "remote_write": bool(remote_write),
                     "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
+                    "ui_prompt_required": bool(effective_ui_write_action),
                     "arg_keys": ctx["arg_keys"],
                     "arg_count": ctx["arg_count"],
                 }
@@ -1022,6 +1057,36 @@ def mcp_tool(
                     }
                 )
 
+                TOOLS_LOGGER.error(
+                    _tool_user_message(
+                        tool_name,
+                        write_action=effective_ui_write_action,
+                        phase="error",
+                        duration_ms=duration_ms,
+                        error=f"{exc.__class__.__name__}: {exc}",
+                    ),
+                    extra={
+                        "event": "tool_call_error",
+                        "status": "error",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "duration_ms": duration_ms,
+                        "request": request_ctx,
+                        "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
+                        "tool_error_type": exc.__class__.__name__,
+                        "tool_error_message": str(error_info.get("message") or exc),
+                        "tool_error_category": error_info.get("category"),
+                        "tool_error_origin": error_info.get("origin"),
+                        "tool_error_code": error_info.get("code"),
+                        "tool_error_retryable": error_info.get("retryable"),
+                    },
+                )
+
                 TOOLS_LOGGER.detailed(
                     f"[tool error] tool={tool_name} | call_id={call_id}",
                     extra={
@@ -1037,7 +1102,12 @@ def mcp_tool(
                         "remote_write": bool(remote_write),
                         "write_allowed": _current_write_allowed(),
                         "ui_prompt_required": bool(effective_ui_write_action),
-                        "error_type": exc.__class__.__name__,
+                        "tool_error_type": exc.__class__.__name__,
+                        "tool_error_message": str(error_info.get("message") or exc),
+                        "tool_error_category": error_info.get("category"),
+                        "tool_error_origin": error_info.get("origin"),
+                        "tool_error_code": error_info.get("code"),
+                        "tool_error_retryable": error_info.get("retryable"),
                     },
                 )
 
@@ -1082,7 +1152,7 @@ def mcp_tool(
                     "side_effects": side_effect.value,
                     "remote_write": bool(remote_write),
                     "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
+                    "ui_prompt_required": bool(effective_ui_write_action),
                     "result_type": result_type,
                     "user_message": _tool_user_message(
                         tool_name,

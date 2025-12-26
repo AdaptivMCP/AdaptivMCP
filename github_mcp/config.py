@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
 import time
 from collections import deque
+
+from github_mcp.mcp_server.schemas import _sanitize_metadata_value
 
 # Custom log levels
 # ------------------------------------------------------------------------------
@@ -167,9 +170,30 @@ class _ColorFormatter(logging.Formatter):
         if self._use_color and levelname in self._C:
             record.levelname = f"{self._C[levelname]}{levelname}{self._C['RESET']}"
         try:
-            return super().format(record)
+            base = super().format(record)
+            extra_payload = _extract_log_extras(record)
+            if extra_payload:
+                extra_json = json.dumps(
+                    extra_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                )
+                return f"{base} | data={extra_json}"
+            return base
         finally:
             record.levelname = levelname
+
+
+_STANDARD_LOG_FIELDS = set(
+    logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys()
+)
+
+
+def _extract_log_extras(record: logging.LogRecord) -> dict[str, object]:
+    extras: dict[str, object] = {}
+    for key, value in record.__dict__.items():
+        if key in _STANDARD_LOG_FIELDS or key.startswith("_"):
+            continue
+        extras[key] = _sanitize_metadata_value(value)
+    return extras
 
 
 def _configure_logging() -> None:
@@ -247,6 +271,9 @@ class _InMemoryErrorLogHandler(logging.Handler):
             "tool_error_message": getattr(record, "tool_error_message", None),
             "tool_error_origin": getattr(record, "tool_error_origin", None),
             "tool_error_category": getattr(record, "tool_error_category", None),
+            "tool_error_code": getattr(record, "tool_error_code", None),
+            "tool_error_retryable": getattr(record, "tool_error_retryable", None),
+            "extra": _extract_log_extras(record),
         }
 
         self._records.append(payload)
@@ -297,6 +324,7 @@ class _InMemoryLogHandler(logging.Handler):
             "tags": getattr(record, "tags", None),
             "error_category": getattr(record, "error_category", None),
             "error_origin": getattr(record, "error_origin", None),
+            "extra": _extract_log_extras(record),
         }
 
         self._records.append(payload)
