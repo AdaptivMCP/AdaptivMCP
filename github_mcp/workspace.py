@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 import shutil
 import shlex
@@ -12,7 +13,7 @@ import re
 from typing import Any, Dict, Optional
 
 from . import config
-from .exceptions import GitHubAPIError
+from .exceptions import GitHubAPIError, GitHubAuthError
 from .http_clients import _get_github_token
 
 
@@ -129,6 +130,17 @@ async def _run_shell(
     }
 
 
+def _git_auth_env() -> Dict[str, str]:
+    env = {"GIT_TERMINAL_PROMPT": "0"}
+    try:
+        token = _get_github_token()
+    except GitHubAuthError:
+        return env
+    basic_token = base64.b64encode(f"x-access-token:{token}".encode("utf-8")).decode("utf-8")
+    env["GIT_HTTP_EXTRA_HEADER"] = f"Authorization: Basic {basic_token}"
+    return env
+
+
 def _workspace_path(full_name: str, ref: str) -> str:
     repo_key = full_name.replace("/", "__")
 
@@ -164,6 +176,7 @@ async def _clone_repo(
 
     main_module = sys.modules.get("main")
     run_shell = getattr(main_module, "_run_shell", _run_shell)
+    auth_env = _git_auth_env()
 
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
         if preserve_changes:
@@ -171,6 +184,7 @@ async def _clone_repo(
                 "git fetch origin --prune",
                 cwd=workspace_dir,
                 timeout_seconds=300,
+                env=auth_env,
             )
             if fetch_result["exit_code"] != 0:
                 stderr = fetch_result.get("stderr", "") or fetch_result.get("stdout", "")
@@ -191,7 +205,12 @@ async def _clone_repo(
         ]
 
         for cmd, timeout in refresh_steps:
-            result = await run_shell(cmd, cwd=workspace_dir, timeout_seconds=timeout)
+            result = await run_shell(
+                cmd,
+                cwd=workspace_dir,
+                timeout_seconds=timeout,
+                env=auth_env,
+            )
             if result["exit_code"] != 0:
                 stderr = result.get("stderr", "") or result.get("stdout", "")
                 raise GitHubAPIError(
@@ -204,8 +223,6 @@ async def _clone_repo(
         shutil.rmtree(workspace_dir)
 
     tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
-    token = _get_github_token()
-
     url = f"https://github.com/{full_name}.git"
     q_ref = shlex.quote(effective_ref)
     q_url = shlex.quote(url)
@@ -215,10 +232,7 @@ async def _clone_repo(
         cmd,
         cwd=None,
         timeout_seconds=600,
-        env={
-            "GIT_TERMINAL_PROMPT": "0",
-            "GIT_HTTP_EXTRA_HEADER": f"Authorization: Bearer {token}",
-        },
+        env=auth_env,
     )
     if result["exit_code"] != 0:
         stderr = result.get("stderr", "")
