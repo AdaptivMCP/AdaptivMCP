@@ -855,8 +855,14 @@ async def get_file_contents(
     full_name: str,
     path: str,
     ref: str = "main",
+    *,
+    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Fetch a single file from GitHub and decode base64 to UTF-8 text."""
+    # Back-compat: some callers send 'branch' instead of 'ref'.
+    if branch:
+        ref = branch
+
     decoded = await _decode_github_content(full_name, path, ref)
     _cache_file_result(full_name=full_name, path=path, ref=ref, decoded=decoded)
     return decoded
