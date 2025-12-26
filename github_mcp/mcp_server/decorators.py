@@ -166,7 +166,10 @@ def _build_tool_descriptor_text(d: Mapping[str, Any]) -> str:
     ]
 
     desc = (d.get('description') or '').strip()
+    # Ensure tool_descriptor_text is always single-line (avoid literal newlines).
+    # This prevents log/UI injection of `\n` sequences and keeps JSON logs compact.
     if desc:
+        desc = ' '.join(desc.split())
         lines.append('Description: ' + desc)
 
     return ' | '.join(lines)
