@@ -169,7 +169,7 @@ def _build_tool_descriptor_text(d: Mapping[str, Any]) -> str:
     if desc:
         lines.append('Description: ' + desc)
 
-    return "\n".join(lines)
+    return ' | '.join(lines)
 
 
 def _lookup_tool_descriptor(tool_name: str) -> dict[str, Any] | None:
