@@ -301,30 +301,48 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
-    """Emit a single machine-parseable JSON record for tool lifecycle events."""
+    """Emit a machine-parseable record for tool lifecycle events.
+
+    IMPORTANT: Do NOT embed raw JSON into the log message. Render's log viewer is
+    human-centric, and embedding JSON inside the message (then appending
+    `data=<json>` again) produces unreadable output full of escape sequences.
+
+    Instead, we keep the message short and attach the structured payload via
+    `extra`, which is appended once by the formatter.
+    """
     try:
         base = dict(payload)
+
+        # Optionally inject descriptor metadata (useful for machines).
         if 'tool_name' in base and 'tool_descriptor' not in base:
             injected = _lookup_tool_descriptor(str(base.get('tool_name') or ''))
             if injected:
                 for k, v in injected.items():
                     base.setdefault(k, v)
+
         safe = _sanitize_metadata_value(base)
-        raw = json.dumps(
-            safe, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        )
+
+        # Human-friendly, compact summary in message
+        tool_name = str(payload.get('tool_name') or '')
+        status = str(payload.get('status') or '')
+        call_id = str(payload.get('call_id') or '')
+        evt = str(payload.get('event') or 'tool_json')
+        duration_ms = payload.get('duration_ms')
+        dur = f" | duration_ms={duration_ms}" if isinstance(duration_ms, (int, float)) else ''
+        msg = f"[tool event] {evt} | status={status} | tool={tool_name} | call_id={call_id}{dur}"
+
         TOOLS_LOGGER.detailed(
-            f"[tool json] {raw}",
+            msg,
             extra={
-                "event": "tool_json",
-                "status": payload.get("status"),
-                "tool_name": payload.get("tool_name"),
-                "call_id": payload.get("call_id"),
+                'event': 'tool_json',
+                'status': payload.get('status'),
+                'tool_name': payload.get('tool_name'),
+                'call_id': payload.get('call_id'),
+                'tool_event': safe,
             },
         )
     except Exception:
         return
-
 
 def _tool_user_message(
     tool_name: str,
