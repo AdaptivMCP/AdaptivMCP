@@ -11,3 +11,8 @@ The server exposes:
 - `/sse` – MCP transport endpoint.
 
 Metrics are in-memory only (reset on restart) and never include secrets.
+
+## Documentation
+
+- [Usage guide](docs/usage.md) — current functionality, behavior, configuration, and usage patterns.
+- [Detailed tools reference](Detailed_Tools.md) — tool catalog grouped by function.
