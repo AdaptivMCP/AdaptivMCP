@@ -152,9 +152,8 @@ class _RequestContextMiddleware:
     We avoid BaseHTTPMiddleware to preserve streaming semantics.
     """
 
-    def __init__(self, app, *, max_body_bytes: int = 262144):
+    def __init__(self, app):
         self.app = app
-        self.max_body_bytes = max_body_bytes
 
     async def __call__(self, scope, receive, send):
         if scope.get('type') != 'http':
@@ -194,15 +193,13 @@ class _RequestContextMiddleware:
                     if chunk:
                         body_chunks.append(chunk)
                         total += len(chunk)
-                        if total > self.max_body_bytes:
-                            break
                     more_body = bool(msg.get('more_body'))
 
             # Drain once, then replay to downstream app.
             await _drain_body()
             body = b''.join(body_chunks)
             try:
-                if body and total <= self.max_body_bytes:
+                if body:
                     payload = json.loads(body.decode('utf-8', errors='replace'))
                     msg_id = payload.get('id')
                     if msg_id is not None:
