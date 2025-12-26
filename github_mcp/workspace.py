@@ -206,12 +206,20 @@ async def _clone_repo(
     tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
     token = _get_github_token()
 
-    url = f"https://x-access-token:{token}@github.com/{full_name}.git"  # tokenlike-allow
+    url = f"https://github.com/{full_name}.git"
     q_ref = shlex.quote(effective_ref)
     q_url = shlex.quote(url)
     q_tmpdir = shlex.quote(tmpdir)
     cmd = f"git clone --depth 1 --branch {q_ref} {q_url} {q_tmpdir}"
-    result = await run_shell(cmd, cwd=None, timeout_seconds=600)
+    result = await run_shell(
+        cmd,
+        cwd=None,
+        timeout_seconds=600,
+        env={
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_HTTP_EXTRA_HEADER": f"Authorization: Bearer {token}",
+        },
+    )
     if result["exit_code"] != 0:
         stderr = result.get("stderr", "")
         raise GitHubAPIError(f"git clone failed: {stderr}")
