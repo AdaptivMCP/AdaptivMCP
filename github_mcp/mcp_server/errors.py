@@ -101,6 +101,11 @@ def _structured_tool_error(
     *,
     context: Optional[str] = None,
     path: Optional[str] = None,
+    tool_descriptor: Optional[Dict[str, Any]] = None,
+    tool_descriptor_text: Optional[str] = None,
+    tool_surface: Optional[str] = None,
+    routing_hint: Optional[Dict[str, Any]] = None,
+    request: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Convert any exception into a structured payload.
@@ -114,7 +119,7 @@ def _structured_tool_error(
     if isinstance(exc, AdaptivToolError):
         err = exc.to_error_dict(incident_id=incident_id)
         user_message = _format_user_message(err, context=context, path=path)
-        return {"error": err, "user_message": user_message}
+        return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
 
     # GitHub rate limit -> upstream, retryable, actionable (NOT a generic runtime error)
     if isinstance(exc, GitHubRateLimitError):
@@ -146,7 +151,7 @@ def _structured_tool_error(
             "hint": "Wait for the reset time, reduce request frequency, or use a higher-limit GitHub credential.",
         }
         user_message = _format_user_message(err, context=context, path=path)
-        return {"error": err, "user_message": user_message}
+        return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
 
     # Generic exception -> normalized error
     err: Dict[str, Any] = {
@@ -168,7 +173,7 @@ def _structured_tool_error(
         err["details"]["path"] = path
 
     user_message = _format_user_message(err, context=context, path=path)
-    return {"error": err, "user_message": user_message}
+    return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
 
 
 def _format_user_message(err: Dict[str, Any], *, context: Optional[str], path: Optional[str]) -> str:
