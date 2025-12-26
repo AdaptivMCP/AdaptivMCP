@@ -1073,6 +1073,7 @@ async def describe_tool(
     name: Optional[str] = None,
     names: Optional[List[str]] = None,
     include_parameters: bool = True,
+    tool_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Inspect one or more registered MCP tools by name.
 
@@ -1089,6 +1090,16 @@ async def describe_tool(
         include_parameters: When True, include the serialized input schema for
             each tool (equivalent to list_all_actions(include_parameters=True)).
     """
+
+    # Back-compat: some callers send tool_name instead of name.
+    if tool_name:
+        if names is not None:
+            raise ValueError("Provide either tool_name/name or names (not both).")
+        if name is None:
+            name = tool_name
+        elif name != tool_name:
+            raise ValueError("Provide only one of tool_name or name (or set them equal).")
+
     from github_mcp.main_tools.introspection import describe_tool as _impl
     return await _impl(name=name, names=names, include_parameters=include_parameters)
 
