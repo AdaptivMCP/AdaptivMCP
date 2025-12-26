@@ -81,14 +81,14 @@ Key environment variables:
 
 ### GitHub authentication
 
-- `GITHUB_PAT` / `GITHUB_TOKEN` — GitHub API token.
+- `GITHUB_PAT` — GitHub API token.
 - `GITHUB_API_BASE` — override GitHub API base URL.
 
 ### Render observability (optional)
 
-- `RENDER_API_KEY` / `RENDER_API_TOKEN` — Render API authentication.
-- `RENDER_RESOURCE` / `RENDER_SERVICE_ID` — default Render resource.
-- `RENDER_OWNER_ID` / `RENDER_OWNER` — default owner identifier.
+- `RENDER_API_KEY` — Render API authentication.
+- `RENDER_SERVICE_ID` — default Render resource.
+- `RENDER_OWNER_ID` — default owner identifier.
 
 ### Workspace settings
 

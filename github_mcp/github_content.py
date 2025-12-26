@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import base64
-import os
 import re
 import sys
 from typing import Any, Dict, Optional
 
+from .config import SANDBOX_CONTENT_BASE_URL
 from .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
 from .utils import _effective_ref_for_repo
@@ -239,7 +239,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
 
     if content_url.startswith("sandbox:"):
         local_path = content_url[len("sandbox:") :]
-        rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
+        rewrite_base = SANDBOX_CONTENT_BASE_URL
         try:
             return _read_local(local_path, sandbox_hint)
         except GitHubAPIError:
@@ -255,7 +255,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             )
 
     if content_url.startswith("/") or _is_windows_absolute_path(content_url):
-        rewrite_base = os.environ.get("SANDBOX_CONTENT_BASE_URL")
+        rewrite_base = SANDBOX_CONTENT_BASE_URL
         missing_hint = (
             "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
             "hosts can rewrite it."

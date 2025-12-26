@@ -21,26 +21,10 @@ def _find_repo_root(start: Path) -> Path | None:
 def _get_controller_revision_info() -> Dict[str, Any]:
     """Return best-effort controller revision metadata.
 
-    In some deploy environments, the `.git` directory may not exist. In that case
-    we fall back to common CI/deploy-provided env vars.
+    In some deploy environments, the `.git` directory may not exist.
     """
 
     info: Dict[str, Any] = {}
-
-    env_commit_vars = [
-        "RENDER_GIT_COMMIT",
-        "GIT_COMMIT",
-        "SOURCE_VERSION",
-        "COMMIT_SHA",
-        "VERCEL_GIT_COMMIT_SHA",
-        "RAILWAY_GIT_COMMIT_SHA",
-    ]
-    for key in env_commit_vars:
-        val = os.environ.get(key)
-        if val:
-            info["env_commit"] = val
-            info["env_commit_var"] = key
-            break
 
     try:
         repo_root = _find_repo_root(Path(__file__).resolve())
@@ -84,19 +68,15 @@ async def validate_environment() -> Dict[str, Any]:
             status = "warning"
 
     # GitHub token presence/shape
-    raw_token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
-    token_env_var = (
-        "GITHUB_PAT"
-        if os.environ.get("GITHUB_PAT") is not None
-        else ("GITHUB_TOKEN" if os.environ.get("GITHUB_TOKEN") is not None else None)
-    )
+    raw_token = os.environ.get("GITHUB_PAT")
+    token_env_var = "GITHUB_PAT" if os.environ.get("GITHUB_PAT") is not None else None
 
     if raw_token is None:
         add_check(
             "github_token",
             "error",
-            "GITHUB_PAT or GITHUB_TOKEN is not set",
-            {"env_vars": ["GITHUB_PAT", "GITHUB_TOKEN"]},
+            "GITHUB_PAT is not set",
+            {"env_vars": ["GITHUB_PAT"]},
         )
         token_ok = False
     elif not raw_token.strip():
