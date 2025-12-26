@@ -352,37 +352,24 @@ def _tool_user_message(
     duration_ms: Optional[int] = None,
     error: Optional[str] = None,
 ) -> str:
-    scope = "write" if write_action else "read"
+    """Human console-style tool messages (Render logs are the primary debugger).
 
-    if phase == "start":
-        msg = f"Starting {tool_name} ({scope})."
-        if write_action:
-            msg += " This will modify repo state."
-        return msg
-
-    if phase == "ok":
-        dur = f" in {duration_ms}ms" if duration_ms is not None else ""
-        return f"Finished {tool_name}{dur}."
-
-    if phase == "error":
-        dur = f" after {duration_ms}ms" if duration_ms is not None else ""
-        suffix = f" ({error})" if error else ""
-        return f"Failed {tool_name}{dur}.{suffix}"
-
-    return f"{tool_name} ({scope})."
-
-
-# Best-effort dedupe for duplicated upstream requests.
-_DEDUPE_TTL_SECONDS = 10.0
-_DEDUPE_MAX_ENTRIES = 2048
-
-# key -> (expires_at, asyncio.Future)
-_DEDUPE_INFLIGHT: dict[str, tuple[float, asyncio.Future]] = {}
-
-# key -> (expires_at, result)
-_DEDUPE_RESULTS: dict[str, tuple[float, Any]] = {}
-_DEDUPE_LOCK = asyncio.Lock()
-
+    Style goal: what you'd expect to see running commands locally.
+    - Start:  → <tool> <arg_summary>
+    - OK:     ← ok (<duration>)
+    - Error:  ← error (<duration>) <reason>
+"""
+    scope = 'write' if write_action else 'read'
+    dur = f" ({duration_ms}ms)" if duration_ms is not None else ''
+    if phase == 'start':
+        # Keep it terse; deeper details belong in structured payloads.
+        return f"→ {tool_name} [{scope}]"
+    if phase == 'ok':
+        return f"← ok{dur}"
+    if phase == 'error':
+        suffix = f" {error}" if error else ''
+        return f"← error{dur}{suffix}"
+    return f"{tool_name} [{scope}]"
 
 def _stable_request_id() -> Optional[str]:
     """Return a stable id for the current inbound request when available."""

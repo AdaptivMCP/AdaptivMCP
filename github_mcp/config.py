@@ -173,6 +173,9 @@ class _ColorFormatter(logging.Formatter):
             base = super().format(record)
             extra_payload = _extract_log_extras(record)
             if extra_payload:
+                # CHAT logs are the primary human console surface in Render; keep them message-only.
+                if record.levelname == 'CHAT':
+                    return base
                 extra_json = json.dumps(
                     extra_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
                 )
