@@ -14,7 +14,7 @@ import time
 import traceback
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from github_mcp.exceptions import GitHubRateLimitError
 
@@ -116,8 +116,9 @@ def _structured_tool_error(
     """
     incident_id = str(uuid.uuid4())
 
-    if isinstance(exc, AdaptivToolError):
-        err = exc.to_error_dict(incident_id=incident_id)
+    adaptiv_exc = _unwrap_adaptiv_error(exc)
+    if adaptiv_exc is not None:
+        err = adaptiv_exc.to_error_dict(incident_id=incident_id)
         user_message = _format_user_message(err, context=context, path=path)
         return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
 
@@ -174,6 +175,23 @@ def _structured_tool_error(
 
     user_message = _format_user_message(err, context=context, path=path)
     return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
+
+
+def _unwrap_adaptiv_error(exc: BaseException) -> Optional[AdaptivToolError]:
+    if isinstance(exc, AdaptivToolError):
+        return exc
+    seen: Set[int] = set()
+    current: Optional[BaseException] = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        cause = getattr(current, "__cause__", None)
+        if isinstance(cause, AdaptivToolError):
+            return cause
+        context = getattr(current, "__context__", None)
+        if isinstance(context, AdaptivToolError):
+            return context
+        current = cause or context
+    return None
 
 
 def _format_user_message(err: Dict[str, Any], *, context: Optional[str], path: Optional[str]) -> str:
