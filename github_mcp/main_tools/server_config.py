@@ -41,7 +41,7 @@ async def get_server_config() -> Dict[str, Any]:
         "approval_policy": {
             "notes": (
                 "Reads are always allowed. Soft writes are auto-approved when WRITE_ALLOWED "
-                "is enabled. Hard writes always require explicit approval. When WRITE_ALLOWED "
+                "is enabled. Hard writes (including web fetches) always require explicit approval. When WRITE_ALLOWED "
                 "is disabled, both soft and hard writes require approval."
             ),
             "toggle_tool": "authorize_write_actions",

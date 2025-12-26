@@ -34,7 +34,7 @@ def resolve_side_effect_class(tool_or_name: Any) -> SideEffectClass:
     Resolution order:
     1) Explicit ``__side_effect_class__`` override on tool/func.
     2) ``__mcp_remote_write__`` when present (remote_write=True => REMOTE_MUTATION).
-    3) Name heuristic for local-only helpers.
+    3) Name heuristic for web and local-only helpers.
     4) Default READ_ONLY.
     """
 
@@ -64,6 +64,8 @@ def resolve_side_effect_class(tool_or_name: Any) -> SideEffectClass:
         name = getattr(tool_or_name, "__name__", None)
 
     if isinstance(name, str):
+        if name == "fetch_url" or name.startswith("web_"):
+            return SideEffectClass.REMOTE_MUTATION
         local_prefixes = (
             "terminal_",
             "run_",
