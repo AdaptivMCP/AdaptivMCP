@@ -204,13 +204,10 @@ def _auto_approved_for_tool(
       - Soft writes are auto-approved iff WRITE_ALLOWED is true.
       - Hard writes are never auto-approved.
       - Render CLI tools never require approval.
-      - Web fetch requires approval when WRITE_ALLOWED is false.
+      - Web tools are treated as hard writes.
     """
     # Render CLI tools (explicitly never require approval)
     if tool_name.startswith('render_') or tool_name in {'render_shell', 'terminal_command', 'run_command'}:
-        return True
-    # Web tool policy (treated as read-only for approval purposes)
-    if tool_name == 'fetch_url':
         return True
 
     if side_effect is SideEffectClass.READ_ONLY:
