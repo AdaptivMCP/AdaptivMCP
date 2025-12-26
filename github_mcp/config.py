@@ -75,16 +75,17 @@ _install_custom_log_levels()
 # Configuration and globals
 # ------------------------------------------------------------------------------
 
-GITHUB_PAT = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
+GITHUB_PAT = os.environ.get("GITHUB_PAT")
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
 GITHUB_API_BASE_URL = GITHUB_API_BASE
 
 # Render Public API (optional, for provider-side logs/metrics).
 RENDER_API_BASE = os.environ.get("RENDER_API_BASE", "https://api.render.com/v1")
-RENDER_API_KEY = os.environ.get("RENDER_API_KEY") or os.environ.get("RENDER_API_TOKEN")
-# Default Render resource/service id for render_* observability tools.
-RENDER_DEFAULT_RESOURCE = os.environ.get("RENDER_RESOURCE") or os.environ.get("RENDER_SERVICE_ID")
-RENDER_OWNER_ID = os.environ.get("RENDER_OWNER_ID") or os.environ.get("RENDER_OWNER")
+RENDER_API_KEY = os.environ.get("RENDER_API_KEY")
+# Default Render service id for render_* observability tools.
+RENDER_SERVICE_ID = os.environ.get("RENDER_SERVICE_ID")
+RENDER_OWNER_ID = os.environ.get("RENDER_OWNER_ID")
+SANDBOX_CONTENT_BASE_URL = os.environ.get("SANDBOX_CONTENT_BASE_URL")
 
 # Base directory for persistent workspaces used by run_command and related tools.
 # This keeps cloned repositories stable across tool invocations so installations
@@ -100,14 +101,14 @@ HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", 300))
 HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", 200))
 
 MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 80))
-FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", MAX_CONCURRENCY))
+FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "80"))
 FILE_CACHE_MAX_ENTRIES = int(os.environ.get("FILE_CACHE_MAX_ENTRIES", "500"))
 FILE_CACHE_MAX_BYTES = int(os.environ.get("FILE_CACHE_MAX_BYTES", "52428800"))
 
 GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
 GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
-GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", GIT_AUTHOR_NAME)
-GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", GIT_AUTHOR_EMAIL)
+GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", "Ally")
+GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", "ally@example.com")
 
 # Upper bounds for tool stdout/stderr payloads returned to the connector. These
 # can be tuned via environment variables; set to 0 or a negative value to disable
@@ -140,7 +141,10 @@ LOG_FORMAT = os.environ.get(
 
 # Use a non-colored formatter for in-memory logs (these often show up in JSON
 # tool results and should stay plain text).
-LOG_FORMAT_PLAIN = os.environ.get("LOG_FORMAT_PLAIN", LOG_FORMAT)
+LOG_FORMAT_PLAIN = os.environ.get(
+    "LOG_FORMAT_PLAIN",
+    "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
 
 
 class _ColorFormatter(logging.Formatter):
@@ -363,7 +367,8 @@ __all__ = [
     "GITHUB_PAT",
     "RENDER_API_BASE",
     "RENDER_API_KEY",
-    "RENDER_DEFAULT_RESOURCE",
+    "RENDER_OWNER_ID",
+    "RENDER_SERVICE_ID",
     "HTTPX_MAX_CONNECTIONS",
     "HTTPX_MAX_KEEPALIVE",
     "HTTPX_TIMEOUT",
@@ -377,6 +382,7 @@ __all__ = [
     "TOOL_STDIO_COMBINED_MAX_CHARS",
     "TOOL_STDOUT_MAX_CHARS",
     "WORKSPACE_BASE_DIR",
+    "SANDBOX_CONTENT_BASE_URL",
     "ERROR_LOG_HANDLER",
     "ERROR_LOG_CAPACITY",
     "LOG_RECORD_HANDLER",

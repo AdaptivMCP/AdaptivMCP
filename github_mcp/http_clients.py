@@ -64,7 +64,7 @@ def _get_github_token() -> str:
     values during long-running processes.
     """
 
-    token = os.environ.get("GITHUB_PAT") or os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get("GITHUB_PAT")
     if token is None:
         raise GitHubAuthError("GitHub authentication failed: token is not configured")
 

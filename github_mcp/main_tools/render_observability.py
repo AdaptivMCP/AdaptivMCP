@@ -4,7 +4,7 @@ This module backs the `list_render_logs` and `get_render_metrics` tools defined 
 `main.py`.
 
 It uses Render's Public API (https://api.render.com/v1) and is optional: set
-RENDER_API_KEY (or RENDER_API_TOKEN) to enable.
+RENDER_API_KEY to enable.
 
 All functions are read-only.
 """
@@ -22,8 +22,8 @@ from github_mcp.config import (
     HTTPX_TIMEOUT,
     RENDER_API_BASE,
     RENDER_API_KEY,
-    RENDER_DEFAULT_RESOURCE,
     RENDER_OWNER_ID,
+    RENDER_SERVICE_ID,
 )
 from github_mcp.exceptions import UsageError
 
@@ -39,15 +39,15 @@ def _require_api_key() -> str:
     key = (RENDER_API_KEY or '').strip()
     if not key:
         raise UsageError(
-            "Render API access is not configured. Set RENDER_API_KEY (or RENDER_API_TOKEN)."
+            "Render API access is not configured. Set RENDER_API_KEY."
         )
     return key
 
 
 def _default_resource_list() -> Optional[List[str]]:
-    if not RENDER_DEFAULT_RESOURCE:
+    if not RENDER_SERVICE_ID:
         return None
-    val = str(RENDER_DEFAULT_RESOURCE).strip()
+    val = str(RENDER_SERVICE_ID).strip()
     return [val] if val else None
 
 
@@ -102,7 +102,7 @@ async def _resolve_owner_id(resource_id: str | None) -> str:
 
 async def _render_get(path: str, *, params: Dict[str, Any]) -> Any:
     api_key = _require_api_key()
-    base = (RENDER_API_BASE or 'https://api.render.com/v1').rstrip('/')
+    base = (RENDER_API_BASE or '').rstrip('/')
     url = f"{base}{path}"
 
     limits = httpx.Limits(
@@ -145,7 +145,7 @@ async def list_render_logs(
 
     Parameters are passed through to the Render Public API.
 
-    If `resource` is omitted, RENDER_RESOURCE/RENDER_SERVICE_ID is used when set. If `ownerId` is omitted, the tool uses RENDER_OWNER_ID or attempts to resolve it from the service id via GET /services/:id.
+    If `resource` is omitted, RENDER_SERVICE_ID is used when set. If `ownerId` is omitted, the tool uses RENDER_OWNER_ID or attempts to resolve it from the service id via GET /services/:id.
     """
 
     resource = resource or _default_resource_list()
@@ -179,8 +179,6 @@ async def list_render_logs(
 # older internal code paths such as /metrics/http-request-count and
 # /metrics/http-throughput are not valid.
 #
-# We keep a small set of backwards-compatible aliases so existing callers keep
-# working.
 _METRIC_ENDPOINTS: Dict[str, str] = {
     # Canonical keys
     "cpu": "/metrics/cpu",
@@ -198,12 +196,6 @@ _METRIC_ENDPOINTS: Dict[str, str] = {
     "bandwidth": "/metrics/bandwidth",
     "bandwidth_sources": "/metrics/bandwidth-sources",
     "replication_lag": "/metrics/replication-lag",
-
-    # Backwards-compat aliases (legacy keys)
-    "cpu_usage": "/metrics/cpu",
-    "http_request_count": "/metrics/http-requests",
-    "http_request": "/metrics/http-requests",
-    "http_request_count_total": "/metrics/http-requests",
 }
 
 
@@ -215,7 +207,7 @@ async def get_render_metrics(
     endTime: Optional[str] = None,
     resolution: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Fetch one or more Render metrics for a resource. If resourceId is omitted, uses RENDER_SERVICE_ID / RENDER_RESOURCE when set.
+    """Fetch one or more Render metrics for a resource. If resourceId is omitted, uses RENDER_SERVICE_ID when set.
 
     `metricTypes` values must be keys in `_METRIC_ENDPOINTS`.
 
@@ -225,12 +217,10 @@ async def get_render_metrics(
 
     rid = str(resourceId).strip() if resourceId is not None else ''
     if not rid:
-        rid = str(RENDER_DEFAULT_RESOURCE or '').strip()
+        rid = str(RENDER_SERVICE_ID or '').strip()
 
     if not rid:
-        raise UsageError(
-            'resourceId is required (or set RENDER_SERVICE_ID / RENDER_RESOURCE in the environment)'
-        )
+        raise UsageError('resourceId is required (or set RENDER_SERVICE_ID in the environment)')
 
     if not metricTypes:
         raise UsageError('metricTypes must be a non-empty list')
