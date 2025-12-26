@@ -189,10 +189,21 @@ _STANDARD_LOG_FIELDS = set(
 
 def _extract_log_extras(record: logging.LogRecord) -> dict[str, object]:
     extras: dict[str, object] = {}
+
+    # NOTE:
+    # The formatter mutates the record by injecting fields like `asctime` and
+    # computing `message` from msg/args. When we later append `data=<json>`
+    # using record.__dict__, those injected fields can be picked up as extras and
+    # cause double-encoding (lots of backslashes) and extremely noisy logs.
+    _exclude_dynamic = {"asctime", "message"}
+
     for key, value in record.__dict__.items():
         if key in _STANDARD_LOG_FIELDS or key.startswith("_"):
             continue
+        if key in _exclude_dynamic:
+            continue
         extras[key] = _sanitize_metadata_value(value)
+
     return extras
 
 
