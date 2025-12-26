@@ -3,9 +3,8 @@ Write gate (server-side) for mutations.
 
 Policy:
 - Reads are always allowed.
-- Soft writes (local workspace mutations) are auto-approved when WRITE_ALLOWED is true.
-- Hard writes (remote/GitHub mutations) always require explicit user approval.
-- When WRITE_ALLOWED is false, both soft and hard writes require explicit approval.
+- Writes (both local workspace and remote/GitHub) are auto-approved when WRITE_ALLOWED is true.
+- When WRITE_ALLOWED is false, any write requires explicit user approval.
 """
 
 from __future__ import annotations
@@ -25,11 +24,10 @@ def _get_write_allowed() -> bool:
 
 
 def _requires_approval(write_allowed: bool, write_kind: str) -> bool:
-    if write_kind == "hard_write":
-        return True
-    if write_kind == "soft_write":
-        return not write_allowed
-    return not write_allowed
+    """Return True when an explicit approval signal is required."""
+    # Single-policy gate: when WRITE_ALLOWED is enabled, all writes proceed.
+    # When disabled, any write requires an explicit approval signal.
+    return not bool(write_allowed)
 
 
 def _ensure_write_allowed(
@@ -72,7 +70,7 @@ def _ensure_write_allowed(
             "approval_required": True,
         },
         hint=(
-            "Approve the write in the client UI. To auto-approve soft writes, "
+            "Approve the write in the client UI. To auto-approve writes, "
             "call authorize_write_actions({approved:true}) or set WRITE_ALLOWED=true."
         ),
     )
