@@ -58,9 +58,11 @@ async def workspace_create_branch(
         if new_branch.endswith(".lock"):
             raise ValueError("new_branch must not end with '.lock'")
 
+        write_kind = "hard_write" if push else "soft_write"
         _tw()._ensure_write_allowed(
             f"workspace_create_branch {new_branch} from {full_name}@{effective_base}",
             target_ref=effective_base,
+            write_kind=write_kind,
         )
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_base, preserve_changes=True)
@@ -141,6 +143,7 @@ async def workspace_delete_branch(
         _tw()._ensure_write_allowed(
             f"workspace_delete_branch {branch} for {full_name}@{effective_ref}",
             target_ref=effective_ref,
+            write_kind="hard_write",
         )
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -231,6 +234,7 @@ async def workspace_self_heal_branch(
         _tw()._ensure_write_allowed(
             f"workspace_self_heal_branch {branch} for {full_name}@{effective_base}",
             target_ref=effective_base,
+            write_kind="hard_write",
         )
 
         steps: List[Dict[str, Any]] = []

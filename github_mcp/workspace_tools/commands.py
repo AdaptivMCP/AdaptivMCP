@@ -16,7 +16,7 @@ def _tw():
     return tw
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=False)
 async def render_shell(
     full_name: Optional[str] = None,
     *,
@@ -49,12 +49,6 @@ async def render_shell(
         if not base_ref:
             base_ref = _tw()._default_branch_for_repo(full_name)
         effective_ref = _tw()._effective_ref_for_repo(full_name, base_ref)
-
-        _tw()._ensure_write_allowed(
-            f"render_shell {command} in {full_name}@{effective_ref}",
-            target_ref=effective_ref,
-            write_kind="soft_write",
-        )
 
         branch_creation: Optional[Dict[str, Any]] = None
         target_ref = effective_ref
@@ -136,11 +130,13 @@ async def terminal_command(
                 deps["ensure_write_allowed"](
                     f"terminal_command {command} in {full_name}@{effective_ref}",
                     target_ref=effective_ref,
+                    write_kind="soft_write",
                 )
             except TypeError:
                 # Backwards-compat: older implementations accept only (context).
                 deps["ensure_write_allowed"](
-                    f"terminal_command {command} in {full_name}@{effective_ref}"
+                    f"terminal_command {command} in {full_name}@{effective_ref}",
+                    write_kind="soft_write",
                 )
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         if use_temp_venv:

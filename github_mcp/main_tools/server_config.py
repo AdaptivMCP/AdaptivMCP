@@ -40,9 +40,9 @@ async def get_server_config() -> Dict[str, Any]:
         },
         "approval_policy": {
             "notes": (
-                "Soft and hard write tools follow the WRITE_ALLOWED toggle. "
-                "When WRITE_ALLOWED is enabled, write-capable tools are authorized; "
-                "when disabled, write-capable tools require explicit approval."
+                "Reads are always allowed. Soft writes are auto-approved when WRITE_ALLOWED "
+                "is enabled. Hard writes always require explicit approval. When WRITE_ALLOWED "
+                "is disabled, both soft and hard writes require approval."
             ),
             "toggle_tool": "authorize_write_actions",
         },

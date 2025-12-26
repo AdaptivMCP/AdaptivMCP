@@ -15,7 +15,10 @@ async def create_branch(
 
     m = _main()
 
-    m._ensure_write_allowed(f"create branch {branch} from {from_ref} in {full_name}")
+    m._ensure_write_allowed(
+        f"create branch {branch} from {from_ref} in {full_name}",
+        write_kind="hard_write",
+    )
 
     branch = branch.strip()
     if not branch:
@@ -84,7 +87,10 @@ async def ensure_branch(
 
     m = _main()
 
-    m._ensure_write_allowed(f"ensure branch {branch} from {from_ref} in {full_name}")
+    m._ensure_write_allowed(
+        f"ensure branch {branch} from {from_ref} in {full_name}",
+        write_kind="hard_write",
+    )
     client = m._github_client_instance()
     async with m._get_concurrency_semaphore():
         resp = await client.get(f"/repos/{full_name}/git/ref/heads/{branch}")

@@ -50,10 +50,11 @@ async def commit_workspace(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        write_kind = "hard_write" if push else "soft_write"
         _tw()._ensure_write_allowed(
             f"commit_workspace for {full_name}@{effective_ref}",
             target_ref=effective_ref,
-            write_kind="soft_write",
+            write_kind=write_kind,
         )
         deps = _tw()._workspace_deps()
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -154,10 +155,11 @@ async def commit_workspace_files(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        write_kind = "hard_write" if push else "soft_write"
         _tw()._ensure_write_allowed(
             f"commit_workspace_files for {full_name}@{effective_ref}",
             target_ref=effective_ref,
-            write_kind="soft_write",
+            write_kind=write_kind,
         )
         deps = _tw()._workspace_deps()
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)

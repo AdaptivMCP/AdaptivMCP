@@ -36,7 +36,6 @@ from github_mcp.mcp_server.errors import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
-    _normalize_input_schema,
     _normalize_tool_description,
     _sanitize_metadata_value,
     _title_from_tool_name,
@@ -50,6 +49,21 @@ from github_mcp.side_effects import (
 # OpenAI connector UI strings.
 OPENAI_INVOKING_MESSAGE = "Adaptiv Controller: running tool…"
 OPENAI_INVOKED_MESSAGE = "Adaptiv Controller: tool finished."
+
+
+def _auto_approved_for_tool(
+    tool_name: str,
+    *,
+    side_effect: SideEffectClass,
+    write_allowed: bool,
+) -> bool:
+    if tool_name.startswith("render_"):
+        return True
+    if side_effect is SideEffectClass.READ_ONLY:
+        return True
+    if side_effect is SideEffectClass.LOCAL_MUTATION:
+        return bool(write_allowed)
+    return False
 
 
 def _current_write_allowed() -> bool:
@@ -275,18 +289,15 @@ def _register_with_fastmcp(
     visibility: str = "public",
 ) -> Any:
     read_only_hint = bool(side_effect is SideEffectClass.READ_ONLY and not remote_write)
-    meta: dict[str, Any] = {"visibility": visibility, "read_only_hint": read_only_hint}
-
-    for domain_prefix in ("chatgpt.com",):
-        meta[f"{domain_prefix}/visibility"] = visibility
-        meta[f"{domain_prefix}/read_only_hint"] = read_only_hint
-        meta[f"{domain_prefix}/toolInvocation/invoking"] = OPENAI_INVOKING_MESSAGE
-        meta[f"{domain_prefix}/toolInvocation/invoked"] = OPENAI_INVOKED_MESSAGE
+    meta: dict[str, Any] = {
+        "chatgpt.com/visibility": visibility,
+        "chatgpt.com/read_only_hint": read_only_hint,
+        "chatgpt.com/toolInvocation/invoking": OPENAI_INVOKING_MESSAGE,
+        "chatgpt.com/toolInvocation/invoked": OPENAI_INVOKED_MESSAGE,
+    }
 
     if title:
-        meta["title"] = title
-        for domain_prefix in ("chatgpt.com",):
-            meta[f"{domain_prefix}/title"] = title
+        meta["chatgpt.com/title"] = title
 
     annotations = {"title": title or _title_from_tool_name(name)}
     if read_only_hint:
@@ -310,57 +321,13 @@ def _register_with_fastmcp(
     ]
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
 
-    # Schema fingerprint for debugging.
-    schema: Dict[str, Any] | None = None
-    sanitized_schema: Dict[str, Any] | None = None
-    try:
-        schema = _normalize_input_schema(tool_obj) or {
-            "type": "object",
-            "properties": {},
-        }
-        sanitized_schema = _sanitize_metadata_value(schema)
-        normalized = json.dumps(
-            sanitized_schema, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        )
-        schema_fingerprint = hashlib.sha1(
-            normalized.encode("utf-8", errors="replace")
-        ).hexdigest()[:10]
-        schema_visibility = f"schema:{name}:{schema_fingerprint}"
-        tool_obj.meta["schema_visibility"] = schema_visibility
-        for domain_prefix in ("chatgpt.com",):
-            tool_obj.meta[f"{domain_prefix}/schema_visibility"] = schema_visibility
-        # Machine-readable schema identifiers
-        tool_obj.meta["schema_fingerprint"] = schema_fingerprint
-        tool_obj.meta["schema_name"] = name
-        tool_obj.meta["schema_title"] = title or _title_from_tool_name(name)
-        if description:
-            tool_obj.meta["schema_description"] = description
-        for domain_prefix in ("chatgpt.com",):
-            tool_obj.meta[f"{domain_prefix}/schema_fingerprint"] = schema_fingerprint
-            tool_obj.meta[f"{domain_prefix}/schema_name"] = name
-            tool_obj.meta[f"{domain_prefix}/schema_title"] = (
-                title or _title_from_tool_name(name)
-            )
-            if description:
-                tool_obj.meta[f"{domain_prefix}/schema_description"] = description
-    except Exception:
-        pass
-    finally:
-        sanitized_schema = sanitized_schema or _sanitize_metadata_value(
-            schema or {"type": "object", "properties": {}}
-        )
-        tool_obj.meta["schema"] = sanitized_schema
-        tool_obj.meta["input_schema"] = sanitized_schema
-
-        wa = _current_write_allowed()
-        tool_obj.meta["write_allowed"] = wa
-        tool_obj.meta["remote_write"] = bool(remote_write)
-        tool_obj.meta["ui_write_action"] = bool(ui_write_action)
-
-        # Side-effect classification is used for both humans and machines.
-        tool_obj.meta["side_effects"] = side_effect.value
-        for domain_prefix in ("chatgpt.com",):
-            tool_obj.meta[f"{domain_prefix}/side_effects"] = side_effect.value
+    wa = _current_write_allowed()
+    tool_obj.meta["chatgpt.com/auto_approved"] = _auto_approved_for_tool(
+        name,
+        side_effect=side_effect,
+        write_allowed=wa,
+    )
+    tool_obj.meta["chatgpt.com/side_effects"] = side_effect.value
 
     tool_obj.__side_effect_class__ = side_effect
     fn.__side_effect_class__ = side_effect
@@ -938,14 +905,14 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
 
     for tool_obj, fn in list(_REGISTERED_MCP_TOOLS):
         try:
-            tool_obj.meta["write_allowed"] = effective_write_allowed
-
+            tool_name = str(getattr(tool_obj, "name", None) or getattr(fn, "__name__", "tool"))
             side_effect = getattr(fn, "__side_effect_class__", None)
             if not isinstance(side_effect, SideEffectClass):
-                side_effect = resolve_side_effect_class(
-                    getattr(tool_obj, "name", "tool")
-                )
-
-            tool_obj.meta["ui_write_action"] = False
+                side_effect = resolve_side_effect_class(tool_name)
+            tool_obj.meta["chatgpt.com/auto_approved"] = _auto_approved_for_tool(
+                tool_name,
+                side_effect=side_effect,
+                write_allowed=effective_write_allowed,
+            )
         except Exception:
             continue
