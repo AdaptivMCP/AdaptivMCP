@@ -209,10 +209,9 @@ def _auto_approved_for_tool(
     # Render CLI tools (explicitly never require approval)
     if tool_name.startswith('render_') or tool_name in {'render_shell', 'terminal_command', 'run_command'}:
         return True
-
-    # Web tool policy
+    # Web tool policy (treated as read-only for approval purposes)
     if tool_name == 'fetch_url':
-        return bool(write_allowed)
+        return True
 
     if side_effect is SideEffectClass.READ_ONLY:
         return True
