@@ -172,17 +172,38 @@ async def list_render_logs(
     return await _render_get('/logs', params=params)
 
 
+# Render Public API metrics endpoints.
+#
+# NOTE:
+# Render's API uses specific metric paths (e.g. /metrics/http-requests), and
+# older internal code paths such as /metrics/http-request-count and
+# /metrics/http-throughput are not valid.
+#
+# We keep a small set of backwards-compatible aliases so existing callers keep
+# working.
 _METRIC_ENDPOINTS: Dict[str, str] = {
-    # Monitoring > Metrics endpoints in Render Public API reference.
-    "cpu_usage": "/metrics/cpu",
+    # Canonical keys
+    "cpu": "/metrics/cpu",
     "cpu_limit": "/metrics/cpu-limit",
+    "cpu_target": "/metrics/cpu-target",
     "memory": "/metrics/memory",
     "memory_limit": "/metrics/memory-limit",
-    "http_latency": "/metrics/http-latency",
-    "http_request_count": "/metrics/http-request-count",
-    "http_throughput": "/metrics/http-throughput",
-    "bandwidth": "/metrics/bandwidth",
+    "memory_target": "/metrics/memory-target",
+    "disk_usage": "/metrics/disk-usage",
+    "disk_capacity": "/metrics/disk-capacity",
     "instance_count": "/metrics/instance-count",
+    "active_connections": "/metrics/active-connections",
+    "http_latency": "/metrics/http-latency",
+    "http_requests": "/metrics/http-requests",
+    "bandwidth": "/metrics/bandwidth",
+    "bandwidth_sources": "/metrics/bandwidth-sources",
+    "replication_lag": "/metrics/replication-lag",
+
+    # Backwards-compat aliases (legacy keys)
+    "cpu_usage": "/metrics/cpu",
+    "http_request_count": "/metrics/http-requests",
+    "http_request": "/metrics/http-requests",
+    "http_request_count_total": "/metrics/http-requests",
 }
 
 
