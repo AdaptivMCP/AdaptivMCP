@@ -139,6 +139,28 @@ async def terminal_command(
         cwd = repo_dir
         if workdir:
             cwd = os.path.join(repo_dir, workdir)
+        cd_match = re.match(r"^\s*cd\s+(.+?)\s*&&\s*(.+)$", command, flags=re.S)
+        if cd_match:
+            raw_cd = cd_match.group(1).strip()
+            remainder = cd_match.group(2).strip()
+            if raw_cd and raw_cd[0] == raw_cd[-1] and raw_cd[0] in {"'", '"'}:
+                raw_cd = raw_cd[1:-1]
+            target_path = raw_cd
+            if not os.path.isabs(target_path):
+                target_path = os.path.join(cwd, target_path)
+            target_path = os.path.normpath(target_path)
+            repo_root = os.path.normpath(repo_dir)
+            if os.path.commonpath([target_path, repo_root]) != repo_root:
+                raise GitHubAPIError(
+                    "Refusing to run terminal_command with 'cd' outside the workspace. "
+                    "Use the workdir parameter to target subdirectories."
+                )
+            if not remainder:
+                raise GitHubAPIError(
+                    "terminal_command received a 'cd' prefix without a command to run."
+                )
+            cwd = target_path
+            command = remainder
 
         # Optional dependency installation. If requested, install dev-requirements.txt (preferred)
         # or requirements.txt when present
