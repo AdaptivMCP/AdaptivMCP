@@ -223,6 +223,35 @@ def _auto_approved_for_tool(
     # Remote mutation (hard write)
     return False
 
+def _ui_prompt_required_for_tool(
+    tool_name: str,
+    *,
+    side_effect: SideEffectClass,
+    write_allowed: bool,
+) -> bool:
+    """Whether the ChatGPT UI should prompt for approval before invoking the tool.
+
+    Policy (per app rules):
+      - WRITE_ALLOWED=true: prompt only for hard writes (REMOTE_MUTATION).
+      - WRITE_ALLOWED=false: prompt for any non-read operation (LOCAL_MUTATION or REMOTE_MUTATION).
+      - Reads never prompt.
+      - Render CLI helpers never prompt.
+    """
+    tn = str(tool_name or '')
+
+    # Render CLI helpers never prompt.
+    if tn.startswith('render_') or tn in {'render_shell', 'terminal_command', 'run_command'}:
+        return False
+
+    if side_effect is SideEffectClass.READ_ONLY:
+        return False
+
+    if write_allowed:
+        # Only hard writes prompt.
+        return side_effect is SideEffectClass.REMOTE_MUTATION
+
+    # write_allowed is false -> any mutation prompts.
+    return side_effect in {SideEffectClass.LOCAL_MUTATION, SideEffectClass.REMOTE_MUTATION}
 
 
 def _current_write_allowed() -> bool:
@@ -576,11 +605,13 @@ def mcp_tool(
             if remote_write
             else resolve_side_effect_class(tool_name)
         )
-
-        # Option C UI prompt behavior:
-        # - Only remote mutations may prompt
-        # - Prompt only when write gate is disabled
-        ui_write_action = False  # UI prompts suppressed by policy
+        # UI prompt behavior (app policy):
+        # - WRITE_ALLOWED=true: prompt only for hard writes (REMOTE_MUTATION)
+        # - WRITE_ALLOWED=false: prompt for any non-read operation
+        initial_write_allowed = _current_write_allowed()
+        ui_write_action = _ui_prompt_required_for_tool(
+            tool_name, side_effect=side_effect, write_allowed=initial_write_allowed
+        )
 
         write_kind = (
             "hard_write"
@@ -607,11 +638,16 @@ def mcp_tool(
                 all_args = _bind_call_args(signature, args, kwargs)
                 ctx = _extract_context(all_args)
 
+                effective_write_allowed = _current_write_allowed()
+                effective_ui_write_action = _ui_prompt_required_for_tool(
+                    tool_name, side_effect=side_effect, write_allowed=effective_write_allowed
+                )
+
                 start = time.perf_counter()
                 request_ctx = get_request_context()
                 dedupe_key = _dedupe_key(
                     tool_name,
-                    ui_write_action=ui_write_action,
+                    ui_write_action=effective_ui_write_action,
                     args_preview=ctx["arg_preview"],
                 )
 
@@ -624,14 +660,14 @@ def mcp_tool(
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
                         "user_message": _tool_user_message(
-                            tool_name, write_action=ui_write_action, phase="start"
+                            tool_name, write_action=effective_ui_write_action, phase="start"
                         ),
                     }
                 )
 
                 TOOLS_LOGGER.chat(
                     _tool_user_message(
-                        tool_name, write_action=ui_write_action, phase="start"
+                        tool_name, write_action=effective_ui_write_action, phase="start"
                     ),
                     extra={
                         "event": "tool_chat",
@@ -670,6 +706,7 @@ def mcp_tool(
                         "side_effects": side_effect.value,
                         "remote_write": bool(remote_write),
                         "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                         "arg_keys": ctx["arg_keys"],
                         "arg_count": ctx["arg_count"],
                     }
@@ -711,6 +748,7 @@ def mcp_tool(
                             "side_effects": side_effect.value,
                             "remote_write": bool(remote_write),
                             "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                             "error_type": exc.__class__.__name__,
                             "error_message": str(
                                 error_info.get("message") or exc.__class__.__name__
@@ -719,7 +757,7 @@ def mcp_tool(
                             "error_origin": error_info.get("origin"),
                             "user_message": _tool_user_message(
                                 tool_name,
-                                write_action=ui_write_action,
+                                write_action=effective_ui_write_action,
                                 phase="error",
                                 duration_ms=duration_ms,
                                 error=f"{exc.__class__.__name__}: {exc}",
@@ -741,6 +779,7 @@ def mcp_tool(
                             "side_effects": side_effect.value,
                             "remote_write": bool(remote_write),
                             "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                             "error_type": exc.__class__.__name__,
                         },
                     )
@@ -758,6 +797,7 @@ def mcp_tool(
                             "side_effects": side_effect.value,
                             "remote_write": bool(remote_write),
                             "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                             "error_type": exc.__class__.__name__,
                             "error_message": str(error_info.get("message") or exc),
                             "error_category": error_info.get("category"),
@@ -788,10 +828,11 @@ def mcp_tool(
                         "side_effects": side_effect.value,
                         "remote_write": bool(remote_write),
                         "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                         "result_type": result_type,
                         "user_message": _tool_user_message(
                             tool_name,
-                            write_action=ui_write_action,
+                            write_action=effective_ui_write_action,
                             phase="ok",
                             duration_ms=duration_ms,
                         ),
@@ -812,6 +853,7 @@ def mcp_tool(
                         "side_effects": side_effect.value,
                         "remote_write": bool(remote_write),
                         "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                         "result_type": result_type,
                     },
                 )
@@ -829,6 +871,7 @@ def mcp_tool(
                         "side_effects": side_effect.value,
                         "remote_write": bool(remote_write),
                         "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                         "result_type": result_type,
                     }
                 )
@@ -841,7 +884,7 @@ def mcp_tool(
                 title=tool_title,
                 description=normalized_description,
                 tags=tag_set,
-                ui_write_action=ui_write_action,
+                ui_write_action=effective_ui_write_action,
                 side_effect=side_effect,
                 remote_write=remote_write,
                 visibility=tool_visibility,
@@ -859,10 +902,15 @@ def mcp_tool(
             all_args = _bind_call_args(signature, args, kwargs)
             ctx = _extract_context(all_args)
 
+            effective_write_allowed = _current_write_allowed()
+            effective_ui_write_action = _ui_prompt_required_for_tool(
+                tool_name, side_effect=side_effect, write_allowed=effective_write_allowed
+            )
+
             request_ctx = get_request_context()
             dedupe_key = _dedupe_key(
                 tool_name,
-                ui_write_action=ui_write_action,
+                ui_write_action=effective_ui_write_action,
                 args_preview=ctx["arg_preview"],
             )
             start = time.perf_counter()
@@ -876,14 +924,14 @@ def mcp_tool(
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
                     "user_message": _tool_user_message(
-                        tool_name, write_action=ui_write_action, phase="start"
+                        tool_name, write_action=effective_ui_write_action, phase="start"
                     ),
                 }
             )
 
             TOOLS_LOGGER.chat(
                 _tool_user_message(
-                    tool_name, write_action=ui_write_action, phase="start"
+                    tool_name, write_action=effective_ui_write_action, phase="start"
                 ),
                 extra={
                     "event": "tool_chat",
@@ -922,6 +970,7 @@ def mcp_tool(
                     "side_effects": side_effect.value,
                     "remote_write": bool(remote_write),
                     "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                     "arg_keys": ctx["arg_keys"],
                     "arg_count": ctx["arg_count"],
                 }
@@ -960,6 +1009,7 @@ def mcp_tool(
                         "side_effects": side_effect.value,
                         "remote_write": bool(remote_write),
                         "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                         "error_type": exc.__class__.__name__,
                         "error_message": str(
                             error_info.get("message") or exc.__class__.__name__
@@ -968,7 +1018,7 @@ def mcp_tool(
                         "error_origin": error_info.get("origin"),
                         "user_message": _tool_user_message(
                             tool_name,
-                            write_action=ui_write_action,
+                            write_action=effective_ui_write_action,
                             phase="error",
                             duration_ms=duration_ms,
                             error=f"{exc.__class__.__name__}: {exc}",
@@ -990,6 +1040,7 @@ def mcp_tool(
                         "side_effects": side_effect.value,
                         "remote_write": bool(remote_write),
                         "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                         "error_type": exc.__class__.__name__,
                     },
                 )
@@ -1007,6 +1058,7 @@ def mcp_tool(
                         "side_effects": side_effect.value,
                         "remote_write": bool(remote_write),
                         "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                         "error_type": exc.__class__.__name__,
                         "error_message": str(error_info.get("message") or exc),
                         "error_category": error_info.get("category"),
@@ -1034,10 +1086,11 @@ def mcp_tool(
                     "side_effects": side_effect.value,
                     "remote_write": bool(remote_write),
                     "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                     "result_type": result_type,
                     "user_message": _tool_user_message(
                         tool_name,
-                        write_action=ui_write_action,
+                        write_action=effective_ui_write_action,
                         phase="ok",
                         duration_ms=duration_ms,
                     ),
@@ -1058,6 +1111,7 @@ def mcp_tool(
                     "side_effects": side_effect.value,
                     "remote_write": bool(remote_write),
                     "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                     "result_type": result_type,
                 },
             )
@@ -1075,6 +1129,7 @@ def mcp_tool(
                     "side_effects": side_effect.value,
                     "remote_write": bool(remote_write),
                     "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
                     "result_type": result_type,
                 }
             )
@@ -1087,7 +1142,7 @@ def mcp_tool(
             title=tool_title,
             description=normalized_description,
             tags=tag_set,
-            ui_write_action=ui_write_action,
+            ui_write_action=effective_ui_write_action,
             side_effect=side_effect,
             remote_write=remote_write,
             visibility=tool_visibility,
