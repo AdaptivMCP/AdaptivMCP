@@ -54,12 +54,6 @@ For small changes, you can use GitHub contents APIs via MCP tools:
 - `create_file`, `apply_text_update_and_commit`, `move_file`, `delete_file`
 - `update_file_from_workspace` to push a workspace file back to GitHub
 
-### Write metadata
-
-Write-capable tools are marked as **remote mutations** in tool metadata. The
-current `WRITE_ALLOWED` state is exposed for clients that want to display
-read/write status.
-
 ## Behavior and safety constraints
 
 - **Request deduplication**: the server uses request metadata (session ID +

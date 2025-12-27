@@ -104,13 +104,13 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
         "head_ref",
     }
 
-    arg_keys = sorted([k for k in all_args.keys()])
     sanitized_args = {k: v for k, v in all_args.items() if k not in location_keys}
+    arg_keys = sorted(sanitized_args.keys())
     arg_preview = _format_tool_args_preview(sanitized_args)
 
     return {
         "arg_keys": arg_keys,
-        "arg_count": len(all_args),
+        "arg_count": len(sanitized_args),
         "arg_preview": arg_preview,
     }
 
@@ -127,6 +127,15 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
     """
     try:
         base = dict(payload)
+        for key in (
+            "side_effects",
+            "write_allowed",
+            "ui_prompt_required",
+            "write_kind",
+            "remote_write",
+            "arg_keys",
+        ):
+            base.pop(key, None)
 
         safe = _sanitize_metadata_value(base)
 
@@ -425,15 +434,8 @@ def _register_with_fastmcp(
     remote_write: bool,
     visibility: str = "public",
 ) -> Any:
-    read_only_hint = bool(side_effect is SideEffectClass.READ_ONLY and not remote_write)
-    meta: dict[str, Any] = {
-        "chatgpt.com/read_only_hint": read_only_hint,
-    }
-
+    meta: dict[str, Any] = {}
     annotations: dict[str, Any] = {}
-    if read_only_hint:
-        annotations["readOnlyHint"] = True
-        annotations["read_only_hint"] = True
 
     tool_obj = mcp.tool(
         fn,
@@ -451,9 +453,6 @@ def _register_with_fastmcp(
         if (getattr(t, "name", None) or getattr(f, "__name__", None)) != name
     ]
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
-
-    wa = _current_write_allowed()
-    tool_obj.meta["chatgpt.com/write_allowed"] = bool(wa)
 
     tool_obj.__side_effect_class__ = side_effect
     fn.__side_effect_class__ = side_effect
@@ -1346,12 +1345,4 @@ def register_extra_tools_if_available() -> None:
 
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
     """Refresh connector-facing metadata for registered tools."""
-    effective_write_allowed = (
-        _current_write_allowed() if _write_allowed is None else bool(_write_allowed)
-    )
-
-    for tool_obj, fn in list(_REGISTERED_MCP_TOOLS):
-        try:
-            tool_obj.meta["chatgpt.com/write_allowed"] = bool(effective_write_allowed)
-        except Exception:
-            continue
+    return None

@@ -3,9 +3,6 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional
 
 import jsonschema
-
-from github_mcp.mcp_server.decorators import refresh_registered_tool_metadata
-from github_mcp.side_effects import SideEffectClass, resolve_side_effect_class
 from github_mcp.utils import normalize_args
 
 from ._main import _main
@@ -22,8 +19,8 @@ def list_write_tools() -> Dict[str, Any]:
         {
             "name": "authorize_write_actions",
             "category": "control",
-            "description": "Update write-allowed metadata exposed to clients.",
-            "notes": "This does not block writes; it only updates the WRITE_ALLOWED flag.",
+            "description": "Update the server's write-allowed state.",
+            "notes": "This toggles the WRITE_ALLOWED flag used by write gating.",
         },
         {
             "name": "create_branch",
@@ -140,15 +137,13 @@ def list_write_tools() -> Dict[str, Any]:
 
 
 def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
-    """Enumerate every available MCP tool with read/write metadata."""
+    """Enumerate every available MCP tool with optional schemas."""
 
     m = _main()
     compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
 
     tools: List[Dict[str, Any]] = []
     seen_names: set[str] = set()
-
-    refresh_registered_tool_metadata(m.WRITE_ALLOWED)
 
     for tool, func in m._REGISTERED_MCP_TOOLS:
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
@@ -158,9 +153,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         if name_str in seen_names:
             continue
         seen_names.add(name_str)
-
-        meta = getattr(tool, "meta", {}) or {}
-        annotations = getattr(tool, "annotations", None)
 
         description = getattr(tool, "description", None) or (func.__doc__ or "")
         description = description.strip()
@@ -177,22 +169,8 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
                 compact_description = f"{compact_description[: max_length - 3].rstrip()}..."
             description = compact_description
 
-        try:
-            side_effect = getattr(tool, "__side_effect_class__", None) or resolve_side_effect_class(name_str)
-        except Exception:
-            meta_side_effect = meta.get("side_effects")
-            try:
-                side_effect = SideEffectClass(meta_side_effect)
-            except Exception:
-                side_effect = SideEffectClass.READ_ONLY
-
-        write_action = False  # UI prompts suppressed by policy
-
         tool_info: Dict[str, Any] = {
             "name": name_str,
-            "write_action": write_action,
-            "read_only_hint": getattr(annotations, "readOnlyHint", None),
-            "side_effects": side_effect.value,
         }
 
         if description:
@@ -212,10 +190,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
     if "list_all_actions" not in seen_names:
         synthetic: Dict[str, Any] = {
             "name": "list_all_actions",
-            "write_action": False,
-            "read_only_hint": True,
-            "description": "Enumerate every available MCP tool with read/write metadata.",
-            "side_effects": SideEffectClass.READ_ONLY.value,
+            "description": "Enumerate every available MCP tool with optional schemas.",
         }
         if not compact_mode:
             synthetic["tags"] = ["meta"]
@@ -234,7 +209,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
     tools.sort(key=lambda entry: entry["name"])
 
     return {
-        "write_actions_enabled": m.server.WRITE_ALLOWED,
         "compact": compact_mode,
         "tools": tools,
     }
