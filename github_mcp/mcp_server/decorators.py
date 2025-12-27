@@ -51,6 +51,13 @@ from github_mcp.side_effects import (
 OPENAI_INVOKING_MESSAGE = "Adaptiv Controller: running tool…"
 OPENAI_INVOKED_MESSAGE = "Adaptiv Controller: tool finished."
 
+# Dedupe cache (best-effort, per-process).
+_DEDUPE_TTL_SECONDS = 30.0
+_DEDUPE_MAX_ENTRIES = 2048
+_DEDUPE_INFLIGHT: dict[str, tuple[float, asyncio.Future[Any]]] = {}
+_DEDUPE_RESULTS: dict[str, tuple[float, Any]] = {}
+_DEDUPE_LOCK = asyncio.Lock()
+
 
 # --- Tool visibility + routing metadata (ChatGPT-facing) ---
 # Make tool routing and side-effects explicit for both humans and machines.
