@@ -141,6 +141,29 @@ def _git_auth_env() -> Dict[str, str]:
     return env
 
 
+def _is_git_auth_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(
+        fragment in lowered
+        for fragment in (
+            "terminal prompts disabled",
+            "could not read username",
+            "could not read password",
+            "authentication failed",
+            "invalid username or password",
+        )
+    )
+
+
+def _raise_git_auth_error(operation: str, stderr: str) -> None:
+    if not _is_git_auth_error(stderr):
+        return
+    raise GitHubAuthError(
+        f"{operation} requires GitHub authentication but interactive prompts are disabled. "
+        "Configure GITHUB_PAT or attach credentials to the connector, or ensure the repo is public."
+    )
+
+
 def _workspace_path(full_name: str, ref: str) -> str:
     repo_key = full_name.replace("/", "__")
 
@@ -188,6 +211,7 @@ async def _clone_repo(
             )
             if fetch_result["exit_code"] != 0:
                 stderr = fetch_result.get("stderr", "") or fetch_result.get("stdout", "")
+                _raise_git_auth_error("Workspace fetch", stderr)
                 raise GitHubAPIError(
                     f"Workspace fetch failed for {full_name}@{effective_ref}: {stderr}"
                 )
@@ -213,6 +237,7 @@ async def _clone_repo(
             )
             if result["exit_code"] != 0:
                 stderr = result.get("stderr", "") or result.get("stdout", "")
+                _raise_git_auth_error("Workspace refresh", stderr)
                 raise GitHubAPIError(
                     f"Workspace refresh failed for {full_name}@{effective_ref}: {stderr}"
                 )
@@ -235,7 +260,8 @@ async def _clone_repo(
         env=auth_env,
     )
     if result["exit_code"] != 0:
-        stderr = result.get("stderr", "")
+        stderr = result.get("stderr", "") or result.get("stdout", "")
+        _raise_git_auth_error("git clone", stderr)
         raise GitHubAPIError(f"git clone failed: {stderr}")
 
     shutil.move(tmpdir, workspace_dir)
