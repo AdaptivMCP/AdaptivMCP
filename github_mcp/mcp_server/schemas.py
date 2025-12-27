@@ -107,33 +107,6 @@ def _normalize_and_truncate(s: str) -> str:
     return s
 
 
-def _sanitize_metadata_value(value: Any, *, _depth: int = 0) -> Any:
-    """Convert arbitrary values into a JSON-serializable structure."""
-    if value is None:
-        return None
-    if isinstance(value, (bool, int, float, str)):
-        return value
-
-    # Prevent pathological recursion
-    if _depth >= 12:
-        return "<max_depth>"
-
-    if isinstance(value, Mapping):
-        out: Dict[str, Any] = {}
-        for k, v in value.items():
-            out[str(k)] = _sanitize_metadata_value(v, _depth=_depth + 1)
-        return out
-
-    if isinstance(value, (list, tuple, set)):
-        return [_sanitize_metadata_value(item, _depth=_depth + 1) for item in value]
-
-    try:
-        json.dumps(value)
-        return value
-    except Exception:
-        return str(value)
-
-
 def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     """
     Stable, bounded preview of tool args for logs.
