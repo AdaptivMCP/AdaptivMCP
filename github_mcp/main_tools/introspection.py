@@ -22,8 +22,8 @@ def list_write_tools() -> Dict[str, Any]:
         {
             "name": "authorize_write_actions",
             "category": "control",
-            "description": "Enable or disable write tools within this MCP session.",
-            "notes": "Call with approved=true to enable writes (WRITE_ALLOWED).",
+            "description": "Update write-allowed metadata exposed to clients.",
+            "notes": "This does not block writes; it only updates the WRITE_ALLOWED flag.",
         },
         {
             "name": "create_branch",

@@ -139,7 +139,7 @@ async def set_workspace_file_contents(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
         # Prefer scoped write gating so feature-branch work is allowed even
-        # when global WRITE_ALLOWED is disabled.
+        # when global WRITE_ALLOWED is disabled (metadata only).
         try:
             deps["ensure_write_allowed"](
                 f"set_workspace_file_contents {path} for {full_name}@{effective_ref}",

@@ -7,7 +7,6 @@ Goals:
   call each other directly without dealing with FastMCP objects).
 - Emit stable, testable log records for every tool call.
 - Record a compact in-memory narrative of recent tool executions.
-- Attach connector UI metadata (`invoking_message`, `invoked_message`).
 
 Important: this file is part of the server's public compatibility surface.
 Changes here should be backwards compatible.
@@ -36,20 +35,14 @@ from github_mcp.mcp_server.errors import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
-    _normalize_input_schema,
     _normalize_tool_description,
     _sanitize_metadata_value,
-    _title_from_tool_name,
 )
 from github_mcp.metrics import _record_tool_call
 from github_mcp.side_effects import (
     SideEffectClass,
     resolve_side_effect_class,
 )
-
-# OpenAI connector UI strings.
-OPENAI_INVOKING_MESSAGE = "Adaptiv Controller: running tool…"
-OPENAI_INVOKED_MESSAGE = "Adaptiv Controller: tool finished."
 
 # Dedupe cache (best-effort, per-process).
 _DEDUPE_TTL_SECONDS = 30.0
@@ -58,181 +51,13 @@ _DEDUPE_INFLIGHT: dict[str, tuple[float, asyncio.Future[Any]]] = {}
 _DEDUPE_RESULTS: dict[str, tuple[float, Any]] = {}
 _DEDUPE_LOCK = asyncio.Lock()
 
-
-# --- Tool visibility + routing metadata (ChatGPT-facing) ---
-# Make tool routing and side-effects explicit for both humans and machines.
-# Primary goal: prevent tool-surface ambiguity (server/admin vs workspace clone vs GitHub API).
-
-
-def _infer_tool_surface(tool_name: str) -> str:
-    tn = (tool_name or '').lower()
-
-    # Workspace (local clone)
-    if (
-        'workspace' in tn
-        or tn.startswith('workspace_')
-        or tn.startswith('ensure_workspace')
-        or tn.startswith('get_workspace')
-        or tn.startswith('set_workspace')
-        or tn.startswith('list_workspace')
-        or tn.startswith('search_workspace')
-        or tn in {'render_shell', 'terminal_command', 'run_command', 'run_tests', 'run_lint_suite', 'run_quality_suite'}
-    ):
-        return 'workspace'
-
-    # Server/admin diagnostics
-    if (
-        tn.startswith('ping')
-        or tn.startswith('validate_')
-        or tn.startswith('get_recent_')
-        or tn in {'list_tools', 'list_all_actions', 'describe_tool', 'get_repo_defaults', 'authorize_write_actions', 'get_server_config', 'list_render_logs', 'get_render_metrics'}
-    ):
-        return 'server_admin'
-
-    # Default to GitHub API surface
-    return 'github_api' if tn else 'unknown'
-
-
-def _routing_hint(surface: str) -> dict[str, str]:
-    if surface == 'workspace':
-        return {
-            'summary': 'Use for operations on the local workspace clone (Render filesystem).',
-            'example': 'Edit/search/run commands in the staged repo clone.',
-        }
-    if surface == 'github_api':
-        return {
-            'summary': 'Use for operations against GitHub (remote API / live repo state).',
-            'example': 'Fetch file contents from GitHub, open PRs, manage issues.',
-        }
-    if surface == 'server_admin':
-        return {
-            'summary': 'Use for server/admin/diagnostics endpoints (not repo content).',
-            'example': 'Ping, list tools, validate environment, fetch recent logs/errors.',
-        }
-    return {
-        'summary': 'Routing surface unknown; use describe_tool/list_tools to confirm.',
-        'example': 'Call describe_tool to inspect expected arguments and purpose.',
-    }
-
-
-def _build_tool_descriptor(
-    *,
-    tool_name: str,
-    title: str,
-    description: str | None,
-    visibility: str,
-    tags: Iterable[str],
-    read_only_hint: bool,
-    side_effects: str,
-    remote_write: bool,
-    ui_write_action: bool,
-    write_allowed: bool,
-    schema_fingerprint: str,
-    schema_visibility: str,
-) -> dict[str, Any]:
-    surface = _infer_tool_surface(tool_name)
-    return {
-        'name': tool_name,
-        'title': title,
-        'description': (description or '').strip(),
-        'visibility': visibility,
-        'tags': sorted(set([t for t in tags if t])),
-        'surface': surface,
-        'routing_hint': _routing_hint(surface),
-        'read_only_hint': bool(read_only_hint),
-        'side_effects': side_effects,
-        'remote_write': bool(remote_write),
-        'ui_write_action': bool(ui_write_action),
-        'write_allowed': bool(write_allowed),
-        'schema': {
-            'fingerprint': schema_fingerprint,
-            'visibility': schema_visibility,
-        },
-    }
-
-
-def _build_tool_descriptor_text(d: Mapping[str, Any]) -> str:
-    rh = d.get('routing_hint') or {}
-    schema = d.get('schema') or {}
-    tags = d.get('tags') or []
-
-    lines = [
-        f"Tool: {d.get('title','')} ({d.get('name','')})",
-        f"Surface: {d.get('surface','')}",
-        f"Visibility: {d.get('visibility','')}",
-        f"Side effects: {d.get('side_effects','')}",
-        f"Read-only hint: {d.get('read_only_hint', False)}",
-        f"Remote write: {d.get('remote_write', False)}",
-        f"UI write action: {d.get('ui_write_action', False)}",
-        f"Write allowed: {d.get('write_allowed', False)}",
-        f"Schema fingerprint: {schema.get('fingerprint','')}",
-        f"Schema visibility: {schema.get('visibility','')}",
-        ("Tags: " + ", ".join(tags)) if tags else 'Tags: (none)',
-        f"Routing: {rh.get('summary','')}",
-        f"Routing example: {rh.get('example','')}",
-    ]
-
-    desc = (d.get('description') or '').strip()
-    # Ensure tool_descriptor_text is always single-line (avoid literal newlines).
-    # This prevents log/UI injection of `\n` sequences and keeps JSON logs compact.
-    if desc:
-        desc = ' '.join(desc.split())
-        lines.append('Description: ' + desc)
-
-    return ' | '.join(lines)
-
-
-def _lookup_tool_descriptor(tool_name: str) -> dict[str, Any] | None:
-    tn = str(tool_name or '')
-    for tool_obj, fn in reversed(list(_REGISTERED_MCP_TOOLS)):
-        try:
-            if getattr(tool_obj, 'name', None) == tn or getattr(fn, '__name__', None) == tn:
-                meta = getattr(tool_obj, 'meta', {}) or {}
-                desc = meta.get('tool_descriptor')
-                if isinstance(desc, dict):
-                    return {
-                        'tool_descriptor': desc,
-                        'tool_descriptor_text': meta.get('tool_descriptor_text'),
-                        'tool_surface': desc.get('surface'),
-                        'routing_hint': desc.get('routing_hint'),
-                    }
-        except Exception:
-            continue
-    return None
-
-
-def _auto_approved_for_tool(
-    tool_name: str,
-    *,
-    side_effect: SideEffectClass,
-    write_allowed: bool,
-) -> bool:
-    """Compute connector-side auto-approval for a tool.
-
-    Policy:
-      - Reads are always auto-approved.
-      - Writes are auto-approved iff WRITE_ALLOWED is true.
-      - Render CLI tools never require approval.
-    """
-    # Render CLI tools (explicitly never require approval)
-    if tool_name.startswith('render_') or tool_name in {'render_shell', 'terminal_command', 'run_command'}:
-        return True
-
-    if side_effect is SideEffectClass.READ_ONLY:
-        return True
-
-    return bool(write_allowed)
-
 def _ui_prompt_required_for_tool(
     tool_name: str,
     *,
     side_effect: SideEffectClass,
     write_allowed: bool,
 ) -> bool:
-    """Whether the ChatGPT UI should prompt for approval before invoking the tool.
-
-    This server does not use UI approval prompts; WRITE_ALLOWED is the only gate.
-    """
+    """Whether the ChatGPT UI should prompt for approval before invoking the tool."""
     return False
 
 
@@ -295,13 +120,6 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
     """
     try:
         base = dict(payload)
-
-        # Optionally inject descriptor metadata (useful for machines).
-        if 'tool_name' in base and 'tool_descriptor' not in base:
-            injected = _lookup_tool_descriptor(str(base.get('tool_name') or ''))
-            if injected:
-                for k, v in injected.items():
-                    base.setdefault(k, v)
 
         safe = _sanitize_metadata_value(base)
 
@@ -471,16 +289,10 @@ def _register_with_fastmcp(
 ) -> Any:
     read_only_hint = bool(side_effect is SideEffectClass.READ_ONLY and not remote_write)
     meta: dict[str, Any] = {
-        "chatgpt.com/visibility": visibility,
         "chatgpt.com/read_only_hint": read_only_hint,
-        "chatgpt.com/toolInvocation/invoking": OPENAI_INVOKING_MESSAGE,
-        "chatgpt.com/toolInvocation/invoked": OPENAI_INVOKED_MESSAGE,
     }
 
-    if title:
-        meta["chatgpt.com/title"] = title
-
-    annotations = {"title": title or _title_from_tool_name(name)}
+    annotations: dict[str, Any] = {}
     if read_only_hint:
         annotations["readOnlyHint"] = True
         annotations["read_only_hint"] = True
@@ -503,60 +315,7 @@ def _register_with_fastmcp(
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
 
     wa = _current_write_allowed()
-    tool_obj.meta["chatgpt.com/auto_approved"] = _auto_approved_for_tool(
-        name,
-        side_effect=side_effect,
-        write_allowed=wa,
-    )
-    tool_obj.meta["chatgpt.com/side_effects"] = side_effect.value
-
-    # Schema fingerprint + routing/visibility descriptor (ChatGPT-facing).
-    schema_norm = _normalize_input_schema(tool_obj)
-    try:
-        schema_json = json.dumps(schema_norm, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-    except Exception:
-        schema_json = ''
-    schema_fingerprint = (
-        hashlib.sha1(schema_json.encode('utf-8', errors='replace')).hexdigest()
-        if schema_json
-        else ''
-    )
-    tool_obj.meta['schema_fingerprint'] = schema_fingerprint
-    tool_obj.meta['schema_visibility'] = visibility
-    for domain_prefix in ('chatgpt.com',):
-        tool_obj.meta[f'{domain_prefix}/schema_fingerprint'] = schema_fingerprint
-        tool_obj.meta[f'{domain_prefix}/schema_visibility'] = visibility
-
-    descriptor = _build_tool_descriptor(
-        tool_name=name,
-        title=(title or _title_from_tool_name(name)),
-        description=description,
-        visibility=visibility,
-        tags=tags,
-        read_only_hint=read_only_hint,
-        side_effects=side_effect.value,
-        remote_write=bool(remote_write),
-        ui_write_action=bool(ui_write_action),
-        write_allowed=bool(wa),
-        schema_fingerprint=schema_fingerprint,
-        schema_visibility=visibility,
-    )
-    descriptor = _sanitize_metadata_value(descriptor)
-    tool_obj.meta['tool_descriptor'] = descriptor
-    tool_obj.meta['tool_descriptor_text'] = _build_tool_descriptor_text(descriptor)
-    tool_obj.meta['tool_surface'] = descriptor.get('surface')
-    tool_obj.meta['routing_hint'] = (descriptor.get('routing_hint') or {})
-    for domain_prefix in ('chatgpt.com',):
-        tool_obj.meta[f'{domain_prefix}/tool_descriptor'] = descriptor
-        tool_obj.meta[f'{domain_prefix}/tool_descriptor_text'] = tool_obj.meta['tool_descriptor_text']
-        tool_obj.meta[f'{domain_prefix}/tool_surface'] = tool_obj.meta['tool_surface']
-        tool_obj.meta[f'{domain_prefix}/routing_hint'] = tool_obj.meta['routing_hint']
-
-    try:
-        fn.__tool_descriptor__ = descriptor
-        fn.__tool_descriptor_text__ = tool_obj.meta['tool_descriptor_text']
-    except Exception:
-        pass
+    tool_obj.meta["chatgpt.com/write_allowed"] = bool(wa)
 
     tool_obj.__side_effect_class__ = side_effect
     fn.__side_effect_class__ = side_effect
@@ -583,8 +342,6 @@ def mcp_tool(
 
         tool_name = name or getattr(func, "__name__", "tool")
         tool_visibility = _ignored.get("visibility", visibility)
-        tool_title = _title_from_tool_name(tool_name)
-
         # Remote mutations should still be classified as REMOTE_MUTATION.
         remote_write = bool(write_action)
         side_effect = (
@@ -592,7 +349,7 @@ def mcp_tool(
             if remote_write
             else resolve_side_effect_class(tool_name)
         )
-        # UI prompt behavior is disabled; WRITE_ALLOWED is the only gate.
+        # UI prompt behavior is disabled.
         initial_write_allowed = _current_write_allowed()
         ui_write_action = _ui_prompt_required_for_tool(
             tool_name, side_effect=side_effect, write_allowed=initial_write_allowed
@@ -901,7 +658,7 @@ def mcp_tool(
             wrapper.__mcp_tool__ = _register_with_fastmcp(
                 wrapper,
                 name=tool_name,
-                title=tool_title,
+                title=None,
                 description=normalized_description,
                 tags=tag_set,
                 ui_write_action=ui_write_action,
@@ -1194,7 +951,7 @@ def mcp_tool(
         wrapper.__mcp_tool__ = _register_with_fastmcp(
             wrapper,
             name=tool_name,
-            title=tool_title,
+            title=None,
             description=normalized_description,
             tags=tag_set,
             ui_write_action=ui_write_action,
@@ -1228,14 +985,6 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
 
     for tool_obj, fn in list(_REGISTERED_MCP_TOOLS):
         try:
-            tool_name = str(getattr(tool_obj, "name", None) or getattr(fn, "__name__", "tool"))
-            side_effect = getattr(fn, "__side_effect_class__", None)
-            if not isinstance(side_effect, SideEffectClass):
-                side_effect = resolve_side_effect_class(tool_name)
-            tool_obj.meta["chatgpt.com/auto_approved"] = _auto_approved_for_tool(
-                tool_name,
-                side_effect=side_effect,
-                write_allowed=effective_write_allowed,
-            )
+            tool_obj.meta["chatgpt.com/write_allowed"] = bool(effective_write_allowed)
         except Exception:
             continue

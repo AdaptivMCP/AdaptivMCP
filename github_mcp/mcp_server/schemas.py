@@ -1,41 +1,15 @@
-"""
-Schema + metadata helpers.
-
-Project policy:
-- No custom token redaction.
-- Still enforce JSON-serializable metadata and bounded previews to keep logs stable.
-
-Note on log stability:
-- Tool args and metadata are frequently embedded into log lines and UI previews.
-- To prevent accidental multi-line log entries, we normalize string values to a single line
-  (\r/\n/\t collapse + control-char removal) before truncation.
-"""
+"""Schema + metadata helpers."""
 
 from __future__ import annotations
 
 import inspect
 import json
-import re
 from typing import Any, Dict, Mapping, Optional
 
 
-_MAX_STR_LEN = 2000
-_MAX_LIST_ITEMS = 100
-_MAX_DICT_ITEMS = 200
-_MAX_DEPTH = 6
-
-
-_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
-
-
 def _single_line(s: str) -> str:
-    """Normalize a string for safe log/UI embedding."""
-    # Normalize newlines/tabs to spaces
-    s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
-    # Drop remaining control chars
-    s = _CONTROL_CHARS_RE.sub("", s)
-    # Collapse whitespace runs
-    return " ".join(s.split())
+    """Return the string unchanged."""
+    return s
 
 
 def _title_from_tool_name(name: str) -> str:
@@ -125,59 +99,31 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
 
 
 def _truncate_str(s: str) -> str:
-    if len(s) <= _MAX_STR_LEN:
-        return s
-    return s[:_MAX_STR_LEN] + "…(truncated)"
+    return s
 
 
 def _normalize_and_truncate(s: str) -> str:
-    """Normalize strings without scanning unbounded payloads."""
-    if len(s) > _MAX_STR_LEN:
-        head = s[:_MAX_STR_LEN]
-        return _single_line(head) + "…(truncated)"
-    return _single_line(s)
+    return s
 
 
 def _sanitize_metadata_value(value: Any, *, _depth: int = 0) -> Any:
-    """
-    Convert arbitrary values into a JSON-serializable, bounded structure.
-
-    NOTE: No redaction is applied; only type normalization + truncation.
-    """
-    if _depth > _MAX_DEPTH:
-        return "…(max_depth)"
-
+    """Convert arbitrary values into a JSON-serializable structure."""
     if value is None:
         return None
-    if isinstance(value, (bool, int, float)):
+    if isinstance(value, (bool, int, float, str)):
         return value
-    if isinstance(value, str):
-        return _normalize_and_truncate(value)
 
     if isinstance(value, Mapping):
-        out: Dict[str, Any] = {}
-        for i, (k, v) in enumerate(value.items()):
-            if i >= _MAX_DICT_ITEMS:
-                out["…"] = f"(truncated after {_MAX_DICT_ITEMS} keys)"
-                break
-            key = _truncate_str(_single_line(str(k)))
-            out[key] = _sanitize_metadata_value(v, _depth=_depth + 1)
-        return out
+        return {str(k): _sanitize_metadata_value(v, _depth=_depth + 1) for k, v in value.items()}
 
     if isinstance(value, (list, tuple, set)):
-        out_list = []
-        for i, item in enumerate(value):
-            if i >= _MAX_LIST_ITEMS:
-                out_list.append(f"…(truncated after {_MAX_LIST_ITEMS} items)")
-                break
-            out_list.append(_sanitize_metadata_value(item, _depth=_depth + 1))
-        return out_list
+        return [_sanitize_metadata_value(item, _depth=_depth + 1) for item in value]
 
-    # Fallback: stringify
     try:
-        return _truncate_str(_single_line(str(value)))
+        json.dumps(value)
+        return value
     except Exception:
-        return f"<{type(value).__name__}>"
+        return str(value)
 
 
 def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
@@ -189,11 +135,11 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     try:
         sanitized = _sanitize_metadata_value(dict(args))
         raw = json.dumps(sanitized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        return _truncate_str(_single_line(raw))
+        return raw
     except Exception:
         # Worst-case fallback
         try:
-            return _truncate_str(_single_line(str(args)))
+            return str(args)
         except Exception:
             return "<unprintable_args>"
 
@@ -228,7 +174,7 @@ def _preflight_tool_args(
 
     Policy:
     - No redaction.
-    - Ensure JSON-serializable, bounded output.
+    - Ensure JSON-serializable output.
     """
     try:
         payload = {

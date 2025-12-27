@@ -301,7 +301,7 @@ def __getattr__(name: str):
     raise AttributeError(name)
 
 
-# Recalculate write gate on first import to honor updated environment variables when
+# Recalculate write-allowed metadata on first import to honor updated environment variables when
 # ``main`` is reloaded in tests without clobbering runtime toggles.
 if not getattr(server, "_WRITE_ALLOWED_INITIALIZED", False):
     server.WRITE_ALLOWED = server.WRITE_ALLOWED if hasattr(server, "WRITE_ALLOWED") else True
@@ -451,7 +451,7 @@ async def commit_workspace_files(
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Toggle server-side write access (WRITE_ALLOWED)."""
+    """Update WRITE_ALLOWED metadata exposed to clients."""
 
     server.WRITE_ALLOWED = bool(approved)
     import github_mcp.mcp_server.context as _ctx
