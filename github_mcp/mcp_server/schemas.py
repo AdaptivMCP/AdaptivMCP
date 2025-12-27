@@ -114,9 +114,6 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     Produces a single-line JSON string (truncated).
     """
     try:
-        sanitized = _sanitize_metadata_value(dict(args))
-        raw = json.dumps(sanitized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        return raw
     except Exception:
         # Worst-case fallback
         try:
