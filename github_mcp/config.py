@@ -9,7 +9,7 @@ import tempfile
 import time
 from collections import deque
 
-from github_mcp.mcp_server.schemas import _sanitize_metadata_value
+from github_mcp.mcp_server.schemas import _jsonable
 
 # Custom log levels
 # ------------------------------------------------------------------------------
@@ -219,7 +219,7 @@ def _extract_log_extras(record: logging.LogRecord) -> dict[str, object]:
             continue
         if key in _exclude_dynamic:
             continue
-        extras[key] = _sanitize_metadata_value(value)
+        extras[key] = _jsonable(value)
 
     return extras
 
