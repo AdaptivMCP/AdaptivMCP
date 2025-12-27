@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 
 from ._main import _main
+from github_mcp.config import GITHUB_TOKEN_ENV_VARS
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -68,15 +69,21 @@ async def validate_environment() -> Dict[str, Any]:
             status = "warning"
 
     # GitHub token presence/shape
-    raw_token = os.environ.get("GITHUB_PAT")
-    token_env_var = "GITHUB_PAT" if os.environ.get("GITHUB_PAT") is not None else None
+    raw_token = None
+    token_env_var = None
+    for env_var in GITHUB_TOKEN_ENV_VARS:
+        candidate = os.environ.get(env_var)
+        if candidate is not None:
+            raw_token = candidate
+            token_env_var = env_var
+            break
 
     if raw_token is None:
         add_check(
             "github_token",
             "error",
-            "GITHUB_PAT is not set",
-            {"env_vars": ["GITHUB_PAT"]},
+            "GitHub token is not set",
+            {"env_vars": list(GITHUB_TOKEN_ENV_VARS)},
         )
         token_ok = False
     elif not raw_token.strip():

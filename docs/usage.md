@@ -79,7 +79,7 @@ Key environment variables:
 
 ### GitHub authentication
 
-- `GITHUB_PAT` — GitHub API token.
+- `GITHUB_PAT`, `GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_OAUTH_TOKEN` — GitHub API token (first configured is used).
 - `GITHUB_API_BASE` — override GitHub API base URL.
 
 ### Render observability (optional)

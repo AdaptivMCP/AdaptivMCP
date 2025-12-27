@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from typing import Any, Dict, Optional
 
@@ -11,7 +12,7 @@ from github_mcp.config import (
     GIT_COMMITTER_EMAIL,
     GIT_COMMITTER_NAME,
     GITHUB_API_BASE,
-    GITHUB_PAT,
+    GITHUB_TOKEN_ENV_VARS,
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
@@ -56,7 +57,7 @@ async def get_server_config() -> Dict[str, Any]:
             "sandbox_content_base_url_configured": bool(SANDBOX_CONTENT_BASE_URL),
         },
         "environment": {
-            "github_token_present": bool(GITHUB_PAT),
+            "github_token_present": any(os.environ.get(name) for name in GITHUB_TOKEN_ENV_VARS),
         },
     }
 
