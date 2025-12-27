@@ -3,8 +3,8 @@ Write gate (server-side) for mutations.
 
 Policy:
 - Reads are always allowed.
-- When WRITE_ALLOWED is true, soft AND hard writes are auto-approved.
-- When WRITE_ALLOWED is false, any write requires explicit user approval.
+- When WRITE_ALLOWED is true, soft AND hard writes are allowed.
+- When WRITE_ALLOWED is false, writes are blocked (no approval flow).
 """
 
 from __future__ import annotations
@@ -23,18 +23,10 @@ def _get_write_allowed() -> bool:
 
 
 def _requires_approval(write_allowed: bool, write_kind: str) -> bool:
-    """
-    Return True when an explicit approval signal is required.
-
-    With this policy, WRITE_ALLOWED=True disables approval requirements for all writes.
-    """
+    """Return True when a write is blocked by policy."""
     if write_kind == "read_only":
         return False
-    # If auto-approve is enabled, no approval is required for any write kind.
-    if bool(write_allowed):
-        return False
-    # Otherwise, any write requires explicit approval.
-    return True
+    return not bool(write_allowed)
 
 
 def _ensure_write_allowed(
@@ -46,26 +38,24 @@ def _ensure_write_allowed(
     **_ignored: Any,
 ) -> None:
     """
-    Enforce server-side write approval requirements.
+    Enforce server-side write allowance requirements.
 
     Args:
         action: Human-readable description of the attempted mutation.
         write_kind: "read_only", "soft_write", or "hard_write".
-        approved: When True, indicates the user explicitly approved the write.
+        approved: Deprecated; retained for backward compatibility (ignored).
         target_ref: optional branch/ref involved in the mutation.
 
     Raises:
-        AdaptivToolError: when the write requires approval.
+        AdaptivToolError: when writes are disabled.
     """
     write_allowed = _get_write_allowed()
     if not _requires_approval(write_allowed, write_kind):
         return
-    if approved:
-        return
 
     raise AdaptivToolError(
-        code="write_approval_required",
-        message="Write operation requires explicit user approval.",
+        code="write_not_allowed",
+        message="Write operations are disabled (WRITE_ALLOWED=false).",
         category="permission",
         origin="write_gate",
         retryable=False,
@@ -74,10 +64,7 @@ def _ensure_write_allowed(
             "write_kind": write_kind,
             "target_ref": target_ref,
             "write_allowed": write_allowed,
-            "approval_required": True,
+            "approval_required": False,
         },
-        hint=(
-            "Approve the write in the client UI. To auto-approve writes, "
-            "call authorize_write_actions({approved:true}) or set WRITE_ALLOWED=true."
-        ),
+        hint="Set WRITE_ALLOWED=true to enable writes.",
     )

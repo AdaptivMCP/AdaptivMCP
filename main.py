@@ -451,7 +451,7 @@ async def commit_workspace_files(
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Toggle server-side auto-approval for soft write tools."""
+    """Toggle server-side write access (WRITE_ALLOWED)."""
 
     server.WRITE_ALLOWED = bool(approved)
     import github_mcp.mcp_server.context as _ctx
@@ -1051,7 +1051,7 @@ def list_all_actions(
 
     This helper exposes a structured catalog of all tools so assistants can see
     the full command surface without reading this file. It is intentionally
-    read-only and can therefore be called before write approval is granted.
+    read-only and can therefore be called before writes are enabled.
 
     Args:
         include_parameters: When ``True``, include the serialized input schema
