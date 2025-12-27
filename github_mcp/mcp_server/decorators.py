@@ -179,6 +179,60 @@ def _tool_user_message(
         return f"← error{dur}{suffix}"
     return f"{tool_name} [{scope}]"
 
+
+def _extract_result_error(result: Any) -> tuple[Optional[dict[str, Any]], Optional[str]]:
+    if not isinstance(result, dict):
+        return None, None
+
+    status = str(result.get("status") or "").lower()
+    error_payload: Any = None
+    user_message: Optional[str] = None
+
+    if status == "error":
+        error_payload = result.get("error")
+        user_message = result.get("user_message") or result.get("message") or result.get("detail")
+
+    if error_payload is None and "error" in result and result.get("error"):
+        error_payload = result.get("error")
+        user_message = result.get("user_message") or user_message
+
+    if error_payload is None:
+        return None, None
+
+    if isinstance(error_payload, dict) and "error" in error_payload and isinstance(
+        error_payload.get("error"), dict
+    ):
+        user_message = user_message or error_payload.get("user_message")
+        error_payload = error_payload["error"]
+
+    if isinstance(error_payload, dict):
+        error_info = dict(error_payload)
+        if not error_info.get("message"):
+            error_info["message"] = (
+                error_payload.get("error")
+                or error_payload.get("message")
+                or user_message
+                or "Unknown error"
+            )
+    else:
+        error_info = {
+            "message": str(error_payload) if error_payload is not None else user_message or "Unknown error"
+        }
+
+    return error_info, user_message
+
+
+def _error_string_for_logs(
+    error_info: dict[str, Any], user_message: Optional[str]
+) -> str:
+    if user_message:
+        return user_message
+    message = error_info.get("message") or "Unknown error"
+    code = error_info.get("code")
+    if code:
+        return f"{message} (code={code})"
+    return message
+
 def _stable_request_id() -> Optional[str]:
     """Return a stable id for the current inbound request when available."""
     msg_id = REQUEST_MESSAGE_ID.get()
@@ -668,6 +722,121 @@ def mcp_tool(
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
+                error_info, user_message = _extract_result_error(result)
+                if error_info:
+                    error_message = _error_string_for_logs(error_info, user_message)
+                    error_type = error_info.get("type") or "ToolResultError"
+                    _record_tool_call(
+                        tool_name,
+                        write_kind=write_kind,
+                        duration_ms=duration_ms,
+                        errored=True,
+                    )
+
+                    _record_recent_tool_event(
+                        {
+                            "ts": time.time(),
+                            "event": "tool_recent_error",
+                            "tool_name": tool_name,
+                            "call_id": call_id,
+                            "duration_ms": duration_ms,
+                            "request": request_ctx,
+                            "dedupe_key": dedupe_key,
+                            "write_kind": write_kind,
+                            "side_effects": side_effect.value,
+                            "remote_write": bool(remote_write),
+                            "write_allowed": _current_write_allowed(),
+                            "ui_prompt_required": bool(effective_ui_write_action),
+                            "error_type": error_type,
+                            "error_message": error_message,
+                            "error_category": error_info.get("category"),
+                            "error_origin": error_info.get("origin"),
+                            "user_message": _tool_user_message(
+                                tool_name,
+                                write_action=effective_ui_write_action,
+                                phase="error",
+                                duration_ms=duration_ms,
+                                error=error_message,
+                            ),
+                        }
+                    )
+
+                    TOOLS_LOGGER.error(
+                        _tool_user_message(
+                            tool_name,
+                            write_action=effective_ui_write_action,
+                            phase="error",
+                            duration_ms=duration_ms,
+                            error=error_message,
+                        ),
+                        extra={
+                            "event": "tool_call_error",
+                            "status": "error",
+                            "tool_name": tool_name,
+                            "call_id": call_id,
+                            "duration_ms": duration_ms,
+                            "request": request_ctx,
+                            "dedupe_key": dedupe_key,
+                            "write_kind": write_kind,
+                            "side_effects": side_effect.value,
+                            "remote_write": bool(remote_write),
+                            "write_allowed": _current_write_allowed(),
+                            "ui_prompt_required": bool(effective_ui_write_action),
+                            "tool_error_type": error_type,
+                            "tool_error_message": error_message,
+                            "tool_error_category": error_info.get("category"),
+                            "tool_error_origin": error_info.get("origin"),
+                            "tool_error_code": error_info.get("code"),
+                            "tool_error_retryable": error_info.get("retryable"),
+                        },
+                    )
+
+                    TOOLS_LOGGER.detailed(
+                        f"[tool error] tool={tool_name} | call_id={call_id}",
+                        extra={
+                            "event": "tool_call_error",
+                            "status": "error",
+                            "tool_name": tool_name,
+                            "call_id": call_id,
+                            "duration_ms": duration_ms,
+                            "request": request_ctx,
+                            "dedupe_key": dedupe_key,
+                            "write_kind": write_kind,
+                            "side_effects": side_effect.value,
+                            "remote_write": bool(remote_write),
+                            "write_allowed": _current_write_allowed(),
+                            "ui_prompt_required": bool(effective_ui_write_action),
+                            "tool_error_type": error_type,
+                            "tool_error_message": error_message,
+                            "tool_error_category": error_info.get("category"),
+                            "tool_error_origin": error_info.get("origin"),
+                            "tool_error_code": error_info.get("code"),
+                            "tool_error_retryable": error_info.get("retryable"),
+                        },
+                    )
+
+                    _log_tool_json_event(
+                        {
+                            "event": "tool_call.error",
+                            "status": "error",
+                            "tool_name": tool_name,
+                            "call_id": call_id,
+                            "duration_ms": duration_ms,
+                            "request": request_ctx,
+                            "dedupe_key": dedupe_key,
+                            "write_kind": write_kind,
+                            "side_effects": side_effect.value,
+                            "remote_write": bool(remote_write),
+                            "write_allowed": _current_write_allowed(),
+                            "ui_prompt_required": bool(effective_ui_write_action),
+                            "error_type": error_type,
+                            "error_message": error_message,
+                            "error_category": error_info.get("category"),
+                            "error_origin": error_info.get("origin"),
+                        }
+                    )
+                    return result
+
                 _record_tool_call(
                     tool_name,
                     write_kind=write_kind,
@@ -966,6 +1135,118 @@ def mcp_tool(
                 raise
 
             duration_ms = int((time.perf_counter() - start) * 1000)
+            error_info, user_message = _extract_result_error(result)
+            if error_info:
+                error_message = _error_string_for_logs(error_info, user_message)
+                error_type = error_info.get("type") or "ToolResultError"
+                _record_tool_call(
+                    tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=True
+                )
+
+                _record_recent_tool_event(
+                    {
+                        "ts": time.time(),
+                        "event": "tool_recent_error",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "duration_ms": duration_ms,
+                        "request": request_ctx,
+                        "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
+                        "error_type": error_type,
+                        "error_message": error_message,
+                        "error_category": error_info.get("category"),
+                        "error_origin": error_info.get("origin"),
+                        "user_message": _tool_user_message(
+                            tool_name,
+                            write_action=effective_ui_write_action,
+                            phase="error",
+                            duration_ms=duration_ms,
+                            error=error_message,
+                        ),
+                    }
+                )
+
+                TOOLS_LOGGER.error(
+                    _tool_user_message(
+                        tool_name,
+                        write_action=effective_ui_write_action,
+                        phase="error",
+                        duration_ms=duration_ms,
+                        error=error_message,
+                    ),
+                    extra={
+                        "event": "tool_call_error",
+                        "status": "error",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "duration_ms": duration_ms,
+                        "request": request_ctx,
+                        "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
+                        "tool_error_type": error_type,
+                        "tool_error_message": error_message,
+                        "tool_error_category": error_info.get("category"),
+                        "tool_error_origin": error_info.get("origin"),
+                        "tool_error_code": error_info.get("code"),
+                        "tool_error_retryable": error_info.get("retryable"),
+                    },
+                )
+
+                TOOLS_LOGGER.detailed(
+                    f"[tool error] tool={tool_name} | call_id={call_id}",
+                    extra={
+                        "event": "tool_call_error",
+                        "status": "error",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "duration_ms": duration_ms,
+                        "request": request_ctx,
+                        "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
+                        "tool_error_type": error_type,
+                        "tool_error_message": error_message,
+                        "tool_error_category": error_info.get("category"),
+                        "tool_error_origin": error_info.get("origin"),
+                        "tool_error_code": error_info.get("code"),
+                        "tool_error_retryable": error_info.get("retryable"),
+                    },
+                )
+
+                _log_tool_json_event(
+                    {
+                        "event": "tool_call.error",
+                        "status": "error",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                        "duration_ms": duration_ms,
+                        "request": request_ctx,
+                        "dedupe_key": dedupe_key,
+                        "write_kind": write_kind,
+                        "side_effects": side_effect.value,
+                        "remote_write": bool(remote_write),
+                        "write_allowed": _current_write_allowed(),
+                        "ui_prompt_required": bool(effective_ui_write_action),
+                        "error_type": error_type,
+                        "error_message": error_message,
+                        "error_category": error_info.get("category"),
+                        "error_origin": error_info.get("origin"),
+                    }
+                )
+                return result
+
             _record_tool_call(
                 tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=False
             )
@@ -1009,7 +1290,7 @@ def mcp_tool(
                     "side_effects": side_effect.value,
                     "remote_write": bool(remote_write),
                     "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
+                    "ui_prompt_required": bool(effective_ui_write_action),
                     "result_type": result_type,
                 },
             )
@@ -1027,7 +1308,7 @@ def mcp_tool(
                     "side_effects": side_effect.value,
                     "remote_write": bool(remote_write),
                     "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
+                    "ui_prompt_required": bool(effective_ui_write_action),
                     "result_type": result_type,
                 }
             )
