@@ -42,6 +42,7 @@ async def render_shell(
     """
 
     try:
+        requested_command = command
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
 
         base_ref = _tw()._resolve_ref(ref, branch=branch)
@@ -80,6 +81,7 @@ async def render_shell(
             "base_ref": effective_ref,
             "target_ref": target_ref,
             "branch": branch_creation,
+            "command_input": requested_command,
             "command": command_result,
         }
     except Exception as exc:
@@ -107,6 +109,7 @@ async def terminal_command(
     persists across calls so installed dependencies and edits are reused."""
 
     env: Optional[Dict[str, str]] = None
+    requested_command = command
     try:
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
@@ -196,6 +199,8 @@ async def terminal_command(
         out: Dict[str, Any] = {
             "repo_dir": repo_dir,
             "workdir": workdir,
+            "command_input": requested_command,
+            "command": command,
             "install": install_result,
             "result": result,
         }
