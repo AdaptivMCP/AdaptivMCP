@@ -15,15 +15,13 @@ from typing import Any, Dict, List, Optional
 
 import asyncio
 import httpx
+import os
 
 from github_mcp.config import (
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
     RENDER_API_BASE,
-    RENDER_API_KEY,
-    RENDER_OWNER_ID,
-    RENDER_SERVICE_ID,
 )
 from github_mcp.exceptions import UsageError
 
@@ -36,7 +34,7 @@ def _comma(values: Optional[List[str]]) -> Optional[str]:
 
 
 def _require_api_key() -> str:
-    key = (RENDER_API_KEY or '').strip()
+    key = (os.environ.get("RENDER_API_KEY") or "").strip()
     if not key:
         raise UsageError(
             "Render API access is not configured. Set RENDER_API_KEY."
@@ -45,9 +43,10 @@ def _require_api_key() -> str:
 
 
 def _default_resource_list() -> Optional[List[str]]:
-    if not RENDER_SERVICE_ID:
+    service_id = os.environ.get("RENDER_SERVICE_ID")
+    if not service_id:
         return None
-    val = str(RENDER_SERVICE_ID).strip()
+    val = str(service_id).strip()
     return [val] if val else None
 
 
@@ -57,7 +56,7 @@ _OWNER_ID_CACHE_TTL_SECONDS = 60 * 60  # 1 hour
 
 
 def _default_owner_id() -> str:
-    return (RENDER_OWNER_ID or "").strip()
+    return (os.environ.get("RENDER_OWNER_ID") or "").strip()
 
 
 async def _resolve_owner_id(resource_id: str | None) -> str:
@@ -102,7 +101,7 @@ async def _resolve_owner_id(resource_id: str | None) -> str:
 
 async def _render_get(path: str, *, params: Dict[str, Any]) -> Any:
     api_key = _require_api_key()
-    base = (RENDER_API_BASE or '').rstrip('/')
+    base = (os.environ.get("RENDER_API_BASE") or RENDER_API_BASE or "").rstrip("/")
     url = f"{base}{path}"
 
     limits = httpx.Limits(
@@ -215,9 +214,9 @@ async def get_render_metrics(
     dict keyed by metric type.
     """
 
-    rid = str(resourceId).strip() if resourceId is not None else ''
+    rid = str(resourceId).strip() if resourceId is not None else ""
     if not rid:
-        rid = str(RENDER_SERVICE_ID or '').strip()
+        rid = str(os.environ.get("RENDER_SERVICE_ID") or "").strip()
 
     if not rid:
         raise UsageError('resourceId is required (or set RENDER_SERVICE_ID in the environment)')
