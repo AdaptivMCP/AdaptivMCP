@@ -75,6 +75,7 @@ _install_custom_log_levels()
 # Configuration and globals
 # ------------------------------------------------------------------------------
 
+GITHUB_TOKEN_ENV_VARS = ("GITHUB_PAT", "GITHUB_TOKEN", "GH_TOKEN", "GITHUB_OAUTH_TOKEN")
 GITHUB_PAT = os.environ.get("GITHUB_PAT")
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
 GITHUB_API_BASE_URL = GITHUB_API_BASE
@@ -363,6 +364,7 @@ __all__ = [
     "GIT_COMMITTER_EMAIL",
     "GIT_COMMITTER_NAME",
     "GITHUB_API_BASE",
+    "GITHUB_TOKEN_ENV_VARS",
     "GITHUB_LOGGER",
     "GITHUB_PAT",
     "RENDER_API_BASE",

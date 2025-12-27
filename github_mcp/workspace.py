@@ -160,7 +160,8 @@ def _raise_git_auth_error(operation: str, stderr: str) -> None:
         return
     raise GitHubAuthError(
         f"{operation} requires GitHub authentication but interactive prompts are disabled. "
-        "Configure GITHUB_PAT or attach credentials to the connector, or ensure the repo is public."
+        "Configure GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, or GITHUB_OAUTH_TOKEN, attach credentials "
+        "to the connector, or ensure the repo is public."
     )
 
 

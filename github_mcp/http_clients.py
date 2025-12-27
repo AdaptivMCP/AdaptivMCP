@@ -17,6 +17,7 @@ from .config import (
     GITHUB_API_BASE,
     GITHUB_API_BASE_URL,
     GITHUB_REQUEST_TIMEOUT_SECONDS,
+    GITHUB_TOKEN_ENV_VARS,
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
@@ -64,13 +65,23 @@ def _get_github_token() -> str:
     values during long-running processes.
     """
 
-    token = os.environ.get("GITHUB_PAT")
+    token = None
+    token_source = None
+    for env_var in GITHUB_TOKEN_ENV_VARS:
+        candidate = os.environ.get(env_var)
+        if candidate is not None:
+            token = candidate
+            token_source = env_var
+            break
+
     if token is None:
         raise GitHubAuthError("GitHub authentication failed: token is not configured")
 
     token = token.strip()
     if not token:
-        raise GitHubAuthError("GitHub authentication failed: token is empty")
+        raise GitHubAuthError(
+            f"GitHub authentication failed: {token_source or 'token'} is empty"
+        )
 
     return token
 
