@@ -119,7 +119,7 @@ async def terminal_command(
         )
         if needs_write_gate:
             # Prefer scoped write gating so feature-branch work is allowed even
-            # when global WRITE_ALLOWED is disabled.
+            # when global WRITE_ALLOWED is disabled (metadata only).
             try:
                 deps["ensure_write_allowed"](
                     f"terminal_command {command} in {full_name}@{effective_ref}",

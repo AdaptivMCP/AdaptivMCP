@@ -4,11 +4,9 @@ This controller is operated by a single owner.
 
 We classify tools into side-effect buckets used for:
 - observability (logs, recent events)
-- server-side write gating (soft vs hard writes)
 
 UX policy:
 - Client/UI approval prompts are never used by this server.
-  Authorization is enforced server-side via the write gate.
 
 SideEffectClass:
 - READ_ONLY: no mutations.
