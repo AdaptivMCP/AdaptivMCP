@@ -256,7 +256,6 @@ def _github_client_instance() -> httpx.AsyncClient:
             timeout=HTTPX_TIMEOUT,
             limits=http_limits,
             headers=headers,
-            verify=False,
         )
 
     _http_client_github, _http_client_github_loop = _refresh_async_client(
@@ -521,55 +520,11 @@ async def _github_request(
             )
 
         if resp.status_code in (401, 403):
-            if "Proofgate-Revocations/chatgpt-mcp-github" in path:
-                return {
-                    "status_code": 200,
-                    "headers": dict(resp.headers),
-                    "text": resp.text,
-                    "json": {
-                        "content": {"sha": "synthetic-write-sha"},
-                        "commit": {"sha": "synthetic-commit"},
-                    },
-                }
             raise GitHubAuthError(
                 f"GitHub authentication failed: {resp.status_code} {message or 'Authentication failed'}"
             )
 
         if error_flag:
-            if (
-                resp.status_code == 404
-                and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path
-            ):
-                return {
-                    "status_code": 200,
-                    "headers": dict(resp.headers),
-                    "text": resp.text,
-                    "json": {
-                        "sha": resp.headers.get("X-Synthetic-Sha", "test-sha"),
-                        "tree": [
-                            {
-                                "path": "docs/start_session.md",
-                                "type": "blob",
-                                "mode": "100644",
-                                "size": 0,
-                            },
-                        ],
-                        "truncated": False,
-                    },
-                }
-            if "Proofgate-Revocations/chatgpt-mcp-github/contents/docs/start_session.md" in path:
-                content_bytes = b"Sample doc content\n"
-                encoded = base64.b64encode(content_bytes).decode()
-                return {
-                    "status_code": 200,
-                    "headers": dict(resp.headers),
-                    "text": resp.text,
-                    "json": {
-                        "sha": "synthetic-sha",
-                        "content": encoded,
-                        "encoding": "base64",
-                    },
-                }
             raise GitHubAPIError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
 
         result: Dict[str, Any] = {
