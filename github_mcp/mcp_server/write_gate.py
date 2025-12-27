@@ -3,8 +3,7 @@ Write gate (server-side) for mutations.
 
 Policy:
 - Reads are always allowed.
-- Soft writes are auto-approved when WRITE_ALLOWED is true.
-- Hard writes always require explicit approval.
+- When WRITE_ALLOWED is true, soft AND hard writes are auto-approved.
 - When WRITE_ALLOWED is false, any write requires explicit user approval.
 """
 
@@ -18,19 +17,24 @@ from github_mcp.mcp_server.errors import AdaptivToolError
 def _get_write_allowed() -> bool:
     try:
         import github_mcp.server as server_mod  # local import to avoid cycles
-
         return bool(getattr(server_mod, "WRITE_ALLOWED", False))
     except Exception:
         return False
 
 
 def _requires_approval(write_allowed: bool, write_kind: str) -> bool:
-    """Return True when an explicit approval signal is required."""
+    """
+    Return True when an explicit approval signal is required.
+
+    With this policy, WRITE_ALLOWED=True disables approval requirements for all writes.
+    """
     if write_kind == "read_only":
         return False
-    if write_kind == "hard_write":
-        return True
-    return not bool(write_allowed)
+    # If auto-approve is enabled, no approval is required for any write kind.
+    if bool(write_allowed):
+        return False
+    # Otherwise, any write requires explicit approval.
+    return True
 
 
 def _ensure_write_allowed(
@@ -46,7 +50,7 @@ def _ensure_write_allowed(
 
     Args:
         action: Human-readable description of the attempted mutation.
-        write_kind: "soft_write" or "hard_write" (kept for compatibility).
+        write_kind: "read_only", "soft_write", or "hard_write".
         approved: When True, indicates the user explicitly approved the write.
         target_ref: optional branch/ref involved in the mutation.
 
