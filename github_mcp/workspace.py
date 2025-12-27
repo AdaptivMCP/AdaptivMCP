@@ -198,10 +198,17 @@ def _is_git_auth_error(message: str) -> bool:
 def _raise_git_auth_error(operation: str, stderr: str) -> None:
     if not _is_git_auth_error(stderr):
         return
+
+    # Best-effort context without dumping huge logs. Do not include any env content here.
+    excerpt = " ".join((stderr or "").replace("\r", " ").replace("\n", " ").split())
+    if len(excerpt) > 240:
+        excerpt = excerpt[:240] + "..."
+
     raise GitHubAuthError(
-        f"{operation} requires GitHub authentication but interactive prompts are disabled. "
-        "Configure GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, or GITHUB_OAUTH_TOKEN, attach credentials "
-        "to the connector, or ensure the repo is public."
+        f"{operation} failed with an authentication-like git error while prompts are disabled. "
+        f"git stderr (excerpt): {excerpt} "
+        "Provide GitHub repo credentials via a connector/credential helper or a supported env var "
+        "(GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, GITHUB_OAUTH_TOKEN), or ensure the repo is public."
     )
 
 
