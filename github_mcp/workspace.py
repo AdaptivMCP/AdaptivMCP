@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import re
 import shutil
 import shlex
 import sys
 import tempfile
-import re
 from typing import Any, Dict, Optional
 
 from . import config
@@ -18,7 +18,7 @@ from .http_clients import _get_github_token
 
 
 def _is_git_rate_limit_error(message: str) -> bool:
-    lowered = message.lower()
+    lowered = (message or "").lower()
     return any(
         marker in lowered
         for marker in ("rate limit", "secondary rate limit", "abuse detection")
@@ -64,7 +64,6 @@ async def _run_shell(
     env: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Execute a shell command with author/committer env vars injected."""
-
     shell_executable = os.environ.get("SHELL")
     if os.name == "nt":
         shell_executable = shell_executable or shutil.which("bash")
@@ -82,7 +81,7 @@ async def _run_shell(
     if env is not None:
         proc_env.update(env)
 
-    start_new_session = os.name != 'nt'
+    start_new_session = os.name != "nt"
     proc = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
@@ -102,7 +101,7 @@ async def _run_shell(
         timed_out = True
         # Best-effort termination: kill the whole process group on POSIX so
         # child processes (e.g. pytest workers) don't keep pipes open.
-        if os.name != 'nt':
+        if os.name != "nt":
             import signal
 
             try:
@@ -125,13 +124,12 @@ async def _run_shell(
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=5)
         except Exception:
-            stdout_bytes, stderr_bytes = b'', b''
-
+            stdout_bytes, stderr_bytes = b"", b""
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
-    stdout = (raw_stdout)
-    stderr = (raw_stderr)
+    stdout = raw_stdout
+    stderr = raw_stderr
     stdout_truncated = False
     stderr_truncated = False
 
@@ -170,19 +168,47 @@ async def _run_shell(
     }
 
 
+def _append_git_config_env(env: Dict[str, str], key: str, value: str) -> None:
+    """
+    Append a git config entry via environment variables (GIT_CONFIG_COUNT, etc.).
+    This avoids putting secrets on the command line.
+    """
+    # Git reads these: GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>
+    try:
+        existing = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
+    except Exception:
+        existing = 0
+
+    idx = existing
+    env["GIT_CONFIG_COUNT"] = str(existing + 1)
+    env[f"GIT_CONFIG_KEY_{idx}"] = key
+    env[f"GIT_CONFIG_VALUE_{idx}"] = value
+
+
 def _git_auth_env() -> Dict[str, str]:
-    env = {"GIT_TERMINAL_PROMPT": "0"}
+    env: Dict[str, str] = {"GIT_TERMINAL_PROMPT": "0"}
     try:
         token = _get_github_token()
     except GitHubAuthError:
         return env
+
+    # GitHub supports basic auth with username "x-access-token" and the token as password.
     basic_token = base64.b64encode(f"x-access-token:{token}".encode("utf-8")).decode("utf-8")
-    env["GIT_HTTP_EXTRA_HEADER"] = f"Authorization: Basic {basic_token}"
+    header_value = f"Authorization: Basic {basic_token}"
+
+    # Correct name (no extra underscore).
+    env["GIT_HTTP_EXTRAHEADER"] = header_value
+    # Back-compat for any code that mistakenly used the wrong name.
+    env["GIT_HTTP_EXTRA_HEADER"] = header_value
+
+    # Also set via config-env to improve compatibility across git builds.
+    _append_git_config_env(env, "http.extraHeader", header_value)
+
     return env
 
 
 def _is_git_auth_error(message: str) -> bool:
-    lowered = message.lower()
+    lowered = (message or "").lower()
     return any(
         fragment in lowered
         for fragment in (
@@ -233,12 +259,10 @@ def _workspace_path(full_name: str, ref: str) -> str:
     return workspace_dir
 
 
-
 async def _clone_repo(
     full_name: str, ref: Optional[str] = None, *, preserve_changes: bool = False
 ) -> str:
     """Clone or return a persistent workspace for ``full_name``/``ref``."""
-
     from .utils import _effective_ref_for_repo  # Local import to avoid cycles
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -271,10 +295,7 @@ async def _clone_repo(
         refresh_steps = [
             ("git fetch origin --prune", 300),
             (f"git reset --hard origin/{q_ref}", 120),
-            (
-                "git clean -fdx --exclude .venv-mcp",
-                120,
-            ),
+            ("git clean -fdx --exclude .venv-mcp", 120),
         ]
 
         for cmd, timeout in refresh_steps:
@@ -321,7 +342,6 @@ async def _clone_repo(
 
 async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
     """Create an isolated virtualenv and return env vars that activate it."""
-
     main_module = sys.modules.get("main")
     run_shell = getattr(main_module, "_run_shell", _run_shell)
 
@@ -359,7 +379,6 @@ def _maybe_unescape_unified_diff(patch: str) -> str:
     `git apply`. We only unescape when the input looks like an escaped diff and
     contains no real newlines.
     """
-
     if not isinstance(patch, str):
         return patch
 
@@ -396,7 +415,6 @@ def _sanitize_patch_head(patch: str) -> str:
 
     We only strip when the input looks like a diff somewhere in the text.
     """
-
     if not isinstance(patch, str):
         return patch
 
@@ -423,11 +441,10 @@ def _sanitize_patch_head(patch: str) -> str:
     # Remove leading markdown fences.
     if lines and lines[0].strip().startswith("```"):
         lines.pop(0)
-        # Some callers include a blank line after the fence.
         while lines and not lines[0].strip():
             lines.pop(0)
 
-    # If the diff starts later (e.g., after some chatter), drop everything before it.
+    # If the diff starts later, drop everything before it.
     start_idx = None
     for i, ln in enumerate(lines):
         s = ln.lstrip()
@@ -441,20 +458,10 @@ def _sanitize_patch_head(patch: str) -> str:
 
 
 def _sanitize_patch_tail(patch: str) -> str:
-    """Strip common trailing junk that breaks `git apply`.
-
-    Guards against accidental JSON/Markdown artifacts being appended to patches
-    (e.g. `}}`, code fences), which commonly yields:
-    - "corrupt patch"
-    - "No valid patches in input"
-    """
-
+    """Strip common trailing junk that breaks `git apply`."""
     if not isinstance(patch, str):
         return patch
 
-    # Only attempt to strip trailing junk when the input actually looks like a diff.
-    # This avoids surprising behavior for arbitrary strings that may legitimately end
-    # with code fences or braces.
     looks_like_diff = (
         patch.lstrip().startswith("diff --git ")
         or patch.lstrip().startswith("--- ")
@@ -481,7 +488,6 @@ def _sanitize_patch_tail(patch: str) -> str:
 
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     """Write a unified diff to disk and apply it with ``git apply``."""
-
     if not patch or not patch.strip():
         raise GitHubAPIError("Received empty patch to apply in workspace")
 
