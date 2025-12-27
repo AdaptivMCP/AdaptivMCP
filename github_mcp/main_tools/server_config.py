@@ -42,8 +42,7 @@ async def get_server_config() -> Dict[str, Any]:
         },
         "approval_policy": {
             "notes": (
-                "Reads and writes are always allowed. WRITE_ALLOWED is exposed as metadata "
-                "for clients that want to display read/write status."
+                "Reads and writes are always allowed unless WRITE_ALLOWED is toggled off."
             ),
             "toggle_tool": "authorize_write_actions",
         },

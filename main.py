@@ -301,7 +301,7 @@ def __getattr__(name: str):
     raise AttributeError(name)
 
 
-# Recalculate write-allowed metadata on first import to honor updated environment variables when
+# Recalculate write-allowed state on first import to honor updated environment variables when
 # ``main`` is reloaded in tests without clobbering runtime toggles.
 if not getattr(server, "_WRITE_ALLOWED_INITIALIZED", False):
     server.WRITE_ALLOWED = server.WRITE_ALLOWED if hasattr(server, "WRITE_ALLOWED") else True
@@ -451,7 +451,7 @@ async def commit_workspace_files(
 
 @mcp_tool(write_action=False)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Update WRITE_ALLOWED metadata exposed to clients."""
+    """Update the WRITE_ALLOWED state used for write gating."""
 
     server.WRITE_ALLOWED = bool(approved)
     import github_mcp.mcp_server.context as _ctx
@@ -1028,7 +1028,7 @@ async def list_recent_failures(
 @mcp_tool(
     write_action=False,
     description=(
-        "List available MCP tools with basic read/write metadata. "
+        "List available MCP tools with a compact description. "
         "Use describe_tool (or list_all_actions with include_parameters=true) when you need full schemas."
     ),
 )
@@ -1047,7 +1047,7 @@ async def list_tools(
 def list_all_actions(
     include_parameters: bool = False, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
-    """Enumerate every available MCP tool with read/write metadata.
+    """Enumerate every available MCP tool with optional schemas.
 
     This helper exposes a structured catalog of all tools so assistants can see
     the full command surface without reading this file. It is intentionally
@@ -1068,7 +1068,7 @@ def list_all_actions(
 @mcp_tool(
     write_action=False,
     description=(
-        "Return metadata and optional schema for one or more tools. "
+        "Return optional schema for one or more tools. "
         "Prefer this over manually scanning list_all_actions in long sessions."
     ),
 )

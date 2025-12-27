@@ -10,6 +10,21 @@ from github_mcp.mcp_server.schemas import _sanitize_metadata_value
 _FORBIDDEN_META_KEYS = {
     "auto_approved",
     "chatgpt.com/auto_approved",
+    "chatgpt.com/read_only_hint",
+    "chatgpt.com/write_allowed",
+    "readOnlyHint",
+    "read_only_hint",
+    "side_effects",
+    "ui_prompt_required",
+    "write_action",
+}
+
+_FORBIDDEN_ANNOTATION_KEYS = {
+    "readOnlyHint",
+    "read_only_hint",
+    "side_effects",
+    "ui_prompt_required",
+    "write_action",
 }
 
 
@@ -18,6 +33,14 @@ def _sanitize_actions_meta(meta: Any) -> Any:
         return meta
     meta = {k: v for k, v in meta.items() if k not in _FORBIDDEN_META_KEYS}
     return _sanitize_metadata_value(meta)
+
+def _sanitize_actions_annotations(annotations: Any) -> Any:
+    if not isinstance(annotations, dict):
+        return annotations
+    annotations = {
+        k: v for k, v in annotations.items() if k not in _FORBIDDEN_ANNOTATION_KEYS
+    }
+    return _sanitize_metadata_value(annotations)
 
 
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
@@ -45,7 +68,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         elif not isinstance(meta, dict):
             meta = None
 
-        annotations = _sanitize_metadata_value(annotations)
+        annotations = _sanitize_actions_annotations(annotations)
         meta = _sanitize_actions_meta(meta)
 
         display_name = getattr(tool, "title", None)
