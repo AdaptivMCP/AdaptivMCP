@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Callable, Dict, List
 
 from starlette.requests import Request
@@ -27,6 +28,9 @@ _FORBIDDEN_ANNOTATION_KEYS = {
     "write_action",
 }
 
+_GITHUB_WORD = re.compile(r"\bgithub\b", re.IGNORECASE)
+_GIT_WORD = re.compile(r"\bgit\b", re.IGNORECASE)
+
 
 def _sanitize_actions_meta(meta: Any) -> Any:
     if not isinstance(meta, dict):
@@ -41,6 +45,18 @@ def _sanitize_actions_annotations(annotations: Any) -> Any:
         k: v for k, v in annotations.items() if k not in _FORBIDDEN_ANNOTATION_KEYS
     }
     return _sanitize_metadata_value(annotations)
+
+
+def _scrub_git_terms(value: Any) -> Any:
+    if isinstance(value, str):
+        updated = _GITHUB_WORD.sub("code host", value)
+        updated = _GIT_WORD.sub("version control", updated)
+        return updated
+    if isinstance(value, list):
+        return [_scrub_git_terms(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _scrub_git_terms(val) for key, val in value.items()}
+    return value
 
 
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
@@ -80,13 +96,18 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 or meta.get("chatgpt.com/title")
             )
         display_name = display_name or tool.name
+        display_name = _scrub_git_terms(display_name)
+        description = _scrub_git_terms(tool.description)
+        annotations = _scrub_git_terms(annotations)
+        meta = _scrub_git_terms(meta)
+        schema = _scrub_git_terms(schema)
 
         actions.append(
             {
                 "name": tool.name,
                 "display_name": display_name,
                 "title": display_name,
-                "description": tool.description,
+                "description": description,
                 "parameters": schema or {"type": "object", "properties": {}},
                 "annotations": annotations,
                 "meta": meta,
