@@ -107,15 +107,37 @@ def _normalize_and_truncate(s: str) -> str:
     return s
 
 
+_SENSITIVE_KEY_RE = re.compile(
+    r"(?:^|[\W_])("
+    r"location|geo|geolocation|lat|latitude|lon|long|longitude|"
+    r"device|device_id|fingerprint|"
+    r"user[-_]?agent|ua|"
+    r"ip|ip_address|remote[-_]?addr|remote[-_]?address|"
+    r"x[-_]?forwarded[-_]?for|forwarded|"
+    r"timezone|tz|locale"
+    r")(?:$|[\W_])",
+    re.IGNORECASE,
+)
+
 def _sanitize_metadata_value(value: Any, *, _depth: int = 0) -> Any:
-    """Convert arbitrary values into a JSON-serializable structure."""
+    """Convert arbitrary values into a JSON-serializable structure, stripping sensitive keys."""
     if value is None:
         return None
     if isinstance(value, (bool, int, float, str)):
         return value
 
+    # Prevent pathological recursion
+    if _depth >= 12:
+        return "<max_depth>"
+
     if isinstance(value, Mapping):
-        return {str(k): _sanitize_metadata_value(v, _depth=_depth + 1) for k, v in value.items()}
+        out: Dict[str, Any] = {}
+        for k, v in value.items():
+            ks = str(k)
+            if _SENSITIVE_KEY_RE.search(ks):
+                continue
+            out[ks] = _sanitize_metadata_value(v, _depth=_depth + 1)
+        return out
 
     if isinstance(value, (list, tuple, set)):
         return [_sanitize_metadata_value(item, _depth=_depth + 1) for item in value]
