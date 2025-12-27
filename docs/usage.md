@@ -59,10 +59,8 @@ For small changes, you can use GitHub contents APIs via MCP tools:
 Write-capable tools are marked as **remote mutations** in tool metadata. The
 server supports a write gate:
 
-- `authorize_write_actions(approved=True/False)` toggles server-side auto-approval
-  for soft write tools.
-- When write approval is disabled, non-read operations require explicit approval
-  from the client UI.
+- `authorize_write_actions(approved=True/False)` toggles the WRITE_ALLOWED gate.
+- When WRITE_ALLOWED is disabled, all write operations are blocked.
 
 ## Behavior and safety constraints
 

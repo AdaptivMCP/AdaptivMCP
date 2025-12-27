@@ -204,10 +204,8 @@ def _auto_approved_for_tool(
 
     Policy:
       - Reads are always auto-approved.
-      - Soft writes are auto-approved iff WRITE_ALLOWED is true.
-      - Hard writes are never auto-approved.
+      - Writes are auto-approved iff WRITE_ALLOWED is true.
       - Render CLI tools never require approval.
-      - Web tools are treated as hard writes.
     """
     # Render CLI tools (explicitly never require approval)
     if tool_name.startswith('render_') or tool_name in {'render_shell', 'terminal_command', 'run_command'}:
@@ -216,11 +214,7 @@ def _auto_approved_for_tool(
     if side_effect is SideEffectClass.READ_ONLY:
         return True
 
-    if side_effect is SideEffectClass.LOCAL_MUTATION:
-        return bool(write_allowed)
-
-    # Remote mutation (hard write)
-    return False
+    return bool(write_allowed)
 
 def _ui_prompt_required_for_tool(
     tool_name: str,
@@ -230,27 +224,9 @@ def _ui_prompt_required_for_tool(
 ) -> bool:
     """Whether the ChatGPT UI should prompt for approval before invoking the tool.
 
-    Policy (per app rules):
-      - WRITE_ALLOWED=true: prompt only for hard writes (REMOTE_MUTATION).
-      - WRITE_ALLOWED=false: prompt for any non-read operation (LOCAL_MUTATION or REMOTE_MUTATION).
-      - Reads never prompt.
-      - Render CLI helpers never prompt.
+    This server does not use UI approval prompts; WRITE_ALLOWED is the only gate.
     """
-    tn = str(tool_name or '')
-
-    # Render CLI helpers never prompt.
-    if tn.startswith('render_') or tn in {'render_shell', 'terminal_command', 'run_command'}:
-        return False
-
-    if side_effect is SideEffectClass.READ_ONLY:
-        return False
-
-    if write_allowed:
-        # Only hard writes prompt.
-        return side_effect is SideEffectClass.REMOTE_MUTATION
-
-    # write_allowed is false -> any mutation prompts.
-    return side_effect in {SideEffectClass.LOCAL_MUTATION, SideEffectClass.REMOTE_MUTATION}
+    return False
 
 
 def _current_write_allowed() -> bool:
@@ -392,8 +368,8 @@ def _dedupe_key(
     if not stable:
         return None
 
-    # Always dedupe READ_ONLY. For UI-write actions (connector approvals), only dedupe when
-    # we have an explicit per-message id, so we don't suppress intentional repeated writes.
+    # For write actions that might be repeated intentionally, only dedupe when we have
+    # an explicit per-message id so we don't suppress intentional repeated writes.
     if ui_write_action and not REQUEST_MESSAGE_ID.get():
         return None
 
@@ -609,9 +585,7 @@ def mcp_tool(
             if remote_write
             else resolve_side_effect_class(tool_name)
         )
-        # UI prompt behavior (app policy):
-        # - WRITE_ALLOWED=true: prompt only for hard writes (REMOTE_MUTATION)
-        # - WRITE_ALLOWED=false: prompt for any non-read operation
+        # UI prompt behavior is disabled; WRITE_ALLOWED is the only gate.
         initial_write_allowed = _current_write_allowed()
         ui_write_action = _ui_prompt_required_for_tool(
             tool_name, side_effect=side_effect, write_allowed=initial_write_allowed
