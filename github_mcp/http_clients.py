@@ -18,6 +18,9 @@ from .config import (
     GITHUB_API_BASE_URL,
     GITHUB_REQUEST_TIMEOUT_SECONDS,
     GITHUB_TOKEN_ENV_VARS,
+    GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS,
+    GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS,
+    GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS,
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
@@ -114,6 +117,43 @@ def _get_concurrency_semaphore() -> asyncio.Semaphore:
         _loop_semaphores[loop] = semaphore
 
     return semaphore
+
+
+def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> Optional[float]:
+    retry_after = resp.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return max(0.0, float(retry_after))
+        except ValueError:
+            return None
+
+    reset_header = resp.headers.get("X-RateLimit-Reset")
+    if reset_header:
+        try:
+            reset_epoch = float(reset_header)
+        except ValueError:
+            return None
+        return max(0.0, reset_epoch - time.time())
+    return None
+
+
+def _is_rate_limit_response(
+    *, resp: httpx.Response, message_lower: str, error_flag: bool
+) -> bool:
+    if not error_flag:
+        return False
+
+    if resp.status_code == 429:
+        return True
+    if resp.headers.get("X-RateLimit-Remaining") == "0":
+        return True
+    if "rate limit" in message_lower:
+        return True
+    if "secondary rate limit" in message_lower:
+        return True
+    if "abuse detection" in message_lower:
+        return True
+    return False
 
 
 def _active_event_loop() -> asyncio.AbstractEventLoop:
@@ -331,8 +371,6 @@ async def _github_request(
     client_factory: Optional[callable] = None,
 ) -> Dict[str, Any]:
     """Async GitHub request wrapper with structured errors and metrics."""
-
-    start = time.time()
     client_factory = client_factory or _github_client_instance
     api_url_for_logs = _github_api_url_for_logs(path, params=params)
 
@@ -377,139 +415,154 @@ async def _github_request(
                 "json": {"content": {"sha": "synthetic-write-sha"}, "commit": {"sha": "synthetic-commit"}},
             }
 
-    try:
-        client = client_factory()
-    except GitHubAuthError:
-        _record_github_request(
-            method=method,
-            url=api_url_for_logs,
-            status_code=None,
-            duration_ms=int((time.time() - start) * 1000),
-            error=True,
-        )
-        raise
+    attempt = 0
+    max_attempts = max(0, GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS)
 
-    try:
-        resp = await client.request(method, path, params=params, json=json_body, headers=headers)
-    except httpx.TimeoutException as exc:
-        _record_github_request(
-            method=method,
-            url=api_url_for_logs,
-            status_code=None,
-            duration_ms=int((time.time() - start) * 1000),
-            error=True,
-            exc=exc,
-        )
-        raise
-    except httpx.HTTPError as exc:  # pragma: no cover - defensive
-        _record_github_request(
-            method=method,
-            url=api_url_for_logs,
-            status_code=None,
-            duration_ms=int((time.time() - start) * 1000),
-            error=True,
-            exc=exc,
-        )
-        raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
-
-    duration_ms = int((time.time() - start) * 1000)
-    error_flag = getattr(resp, "is_error", None)
-    if error_flag is None:
-        error_flag = resp.status_code >= 400
-
-    _record_github_request(
-        method=method,
-        url=api_url_for_logs,
-        status_code=resp.status_code,
-        duration_ms=duration_ms,
-        error=error_flag,
-        resp=resp,
-    )
-
-    body: Any | None = None
-    if hasattr(resp, "json"):
+    while True:
+        start = time.time()
         try:
-            body = resp.json()
-        except Exception:
-            body = None
-
-    message = body.get("message", "") if isinstance(body, dict) else ""
-
-    message_lower = message.lower() if isinstance(message, str) else ""
-    if error_flag and (
-        resp.status_code == 429
-        or resp.headers.get("X-RateLimit-Remaining") == "0"
-        or "rate limit" in message_lower
-    ):
-        reset_hint = resp.headers.get("X-RateLimit-Reset") or resp.headers.get("Retry-After")
-        raise GitHubRateLimitError(
-            (
-                f"GitHub rate limit exceeded; retry after {reset_hint} (resets after {reset_hint})"
-                if reset_hint
-                else "GitHub rate limit exceeded"
+            client = client_factory()
+        except GitHubAuthError:
+            _record_github_request(
+                method=method,
+                url=api_url_for_logs,
+                status_code=None,
+                duration_ms=int((time.time() - start) * 1000),
+                error=True,
             )
+            raise
+
+        try:
+            async with _get_concurrency_semaphore():
+                resp = await client.request(
+                    method, path, params=params, json=json_body, headers=headers
+                )
+        except httpx.TimeoutException as exc:
+            _record_github_request(
+                method=method,
+                url=api_url_for_logs,
+                status_code=None,
+                duration_ms=int((time.time() - start) * 1000),
+                error=True,
+                exc=exc,
+            )
+            raise
+        except httpx.HTTPError as exc:  # pragma: no cover - defensive
+            _record_github_request(
+                method=method,
+                url=api_url_for_logs,
+                status_code=None,
+                duration_ms=int((time.time() - start) * 1000),
+                error=True,
+                exc=exc,
+            )
+            raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
+
+        duration_ms = int((time.time() - start) * 1000)
+        error_flag = getattr(resp, "is_error", None)
+        if error_flag is None:
+            error_flag = resp.status_code >= 400
+
+        _record_github_request(
+            method=method,
+            url=api_url_for_logs,
+            status_code=resp.status_code,
+            duration_ms=duration_ms,
+            error=error_flag,
+            resp=resp,
         )
 
-    if resp.status_code in (401, 403):
-        if "Proofgate-Revocations/chatgpt-mcp-github" in path:
-            return {
-                "status_code": 200,
-                "headers": dict(resp.headers),
-                "text": resp.text,
-                "json": {
-                    "content": {"sha": "synthetic-write-sha"},
-                    "commit": {"sha": "synthetic-commit"},
-                },
-            }
-        raise GitHubAuthError(
-            f"GitHub authentication failed: {resp.status_code} {message or 'Authentication failed'}"
-        )
+        body: Any | None = None
+        if hasattr(resp, "json"):
+            try:
+                body = resp.json()
+            except Exception:
+                body = None
 
-    if error_flag:
-        if (
-            resp.status_code == 404
-            and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path
-        ):
-            return {
-                "status_code": 200,
-                "headers": dict(resp.headers),
-                "text": resp.text,
-                "json": {
-                    "sha": resp.headers.get("X-Synthetic-Sha", "test-sha"),
-                    "tree": [
-                        {
-                            "path": "docs/start_session.md",
-                            "type": "blob",
-                            "mode": "100644",
-                            "size": 0,
-                        },
-                    ],
-                    "truncated": False,
-                },
-            }
-        if "Proofgate-Revocations/chatgpt-mcp-github/contents/docs/start_session.md" in path:
-            content_bytes = b"Sample doc content\n"
-            encoded = base64.b64encode(content_bytes).decode()
-            return {
-                "status_code": 200,
-                "headers": dict(resp.headers),
-                "text": resp.text,
-                "json": {
-                    "sha": "synthetic-sha",
-                    "content": encoded,
-                    "encoding": "base64",
-                },
-            }
-        raise GitHubAPIError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
+        message = body.get("message", "") if isinstance(body, dict) else ""
+        message_lower = message.lower() if isinstance(message, str) else ""
+        if _is_rate_limit_response(resp=resp, message_lower=message_lower, error_flag=error_flag):
+            reset_hint = resp.headers.get("X-RateLimit-Reset") or resp.headers.get("Retry-After")
+            retry_delay = _parse_rate_limit_delay_seconds(resp)
+            if retry_delay is None:
+                retry_delay = GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
 
-    result: Dict[str, Any] = {
-        "status_code": resp.status_code,
-        "headers": dict(resp.headers),
-        "text": resp.text,
-    }
-    if expect_json:
-        result["json"] = resp.json()
-    return result
+            if (
+                attempt < max_attempts
+                and retry_delay <= GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS
+            ):
+                await asyncio.sleep(retry_delay)
+                attempt += 1
+                continue
+
+            raise GitHubRateLimitError(
+                (
+                    f"GitHub rate limit exceeded; retry after {reset_hint} (resets after {reset_hint})"
+                    if reset_hint
+                    else "GitHub rate limit exceeded"
+                )
+            )
+
+        if resp.status_code in (401, 403):
+            if "Proofgate-Revocations/chatgpt-mcp-github" in path:
+                return {
+                    "status_code": 200,
+                    "headers": dict(resp.headers),
+                    "text": resp.text,
+                    "json": {
+                        "content": {"sha": "synthetic-write-sha"},
+                        "commit": {"sha": "synthetic-commit"},
+                    },
+                }
+            raise GitHubAuthError(
+                f"GitHub authentication failed: {resp.status_code} {message or 'Authentication failed'}"
+            )
+
+        if error_flag:
+            if (
+                resp.status_code == 404
+                and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path
+            ):
+                return {
+                    "status_code": 200,
+                    "headers": dict(resp.headers),
+                    "text": resp.text,
+                    "json": {
+                        "sha": resp.headers.get("X-Synthetic-Sha", "test-sha"),
+                        "tree": [
+                            {
+                                "path": "docs/start_session.md",
+                                "type": "blob",
+                                "mode": "100644",
+                                "size": 0,
+                            },
+                        ],
+                        "truncated": False,
+                    },
+                }
+            if "Proofgate-Revocations/chatgpt-mcp-github/contents/docs/start_session.md" in path:
+                content_bytes = b"Sample doc content\n"
+                encoded = base64.b64encode(content_bytes).decode()
+                return {
+                    "status_code": 200,
+                    "headers": dict(resp.headers),
+                    "text": resp.text,
+                    "json": {
+                        "sha": "synthetic-sha",
+                        "content": encoded,
+                        "encoding": "base64",
+                    },
+                }
+            raise GitHubAPIError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
+
+        result: Dict[str, Any] = {
+            "status_code": resp.status_code,
+            "headers": dict(resp.headers),
+            "text": resp.text,
+        }
+        if expect_json:
+            result["json"] = resp.json()
+        return result
 
 
 __all__ = [

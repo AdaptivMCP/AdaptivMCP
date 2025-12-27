@@ -17,6 +17,46 @@ from .exceptions import GitHubAPIError, GitHubAuthError
 from .http_clients import _get_github_token
 
 
+def _is_git_rate_limit_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(
+        marker in lowered
+        for marker in ("rate limit", "secondary rate limit", "abuse detection")
+    )
+
+
+async def _run_git_with_retry(
+    run_shell,
+    cmd: str,
+    *,
+    cwd: Optional[str],
+    timeout_seconds: int,
+    env: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    attempt = 0
+    max_attempts = max(0, config.GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS)
+
+    while True:
+        result = await run_shell(
+            cmd,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            env=env,
+        )
+        if result.get("exit_code", 0) == 0:
+            return result
+
+        stderr = result.get("stderr", "") or result.get("stdout", "")
+        if _is_git_rate_limit_error(stderr) and attempt < max_attempts:
+            delay = config.GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
+            delay = min(delay, config.GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS)
+            await asyncio.sleep(delay)
+            attempt += 1
+            continue
+
+        return result
+
+
 async def _run_shell(
     cmd: str,
     cwd: Optional[str] = None,
@@ -204,7 +244,8 @@ async def _clone_repo(
 
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
         if preserve_changes:
-            fetch_result = await run_shell(
+            fetch_result = await _run_git_with_retry(
+                run_shell,
                 "git fetch origin --prune",
                 cwd=workspace_dir,
                 timeout_seconds=300,
@@ -230,7 +271,8 @@ async def _clone_repo(
         ]
 
         for cmd, timeout in refresh_steps:
-            result = await run_shell(
+            result = await _run_git_with_retry(
+                run_shell,
                 cmd,
                 cwd=workspace_dir,
                 timeout_seconds=timeout,
@@ -254,7 +296,8 @@ async def _clone_repo(
     q_url = shlex.quote(url)
     q_tmpdir = shlex.quote(tmpdir)
     cmd = f"git clone --depth 1 --branch {q_ref} {q_url} {q_tmpdir}"
-    result = await run_shell(
+    result = await _run_git_with_retry(
+        run_shell,
         cmd,
         cwd=None,
         timeout_seconds=600,
