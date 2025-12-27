@@ -39,6 +39,7 @@ from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
     _normalize_tool_description,
+    _jsonable,
 )
 from github_mcp.metrics import _record_tool_call
 from github_mcp.side_effects import (
@@ -135,6 +136,8 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
             "arg_keys",
         ):
             base.pop(key, None)
+
+        safe = _jsonable(base)
 
         # Human-friendly, compact summary in message
         tool_name = str(payload.get('tool_name') or '')
@@ -440,7 +443,7 @@ def _register_with_fastmcp(
         description=description,
         tags=tags,
         meta=meta,
-        annotations=annotations,
+        annotations=_jsonable(annotations),
     )
 
     # Keep registry stable.
