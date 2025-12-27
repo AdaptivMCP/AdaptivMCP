@@ -7,6 +7,70 @@ import json
 import re
 from typing import Any, Dict, Mapping, Optional
 
+def _jsonable(value: Any) -> Any:
+    """Convert arbitrary Python values into something JSON-serializable.
+
+    This is intentionally not a redaction/sanitization layer. It exists purely
+    to keep structured logging and schema metadata stable when values include
+    non-JSON types (exceptions, bytes, sets, pydantic models, etc.).
+    """
+    # Fast path for common JSON scalars.
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+
+    # Bytes are not JSON; decode best-effort.
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            return bytes(value).decode("utf-8", errors="replace")
+        except Exception:
+            return str(value)
+
+    # Mappings: coerce keys to strings.
+    if isinstance(value, Mapping):
+        out: Dict[str, Any] = {}
+        for k, v in value.items():
+            try:
+                key = k if isinstance(k, str) else str(k)
+            except Exception:
+                key = "<unprintable_key>"
+            out[key] = _jsonable(v)
+        return out
+
+    # Iterables.
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_jsonable(v) for v in value]
+
+    # Dataclasses.
+    try:
+        import dataclasses
+        if dataclasses.is_dataclass(value):
+            return _jsonable(dataclasses.asdict(value))
+    except Exception:
+        pass
+
+    # Pydantic v2 models.
+    try:
+        dump = getattr(value, "model_dump", None)
+        if callable(dump):
+            return _jsonable(dump(mode="json"))
+    except Exception:
+        pass
+
+    # Exceptions.
+    if isinstance(value, BaseException):
+        return {"type": type(value).__name__, "message": str(value)}
+
+    # Last resort: if it can be JSON-dumped, keep it; else stringify.
+    try:
+        json.dumps(value, ensure_ascii=False)
+        return value
+    except Exception:
+        try:
+            return str(value)
+        except Exception:
+            return f"<{type(value).__name__}>"
+
+
 
 def _single_line(s: str) -> str:
     """Return the string unchanged."""
@@ -114,6 +178,9 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     Produces a single-line JSON string (truncated).
     """
     try:
+        sanitized = _jsonable(dict(args))
+        raw = json.dumps(sanitized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return raw
     except Exception:
         # Worst-case fallback
         try:
@@ -157,7 +224,7 @@ def _preflight_tool_args(
     try:
         payload = {
             "tool": tool_name,
-            "args": _sanitize_metadata_value(dict(args)),
+            "args": _jsonable(dict(args)),
         }
         if compact:
             raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
