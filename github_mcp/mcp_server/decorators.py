@@ -15,12 +15,15 @@ Changes here should be backwards compatible.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import functools
 import hashlib
 import inspect
 import json
+import threading
 import time
 import uuid
+import weakref
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from github_mcp.config import TOOLS_LOGGER
@@ -47,9 +50,13 @@ from github_mcp.side_effects import (
 # Dedupe cache (best-effort, per-process).
 _DEDUPE_TTL_SECONDS = 30.0
 _DEDUPE_MAX_ENTRIES = 2048
-_DEDUPE_INFLIGHT: dict[str, tuple[float, asyncio.Future[Any]]] = {}
-_DEDUPE_RESULTS: dict[str, tuple[float, Any]] = {}
-_DEDUPE_LOCK = asyncio.Lock()
+_DEDUPE_STATE: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, Any]]" = (
+    weakref.WeakKeyDictionary()
+)
+_DEDUPE_STATE_GUARD = threading.Lock()
+_DEDUPE_SYNC_INFLIGHT: dict[str, tuple[float, concurrent.futures.Future[Any]]] = {}
+_DEDUPE_SYNC_RESULTS: dict[str, tuple[float, Any]] = {}
+_DEDUPE_SYNC_LOCK = threading.Lock()
 
 def _ui_prompt_required_for_tool(
     tool_name: str,
@@ -225,35 +232,54 @@ async def _maybe_dedupe_call(
     fut: asyncio.Future | None = None
     entry_exists = False
 
-    async with _DEDUPE_LOCK:
-        # Clean expired inflight/results.
-        expired = [k for k, (exp, _) in _DEDUPE_INFLIGHT.items() if exp <= now]
-        for k in expired:
-            _DEDUPE_INFLIGHT.pop(k, None)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
 
-        expired_r = [k for k, (exp, _) in _DEDUPE_RESULTS.items() if exp <= now]
+    with _DEDUPE_STATE_GUARD:
+        state = _DEDUPE_STATE.get(loop)
+        if state is None:
+            state = {
+                "lock": asyncio.Lock(),
+                "inflight": {},
+                "results": {},
+            }
+            _DEDUPE_STATE[loop] = state
+
+    lock: asyncio.Lock = state["lock"]
+    inflight: dict[str, tuple[float, asyncio.Future[Any]]] = state["inflight"]
+    results: dict[str, tuple[float, Any]] = state["results"]
+
+    async with lock:
+        # Clean expired inflight/results.
+        expired = [k for k, (exp, _) in inflight.items() if exp <= now]
+        for k in expired:
+            inflight.pop(k, None)
+
+        expired_r = [k for k, (exp, _) in results.items() if exp <= now]
         for k in expired_r:
-            _DEDUPE_RESULTS.pop(k, None)
+            results.pop(k, None)
 
         # Cap size.
-        if len(_DEDUPE_INFLIGHT) > _DEDUPE_MAX_ENTRIES:
-            for k, _ in sorted(_DEDUPE_INFLIGHT.items(), key=lambda kv: kv[1][0])[
-                : max(1, len(_DEDUPE_INFLIGHT) - _DEDUPE_MAX_ENTRIES)
+        if len(inflight) > _DEDUPE_MAX_ENTRIES:
+            for k, _ in sorted(inflight.items(), key=lambda kv: kv[1][0])[
+                : max(1, len(inflight) - _DEDUPE_MAX_ENTRIES)
             ]:
-                _DEDUPE_INFLIGHT.pop(k, None)
+                inflight.pop(k, None)
 
-        cached = _DEDUPE_RESULTS.get(key)
+        cached = results.get(key)
         if cached is not None:
             _exp, cached_result = cached
             return cached_result
 
-        entry = _DEDUPE_INFLIGHT.get(key)
+        entry = inflight.get(key)
         if entry is not None:
             entry_exists = True
             _, fut = entry
         else:
             fut = asyncio.get_running_loop().create_future()
-            _DEDUPE_INFLIGHT[key] = (now + _DEDUPE_TTL_SECONDS, fut)
+            inflight[key] = (now + _DEDUPE_TTL_SECONDS, fut)
 
     # Await outside the lock.
     if entry_exists and fut is not None:
@@ -263,16 +289,74 @@ async def _maybe_dedupe_call(
         result = await coro_factory()
         if fut is not None and not fut.done():
             fut.set_result(result)
-        async with _DEDUPE_LOCK:
-            _DEDUPE_RESULTS[key] = (time.time() + _DEDUPE_TTL_SECONDS, result)
+        async with lock:
+            results[key] = (time.time() + _DEDUPE_TTL_SECONDS, result)
         return result
     except Exception as exc:
         if fut is not None and not fut.done():
             fut.set_exception(exc)
         raise
     finally:
-        async with _DEDUPE_LOCK:
-            _DEDUPE_INFLIGHT.pop(key, None)
+        async with lock:
+            inflight.pop(key, None)
+
+
+def _maybe_dedupe_call_sync(
+    key: Optional[str], fn: Callable[[], Any]
+) -> Any:
+    """Best-effort dedupe wrapper for sync call sites."""
+    if not key:
+        return fn()
+
+    now = time.time()
+    fut: concurrent.futures.Future[Any] | None = None
+    entry_exists = False
+
+    with _DEDUPE_SYNC_LOCK:
+        expired = [k for k, (exp, _) in _DEDUPE_SYNC_INFLIGHT.items() if exp <= now]
+        for k in expired:
+            _DEDUPE_SYNC_INFLIGHT.pop(k, None)
+
+        expired_r = [k for k, (exp, _) in _DEDUPE_SYNC_RESULTS.items() if exp <= now]
+        for k in expired_r:
+            _DEDUPE_SYNC_RESULTS.pop(k, None)
+
+        if len(_DEDUPE_SYNC_INFLIGHT) > _DEDUPE_MAX_ENTRIES:
+            for k, _ in sorted(_DEDUPE_SYNC_INFLIGHT.items(), key=lambda kv: kv[1][0])[
+                : max(1, len(_DEDUPE_SYNC_INFLIGHT) - _DEDUPE_MAX_ENTRIES)
+            ]:
+                _DEDUPE_SYNC_INFLIGHT.pop(k, None)
+
+        cached = _DEDUPE_SYNC_RESULTS.get(key)
+        if cached is not None:
+            _exp, cached_result = cached
+            return cached_result
+
+        entry = _DEDUPE_SYNC_INFLIGHT.get(key)
+        if entry is not None:
+            entry_exists = True
+            _, fut = entry
+        else:
+            fut = concurrent.futures.Future()
+            _DEDUPE_SYNC_INFLIGHT[key] = (now + _DEDUPE_TTL_SECONDS, fut)
+
+    if entry_exists and fut is not None:
+        return fut.result()
+
+    try:
+        result = fn()
+        if fut is not None and not fut.done():
+            fut.set_result(result)
+        with _DEDUPE_SYNC_LOCK:
+            _DEDUPE_SYNC_RESULTS[key] = (time.time() + _DEDUPE_TTL_SECONDS, result)
+        return result
+    except Exception as exc:
+        if fut is not None and not fut.done():
+            fut.set_exception(exc)
+        raise
+    finally:
+        with _DEDUPE_SYNC_LOCK:
+            _DEDUPE_SYNC_INFLIGHT.pop(key, None)
 
 
 def _register_with_fastmcp(
@@ -754,7 +838,9 @@ def mcp_tool(
             )
 
             try:
-                result = func(*args, **kwargs)
+                result = _maybe_dedupe_call_sync(
+                    dedupe_key, lambda: func(*args, **kwargs)
+                )
             except Exception as exc:
                 duration_ms = int((time.perf_counter() - start) * 1000)
                 _record_tool_call(
