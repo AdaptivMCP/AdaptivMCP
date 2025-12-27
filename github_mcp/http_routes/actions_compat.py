@@ -5,43 +5,6 @@ from typing import Any, Callable, Dict, List
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from github_mcp.mcp_server.schemas import _sanitize_metadata_value
-
-_FORBIDDEN_META_KEYS = {
-    "auto_approved",
-    "chatgpt.com/auto_approved",
-    "chatgpt.com/read_only_hint",
-    "chatgpt.com/write_allowed",
-    "readOnlyHint",
-    "read_only_hint",
-    "side_effects",
-    "ui_prompt_required",
-    "write_action",
-}
-
-_FORBIDDEN_ANNOTATION_KEYS = {
-    "readOnlyHint",
-    "read_only_hint",
-    "side_effects",
-    "ui_prompt_required",
-    "write_action",
-}
-
-
-def _sanitize_actions_meta(meta: Any) -> Any:
-    if not isinstance(meta, dict):
-        return meta
-    meta = {k: v for k, v in meta.items() if k not in _FORBIDDEN_META_KEYS}
-    return _sanitize_metadata_value(meta)
-
-
-def _sanitize_actions_annotations(annotations: Any) -> Any:
-    if not isinstance(annotations, dict):
-        return annotations
-    annotations = {k: v for k, v in annotations.items() if k not in _FORBIDDEN_ANNOTATION_KEYS}
-    return _sanitize_metadata_value(annotations)
-
-
 def _terminal_help(name: str, description: str, schema: Any) -> str:
     desc = (description or "").strip()
     synopsis = (desc.splitlines()[0].strip() if desc else "").strip()
@@ -100,9 +63,6 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
             meta = meta.model_dump(exclude_none=True)
         elif not isinstance(meta, dict):
             meta = None
-
-        annotations = _sanitize_actions_annotations(annotations)
-        meta = _sanitize_actions_meta(meta)
 
         display_name = getattr(tool, "title", None)
         if not display_name and isinstance(annotations, dict):
