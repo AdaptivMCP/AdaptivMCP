@@ -121,7 +121,15 @@ def _structured_tool_error(
     if adaptiv_exc is not None:
         err = adaptiv_exc.to_error_dict(incident_id=incident_id)
         user_message = _format_user_message(err, context=context, path=path)
-        return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
+        return {
+            "error": err,
+            "user_message": user_message,
+            "tool_descriptor": tool_descriptor,
+            "tool_descriptor_text": tool_descriptor_text,
+            "tool_surface": tool_surface,
+            "routing_hint": routing_hint,
+            "request": request,
+        }
 
     if isinstance(exc, GitHubAuthError):
         msg = _single_line(str(exc) or "GitHub authentication failed.")
@@ -138,10 +146,24 @@ def _structured_tool_error(
                 **({"context": context} if context else {}),
                 **({"path": path} if path else {}),
             },
-            "hint": "Set a GitHub token (PAT, GitHub App token, or OAuth token) in one of the supported env vars.",
+            # IMPORTANT: avoid masking the true issue by claiming this is always an env-var problem.
+            "hint": (
+                "GitHub repository access is not available to this process (or git cannot use the configured credentials). "
+                "If you rely on platform-injected secrets (e.g., Render runtime env), confirm they are attached to the service "
+                "and visible to the git subprocess. If you use env vars, set one of the supported GitHub token variables. "
+                "Note: Render observability tools require RENDER_API_KEY; that is separate from GitHub repository auth."
+            ),
         }
         user_message = _format_user_message(err, context=context, path=path)
-        return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
+        return {
+            "error": err,
+            "user_message": user_message,
+            "tool_descriptor": tool_descriptor,
+            "tool_descriptor_text": tool_descriptor_text,
+            "tool_surface": tool_surface,
+            "routing_hint": routing_hint,
+            "request": request,
+        }
 
     if isinstance(exc, UsageError):
         msg = _single_line(str(exc) or "Invalid usage.")
@@ -176,7 +198,15 @@ def _structured_tool_error(
             "hint": hint,
         }
         user_message = _format_user_message(err, context=context, path=path)
-        return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
+        return {
+            "error": err,
+            "user_message": user_message,
+            "tool_descriptor": tool_descriptor,
+            "tool_descriptor_text": tool_descriptor_text,
+            "tool_surface": tool_surface,
+            "routing_hint": routing_hint,
+            "request": request,
+        }
 
     # GitHub rate limit -> upstream, retryable, actionable (NOT a generic runtime error)
     if isinstance(exc, GitHubRateLimitError):
@@ -208,7 +238,15 @@ def _structured_tool_error(
             "hint": "Wait for the reset time, reduce request frequency, or use a higher-limit GitHub credential.",
         }
         user_message = _format_user_message(err, context=context, path=path)
-        return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
+        return {
+            "error": err,
+            "user_message": user_message,
+            "tool_descriptor": tool_descriptor,
+            "tool_descriptor_text": tool_descriptor_text,
+            "tool_surface": tool_surface,
+            "routing_hint": routing_hint,
+            "request": request,
+        }
 
     # Generic exception -> normalized error
     err: Dict[str, Any] = {
@@ -230,7 +268,15 @@ def _structured_tool_error(
         err["details"]["path"] = path
 
     user_message = _format_user_message(err, context=context, path=path)
-    return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
+    return {
+        "error": err,
+        "user_message": user_message,
+        "tool_descriptor": tool_descriptor,
+        "tool_descriptor_text": tool_descriptor_text,
+        "tool_surface": tool_surface,
+        "routing_hint": routing_hint,
+        "request": request,
+    }
 
 
 def _unwrap_adaptiv_error(exc: BaseException) -> Optional[AdaptivToolError]:
