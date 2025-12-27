@@ -34,6 +34,7 @@ _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.
 )
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_github_loop: Optional[asyncio.AbstractEventLoop] = None
+_http_client_github_token: Optional[str] = None
 _http_client_external: Optional[httpx.AsyncClient] = None
 _http_client_external_loop: Optional[asyncio.AbstractEventLoop] = None
 
@@ -87,6 +88,18 @@ def _get_github_token() -> str:
         )
 
     return token
+
+
+def _get_optional_github_token() -> Optional[str]:
+    """Return a trimmed GitHub token or None when missing/empty."""
+
+    for env_var in GITHUB_TOKEN_ENV_VARS:
+        candidate = os.environ.get(env_var)
+        if candidate is not None:
+            token = candidate.strip()
+            return token or None
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +183,7 @@ def _refresh_async_client(
     *,
     client_loop: Optional[asyncio.AbstractEventLoop],
     rebuild: Callable[[], httpx.AsyncClient],
+    force_refresh: bool = False,
 ) -> Tuple[httpx.AsyncClient, asyncio.AbstractEventLoop]:
     """Return a loop-safe AsyncClient, rebuilding if necessary.
 
@@ -180,7 +194,7 @@ def _refresh_async_client(
 
     loop = _active_event_loop()
 
-    needs_refresh = client is None
+    needs_refresh = force_refresh or client is None
     if not needs_refresh:
         try:
             if client.is_closed:
@@ -221,14 +235,13 @@ def _build_default_client() -> httpx.Client:
 def _github_client_instance() -> httpx.AsyncClient:
     """Singleton async client for GitHub API requests."""
 
-    global _http_client_github, _http_client_github_loop
+    global _http_client_github, _http_client_github_loop, _http_client_github_token
+
+    current_token = _get_optional_github_token()
+    token_changed = current_token != _http_client_github_token
 
     def _build_client() -> httpx.AsyncClient:
-        token: Optional[str]
-        try:
-            token = _get_github_token()
-        except GitHubAuthError:
-            token = None
+        token = current_token
 
         http_limits = httpx.Limits(
             max_connections=HTTPX_MAX_CONNECTIONS,
@@ -247,8 +260,12 @@ def _github_client_instance() -> httpx.AsyncClient:
         )
 
     _http_client_github, _http_client_github_loop = _refresh_async_client(
-        _http_client_github, client_loop=_http_client_github_loop, rebuild=_build_client
+        _http_client_github,
+        client_loop=_http_client_github_loop,
+        rebuild=_build_client,
+        force_refresh=token_changed,
     )
+    _http_client_github_token = current_token
     return _http_client_github
 
 
