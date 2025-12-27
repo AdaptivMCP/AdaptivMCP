@@ -1,7 +1,9 @@
 # Adaptiv Controller – MCP Server
 
-This repository is a self-hosted GitHub MCP (Model Context Protocol) server hosted through Render.com Web Service Python Environment.
-It exposes a safe, engineering-oriented tool surface so ChatGPT AI Models (Currently tested up to model 5.2 Thinking) can assist users better.
+Adaptiv is designed to act as an AI model's personal PC, assisting users through the
+connected Adaptiv connector with multiple tasks and queries. Today it ships with
+GitHub and Render integrations, with plans for additional service integrations in
+future updates.
 
 ## Health and observability
 

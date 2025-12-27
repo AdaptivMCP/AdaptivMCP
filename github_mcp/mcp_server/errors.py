@@ -16,7 +16,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Set
 
-from github_mcp.exceptions import GitHubRateLimitError
+from github_mcp.config import GITHUB_TOKEN_ENV_VARS
+from github_mcp.exceptions import GitHubAuthError, GitHubRateLimitError, UsageError
 
 
 @dataclass
@@ -119,6 +120,61 @@ def _structured_tool_error(
     adaptiv_exc = _unwrap_adaptiv_error(exc)
     if adaptiv_exc is not None:
         err = adaptiv_exc.to_error_dict(incident_id=incident_id)
+        user_message = _format_user_message(err, context=context, path=path)
+        return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
+
+    if isinstance(exc, GitHubAuthError):
+        msg = _single_line(str(exc) or "GitHub authentication failed.")
+        err = {
+            "incident_id": incident_id,
+            "type": exc.__class__.__name__,
+            "code": "github_auth_failed",
+            "message": msg,
+            "category": "permission",
+            "origin": "github",
+            "retryable": False,
+            "details": {
+                "env_vars": list(GITHUB_TOKEN_ENV_VARS),
+                **({"context": context} if context else {}),
+                **({"path": path} if path else {}),
+            },
+            "hint": "Set a GitHub token (PAT, GitHub App token, or OAuth token) in one of the supported env vars.",
+        }
+        user_message = _format_user_message(err, context=context, path=path)
+        return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
+
+    if isinstance(exc, UsageError):
+        msg = _single_line(str(exc) or "Invalid usage.")
+        details = _best_effort_details(exc)
+        details.update({"context": context} if context else {})
+        details.update({"path": path} if path else {})
+
+        category = "validation"
+        origin = "tool"
+        hint = None
+
+        if "RENDER_API_KEY" in msg:
+            category = "configuration"
+            origin = "render"
+            details.setdefault("required_env", ["RENDER_API_KEY"])
+            hint = "Set RENDER_API_KEY before calling Render observability tools."
+        elif "RENDER_SERVICE_ID" in msg:
+            category = "configuration"
+            origin = "render"
+            details.setdefault("required_env", ["RENDER_SERVICE_ID"])
+            hint = "Set RENDER_SERVICE_ID or pass resourceId when requesting Render metrics."
+
+        err = {
+            "incident_id": incident_id,
+            "type": exc.__class__.__name__,
+            "code": "usage_error",
+            "message": msg,
+            "category": category,
+            "origin": origin,
+            "retryable": False,
+            "details": details,
+            "hint": hint,
+        }
         user_message = _format_user_message(err, context=context, path=path)
         return {"error": err, "user_message": user_message, "tool_descriptor": tool_descriptor, "tool_descriptor_text": tool_descriptor_text, "tool_surface": tool_surface, "routing_hint": routing_hint, "request": request}
 
