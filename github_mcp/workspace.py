@@ -207,6 +207,19 @@ def _git_auth_env() -> Dict[str, str]:
     return env
 
 
+def _git_env_has_auth_header(env: Dict[str, str]) -> bool:
+    if env.get("GIT_HTTP_EXTRAHEADER") or env.get("GIT_HTTP_EXTRA_HEADER"):
+        return True
+    for key, value in env.items():
+        if key.startswith("GIT_CONFIG_KEY_") and value == "http.extraHeader":
+            return True
+    return False
+
+
+def _git_no_auth_env() -> Dict[str, str]:
+    return {"GIT_TERMINAL_PROMPT": "0"}
+
+
 def _is_git_auth_error(message: str) -> bool:
     lowered = (message or "").lower()
     return any(
@@ -272,6 +285,8 @@ async def _clone_repo(
     main_module = sys.modules.get("main")
     run_shell = getattr(main_module, "_run_shell", _run_shell)
     auth_env = _git_auth_env()
+    no_auth_env = _git_no_auth_env()
+    git_env = auth_env
 
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
         if preserve_changes:
@@ -280,10 +295,22 @@ async def _clone_repo(
                 "git fetch origin --prune",
                 cwd=workspace_dir,
                 timeout_seconds=300,
-                env=auth_env,
+                env=git_env,
             )
             if fetch_result["exit_code"] != 0:
                 stderr = fetch_result.get("stderr", "") or fetch_result.get("stdout", "")
+                if _is_git_auth_error(stderr) and _git_env_has_auth_header(git_env):
+                    fetch_result = await _run_git_with_retry(
+                        run_shell,
+                        "git fetch origin --prune",
+                        cwd=workspace_dir,
+                        timeout_seconds=300,
+                        env=no_auth_env,
+                    )
+                    if fetch_result["exit_code"] == 0:
+                        git_env = no_auth_env
+                        return workspace_dir
+                    stderr = fetch_result.get("stderr", "") or fetch_result.get("stdout", "")
                 _raise_git_auth_error("Workspace fetch", stderr)
                 raise GitHubAPIError(
                     f"Workspace fetch failed for {full_name}@{effective_ref}: {stderr}"
@@ -304,10 +331,22 @@ async def _clone_repo(
                 cmd,
                 cwd=workspace_dir,
                 timeout_seconds=timeout,
-                env=auth_env,
+                env=git_env,
             )
             if result["exit_code"] != 0:
                 stderr = result.get("stderr", "") or result.get("stdout", "")
+                if _is_git_auth_error(stderr) and _git_env_has_auth_header(git_env):
+                    result = await _run_git_with_retry(
+                        run_shell,
+                        cmd,
+                        cwd=workspace_dir,
+                        timeout_seconds=timeout,
+                        env=no_auth_env,
+                    )
+                    if result["exit_code"] == 0:
+                        git_env = no_auth_env
+                        continue
+                    stderr = result.get("stderr", "") or result.get("stdout", "")
                 _raise_git_auth_error("Workspace refresh", stderr)
                 raise GitHubAPIError(
                     f"Workspace refresh failed for {full_name}@{effective_ref}: {stderr}"
@@ -329,10 +368,26 @@ async def _clone_repo(
         cmd,
         cwd=None,
         timeout_seconds=600,
-        env=auth_env,
+        env=git_env,
     )
     if result["exit_code"] != 0:
         stderr = result.get("stderr", "") or result.get("stdout", "")
+        if _is_git_auth_error(stderr) and _git_env_has_auth_header(git_env):
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
+            q_tmpdir = shlex.quote(tmpdir)
+            cmd = f"git clone --depth 1 --branch {q_ref} {q_url} {q_tmpdir}"
+            result = await _run_git_with_retry(
+                run_shell,
+                cmd,
+                cwd=None,
+                timeout_seconds=600,
+                env=no_auth_env,
+            )
+            if result["exit_code"] == 0:
+                shutil.move(tmpdir, workspace_dir)
+                return workspace_dir
+            stderr = result.get("stderr", "") or result.get("stdout", "")
         _raise_git_auth_error("git clone", stderr)
         raise GitHubAPIError(f"git clone failed: {stderr}")
 
