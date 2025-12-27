@@ -6,7 +6,7 @@ import contextvars
 from collections import deque
 from typing import Any, Optional
 
-from anyio import ClosedResourceError
+from anyio import BrokenResourceError, ClosedResourceError, EndOfStream
 from fastmcp import FastMCP
 from mcp.types import Icon
 
@@ -138,10 +138,19 @@ from mcp.shared import session as mcp_shared_session  # noqa: E402
 _orig_send_response = mcp_shared_session.BaseSession._send_response
 
 
+_DISCONNECT_ERRORS = (
+    ClosedResourceError,
+    BrokenResourceError,
+    EndOfStream,
+    BrokenPipeError,
+    ConnectionResetError,
+)
+
+
 async def _quiet_send_response(self, request_id, response):
     try:
         return await _orig_send_response(self, request_id, response)
-    except ClosedResourceError:
+    except _DISCONNECT_ERRORS:
         return None
 
 
