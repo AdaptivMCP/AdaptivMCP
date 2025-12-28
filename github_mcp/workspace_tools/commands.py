@@ -186,7 +186,7 @@ async def terminal_command(
         return _structured_tool_error(exc, context="terminal_command")
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=False, visibility="hidden")
 async def run_command(
     full_name: Optional[str] = None,
     ref: str = "main",
