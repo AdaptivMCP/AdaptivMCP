@@ -17,6 +17,7 @@ from .config import (
     GITHUB_API_BASE,
     GITHUB_API_BASE_URL,
     GITHUB_REQUEST_TIMEOUT_SECONDS,
+    GITHUB_SEARCH_MIN_INTERVAL_SECONDS,
     GITHUB_TOKEN_ENV_VARS,
     GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS,
     GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS,
@@ -30,6 +31,9 @@ from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError
 from .tool_logging import _record_github_request
 
 _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
+    weakref.WeakKeyDictionary()
+)
+_search_rate_limit_states: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, Dict[str, Any]]" = (
     weakref.WeakKeyDictionary()
 )
 _http_client_github: Optional[httpx.AsyncClient] = None
@@ -176,6 +180,34 @@ def _active_event_loop() -> asyncio.AbstractEventLoop:
         return asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.get_event_loop()
+
+
+def _get_search_rate_limit_state() -> Dict[str, Any]:
+    """Return per-event-loop search throttle state."""
+
+    loop = _active_event_loop()
+    state = _search_rate_limit_states.get(loop)
+    if state is None:
+        state = {"lock": asyncio.Lock(), "next_time": 0.0}
+        _search_rate_limit_states[loop] = state
+    return state
+
+
+async def _throttle_search_requests() -> None:
+    """Throttle GitHub search requests to avoid secondary rate limits."""
+
+    min_interval = GITHUB_SEARCH_MIN_INTERVAL_SECONDS
+    if min_interval <= 0:
+        return
+
+    state = _get_search_rate_limit_state()
+    lock: asyncio.Lock = state["lock"]
+    async with lock:
+        now = time.time()
+        wait_seconds = max(0.0, state["next_time"] - now)
+        if wait_seconds:
+            await asyncio.sleep(wait_seconds)
+        state["next_time"] = time.time() + min_interval
 
 
 def _refresh_async_client(
@@ -449,6 +481,8 @@ async def _github_request(
             raise
 
         try:
+            if path.lstrip("/").startswith("search/"):
+                await _throttle_search_requests()
             async with _get_concurrency_semaphore():
                 resp = await client.request(
                     method, path, params=params, json=json_body, headers=headers
