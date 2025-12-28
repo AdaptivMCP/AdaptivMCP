@@ -32,8 +32,6 @@ from github_mcp.mcp_server.schemas import (  # noqa: F401
     _preflight_tool_args,
     _stringify_annotation,
 )
-from github_mcp.mcp_server.write_gate import _ensure_write_allowed
-
 __all__ = [
     "COMPACT_METADATA_DEFAULT",
     "CONTROLLER_DEFAULT_BRANCH",
@@ -49,7 +47,6 @@ __all__ = [
     "_github_request",
     "_normalize_input_schema",
     "_structured_tool_error",
-    "_ensure_write_allowed",
     "mcp",
     "mcp_tool",
     "register_extra_tools_if_available",

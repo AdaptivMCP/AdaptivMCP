@@ -30,13 +30,6 @@ async def create_file(
     effective_branch = m._effective_ref_for_repo(full_name, branch)
     normalized_path = m._normalize_repo_path(path)
 
-
-    m._ensure_write_allowed(
-        "create_file %s %s" % (full_name, normalized_path),
-        target_ref=effective_branch,
-        write_kind="hard_write",
-    )
-
     # Ensure the file does not already exist.
     try:
         await m._decode_github_content(full_name, normalized_path, effective_branch)
@@ -142,13 +135,6 @@ async def apply_text_update_and_commit(
 
     effective_branch = m._effective_ref_for_repo(full_name, branch)
     normalized_path = m._normalize_repo_path(path)
-
-
-    m._ensure_write_allowed(
-        "apply_text_update_and_commit %s %s" % (full_name, normalized_path),
-        target_ref=effective_branch,
-        write_kind="hard_write",
-    )
 
     is_new_file = False
     old_text: str | None = None
@@ -271,12 +257,6 @@ async def move_file(
         raise ValueError("full_name must be in 'owner/repo' format")
 
     effective_branch = m._effective_ref_for_repo(full_name, branch)
-
-    m._ensure_write_allowed(
-        f"move_file from {from_path} to {to_path} in {full_name}@{effective_branch}",
-        target_ref=effective_branch,
-        write_kind="hard_write",
-    )
 
     from_path = m._normalize_repo_path(from_path)
     to_path = m._normalize_repo_path(to_path)

@@ -8,7 +8,7 @@ def _main() -> ModuleType:
     """Return the loaded `main` module (importing it if needed).
 
     Tool implementations use this to access symbols that tests monkeypatch on
-    `main` (e.g. `_github_request`, `_ensure_write_allowed`, constants).
+    `main` (e.g. `_github_request`, constants).
     """
 
     return importlib.import_module("main")

@@ -29,7 +29,7 @@ def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[
             continue
         resources.append(
             {
-                "uri": f"/{name}",
+                "uri": f"/tools/{name}",
                 "name": name,
                 "description": entry.get("description"),
                 "mimeType": "application/json",
@@ -119,5 +119,3 @@ def register_tool_registry_routes(app: Any) -> None:
     app.add_route("/resources", registry_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", detail_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", invoke_endpoint, methods=["POST"])
-    app.add_route("/{tool_name:str}", detail_endpoint, methods=["GET"])
-    app.add_route("/{tool_name:str}", invoke_endpoint, methods=["POST"])

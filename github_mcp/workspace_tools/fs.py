@@ -138,20 +138,6 @@ async def set_workspace_file_contents(
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
-        # Prefer scoped write gating so feature-branch work is allowed even
-        # when global WRITE_ALLOWED is disabled (metadata only).
-        try:
-            deps["ensure_write_allowed"](
-                f"set_workspace_file_contents {path} for {full_name}@{effective_ref}",
-                target_ref=effective_ref,
-                write_kind="soft_write",
-            )
-        except TypeError:
-            deps["ensure_write_allowed"](
-                f"set_workspace_file_contents {path} for {full_name}@{effective_ref}",
-                write_kind="soft_write",
-            )
-
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         before_info = _workspace_read_text(repo_dir, path)
         before_text = before_info.get("text") if before_info.get("exists") else ""

@@ -6,10 +6,7 @@ import re
 from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
-from github_mcp.server import (
-    CONTROLLER_REPO,
-    _ensure_write_allowed,
-)
+from github_mcp.server import CONTROLLER_REPO
 from github_mcp.workspace import (
     _clone_repo,
     _prepare_temp_virtualenv,
@@ -131,9 +128,6 @@ def _workspace_deps() -> Dict[str, Any]:
         "run_shell": getattr(main_module, "_run_shell", _run_shell),
         "prepare_temp_virtualenv": getattr(
             main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv
-        ),
-        "ensure_write_allowed": getattr(
-            main_module, "_ensure_write_allowed", _ensure_write_allowed
         ),
     }
 def _resolve_full_name(
