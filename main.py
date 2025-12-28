@@ -93,6 +93,7 @@ from github_mcp.workspace import (
 )
 from github_mcp.http_routes.actions_compat import register_actions_compat_routes
 from github_mcp.http_routes.healthz import register_healthz_route
+from github_mcp.http_routes.tool_registry import register_tool_registry_routes
 from starlette.staticfiles import StaticFiles
 
 
@@ -331,6 +332,7 @@ except Exception:
 
 register_actions_compat_routes(app, server)
 register_healthz_route(app)
+register_tool_registry_routes(app)
 
 
 def _cache_file_result(
