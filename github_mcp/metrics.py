@@ -4,7 +4,23 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-import httpx
+import importlib.util
+
+if importlib.util.find_spec("httpx") is not None:
+    import httpx
+else:
+    class _HttpxTimeoutStub(Exception):
+        pass
+
+    class _HttpxResponseStub:
+        headers: dict[str, str] = {}
+        status_code: int = 0
+
+    class _HttpxModuleStub:
+        TimeoutException = _HttpxTimeoutStub
+        Response = _HttpxResponseStub
+
+    httpx = _HttpxModuleStub()
 
 
 def _new_metrics_state() -> Dict[str, Any]:
