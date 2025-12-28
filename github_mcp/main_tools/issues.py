@@ -93,11 +93,6 @@ async def create_issue(
     if "/" not in full_name:
         raise ValueError("full_name must be in owner/repo format")
 
-    m._ensure_write_allowed(
-        f"create issue in {full_name}: {title!r}",
-        write_kind="hard_write",
-    )
-
     payload: Dict[str, Any] = {"title": title}
     if body is not None:
         payload["body"] = body
@@ -128,11 +123,6 @@ async def update_issue(
 
     if "/" not in full_name:
         raise ValueError("full_name must be in owner/repo format")
-
-    m._ensure_write_allowed(
-        f"update issue #{issue_number} in {full_name}",
-        write_kind="hard_write",
-    )
 
     payload: Dict[str, Any] = {}
     if title is not None:
@@ -170,11 +160,6 @@ async def comment_on_issue(
 
     if "/" not in full_name:
         raise ValueError("full_name must be in owner/repo format")
-
-    m._ensure_write_allowed(
-        f"comment on issue #{issue_number} in {full_name}",
-        write_kind="hard_write",
-    )
 
     return await m._github_request(
         "POST",

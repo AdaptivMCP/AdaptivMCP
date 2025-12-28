@@ -69,7 +69,6 @@ from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
-    _ensure_write_allowed,  # noqa: F401
     _structured_tool_error,  # noqa: F401
     _github_request,
     mcp_tool,
@@ -241,7 +240,6 @@ __all__ = [
     "CONTROLLER_DEFAULT_BRANCH",
     "_github_request",
     "get_recent_server_logs",
-    "_ensure_write_allowed",
 ]
 # Exposed for tests that monkeypatch the external HTTP client used for sandbox: URLs.
 _http_client_external: httpx.AsyncClient | None = None

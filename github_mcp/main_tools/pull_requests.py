@@ -46,10 +46,6 @@ async def merge_pull_request(
         raise ValueError("merge_method must be 'merge', 'squash', or 'rebase'")
 
     m = _main()
-    m._ensure_write_allowed(
-        f"merge PR #{number} in {full_name}",
-        write_kind="hard_write",
-    )
     payload: Dict[str, Any] = {"merge_method": merge_method}
     if commit_title is not None:
         payload["commit_title"] = commit_title
@@ -66,10 +62,6 @@ async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
     """Close a pull request without merging."""
 
     m = _main()
-    m._ensure_write_allowed(
-        f"close PR #{number} in {full_name}",
-        write_kind="hard_write",
-    )
     return await m._github_request(
         "PATCH",
         f"/repos/{full_name}/pulls/{number}",
@@ -81,10 +73,6 @@ async def comment_on_pull_request(full_name: str, number: int, body: str) -> Dic
     """Post a comment on a pull request (issue API under the hood)."""
 
     m = _main()
-    m._ensure_write_allowed(
-        f"comment on PR #{number} in {full_name}",
-        write_kind="hard_write",
-    )
     return await m._github_request(
         "POST",
         f"/repos/{full_name}/issues/{number}/comments",
@@ -260,11 +248,6 @@ async def create_pull_request(
 
     try:
         effective_base = m._effective_ref_for_repo(full_name, base)
-        m._ensure_write_allowed(
-            f"create PR from {head} to {effective_base} in {full_name}",
-            write_kind="hard_write",
-        )
-
         effective_body = body
         if effective_body is None or not str(effective_body).strip():
             try:
@@ -421,11 +404,6 @@ async def update_files_and_open_pr(
 
         # 1) Ensure a dedicated branch exists
         branch = new_branch or f"ally-{os.urandom(4).hex()}"
-        m._ensure_write_allowed(
-            "update_files_and_open_pr %s %s" % (full_name, branch),
-            target_ref=branch,
-            write_kind="hard_write",
-        )
         await m.ensure_branch(full_name, branch, from_ref=effective_base)
 
         commit_results: List[Dict[str, Any]] = []

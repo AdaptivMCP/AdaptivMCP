@@ -45,7 +45,7 @@ Client (ChatGPT / connector)
 
 - **`github_mcp/mcp_server/context.py`**
   - Initializes `FastMCP` instance and shared contextvars for request metadata.
-  - Defines write gating defaults (`WRITE_ALLOWED`), tool examples, and recent tool event buffer.
+  - Defines the write-allowed flag (`WRITE_ALLOWED`), tool examples, and recent tool event buffer.
   - Wraps MCP session response to suppress SSE disconnect noise.
 
 - **`github_mcp/mcp_server/decorators.py`**
@@ -123,18 +123,16 @@ Client (ChatGPT / connector)
 - `github_mcp/http_clients.py` (`_get_github_token`)
 - `github_mcp/workspace.py` (`_git_auth_env`)
 
-### 3.2 Write gating & approvals
+### 3.2 Write allow-listing & approvals
 
-- A write gate flag (`WRITE_ALLOWED`) is exposed via configuration and used for tool metadata.
-- The legacy `_ensure_write_allowed` function is implemented as a **no-op** shim for compatibility.
+- A write-allowed flag (`WRITE_ALLOWED`) is exposed via configuration and used for tool metadata.
 - UI approval prompts are explicitly disabled in the tool decorator.
 
 **Implication:**
-- Write safety is *metadata-based* and depends on operator configuration or external policy. There is no enforced runtime authorization check within `_ensure_write_allowed`.
+- Write safety is *metadata-based* and depends on operator configuration or external policy.
 
 **Relevant modules:**
 - `github_mcp/mcp_server/context.py` (`WRITE_ALLOWED`)
-- `github_mcp/mcp_server/write_gate.py` (no-op)
 - `github_mcp/mcp_server/decorators.py` (`_ui_prompt_required_for_tool` returns `False`)
 
 ### 3.3 Side-effect classification
@@ -200,8 +198,8 @@ This classification is used for logging, metadata, and recent event buffers.
 
 ## 4. Notable safety gaps or assumptions
 
-1. **Write gating is non-enforced.**
-   - `_ensure_write_allowed` is a no-op, so tools that call it do not block writes at runtime.
+1. **Write enforcement is metadata-only.**
+   - Runtime authorization checks are not enforced in tool implementations.
    - If enforcement is desired, it must be added or enforced upstream.
 
 2. **No UI approval prompts.**

@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 
 from github_mcp.config import RUN_COMMAND_MAX_CHARS
-from github_mcp.server import CONTROLLER_REPO, _ensure_write_allowed, _structured_tool_error, mcp_tool
+from github_mcp.server import CONTROLLER_REPO, _structured_tool_error, mcp_tool
 from github_mcp.utils import _default_branch_for_repo, _effective_ref_for_repo
 from github_mcp.workspace import _workspace_path
 
@@ -67,7 +67,6 @@ __all__ = [
     'uuid',
     'RUN_COMMAND_MAX_CHARS',
     'CONTROLLER_REPO',
-    '_ensure_write_allowed',
     '_structured_tool_error',
     'mcp_tool',
     '_default_branch_for_repo',

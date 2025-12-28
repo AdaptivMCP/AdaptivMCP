@@ -162,11 +162,6 @@ async def create_repository(
         create_target_desc = (
             f"{target_owner}/{name}" if target_owner else f"(authenticated-user)/{name}"
         )
-        m._ensure_write_allowed(
-            f"create repository {create_target_desc}",
-            write_kind="hard_write",
-        )
-
         def _apply_overrides(
             base: Dict[str, Any], overrides: Optional[Dict[str, Any]]
         ) -> Dict[str, Any]:

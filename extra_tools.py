@@ -7,7 +7,6 @@ from typing import Any, Callable, Dict, Literal, Protocol
 from main import (
     _decode_github_content,
     _effective_ref_for_repo,
-    _ensure_write_allowed,
     _github_request,
     _resolve_file_sha,
     _workspace_path,
@@ -226,10 +225,6 @@ async def delete_file(
         raise ValueError("if_missing must be 'error' or 'noop'")
 
     effective_branch = _effective_ref_for_repo(full_name, branch)
-    _ensure_write_allowed(
-        f"delete_file {full_name} {path}",
-        target_ref=effective_branch,
-    )
 
     sha = await _resolve_file_sha(full_name, path, effective_branch)
     if sha is None:
@@ -269,11 +264,6 @@ async def update_file_from_workspace(
     """Commit a workspace file to a target path in the repository."""
 
     effective_ref = _effective_ref_for_repo(full_name, branch)
-
-    _ensure_write_allowed(
-        f"update_file_from_workspace {full_name} {target_path}",
-        target_ref=effective_ref,
-    )
 
     workspace_root = _workspace_path(full_name, effective_ref)
 

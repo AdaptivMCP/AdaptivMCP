@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-# _ensure_write_allowed is defined later with target_ref support.
 _REGISTERED_MCP_TOOLS: list[tuple[Any, Any]] = []
 
 

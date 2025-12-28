@@ -58,13 +58,6 @@ async def workspace_create_branch(
         if new_branch.endswith(".lock"):
             raise ValueError("new_branch must not end with '.lock'")
 
-        write_kind = "hard_write" if push else "soft_write"
-        _tw()._ensure_write_allowed(
-            f"workspace_create_branch {new_branch} from {full_name}@{effective_base}",
-            target_ref=effective_base,
-            write_kind=write_kind,
-        )
-
         repo_dir = await deps["clone_repo"](full_name, ref=effective_base, preserve_changes=True)
 
         checkout = await deps["run_shell"](
@@ -139,12 +132,6 @@ async def workspace_delete_branch(
         # Normalize to the default branch for workspace operations so we are not
         # checked out on the branch we are about to delete.
         effective_ref = _tw()._effective_ref_for_repo(full_name, default_branch)
-
-        _tw()._ensure_write_allowed(
-            f"workspace_delete_branch {branch} for {full_name}@{effective_ref}",
-            target_ref=effective_ref,
-            write_kind="hard_write",
-        )
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
@@ -231,12 +218,6 @@ async def workspace_self_heal_branch(
             raise ValueError("branch must not end with '.lock'")
 
         effective_base = _tw()._effective_ref_for_repo(full_name, base_ref)
-        _tw()._ensure_write_allowed(
-            f"workspace_self_heal_branch {branch} for {full_name}@{effective_base}",
-            target_ref=effective_base,
-            write_kind="hard_write",
-        )
-
         steps: List[Dict[str, Any]] = []
 
         def step(action: str, detail: str, *, status: str = "ok", **extra: Any) -> None:
