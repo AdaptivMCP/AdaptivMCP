@@ -11,7 +11,21 @@ from __future__ import annotations
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
-import httpx
+import importlib.util
+
+if importlib.util.find_spec("httpx") is not None:
+    import httpx
+else:
+    class _HttpxResponseStub:
+        headers: dict[str, str] = {}
+
+        def __init__(self) -> None:
+            self.request = None
+
+    class _HttpxModuleStub:
+        Response = _HttpxResponseStub
+
+    httpx = _HttpxModuleStub()
 
 from github_mcp.config import GITHUB_LOGGER
 from github_mcp.metrics import _record_github_request as _record_github_request_metrics

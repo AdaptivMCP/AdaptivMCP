@@ -6,6 +6,18 @@ errors when internal helpers change, we only re-export that submodule here."""
 
 from __future__ import annotations
 
-from . import tools_workspace
+import importlib
+from typing import Any
 
 __all__ = ["tools_workspace"]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "tools_workspace":
+        module = importlib.import_module(f"{__name__}.tools_workspace")
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(list(globals().keys()) + __all__)

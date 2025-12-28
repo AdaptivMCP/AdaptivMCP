@@ -11,7 +11,98 @@ from typing import Any, Callable, Dict, Optional, Tuple
 import weakref
 from urllib.parse import urlencode
 
-import httpx
+import importlib.util
+
+if importlib.util.find_spec("httpx") is not None:
+    import httpx
+else:
+    class HTTPError(Exception):
+        """Fallback HTTP error when httpx is unavailable."""
+
+    class TimeoutException(HTTPError):
+        """Fallback timeout exception when httpx is unavailable."""
+
+    class Limits:
+        def __init__(
+            self,
+            *,
+            max_connections: Optional[int] = None,
+            max_keepalive_connections: Optional[int] = None,
+        ) -> None:
+            self.max_connections = max_connections
+            self.max_keepalive_connections = max_keepalive_connections
+
+    class Response:
+        def __init__(
+            self,
+            status_code: int = 200,
+            *,
+            headers: Optional[Dict[str, str]] = None,
+            text: str = "",
+            json_data: Optional[Dict[str, Any]] = None,
+        ) -> None:
+            self.status_code = status_code
+            self.headers = headers or {}
+            self.text = text
+            self._json_data = json_data or {}
+
+        @property
+        def is_error(self) -> bool:
+            return self.status_code >= 400
+
+        def json(self) -> Dict[str, Any]:
+            return dict(self._json_data)
+
+    class Timeout:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self.args = args
+            self.kwargs = kwargs
+
+    class Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self.is_closed = False
+
+        def request(self, *args: Any, **kwargs: Any) -> "Response":
+            raise HTTPError("httpx is not installed")
+
+        def get(self, *args: Any, **kwargs: Any) -> "Response":
+            return self.request(*args, **kwargs)
+
+        def post(self, *args: Any, **kwargs: Any) -> "Response":
+            return self.request(*args, **kwargs)
+
+        def close(self) -> None:
+            self.is_closed = True
+
+    class AsyncClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self.is_closed = False
+
+        async def request(self, *args: Any, **kwargs: Any) -> "Response":
+            raise HTTPError("httpx is not installed")
+
+        async def get(self, *args: Any, **kwargs: Any) -> "Response":
+            return await self.request(*args, **kwargs)
+
+        async def post(self, *args: Any, **kwargs: Any) -> "Response":
+            return await self.request(*args, **kwargs)
+
+        async def aclose(self) -> None:
+            self.is_closed = True
+
+        def close(self) -> None:
+            self.is_closed = True
+
+    class _HttpxModule:
+        HTTPError = HTTPError
+        TimeoutException = TimeoutException
+        Limits = Limits
+        Response = Response
+        Timeout = Timeout
+        Client = Client
+        AsyncClient = AsyncClient
+
+    httpx = _HttpxModule()
 
 from .config import (
     GITHUB_API_BASE,
