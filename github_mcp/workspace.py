@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
-import re
 import shutil
 import shlex
 import sys
@@ -254,20 +253,10 @@ def _raise_git_auth_error(operation: str, stderr: str) -> None:
 def _workspace_path(full_name: str, ref: str) -> str:
     repo_key = full_name.replace("/", "__")
 
-    # refs can include slashes (feature/foo), tags (v1.2.3), or SHAs.
-    # We sanitize to avoid path traversal and keep workspaces under base_dir.
-    ref_key = re.sub(r"[^A-Za-z0-9_.-]+", "__", ref)
-
     main_module = sys.modules.get("main")
     base_dir = getattr(main_module, "WORKSPACE_BASE_DIR", config.WORKSPACE_BASE_DIR)
 
-    workspace_dir = os.path.join(base_dir, repo_key, ref_key)
-
-    # Defensive: ensure the resolved path stays within the configured base_dir.
-    base_real = os.path.realpath(base_dir)
-    workspace_real = os.path.realpath(workspace_dir)
-    if not (workspace_real == base_real or workspace_real.startswith(base_real + os.sep)):
-        raise GitHubAPIError(f"Unsafe workspace path resolved for ref={ref!r}")
+    workspace_dir = os.path.join(base_dir, repo_key, ref)
 
     return workspace_dir
 
@@ -461,94 +450,12 @@ def _maybe_unescape_unified_diff(patch: str) -> str:
         return patch.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
 
 
-def _sanitize_patch_head(patch: str) -> str:
-    """Strip common leading junk that breaks `git apply`.
-
-    Common failure cases:
-    - Patches wrapped in markdown fences (```diff ... ```)
-    - Patches prefixed with stray JSON braces or assistant metadata
-
-    We only strip when the input looks like a diff somewhere in the text.
-    """
-    if not isinstance(patch, str):
-        return patch
-
-    # Normalize line endings early.
-    patch = patch.replace("\r\n", "\n")
-
-    looks_like_diff = (
-        patch.lstrip().startswith("diff --git ")
-        or patch.lstrip().startswith("--- ")
-        or "diff --git " in patch
-        or "--- " in patch
-        or "+++ " in patch
-        or "@@ " in patch
-    )
-    if not looks_like_diff:
-        return patch
-
-    lines = patch.splitlines()
-
-    # Remove leading blank lines.
-    while lines and not lines[0].strip():
-        lines.pop(0)
-
-    # Remove leading markdown fences.
-    if lines and lines[0].strip().startswith("```"):
-        lines.pop(0)
-        while lines and not lines[0].strip():
-            lines.pop(0)
-
-    # If the diff starts later, drop everything before it.
-    start_idx = None
-    for i, ln in enumerate(lines):
-        s = ln.lstrip()
-        if s.startswith("diff --git ") or s.startswith("--- "):
-            start_idx = i
-            break
-    if start_idx is not None and start_idx > 0:
-        lines = lines[start_idx:]
-
-    return "\n".join(lines) + ("\n" if patch.endswith("\n") else "")
-
-
-def _sanitize_patch_tail(patch: str) -> str:
-    """Strip common trailing junk that breaks `git apply`."""
-    if not isinstance(patch, str):
-        return patch
-
-    looks_like_diff = (
-        patch.lstrip().startswith("diff --git ")
-        or patch.lstrip().startswith("--- ")
-        or "diff --git " in patch
-        or "--- " in patch
-        or "+++ " in patch
-        or "@@ " in patch
-    )
-    if not looks_like_diff:
-        return patch
-
-    ends_with_nl = patch.endswith("\n")
-    lines = patch.splitlines()
-
-    junk_lines = {"}", "}}", "```", "```diff", "```patch"}
-    while lines and lines[-1].strip() in junk_lines:
-        lines.pop()
-
-    out = "\n".join(lines)
-    if ends_with_nl and out and not out.endswith("\n"):
-        out += "\n"
-    return out
-
-
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     """Write a unified diff to disk and apply it with ``git apply``."""
     if not patch or not patch.strip():
         raise GitHubAPIError("Received empty patch to apply in workspace")
 
     patch = _maybe_unescape_unified_diff(patch)
-    patch = _sanitize_patch_head(patch)
-    patch = _sanitize_patch_tail(patch)
 
     patch_path = os.path.join(repo_dir, "mcp_patch.diff")
 
