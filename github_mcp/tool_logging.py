@@ -17,39 +17,8 @@ from github_mcp.config import GITHUB_LOGGER
 from github_mcp.metrics import _record_github_request as _record_github_request_metrics
 
 
-_QUOTE_CHARS = {"\"", "'", '“', '”', '‘', '’'}
-
-
 def _sanitize_url_for_logs(raw: str) -> str:
-    """Normalize URLs that may include stray quotes or extra tokens.
-
-    Some upstream loggers can append trailing quotes or protocol snippets.
-    This keeps derived links clickable in Render logs.
-    """
-
-    s = (raw or "").strip()
-    if not s:
-        return s
-
-    # If wrapped in angle brackets, keep the inner portion.
-    if s.startswith("<") and ">" in s:
-        s = s[1 : s.find(">")].strip()
-
-    # If there is whitespace, choose the first URL-like token.
-    tokens = s.split()
-    if len(tokens) > 1:
-        for tok in tokens:
-            if tok.startswith(("https://", "http://")):
-                s = tok
-                break
-        else:
-            s = tokens[0]
-
-    # Strip surrounding/trailing quotes (including common unicode quote characters).
-    s = s.strip(''.join(_QUOTE_CHARS))
-    while s and s[-1] in _QUOTE_CHARS:
-        s = s[:-1]
-    return s
+    return (raw or "")
 
 
 

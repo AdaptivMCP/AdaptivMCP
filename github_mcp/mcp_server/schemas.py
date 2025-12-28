@@ -121,31 +121,11 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
       adding default properties entries (type=string). This matches existing expectations in tests.
     """
 
-    def _tighten_required_properties(schema: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            if schema.get("type") != "object":
-                return schema
-
-            props = schema.get("properties")
-            if not isinstance(props, dict):
-                props = {}
-                schema["properties"] = props
-
-            req = schema.get("required")
-            if isinstance(req, list):
-                for name in req:
-                    if isinstance(name, str) and name not in props:
-                        props[name] = {"type": "string"}
-        except Exception:
-            return schema
-
-        return schema
-
     for attr in ("input_schema", "inputSchema", "schema", "parameters"):
         try:
             val = getattr(tool_obj, attr, None)
             if isinstance(val, dict):
-                return _tighten_required_properties(val)
+                return val
         except Exception:
             continue
 
@@ -156,7 +136,7 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
             for k in ("input_schema", "schema", "parameters"):
                 v = meta.get(k)
                 if isinstance(v, dict):
-                    return _tighten_required_properties(v)
+                    return v
     except Exception:
         pass
 

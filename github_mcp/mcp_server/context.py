@@ -80,16 +80,6 @@ def _record_recent_tool_event(event: dict) -> None:
 
     global RECENT_TOOL_EVENTS_TOTAL, RECENT_TOOL_EVENTS_DROPPED
     try:
-        if isinstance(event, dict):
-            for key in (
-                "side_effects",
-                "write_allowed",
-                "ui_prompt_required",
-                "write_kind",
-                "remote_write",
-                "arg_keys",
-            ):
-                event.pop(key, None)
         RECENT_TOOL_EVENTS_TOTAL += 1
         if isinstance(RECENT_TOOL_EVENTS, deque):
             maxlen = RECENT_TOOL_EVENTS.maxlen

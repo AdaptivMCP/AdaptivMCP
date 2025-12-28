@@ -92,25 +92,12 @@ def _bind_call_args(
 
 
 def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
-    location_keys = {
-        "full_name",
-        "owner",
-        "repo",
-        "path",
-        "file_path",
-        "ref",
-        "branch",
-        "base_ref",
-        "head_ref",
-    }
-
-    sanitized_args = {k: v for k, v in all_args.items() if k not in location_keys}
-    arg_keys = sorted(sanitized_args.keys())
-    arg_preview = _format_tool_args_preview(sanitized_args)
+    arg_keys = sorted(all_args.keys())
+    arg_preview = _format_tool_args_preview(all_args)
 
     return {
         "arg_keys": arg_keys,
-        "arg_count": len(sanitized_args),
+        "arg_count": len(all_args),
         "arg_preview": arg_preview,
     }
 
