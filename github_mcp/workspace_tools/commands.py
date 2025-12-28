@@ -115,26 +115,6 @@ async def terminal_command(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        needs_write_gate = (
-            mutating
-            or installing_dependencies
-            or not use_temp_venv
-        )
-        if needs_write_gate:
-            # Prefer scoped write gating so feature-branch work is allowed even
-            # when global WRITE_ALLOWED is disabled (metadata only).
-            try:
-                deps["ensure_write_allowed"](
-                    f"terminal_command {command} in {full_name}@{effective_ref}",
-                    target_ref=effective_ref,
-                    write_kind="soft_write",
-                )
-            except TypeError:
-                # Backwards-compat: older implementations accept only (context).
-                deps["ensure_write_allowed"](
-                    f"terminal_command {command} in {full_name}@{effective_ref}",
-                    write_kind="soft_write",
-                )
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
@@ -142,29 +122,6 @@ async def terminal_command(
         cwd = repo_dir
         if workdir:
             cwd = os.path.join(repo_dir, workdir)
-        cd_match = re.match(r"^\s*cd\s+(.+?)\s*&&\s*(.+)$", command, flags=re.S)
-        if cd_match:
-            raw_cd = cd_match.group(1).strip()
-            remainder = cd_match.group(2).strip()
-            if raw_cd and raw_cd[0] == raw_cd[-1] and raw_cd[0] in {"'", '"'}:
-                raw_cd = raw_cd[1:-1]
-            target_path = raw_cd
-            if not os.path.isabs(target_path):
-                target_path = os.path.join(cwd, target_path)
-            target_path = os.path.normpath(target_path)
-            repo_root = os.path.normpath(repo_dir)
-            if os.path.commonpath([target_path, repo_root]) != repo_root:
-                raise GitHubAPIError(
-                    "Refusing to run terminal_command with 'cd' outside the workspace. "
-                    "Use the workdir parameter to target subdirectories."
-                )
-            if not remainder:
-                raise GitHubAPIError(
-                    "terminal_command received a 'cd' prefix without a command to run."
-                )
-            cwd = target_path
-            command = remainder
-
         # Optional dependency installation. If requested, install dev-requirements.txt (preferred)
         # or requirements.txt when present
         # (unless the command already appears to be installing deps).
