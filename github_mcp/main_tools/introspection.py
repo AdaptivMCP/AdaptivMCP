@@ -146,6 +146,11 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
     seen_names: set[str] = set()
 
     for tool, func in m._REGISTERED_MCP_TOOLS:
+        visibility = getattr(func, "__mcp_visibility__", None) or getattr(
+            tool, "__mcp_visibility__", None
+        )
+        if visibility and visibility != "public":
+            continue
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
         if not name:
             continue
