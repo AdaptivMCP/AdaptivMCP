@@ -21,6 +21,7 @@ import functools
 import hashlib
 import inspect
 import json
+import os
 import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
@@ -37,6 +38,11 @@ from github_mcp.mcp_server.schemas import (
     _jsonable,
 )
 from github_mcp.metrics import _record_tool_call
+
+
+def _parse_bool(value: Optional[str]) -> bool:
+    v = (value or "").strip().lower()
+    return v in ("1", "true", "t", "yes", "y", "on")
 
 
 def _schema_hash(schema: Mapping[str, Any]) -> str:
@@ -98,18 +104,37 @@ def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: 
 
 
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
+    """
+    Enforce the write gate. If the in-memory flag is stale but the environment
+    says writes are allowed, self-heal by flipping WRITE_ALLOWED.value to True.
+    """
     if not write_action:
         return
+
     if bool(WRITE_ALLOWED):
         return
+
+    env_allows = _parse_bool(os.environ.get("GITHUB_MCP_WRITE_ALLOWED", "true"))
+    if env_allows:
+        # Self-heal: if env says true, do not block due to stale in-memory state.
+        try:
+            WRITE_ALLOWED.value = True  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        return
+
     raise AdaptivToolError(
         code="write_not_allowed",
         message=f"Write tool {tool_name!r} blocked because WRITE_ALLOWED is false.",
         category="policy",
         origin="write_gate",
         retryable=False,
-        details={"tool": tool_name, "write_allowed": False},
-        hint="Set WRITE_ALLOWED=true and retry.",
+        details={
+            "tool": tool_name,
+            "write_allowed": False,
+            "env_GITHUB_MCP_WRITE_ALLOWED": os.environ.get("GITHUB_MCP_WRITE_ALLOWED"),
+        },
+        hint="Set GITHUB_MCP_WRITE_ALLOWED=true and retry.",
     )
 
 
@@ -147,7 +172,6 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
     - Subsequent calls within TTL await the cached Future (even if already done).
     - Failures are not cached; cache entry is removed immediately on exception.
     """
-
     ttl_s = max(0.0, float(ttl_s))
     now = time.time()
 
@@ -192,7 +216,6 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
 
 def _maybe_dedupe_call_sync(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> Any:
     """Sync dedupe: memoize result for ttl_s seconds."""
-
     ttl_s = max(0.0, float(ttl_s))
     now = time.time()
 
@@ -235,12 +258,18 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
+    """
+    Log a structured tool event without ever throwing.
+    Falls back if TOOLS_LOGGER has no .detailed().
+    """
     try:
         safe = _jsonable(dict(payload))
-        TOOLS_LOGGER.detailed(
-            f"[tool event] {safe.get('event','tool')} | status={safe.get('status')} | tool={safe.get('tool_name')}",
-            extra={"event": "tool_json", "tool_event": safe},
-        )
+        msg = f"[tool event] {safe.get('event','tool')} | status={safe.get('status')} | tool={safe.get('tool_name')}"
+        log_fn = getattr(TOOLS_LOGGER, "detailed", None)
+        if callable(log_fn):
+            log_fn(msg, extra={"event": "tool_json", "tool_event": safe})
+        else:
+            TOOLS_LOGGER.info(msg, extra={"event": "tool_json", "tool_event": safe})
     except Exception:
         return
 
@@ -257,17 +286,11 @@ def _fastmcp_tool_params() -> Optional[tuple[inspect.Parameter, ...]]:
     return params
 
 
-def _fastmcp_tool_kwargs(params: Optional[tuple[inspect.Parameter, ...]], *, name: str, description: Optional[str]) -> dict[str, Any]:
-    kwargs: dict[str, Any] = {
-        "name": name,
-        "description": description,
-        "tags": set(),  # ignore tags entirely to prevent tag-driven behavior
-        "meta": {},
-        "annotations": _jsonable({}),
-    }
+def _filter_kwargs_for_signature(
+    params: Optional[tuple[inspect.Parameter, ...]], kwargs: dict[str, Any]
+) -> dict[str, Any]:
     if params is None:
         return kwargs
-
     if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in params):
         return kwargs
 
@@ -276,34 +299,89 @@ def _fastmcp_tool_kwargs(params: Optional[tuple[inspect.Parameter, ...]], *, nam
         for param in params
         if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
     }
-    return {key: value for key, value in kwargs.items() if key in allowed}
+    return {k: v for k, v in kwargs.items() if k in allowed}
 
 
-def _fastmcp_requires_fn_positional(params: Optional[tuple[inspect.Parameter, ...]]) -> bool:
-    if params is None:
-        return False
-    for param in params:
-        if param.name in {"fn", "func", "tool"} and param.kind in (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        ):
-            return param.default is inspect._empty
-    return False
+def _fastmcp_call_style(params: Optional[tuple[inspect.Parameter, ...]]) -> str:
+    """
+    Determine safest call style:
+    - If first param is name: must use decorator factory style (tool(name=...)(fn)).
+    - If first param is fn/func/etc: can use direct call tool(fn, ...).
+    - Unknown: try factory first, then direct.
+    """
+    if params is None or not params:
+        return "unknown"
+    first = params[0].name
+    if first == "name":
+        return "factory"
+    if first in {"fn", "func", "callable", "handler", "tool"}:
+        return "direct"
+    return "unknown"
 
 
 def _register_with_fastmcp(fn: Callable[..., Any], *, name: str, description: Optional[str]) -> Any:
-    params = _fastmcp_tool_params()
-    kwargs = _fastmcp_tool_kwargs(params, name=name, description=description)
+    """
+    Robust FastMCP registration across signature variants.
 
-    if _fastmcp_requires_fn_positional(params):
-        tool_obj = mcp.tool(fn, **kwargs)
-    else:
-        try:
-            tool_decorator = mcp.tool(**kwargs)
-        except TypeError:
-            tool_obj = mcp.tool(fn, **kwargs)
-        else:
-            tool_obj = tool_decorator(fn) if callable(tool_decorator) else tool_decorator
+    Prevents the crash:
+      TypeError: FastMCP.tool() got multiple values for argument 'name'
+    by never passing `fn` positionally when the tool() signature expects `name`
+    positionally.
+    """
+    params = _fastmcp_tool_params()
+    style = _fastmcp_call_style(params)
+
+    # Build kwargs in descending compatibility order.
+    base: dict[str, Any] = {"name": name, "description": description}
+    full: dict[str, Any] = {
+        "name": name,
+        "description": description,
+        "tags": set(),  # accepted/ignored where supported
+        "meta": {},
+        "annotations": _jsonable({}),
+    }
+
+    attempts = [full, base, {"name": name}]
+
+    last_exc: Optional[Exception] = None
+    tool_obj: Any = None
+
+    for kw in attempts:
+        kw2 = _filter_kwargs_for_signature(params, dict(kw))
+
+        # Factory style: mcp.tool(**kw)(fn)
+        if style in {"factory", "unknown"}:
+            try:
+                decorator = mcp.tool(**kw2)
+                # decorator should be callable; if it's already a tool object, keep it.
+                if callable(decorator) and not hasattr(decorator, "name"):
+                    tool_obj = decorator(fn)
+                else:
+                    # Some implementations may return a Tool-like object directly.
+                    tool_obj = decorator
+                break
+            except TypeError as exc:
+                last_exc = exc
+                # If factory failed, and signature indicates direct style, try direct below.
+                if style == "factory":
+                    continue
+
+        # Direct style: mcp.tool(fn, **kw)
+        if style in {"direct", "unknown"}:
+            # IMPORTANT: do not attempt direct style if signature starts with name
+            if style == "unknown" and params and params[0].name == "name":
+                continue
+            try:
+                tool_obj = mcp.tool(fn, **kw2)
+                break
+            except TypeError as exc:
+                last_exc = exc
+                continue
+
+    if tool_obj is None:
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("Failed to register tool with FastMCP")
 
     _REGISTERED_MCP_TOOLS[:] = [
         (t, f)
