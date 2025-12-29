@@ -31,6 +31,7 @@ from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_erro
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
+    _schema_from_signature,
     _normalize_input_schema,
     _normalize_tool_description,
     _jsonable,
@@ -448,6 +449,8 @@ def mcp_tool(
 
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
+                schema = _schema_from_signature(signature)
+            if not isinstance(schema, Mapping):
                 raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
             wrapper.__mcp_input_schema__ = schema
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
@@ -544,6 +547,8 @@ def mcp_tool(
         wrapper.__mcp_tool__ = _register_with_fastmcp(wrapper, name=tool_name, description=normalized_description)
 
         schema = _normalize_input_schema(wrapper.__mcp_tool__)
+        if not isinstance(schema, Mapping):
+            schema = _schema_from_signature(signature)
         if not isinstance(schema, Mapping):
             raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
         wrapper.__mcp_input_schema__ = schema
