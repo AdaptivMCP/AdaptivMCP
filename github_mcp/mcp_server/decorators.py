@@ -245,14 +245,24 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
 
 
 def _register_with_fastmcp(fn: Callable[..., Any], *, name: str, description: Optional[str]) -> Any:
-    tool_obj = mcp.tool(
-        fn,
-        name=name,
-        description=description,
-        tags=set(),  # ignore tags entirely to prevent tag-driven behavior
-        meta={},
-        annotations=_jsonable({}),
-    )
+    try:
+        tool_decorator = mcp.tool(
+            name=name,
+            description=description,
+            tags=set(),  # ignore tags entirely to prevent tag-driven behavior
+            meta={},
+            annotations=_jsonable({}),
+        )
+        tool_obj = tool_decorator(fn)
+    except TypeError:
+        tool_obj = mcp.tool(
+            fn,
+            name=name,
+            description=description,
+            tags=set(),  # ignore tags entirely to prevent tag-driven behavior
+            meta={},
+            annotations=_jsonable({}),
+        )
 
     _REGISTERED_MCP_TOOLS[:] = [
         (t, f)
