@@ -18,20 +18,49 @@ from typing import Any, Deque, Dict, List, Mapping, Optional
 
 from github_mcp.utils import _env_flag
 
+_FASTMCP_ERROR: Exception | None = None
 try:
     from mcp.server.fastmcp import FastMCP  # type: ignore
 except Exception as exc:
-    raise RuntimeError(
+    FastMCP = None  # type: ignore[assignment]
+    _FASTMCP_ERROR = exc
+
+
+def _fastmcp_import_error() -> RuntimeError:
+    return RuntimeError(
         "FastMCP import failed. Ensure the MCP server dependency is installed and importable "
         "(expected: from mcp.server.fastmcp import FastMCP)."
-    ) from exc
+    )
+
+
+class _MissingFastMCP:
+    """Placeholder when FastMCP is unavailable; raises on use."""
+
+    def __init__(self, name: str, exc: Exception | None) -> None:
+        self.name = name
+        self._exc = exc
+
+    def _raise(self) -> None:
+        raise _fastmcp_import_error() from self._exc
+
+    def tool(self, *_args: Any, **_kwargs: Any) -> Any:
+        self._raise()
+
+    def __getattr__(self, _name: str) -> Any:
+        self._raise()
+
+
+FASTMCP_AVAILABLE = FastMCP is not None
 
 
 # -----------------------------------------------------------------------------
 # Public MCP server instance used for tool registration
 # -----------------------------------------------------------------------------
 
-mcp = FastMCP("github_mcp")
+if FastMCP is None:
+    mcp = _MissingFastMCP("github_mcp", _FASTMCP_ERROR)
+else:
+    mcp = FastMCP("github_mcp")
 
 
 # -----------------------------------------------------------------------------
