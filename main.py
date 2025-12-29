@@ -318,9 +318,18 @@ register_extra_tools_if_available()
 # caused the public endpoint to return ``404 Not Found``. Using the SSE transport
 # keeps the documented ``/sse`` path working for existing clients.
 if hasattr(server.mcp, "http_app"):
-    app = server.mcp.http_app(path="/sse", transport="sse")
+    try:
+        app = server.mcp.http_app(path="/sse", transport="sse")
+    except TypeError:
+        try:
+            app = server.mcp.http_app(transport="sse")
+        except TypeError:
+            app = server.mcp.http_app()
 elif hasattr(server.mcp, "sse_app"):
-    app = server.mcp.sse_app(path="/sse")
+    try:
+        app = server.mcp.sse_app(path="/sse")
+    except TypeError:
+        app = server.mcp.sse_app()
 elif hasattr(server.mcp, "app"):
     app_factory = server.mcp.app
     if callable(app_factory):
