@@ -117,9 +117,17 @@ class _CacheControlMiddleware:
             return await self.app(scope, receive, send)
 
         path = scope.get('path', '') or ''
+        started = False
+        completed = False
 
         async def send_wrapper(message):
+            nonlocal started, completed
+            if completed:
+                return
             if message.get('type') == 'http.response.start':
+                if started:
+                    return
+                started = True
                 headers = list(message.get('headers', []))
                 # Normalize: remove any existing Cache-Control header if we're overriding.
                 def _has_cache_control(hdrs):
@@ -134,6 +142,9 @@ class _CacheControlMiddleware:
                     headers = [(k, v) for (k, v) in headers if k.lower() != b'cache-control']
                     headers.append((b'cache-control', b'no-store'))
                 message['headers'] = headers
+            elif message.get('type') == 'http.response.body':
+                if not message.get('more_body', False):
+                    completed = True
             await send(message)
 
         return await self.app(scope, receive, send_wrapper)
