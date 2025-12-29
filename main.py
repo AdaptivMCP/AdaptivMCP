@@ -309,14 +309,29 @@ if not getattr(server, "_WRITE_ALLOWED_INITIALIZED", False):
 register_extra_tools_if_available()
 
 # Expose an ASGI app for hosting via uvicorn/Render. The FastMCP server lazily
-# constructs a Starlette application through ``http_app``; we create it once at
-# import time so ``uvicorn main:app`` works as expected.
+# constructs a Starlette application through ``http_app`` (newer releases), but
+# older versions used ``sse_app``/``app`` helpers. Build the app once at import
+# time so ``uvicorn main:app`` works across versions.
 #
-# Force the SSE transport so the controller serves ``/sse`` again. FastMCP
-# 2.14 defaults to the streamable HTTP transport, which removed the SSE route
-# and caused the public endpoint to return ``404 Not Found``. Using the SSE
-# transport keeps the documented ``/sse`` path working for existing clients.
-app = server.mcp.http_app(path="/sse", transport="sse")
+# Force the SSE transport so the controller serves ``/sse`` again. FastMCP 2.14
+# defaults to the streamable HTTP transport, which removed the SSE route and
+# caused the public endpoint to return ``404 Not Found``. Using the SSE transport
+# keeps the documented ``/sse`` path working for existing clients.
+if hasattr(server.mcp, "http_app"):
+    app = server.mcp.http_app(path="/sse", transport="sse")
+elif hasattr(server.mcp, "sse_app"):
+    app = server.mcp.sse_app(path="/sse")
+elif hasattr(server.mcp, "app"):
+    app_factory = server.mcp.app
+    if callable(app_factory):
+        try:
+            app = app_factory(path="/sse")
+        except TypeError:
+            app = app_factory()
+    else:
+        app = app_factory
+else:
+    raise RuntimeError("FastMCP does not expose an ASGI app factory.")
 app.add_middleware(_CacheControlMiddleware)
 app.add_middleware(_RequestContextMiddleware)
 
