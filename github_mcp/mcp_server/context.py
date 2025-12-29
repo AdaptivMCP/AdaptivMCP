@@ -69,6 +69,8 @@ else:
 
 REQUEST_MESSAGE_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_MESSAGE_ID", default=None)
 REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID", default=None)
+REQUEST_PATH: ContextVar[Optional[str]] = ContextVar("REQUEST_PATH", default=None)
+REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar("REQUEST_RECEIVED_AT", default=None)
 
 
 def get_request_context() -> Dict[str, Any]:
@@ -76,6 +78,8 @@ def get_request_context() -> Dict[str, Any]:
     return {
         "message_id": REQUEST_MESSAGE_ID.get(),
         "session_id": REQUEST_SESSION_ID.get(),
+        "path": REQUEST_PATH.get(),
+        "received_at": REQUEST_RECEIVED_AT.get(),
         "ts": time.time(),
     }
 
