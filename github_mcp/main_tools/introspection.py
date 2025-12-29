@@ -7,6 +7,33 @@ from github_mcp.utils import normalize_args
 
 from ._main import _main
 
+_UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = {
+    "apply_text_update_and_commit",
+    "commit_workspace",
+    "commit_workspace_files",
+    "create_branch",
+    "create_file",
+    "ensure_branch",
+    "merge_pull_request",
+    "move_file",
+    "pr_smoke_test",
+    "update_files_and_open_pr",
+    "workspace_create_branch",
+    "workspace_delete_branch",
+    "workspace_self_heal_branch",
+}
+
+
+def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed: bool) -> bool:
+    if not write_action:
+        return False
+    if not write_allowed:
+        return True
+    if tool_name in _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS:
+        return True
+    lowered = tool_name.lower()
+    return "commit" in lowered or "push" in lowered
+
 
 def list_write_tools() -> Dict[str, Any]:
     """Describe write-capable tools exposed by this server.
@@ -163,6 +190,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
 
     tools: List[Dict[str, Any]] = []
     seen_names: set[str] = set()
+    write_allowed = bool(m.server.WRITE_ALLOWED)
 
     for tool, func in m._REGISTERED_MCP_TOOLS:
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
@@ -194,10 +222,15 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             or "public"
         )
 
+        base_write_action = bool(_tool_attr(tool, func, "write_action", False))
         tool_info: Dict[str, Any] = {
             "name": name_str,
             "visibility": str(visibility),
-            "write_action": bool(_tool_attr(tool, func, "write_action", False)),
+            "write_action": _ui_prompt_write_action(
+                name_str,
+                base_write_action,
+                write_allowed=write_allowed,
+            ),
         }
 
         operation = _tool_attr(tool, func, "operation", None)
