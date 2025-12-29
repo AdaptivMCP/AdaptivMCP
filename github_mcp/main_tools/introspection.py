@@ -136,8 +136,27 @@ def list_write_tools() -> Dict[str, Any]:
 
 
 
+def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
+    """Best-effort attribute resolution across tool and function wrappers."""
+
+    if hasattr(tool, name):
+        return getattr(tool, name)
+    private = f"__mcp_{name}__"
+    if hasattr(func, private):
+        return getattr(func, private)
+    return default
+
+
+
 def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
-    """Enumerate every available MCP tool with optional schemas."""
+    """Enumerate every available MCP tool with optional schemas.
+
+    Important: this endpoint is used as the canonical "schema registry" by
+    assistants. It must remain readable even when write actions are disabled.
+
+    Execution gating should be enforced at invocation time; schema visibility
+    is always-on so callers can reliably validate payloads.
+    """
 
     m = _main()
     compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
@@ -146,11 +165,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
     seen_names: set[str] = set()
 
     for tool, func in m._REGISTERED_MCP_TOOLS:
-        visibility = getattr(func, "__mcp_visibility__", None) or getattr(
-            tool, "__mcp_visibility__", None
-        )
-        if visibility and visibility != "public":
-            continue
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
         if not name:
             continue
@@ -174,9 +188,24 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
                 compact_description = f"{compact_description[: max_length - 3].rstrip()}..."
             description = compact_description
 
+        visibility = (
+            getattr(func, "__mcp_visibility__", None)
+            or getattr(tool, "__mcp_visibility__", None)
+            or "public"
+        )
+
         tool_info: Dict[str, Any] = {
             "name": name_str,
+            "visibility": str(visibility),
+            "write_action": bool(_tool_attr(tool, func, "write_action", False)),
         }
+
+        operation = _tool_attr(tool, func, "operation", None)
+        risk_level = _tool_attr(tool, func, "risk_level", None)
+        if operation is not None:
+            tool_info["operation"] = operation
+        if risk_level is not None:
+            tool_info["risk_level"] = risk_level
 
         if description:
             tool_info["description"] = description
@@ -196,6 +225,8 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         synthetic: Dict[str, Any] = {
             "name": "list_all_actions",
             "description": "Enumerate every available MCP tool with optional schemas.",
+            "visibility": "public",
+            "write_action": False,
         }
         if not compact_mode:
             synthetic["tags"] = ["meta"]
@@ -215,6 +246,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
 
     return {
         "compact": compact_mode,
+        "write_actions_enabled": bool(m.server.WRITE_ALLOWED),
         "tools": tools,
     }
 
@@ -250,13 +282,14 @@ async def list_tools(
                 "write_action": write_action,
                 "operation": entry.get("operation"),
                 "risk_level": entry.get("risk_level"),
+                "visibility": entry.get("visibility"),
             }
         )
 
     tools.sort(key=lambda t: t["name"])
     m = _main()
     return {
-        "write_actions_enabled": m.server.WRITE_ALLOWED,
+        "write_actions_enabled": bool(m.server.WRITE_ALLOWED),
         "tools": tools,
     }
 
@@ -335,7 +368,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         )
         raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
 
-    tool, _ = found
+    tool, func = found
     schema = m._normalize_input_schema(tool)
     if schema is None:
         raise ValueError(f"Tool {tool_name!r} does not expose an input schema")
@@ -361,6 +394,12 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         "valid": len(errors) == 0,
         "errors": errors,
         "schema": schema,
+        "visibility": (
+            getattr(func, "__mcp_visibility__", None)
+            or getattr(tool, "__mcp_visibility__", None)
+            or "public"
+        ),
+        "write_action": bool(_tool_attr(tool, func, "write_action", False)),
     }
 
 
