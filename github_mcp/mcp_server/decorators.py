@@ -1,29 +1,22 @@
-"""Decorators and helpers for registering MCP tools.
+"""
+Decorators and helpers for registering MCP tools.
 
-This module provides the `mcp_tool` decorator used across the repo.
-
-Goals:
-- Register tools with FastMCP while returning a callable function (so tools can
-  call each other directly without dealing with FastMCP objects).
-- Emit stable, testable log records for every tool call.
-- Record a compact in-memory narrative of recent tool executions.
-
-Important: this file is part of the server's public compatibility surface.
-Changes here should be backwards compatible.
+Design goals for this version:
+- The only blocking/guardrail is WRITE_ALLOWED (true/false) for write tools.
+- Every tool call is validated against its published input schema (no guessing).
+- No tag-based behavior, no side-effect classification, no dedupe suppression,
+  no UI prompts. Logging remains for observability.
 """
 
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import functools
 import hashlib
 import inspect
 import json
-import threading
 import time
 import uuid
-import weakref
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from github_mcp.config import TOOLS_LOGGER
@@ -38,36 +31,14 @@ from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_erro
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
-    _normalize_tool_description,
     _normalize_input_schema,
+    _normalize_tool_description,
     _jsonable,
 )
 from github_mcp.metrics import _record_tool_call
-from github_mcp.side_effects import (
-    SideEffectClass,
-    resolve_side_effect_class,
-)
-
-# Dedupe cache (best-effort, per-process).
-_DEDUPE_TTL_SECONDS = 30.0
-_DEDUPE_MAX_ENTRIES = 2048
-_DEDUPE_STATE: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, Any]]" = (
-    weakref.WeakKeyDictionary()
-)
-_DEDUPE_STATE_GUARD = threading.Lock()
-_DEDUPE_SYNC_INFLIGHT: dict[str, tuple[float, concurrent.futures.Future[Any]]] = {}
-_DEDUPE_SYNC_RESULTS: dict[str, tuple[float, Any]] = {}
-_DEDUPE_SYNC_LOCK = threading.Lock()
-
-
-# ---------------------------------------------------------------------------
-# Tool schema hashing + argument validation
-# ---------------------------------------------------------------------------
 
 
 def _schema_hash(schema: Mapping[str, Any]) -> str:
-    """Compute a stable hash for an input schema."""
-
     try:
         raw = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     except Exception:
@@ -75,24 +46,35 @@ def _schema_hash(schema: Mapping[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
 
 
+def _require_jsonschema() -> Any:
+    """
+    Enforce strict schema validation.
+    If jsonschema isn't installed, we fail fast rather than silently skipping validation.
+    """
+    try:
+        import jsonschema  # type: ignore
+
+        return jsonschema
+    except Exception as exc:
+        raise AdaptivToolError(
+            code="schema_validation_unavailable",
+            message="jsonschema is required for strict tool argument validation but is not installed.",
+            category="validation",
+            origin="schema",
+            retryable=False,
+            details={"missing_dependency": "jsonschema"},
+            hint="Add jsonschema to your server dependencies (pip install jsonschema) and redeploy.",
+        ) from exc
+
+
 def _validate_tool_args_schema(
     tool_name: str,
     schema: Mapping[str, Any],
     args: Mapping[str, Any],
 ) -> None:
-    """Validate tool invocation args against the tool's published JSON schema.
+    jsonschema = _require_jsonschema()
 
-    This intentionally fails fast with a structured validation error so callers
-    do not need to guess schemas.
-    """
-
-    try:
-        import jsonschema  # type: ignore
-    except Exception:
-        # jsonschema is an optional dependency for some deployments.
-        return
-
-    # Best-effort: strip method receiver.
+    # Strip method receiver if present.
     payload = dict(args)
     payload.pop("self", None)
 
@@ -109,13 +91,13 @@ def _validate_tool_args_schema(
             origin="schema",
             retryable=False,
             details={"tool": tool_name},
-            hint="Inspect the tool schema via describe_tool or list_all_actions(include_parameters=true).",
+            hint="Inspect the tool schema via tool_schema/tool_spec or schema_catalog, then resend args that conform exactly.",
         ) from exc
 
     if not errors:
         return
 
-    error_list = []
+    error_list: list[dict[str, Any]] = []
     for err in errors[:50]:
         try:
             error_list.append(
@@ -136,17 +118,8 @@ def _validate_tool_args_schema(
         origin="schema",
         retryable=False,
         details={"tool": tool_name, "errors": error_list, "schema": dict(schema)},
-        hint="Fetch the tool schema (describe_tool or list_all_actions with include_parameters=true) and resend args that conform exactly.",
+        hint="Fetch the tool schema and resend args that conform exactly. Do not guess fields.",
     )
-
-def _ui_prompt_required_for_tool(
-    tool_name: str,
-    *,
-    side_effect: SideEffectClass,
-    write_allowed: bool,
-) -> bool:
-    """Whether the ChatGPT UI should prompt for approval before invoking the tool."""
-    return False
 
 
 def _current_write_allowed() -> bool:
@@ -156,6 +129,22 @@ def _current_write_allowed() -> bool:
         return bool(getattr(server_mod, "WRITE_ALLOWED", False))
     except Exception:
         return False
+
+
+def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
+    if not write_action:
+        return
+    if _current_write_allowed():
+        return
+    raise AdaptivToolError(
+        code="write_not_allowed",
+        message=f"Write tool {tool_name!r} blocked because WRITE_ALLOWED is false.",
+        category="policy",
+        origin="write_gate",
+        retryable=False,
+        details={"tool": tool_name, "write_allowed": False},
+        hint="Set WRITE_ALLOWED=true (or enable writes via your server config) and retry.",
+    )
 
 
 def _bind_call_args(
@@ -175,59 +164,33 @@ def _bind_call_args(
 def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
     arg_keys = sorted(all_args.keys())
     arg_preview = _format_tool_args_preview(all_args)
-
-    return {
-        "arg_keys": arg_keys,
-        "arg_count": len(all_args),
-        "arg_preview": arg_preview,
-    }
+    return {"arg_keys": arg_keys, "arg_count": len(all_args), "arg_preview": arg_preview}
 
 
 def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
-    """Emit a machine-parseable record for tool lifecycle events.
-
-    IMPORTANT: Do NOT embed raw JSON into the log message. Render's log viewer is
-    human-centric, and embedding JSON inside the message (then appending
-    `data=<json>` again) produces unreadable output full of escape sequences.
-
-    Instead, we keep the message short and attach the structured payload via
-    `extra`, which is appended once by the formatter.
-    """
     try:
-        base = dict(payload)
-        for key in (
-            "side_effects",
-            "write_allowed",
-            "ui_prompt_required",
-            "write_kind",
-            "remote_write",
-            "arg_keys",
-        ):
-            base.pop(key, None)
-
-        safe = _jsonable(base)
-
-        # Human-friendly, compact summary in message
-        tool_name = str(payload.get('tool_name') or '')
-        status = str(payload.get('status') or '')
-        call_id = str(payload.get('call_id') or '')
-        evt = str(payload.get('event') or 'tool_json')
-        duration_ms = payload.get('duration_ms')
-        dur = f" | duration_ms={duration_ms}" if isinstance(duration_ms, (int, float)) else ''
+        safe = _jsonable(dict(payload))
+        tool_name = str(payload.get("tool_name") or "")
+        status = str(payload.get("status") or "")
+        call_id = str(payload.get("call_id") or "")
+        evt = str(payload.get("event") or "tool_json")
+        duration_ms = payload.get("duration_ms")
+        dur = f" | duration_ms={duration_ms}" if isinstance(duration_ms, (int, float)) else ""
         msg = f"[tool event] {evt} | status={status} | tool={tool_name} | call_id={call_id}{dur}"
 
         TOOLS_LOGGER.detailed(
             msg,
             extra={
-                'event': 'tool_json',
-                'status': payload.get('status'),
-                'tool_name': payload.get('tool_name'),
-                'call_id': payload.get('call_id'),
-                'tool_event': safe,
+                "event": "tool_json",
+                "status": payload.get("status"),
+                "tool_name": payload.get("tool_name"),
+                "call_id": payload.get("call_id"),
+                "tool_event": safe,
             },
         )
     except Exception:
         return
+
 
 def _tool_user_message(
     tool_name: str,
@@ -237,269 +200,33 @@ def _tool_user_message(
     duration_ms: Optional[int] = None,
     error: Optional[str] = None,
 ) -> str:
-    """Human console-style tool messages (Render logs are the primary debugger).
-
-    Style goal: what you'd expect to see running commands locally.
-    - Start:  → <tool> <arg_summary>
-    - OK:     ← ok (<duration>)
-    - Error:  ← error (<duration>) <reason>
-"""
-    scope = 'write' if write_action else 'read'
-    dur = f" ({duration_ms}ms)" if duration_ms is not None else ''
-    if phase == 'start':
-        # Keep it terse; deeper details belong in structured payloads.
+    scope = "write" if write_action else "read"
+    dur = f" ({duration_ms}ms)" if duration_ms is not None else ""
+    if phase == "start":
         return f"→ {tool_name} [{scope}]"
-    if phase == 'ok':
+    if phase == "ok":
         return f"← ok{dur}"
-    if phase == 'error':
-        suffix = f" {error}" if error else ''
+    if phase == "error":
+        suffix = f" {error}" if error else ""
         return f"← error{dur}{suffix}"
     return f"{tool_name} [{scope}]"
 
 
-def _extract_result_error(result: Any) -> tuple[Optional[dict[str, Any]], Optional[str]]:
-    if not isinstance(result, dict):
-        return None, None
-
-    status = str(result.get("status") or "").lower()
-    error_payload: Any = None
-    user_message: Optional[str] = None
-
-    if status == "error":
-        error_payload = result.get("error")
-        user_message = result.get("user_message") or result.get("message") or result.get("detail")
-
-    if error_payload is None and "error" in result and result.get("error"):
-        error_payload = result.get("error")
-        user_message = result.get("user_message") or user_message
-
-    if error_payload is None:
-        return None, None
-
-    if isinstance(error_payload, dict) and "error" in error_payload and isinstance(
-        error_payload.get("error"), dict
-    ):
-        user_message = user_message or error_payload.get("user_message")
-        error_payload = error_payload["error"]
-
-    if isinstance(error_payload, dict):
-        error_info = dict(error_payload)
-        if not error_info.get("message"):
-            error_info["message"] = (
-                error_payload.get("error")
-                or error_payload.get("message")
-                or user_message
-                or "Unknown error"
-            )
-    else:
-        error_info = {
-            "message": str(error_payload) if error_payload is not None else user_message or "Unknown error"
-        }
-
-    return error_info, user_message
-
-
-def _error_string_for_logs(
-    error_info: dict[str, Any], user_message: Optional[str]
-) -> str:
-    if user_message:
-        return user_message
-    message = error_info.get("message") or "Unknown error"
-    code = error_info.get("code")
-    if code:
-        return f"{message} (code={code})"
-    return message
-
 def _stable_request_id() -> Optional[str]:
-    """Return a stable id for the current inbound request when available."""
     msg_id = REQUEST_MESSAGE_ID.get()
     if msg_id:
         return msg_id
-
     sess_id = REQUEST_SESSION_ID.get()
     if sess_id:
         return sess_id
-
     return None
-
-
-def _dedupe_key(
-    tool_name: str, *, ui_write_action: bool, args_preview: str
-) -> Optional[str]:
-    """Compute a dedupe key or return None when dedupe is disabled."""
-    stable = _stable_request_id()
-    if not stable:
-        return None
-
-    # For write actions that might be repeated intentionally, only dedupe when we have
-    # an explicit per-message id so we don't suppress intentional repeated writes.
-    if ui_write_action and not REQUEST_MESSAGE_ID.get():
-        return None
-
-    payload = {
-        "id": stable,
-        "tool": tool_name,
-        "ui_write": bool(ui_write_action),
-        "args": args_preview,
-    }
-    normalized = json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    )
-    return hashlib.sha1(normalized.encode("utf-8", errors="replace")).hexdigest()
-
-
-async def _maybe_dedupe_call(
-    key: Optional[str], coro_factory: Callable[[], Any]
-) -> Any:
-    """Best-effort dedupe wrapper.
-
-    IMPORTANT: never await while holding _DEDUPE_LOCK.
-    """
-    if not key:
-        return await coro_factory()
-
-    now = time.time()
-
-    fut: asyncio.Future | None = None
-    entry_exists = False
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.get_event_loop()
-
-    with _DEDUPE_STATE_GUARD:
-        state = _DEDUPE_STATE.get(loop)
-        if state is None:
-            state = {
-                "lock": asyncio.Lock(),
-                "inflight": {},
-                "results": {},
-            }
-            _DEDUPE_STATE[loop] = state
-
-    lock: asyncio.Lock = state["lock"]
-    inflight: dict[str, tuple[float, asyncio.Future[Any]]] = state["inflight"]
-    results: dict[str, tuple[float, Any]] = state["results"]
-
-    async with lock:
-        # Clean expired inflight/results.
-        expired = [k for k, (exp, _) in inflight.items() if exp <= now]
-        for k in expired:
-            inflight.pop(k, None)
-
-        expired_r = [k for k, (exp, _) in results.items() if exp <= now]
-        for k in expired_r:
-            results.pop(k, None)
-
-        # Cap size.
-        if len(inflight) > _DEDUPE_MAX_ENTRIES:
-            for k, _ in sorted(inflight.items(), key=lambda kv: kv[1][0])[
-                : max(1, len(inflight) - _DEDUPE_MAX_ENTRIES)
-            ]:
-                inflight.pop(k, None)
-
-        cached = results.get(key)
-        if cached is not None:
-            _exp, cached_result = cached
-            return cached_result
-
-        entry = inflight.get(key)
-        if entry is not None:
-            entry_exists = True
-            _, fut = entry
-        else:
-            fut = asyncio.get_running_loop().create_future()
-            inflight[key] = (now + _DEDUPE_TTL_SECONDS, fut)
-
-    # Await outside the lock.
-    if entry_exists and fut is not None:
-        return await fut
-
-    try:
-        result = await coro_factory()
-        if fut is not None and not fut.done():
-            fut.set_result(result)
-        async with lock:
-            results[key] = (time.time() + _DEDUPE_TTL_SECONDS, result)
-        return result
-    except Exception as exc:
-        if fut is not None and not fut.done():
-            fut.set_exception(exc)
-        raise
-    finally:
-        async with lock:
-            inflight.pop(key, None)
-
-
-def _maybe_dedupe_call_sync(
-    key: Optional[str], fn: Callable[[], Any]
-) -> Any:
-    """Best-effort dedupe wrapper for sync call sites."""
-    if not key:
-        return fn()
-
-    now = time.time()
-    fut: concurrent.futures.Future[Any] | None = None
-    entry_exists = False
-
-    with _DEDUPE_SYNC_LOCK:
-        expired = [k for k, (exp, _) in _DEDUPE_SYNC_INFLIGHT.items() if exp <= now]
-        for k in expired:
-            _DEDUPE_SYNC_INFLIGHT.pop(k, None)
-
-        expired_r = [k for k, (exp, _) in _DEDUPE_SYNC_RESULTS.items() if exp <= now]
-        for k in expired_r:
-            _DEDUPE_SYNC_RESULTS.pop(k, None)
-
-        if len(_DEDUPE_SYNC_INFLIGHT) > _DEDUPE_MAX_ENTRIES:
-            for k, _ in sorted(_DEDUPE_SYNC_INFLIGHT.items(), key=lambda kv: kv[1][0])[
-                : max(1, len(_DEDUPE_SYNC_INFLIGHT) - _DEDUPE_MAX_ENTRIES)
-            ]:
-                _DEDUPE_SYNC_INFLIGHT.pop(k, None)
-
-        cached = _DEDUPE_SYNC_RESULTS.get(key)
-        if cached is not None:
-            _exp, cached_result = cached
-            return cached_result
-
-        entry = _DEDUPE_SYNC_INFLIGHT.get(key)
-        if entry is not None:
-            entry_exists = True
-            _, fut = entry
-        else:
-            fut = concurrent.futures.Future()
-            _DEDUPE_SYNC_INFLIGHT[key] = (now + _DEDUPE_TTL_SECONDS, fut)
-
-    if entry_exists and fut is not None:
-        return fut.result()
-
-    try:
-        result = fn()
-        if fut is not None and not fut.done():
-            fut.set_result(result)
-        with _DEDUPE_SYNC_LOCK:
-            _DEDUPE_SYNC_RESULTS[key] = (time.time() + _DEDUPE_TTL_SECONDS, result)
-        return result
-    except Exception as exc:
-        if fut is not None and not fut.done():
-            fut.set_exception(exc)
-        raise
-    finally:
-        with _DEDUPE_SYNC_LOCK:
-            _DEDUPE_SYNC_INFLIGHT.pop(key, None)
 
 
 def _register_with_fastmcp(
     fn: Callable[..., Any],
     *,
     name: str,
-    title: Optional[str],
     description: Optional[str],
-    tags: set[str],
-    ui_write_action: bool,
-    side_effect: SideEffectClass,
-    remote_write: bool,
     visibility: str = "public",
 ) -> Any:
     meta: dict[str, Any] = {}
@@ -509,7 +236,7 @@ def _register_with_fastmcp(
         fn,
         name=name,
         description=description,
-        tags=tags,
+        tags=set(),  # explicitly ignore tags to prevent tag-based behavior upstream
         meta=meta,
         annotations=_jsonable(annotations),
     )
@@ -521,10 +248,6 @@ def _register_with_fastmcp(
         if (getattr(t, "name", None) or getattr(f, "__name__", None)) != name
     ]
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
-
-    tool_obj.__side_effect_class__ = side_effect
-    fn.__side_effect_class__ = side_effect
-
     return tool_obj
 
 
@@ -532,12 +255,18 @@ def mcp_tool(
     *,
     name: str | None = None,
     write_action: bool,
-    tags: Optional[Iterable[str]] = None,
+    tags: Optional[Iterable[str]] = None,  # ignored on purpose
     description: str | None = None,
     visibility: str = "public",
     **_ignored: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Decorator used across the repo to register an MCP tool."""
+    """
+    Decorator used across the repo to register an MCP tool.
+
+    Enforcement invariants:
+    - If write_action=True and WRITE_ALLOWED is false -> block with AdaptivToolError.
+    - Validate every call against the tool's published input schema (strict).
+    """
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         try:
@@ -547,35 +276,11 @@ def mcp_tool(
 
         tool_name = name or getattr(func, "__name__", "tool")
         tool_visibility = _ignored.get("visibility", visibility)
-        # Remote mutations should still be classified as REMOTE_MUTATION.
-        remote_write = bool(write_action)
-        side_effect = (
-            SideEffectClass.REMOTE_MUTATION
-            if remote_write
-            else resolve_side_effect_class(tool_name)
-        )
-        # UI prompt behavior is disabled.
-        initial_write_allowed = _current_write_allowed()
-        ui_write_action = _ui_prompt_required_for_tool(
-            tool_name, side_effect=side_effect, write_allowed=initial_write_allowed
-        )
 
-        write_kind = (
-            "hard_write"
-            if side_effect is SideEffectClass.REMOTE_MUTATION
-            else "soft_write"
-            if side_effect is SideEffectClass.LOCAL_MUTATION
-            else "read_only"
-        )
-
-        llm_level = (
-            "advanced" if side_effect is not SideEffectClass.READ_ONLY else "basic"
-        )
+        llm_level = "advanced" if write_action else "basic"
         normalized_description = description or _normalize_tool_description(
             func, signature, llm_level=llm_level
         )
-
-        tag_set = set(tags or [])
 
         if asyncio.iscoroutinefunction(func):
 
@@ -583,24 +288,27 @@ def mcp_tool(
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 call_id = str(uuid.uuid4())
                 all_args = _bind_call_args(signature, args, kwargs)
+
+                # Strict schema: must exist and must validate.
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-                if isinstance(schema, Mapping):
-                    _validate_tool_args_schema(tool_name, schema, all_args)
+                if not isinstance(schema, Mapping) or not schema_hash:
+                    raise AdaptivToolError(
+                        code="schema_missing",
+                        message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
+                        category="validation",
+                        origin="schema",
+                        retryable=False,
+                        details={"tool": tool_name},
+                        hint="Ensure tools are registered with input schemas and schema caching is enabled at startup.",
+                    )
+
+                _validate_tool_args_schema(tool_name, schema, all_args)
+                _enforce_write_allowed(tool_name, write_action=write_action)
+
                 ctx = _extract_context(all_args)
-
-                effective_write_allowed = _current_write_allowed()
-                effective_ui_write_action = _ui_prompt_required_for_tool(
-                    tool_name, side_effect=side_effect, write_allowed=effective_write_allowed
-                )
-
                 start = time.perf_counter()
                 request_ctx = get_request_context()
-                dedupe_key = _dedupe_key(
-                    tool_name,
-                    ui_write_action=effective_ui_write_action,
-                    args_preview=ctx["arg_preview"],
-                )
 
                 _record_recent_tool_event(
                     {
@@ -609,26 +317,24 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
                         "schema_hash": schema_hash,
-                        "schema_present": bool(schema_hash),
+                        "schema_present": True,
+                        "write_action": bool(write_action),
+                        "write_allowed": _current_write_allowed(),
                         "user_message": _tool_user_message(
-                            tool_name, write_action=effective_ui_write_action, phase="start"
+                            tool_name, write_action=write_action, phase="start"
                         ),
                     }
                 )
 
                 TOOLS_LOGGER.chat(
-                    _tool_user_message(
-                        tool_name, write_action=effective_ui_write_action, phase="start"
-                    ),
+                    _tool_user_message(tool_name, write_action=write_action, phase="start"),
                     extra={
                         "event": "tool_chat",
                         "status": "start",
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
                     },
                 )
 
@@ -638,14 +344,14 @@ def mcp_tool(
                         "event": "tool_call_start",
                         "status": "start",
                         "tool_name": tool_name,
-                        "tags": sorted(tag_set),
                         "call_id": call_id,
                         "arg_keys": ctx["arg_keys"],
                         "arg_count": ctx["arg_count"],
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
                         "schema_hash": schema_hash,
-                        "schema_present": bool(schema_hash),
+                        "schema_present": True,
+                        "write_action": bool(write_action),
+                        "write_allowed": _current_write_allowed(),
                     },
                 )
 
@@ -656,41 +362,29 @@ def mcp_tool(
                         "tool_name": tool_name,
                         "call_id": call_id,
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
                         "schema_hash": schema_hash,
-                        "schema_present": bool(schema_hash),
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
+                        "schema_present": True,
+                        "write_action": bool(write_action),
                         "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
                         "arg_keys": ctx["arg_keys"],
                         "arg_count": ctx["arg_count"],
                     }
                 )
 
-                async def _run() -> Any:
-                    return await func(*args, **kwargs)
-
                 try:
-                    result = await _maybe_dedupe_call(dedupe_key, _run)
+                    result = await func(*args, **kwargs)
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
                     _record_tool_call(
                         tool_name,
-                        write_kind=write_kind,
+                        write_kind="write" if write_action else "read",
                         duration_ms=duration_ms,
                         errored=True,
                     )
 
-                    structured_error = _structured_tool_error(
-                        exc, context=tool_name, path=None
-                    )
-                    error_info = (
-                        structured_error.get("error", {})
-                        if isinstance(structured_error, dict)
-                        else {}
-                    )
+                    structured_error = _structured_tool_error(exc, context=tool_name, path=None)
+                    err_obj = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
+                    err_msg = str(err_obj.get("message") or exc)
 
                     _record_recent_tool_event(
                         {
@@ -700,21 +394,15 @@ def mcp_tool(
                             "call_id": call_id,
                             "duration_ms": duration_ms,
                             "request": request_ctx,
-                            "dedupe_key": dedupe_key,
-                            "write_kind": write_kind,
-                            "side_effects": side_effect.value,
-                            "remote_write": bool(remote_write),
+                            "schema_hash": schema_hash,
+                            "schema_present": True,
+                            "write_action": bool(write_action),
                             "write_allowed": _current_write_allowed(),
-                            "ui_prompt_required": bool(effective_ui_write_action),
                             "error_type": exc.__class__.__name__,
-                            "error_message": str(
-                                error_info.get("message") or exc.__class__.__name__
-                            ),
-                            "error_category": error_info.get("category"),
-                            "error_origin": error_info.get("origin"),
+                            "error_message": err_msg,
                             "user_message": _tool_user_message(
                                 tool_name,
-                                write_action=effective_ui_write_action,
+                                write_action=write_action,
                                 phase="error",
                                 duration_ms=duration_ms,
                                 error=f"{exc.__class__.__name__}: {exc}",
@@ -725,7 +413,7 @@ def mcp_tool(
                     TOOLS_LOGGER.error(
                         _tool_user_message(
                             tool_name,
-                            write_action=effective_ui_write_action,
+                            write_action=write_action,
                             phase="error",
                             duration_ms=duration_ms,
                             error=f"{exc.__class__.__name__}: {exc}",
@@ -737,42 +425,10 @@ def mcp_tool(
                             "call_id": call_id,
                             "duration_ms": duration_ms,
                             "request": request_ctx,
-                            "dedupe_key": dedupe_key,
-                            "write_kind": write_kind,
-                            "side_effects": side_effect.value,
-                            "remote_write": bool(remote_write),
+                            "schema_hash": schema_hash,
+                            "schema_present": True,
+                            "write_action": bool(write_action),
                             "write_allowed": _current_write_allowed(),
-                            "ui_prompt_required": bool(effective_ui_write_action),
-                            "tool_error_type": exc.__class__.__name__,
-                            "tool_error_message": str(error_info.get("message") or exc),
-                            "tool_error_category": error_info.get("category"),
-                            "tool_error_origin": error_info.get("origin"),
-                            "tool_error_code": error_info.get("code"),
-                            "tool_error_retryable": error_info.get("retryable"),
-                        },
-                    )
-
-                    TOOLS_LOGGER.detailed(
-                        f"[tool error] tool={tool_name} | call_id={call_id}",
-                        extra={
-                            "event": "tool_call_error",
-                            "status": "error",
-                            "tool_name": tool_name,
-                            "call_id": call_id,
-                            "duration_ms": duration_ms,
-                            "request": request_ctx,
-                            "dedupe_key": dedupe_key,
-                            "write_kind": write_kind,
-                            "side_effects": side_effect.value,
-                            "remote_write": bool(remote_write),
-                            "write_allowed": _current_write_allowed(),
-                            "ui_prompt_required": bool(effective_ui_write_action),
-                            "tool_error_type": exc.__class__.__name__,
-                            "tool_error_message": str(error_info.get("message") or exc),
-                            "tool_error_category": error_info.get("category"),
-                            "tool_error_origin": error_info.get("origin"),
-                            "tool_error_code": error_info.get("code"),
-                            "tool_error_retryable": error_info.get("retryable"),
                         },
                     )
 
@@ -784,144 +440,24 @@ def mcp_tool(
                             "call_id": call_id,
                             "duration_ms": duration_ms,
                             "request": request_ctx,
-                            "dedupe_key": dedupe_key,
-                            "write_kind": write_kind,
-                            "side_effects": side_effect.value,
-                            "remote_write": bool(remote_write),
+                            "schema_hash": schema_hash,
+                            "schema_present": True,
+                            "write_action": bool(write_action),
                             "write_allowed": _current_write_allowed(),
-                            "ui_prompt_required": bool(effective_ui_write_action),
                             "error_type": exc.__class__.__name__,
-                            "error_message": str(error_info.get("message") or exc),
-                            "error_category": error_info.get("category"),
-                            "error_origin": error_info.get("origin"),
+                            "error_message": err_msg,
                         }
                     )
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                error_info, user_message = _extract_result_error(result)
-                if error_info:
-                    error_message = _error_string_for_logs(error_info, user_message)
-                    error_type = error_info.get("type") or "ToolResultError"
-                    _record_tool_call(
-                        tool_name,
-                        write_kind=write_kind,
-                        duration_ms=duration_ms,
-                        errored=True,
-                    )
-
-                    _record_recent_tool_event(
-                        {
-                            "ts": time.time(),
-                            "event": "tool_recent_error",
-                            "tool_name": tool_name,
-                            "call_id": call_id,
-                            "duration_ms": duration_ms,
-                            "request": request_ctx,
-                            "dedupe_key": dedupe_key,
-                            "write_kind": write_kind,
-                            "side_effects": side_effect.value,
-                            "remote_write": bool(remote_write),
-                            "write_allowed": _current_write_allowed(),
-                            "ui_prompt_required": bool(effective_ui_write_action),
-                            "error_type": error_type,
-                            "error_message": error_message,
-                            "error_category": error_info.get("category"),
-                            "error_origin": error_info.get("origin"),
-                            "user_message": _tool_user_message(
-                                tool_name,
-                                write_action=effective_ui_write_action,
-                                phase="error",
-                                duration_ms=duration_ms,
-                                error=error_message,
-                            ),
-                        }
-                    )
-
-                    TOOLS_LOGGER.error(
-                        _tool_user_message(
-                            tool_name,
-                            write_action=effective_ui_write_action,
-                            phase="error",
-                            duration_ms=duration_ms,
-                            error=error_message,
-                        ),
-                        extra={
-                            "event": "tool_call_error",
-                            "status": "error",
-                            "tool_name": tool_name,
-                            "call_id": call_id,
-                            "duration_ms": duration_ms,
-                            "request": request_ctx,
-                            "dedupe_key": dedupe_key,
-                            "write_kind": write_kind,
-                            "side_effects": side_effect.value,
-                            "remote_write": bool(remote_write),
-                            "write_allowed": _current_write_allowed(),
-                            "ui_prompt_required": bool(effective_ui_write_action),
-                            "tool_error_type": error_type,
-                            "tool_error_message": error_message,
-                            "tool_error_category": error_info.get("category"),
-                            "tool_error_origin": error_info.get("origin"),
-                            "tool_error_code": error_info.get("code"),
-                            "tool_error_retryable": error_info.get("retryable"),
-                        },
-                    )
-
-                    TOOLS_LOGGER.detailed(
-                        f"[tool error] tool={tool_name} | call_id={call_id}",
-                        extra={
-                            "event": "tool_call_error",
-                            "status": "error",
-                            "tool_name": tool_name,
-                            "call_id": call_id,
-                            "duration_ms": duration_ms,
-                            "request": request_ctx,
-                            "dedupe_key": dedupe_key,
-                            "write_kind": write_kind,
-                            "side_effects": side_effect.value,
-                            "remote_write": bool(remote_write),
-                            "write_allowed": _current_write_allowed(),
-                            "ui_prompt_required": bool(effective_ui_write_action),
-                            "tool_error_type": error_type,
-                            "tool_error_message": error_message,
-                            "tool_error_category": error_info.get("category"),
-                            "tool_error_origin": error_info.get("origin"),
-                            "tool_error_code": error_info.get("code"),
-                            "tool_error_retryable": error_info.get("retryable"),
-                        },
-                    )
-
-                    _log_tool_json_event(
-                        {
-                            "event": "tool_call.error",
-                            "status": "error",
-                            "tool_name": tool_name,
-                            "call_id": call_id,
-                            "duration_ms": duration_ms,
-                            "request": request_ctx,
-                            "dedupe_key": dedupe_key,
-                            "write_kind": write_kind,
-                            "side_effects": side_effect.value,
-                            "remote_write": bool(remote_write),
-                            "write_allowed": _current_write_allowed(),
-                            "ui_prompt_required": bool(effective_ui_write_action),
-                            "error_type": error_type,
-                            "error_message": error_message,
-                            "error_category": error_info.get("category"),
-                            "error_origin": error_info.get("origin"),
-                        }
-                    )
-                    return result
-
                 _record_tool_call(
                     tool_name,
-                    write_kind=write_kind,
+                    write_kind="write" if write_action else "read",
                     duration_ms=duration_ms,
                     errored=False,
                 )
 
-                result_type = type(result).__name__
                 _record_recent_tool_event(
                     {
                         "ts": time.time(),
@@ -930,24 +466,19 @@ def mcp_tool(
                         "call_id": call_id,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
+                        "schema_hash": schema_hash,
+                        "schema_present": True,
+                        "write_action": bool(write_action),
                         "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                        "result_type": result_type,
+                        "result_type": type(result).__name__,
                         "user_message": _tool_user_message(
-                            tool_name,
-                            write_action=effective_ui_write_action,
-                            phase="ok",
-                            duration_ms=duration_ms,
+                            tool_name, write_action=write_action, phase="ok", duration_ms=duration_ms
                         ),
                     }
                 )
 
                 TOOLS_LOGGER.detailed(
-                    f"[tool ok] tool={tool_name} | call_id={call_id} | duration_ms={duration_ms} | result_type={result_type}",
+                    f"[tool ok] tool={tool_name} | call_id={call_id} | duration_ms={duration_ms} | result_type={type(result).__name__}",
                     extra={
                         "event": "tool_call_ok",
                         "status": "ok",
@@ -955,13 +486,11 @@ def mcp_tool(
                         "call_id": call_id,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
+                        "schema_hash": schema_hash,
+                        "schema_present": True,
+                        "write_action": bool(write_action),
                         "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                        "result_type": result_type,
+                        "result_type": type(result).__name__,
                     },
                 )
 
@@ -973,67 +502,59 @@ def mcp_tool(
                         "call_id": call_id,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
+                        "schema_hash": schema_hash,
+                        "schema_present": True,
+                        "write_action": bool(write_action),
                         "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                        "result_type": result_type,
+                        "result_type": type(result).__name__,
                     }
                 )
 
                 return result
 
+            # Register and cache schema/hash.
             wrapper.__mcp_tool__ = _register_with_fastmcp(
                 wrapper,
                 name=tool_name,
-                title=None,
                 description=normalized_description,
-                tags=tag_set,
-                ui_write_action=ui_write_action,
-                side_effect=side_effect,
-                remote_write=remote_write,
                 visibility=tool_visibility,
             )
 
-            # Cache the published input schema and a stable hash for callers/debugging.
-            try:
-                _schema = _normalize_input_schema(wrapper.__mcp_tool__) or {"type": "object", "properties": {}}
-                wrapper.__mcp_input_schema__ = _schema
-                wrapper.__mcp_input_schema_hash__ = _schema_hash(_schema)
-            except Exception:
-                wrapper.__mcp_input_schema__ = {"type": "object", "properties": {}}
-                wrapper.__mcp_input_schema_hash__ = None
+            schema = _normalize_input_schema(wrapper.__mcp_tool__)
+            if not isinstance(schema, Mapping):
+                raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
+
+            wrapper.__mcp_input_schema__ = schema
+            wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
 
             wrapper.__mcp_visibility__ = tool_visibility
-            wrapper.__mcp_remote_write__ = remote_write
-            wrapper.__mcp_write_action__ = ui_write_action  # UI prompt flag
-
+            wrapper.__mcp_write_action__ = bool(write_action)
             return wrapper
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             call_id = str(uuid.uuid4())
             all_args = _bind_call_args(signature, args, kwargs)
+
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-            if isinstance(schema, Mapping):
-                _validate_tool_args_schema(tool_name, schema, all_args)
+            if not isinstance(schema, Mapping) or not schema_hash:
+                raise AdaptivToolError(
+                    code="schema_missing",
+                    message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
+                    category="validation",
+                    origin="schema",
+                    retryable=False,
+                    details={"tool": tool_name},
+                    hint="Ensure tools are registered with input schemas and schema caching is enabled at startup.",
+                )
+
+            _validate_tool_args_schema(tool_name, schema, all_args)
+            _enforce_write_allowed(tool_name, write_action=write_action)
+
             ctx = _extract_context(all_args)
-
-            effective_write_allowed = _current_write_allowed()
-            effective_ui_write_action = _ui_prompt_required_for_tool(
-                tool_name, side_effect=side_effect, write_allowed=effective_write_allowed
-            )
-
-            request_ctx = get_request_context()
-            dedupe_key = _dedupe_key(
-                tool_name,
-                ui_write_action=effective_ui_write_action,
-                args_preview=ctx["arg_preview"],
-            )
             start = time.perf_counter()
+            request_ctx = get_request_context()
 
             _record_recent_tool_event(
                 {
@@ -1042,34 +563,22 @@ def mcp_tool(
                     "tool_name": tool_name,
                     "call_id": call_id,
                     "request": request_ctx,
-                    "dedupe_key": dedupe_key,
                     "schema_hash": schema_hash,
-                    "schema_present": bool(schema_hash),
-                    "schema_hash": schema_hash,
-                    "schema_present": bool(schema_hash),
-                    "schema_hash": schema_hash,
-                    "schema_present": bool(schema_hash),
-                    "schema_hash": schema_hash,
-                    "schema_present": bool(schema_hash),
-                    "schema_hash": schema_hash,
-                    "schema_present": bool(schema_hash),
-                    "user_message": _tool_user_message(
-                        tool_name, write_action=effective_ui_write_action, phase="start"
-                    ),
+                    "schema_present": True,
+                    "write_action": bool(write_action),
+                    "write_allowed": _current_write_allowed(),
+                    "user_message": _tool_user_message(tool_name, write_action=write_action, phase="start"),
                 }
             )
 
             TOOLS_LOGGER.chat(
-                _tool_user_message(
-                    tool_name, write_action=effective_ui_write_action, phase="start"
-                ),
+                _tool_user_message(tool_name, write_action=write_action, phase="start"),
                 extra={
                     "event": "tool_chat",
                     "status": "start",
                     "tool_name": tool_name,
                     "call_id": call_id,
                     "request": request_ctx,
-                    "dedupe_key": dedupe_key,
                 },
             )
 
@@ -1079,14 +588,14 @@ def mcp_tool(
                     "event": "tool_call_start",
                     "status": "start",
                     "tool_name": tool_name,
-                    "tags": sorted(tag_set),
                     "call_id": call_id,
                     "arg_keys": ctx["arg_keys"],
                     "arg_count": ctx["arg_count"],
                     "request": request_ctx,
-                    "dedupe_key": dedupe_key,
                     "schema_hash": schema_hash,
-                    "schema_present": bool(schema_hash),
+                    "schema_present": True,
+                    "write_action": bool(write_action),
+                    "write_allowed": _current_write_allowed(),
                 },
             )
 
@@ -1097,40 +606,29 @@ def mcp_tool(
                     "tool_name": tool_name,
                     "call_id": call_id,
                     "request": request_ctx,
-                    "dedupe_key": dedupe_key,
                     "schema_hash": schema_hash,
-                    "schema_present": bool(schema_hash),
-                    "write_kind": write_kind,
-                    "side_effects": side_effect.value,
-                    "remote_write": bool(remote_write),
+                    "schema_present": True,
+                    "write_action": bool(write_action),
                     "write_allowed": _current_write_allowed(),
-                    "ui_prompt_required": bool(effective_ui_write_action),
                     "arg_keys": ctx["arg_keys"],
                     "arg_count": ctx["arg_count"],
                 }
             )
 
             try:
-                result = _maybe_dedupe_call_sync(
-                    dedupe_key, lambda: func(*args, **kwargs)
-                )
+                result = func(*args, **kwargs)
             except Exception as exc:
                 duration_ms = int((time.perf_counter() - start) * 1000)
                 _record_tool_call(
                     tool_name,
-                    write_kind=write_kind,
+                    write_kind="write" if write_action else "read",
                     duration_ms=duration_ms,
                     errored=True,
                 )
 
-                structured_error = _structured_tool_error(
-                    exc, context=tool_name, path=None
-                )
-                error_info = (
-                    structured_error.get("error", {})
-                    if isinstance(structured_error, dict)
-                    else {}
-                )
+                structured_error = _structured_tool_error(exc, context=tool_name, path=None)
+                err_obj = structured_error.get("error", {}) if isinstance(structured_error, dict) else {}
+                err_msg = str(err_obj.get("message") or exc)
 
                 _record_recent_tool_event(
                     {
@@ -1140,21 +638,15 @@ def mcp_tool(
                         "call_id": call_id,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
+                        "schema_hash": schema_hash,
+                        "schema_present": True,
+                        "write_action": bool(write_action),
                         "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
                         "error_type": exc.__class__.__name__,
-                        "error_message": str(
-                            error_info.get("message") or exc.__class__.__name__
-                        ),
-                        "error_category": error_info.get("category"),
-                        "error_origin": error_info.get("origin"),
+                        "error_message": err_msg,
                         "user_message": _tool_user_message(
                             tool_name,
-                            write_action=effective_ui_write_action,
+                            write_action=write_action,
                             phase="error",
                             duration_ms=duration_ms,
                             error=f"{exc.__class__.__name__}: {exc}",
@@ -1165,7 +657,7 @@ def mcp_tool(
                 TOOLS_LOGGER.error(
                     _tool_user_message(
                         tool_name,
-                        write_action=effective_ui_write_action,
+                        write_action=write_action,
                         phase="error",
                         duration_ms=duration_ms,
                         error=f"{exc.__class__.__name__}: {exc}",
@@ -1177,42 +669,10 @@ def mcp_tool(
                         "call_id": call_id,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
+                        "schema_hash": schema_hash,
+                        "schema_present": True,
+                        "write_action": bool(write_action),
                         "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                        "tool_error_type": exc.__class__.__name__,
-                        "tool_error_message": str(error_info.get("message") or exc),
-                        "tool_error_category": error_info.get("category"),
-                        "tool_error_origin": error_info.get("origin"),
-                        "tool_error_code": error_info.get("code"),
-                        "tool_error_retryable": error_info.get("retryable"),
-                    },
-                )
-
-                TOOLS_LOGGER.detailed(
-                    f"[tool error] tool={tool_name} | call_id={call_id}",
-                    extra={
-                        "event": "tool_call_error",
-                        "status": "error",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                        "duration_ms": duration_ms,
-                        "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
-                        "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                        "tool_error_type": exc.__class__.__name__,
-                        "tool_error_message": str(error_info.get("message") or exc),
-                        "tool_error_category": error_info.get("category"),
-                        "tool_error_origin": error_info.get("origin"),
-                        "tool_error_code": error_info.get("code"),
-                        "tool_error_retryable": error_info.get("retryable"),
                     },
                 )
 
@@ -1224,138 +684,24 @@ def mcp_tool(
                         "call_id": call_id,
                         "duration_ms": duration_ms,
                         "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
+                        "schema_hash": schema_hash,
+                        "schema_present": True,
+                        "write_action": bool(write_action),
                         "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
                         "error_type": exc.__class__.__name__,
-                        "error_message": str(error_info.get("message") or exc),
-                        "error_category": error_info.get("category"),
-                        "error_origin": error_info.get("origin"),
+                        "error_message": err_msg,
                     }
                 )
                 raise
 
             duration_ms = int((time.perf_counter() - start) * 1000)
-            error_info, user_message = _extract_result_error(result)
-            if error_info:
-                error_message = _error_string_for_logs(error_info, user_message)
-                error_type = error_info.get("type") or "ToolResultError"
-                _record_tool_call(
-                    tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=True
-                )
-
-                _record_recent_tool_event(
-                    {
-                        "ts": time.time(),
-                        "event": "tool_recent_error",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                        "duration_ms": duration_ms,
-                        "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
-                        "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                        "error_type": error_type,
-                        "error_message": error_message,
-                        "error_category": error_info.get("category"),
-                        "error_origin": error_info.get("origin"),
-                        "user_message": _tool_user_message(
-                            tool_name,
-                            write_action=effective_ui_write_action,
-                            phase="error",
-                            duration_ms=duration_ms,
-                            error=error_message,
-                        ),
-                    }
-                )
-
-                TOOLS_LOGGER.error(
-                    _tool_user_message(
-                        tool_name,
-                        write_action=effective_ui_write_action,
-                        phase="error",
-                        duration_ms=duration_ms,
-                        error=error_message,
-                    ),
-                    extra={
-                        "event": "tool_call_error",
-                        "status": "error",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                        "duration_ms": duration_ms,
-                        "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
-                        "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                        "tool_error_type": error_type,
-                        "tool_error_message": error_message,
-                        "tool_error_category": error_info.get("category"),
-                        "tool_error_origin": error_info.get("origin"),
-                        "tool_error_code": error_info.get("code"),
-                        "tool_error_retryable": error_info.get("retryable"),
-                    },
-                )
-
-                TOOLS_LOGGER.detailed(
-                    f"[tool error] tool={tool_name} | call_id={call_id}",
-                    extra={
-                        "event": "tool_call_error",
-                        "status": "error",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                        "duration_ms": duration_ms,
-                        "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
-                        "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                        "tool_error_type": error_type,
-                        "tool_error_message": error_message,
-                        "tool_error_category": error_info.get("category"),
-                        "tool_error_origin": error_info.get("origin"),
-                        "tool_error_code": error_info.get("code"),
-                        "tool_error_retryable": error_info.get("retryable"),
-                    },
-                )
-
-                _log_tool_json_event(
-                    {
-                        "event": "tool_call.error",
-                        "status": "error",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                        "duration_ms": duration_ms,
-                        "request": request_ctx,
-                        "dedupe_key": dedupe_key,
-                        "write_kind": write_kind,
-                        "side_effects": side_effect.value,
-                        "remote_write": bool(remote_write),
-                        "write_allowed": _current_write_allowed(),
-                        "ui_prompt_required": bool(effective_ui_write_action),
-                        "error_type": error_type,
-                        "error_message": error_message,
-                        "error_category": error_info.get("category"),
-                        "error_origin": error_info.get("origin"),
-                    }
-                )
-                return result
-
             _record_tool_call(
-                tool_name, write_kind=write_kind, duration_ms=duration_ms, errored=False
+                tool_name,
+                write_kind="write" if write_action else "read",
+                duration_ms=duration_ms,
+                errored=False,
             )
 
-            result_type = type(result).__name__
             _record_recent_tool_event(
                 {
                     "ts": time.time(),
@@ -1364,24 +710,19 @@ def mcp_tool(
                     "call_id": call_id,
                     "duration_ms": duration_ms,
                     "request": request_ctx,
-                    "dedupe_key": dedupe_key,
-                    "write_kind": write_kind,
-                    "side_effects": side_effect.value,
-                    "remote_write": bool(remote_write),
+                    "schema_hash": schema_hash,
+                    "schema_present": True,
+                    "write_action": bool(write_action),
                     "write_allowed": _current_write_allowed(),
-                    "ui_prompt_required": bool(effective_ui_write_action),
-                    "result_type": result_type,
+                    "result_type": type(result).__name__,
                     "user_message": _tool_user_message(
-                        tool_name,
-                        write_action=effective_ui_write_action,
-                        phase="ok",
-                        duration_ms=duration_ms,
+                        tool_name, write_action=write_action, phase="ok", duration_ms=duration_ms
                     ),
                 }
             )
 
             TOOLS_LOGGER.detailed(
-                f"[tool ok] tool={tool_name} | call_id={call_id} | duration_ms={duration_ms} | result_type={result_type}",
+                f"[tool ok] tool={tool_name} | call_id={call_id} | duration_ms={duration_ms} | result_type={type(result).__name__}",
                 extra={
                     "event": "tool_call_ok",
                     "status": "ok",
@@ -1389,13 +730,11 @@ def mcp_tool(
                     "call_id": call_id,
                     "duration_ms": duration_ms,
                     "request": request_ctx,
-                    "dedupe_key": dedupe_key,
-                    "write_kind": write_kind,
-                    "side_effects": side_effect.value,
-                    "remote_write": bool(remote_write),
+                    "schema_hash": schema_hash,
+                    "schema_present": True,
+                    "write_action": bool(write_action),
                     "write_allowed": _current_write_allowed(),
-                    "ui_prompt_required": bool(effective_ui_write_action),
-                    "result_type": result_type,
+                    "result_type": type(result).__name__,
                 },
             )
 
@@ -1407,13 +746,11 @@ def mcp_tool(
                     "call_id": call_id,
                     "duration_ms": duration_ms,
                     "request": request_ctx,
-                    "dedupe_key": dedupe_key,
-                    "write_kind": write_kind,
-                    "side_effects": side_effect.value,
-                    "remote_write": bool(remote_write),
+                    "schema_hash": schema_hash,
+                    "schema_present": True,
+                    "write_action": bool(write_action),
                     "write_allowed": _current_write_allowed(),
-                    "ui_prompt_required": bool(effective_ui_write_action),
-                    "result_type": result_type,
+                    "result_type": type(result).__name__,
                 }
             )
 
@@ -1422,33 +759,25 @@ def mcp_tool(
         wrapper.__mcp_tool__ = _register_with_fastmcp(
             wrapper,
             name=tool_name,
-            title=None,
             description=normalized_description,
-            tags=tag_set,
-            ui_write_action=ui_write_action,
-            side_effect=side_effect,
-            remote_write=remote_write,
             visibility=tool_visibility,
         )
-        # Cache the published input schema and a stable hash for callers/debugging.
-        try:
-            _schema = _normalize_input_schema(wrapper.__mcp_tool__) or {"type": "object", "properties": {}}
-            wrapper.__mcp_input_schema__ = _schema
-            wrapper.__mcp_input_schema_hash__ = _schema_hash(_schema)
-        except Exception:
-            wrapper.__mcp_input_schema__ = {"type": "object", "properties": {}}
-            wrapper.__mcp_input_schema_hash__ = None
+
+        schema = _normalize_input_schema(wrapper.__mcp_tool__)
+        if not isinstance(schema, Mapping):
+            raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
+
+        wrapper.__mcp_input_schema__ = schema
+        wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
 
         wrapper.__mcp_visibility__ = tool_visibility
-        wrapper.__mcp_remote_write__ = remote_write
-        wrapper.__mcp_write_action__ = ui_write_action  # UI prompt flag
+        wrapper.__mcp_write_action__ = bool(write_action)
         return wrapper
 
     return decorator
 
 
 def register_extra_tools_if_available() -> None:
-    """Register optional extra tools (if the optional module is present)."""
     try:
         from extra_tools import register_extra_tools  # type: ignore
 
@@ -1458,5 +787,5 @@ def register_extra_tools_if_available() -> None:
 
 
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
-    """Refresh connector-facing metadata for registered tools."""
+    # No-op: no dynamic tag/guardrail metadata to refresh.
     return None
