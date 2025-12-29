@@ -1,11 +1,17 @@
-"""
+"""github_mcp.mcp_server.decorators
+
 Decorators and helpers for registering MCP tools.
 
-Design goals:
-- The only blocking/guardrail is WRITE_ALLOWED (true/false) for write tools.
-- Every tool call is validated against its published input schema (no guessing).
-- Tags/side-effects/mutating metadata are ignored (accepted but non-functional).
-- Keep compatibility helpers used by tests (dedupe functions exist).
+Behavioral contract (post-guardrail removal):
+- The only blocking control is WRITE_ALLOWED (true/false) for write tools.
+- Tool arguments are strictly validated against published input schemas.
+- Tags / side_effects / mutating metadata are accepted but ignored.
+- Dedupe helpers remain for compatibility and test coverage.
+
+Dedupe contract:
+- Async dedupe caches completed results for a short TTL within the SAME event loop.
+- Async dedupe is scoped per event loop (never shares futures across loops).
+- Sync dedupe memoizes results for TTL.
 """
 
 from __future__ import annotations
@@ -17,15 +23,10 @@ import inspect
 import json
 import time
 import uuid
-from typing import Any, Awaitable, Callable, Dict, Iterable, Mapping, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
 from github_mcp.config import TOOLS_LOGGER
-from github_mcp.mcp_server.context import (
-    WRITE_ALLOWED,
-    _record_recent_tool_event,
-    get_request_context,
-    mcp,
-)
+from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, get_request_context, mcp
 from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
@@ -36,10 +37,6 @@ from github_mcp.mcp_server.schemas import (
 )
 from github_mcp.metrics import _record_tool_call
 
-
-# -----------------------------------------------------------------------------
-# Schema hashing + strict argument validation
-# -----------------------------------------------------------------------------
 
 def _schema_hash(schema: Mapping[str, Any]) -> str:
     raw = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -65,6 +62,7 @@ def _require_jsonschema() -> Any:
 
 def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: Mapping[str, Any]) -> None:
     jsonschema = _require_jsonschema()
+
     payload = dict(args)
     payload.pop("self", None)
 
@@ -98,10 +96,6 @@ def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: 
     )
 
 
-# -----------------------------------------------------------------------------
-# Single write gate
-# -----------------------------------------------------------------------------
-
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     if not write_action:
         return
@@ -120,75 +114,101 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
 
 # -----------------------------------------------------------------------------
 # Compatibility: dedupe helpers used by tests
-# These do not “block”; they only coalesce identical in-flight calls.
 # -----------------------------------------------------------------------------
 
-_DEDUPE_LOCK = asyncio.Lock()
-_DEDUPE_INFLIGHT: Dict[str, Tuple[float, asyncio.Future]] = {}
+# Async dedupe cache is scoped per loop so futures are never shared across loops.
+_DEDUPE_LOCKS: Dict[int, asyncio.Lock] = {}
+_DEDUPE_ASYNC_CACHE: Dict[Tuple[int, str], Tuple[float, asyncio.Future]] = {}
 
-_DEDUPE_SYNC_LOCK = functools.lru_cache(maxsize=1)(lambda: None)  # placeholder stable object
+# Sync dedupe cache is process-global.
 _DEDUPE_SYNC_MUTEX = __import__("threading").Lock()
-_DEDUPE_SYNC_INFLIGHT: Dict[str, Tuple[float, Any]] = {}
+_DEDUPE_SYNC_CACHE: Dict[str, Tuple[float, Any]] = {}
+
+
+def _loop_id(loop: asyncio.AbstractEventLoop) -> int:
+    return id(loop)
+
+
+def _get_async_lock(loop: asyncio.AbstractEventLoop) -> asyncio.Lock:
+    lid = _loop_id(loop)
+    lock = _DEDUPE_LOCKS.get(lid)
+    if lock is None:
+        # Create inside the loop context
+        lock = asyncio.Lock()
+        _DEDUPE_LOCKS[lid] = lock
+    return lock
 
 
 async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> Any:
+    """Coalesce identical work within an event loop for ttl_s seconds.
+
+    - First call creates a Future and runs work.
+    - Subsequent calls within TTL await the cached Future (even if already done).
+    - Failures are not cached; cache entry is removed immediately on exception.
     """
-    If another identical call is in-flight, await its result.
-    `work` may be:
-      - an awaitable, or
-      - a zero-arg callable returning an awaitable.
-    """
+
+    ttl_s = max(0.0, float(ttl_s))
     now = time.time()
 
-    async with _DEDUPE_LOCK:
-        # expire old
-        item = _DEDUPE_INFLIGHT.get(dedupe_key)
-        if item and item[0] >= now:
-            return await item[1]
+    loop = asyncio.get_running_loop()
+    lid = _loop_id(loop)
+    cache_key = (lid, dedupe_key)
+    lock = _get_async_lock(loop)
 
-        fut: asyncio.Future = asyncio.get_event_loop().create_future()
-        _DEDUPE_INFLIGHT[dedupe_key] = (now + max(0.0, float(ttl_s)), fut)
+    async with lock:
+        # Opportunistic cleanup for this loop.
+        expired = [k for k, (exp, _) in _DEDUPE_ASYNC_CACHE.items() if k[0] == lid and exp < now]
+        for k in expired:
+            _DEDUPE_ASYNC_CACHE.pop(k, None)
 
-    async def _run() -> Any:
-        try:
-            aw = work() if callable(work) else work
-            return await aw
-        finally:
-            pass
+        item = _DEDUPE_ASYNC_CACHE.get(cache_key)
+        if item is not None:
+            expires_at, fut = item
+            if expires_at >= now:
+                return await fut
+            _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
+
+        fut = loop.create_future()
+        _DEDUPE_ASYNC_CACHE[cache_key] = (now + ttl_s, fut)
 
     try:
-        result = await _run()
-        if not fut.done():
-            fut.set_result(result)
-        return result
+        aw = work() if callable(work) else work
+        result = await aw
     except Exception as exc:
         if not fut.done():
             fut.set_exception(exc)
-        raise
-    finally:
-        async with _DEDUPE_LOCK:
-            # remove only if this future is still the stored one
-            cur = _DEDUPE_INFLIGHT.get(dedupe_key)
+        # Do not cache failures.
+        async with lock:
+            cur = _DEDUPE_ASYNC_CACHE.get(cache_key)
             if cur and cur[1] is fut:
-                _DEDUPE_INFLIGHT.pop(dedupe_key, None)
+                _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
+        raise
+    else:
+        if not fut.done():
+            fut.set_result(result)
+        return result
 
 
 def _maybe_dedupe_call_sync(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> Any:
-    """
-    Sync version of dedupe (best-effort). `work` may be:
-      - a zero-arg callable, or
-      - a value (returned as-is).
-    """
-    now = time.time()
-    with _DEDUPE_SYNC_MUTEX:
-        item = _DEDUPE_SYNC_INFLIGHT.get(dedupe_key)
-        if item and item[0] >= now:
-            return item[1]
+    """Sync dedupe: memoize result for ttl_s seconds."""
 
-    result = work() if callable(work) else work
+    ttl_s = max(0.0, float(ttl_s))
+    now = time.time()
+
     with _DEDUPE_SYNC_MUTEX:
-        _DEDUPE_SYNC_INFLIGHT[dedupe_key] = (now + max(0.0, float(ttl_s)), result)
-    return result
+        item = _DEDUPE_SYNC_CACHE.get(dedupe_key)
+        if item is not None:
+            expires_at, value = item
+            if expires_at >= now:
+                return value
+            _DEDUPE_SYNC_CACHE.pop(dedupe_key, None)
+
+    value = work() if callable(work) else work
+
+    with _DEDUPE_SYNC_MUTEX:
+        _DEDUPE_SYNC_CACHE[dedupe_key] = (now + ttl_s, value)
+
+    return value
 
 
 # -----------------------------------------------------------------------------
@@ -234,7 +254,6 @@ def _register_with_fastmcp(fn: Callable[..., Any], *, name: str, description: Op
         annotations=_jsonable({}),
     )
 
-    # Keep registry stable
     _REGISTERED_MCP_TOOLS[:] = [
         (t, f)
         for (t, f) in _REGISTERED_MCP_TOOLS
@@ -252,11 +271,11 @@ def mcp_tool(
     *,
     name: str | None = None,
     write_action: bool,
-    tags: Optional[Iterable[str]] = None,         # accepted, ignored
+    tags: Optional[Iterable[str]] = None,  # accepted, ignored
     description: str | None = None,
-    visibility: str = "public",                   # accepted, ignored in this minimal version
-    mutating: Any = None,                         # accepted, ignored
-    side_effects: Any = None,                     # accepted, ignored
+    visibility: str = "public",  # accepted, ignored
+    mutating: Any = None,  # accepted, ignored
+    side_effects: Any = None,  # accepted, ignored
     **_ignored: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -330,7 +349,12 @@ def mcp_tool(
                     result = await func(*args, **kwargs)
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - start) * 1000)
-                    _record_tool_call(tool_name, write_kind="write" if write_action else "read", duration_ms=duration_ms, errored=True)
+                    _record_tool_call(
+                        tool_name,
+                        write_kind="write" if write_action else "read",
+                        duration_ms=duration_ms,
+                        errored=True,
+                    )
                     _log_tool_json_event(
                         {
                             "event": "tool_call.error",
@@ -348,7 +372,12 @@ def mcp_tool(
                     raise
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(tool_name, write_kind="write" if write_action else "read", duration_ms=duration_ms, errored=False)
+                _record_tool_call(
+                    tool_name,
+                    write_kind="write" if write_action else "read",
+                    duration_ms=duration_ms,
+                    errored=False,
+                )
                 _log_tool_json_event(
                     {
                         "event": "tool_call.ok",
@@ -417,7 +446,12 @@ def mcp_tool(
                 result = func(*args, **kwargs)
             except Exception as exc:
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(tool_name, write_kind="write" if write_action else "read", duration_ms=duration_ms, errored=True)
+                _record_tool_call(
+                    tool_name,
+                    write_kind="write" if write_action else "read",
+                    duration_ms=duration_ms,
+                    errored=True,
+                )
                 _log_tool_json_event(
                     {
                         "event": "tool_call.error",
@@ -435,7 +469,12 @@ def mcp_tool(
                 raise
 
             duration_ms = int((time.perf_counter() - start) * 1000)
-            _record_tool_call(tool_name, write_kind="write" if write_action else "read", duration_ms=duration_ms, errored=False)
+            _record_tool_call(
+                tool_name,
+                write_kind="write" if write_action else "read",
+                duration_ms=duration_ms,
+                errored=False,
+            )
             _log_tool_json_event(
                 {
                     "event": "tool_call.ok",
