@@ -34,11 +34,12 @@ from github_mcp.mcp_server.context import (
     get_request_context,
     mcp,
 )
-from github_mcp.mcp_server.errors import _structured_tool_error
+from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
     _normalize_tool_description,
+    _normalize_input_schema,
     _jsonable,
 )
 from github_mcp.metrics import _record_tool_call
@@ -57,6 +58,86 @@ _DEDUPE_STATE_GUARD = threading.Lock()
 _DEDUPE_SYNC_INFLIGHT: dict[str, tuple[float, concurrent.futures.Future[Any]]] = {}
 _DEDUPE_SYNC_RESULTS: dict[str, tuple[float, Any]] = {}
 _DEDUPE_SYNC_LOCK = threading.Lock()
+
+
+# ---------------------------------------------------------------------------
+# Tool schema hashing + argument validation
+# ---------------------------------------------------------------------------
+
+
+def _schema_hash(schema: Mapping[str, Any]) -> str:
+    """Compute a stable hash for an input schema."""
+
+    try:
+        raw = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except Exception:
+        raw = str(schema)
+    return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _validate_tool_args_schema(
+    tool_name: str,
+    schema: Mapping[str, Any],
+    args: Mapping[str, Any],
+) -> None:
+    """Validate tool invocation args against the tool's published JSON schema.
+
+    This intentionally fails fast with a structured validation error so callers
+    do not need to guess schemas.
+    """
+
+    try:
+        import jsonschema  # type: ignore
+    except Exception:
+        # jsonschema is an optional dependency for some deployments.
+        return
+
+    # Best-effort: strip method receiver.
+    payload = dict(args)
+    payload.pop("self", None)
+
+    try:
+        validator_cls = jsonschema.validators.validator_for(schema)
+        validator_cls.check_schema(schema)
+        validator = validator_cls(schema)
+        errors = sorted(validator.iter_errors(payload), key=str)
+    except Exception as exc:
+        raise AdaptivToolError(
+            code="tool_schema_validation_failed",
+            message=f"Tool schema validation failed for {tool_name!r}: {exc}",
+            category="validation",
+            origin="schema",
+            retryable=False,
+            details={"tool": tool_name},
+            hint="Inspect the tool schema via describe_tool or list_all_actions(include_parameters=true).",
+        ) from exc
+
+    if not errors:
+        return
+
+    error_list = []
+    for err in errors[:50]:
+        try:
+            error_list.append(
+                {
+                    "message": getattr(err, "message", str(err)),
+                    "path": list(getattr(err, "absolute_path", []) or []),
+                    "validator": getattr(err, "validator", None),
+                    "validator_value": getattr(err, "validator_value", None),
+                }
+            )
+        except Exception:
+            error_list.append({"message": str(err)})
+
+    raise AdaptivToolError(
+        code="tool_args_invalid",
+        message=f"Tool arguments did not match schema for {tool_name!r}.",
+        category="validation",
+        origin="schema",
+        retryable=False,
+        details={"tool": tool_name, "errors": error_list, "schema": dict(schema)},
+        hint="Fetch the tool schema (describe_tool or list_all_actions with include_parameters=true) and resend args that conform exactly.",
+    )
 
 def _ui_prompt_required_for_tool(
     tool_name: str,
@@ -502,6 +583,10 @@ def mcp_tool(
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 call_id = str(uuid.uuid4())
                 all_args = _bind_call_args(signature, args, kwargs)
+                schema = getattr(wrapper, "__mcp_input_schema__", None)
+                schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
+                if isinstance(schema, Mapping):
+                    _validate_tool_args_schema(tool_name, schema, all_args)
                 ctx = _extract_context(all_args)
 
                 effective_write_allowed = _current_write_allowed()
@@ -525,6 +610,8 @@ def mcp_tool(
                         "call_id": call_id,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
+                        "schema_hash": schema_hash,
+                        "schema_present": bool(schema_hash),
                         "user_message": _tool_user_message(
                             tool_name, write_action=effective_ui_write_action, phase="start"
                         ),
@@ -557,6 +644,8 @@ def mcp_tool(
                         "arg_count": ctx["arg_count"],
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
+                        "schema_hash": schema_hash,
+                        "schema_present": bool(schema_hash),
                     },
                 )
 
@@ -568,6 +657,8 @@ def mcp_tool(
                         "call_id": call_id,
                         "request": request_ctx,
                         "dedupe_key": dedupe_key,
+                        "schema_hash": schema_hash,
+                        "schema_present": bool(schema_hash),
                         "write_kind": write_kind,
                         "side_effects": side_effect.value,
                         "remote_write": bool(remote_write),
@@ -906,6 +997,15 @@ def mcp_tool(
                 visibility=tool_visibility,
             )
 
+            # Cache the published input schema and a stable hash for callers/debugging.
+            try:
+                _schema = _normalize_input_schema(wrapper.__mcp_tool__) or {"type": "object", "properties": {}}
+                wrapper.__mcp_input_schema__ = _schema
+                wrapper.__mcp_input_schema_hash__ = _schema_hash(_schema)
+            except Exception:
+                wrapper.__mcp_input_schema__ = {"type": "object", "properties": {}}
+                wrapper.__mcp_input_schema_hash__ = None
+
             wrapper.__mcp_visibility__ = tool_visibility
             wrapper.__mcp_remote_write__ = remote_write
             wrapper.__mcp_write_action__ = ui_write_action  # UI prompt flag
@@ -916,6 +1016,10 @@ def mcp_tool(
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             call_id = str(uuid.uuid4())
             all_args = _bind_call_args(signature, args, kwargs)
+            schema = getattr(wrapper, "__mcp_input_schema__", None)
+            schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
+            if isinstance(schema, Mapping):
+                _validate_tool_args_schema(tool_name, schema, all_args)
             ctx = _extract_context(all_args)
 
             effective_write_allowed = _current_write_allowed()
@@ -939,6 +1043,16 @@ def mcp_tool(
                     "call_id": call_id,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
+                    "schema_hash": schema_hash,
+                    "schema_present": bool(schema_hash),
+                    "schema_hash": schema_hash,
+                    "schema_present": bool(schema_hash),
+                    "schema_hash": schema_hash,
+                    "schema_present": bool(schema_hash),
+                    "schema_hash": schema_hash,
+                    "schema_present": bool(schema_hash),
+                    "schema_hash": schema_hash,
+                    "schema_present": bool(schema_hash),
                     "user_message": _tool_user_message(
                         tool_name, write_action=effective_ui_write_action, phase="start"
                     ),
@@ -971,6 +1085,8 @@ def mcp_tool(
                     "arg_count": ctx["arg_count"],
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
+                    "schema_hash": schema_hash,
+                    "schema_present": bool(schema_hash),
                 },
             )
 
@@ -982,6 +1098,8 @@ def mcp_tool(
                     "call_id": call_id,
                     "request": request_ctx,
                     "dedupe_key": dedupe_key,
+                    "schema_hash": schema_hash,
+                    "schema_present": bool(schema_hash),
                     "write_kind": write_kind,
                     "side_effects": side_effect.value,
                     "remote_write": bool(remote_write),
@@ -1312,6 +1430,15 @@ def mcp_tool(
             remote_write=remote_write,
             visibility=tool_visibility,
         )
+        # Cache the published input schema and a stable hash for callers/debugging.
+        try:
+            _schema = _normalize_input_schema(wrapper.__mcp_tool__) or {"type": "object", "properties": {}}
+            wrapper.__mcp_input_schema__ = _schema
+            wrapper.__mcp_input_schema_hash__ = _schema_hash(_schema)
+        except Exception:
+            wrapper.__mcp_input_schema__ = {"type": "object", "properties": {}}
+            wrapper.__mcp_input_schema_hash__ = None
+
         wrapper.__mcp_visibility__ = tool_visibility
         wrapper.__mcp_remote_write__ = remote_write
         wrapper.__mcp_write_action__ = ui_write_action  # UI prompt flag
