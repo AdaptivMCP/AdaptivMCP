@@ -7,7 +7,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from github_mcp.server import _find_registered_tool
-from github_mcp.utils import normalize_args
 
 
 def _parse_bool(value: Optional[str]) -> Optional[bool]:
@@ -48,7 +47,24 @@ def _normalize_payload(payload: Any) -> Dict[str, Any]:
         args = payload.get("args")
     else:
         args = payload
-    return dict(normalize_args(args))
+    if args is None:
+        return {}
+    if isinstance(args, dict):
+        return dict(args)
+    if isinstance(args, (list, tuple)):
+        normalized: Dict[str, Any] = {}
+        for entry in args:
+            if isinstance(entry, dict):
+                if "name" in entry:
+                    normalized[str(entry["name"])] = entry.get("value")
+                elif len(entry) == 1:
+                    key, value = next(iter(entry.items()))
+                    normalized[str(key)] = value
+            elif isinstance(entry, (list, tuple)) and len(entry) == 2:
+                key, value = entry
+                normalized[str(key)] = value
+        return normalized
+    return {}
 
 
 async def _invoke_tool(tool_name: str, args: Dict[str, Any]) -> Any:
