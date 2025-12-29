@@ -10,6 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+from github_mcp.mcp_server.schemas import _jsonable
+from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
+from github_mcp.http_clients import _github_request
+
 # ------------------------------------------------------------------------------
 # Request-scoped context (used for correlation/logging/dedupe)
 # ------------------------------------------------------------------------------
@@ -20,6 +24,15 @@ REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID",
 # These are imported by main.py in your repo; keep names stable.
 REQUEST_PATH: ContextVar[Optional[str]] = ContextVar("REQUEST_PATH", default=None)
 REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar("REQUEST_RECEIVED_AT", default=None)
+
+
+def get_request_context() -> dict[str, Any]:
+    return {
+        "path": REQUEST_PATH.get(),
+        "received_at": REQUEST_RECEIVED_AT.get(),
+        "session_id": REQUEST_SESSION_ID.get(),
+        "message_id": REQUEST_MESSAGE_ID.get(),
+    }
 
 # ------------------------------------------------------------------------------
 # Dynamic write gate (cross-worker)
@@ -141,6 +154,16 @@ _MAX_RECENT_EVENTS = int(os.environ.get("GITHUB_MCP_MAX_RECENT_EVENTS", "200"))
 _recent_tool_events: deque[dict[str, Any]] = deque(maxlen=_MAX_RECENT_EVENTS)
 _recent_tool_event_counters: Counter[str] = Counter()
 _recent_tool_events_dropped: int = 0
+_recent_tool_events_total: int = 0
+
+# Compatibility exports for older call sites.
+RECENT_TOOL_EVENTS = _recent_tool_events
+RECENT_TOOL_EVENTS_CAPACITY = _MAX_RECENT_EVENTS
+RECENT_TOOL_EVENTS_DROPPED = _recent_tool_events_dropped
+RECENT_TOOL_EVENTS_TOTAL = _recent_tool_events_total
+
+COMPACT_METADATA_DEFAULT = _parse_bool(os.environ.get("GITHUB_MCP_COMPACT_METADATA_DEFAULT", "true"))
+_TOOL_EXAMPLES: dict[str, Any] = {}
 
 
 def diagnostics_enabled() -> bool:
@@ -155,25 +178,52 @@ def record_tool_event(event: dict[str, Any]) -> None:
     """
     Best-effort, non-blocking telemetry.
     """
-    global _recent_tool_events_dropped
+    global _recent_tool_events_dropped, _recent_tool_events_total, RECENT_TOOL_EVENTS_DROPPED, RECENT_TOOL_EVENTS_TOTAL
 
     if not (_DIAGNOSTICS_ENABLED and _RECORD_RECENT_EVENTS):
         return
 
     try:
+        safe_event = _jsonable(event)
         before_len = len(_recent_tool_events)
-        _recent_tool_events.append(event)
+        _recent_tool_events.append(safe_event)
         after_len = len(_recent_tool_events)
 
         # If we were at maxlen, append will evict one; treat as dropped for accounting.
         if after_len == before_len and after_len == _MAX_RECENT_EVENTS:
             _recent_tool_events_dropped += 1
+            RECENT_TOOL_EVENTS_DROPPED = _recent_tool_events_dropped
 
-        tool_name = str(event.get("tool", "unknown"))
+        tool_name = str(safe_event.get("tool", safe_event.get("tool_name", "unknown")))
         _recent_tool_event_counters[tool_name] += 1
+        _recent_tool_events_total += 1
+        RECENT_TOOL_EVENTS_TOTAL = _recent_tool_events_total
     except Exception:
         # Telemetry must never break execution.
         return
+
+
+def _record_recent_tool_event(event: dict[str, Any]) -> None:
+    record_tool_event(event)
+
+
+try:
+    from mcp.server.fastmcp import FastMCP  # type: ignore
+
+    FASTMCP_AVAILABLE = True
+    mcp = FastMCP("github-mcp")
+except Exception as exc:  # pragma: no cover - used when dependency missing
+    FASTMCP_AVAILABLE = False
+    missing_exc = exc
+
+    class _MissingFastMCP:
+        def tool(self, *args: Any, **kwargs: Any) -> Any:
+            raise RuntimeError("FastMCP import failed") from missing_exc
+
+        def __getattr__(self, name: str) -> Any:
+            raise AttributeError(name)
+
+    mcp = _MissingFastMCP()
 
 
 def get_recent_tool_events(*, limit: int = 50) -> dict[str, Any]:
