@@ -10,6 +10,7 @@ Goals:
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 import threading
 import time
 from collections import deque
@@ -57,10 +58,85 @@ FASTMCP_AVAILABLE = FastMCP is not None
 # Public MCP server instance used for tool registration
 # -----------------------------------------------------------------------------
 
+def _has_port(host: str) -> bool:
+    if host.endswith(":*"):
+        return True
+    if host.startswith("["):
+        return "]:" in host
+    if ":" in host:
+        _, port = host.rsplit(":", 1)
+        return port.isdigit()
+    return False
+
+
+def _normalize_host(value: str) -> str | None:
+    candidate = value.strip()
+    if not candidate:
+        return None
+    if "://" in candidate:
+        parsed = urlparse(candidate)
+        return parsed.netloc or None
+    return candidate
+
+
+def _build_transport_security_settings():
+    try:
+        from mcp.server.transport_security import TransportSecuritySettings  # type: ignore
+    except Exception:
+        return None
+
+    allowed_hosts_env = (os.getenv("ALLOWED_HOSTS") or "").strip()
+    if allowed_hosts_env == "*":
+        return TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+    raw_hosts: list[str] = []
+    if allowed_hosts_env:
+        raw_hosts.extend(host.strip() for host in allowed_hosts_env.split(",") if host.strip())
+    render_hostname = (os.getenv("RENDER_EXTERNAL_HOSTNAME") or "").strip()
+    render_url = (os.getenv("RENDER_EXTERNAL_URL") or "").strip()
+    if render_hostname:
+        raw_hosts.append(render_hostname)
+    if render_url:
+        raw_hosts.append(render_url)
+
+    normalized_hosts: list[str] = []
+    for host in raw_hosts:
+        normalized = _normalize_host(host)
+        if normalized:
+            normalized_hosts.append(normalized)
+
+    if not normalized_hosts:
+        return None
+
+    allowed_hosts: list[str] = []
+    for host in normalized_hosts:
+        allowed_hosts.append(host)
+        if not _has_port(host):
+            allowed_hosts.append(f"{host}:*")
+
+    allowed_hosts = list(dict.fromkeys(allowed_hosts))
+
+    allowed_origins: list[str] = []
+    for host in allowed_hosts:
+        allowed_origins.append(f"http://{host}")
+        allowed_origins.append(f"https://{host}")
+
+    allowed_origins = list(dict.fromkeys(allowed_origins))
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )
+
+
 if FastMCP is None:
     mcp = _MissingFastMCP("github_mcp", _FASTMCP_ERROR)
 else:
-    mcp = FastMCP("github_mcp")
+    transport_security = _build_transport_security_settings()
+    host = (os.getenv("FASTMCP_HOST") or os.getenv("HOST") or "").strip()
+    if not host:
+        host = "0.0.0.0" if (os.getenv("RENDER_EXTERNAL_HOSTNAME") or os.getenv("RENDER_EXTERNAL_URL")) else "127.0.0.1"
+    mcp = FastMCP("github_mcp", host=host, transport_security=transport_security)
 
 
 # -----------------------------------------------------------------------------
