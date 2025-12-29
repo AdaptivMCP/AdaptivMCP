@@ -50,6 +50,29 @@ def _schema_hash(schema: Mapping[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
 
 
+def _apply_tool_metadata(tool_obj: Any, schema: Mapping[str, Any], visibility: str) -> None:
+    if tool_obj is None:
+        return
+    try:
+        setattr(tool_obj, "__mcp_visibility__", visibility)
+    except Exception:
+        pass
+
+    existing_schema = _normalize_input_schema(tool_obj)
+    if isinstance(existing_schema, Mapping):
+        return
+
+    try:
+        setattr(tool_obj, "input_schema", schema)
+        return
+    except Exception:
+        pass
+
+    meta = getattr(tool_obj, "meta", None)
+    if isinstance(meta, dict):
+        meta.setdefault("input_schema", schema)
+
+
 def _require_jsonschema() -> Any:
     try:
         import jsonschema  # type: ignore
@@ -590,6 +613,8 @@ def mcp_tool(
             wrapper.__mcp_input_schema__ = schema
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_write_action__ = bool(write_action)
+            wrapper.__mcp_visibility__ = visibility
+            _apply_tool_metadata(wrapper.__mcp_tool__, schema, visibility)
             return wrapper
 
         @functools.wraps(func)
@@ -709,6 +734,8 @@ def mcp_tool(
         wrapper.__mcp_input_schema__ = schema
         wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
         wrapper.__mcp_write_action__ = bool(write_action)
+        wrapper.__mcp_visibility__ = visibility
+        _apply_tool_metadata(wrapper.__mcp_tool__, schema, visibility)
         return wrapper
 
     return decorator
