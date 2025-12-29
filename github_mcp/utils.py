@@ -133,38 +133,6 @@ def _render_visible_whitespace(text: str) -> str:
     return "\n".join(rendered_lines)
 
 
-def normalize_args(raw_args: Any) -> Mapping[str, Any]:
-    """Normalize tool args to a JSON-friendly mapping."""
-
-    if raw_args is None:
-        return {}
-
-    if isinstance(raw_args, Mapping):
-        return dict(raw_args)
-
-    if isinstance(raw_args, str):
-        stripped = raw_args.lstrip()
-
-        if stripped.startswith("{") or stripped.startswith("["):
-            try:
-                parsed = json.loads(raw_args)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"args must be a valid JSON object/array: {exc}") from exc
-
-            if not isinstance(parsed, Mapping):
-                raise TypeError(f"args JSON must decode to an object, got {type(parsed).__name__}")
-
-            return dict(parsed)
-
-        raise TypeError(
-            "Adaptiv tools must receive args as a structured object (prefer a Python dict). "
-            "If a tool needs a free-form string, place it inside the args mapping "
-            "as a field instead of passing the string as the entire args payload. "
-            "JSON text is supported only as a compatibility path when it decodes to an object."
-        )
-
-    raise TypeError(f"Unsupported args type: {type(raw_args).__name__}")
-
 
 def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
     """Extract and concatenate text files from a zipped job log archive."""
@@ -198,5 +166,4 @@ __all__ = [
     "_normalize_write_context",
     "_render_visible_whitespace",
     "_with_numbered_lines",
-    "normalize_args",
 ]
