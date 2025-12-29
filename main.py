@@ -8,6 +8,7 @@ being pushed toward a particular working style.
 
 import base64
 import json
+import os
 import time
 from urllib.parse import parse_qs
 from typing import Any, Dict, List, Mapping, Optional, Literal
@@ -95,6 +96,7 @@ from github_mcp.http_routes.healthz import register_healthz_route
 from github_mcp.http_routes.tool_registry import register_tool_registry_routes
 from starlette.staticfiles import StaticFiles
 from starlette.responses import PlainTextResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 
 
@@ -353,6 +355,22 @@ elif hasattr(server.mcp, "app"):
         app = app_factory
 else:
     raise RuntimeError("FastMCP does not expose an ASGI app factory.")
+
+
+def _configure_trusted_hosts(app_instance) -> None:
+    allowed_hosts_env = os.getenv("ALLOWED_HOSTS")
+    if allowed_hosts_env:
+        allowed_hosts = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
+    else:
+        allowed_hosts = ["*"]
+    app_instance.user_middleware = [
+        middleware for middleware in app_instance.user_middleware if middleware.cls is not TrustedHostMiddleware
+    ]
+    app_instance.middleware_stack = None
+    app_instance.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
+
+_configure_trusted_hosts(app)
 app.add_middleware(_CacheControlMiddleware)
 app.add_middleware(_RequestContextMiddleware)
 
