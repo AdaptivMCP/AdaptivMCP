@@ -5,7 +5,8 @@ from __future__ import annotations
 import inspect
 import json
 import re
-from typing import Any, Dict, Mapping, Optional
+import types
+from typing import Any, Dict, Mapping, Optional, get_args, get_origin
 
 def _jsonable(value: Any) -> Any:
     """Convert arbitrary Python values into something JSON-serializable.
@@ -141,6 +142,80 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
         pass
 
     return None
+
+
+def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
+    if annotation is inspect.Signature.empty:
+        return {}
+    if annotation is None or annotation is type(None):
+        return {"type": "null"}
+
+    origin = get_origin(annotation)
+    if origin is None:
+        if annotation is str:
+            return {"type": "string"}
+        if annotation is int:
+            return {"type": "integer"}
+        if annotation is float:
+            return {"type": "number"}
+        if annotation is bool:
+            return {"type": "boolean"}
+        if annotation is list:
+            return {"type": "array"}
+        if annotation is dict:
+            return {"type": "object"}
+        return {}
+
+    if origin is list:
+        args = get_args(annotation)
+        items = _annotation_to_schema(args[0]) if args else {}
+        return {"type": "array", "items": items}
+    if origin is dict:
+        args = get_args(annotation)
+        value_schema = _annotation_to_schema(args[1]) if len(args) > 1 else {}
+        return {"type": "object", "additionalProperties": value_schema}
+    if origin is tuple:
+        args = get_args(annotation)
+        if args and args[-1] is ...:
+            return {"type": "array", "items": _annotation_to_schema(args[0])}
+        return {"type": "array", "prefixItems": [_annotation_to_schema(arg) for arg in args]}
+    if origin is set:
+        args = get_args(annotation)
+        items = _annotation_to_schema(args[0]) if args else {}
+        return {"type": "array", "items": items, "uniqueItems": True}
+    if origin is type(None):
+        return {"type": "null"}
+    if origin is __import__("typing").Union or origin is getattr(types, "UnionType", None):
+        args = get_args(annotation)
+        return {"anyOf": [_annotation_to_schema(arg) for arg in args]}
+
+    return {}
+
+
+def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, Any]:
+    properties: Dict[str, Any] = {}
+    required: list[str] = []
+
+    if signature is None:
+        return {"type": "object", "properties": {}}
+
+    for param in signature.parameters.values():
+        if param.name == "self":
+            continue
+        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            continue
+        param_schema: Dict[str, Any] = _annotation_to_schema(param.annotation)
+        if param.default is inspect.Parameter.empty:
+            required.append(param.name)
+        else:
+            param_schema = dict(param_schema)
+            param_schema["default"] = _jsonable(param.default)
+        properties[param.name] = param_schema
+
+    schema: Dict[str, Any] = {"type": "object", "properties": properties, "additionalProperties": False}
+    if required:
+        schema["required"] = required
+    return schema
 
 
 def _truncate_str(s: str) -> str:
