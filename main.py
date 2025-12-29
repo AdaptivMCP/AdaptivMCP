@@ -358,7 +358,6 @@ async def terminal_command(
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-    mutating: bool = False,
 ) -> Dict[str, Any]:
     """Run a shell command in the persistent repo workspace (terminal gateway).
 
@@ -372,7 +371,6 @@ async def terminal_command(
         workdir=workdir,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
-        mutating=mutating,
     )
 
 
@@ -384,7 +382,6 @@ async def run_command(
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-    mutating: bool = False,
 ) -> Dict[str, Any]:
     """Thin wrapper around github_mcp.tools_workspace.terminal_command (via run_command alias).
 
@@ -400,7 +397,6 @@ async def run_command(
         workdir=workdir,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
-        mutating=mutating,
     )
 
 
@@ -412,7 +408,6 @@ async def run_tests(
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-    mutating: bool = False,
 ) -> Dict[str, Any]:
     """Forward run_tests calls to the workspace helper for test surfaces."""
 
@@ -424,7 +419,6 @@ async def run_tests(
         workdir=workdir,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
-        mutating=mutating,
     )
 
 
