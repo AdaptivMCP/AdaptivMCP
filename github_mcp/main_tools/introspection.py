@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional
 
 import jsonschema
-from github_mcp.utils import normalize_args
 
 from ._main import _main
 
@@ -162,7 +161,6 @@ def list_write_tools() -> Dict[str, Any]:
     return {"tools": tools}
 
 
-
 def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
     """Best-effort attribute resolution across tool and function wrappers."""
 
@@ -172,7 +170,6 @@ def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
     if hasattr(func, private):
         return getattr(func, private)
     return default
-
 
 
 def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
@@ -247,7 +244,10 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             tool_info["tags"] = sorted(list(getattr(tool, "tags", []) or []))
 
         if include_parameters:
-            schema = m._normalize_input_schema(tool)
+            # Prefer a pre-computed schema cached on the registered function wrapper.
+            schema = getattr(func, "__mcp_input_schema__", None)
+            if not isinstance(schema, Mapping):
+                schema = m._normalize_input_schema(tool)
             if schema is None:
                 schema = {"type": "object", "properties": {}}
             tool_info["input_schema"] = schema
@@ -384,9 +384,11 @@ async def describe_tool(
     return result
 
 
-
 def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
+
+    if args is not None and not isinstance(args, Mapping):
+        raise TypeError("args must be a mapping")
 
     m = _main()
 
@@ -402,11 +404,14 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
 
     tool, func = found
-    schema = m._normalize_input_schema(tool)
+
+    schema = getattr(func, "__mcp_input_schema__", None)
+    if not isinstance(schema, Mapping):
+        schema = m._normalize_input_schema(tool)
     if schema is None:
         raise ValueError(f"Tool {tool_name!r} does not expose an input schema")
 
-    normalized_args = normalize_args(dict(args or {}))
+    normalized_args = dict(args or {})
 
     validator_cls = jsonschema.validators.validator_for(schema)
     validator_cls.check_schema(schema)
