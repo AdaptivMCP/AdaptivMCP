@@ -10,7 +10,7 @@ import base64
 import json
 import os
 import time
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
 
@@ -357,12 +357,40 @@ else:
     raise RuntimeError("FastMCP does not expose an ASGI app factory.")
 
 
+def _extract_hostname(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if "://" in cleaned:
+        parsed = urlparse(cleaned)
+        host = parsed.hostname or parsed.netloc
+        return host or None
+    return cleaned
+
+
+def _render_external_hosts() -> list[str]:
+    hostnames: list[str] = []
+    for env_name in ("RENDER_EXTERNAL_HOSTNAME", "RENDER_EXTERNAL_URL"):
+        hostname = _extract_hostname(os.getenv(env_name))
+        if hostname:
+            hostnames.append(hostname)
+    return hostnames
+
+
 def _configure_trusted_hosts(app_instance) -> None:
     allowed_hosts_env = os.getenv("ALLOWED_HOSTS")
     if allowed_hosts_env:
         allowed_hosts = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
     else:
         allowed_hosts = ["*"]
+
+    if "*" not in allowed_hosts:
+        for render_host in _render_external_hosts():
+            if render_host not in allowed_hosts:
+                allowed_hosts.append(render_host)
+
     app_instance.user_middleware = [
         middleware for middleware in app_instance.user_middleware if middleware.cls is not TrustedHostMiddleware
     ]
