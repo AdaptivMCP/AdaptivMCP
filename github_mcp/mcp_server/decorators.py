@@ -26,7 +26,7 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import TOOLS_LOGGER
+from github_mcp.config import DETAILED_LEVEL, TOOLS_LOGGER
 from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, get_request_context, mcp
 from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
@@ -318,7 +318,7 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
         safe = _jsonable(dict(payload))
         msg = f"[tool event] {safe.get('event','tool')} | status={safe.get('status')} | tool={safe.get('tool_name')}"
         log_fn = getattr(TOOLS_LOGGER, "detailed", None)
-        if callable(log_fn):
+        if callable(log_fn) and TOOLS_LOGGER.isEnabledFor(DETAILED_LEVEL):
             log_fn(msg, extra={"event": "tool_json", "tool_event": safe})
         else:
             TOOLS_LOGGER.info(msg, extra={"event": "tool_json", "tool_event": safe})
@@ -630,10 +630,26 @@ def mcp_tool(
                 )
                 raise
 
+            ctx = _extract_context(all_args)
             _record_recent_tool_event(
                 {
                     "ts": time.time(),
                     "event": "tool_start",
+                    "tool_name": tool_name,
+                    "call_id": call_id,
+                    "request": req,
+                    "schema_hash": schema_hash,
+                    "schema_present": True,
+                    "write_action": bool(write_action),
+                    "write_allowed": bool(WRITE_ALLOWED),
+                    "arg_keys": ctx["arg_keys"],
+                    "arg_count": ctx["arg_count"],
+                }
+            )
+            _log_tool_json_event(
+                {
+                    "event": "tool_call.start",
+                    "status": "start",
                     "tool_name": tool_name,
                     "call_id": call_id,
                     "request": req,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
 import re
 import types
 from typing import Any, Dict, Mapping, Optional, get_args, get_origin
@@ -73,9 +74,13 @@ def _jsonable(value: Any) -> Any:
 
 
 
+_TOOL_ARGS_PREVIEW_MAX_CHARS = int(os.environ.get("MCP_TOOL_ARGS_PREVIEW_MAX_CHARS", "2000"))
+
+
 def _single_line(s: str) -> str:
-    """Return the string unchanged."""
-    return s
+    """Return a stable single-line string for logs."""
+    s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    return " ".join(s.split())
 
 
 def _title_from_tool_name(name: str) -> str:
@@ -218,12 +223,17 @@ def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, 
     return schema
 
 
-def _truncate_str(s: str) -> str:
-    return s
+def _truncate_str(s: str, *, max_chars: Optional[int] = None) -> str:
+    limit = _TOOL_ARGS_PREVIEW_MAX_CHARS if max_chars is None else max_chars
+    if not limit or limit <= 0:
+        return s
+    if len(s) <= limit:
+        return s
+    return f"{s[:limit]}..."
 
 
 def _normalize_and_truncate(s: str) -> str:
-    return s
+    return _truncate_str(_single_line(s))
 
 
 def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
@@ -235,11 +245,11 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     try:
         sanitized = _jsonable(dict(args))
         raw = json.dumps(sanitized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        return raw
+        return _normalize_and_truncate(raw)
     except Exception:
         # Worst-case fallback
         try:
-            return str(args)
+            return _normalize_and_truncate(str(args))
         except Exception:
             return "<unprintable_args>"
 
@@ -283,7 +293,7 @@ def _preflight_tool_args(
         }
         if compact:
             raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            return {"tool": tool_name, "preview": _truncate_str(_single_line(raw))}
+            return {"tool": tool_name, "preview": _normalize_and_truncate(raw)}
         return payload
     except Exception:
         return {"tool": tool_name, "preview": "<unprintable_args>"}
