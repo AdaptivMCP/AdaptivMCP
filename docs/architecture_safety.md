@@ -51,6 +51,7 @@ Client (ChatGPT / connector)
 - **`github_mcp/mcp_server/decorators.py`**
   - Implements the `@mcp_tool` decorator:
     - Registers tools with FastMCP while keeping Python-callable functions.
+    - Adapts registration to FastMCP tool signature variants (with or without tag support).
     - Logs structured tool lifecycle events.
     - Tracks metrics and recent tool events.
     - Performs best-effort dedupe to avoid double execution on retries.
