@@ -83,7 +83,7 @@ async def render_shell(
             "command": command_result,
         }
     except Exception as exc:
-        return _structured_tool_error(exc, context="render_shell")
+        return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
 
 
 @mcp_tool(write_action=False)
@@ -180,7 +180,7 @@ async def terminal_command(
 
         return out
     except Exception as exc:
-        return _structured_tool_error(exc, context="terminal_command")
+        return _structured_tool_error(exc, context="terminal_command", tool_surface="terminal_command")
 
 
 @mcp_tool(write_action=False, visibility="hidden")

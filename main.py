@@ -510,12 +510,11 @@ async def commit_workspace_files(
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
     """Update the WRITE_ALLOWED state used for write gating."""
 
-    server.WRITE_ALLOWED = bool(approved)
     import github_mcp.mcp_server.context as _ctx
 
-    _ctx.WRITE_ALLOWED = server.WRITE_ALLOWED
+    _ctx.set_write_allowed(bool(approved))
     refresh_registered_tool_metadata(server.WRITE_ALLOWED)
-    return {"write_allowed": server.WRITE_ALLOWED}
+    return {"write_allowed": bool(server.WRITE_ALLOWED)}
 
 
 # ------------------------------------------------------------------------------

@@ -257,6 +257,58 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _emit_tool_error(
+    *,
+    tool_name: str,
+    call_id: str,
+    write_action: bool,
+    start: float,
+    schema_hash: Optional[str],
+    schema_present: bool,
+    req: Mapping[str, Any],
+    exc: BaseException,
+    phase: str,
+) -> None:
+    duration_ms = int((time.perf_counter() - start) * 1000)
+    _record_tool_call(
+        tool_name,
+        write_kind="write" if write_action else "read",
+        duration_ms=duration_ms,
+        errored=True,
+    )
+    structured_error = _structured_tool_error(exc, context=tool_name, path=None)
+    _record_recent_tool_event(
+        {
+            "ts": time.time(),
+            "event": "tool_error",
+            "phase": phase,
+            "tool_name": tool_name,
+            "call_id": call_id,
+            "request": req,
+            "schema_hash": schema_hash,
+            "schema_present": schema_present,
+            "write_action": bool(write_action),
+            "write_allowed": bool(WRITE_ALLOWED),
+            "error": structured_error.get("error", {}),
+        }
+    )
+    _log_tool_json_event(
+        {
+            "event": "tool_call.error",
+            "status": "error",
+            "phase": phase,
+            "tool_name": tool_name,
+            "call_id": call_id,
+            "duration_ms": duration_ms,
+            "schema_hash": schema_hash,
+            "schema_present": schema_present,
+            "write_action": bool(write_action),
+            "write_allowed": bool(WRITE_ALLOWED),
+            "error": structured_error,
+        }
+    )
+
+
 def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
     """
     Log a structured tool event without ever throwing.
@@ -423,26 +475,41 @@ def mcp_tool(
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 call_id = str(uuid.uuid4())
                 all_args = _bind_call_args(signature, args, kwargs)
+                req = get_request_context()
+                start = time.perf_counter()
 
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-                if not isinstance(schema, Mapping) or not isinstance(schema_hash, str):
-                    raise AdaptivToolError(
-                        code="schema_missing",
-                        message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
-                        category="validation",
-                        origin="schema",
-                        retryable=False,
-                        details={"tool": tool_name},
-                        hint="Ensure tool schema caching runs during registration.",
-                    )
+                schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+                try:
+                    if not schema_present:
+                        raise AdaptivToolError(
+                            code="schema_missing",
+                            message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
+                            category="validation",
+                            origin="schema",
+                            retryable=False,
+                            details={"tool": tool_name},
+                            hint="Ensure tool schema caching runs during registration.",
+                        )
 
-                _validate_tool_args_schema(tool_name, schema, all_args)
-                _enforce_write_allowed(tool_name, write_action=write_action)
+                    _validate_tool_args_schema(tool_name, schema, all_args)
+                    _enforce_write_allowed(tool_name, write_action=write_action)
+                except Exception as exc:
+                    _emit_tool_error(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        write_action=write_action,
+                        start=start,
+                        schema_hash=schema_hash if schema_present else None,
+                        schema_present=schema_present,
+                        req=req,
+                        exc=exc,
+                        phase="preflight",
+                    )
+                    raise
 
                 ctx = _extract_context(all_args)
-                req = get_request_context()
-                start = time.perf_counter()
 
                 _record_recent_tool_event(
                     {
@@ -477,26 +544,16 @@ def mcp_tool(
                 try:
                     result = await func(*args, **kwargs)
                 except Exception as exc:
-                    duration_ms = int((time.perf_counter() - start) * 1000)
-                    _record_tool_call(
-                        tool_name,
-                        write_kind="write" if write_action else "read",
-                        duration_ms=duration_ms,
-                        errored=True,
-                    )
-                    _log_tool_json_event(
-                        {
-                            "event": "tool_call.error",
-                            "status": "error",
-                            "tool_name": tool_name,
-                            "call_id": call_id,
-                            "duration_ms": duration_ms,
-                            "schema_hash": schema_hash,
-                            "schema_present": True,
-                            "write_action": bool(write_action),
-                            "write_allowed": bool(WRITE_ALLOWED),
-                            "error": _structured_tool_error(exc, context=tool_name, path=None),
-                        }
+                    _emit_tool_error(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        write_action=write_action,
+                        start=start,
+                        schema_hash=schema_hash,
+                        schema_present=True,
+                        req=req,
+                        exc=exc,
+                        phase="execute",
                     )
                     raise
 
@@ -539,25 +596,39 @@ def mcp_tool(
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             call_id = str(uuid.uuid4())
             all_args = _bind_call_args(signature, args, kwargs)
+            req = get_request_context()
+            start = time.perf_counter()
 
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-            if not isinstance(schema, Mapping) or not isinstance(schema_hash, str):
-                raise AdaptivToolError(
-                    code="schema_missing",
-                    message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
-                    category="validation",
-                    origin="schema",
-                    retryable=False,
-                    details={"tool": tool_name},
-                    hint="Ensure tool schema caching runs during registration.",
+            schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+            try:
+                if not schema_present:
+                    raise AdaptivToolError(
+                        code="schema_missing",
+                        message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
+                        category="validation",
+                        origin="schema",
+                        retryable=False,
+                        details={"tool": tool_name},
+                        hint="Ensure tool schema caching runs during registration.",
+                    )
+
+                _validate_tool_args_schema(tool_name, schema, all_args)
+                _enforce_write_allowed(tool_name, write_action=write_action)
+            except Exception as exc:
+                _emit_tool_error(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    start=start,
+                    schema_hash=schema_hash if schema_present else None,
+                    schema_present=schema_present,
+                    req=req,
+                    exc=exc,
+                    phase="preflight",
                 )
-
-            _validate_tool_args_schema(tool_name, schema, all_args)
-            _enforce_write_allowed(tool_name, write_action=write_action)
-
-            req = get_request_context()
-            start = time.perf_counter()
+                raise
 
             _record_recent_tool_event(
                 {
@@ -576,26 +647,16 @@ def mcp_tool(
             try:
                 result = func(*args, **kwargs)
             except Exception as exc:
-                duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(
-                    tool_name,
-                    write_kind="write" if write_action else "read",
-                    duration_ms=duration_ms,
-                    errored=True,
-                )
-                _log_tool_json_event(
-                    {
-                        "event": "tool_call.error",
-                        "status": "error",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                        "duration_ms": duration_ms,
-                        "schema_hash": schema_hash,
-                        "schema_present": True,
-                        "write_action": bool(write_action),
-                        "write_allowed": bool(WRITE_ALLOWED),
-                        "error": _structured_tool_error(exc, context=tool_name, path=None),
-                    }
+                _emit_tool_error(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    start=start,
+                    schema_hash=schema_hash,
+                    schema_present=True,
+                    req=req,
+                    exc=exc,
+                    phase="execute",
                 )
                 raise
 
