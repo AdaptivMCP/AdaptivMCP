@@ -83,7 +83,6 @@ from github_mcp.utils import (
     _effective_ref_for_repo,
     _normalize_repo_path,
     _with_numbered_lines,
-    normalize_args,
 )
 from github_mcp.workspace import (
     _clone_repo,  # noqa: F401
@@ -265,7 +264,6 @@ _EXPORT_COMPAT = (
     COMPACT_METADATA_DEFAULT,
     _find_registered_tool,
     _normalize_input_schema,
-    normalize_args,
 )
 
 
