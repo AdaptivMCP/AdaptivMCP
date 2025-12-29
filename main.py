@@ -94,6 +94,7 @@ from github_mcp.http_routes.actions_compat import register_actions_compat_routes
 from github_mcp.http_routes.healthz import register_healthz_route
 from github_mcp.http_routes.tool_registry import register_tool_registry_routes
 from starlette.staticfiles import StaticFiles
+from starlette.responses import PlainTextResponse
 
 
 
@@ -343,6 +344,15 @@ else:
     raise RuntimeError("FastMCP does not expose an ASGI app factory.")
 app.add_middleware(_CacheControlMiddleware)
 app.add_middleware(_RequestContextMiddleware)
+
+
+async def _handle_value_error(request, exc):
+    if str(exc) == "Request validation failed":
+        return PlainTextResponse("Request validation failed", status_code=400)
+    raise exc
+
+
+app.add_exception_handler(ValueError, _handle_value_error)
 
 
 
