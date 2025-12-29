@@ -244,25 +244,65 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
         return
 
 
-def _register_with_fastmcp(fn: Callable[..., Any], *, name: str, description: Optional[str]) -> Any:
+def _fastmcp_tool_params() -> Optional[tuple[inspect.Parameter, ...]]:
     try:
-        tool_decorator = mcp.tool(
-            name=name,
-            description=description,
-            tags=set(),  # ignore tags entirely to prevent tag-driven behavior
-            meta={},
-            annotations=_jsonable({}),
-        )
-        tool_obj = tool_decorator(fn)
-    except TypeError:
-        tool_obj = mcp.tool(
-            fn,
-            name=name,
-            description=description,
-            tags=set(),  # ignore tags entirely to prevent tag-driven behavior
-            meta={},
-            annotations=_jsonable({}),
-        )
+        signature = inspect.signature(mcp.tool)
+    except (TypeError, ValueError):
+        return None
+
+    params = tuple(signature.parameters.values())
+    if params and params[0].name == "self":
+        return params[1:]
+    return params
+
+
+def _fastmcp_tool_kwargs(params: Optional[tuple[inspect.Parameter, ...]], *, name: str, description: Optional[str]) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "name": name,
+        "description": description,
+        "tags": set(),  # ignore tags entirely to prevent tag-driven behavior
+        "meta": {},
+        "annotations": _jsonable({}),
+    }
+    if params is None:
+        return kwargs
+
+    if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in params):
+        return kwargs
+
+    allowed = {
+        param.name
+        for param in params
+        if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    }
+    return {key: value for key, value in kwargs.items() if key in allowed}
+
+
+def _fastmcp_requires_fn_positional(params: Optional[tuple[inspect.Parameter, ...]]) -> bool:
+    if params is None:
+        return False
+    for param in params:
+        if param.name in {"fn", "func", "tool"} and param.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ):
+            return param.default is inspect._empty
+    return False
+
+
+def _register_with_fastmcp(fn: Callable[..., Any], *, name: str, description: Optional[str]) -> Any:
+    params = _fastmcp_tool_params()
+    kwargs = _fastmcp_tool_kwargs(params, name=name, description=description)
+
+    if _fastmcp_requires_fn_positional(params):
+        tool_obj = mcp.tool(fn, **kwargs)
+    else:
+        try:
+            tool_decorator = mcp.tool(**kwargs)
+        except TypeError:
+            tool_obj = mcp.tool(fn, **kwargs)
+        else:
+            tool_obj = tool_decorator(fn) if callable(tool_decorator) else tool_decorator
 
     _REGISTERED_MCP_TOOLS[:] = [
         (t, f)
