@@ -55,33 +55,53 @@ def _apply_tool_metadata(
     schema: Mapping[str, Any],
     visibility: str,
     tags: Optional[Iterable[str]] = None,
+    *,
+    write_action: Optional[bool] = None,
+    write_allowed: Optional[bool] = None,
 ) -> None:
     if tool_obj is None:
         return
+
     try:
         setattr(tool_obj, "__mcp_visibility__", visibility)
     except Exception:
         pass
+
     if tags is not None:
         try:
             setattr(tool_obj, "tags", list(tags))
         except Exception:
             pass
 
-    existing_schema = _normalize_input_schema(tool_obj)
-    if isinstance(existing_schema, Mapping):
-        return
+    if write_action is not None:
+        try:
+            setattr(tool_obj, "write_action", bool(write_action))
+        except Exception:
+            pass
 
+    # Always expose schema on the tool object if not already present.
+    existing_schema = _normalize_input_schema(tool_obj)
+    if not isinstance(existing_schema, Mapping):
+        try:
+            setattr(tool_obj, "input_schema", schema)
+        except Exception:
+            meta = getattr(tool_obj, "meta", None)
+            if isinstance(meta, dict):
+                meta.setdefault("input_schema", schema)
+
+    # Attach structured metadata for clients/UIs.
     try:
-        setattr(tool_obj, "input_schema", schema)
-        return
+        meta = getattr(tool_obj, "meta", None)
+        if not isinstance(meta, dict):
+            meta = {}
+            setattr(tool_obj, "meta", meta)
+        if write_action is not None:
+            meta["write_action"] = bool(write_action)
+        if write_allowed is not None and write_action is not None:
+            meta["write_enabled"] = (not bool(write_action)) or bool(write_allowed)
+            meta["write_allowed"] = bool(write_allowed)
     except Exception:
         pass
-
-    meta = getattr(tool_obj, "meta", None)
-    if isinstance(meta, dict):
-        meta.setdefault("input_schema", schema)
-
 
 def _require_jsonschema() -> Any:
     try:
