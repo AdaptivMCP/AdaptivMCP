@@ -516,7 +516,6 @@ async def commit_workspace_files(
     files: List[str],
     ref: str = "main",
     message: str = "Commit selected workspace changes",
-    push: bool = True,
 ) -> Dict[str, Any]:
     """Forward commit_workspace_files calls to the workspace tool.
 
@@ -528,7 +527,6 @@ async def commit_workspace_files(
         files=files,
         ref=ref,
         message=message,
-        push=push,
     )
 
 

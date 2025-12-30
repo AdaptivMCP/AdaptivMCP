@@ -45,7 +45,7 @@ Typical flow:
 1. `ensure_workspace_clone` or `render_shell` to prepare the workspace.
 2. Edit with `set_workspace_file_contents` or run scripts via `run_command`.
 3. Inspect changes with `get_workspace_changes_summary`.
-4. Commit and push with `commit_workspace` or `commit_workspace_files`.
+4. Commit with `commit_workspace` or `commit_workspace_files`.
 
 ### Direct GitHub API file edits
 

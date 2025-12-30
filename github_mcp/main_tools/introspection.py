@@ -31,7 +31,7 @@ def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed
     if tool_name in _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS:
         return True
     lowered = tool_name.lower()
-    return "commit" in lowered or "push" in lowered
+    return "commit" in lowered
 
 
 def list_write_tools() -> Dict[str, Any]:
@@ -93,14 +93,14 @@ def list_write_tools() -> Dict[str, Any]:
         {
             "name": "commit_workspace",
             "category": "workspace",
-            "description": "Commit and optionally push changes from the persistent workspace.",
-            "notes": "Stages changes, commits with a provided message, and can push to the effective branch.",
+            "description": "Commit changes from the persistent workspace.",
+            "notes": "Stages changes and commits with a provided message.",
         },
         {
             "name": "commit_workspace_files",
             "category": "workspace",
             "description": "Commit a specific list of files from the persistent workspace.",
-            "notes": "Use to avoid staging temporary artifacts while still pushing changes to the branch.",
+            "notes": "Use to avoid staging temporary artifacts while committing changes to the branch.",
         },
         {
             "name": "run_tests",
@@ -172,6 +172,15 @@ def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
     return default
 
 
+def _tool_tags(tool: Any, func: Any) -> list[str]:
+    tags = getattr(tool, "tags", None)
+    if tags is None or tags == [] or tags == set():
+        tags = getattr(func, "__mcp_tags__", None)
+    if not tags:
+        return []
+    return [str(tag) for tag in tags if str(tag).strip()]
+
+
 def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
@@ -241,7 +250,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             tool_info["description"] = description
 
         if not compact_mode:
-            tool_info["tags"] = sorted(list(getattr(tool, "tags", []) or []))
+            tool_info["tags"] = sorted(_tool_tags(tool, func))
 
         if include_parameters:
             # Prefer a pre-computed schema cached on the registered function wrapper.

@@ -42,7 +42,7 @@ async def get_server_config() -> Dict[str, Any]:
         },
         "approval_policy": {
             "notes": (
-                "When WRITE_ALLOWED is true, UI prompts are limited to commit/push-style tools. "
+                "When WRITE_ALLOWED is true, UI prompts are limited to commit-style tools. "
                 "When WRITE_ALLOWED is false, UI prompts are required for any write action."
             ),
             "toggle_tool": "authorize_write_actions",

@@ -38,13 +38,12 @@ async def commit_workspace(
     ref: str = "main",
     message: str = "Commit workspace changes",
     add_all: bool = True,
-    push: bool = True,
     *,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Commit workspace changes and optionally push them."""
+    """Commit workspace changes."""
 
     try:
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
@@ -76,14 +75,6 @@ async def commit_workspace(
         if commit_result["exit_code"] != 0:
             stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
-
-        push_result = None
-        if push:
-            push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
-            if push_result["exit_code"] != 0:
-                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
-                raise GitHubAPIError(f"git push failed: {stderr}")
 
         # Keep tool responses small to avoid connector transport issues.
         rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
@@ -123,7 +114,6 @@ async def commit_workspace(
             "commit_sha": head_sha,
             "commit_summary": head_summary,
             "commit": _slim_shell_result(commit_result),
-            "push": _slim_shell_result(push_result) if push_result is not None else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace")
@@ -133,13 +123,12 @@ async def commit_workspace_files(
     files: List[str],
     ref: str = "main",
     message: str = "Commit selected workspace changes",
-    push: bool = True,
     *,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Commit and optionally push specific files from the persistent workspace."""
+    """Commit specific files from the persistent workspace."""
 
     if not files:
         raise ValueError("files must be a non-empty list of paths")
@@ -174,15 +163,6 @@ async def commit_workspace_files(
         if commit_result["exit_code"] != 0:
             stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
-
-        push_result = None
-        if push:
-            push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
-            if push_result["exit_code"] != 0:
-                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
-                raise GitHubAPIError(f"git push failed: {stderr}")
-
 
         # Keep tool responses small to avoid connector transport issues.
         rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
@@ -223,7 +203,6 @@ async def commit_workspace_files(
             "commit_sha": head_sha,
             "commit_summary": head_summary,
             "commit": _slim_shell_result(commit_result),
-            "push": _slim_shell_result(push_result) if push_result is not None else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace_files")
