@@ -22,13 +22,22 @@ async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) 
     """Execute a GitHub GraphQL query using the shared HTTP client."""
 
     github_request = _resolve_main_helper("_github_request", _default_github_request)
+    structured_tool_error = _resolve_main_helper(
+        "_structured_tool_error", _default_structured_tool_error
+    )
 
     payload = {"query": query, "variables": variables or {}}
-    result = await github_request(
-        "POST",
-        "/graphql",
-        json_body=payload,
-    )
+    try:
+        result = await github_request(
+            "POST",
+            "/graphql",
+            json_body=payload,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return structured_tool_error(
+            exc,
+            context="graphql_query",
+        )
 
     # main.py historically returned only the parsed JSON for graphql_query.
     return result.get("json")
@@ -76,6 +85,9 @@ async def search(
     """Perform GitHub search queries (code, repos, issues, commits, or users)."""
 
     github_request = _resolve_main_helper("_github_request", _default_github_request)
+    structured_tool_error = _resolve_main_helper(
+        "_structured_tool_error", _default_structured_tool_error
+    )
 
     allowed_types = {"code", "repositories", "issues", "commits", "users"}
     if search_type not in allowed_types:
@@ -94,4 +106,19 @@ async def search(
             raise ValueError("order must be 'asc' or 'desc'")
         params["order"] = order
 
-    return await github_request("GET", f"/search/{search_type}", params=params)
+    headers = None
+    if search_type == "commits":
+        headers = {"Accept": "application/vnd.github+json,application/vnd.github.cloak-preview+json"}
+
+    try:
+        return await github_request(
+            "GET",
+            f"/search/{search_type}",
+            params=params,
+            headers=headers,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return structured_tool_error(
+            exc,
+            context="search",
+        )
