@@ -172,6 +172,15 @@ def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
     return default
 
 
+def _tool_tags(tool: Any, func: Any) -> list[str]:
+    tags = getattr(tool, "tags", None)
+    if tags is None or tags == [] or tags == set():
+        tags = getattr(func, "__mcp_tags__", None)
+    if not tags:
+        return []
+    return [str(tag) for tag in tags if str(tag).strip()]
+
+
 def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
@@ -241,7 +250,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             tool_info["description"] = description
 
         if not compact_mode:
-            tool_info["tags"] = sorted(list(getattr(tool, "tags", []) or []))
+            tool_info["tags"] = sorted(_tool_tags(tool, func))
 
         if include_parameters:
             # Prefer a pre-computed schema cached on the registered function wrapper.

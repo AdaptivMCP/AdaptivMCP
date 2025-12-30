@@ -47,3 +47,32 @@ def test_register_with_fastmcp_requires_fn_positional(monkeypatch):
     )
     assert tool_obj["fn"] is positional_tool
     assert tool_obj["name"] == "positional_tool"
+
+
+def test_register_with_fastmcp_passes_tags(monkeypatch):
+    captured = {}
+
+    class FakeMCP:
+        def tool(self, fn=None, *, name=None, description=None, tags=None, meta=None, annotations=None):
+            captured["tags"] = tags
+
+            if fn is None:
+                def decorator(inner):
+                    return {"fn": inner, "name": name, "tags": tags}
+                return decorator
+            return {"fn": fn, "name": name, "tags": tags}
+
+    fake_mcp = FakeMCP()
+    monkeypatch.setattr(decorators, "mcp", fake_mcp)
+    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
+
+    def tagged_tool():
+        return "ok"
+
+    decorators._register_with_fastmcp(
+        tagged_tool,
+        name="tagged_tool",
+        description="tagged description",
+        tags=["alpha", "beta"],
+    )
+    assert captured["tags"] == ["alpha", "beta"]

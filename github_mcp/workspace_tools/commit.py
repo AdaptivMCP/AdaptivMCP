@@ -183,7 +183,6 @@ async def commit_workspace_files(
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
-
         # Keep tool responses small to avoid connector transport issues.
         rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
         head_sha = (rev.get("stdout", "").strip() if isinstance(rev, dict) else "")

@@ -370,8 +370,8 @@ async def workspace_self_heal_branch(
             timeout_seconds=300,
         )
 
-        # Ensure a clean clone for the new branch.
-        new_repo_dir = await deps["clone_repo"](full_name, ref=candidate, preserve_changes=False)
+        # Use the freshly checked out local workspace for the new branch.
+        new_repo_dir = base_repo_dir
         step(
             "Fresh workspace ready",
             f"Created a clean workspace for '{candidate}'.",

@@ -5,7 +5,7 @@ Decorators and helpers for registering MCP tools.
 Behavioral contract (post-guardrail removal):
 - The only blocking control is WRITE_ALLOWED (true/false) for write tools.
 - Tool arguments are strictly validated against published input schemas.
-- Tags / side_effects / mutating metadata are accepted but ignored.
+- Tags metadata is captured for introspection (side_effects/mutating are still ignored).
 - Dedupe helpers remain for compatibility and test coverage.
 
 Dedupe contract:
@@ -50,13 +50,23 @@ def _schema_hash(schema: Mapping[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
 
 
-def _apply_tool_metadata(tool_obj: Any, schema: Mapping[str, Any], visibility: str) -> None:
+def _apply_tool_metadata(
+    tool_obj: Any,
+    schema: Mapping[str, Any],
+    visibility: str,
+    tags: Optional[Iterable[str]] = None,
+) -> None:
     if tool_obj is None:
         return
     try:
         setattr(tool_obj, "__mcp_visibility__", visibility)
     except Exception:
         pass
+    if tags is not None:
+        try:
+            setattr(tool_obj, "tags", list(tags))
+        except Exception:
+            pass
 
     existing_schema = _normalize_input_schema(tool_obj)
     if isinstance(existing_schema, Mapping):
@@ -394,7 +404,13 @@ def _fastmcp_call_style(params: Optional[tuple[inspect.Parameter, ...]]) -> str:
     return "unknown"
 
 
-def _register_with_fastmcp(fn: Callable[..., Any], *, name: str, description: Optional[str]) -> Any:
+def _register_with_fastmcp(
+    fn: Callable[..., Any],
+    *,
+    name: str,
+    description: Optional[str],
+    tags: Optional[Iterable[str]] = None,
+) -> Any:
     """
     Robust FastMCP registration across signature variants.
 
@@ -407,11 +423,12 @@ def _register_with_fastmcp(fn: Callable[..., Any], *, name: str, description: Op
     style = _fastmcp_call_style(params)
 
     # Build kwargs in descending compatibility order.
+    normalized_tags = list(tags or [])
     base: dict[str, Any] = {"name": name, "description": description}
     full: dict[str, Any] = {
         "name": name,
         "description": description,
-        "tags": set(),  # accepted/ignored where supported
+        "tags": normalized_tags,
         "meta": {},
         "annotations": _jsonable({}),
     }
@@ -475,7 +492,7 @@ def mcp_tool(
     *,
     name: str | None = None,
     write_action: bool,
-    tags: Optional[Iterable[str]] = None,  # accepted, ignored
+    tags: Optional[Iterable[str]] = None,
     description: str | None = None,
     visibility: str = "public",  # accepted, ignored
     mutating: Any = None,  # accepted, ignored
@@ -491,6 +508,7 @@ def mcp_tool(
         tool_name = name or getattr(func, "__name__", "tool")
         llm_level = "advanced" if write_action else "basic"
         normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
+        normalized_tags = [str(tag) for tag in tags or [] if str(tag).strip()]
 
         if asyncio.iscoroutinefunction(func):
 
@@ -603,7 +621,12 @@ def mcp_tool(
                 )
                 return result
 
-            wrapper.__mcp_tool__ = _register_with_fastmcp(wrapper, name=tool_name, description=normalized_description)
+            wrapper.__mcp_tool__ = _register_with_fastmcp(
+                wrapper,
+                name=tool_name,
+                description=normalized_description,
+                tags=normalized_tags,
+            )
 
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
@@ -614,7 +637,8 @@ def mcp_tool(
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_write_action__ = bool(write_action)
             wrapper.__mcp_visibility__ = visibility
-            _apply_tool_metadata(wrapper.__mcp_tool__, schema, visibility)
+            wrapper.__mcp_tags__ = normalized_tags
+            _apply_tool_metadata(wrapper.__mcp_tool__, schema, visibility, normalized_tags)
             return wrapper
 
         @functools.wraps(func)
@@ -724,7 +748,12 @@ def mcp_tool(
             )
             return result
 
-        wrapper.__mcp_tool__ = _register_with_fastmcp(wrapper, name=tool_name, description=normalized_description)
+        wrapper.__mcp_tool__ = _register_with_fastmcp(
+            wrapper,
+            name=tool_name,
+            description=normalized_description,
+            tags=normalized_tags,
+        )
 
         schema = _normalize_input_schema(wrapper.__mcp_tool__)
         if not isinstance(schema, Mapping):
@@ -735,7 +764,8 @@ def mcp_tool(
         wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
         wrapper.__mcp_write_action__ = bool(write_action)
         wrapper.__mcp_visibility__ = visibility
-        _apply_tool_metadata(wrapper.__mcp_tool__, schema, visibility)
+        wrapper.__mcp_tags__ = normalized_tags
+        _apply_tool_metadata(wrapper.__mcp_tool__, schema, visibility, normalized_tags)
         return wrapper
 
     return decorator
