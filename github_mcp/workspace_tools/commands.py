@@ -151,7 +151,6 @@ async def terminal_command(
             env=env,
         )
         out: Dict[str, Any] = {
-            "repo_dir": repo_dir,
             "workdir": workdir,
             "command_input": requested_command,
             "command": command,
