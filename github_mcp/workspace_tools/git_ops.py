@@ -81,7 +81,6 @@ async def workspace_create_branch(
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         return {
-            "repo_dir": repo_dir,
             "base_ref": effective_base,
             "new_branch": new_branch,
             "checkout": checkout,
@@ -160,7 +159,6 @@ async def workspace_delete_branch(
         )
 
         return {
-            "repo_dir": repo_dir,
             "default_branch": default_branch,
             "deleted_branch": branch,
             "delete_remote": delete_remote,
@@ -421,7 +419,6 @@ async def workspace_self_heal_branch(
             "healed": True,
             "deleted": bool(delete_result) if delete_mangled_branch else False,
             "new_branch": candidate,
-            "repo_dir": new_repo_dir,
             "steps": steps,
             "diagnostics": diag,
             "snapshot": snapshot,
