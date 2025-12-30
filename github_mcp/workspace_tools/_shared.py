@@ -14,6 +14,30 @@ from github_mcp.workspace import (
     _git_auth_env,
 )
 
+def _cmd_invokes_git(cmd: object) -> bool:
+    """Return True if a shell command string invokes git anywhere as a command segment.
+
+    This handles composite commands like: "rm -rf x && git clone ...".
+    Used only to decide whether to inject git auth env.
+    """
+    if not isinstance(cmd, str):
+        return False
+    s = cmd.strip()
+    if not s:
+        return False
+    if s.startswith('git '):
+        return True
+    # Treat newlines as command separators.
+    s = s.replace('\n', ';')
+    for sep in ('&&', '||', ';', '|'):
+        if sep in s:
+            parts = s.split(sep)
+            for part in parts[1:]:
+                if part.lstrip().startswith('git '):
+                    return True
+    return False
+
+
 def _tw():
     from github_mcp import tools_workspace as tw
     return tw
@@ -153,7 +177,7 @@ def _workspace_deps() -> Dict[str, Any]:
             merged.update(env)
 
         # Only inject auth for git commands (keeps non-git commands untouched).
-        if isinstance(cmd, str) and cmd.lstrip().startswith("git "):
+        if _cmd_invokes_git(cmd):
             for k, v in _git_auth_env().items():
                 merged.setdefault(k, v)
 
