@@ -127,43 +127,15 @@ async def _run_shell(
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
-    stdout = raw_stdout
-    stderr = raw_stderr
-    stdout_truncated = False
-    stderr_truncated = False
 
-    stdout_limit = getattr(main_module, "TOOL_STDOUT_MAX_CHARS", config.TOOL_STDOUT_MAX_CHARS)
-    if stdout_limit and stdout_limit > 0 and len(stdout) > stdout_limit:
-        stdout = stdout[:stdout_limit]
-        stdout_truncated = True
-
-    stderr_limit = getattr(main_module, "TOOL_STDERR_MAX_CHARS", config.TOOL_STDERR_MAX_CHARS)
-    if stderr_limit and stderr_limit > 0 and len(stderr) > stderr_limit:
-        stderr = stderr[:stderr_limit]
-        stderr_truncated = True
-
-    combined_limit = getattr(
-        main_module, "TOOL_STDIO_COMBINED_MAX_CHARS", config.TOOL_STDIO_COMBINED_MAX_CHARS
-    )
-    if combined_limit and combined_limit > 0 and len(stdout) + len(stderr) > combined_limit:
-        allowed_stdout = max(0, combined_limit - len(stderr))
-        if len(stdout) > allowed_stdout:
-            stdout = stdout[:allowed_stdout]
-            stdout_truncated = True
-
-        if len(stdout) + len(stderr) > combined_limit:
-            allowed_stderr = max(0, combined_limit - len(stdout))
-            if len(stderr) > allowed_stderr:
-                stderr = stderr[:allowed_stderr]
-                stderr_truncated = True
-
+    # No truncation (by request).
     return {
         "exit_code": proc.returncode,
         "timed_out": timed_out,
-        "stdout": stdout,
-        "stderr": stderr,
-        "stdout_truncated": stdout_truncated,
-        "stderr_truncated": stderr_truncated,
+        "stdout": raw_stdout,
+        "stderr": raw_stderr,
+        "stdout_truncated": False,
+        "stderr_truncated": False,
     }
 
 
