@@ -117,7 +117,6 @@ async def commit_workspace(
             pass
 
         return {
-            "repo_dir": repo_dir,
             "branch": effective_ref,
             "changed_files": status_lines[:200],
             "changed_files_truncated": len(status_lines) > 200,
@@ -218,7 +217,6 @@ async def commit_workspace_files(
 
 
         return {
-            "repo_dir": repo_dir,
             "branch": effective_ref,
             "staged_files": staged_files[:200],
             "staged_files_truncated": len(staged_files) > 200,
