@@ -107,7 +107,7 @@ async def get_workspace_file_contents(
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         info = _workspace_read_text(repo_dir, path)
-        info.update({"full_name": full_name, "ref": effective_ref, "repo_dir": repo_dir})
+        info.update({"full_name": full_name, "ref": effective_ref})
         return info
     except Exception as exc:
         return _structured_tool_error(exc, context="get_workspace_file_contents")
@@ -183,7 +183,6 @@ async def set_workspace_file_contents(
             pass
 
         return {
-            "repo_dir": repo_dir,
             "branch": effective_ref,
             "status": "written",
             **write_info,
