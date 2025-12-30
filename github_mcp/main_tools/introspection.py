@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import jsonschema
 
+from github_mcp.config import TOOL_DENYLIST
 from ._main import _main
 
 _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = {
@@ -158,7 +159,8 @@ def list_write_tools() -> Dict[str, Any]:
         },
     ]
 
-    return {"tools": tools}
+    filtered = [tool for tool in tools if tool.get("name") not in TOOL_DENYLIST]
+    return {"tools": filtered}
 
 
 def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:

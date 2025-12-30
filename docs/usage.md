@@ -31,7 +31,6 @@ The ASGI application is exposed in `main.py` as `app`.
 Use read-only tools for discovery and inspection:
 
 - `get_repo_defaults`, `get_server_config`, `validate_environment`
-- `get_file_contents`, `fetch_files`, `list_repository_tree`
 - `list_recent_issues`, `list_repository_issues`, `fetch_issue`
 - `fetch_pr`, `get_pr_info`, `list_pr_changed_filenames`
 
@@ -42,17 +41,12 @@ commands to be run locally before pushing changes back to GitHub.
 
 Typical flow:
 
-1. `ensure_workspace_clone` or `render_shell` to prepare the workspace.
-2. Edit with `set_workspace_file_contents` or run scripts via `run_command`.
-3. Inspect changes with `get_workspace_changes_summary`.
-4. Commit and push with `commit_workspace` or `commit_workspace_files`.
+1. `render_shell` (or `terminal_command`) to prepare the workspace.
+2. Edit files and inspect changes using shell commands (e.g., `git status`, `git diff`).
+3. Commit and push from the workspace shell (`git commit`, `git push`).
 
-### Direct GitHub API file edits
-
-For small changes, you can use GitHub contents APIs via MCP tools:
-
-- `create_file`, `apply_text_update_and_commit`, `move_file`, `delete_file`
-- `update_file_from_workspace` to push a workspace file back to GitHub
+GitHub API tools are intended for inspecting live state after workspace pushes,
+such as PRs, issues, and workflows.
 
 ## Behavior and safety constraints
 
@@ -94,6 +88,10 @@ Key environment variables:
 - `TOOL_STDOUT_MAX_CHARS`, `TOOL_STDERR_MAX_CHARS`, `TOOL_STDIO_COMBINED_MAX_CHARS`
 - `WRITE_DIFF_LOG_MAX_LINES`, `WRITE_DIFF_LOG_MAX_CHARS`
 - `RUN_COMMAND_MAX_CHARS`
+
+### Tool registry controls
+
+- `MCP_TOOL_DENYLIST` — comma-separated tool names to disable (set to `none` to allow all).
 
 ### Logging
 

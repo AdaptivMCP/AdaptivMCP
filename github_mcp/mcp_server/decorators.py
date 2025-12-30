@@ -26,7 +26,7 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import DETAILED_LEVEL, TOOLS_LOGGER
+from github_mcp.config import DETAILED_LEVEL, TOOLS_LOGGER, TOOL_DENYLIST
 from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, get_request_context, mcp
 from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
@@ -506,6 +506,9 @@ def mcp_tool(
             signature = None
 
         tool_name = name or getattr(func, "__name__", "tool")
+        if tool_name in TOOL_DENYLIST:
+            TOOLS_LOGGER.info("Skipping MCP tool registration for %s (denied by config)", tool_name)
+            return func
         llm_level = "advanced" if write_action else "basic"
         normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
         normalized_tags = [str(tag) for tag in tags or [] if str(tag).strip()]
