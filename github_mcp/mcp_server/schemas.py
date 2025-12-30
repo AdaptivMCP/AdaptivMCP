@@ -74,7 +74,7 @@ def _jsonable(value: Any) -> Any:
 
 
 
-_TOOL_ARGS_PREVIEW_MAX_CHARS = int(os.environ.get("MCP_TOOL_ARGS_PREVIEW_MAX_CHARS", "2000"))
+_TOOL_ARGS_PREVIEW_MAX_CHARS = int(os.environ.get("MCP_TOOL_ARGS_PREVIEW_MAX_CHARS", "0"))
 
 
 def _single_line(s: str) -> str:
@@ -237,17 +237,15 @@ def _normalize_and_truncate(s: str) -> str:
 
 
 def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
-    """
-    Stable, bounded preview of tool args for logs.
+    """Stable preview of tool args for logs.
 
-    Produces a single-line JSON string (truncated).
+    Uses repr() to avoid heavy JSON escaping that can trigger false downstream blocks.
     """
     try:
         sanitized = _jsonable(dict(args))
-        raw = json.dumps(sanitized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        raw = repr(sanitized)
         return _normalize_and_truncate(raw)
     except Exception:
-        # Worst-case fallback
         try:
             return _normalize_and_truncate(str(args))
         except Exception:
