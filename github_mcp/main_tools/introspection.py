@@ -25,6 +25,7 @@ _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = {
 
 
 def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed: bool) -> bool:
+    # UI policy only (does not define whether the tool is a write tool).
     if not write_action:
         return False
     if not write_allowed:
@@ -165,7 +166,6 @@ def list_write_tools() -> Dict[str, Any]:
 
 def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
     """Best-effort attribute resolution across tool and function wrappers."""
-
     if hasattr(tool, name):
         return getattr(tool, name)
     private = f"__mcp_{name}__"
@@ -186,13 +186,10 @@ def _tool_tags(tool: Any, func: Any) -> list[str]:
 def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
-    Important: this endpoint is used as the canonical "schema registry" by
-    assistants. It must remain readable even when write actions are disabled.
-
-    Execution gating should be enforced at invocation time; schema visibility
-    is always-on so callers can reliably validate payloads.
+    Canonical “schema registry” used by assistants/clients.
+    - Inherent tool classification is always reported as write_action (True/False).
+    - Dynamic gating is reported separately as write_enabled per tool.
     """
-
     m = _main()
     compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
 
@@ -217,12 +214,9 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             if full_doc and len(full_doc) > len(description):
                 description = full_doc
 
+        # Compact mode: keep only first line, but do NOT truncate characters.
         if compact_mode and description:
-            compact_description = description.splitlines()[0].strip() or description
-            max_length = 200
-            if len(compact_description) > max_length:
-                compact_description = f"{compact_description[: max_length - 3].rstrip()}..."
-            description = compact_description
+            description = description.splitlines()[0].strip() or description
 
         visibility = (
             getattr(func, "__mcp_visibility__", None)
@@ -231,10 +225,17 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         )
 
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
+        write_enabled = (not base_write_action) or write_allowed
+
         tool_info: Dict[str, Any] = {
             "name": name_str,
             "visibility": str(visibility),
-            "write_action": _ui_prompt_write_action(
+            # Correct semantic classification:
+            "write_action": base_write_action,
+            # Dynamic gating:
+            "write_enabled": bool(write_enabled),
+            # UI policy hint (separate from write_action):
+            "ui_prompt": _ui_prompt_write_action(
                 name_str,
                 base_write_action,
                 write_allowed=write_allowed,
@@ -255,7 +256,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             tool_info["tags"] = sorted(_tool_tags(tool, func))
 
         if include_parameters:
-            # Prefer a pre-computed schema cached on the registered function wrapper.
             schema = getattr(func, "__mcp_input_schema__", None)
             if not isinstance(schema, Mapping):
                 schema = m._normalize_input_schema(tool)
@@ -271,6 +271,8 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             "description": "Enumerate every available MCP tool with optional schemas.",
             "visibility": "public",
             "write_action": False,
+            "write_enabled": True,
+            "ui_prompt": False,
         }
         if not compact_mode:
             synthetic["tags"] = ["meta"]
@@ -284,7 +286,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
                 "additionalProperties": False,
             }
         tools.append(synthetic)
-        seen_names.add("list_all_actions")
 
     tools.sort(key=lambda entry: entry["name"])
 
@@ -301,7 +302,6 @@ async def list_tools(
     name_prefix: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Lightweight tool catalog."""
-
     if only_write and only_read:
         raise ValueError("only_write and only_read cannot both be true")
 
@@ -324,6 +324,7 @@ async def list_tools(
             {
                 "name": name,
                 "write_action": write_action,
+                "write_enabled": bool(entry.get("write_enabled", True)),
                 "operation": entry.get("operation"),
                 "risk_level": entry.get("risk_level"),
                 "visibility": entry.get("visibility"),
@@ -342,8 +343,12 @@ async def describe_tool(
     name: Optional[str] = None,
     names: Optional[List[str]] = None,
     include_parameters: bool = True,
+    tool_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Inspect one or more registered MCP tools by name."""
+    # Back-compat: some callers pass tool_name.
+    if not name and tool_name:
+        name = tool_name
 
     if names is None or len(names) == 0:
         if not name:
@@ -373,10 +378,10 @@ async def describe_tool(
     found: List[Dict[str, Any]] = []
     missing: List[str] = []
 
-    for tool_name in names:
-        entry = tools_index.get(tool_name)
+    for tool_name2 in names:
+        entry = tools_index.get(tool_name2)
         if entry is None:
-            missing.append(tool_name)
+            missing.append(tool_name2)
         else:
             found.append(entry)
 
@@ -384,7 +389,6 @@ async def describe_tool(
         raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
 
     result: Dict[str, Any] = {"tools": found}
-
     first = found[0]
     for key, value in first.items():
         result.setdefault(key, value)
@@ -397,12 +401,10 @@ async def describe_tool(
 
 def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
-
     if args is not None and not isinstance(args, Mapping):
         raise TypeError("args must be a mapping")
 
     m = _main()
-
     found = m._find_registered_tool(tool_name)
     if found is None:
         available = sorted(
@@ -438,6 +440,9 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         for error in sorted(validator.iter_errors(normalized_args), key=str)
     ]
 
+    base_write_action = bool(_tool_attr(tool, func, "write_action", False))
+    write_allowed = bool(m.server.WRITE_ALLOWED)
+
     return {
         "tool": tool_name,
         "valid": len(errors) == 0,
@@ -448,7 +453,8 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
             or getattr(tool, "__mcp_visibility__", None)
             or "public"
         ),
-        "write_action": bool(_tool_attr(tool, func, "write_action", False)),
+        "write_action": base_write_action,
+        "write_enabled": (not base_write_action) or write_allowed,
     }
 
 
@@ -458,7 +464,6 @@ async def validate_tool_args(
     tool_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Validate candidate payload(s) against tool input schemas without running them."""
-
     if not tool_names:
         if not tool_name:
             raise ValueError("validate_tool_args requires 'tool_name' or 'tool_names'.")
@@ -466,7 +471,6 @@ async def validate_tool_args(
 
     seen = set()
     normalized: List[str] = []
-
     for candidate in tool_names:
         if not isinstance(candidate, str):
             raise TypeError("tool_names must be a list of strings.")
@@ -501,7 +505,6 @@ async def validate_tool_args(
         raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
 
     response: Dict[str, Any] = {"results": results}
-
     first = results[0]
     for key, value in first.items():
         response.setdefault(key, value)
