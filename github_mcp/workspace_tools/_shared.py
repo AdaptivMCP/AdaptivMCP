@@ -11,6 +11,7 @@ from github_mcp.workspace import (
     _clone_repo,
     _prepare_temp_virtualenv,
     _run_shell,
+    _git_auth_env,
 )
 
 def _tw():
@@ -20,7 +21,6 @@ def _tw():
 
 def _safe_branch_slug(value: str, *, max_len: int = 200) -> str:
     """Return a conservative branch slug derived from an arbitrary string."""
-
     cleaned = re.sub(r"[^A-Za-z0-9._/-]+", "-", (value or "").strip())
     cleaned = cleaned.strip("-/.")
     if not cleaned:
@@ -32,12 +32,16 @@ def _safe_branch_slug(value: str, *, max_len: int = 200) -> str:
     if not re.match(r"^[A-Za-z0-9]", cleaned):
         cleaned = f"b-{cleaned}"[:max_len]
     return cleaned
+
+
 async def _run_shell_ok(deps: Dict[str, Any], cmd: str, *, cwd: str, timeout_seconds: int) -> Dict[str, Any]:
     res = await deps["run_shell"](cmd, cwd=cwd, timeout_seconds=timeout_seconds)
     if res.get("exit_code", 0) != 0:
         stderr = res.get("stderr", "") or res.get("stdout", "")
         raise GitHubAPIError(f"Command failed: {cmd}: {stderr}")
     return res
+
+
 def _git_state_markers(repo_dir: str) -> Dict[str, bool]:
     git_dir = os.path.join(repo_dir, ".git")
     return {
@@ -47,11 +51,12 @@ def _git_state_markers(repo_dir: str) -> Dict[str, bool]:
         "cherry_pick_in_progress": os.path.exists(os.path.join(git_dir, "CHERRY_PICK_HEAD")),
         "revert_in_progress": os.path.exists(os.path.join(git_dir, "REVERT_HEAD")),
     }
+
+
 async def _diagnose_workspace_branch(
     deps: Dict[str, Any], *, repo_dir: str, expected_branch: str
 ) -> Dict[str, Any]:
     """Return lightweight diagnostics used to detect a mangled workspace."""
-
     diag: Dict[str, Any] = {"expected_branch": expected_branch}
     show_branch = await deps["run_shell"](
         "git branch --show-current", cwd=repo_dir, timeout_seconds=60
@@ -89,11 +94,12 @@ async def _diagnose_workspace_branch(
     diag["mangled"] = mangled
     diag["detached_or_wrong_branch"] = detached_or_wrong_branch
     return diag
+
+
 async def _delete_branch_via_workspace(
     deps: Dict[str, Any], *, full_name: str, branch: str
 ) -> Dict[str, Any]:
     """Delete a branch via git push (remote) + best-effort local deletion."""
-
     default_branch = _tw()._default_branch_for_repo(full_name)
     if branch == default_branch:
         raise GitHubAPIError(f"Refusing to delete default branch {default_branch!r}")
@@ -120,15 +126,51 @@ async def _delete_branch_via_workspace(
         "delete_remote": delete_remote,
         "delete_local": delete_local,
     }
+
+
 def _workspace_deps() -> Dict[str, Any]:
+    """
+    Return workspace dependencies.
+
+    Important change: wrap run_shell so that any git command automatically
+    receives the GitHub auth header env (GIT_HTTP_EXTRAHEADER + config-env),
+    enabling `git push`/`git fetch` in non-interactive environments.
+    """
     main_module = sys.modules.get("main")
+    clone_repo_fn = getattr(main_module, "_clone_repo", _clone_repo)
+    base_run_shell = getattr(main_module, "_run_shell", _run_shell)
+    prepare_venv_fn = getattr(main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv)
+
+    async def run_shell_with_git_auth(
+        cmd: str,
+        *,
+        cwd: Optional[str] = None,
+        timeout_seconds: int = 300,
+        env: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        merged: Dict[str, str] = {}
+        if env:
+            merged.update(env)
+
+        # Only inject auth for git commands (keeps non-git commands untouched).
+        if isinstance(cmd, str) and cmd.lstrip().startswith("git "):
+            for k, v in _git_auth_env().items():
+                merged.setdefault(k, v)
+
+        return await base_run_shell(
+            cmd,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            env=(merged if merged else None),
+        )
+
     return {
-        "clone_repo": getattr(main_module, "_clone_repo", _clone_repo),
-        "run_shell": getattr(main_module, "_run_shell", _run_shell),
-        "prepare_temp_virtualenv": getattr(
-            main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv
-        ),
+        "clone_repo": clone_repo_fn,
+        "run_shell": run_shell_with_git_auth,
+        "prepare_temp_virtualenv": prepare_venv_fn,
     }
+
+
 def _resolve_full_name(
     full_name: Optional[str], *, owner: Optional[str] = None, repo: Optional[str] = None
 ) -> str:
@@ -137,6 +179,8 @@ def _resolve_full_name(
     if isinstance(owner, str) and owner.strip() and isinstance(repo, str) and repo.strip():
         return f"{owner.strip()}/{repo.strip()}"
     return CONTROLLER_REPO
+
+
 def _resolve_ref(ref: str, *, branch: Optional[str] = None) -> str:
     if isinstance(branch, str) and branch.strip():
         return branch.strip()
