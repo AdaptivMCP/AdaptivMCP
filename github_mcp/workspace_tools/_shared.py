@@ -115,7 +115,6 @@ async def _delete_branch_via_workspace(
         f"git branch -D {shlex.quote(branch)}", cwd=repo_dir, timeout_seconds=120
     )
     return {
-        "repo_dir": repo_dir,
         "default_branch": default_branch,
         "deleted_branch": branch,
         "delete_remote": delete_remote,
