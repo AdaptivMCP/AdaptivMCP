@@ -14,29 +14,16 @@ This document provides a concise tool catalog grouped by function.
 ### Repository & search
 
 - `get_repository` — repository metadata.
-- `list_repository_tree` — server-side tree listing.
-- `search` — GitHub search (code/issues/commits/users/etc.).
 - `fetch_url` — fetch an external HTTPS URL.
 
 ### Workspace
 
-- `ensure_workspace_clone` — persistent clone for a repo/ref.
 - `render_shell` — Render-centric shell command that clones from the default branch, optionally creates a new branch, then runs a command in the workspace.
 - `terminal_command` — run shell commands in the workspace.
-- `get_workspace_file_contents` — read a file from the workspace.
-- `set_workspace_file_contents` — write a file (full replacement) in the workspace.
-- `get_workspace_changes_summary` — summarize workspace changes.
-- `commit_workspace` / `commit_workspace_files` — commit workspace changes.
 
-### Files (GitHub API)
-
-- `get_file_contents` / `fetch_files` — fetch file(s) from GitHub.
-- `create_file` — create a new file.
-- `apply_text_update_and_commit` — update a file by replacing full contents.
-- `apply_patch_and_commit` — apply a unified diff patch (discouraged for normal editing).
-- `move_file` — rename/move a path.
-- `delete_file` — delete a file.
-- `update_file_from_workspace` — push a workspace-edited file back to GitHub.
+Note: file-content and workspace file management tools are disabled by default in
+this deployment to keep all editing and inspection in the shell. Use
+`MCP_TOOL_DENYLIST` to override.
 
 ### Branches & PRs
 
