@@ -28,12 +28,13 @@ async def workspace_create_branch(
     full_name: Optional[str] = None,
     base_ref: str = "main",
     new_branch: str = "",
+    push: bool = True,
     *,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create a branch using the workspace (git).
+    """Create a branch using the workspace (git), optionally pushing to origin.
 
     This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
     """
@@ -68,10 +69,22 @@ async def workspace_create_branch(
             stderr = checkout.get("stderr", "") or checkout.get("stdout", "")
             raise GitHubAPIError(f"git checkout -b failed: {stderr}")
 
+        push_result = None
+        if push:
+            push_result = await deps["run_shell"](
+                f"git push -u origin {shlex.quote(new_branch)}",
+                cwd=repo_dir,
+                timeout_seconds=300,
+            )
+            if push_result.get("exit_code", 0) != 0:
+                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
+                raise GitHubAPIError(f"git push failed: {stderr}")
+
         return {
             "base_ref": effective_base,
             "new_branch": new_branch,
             "checkout": checkout,
+            "push": push_result,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_create_branch")
@@ -177,7 +190,7 @@ async def workspace_self_heal_branch(
       1) Diagnoses the workspace clone for ``branch``.
       2) Optionally deletes the mangled branch (remote + best-effort local).
       3) Resets the base branch workspace (default: ``main``).
-      4) Creates a new fresh branch.
+      4) Creates + pushes a new fresh branch.
       5) Ensures a clean clone for the new branch.
       6) Optionally returns a small repo snapshot to rebuild "mental state".
 
@@ -334,7 +347,7 @@ async def workspace_self_heal_branch(
 
         step(
             "Create fresh branch",
-            f"Creating new branch '{candidate}' from '{effective_base}'.",
+            f"Creating and pushing new branch '{candidate}' from '{effective_base}'.",
             new_branch=candidate,
         )
 
@@ -350,11 +363,18 @@ async def workspace_self_heal_branch(
             cwd=base_repo_dir,
             timeout_seconds=120,
         )
+        await _run_shell_ok(
+            deps,
+            f"git push -u origin {shlex.quote(candidate)}",
+            cwd=base_repo_dir,
+            timeout_seconds=300,
+        )
+
         # Use the freshly checked out local workspace for the new branch.
         new_repo_dir = base_repo_dir
         step(
             "Fresh workspace ready",
-            f"Prepared a clean local workspace for '{candidate}'.",
+            f"Created a clean workspace for '{candidate}'.",
             repo_dir=new_repo_dir,
         )
 

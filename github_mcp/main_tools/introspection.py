@@ -31,7 +31,7 @@ def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed
     if tool_name in _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS:
         return True
     lowered = tool_name.lower()
-    return "commit" in lowered
+    return "commit" in lowered or "push" in lowered
 
 
 def list_write_tools() -> Dict[str, Any]:
@@ -93,14 +93,14 @@ def list_write_tools() -> Dict[str, Any]:
         {
             "name": "commit_workspace",
             "category": "workspace",
-            "description": "Commit changes from the persistent workspace.",
-            "notes": "Stages changes and commits with a provided message.",
+            "description": "Commit and optionally push changes from the persistent workspace.",
+            "notes": "Stages changes, commits with a provided message, and can push to the effective branch.",
         },
         {
             "name": "commit_workspace_files",
             "category": "workspace",
             "description": "Commit a specific list of files from the persistent workspace.",
-            "notes": "Use to avoid staging temporary artifacts while committing changes to the branch.",
+            "notes": "Use to avoid staging temporary artifacts while still pushing changes to the branch.",
         },
         {
             "name": "run_tests",

@@ -21,6 +21,7 @@ async def render_shell(
     *,
     command: str = "echo hello Render",
     create_branch: Optional[str] = None,
+    push_new_branch: bool = True,
     ref: str = "main",
     branch: Optional[str] = None,
     timeout_seconds: int = 300,
@@ -56,6 +57,7 @@ async def render_shell(
                 full_name=full_name,
                 base_ref=effective_ref,
                 new_branch=create_branch,
+                push=push_new_branch,
             )
             target_ref = create_branch
 

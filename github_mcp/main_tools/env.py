@@ -224,7 +224,7 @@ async def validate_environment() -> Dict[str, Any]:
                 add_check(
                     "controller_repo_push_permission",
                     "warning",
-                    "Could not confirm push permission for the controller repository; ensure the token can write before using commit tools",
+                    "Could not confirm push permission for the controller repository; ensure the token can push before using commit or push tools",
                     {"full_name": controller_repo, "permissions": permissions},
                 )
 
