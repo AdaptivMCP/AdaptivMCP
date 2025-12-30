@@ -661,7 +661,15 @@ def mcp_tool(
             wrapper.__mcp_write_action__ = bool(write_action)
             wrapper.__mcp_visibility__ = visibility
             wrapper.__mcp_tags__ = normalized_tags
-            _apply_tool_metadata(wrapper.__mcp_tool__, schema, visibility, normalized_tags)
+            _apply_tool_metadata(
+                wrapper.__mcp_tool__,
+                schema,
+                visibility,
+                normalized_tags,
+                write_action=bool(write_action),
+                write_allowed=bool(WRITE_ALLOWED),
+            )
+
             return wrapper
 
         @functools.wraps(func)
@@ -788,7 +796,15 @@ def mcp_tool(
         wrapper.__mcp_write_action__ = bool(write_action)
         wrapper.__mcp_visibility__ = visibility
         wrapper.__mcp_tags__ = normalized_tags
-        _apply_tool_metadata(wrapper.__mcp_tool__, schema, visibility, normalized_tags)
+        _apply_tool_metadata(
+            wrapper.__mcp_tool__,
+            schema,
+            visibility,
+            normalized_tags,
+            write_action=bool(write_action),
+            write_allowed=bool(WRITE_ALLOWED),
+        )
+
         return wrapper
 
     return decorator
@@ -804,5 +820,36 @@ def register_extra_tools_if_available() -> None:
 
 
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
-    # No-op: no tag/side-effect metadata enforcement.
-    return None
+    allowed = bool(WRITE_ALLOWED) if _write_allowed is None else bool(_write_allowed)
+
+    for tool_obj, func in list(_REGISTERED_MCP_TOOLS):
+        try:
+            base_write = bool(
+                getattr(func, "__mcp_write_action__", None)
+                if getattr(func, "__mcp_write_action__", None) is not None
+                else getattr(tool_obj, "write_action", False)
+            )
+            visibility = (
+                getattr(func, "__mcp_visibility__", None)
+                or getattr(tool_obj, "__mcp_visibility__", None)
+                or "public"
+            )
+            tags = getattr(func, "__mcp_tags__", None) or getattr(tool_obj, "tags", None) or []
+
+            schema = getattr(func, "__mcp_input_schema__", None)
+            if not isinstance(schema, Mapping):
+                schema = _normalize_input_schema(tool_obj)
+            if not isinstance(schema, Mapping):
+                # Best-effort fallback; avoids crashing refresh.
+                schema = {"type": "object", "properties": {}}
+
+            _apply_tool_metadata(
+                tool_obj,
+                schema,
+                visibility,
+                tags,
+                write_action=base_write,
+                write_allowed=allowed,
+            )
+        except Exception:
+            continue
