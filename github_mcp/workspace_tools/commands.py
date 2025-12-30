@@ -1,6 +1,5 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
-import re
 import shlex
 from typing import Any, Dict, Optional
 
@@ -176,16 +175,25 @@ async def terminal_command(
             stderr = result.get("stderr") or ""
             stdout = result.get("stdout") or ""
             combined = f"{stderr}\n{stdout}"
-            mm = re.search(
-                r"ModuleNotFoundError: No module named ['\"]([^'\"]+)['\"]",
-                combined,
-            )
-            if mm:
-                out["dependency_hint"] = {
-                    "missing_module": mm.group(1),
-                    "message": "Missing python dependency. Re-run terminal_command with installing_dependencies=true.",
-                }
-
+            # Lightweight dependency hint (no regex).
+            marker = 'ModuleNotFoundError: No module named '
+            pos = combined.find(marker)
+            if pos != -1:
+                tail = combined[pos + len(marker):].strip()
+                missing = ""
+                if tail[:1] in ("\"", "'"):
+                    q = tail[0]
+                    tail2 = tail[1:]
+                    endq = tail2.find(q)
+                    missing = tail2[:endq] if endq != -1 else tail2
+                else:
+                    missing = tail.split()[0] if tail else ""
+                missing = (missing or "").strip()
+                if missing:
+                    out["dependency_hint"] = {
+                        "missing_module": missing,
+                        "message": "Missing python dependency. Re-run terminal_command with installing_dependencies=true.",
+                    }
         return out
     except Exception as exc:
         return _structured_tool_error(exc, context="terminal_command", tool_surface="terminal_command")
