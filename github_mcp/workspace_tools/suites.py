@@ -84,7 +84,6 @@ async def run_tests(
         "status": status,
         "command": test_command,
         "exit_code": exit_code,
-        "repo_dir": result.get("repo_dir"),
         "workdir": result.get("workdir"),
         "result": cmd_result,
         "controller_log": summary_lines,
