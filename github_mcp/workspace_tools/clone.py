@@ -37,7 +37,6 @@ async def ensure_workspace_clone(
         )
 
         return {
-            "repo_dir": repo_dir,
             "branch": effective_ref,
             "reset": reset,
             "created": not existed,
