@@ -532,7 +532,7 @@ async def commit_workspace_files(
     )
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=True)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
     """Update the WRITE_ALLOWED state used for write gating."""
 

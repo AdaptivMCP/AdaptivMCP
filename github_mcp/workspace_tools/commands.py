@@ -16,7 +16,7 @@ def _tw():
     return tw
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=True)
 async def render_shell(
     full_name: Optional[str] = None,
     *,
@@ -98,7 +98,7 @@ async def render_shell(
         return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=True)
 async def terminal_command(
     full_name: Optional[str] = None,
     ref: str = "main",
@@ -191,7 +191,7 @@ async def terminal_command(
         return _structured_tool_error(exc, context="terminal_command", tool_surface="terminal_command")
 
 
-@mcp_tool(write_action=False, visibility="hidden")
+@mcp_tool(write_action=True, visibility="hidden")
 async def run_command(
     full_name: Optional[str] = None,
     ref: str = "main",
