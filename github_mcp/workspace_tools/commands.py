@@ -1,6 +1,7 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
 import re
+import shlex
 from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
@@ -51,6 +52,7 @@ async def render_shell(
 
         branch_creation: Optional[Dict[str, Any]] = None
         target_ref = effective_ref
+        effective_branch_arg = effective_ref
 
         if create_branch:
             branch_creation = await _tw().workspace_create_branch(
@@ -59,7 +61,17 @@ async def render_shell(
                 new_branch=create_branch,
                 push=push_new_branch,
             )
-            target_ref = create_branch
+
+            if push_new_branch:
+                # Remote branch exists, safe to target it directly.
+                target_ref = create_branch
+                effective_branch_arg = create_branch
+            else:
+                # IMPORTANT: branch exists only locally in the base workspace.
+                # Do NOT try to clone a non-existent remote branch.
+                target_ref = effective_ref
+                effective_branch_arg = effective_ref
+                command = f"git checkout {shlex.quote(create_branch)} && {command}"
 
         command_result = await _tw().terminal_command(
             full_name=full_name,
@@ -71,7 +83,7 @@ async def render_shell(
             installing_dependencies=installing_dependencies,
             owner=owner,
             repo=repo,
-            branch=target_ref,
+            branch=effective_branch_arg,
         )
 
         return {
@@ -119,9 +131,7 @@ async def terminal_command(
         cwd = repo_dir
         if workdir:
             cwd = os.path.join(repo_dir, workdir)
-        # Optional dependency installation. If requested, install dev-requirements.txt (preferred)
-        # or requirements.txt when present
-        # (unless the command already appears to be installing deps).
+
         install_result = None
         if installing_dependencies and use_temp_venv:
             preferred = os.path.join(repo_dir, "dev-requirements.txt")
@@ -158,7 +168,6 @@ async def terminal_command(
             "result": result,
         }
 
-        # If a python dependency is missing, nudge the assistant to rerun with deps installation.
         if (
             not installing_dependencies
             and isinstance(result, dict)
