@@ -542,13 +542,21 @@ async def commit_workspace_files(
 
 @mcp_tool(write_action=True)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Update the WRITE_ALLOWED state used for write gating."""
+    """Update the cross-worker WRITE_ALLOWED gate and refresh tool metadata.
+
+    This tool is user-facing: enabling writes should immediately reflect in tool
+    metadata (read/write classification) and in the returned response.
+    """
 
     import github_mcp.mcp_server.context as _ctx
 
     _ctx.set_write_allowed(bool(approved))
-    refresh_registered_tool_metadata(server.WRITE_ALLOWED)
-    return {"write_allowed": bool(server.WRITE_ALLOWED)}
+    refresh_registered_tool_metadata(_ctx.WRITE_ALLOWED)
+    return {
+        "write_allowed": bool(_ctx.WRITE_ALLOWED),
+        "write_allowed_debug": _ctx.get_write_allowed_debug(),
+    }
+
 
 
 # ------------------------------------------------------------------------------
