@@ -5,24 +5,60 @@ import pytest
 
 
 def _install_starlette_stubs() -> None:
+    """Install minimal Starlette stubs for import-time evaluation.
+
+    These tests validate payload normalization and tool-registry glue code.
+    The project supports running without Starlette installed, so we provide
+    a minimal stub implementation. The stub set must be complete enough to
+    avoid breaking other tests that may import Starlette middleware helpers.
+    """
+
     starlette_module = types.ModuleType("starlette")
+
+    # starlette.applications
+    applications_module = types.ModuleType("starlette.applications")
+
+    class Starlette:  # pragma: no cover - stub
+        def __init__(self, *args, **kwargs):
+            self.user_middleware = []
+
+        def add_middleware(self, cls, **options):
+            # Mirror the interface used by main._configure_trusted_hosts
+            self.user_middleware.append(types.SimpleNamespace(cls=cls, options=options))
+
+    applications_module.Starlette = Starlette
+
+    # starlette.middleware.trustedhost
+    middleware_module = types.ModuleType("starlette.middleware")
+    trustedhost_module = types.ModuleType("starlette.middleware.trustedhost")
+
+    class TrustedHostMiddleware:  # pragma: no cover - stub
+        pass
+
+    trustedhost_module.TrustedHostMiddleware = TrustedHostMiddleware
+
+    # starlette.requests / responses
     requests_module = types.ModuleType("starlette.requests")
     responses_module = types.ModuleType("starlette.responses")
 
-    class Request:  # pragma: no cover - stub for import
+    class Request:  # pragma: no cover - stub
         pass
 
-    class Response:  # pragma: no cover - stub for import
+    class Response:  # pragma: no cover - stub
         pass
 
-    class JSONResponse(Response):  # pragma: no cover - stub for import
+    class JSONResponse(Response):  # pragma: no cover - stub
         pass
 
     requests_module.Request = Request
     responses_module.Response = Response
     responses_module.JSONResponse = JSONResponse
 
+    # Register modules.
     sys.modules.setdefault("starlette", starlette_module)
+    sys.modules.setdefault("starlette.applications", applications_module)
+    sys.modules.setdefault("starlette.middleware", middleware_module)
+    sys.modules.setdefault("starlette.middleware.trustedhost", trustedhost_module)
     sys.modules.setdefault("starlette.requests", requests_module)
     sys.modules.setdefault("starlette.responses", responses_module)
 
