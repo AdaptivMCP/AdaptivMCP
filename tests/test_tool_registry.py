@@ -41,6 +41,14 @@ def _install_starlette_stubs() -> None:
     requests_module = types.ModuleType("starlette.requests")
     responses_module = types.ModuleType("starlette.responses")
 
+    staticfiles_module = types.ModuleType("starlette.staticfiles")
+
+    class StaticFiles:  # pragma: no cover - stub
+        def __init__(self, *args, **kwargs):
+            pass
+
+    staticfiles_module.StaticFiles = StaticFiles
+
     class Request:  # pragma: no cover - stub
         pass
 
@@ -61,6 +69,7 @@ def _install_starlette_stubs() -> None:
     sys.modules.setdefault("starlette.middleware.trustedhost", trustedhost_module)
     sys.modules.setdefault("starlette.requests", requests_module)
     sys.modules.setdefault("starlette.responses", responses_module)
+    sys.modules.setdefault("starlette.staticfiles", staticfiles_module)
 
 
 _install_starlette_stubs()
