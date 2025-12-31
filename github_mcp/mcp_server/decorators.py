@@ -27,7 +27,7 @@ import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
 from github_mcp.config import DETAILED_LEVEL, TOOLS_LOGGER, TOOL_DENYLIST
-from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, get_request_context, mcp
+from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, get_request_context, mcp, FASTMCP_AVAILABLE
 from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
 from github_mcp.mcp_server.user_friendly import attach_error_user_facing_fields, attach_user_facing_fields
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
@@ -444,6 +444,11 @@ def _register_with_fastmcp(
     description: Optional[str],
     tags: Optional[Iterable[str]] = None,
 ) -> Any:
+    if not FASTMCP_AVAILABLE:
+        # FastMCP is optional. When it is not installed, do not attempt
+        # MCP registration. Tool wrappers still exist for metadata/logging.
+        return None
+
     """
     Robust FastMCP registration across signature variants.
 
