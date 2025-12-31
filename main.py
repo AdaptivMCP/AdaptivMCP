@@ -96,6 +96,7 @@ from github_mcp.http_routes.tool_registry import register_tool_registry_routes
 from starlette.staticfiles import StaticFiles
 from starlette.responses import PlainTextResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.applications import Starlette
 
 
 
@@ -355,10 +356,7 @@ else:
     # In minimal/test environments FastMCP may be absent or may not expose an ASGI
     # app factory. Avoid raising at import time so helper functions (e.g.
     # _configure_trusted_hosts) remain testable.
-    try:
-        app = Starlette()
-    except Exception:
-        app = None
+    app = Starlette()
 
 
 def _extract_hostname(value: str | None) -> str | None:
@@ -416,7 +414,8 @@ async def _handle_value_error(request, exc):
     raise exc
 
 
-app.add_exception_handler(ValueError, _handle_value_error)
+if app is not None:
+    app.add_exception_handler(ValueError, _handle_value_error)
 
 
 
