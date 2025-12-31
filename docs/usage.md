@@ -37,7 +37,7 @@ The ASGI application is exposed in `main.py` as `app`.
 
 - GET /sse — MCP transport endpoint (SSE)
 - GET /healthz — JSON health status, controller defaults, and metrics snapshot
-- GET /v1/actions and GET /actions — OpenAI Actions-compatible tool listing
+- GET /v1/actions and GET /actions — Actions-compatible tool listing
 - GET /static/* — static assets (if `assets/` is present)
 
 ## Recommended workflows

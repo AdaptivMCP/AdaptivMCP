@@ -142,7 +142,7 @@ async def run_quality_suite(
       2) Tests via `run_tests`
 
     This suite intentionally does not run token-like string scanning. Token
-    redaction/sanitization happens at log/serialization boundaries.
+    logging happens at log/serialization boundaries.
     """
 
     controller_log: List[str] = [

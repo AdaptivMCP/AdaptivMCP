@@ -2,7 +2,7 @@
 
 Decorators and helpers for registering MCP tools.
 
-Behavioral contract (post-guardrail removal):
+Behavioral contract:
 - The only blocking control is WRITE_ALLOWED (true/false) for write tools.
 - Tool arguments are strictly validated against published input schemas.
 - Tags metadata is captured for introspection (side_effects/mutating are still ignored).

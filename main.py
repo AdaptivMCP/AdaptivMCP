@@ -542,13 +542,22 @@ async def commit_workspace_files(
 
 @mcp_tool(write_action=True)
 def authorize_write_actions(approved: bool = True) -> Dict[str, Any]:
-    """Update the WRITE_ALLOWED state used for write gating."""
+    """Update the cross-worker WRITE_ALLOWED gate and refresh tool metadata.
+
+    This tool is user-facing: toggling write access should immediately persist
+    to the shared gate file (so all workers converge) and update MCP tool
+    metadata so the ChatGPT UI correctly reflects read/write affordances.
+    """
 
     import github_mcp.mcp_server.context as _ctx
 
-    _ctx.set_write_allowed(bool(approved))
-    refresh_registered_tool_metadata(server.WRITE_ALLOWED)
-    return {"write_allowed": bool(server.WRITE_ALLOWED)}
+    effective = _ctx.set_write_allowed(bool(approved))
+    refresh_registered_tool_metadata(bool(effective))
+    return {
+        "write_allowed": bool(effective),
+        "write_allowed_debug": _ctx.get_write_allowed_debug(),
+    }
+
 
 
 # ------------------------------------------------------------------------------

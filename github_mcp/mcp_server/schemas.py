@@ -12,7 +12,7 @@ from typing import Any, Dict, Mapping, Optional, get_args, get_origin
 def _jsonable(value: Any) -> Any:
     """Convert arbitrary Python values into something JSON-serializable.
 
-    This is intentionally not a redaction/sanitization layer. It exists purely
+    This exists purely
     to keep structured logging and schema metadata stable when values include
     non-JSON types (exceptions, bytes, sets, pydantic models, etc.).
     """
@@ -242,8 +242,8 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     Uses repr() to avoid heavy JSON escaping that can trigger false downstream blocks.
     """
     try:
-        sanitized = _jsonable(dict(args))
-        raw = repr(sanitized)
+        jsonable_args = _jsonable(dict(args))
+        raw = repr(jsonable_args)
         return _normalize_and_truncate(raw)
     except Exception:
         try:
@@ -281,7 +281,7 @@ def _preflight_tool_args(
     """Prepare tool args for display/logging.
 
     Policy:
-    - No redaction.
+    - No transformation.
     - Ensure JSON-serializable output.
     """
     try:

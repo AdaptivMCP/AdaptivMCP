@@ -31,9 +31,6 @@ from github_mcp.config import GITHUB_LOGGER
 from github_mcp.metrics import _record_github_request as _record_github_request_metrics
 
 
-def _sanitize_url_for_logs(raw: str) -> str:
-    return (raw or "")
-
 
 
 def _derive_github_web_url(api_url: str) -> Optional[str]:
@@ -44,7 +41,6 @@ def _derive_github_web_url(api_url: str) -> Optional[str]:
     web URL so Render log links work for humans.
     """
 
-    api_url = _sanitize_url_for_logs(api_url)
 
     try:
         parsed = urlparse(api_url)
@@ -68,7 +64,6 @@ def _derive_github_web_url(api_url: str) -> Optional[str]:
 
 
 def _shorten_api_url(api_url: str) -> str:
-    api_url = _sanitize_url_for_logs(api_url)
     for prefix in ("https://api.github.com", "http://api.github.com"):
         if api_url.startswith(prefix):
             return api_url[len(prefix) :]
@@ -110,11 +105,10 @@ def _record_github_request(
     if method:
         log_extra["method"] = method
     if url:
-        url = _sanitize_url_for_logs(url)
         log_extra["url"] = url
         web_url = _derive_github_web_url(url)
         if web_url:
-            log_extra["web_url"] = _sanitize_url_for_logs(web_url)
+            log_extra["web_url"] = web_url
     if resp is not None:
         log_extra["rate_limit_remaining"] = resp.headers.get("X-RateLimit-Remaining")
     if exc is not None:

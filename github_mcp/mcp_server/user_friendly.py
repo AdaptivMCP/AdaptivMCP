@@ -9,7 +9,7 @@ When a tool returns a dict payload, we add:
 - summary: {title, bullets, next_steps}
 - user_message: multiline string for UIs that prefer a single message
 
-We do not redact. We do not alter authorization. We only format.
+We do not alter authorization. We only format.
 """
 
 from __future__ import annotations
