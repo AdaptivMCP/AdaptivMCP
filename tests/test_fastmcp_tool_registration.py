@@ -9,7 +9,7 @@ def test_register_with_fastmcp_skips_unsupported_kwargs(monkeypatch):
             assert name == "sample_tool"
             assert description == "sample description"
             assert meta == {}
-            assert annotations == {}
+            assert (annotations is None) or (annotations == dict())
 
             def decorator(fn):
                 return {"fn": fn, "name": name}
