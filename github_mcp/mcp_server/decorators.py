@@ -444,9 +444,11 @@ def _register_with_fastmcp(
     description: Optional[str],
     tags: Optional[Iterable[str]] = None,
 ) -> Any:
-    if not FASTMCP_AVAILABLE:
-        # FastMCP is optional. When it is not installed, do not attempt
-        # MCP registration. Tool wrappers still exist for metadata/logging.
+    # FastMCP is an optional dependency. In production, when it is not installed,
+    # `mcp` is typically unset/None and registration should be skipped. Unit tests
+    # may inject a FakeMCP into this module even when FastMCP is not installed;
+    # in that case we still exercise registration logic.
+    if not FASTMCP_AVAILABLE and (mcp is None or not hasattr(mcp, "tool")):
         return None
 
     """
