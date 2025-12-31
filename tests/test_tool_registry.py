@@ -76,7 +76,11 @@ def _install_starlette_stubs() -> None:
     sys.modules.setdefault("starlette.staticfiles", staticfiles_module)
 
 
-_install_starlette_stubs()
+
+@pytest.fixture
+def _starlette_stubs(monkeypatch):
+    _install_starlette_stubs()
+    yield
 
 from github_mcp.http_routes import tool_registry
 
@@ -100,5 +104,5 @@ from github_mcp.http_routes import tool_registry
         (None, {}),
     ],
 )
-def test_normalize_payload(payload, expected):
+def test_normalize_payload(_starlette_stubs, payload, expected):
     assert tool_registry._normalize_payload(payload) == expected
