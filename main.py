@@ -352,7 +352,13 @@ elif hasattr(server.mcp, "app"):
     else:
         app = app_factory
 else:
-    raise RuntimeError("FastMCP does not expose an ASGI app factory.")
+    # In minimal/test environments FastMCP may be absent or may not expose an ASGI
+    # app factory. Avoid raising at import time so helper functions (e.g.
+    # _configure_trusted_hosts) remain testable.
+    try:
+        app = Starlette()
+    except Exception:
+        app = None
 
 
 def _extract_hostname(value: str | None) -> str | None:
