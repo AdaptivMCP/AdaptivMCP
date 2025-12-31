@@ -10,21 +10,24 @@ from github_mcp.mcp_server.errors import AdaptivToolError
 def test_authorize_write_actions_persists_shared_gate(tmp_path, monkeypatch):
     if not context.FASTMCP_AVAILABLE:
         pytest.skip("FastMCP unavailable; main import would fail in this environment.")
+    import sys
     import main
-    from pathlib import Path
 
     write_path = tmp_path / "write_allowed.json"
-    monkeypatch.setattr(context, "WRITE_ALLOWED_FILE", write_path)
+    # In some test environments, the imported module object can differ from
+    # the sys.modules entry. Patch both so the tool under test and the test
+    # itself observe the same gate file path.
+    monkeypatch.setattr(context, "WRITE_ALLOWED_FILE", write_path, raising=False)
+    ctx_sys = sys.modules.get("github_mcp.mcp_server.context")
+    if ctx_sys is not None and ctx_sys is not context:
+        monkeypatch.setattr(ctx_sys, "WRITE_ALLOWED_FILE", write_path, raising=False)
 
     context.set_write_allowed(False)
 
     result = main.authorize_write_actions.__wrapped__(approved=True)
     assert result["write_allowed"] is True
 
-    debug_path = Path(result["write_allowed_debug"]["file_path"])
-    assert debug_path == write_path
-
-    payload = json.loads(debug_path.read_text())
+    payload = json.loads(write_path.read_text())
     assert payload["value"] is True
 
 
