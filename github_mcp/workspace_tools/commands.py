@@ -199,7 +199,7 @@ async def terminal_command(
         return _structured_tool_error(exc, context="terminal_command", tool_surface="terminal_command")
 
 
-@mcp_tool(write_action=True, visibility="hidden")
+@mcp_tool(write_action=True)
 async def run_command(
     full_name: Optional[str] = None,
     ref: str = "main",
