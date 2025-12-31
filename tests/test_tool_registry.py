@@ -58,9 +58,13 @@ def _install_starlette_stubs() -> None:
     class JSONResponse(Response):  # pragma: no cover - stub
         pass
 
+    class PlainTextResponse(Response):  # pragma: no cover - stub
+        pass
+
     requests_module.Request = Request
     responses_module.Response = Response
     responses_module.JSONResponse = JSONResponse
+    responses_module.PlainTextResponse = PlainTextResponse
 
     # Register modules.
     sys.modules.setdefault("starlette", starlette_module)
