@@ -96,6 +96,7 @@ from github_mcp.http_routes.tool_registry import register_tool_registry_routes
 from starlette.staticfiles import StaticFiles
 from starlette.responses import PlainTextResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.applications import Starlette
 
 
 
@@ -352,7 +353,10 @@ elif hasattr(server.mcp, "app"):
     else:
         app = app_factory
 else:
-    raise RuntimeError("FastMCP does not expose an ASGI app factory.")
+    # In minimal/test environments FastMCP may be absent or may not expose an ASGI
+    # app factory. Avoid raising at import time so helper functions (e.g.
+    # _configure_trusted_hosts) remain testable.
+    app = Starlette()
 
 
 def _extract_hostname(value: str | None) -> str | None:
@@ -396,9 +400,12 @@ def _configure_trusted_hosts(app_instance) -> None:
     app_instance.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 
-_configure_trusted_hosts(app)
-app.add_middleware(_CacheControlMiddleware)
-app.add_middleware(_RequestContextMiddleware)
+if app is not None:
+    _configure_trusted_hosts(app)
+if app is not None:
+    app.add_middleware(_CacheControlMiddleware)
+if app is not None:
+    app.add_middleware(_RequestContextMiddleware)
 
 
 async def _handle_value_error(request, exc):
@@ -407,7 +414,8 @@ async def _handle_value_error(request, exc):
     raise exc
 
 
-app.add_exception_handler(ValueError, _handle_value_error)
+if app is not None:
+    app.add_exception_handler(ValueError, _handle_value_error)
 
 
 

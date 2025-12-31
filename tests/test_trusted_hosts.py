@@ -10,7 +10,10 @@ import main
 def _get_allowed_hosts(app: Starlette) -> list[str]:
     for middleware in app.user_middleware:
         if middleware.cls is TrustedHostMiddleware:
-            return list(middleware.options.get("allowed_hosts", []))
+            opts = getattr(middleware, "options", None)
+            if opts is None:
+                opts = getattr(middleware, "kwargs", {})
+            return list((opts or {}).get("allowed_hosts", []))
     return []
 
 
