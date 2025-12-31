@@ -11,6 +11,8 @@ def test_authorize_write_actions_persists_shared_gate(tmp_path, monkeypatch):
     if not context.FASTMCP_AVAILABLE:
         pytest.skip("FastMCP unavailable; main import would fail in this environment.")
     import main
+    from pathlib import Path
+
     write_path = tmp_path / "write_allowed.json"
     monkeypatch.setattr(context, "WRITE_ALLOWED_FILE", write_path)
 
@@ -19,7 +21,10 @@ def test_authorize_write_actions_persists_shared_gate(tmp_path, monkeypatch):
     result = main.authorize_write_actions.__wrapped__(approved=True)
     assert result["write_allowed"] is True
 
-    payload = json.loads(write_path.read_text())
+    debug_path = Path(result["write_allowed_debug"]["file_path"])
+    assert debug_path == write_path
+
+    payload = json.loads(debug_path.read_text())
     assert payload["value"] is True
 
 
