@@ -149,9 +149,9 @@ async def terminal_command(
                 if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
                     stderr = install_result.get("stderr") or ""
                     stdout = install_result.get("stdout") or ""
-                    raise GitHubAPIError(
-                        "Dependency installation failed: " + (stderr.strip() or stdout.strip())
-                    )
+                    # Do not raise; surface the failure and continue.
+                    install_result.setdefault("install_failed", True)
+                    install_result.setdefault("install_error", (stderr.strip() or stdout.strip()))
 
         result = await deps["run_shell"](
             command,
@@ -199,7 +199,7 @@ async def terminal_command(
         return _structured_tool_error(exc, context="terminal_command", tool_surface="terminal_command")
 
 
-@mcp_tool(write_action=True, visibility="hidden")
+@mcp_tool(write_action=True)
 async def run_command(
     full_name: Optional[str] = None,
     ref: str = "main",
