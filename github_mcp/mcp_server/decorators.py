@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 from github_mcp.config import DETAILED_LEVEL, TOOLS_LOGGER, TOOL_DENYLIST
 from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, get_request_context, mcp
 from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
+from github_mcp.mcp_server.user_friendly import attach_error_user_facing_fields, attach_user_facing_fields
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
@@ -330,6 +331,7 @@ def _emit_tool_error(
         errored=True,
     )
     structured_error = _structured_tool_error(exc, context=tool_name, path=None)
+    structured_error = attach_error_user_facing_fields(tool_name, structured_error)
     _record_recent_tool_event(
         {
             "ts": time.time(),
@@ -642,6 +644,7 @@ def mcp_tool(
                         "result_type": type(result).__name__,
                     }
                 )
+                result = attach_user_facing_fields(tool_name, result)
                 return result
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -777,6 +780,7 @@ def mcp_tool(
                     "result_type": type(result).__name__,
                 }
             )
+            result = attach_user_facing_fields(tool_name, result)
             return result
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(
