@@ -509,7 +509,6 @@ def _register_with_fastmcp(
         "description": description,
         "tags": normalized_tags,
         "meta": {},
-        "annotations": _jsonable({}),
     }
 
     attempts = [full, base, {"name": name}]
