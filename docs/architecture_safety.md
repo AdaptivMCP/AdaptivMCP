@@ -235,7 +235,7 @@ Console output is intentionally short and readable:
 
 - Example: `[tool] terminal_command ok 475ms (tool_call.ok)`
 
-The full structured payload is attached as a compact JSON string under the log extra field `tool_json`.
+The full structured payload is attached as a compact JSON string under the log extra field `tool_event`.
 
 Canonical fields in the structured payload:
 

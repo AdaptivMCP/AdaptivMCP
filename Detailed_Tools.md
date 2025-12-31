@@ -57,6 +57,6 @@ this deployment to keep all editing and inspection in the shell. Use
 Tools emit structured lifecycle events to provider logs.
 
 - Console line format: `[tool] <tool_name> <status> <duration_ms>ms (<event>)`
-- Full structured payload: available as compact JSON in log extra field `tool_json`
+- Full structured payload: available as compact JSON in log extra field `tool_event`
 
 This is designed to match what you see in Render logs while remaining readable.
