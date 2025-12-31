@@ -27,7 +27,7 @@ import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
 from github_mcp.config import DETAILED_LEVEL, TOOLS_LOGGER, TOOL_DENYLIST
-from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, get_request_context, mcp, FASTMCP_AVAILABLE
+from github_mcp.mcp_server.context import WRITE_ALLOWED, get_write_allowed, get_request_context, _record_recent_tool_event
 from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
 from github_mcp.mcp_server.user_friendly import attach_error_user_facing_fields, attach_user_facing_fields
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
@@ -39,6 +39,17 @@ from github_mcp.mcp_server.schemas import (
     _jsonable,
 )
 from github_mcp.metrics import _record_tool_call
+
+# Optional registration backend; defined for import-time stability.
+mcp = None
+
+# Optional dependency availability. Tests may inject a FakeMCP even when
+# the fastmcp package is not installed.
+try:
+    import importlib.util as _importlib_util
+    FASTMCP_AVAILABLE = _importlib_util.find_spec("fastmcp") is not None
+except Exception:  # pragma: no cover
+    FASTMCP_AVAILABLE = False
 
 
 def _parse_bool(value: Optional[str]) -> bool:
@@ -179,7 +190,7 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
 
     raise AdaptivToolError(
         code="write_not_allowed",
-        message=f"Write tool {tool_name!r} blocked because WRITE_ALLOWED is false.",
+        message=f"Write tool {tool_name!r} stopped because WRITE_ALLOWED is false.",
         category="policy",
         origin="write_gate",
         retryable=False,
@@ -481,6 +492,10 @@ def _register_with_fastmcp(
     tags: Optional[Iterable[str]] = None,
 ) -> Any:
     # FastMCP is an optional dependency. In production, when it is not installed,
+    # Skip registration when the backend is not present.
+    if (mcp is None) or (getattr(getattr(mcp, "__class__", None), "__name__", None) == "_MissingFastMCP"):
+        return None
+
     # `mcp` is typically unset/None and registration should be skipped. Unit tests
     # may inject a FakeMCP into this module even when FastMCP is not installed;
     # in that case we still exercise registration logic.
@@ -585,7 +600,7 @@ def mcp_tool(
 
         tool_name = name or getattr(func, "__name__", "tool")
         if tool_name in TOOL_DENYLIST:
-            TOOLS_LOGGER.info("Skipping MCP tool registration for %s (denied by config)", tool_name)
+            TOOLS_LOGGER.info("Skipping MCP tool registration for %s (not enabled by config)", tool_name)
             return func
         llm_level = "advanced" if write_action else "basic"
         normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
@@ -880,7 +895,7 @@ def register_extra_tools_if_available() -> None:
 
 
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
-    allowed = bool(WRITE_ALLOWED) if _write_allowed is None else bool(_write_allowed)
+    allowed = bool(get_write_allowed(refresh_after_seconds=0.0)) if _write_allowed is None else bool(_write_allowed)
 
     for tool_obj, func in list(_REGISTERED_MCP_TOOLS):
         try:
