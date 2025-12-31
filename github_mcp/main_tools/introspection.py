@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Mapping, Optional
 import jsonschema
 
 from github_mcp.config import TOOL_DENYLIST
+from github_mcp.mcp_server.context import get_write_allowed
 from ._main import _main
 
 _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = {
@@ -195,7 +196,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
 
     tools: List[Dict[str, Any]] = []
     seen_names: set[str] = set()
-    write_allowed = bool(m.server.WRITE_ALLOWED)
+    write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
 
     for tool, func in m._REGISTERED_MCP_TOOLS:
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
@@ -291,7 +292,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
 
     return {
         "compact": compact_mode,
-        "write_actions_enabled": bool(m.server.WRITE_ALLOWED),
+        "write_actions_enabled": bool(get_write_allowed(refresh_after_seconds=0.0)),
         "tools": tools,
     }
 
@@ -334,7 +335,7 @@ async def list_tools(
     tools.sort(key=lambda t: t["name"])
     m = _main()
     return {
-        "write_actions_enabled": bool(m.server.WRITE_ALLOWED),
+        "write_actions_enabled": bool(get_write_allowed(refresh_after_seconds=0.0)),
         "tools": tools,
     }
 
@@ -441,7 +442,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
     ]
 
     base_write_action = bool(_tool_attr(tool, func, "write_action", False))
-    write_allowed = bool(m.server.WRITE_ALLOWED)
+    write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
 
     return {
         "tool": tool_name,
