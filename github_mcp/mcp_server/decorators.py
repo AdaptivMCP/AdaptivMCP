@@ -599,7 +599,10 @@ def mcp_tool(
             signature = None
 
         tool_name = name or getattr(func, "__name__", "tool")
-        if tool_name in TOOL_DENYLIST:
+        # IMPORTANT: TOOL_DENYLIST is an exposure control, not an authorization control.
+        # To ensure WRITE_ALLOWED is the only authorization gate for write actions,
+        # do not allow TOOL_DENYLIST to suppress registration of write tools.
+        if (not bool(write_action)) and tool_name in TOOL_DENYLIST:
             TOOLS_LOGGER.info("Skipping MCP tool registration for %s (not enabled by config)", tool_name)
             return func
         llm_level = "advanced" if write_action else "basic"

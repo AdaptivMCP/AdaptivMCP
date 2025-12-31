@@ -161,8 +161,8 @@ def list_write_tools() -> Dict[str, Any]:
         },
     ]
 
-    filtered = [tool for tool in tools if tool.get("name") not in TOOL_DENYLIST]
-    return {"tools": filtered}
+    return {"tools": tools}
+
 
 
 def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
