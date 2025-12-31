@@ -404,8 +404,10 @@ def _configure_trusted_hosts(app_instance) -> None:
 
 if app is not None:
     _configure_trusted_hosts(app)
-app.add_middleware(_CacheControlMiddleware)
-app.add_middleware(_RequestContextMiddleware)
+if app is not None:
+    app.add_middleware(_CacheControlMiddleware)
+if app is not None:
+    app.add_middleware(_RequestContextMiddleware)
 
 
 async def _handle_value_error(request, exc):
