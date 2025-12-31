@@ -402,7 +402,8 @@ def _configure_trusted_hosts(app_instance) -> None:
     app_instance.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 
-_configure_trusted_hosts(app)
+if app is not None:
+    _configure_trusted_hosts(app)
 app.add_middleware(_CacheControlMiddleware)
 app.add_middleware(_RequestContextMiddleware)
 
