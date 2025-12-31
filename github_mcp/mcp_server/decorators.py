@@ -190,7 +190,7 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
 
     raise AdaptivToolError(
         code="write_not_allowed",
-        message=f"Write tool {tool_name!r} blocked because WRITE_ALLOWED is false.",
+        message=f"Write tool {tool_name!r} stopped because WRITE_ALLOWED is false.",
         category="policy",
         origin="write_gate",
         retryable=False,
