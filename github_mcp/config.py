@@ -134,6 +134,10 @@ TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "0"))
 TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "0"))
 TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "0"))
 
+WORKSPACE_SHELL_RESULT_MAX_CHARS = int(os.environ.get("WORKSPACE_SHELL_RESULT_MAX_CHARS", "0"))
+WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS = int(os.environ.get("WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS", "0"))
+GITHUB_ERROR_TEXT_MAX_CHARS = int(os.environ.get("GITHUB_ERROR_TEXT_MAX_CHARS", "0"))
+
 # Upper bounds for unified diffs printed to stdout logs for write tools.
 # These are separate from TOOL_STDOUT_MAX_CHARS (tool return payload truncation).
 WRITE_DIFF_LOG_MAX_LINES = int(os.environ.get("WRITE_DIFF_LOG_MAX_LINES", "0"))

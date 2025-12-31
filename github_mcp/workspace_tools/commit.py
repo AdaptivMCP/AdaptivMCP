@@ -16,19 +16,37 @@ def _tw():
     from github_mcp import tools_workspace as tw
     return tw
 
-def _slim_shell_result(result: Any, *, max_chars: int = 2000) -> Dict[str, Any]:
-    """Return a small, connector-safe view of a run_shell result."""
+def _slim_shell_result(result: Any, *, max_chars: int = 0) -> Dict[str, Any]:
+    """Return a connector-safe view of a run_shell result.
+
+    Set max_chars to 0 (or a negative value) to disable truncation.
+    """
     if not isinstance(result, dict):
-        return {"raw": str(result)[:max_chars]}
+        raw = str(result)
+        if max_chars and max_chars > 0:
+            raw = raw[:max_chars]
+        return {"raw": raw}
     stdout = (result.get("stdout") or "").strip()
     stderr = (result.get("stderr") or "").strip()
+
+    if max_chars and max_chars > 0:
+        out_stdout = stdout[:max_chars] if stdout else ""
+        out_stderr = stderr[:max_chars] if stderr else ""
+        stdout_truncated = len(stdout) > max_chars
+        stderr_truncated = len(stderr) > max_chars
+    else:
+        out_stdout = stdout
+        out_stderr = stderr
+        stdout_truncated = False
+        stderr_truncated = False
+
     return {
         "exit_code": result.get("exit_code"),
         "timed_out": result.get("timed_out", False),
-        "stdout": stdout[:max_chars] if stdout else "",
-        "stderr": stderr[:max_chars] if stderr else "",
-        "stdout_truncated": len(stdout) > max_chars,
-        "stderr_truncated": len(stderr) > max_chars,
+        "stdout": out_stdout,
+        "stderr": out_stderr,
+        "stdout_truncated": stdout_truncated,
+        "stderr_truncated": stderr_truncated,
     }
 
 
@@ -118,12 +136,12 @@ async def commit_workspace(
 
         return {
             "branch": effective_ref,
-            "changed_files": status_lines[:200],
-            "changed_files_truncated": len(status_lines) > 200,
+            "changed_files": (status_lines if config.WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS <= 0 else status_lines[: config.WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS]),
+            "changed_files_truncated": (config.WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS > 0 and len(status_lines) > config.WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS),
             "commit_sha": head_sha,
             "commit_summary": head_summary,
-            "commit": _slim_shell_result(commit_result),
-            "push": _slim_shell_result(push_result) if push_result is not None else None,
+            "commit": _slim_shell_result(commit_result, max_chars=config.WORKSPACE_SHELL_RESULT_MAX_CHARS),
+            "push": _slim_shell_result(push_result, max_chars=config.WORKSPACE_SHELL_RESULT_MAX_CHARS) if push_result is not None else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace")
@@ -217,12 +235,12 @@ async def commit_workspace_files(
 
         return {
             "branch": effective_ref,
-            "staged_files": staged_files[:200],
-            "staged_files_truncated": len(staged_files) > 200,
+            "staged_files": (staged_files if config.WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS <= 0 else staged_files[: config.WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS]),
+            "staged_files_truncated": (config.WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS > 0 and len(staged_files) > config.WORKSPACE_COMMIT_FILE_LIST_MAX_ITEMS),
             "commit_sha": head_sha,
             "commit_summary": head_summary,
-            "commit": _slim_shell_result(commit_result),
-            "push": _slim_shell_result(push_result) if push_result is not None else None,
+            "commit": _slim_shell_result(commit_result, max_chars=config.WORKSPACE_SHELL_RESULT_MAX_CHARS),
+            "push": _slim_shell_result(push_result, max_chars=config.WORKSPACE_SHELL_RESULT_MAX_CHARS) if push_result is not None else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace_files")
