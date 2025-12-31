@@ -448,7 +448,10 @@ def _register_with_fastmcp(
     # `mcp` is typically unset/None and registration should be skipped. Unit tests
     # may inject a FakeMCP into this module even when FastMCP is not installed;
     # in that case we still exercise registration logic.
-    if not FASTMCP_AVAILABLE and (mcp is None or not hasattr(mcp, "tool")):
+    if not FASTMCP_AVAILABLE and (
+        mcp is None
+        or getattr(getattr(mcp, "__class__", None), "__name__", None) == "_MissingFastMCP"
+    ):
         return None
 
     """
