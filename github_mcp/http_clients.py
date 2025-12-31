@@ -11,6 +11,15 @@ from typing import Any, Callable, Dict, Optional, Tuple
 import weakref
 from urllib.parse import urlencode
 
+GITHUB_ERROR_TEXT_MAX_CHARS = int(os.environ.get("GITHUB_ERROR_TEXT_MAX_CHARS", "0"))
+
+def _maybe_truncate_error_text(text: str) -> str:
+    """Return full text unless a max is configured via GITHUB_ERROR_TEXT_MAX_CHARS."""
+    limit = GITHUB_ERROR_TEXT_MAX_CHARS
+    if not limit or limit <= 0:
+        return text
+    return text[:limit]
+
 import importlib.util
 
 if importlib.util.find_spec("httpx") is not None:
@@ -494,7 +503,7 @@ def _request_with_metrics(
         raise GitHubAuthError("GitHub authentication failed. Check your token and permissions.")
 
     if response.is_error:
-        raise GitHubAPIError(f"GitHub API error {response.status_code}: {response.text[:200]}")
+        raise GitHubAPIError(f"GitHub API error {response.status_code}: {_maybe_truncate_error_text(response.text)}")
 
     return response
 
@@ -650,7 +659,7 @@ async def _github_request(
             )
 
         if error_flag:
-            raise GitHubAPIError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
+            raise GitHubAPIError(f"GitHub API error {resp.status_code}: {_maybe_truncate_error_text(resp.text)}")
 
         result: Dict[str, Any] = {
             "status_code": resp.status_code,
