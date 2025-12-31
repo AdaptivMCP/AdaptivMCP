@@ -149,9 +149,9 @@ async def terminal_command(
                 if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
                     stderr = install_result.get("stderr") or ""
                     stdout = install_result.get("stdout") or ""
-                    raise GitHubAPIError(
-                        "Dependency installation failed: " + (stderr.strip() or stdout.strip())
-                    )
+                    # Do not raise; surface the failure and continue.
+                    install_result.setdefault("install_failed", True)
+                    install_result.setdefault("install_error", (stderr.strip() or stdout.strip()))
 
         result = await deps["run_shell"](
             command,
