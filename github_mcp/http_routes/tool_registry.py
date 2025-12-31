@@ -88,7 +88,9 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any]) -> Any:
 
 def build_tool_registry_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
-        include_parameters = _parse_bool(request.query_params.get("include_parameters")) or False
+        include_parameters = _parse_bool(request.query_params.get("include_parameters"))
+        if include_parameters is None:
+            include_parameters = True
         compact = _parse_bool(request.query_params.get("compact"))
         return JSONResponse(_tool_catalog(include_parameters=include_parameters, compact=compact))
 
