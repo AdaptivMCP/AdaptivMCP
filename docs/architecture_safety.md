@@ -220,3 +220,32 @@ These are not necessarily flaws, but they are important operational assumptions 
 ---
 
 *Document generated from the codebase in `/workspace/chatgpt-mcp-github`.*
+
+## Tool-event logging
+
+The server emits structured tool lifecycle events to provider logs (e.g., Render) to make debugging and auditing straightforward.
+
+Each tool call emits up to three events:
+
+- `tool_call.start` — emitted after preflight validation but before execution
+- `tool_call.ok` — emitted after successful execution
+- `tool_call.error` — emitted on exceptions
+
+Console output is intentionally short and readable:
+
+- Example: `[tool] terminal_command ok 475ms (tool_call.ok)`
+
+The full structured payload is attached as a compact JSON string under the log extra field `tool_json`.
+
+Canonical fields in the structured payload:
+
+- `event`: `tool_call.start` | `tool_call.ok` | `tool_call.error`
+- `status`: `start` | `ok` | `error`
+- `tool_name`
+- `call_id`
+- `duration_ms` (for ok/error)
+- `schema_hash` and `schema_present`
+- `write_action` and `write_allowed`
+- `request` (minimal): `path`, `received_at`, `session_id`, `message_id`
+
+This separation ensures provider logs stay readable while retaining the complete debug context.

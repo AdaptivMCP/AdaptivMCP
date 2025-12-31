@@ -51,3 +51,12 @@ this deployment to keep all editing and inspection in the shell. Use
 ### Repository creation
 
 - `create_repository` — create a new repo (supports templates and payload overrides to match GitHub’s "New repository" UI).
+
+## Logging
+
+Tools emit structured lifecycle events to provider logs.
+
+- Console line format: `[tool] <tool_name> <status> <duration_ms>ms (<event>)`
+- Full structured payload: available as compact JSON in log extra field `tool_json`
+
+This is designed to match what you see in Render logs while remaining readable.
