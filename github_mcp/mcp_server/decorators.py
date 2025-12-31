@@ -368,21 +368,56 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
     """Emit a structured tool event to provider logs.
 
     Provider log formatters can render nested dict extras inconsistently.
-    To keep logs stable and parseable we attach the canonical payload as a compact
-    JSON string under `tool_json`.
+    To keep logs stable and parseable we attach a structured payload as a nested
+    dict under `tool_event` (not a pre-serialized JSON string). This prevents
+    double-encoding and removes backslash/quote spam in hosted log streams.
 
     Note: tests monkeypatch this function; keep name and signature stable.
     """
     try:
-        safe = _jsonable(dict(payload))
-        msg = f"[tool event] {safe.get('event','tool')} | status={safe.get('status')} | tool={safe.get('tool_name')}"
-        tool_json = json.dumps(safe, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        extra = {
-            "event": "tool_json",
-            "tool_json": tool_json,
-            "tool_name": safe.get("tool_name"),
-            "call_id": safe.get("call_id"),
+        safe_full = _jsonable(dict(payload))
+
+        msg = (
+            f"[tool event] {safe_full.get('event','tool')}"
+            f" | status={safe_full.get('status')}"
+            f" | tool={safe_full.get('tool_name')}"
+        )
+
+        # Keep provider logs readable by default.
+        tool_event: dict[str, Any] = {
+            "event": safe_full.get("event"),
+            "status": safe_full.get("status"),
+            "phase": safe_full.get("phase"),
+            "tool_name": safe_full.get("tool_name"),
+            "call_id": safe_full.get("call_id"),
+            "duration_ms": safe_full.get("duration_ms"),
+            "schema_hash": safe_full.get("schema_hash"),
+            "schema_present": safe_full.get("schema_present"),
+            "write_action": safe_full.get("write_action"),
+            "write_allowed": safe_full.get("write_allowed"),
         }
+
+        if isinstance(safe_full.get("request"), dict):
+            tool_event["request_keys"] = sorted(list(safe_full["request"].keys()))
+
+        if isinstance(safe_full.get("error"), dict):
+            # error payloads differ slightly by callsite; include common fields.
+            err = safe_full["error"]
+            if isinstance(err.get("error"), dict):
+                err = err["error"]
+            tool_event["error"] = {
+                "code": err.get("code"),
+                "message": err.get("message"),
+                "category": err.get("category"),
+            }
+
+        extra = {
+            "event": "tool_event",
+            "tool_event": tool_event,
+            "tool_name": tool_event.get("tool_name"),
+            "call_id": tool_event.get("call_id"),
+        }
+
         log_fn = getattr(TOOLS_LOGGER, "detailed", None)
         if callable(log_fn) and TOOLS_LOGGER.isEnabledFor(DETAILED_LEVEL):
             log_fn(msg, extra=extra)
@@ -390,6 +425,7 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
             TOOLS_LOGGER.info(msg, extra=extra)
     except Exception:
         return
+
 
 
 def _fastmcp_tool_params() -> Optional[tuple[inspect.Parameter, ...]]:
