@@ -1,4 +1,5 @@
 # Split from github_mcp.tools_workspace (generated).
+
 import os
 import re
 from typing import Any, Dict, Optional
@@ -11,7 +12,9 @@ from github_mcp.server import (
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 @mcp_tool(write_action=False)
 async def list_workspace_files(
@@ -28,14 +31,14 @@ async def list_workspace_files(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """List files in the workspace clone without default truncation."""
+    """List files in the workspace clone."""
 
-    # Alias: many clients use max_results instead of max_files.
+    # Alias: some clients use max_results instead of max_files.
     if max_results is not None:
         if max_files is None:
             max_files = max_results
         elif max_files != max_results:
-            raise ValueError("max_files and max_results must match when both are provided.")
+            raise ValueError("max_files and max_results must match when both are provided")
 
     try:
         deps = _tw()._workspace_deps()
@@ -128,7 +131,6 @@ async def search_workspace(
     ref: str = "main",
     query: str = "",
     path: str = "",
-    use_regex: bool = False,
     case_sensitive: bool = False,
     max_results: Optional[int] = None,
     max_file_bytes: Optional[int] = None,
@@ -138,7 +140,7 @@ async def search_workspace(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Search text files in the workspace clone (bounded, no shell)."""
+    """Search text files in the workspace clone using a pattern (bounded, no shell)."""
 
     if not isinstance(query, str) or not query:
         raise ValueError("query must be a non-empty string")
@@ -163,7 +165,6 @@ async def search_workspace(
                 "ref": effective_ref,
                 "path": path,
                 "query": query,
-                "use_regex": use_regex,
                 "case_sensitive": case_sensitive,
                 "results": [],
                 "truncated": False,
@@ -174,14 +175,15 @@ async def search_workspace(
             }
 
         flags = 0 if case_sensitive else re.IGNORECASE
-        matcher = re.compile(query, flags=flags) if use_regex else None
+        try:
+            matcher = re.compile(query, flags=flags)
+        except re.error as exc:
+            raise ValueError(f"invalid pattern: {exc}") from exc
 
         results: list[dict[str, Any]] = []
         truncated = False
         files_scanned = 0
         files_skipped = 0
-
-        needle = query if case_sensitive else query.lower()
 
         walk_iter = [(os.path.dirname(start), [], [os.path.basename(start)])] if single_file else os.walk(start)
         for cur_dir, dirnames, filenames in walk_iter:
@@ -204,6 +206,7 @@ async def search_workspace(
                     files_skipped += 1
                     continue
 
+                # Skip probable binaries.
                 try:
                     with open(abs_path, "rb") as bf:
                         sample = bf.read(2048)
@@ -220,13 +223,8 @@ async def search_workspace(
                 try:
                     with open(abs_path, "r", encoding="utf-8", errors="ignore") as tf:
                         for i, line in enumerate(tf, start=1):
-                            if use_regex:
-                                if not matcher or not matcher.search(line):
-                                    continue
-                            else:
-                                hay = line if case_sensitive else line.lower()
-                                if needle not in hay:
-                                    continue
+                            if not matcher.search(line):
+                                continue
 
                             results.append(
                                 {
@@ -253,7 +251,6 @@ async def search_workspace(
             "ref": effective_ref,
             "path": path,
             "query": query,
-            "use_regex": use_regex,
             "case_sensitive": case_sensitive,
             "results": results,
             "truncated": truncated,

@@ -107,7 +107,7 @@ Client (ChatGPT / connector)
   - In-memory counters and timing metrics for tool and GitHub requests.
 
 - **`github_mcp/tool_logging.py`**
-  - Structured logging for GitHub API requests with sanitized URLs and derived human-friendly web URLs.
+  - Structured logging for GitHub API requests with URLs and derived human-friendly web URLs.
 
 - **`github_mcp/http_routes/healthz.py`**
   - `/healthz` endpoint reporting uptime, token presence, controller defaults, and metrics snapshot.
@@ -172,7 +172,7 @@ This classification is used for logging, metadata, and recent event buffers.
 
 - File cache is in-memory only and bounded by entry count and byte size.
 - Metrics and recent tool events are in-memory only; they reset on restart.
-- Log payloads are sanitized to remove nonessential data and avoid JSON spam.
+- Log payloads are structured for readability and to avoid excessive verbosity.
 
 **Relevant modules:**
 - `github_mcp/file_cache.py`

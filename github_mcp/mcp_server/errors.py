@@ -4,7 +4,7 @@ Structured error model for Adaptiv MCP.
 Requirements:
 - Machine readable: stable fields for programmatic handling.
 - User readable: clear, detailed messages.
-- No custom redaction layer is applied here (per project policy).
+- No custom transformation layer is applied here (per project policy).
 """
 
 from __future__ import annotations
