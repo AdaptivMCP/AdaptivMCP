@@ -1,102 +1,79 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List
+import os
+from typing import Any, Callable, Dict, Optional
 
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
-def _terminal_help(name: str, description: str, schema: Any) -> str:
-    desc = (description or "").strip()
-    synopsis = (desc.splitlines()[0].strip() if desc else "").strip()
 
-    props = {}
-    required = set()
-    if isinstance(schema, dict):
-        props = schema.get("properties") or {}
-        required = set(schema.get("required") or [])
+def _parse_bool(value: Optional[str]) -> Optional[bool]:
+    if value is None:
+        return None
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
-    lines: List[str] = []
-    lines.append("NAME")
-    lines.append(f"  {name}")
-    lines.append("")
-    lines.append("SYNOPSIS")
-    lines.append(f"  {synopsis or '(no synopsis)'}")
-    lines.append("")
-    lines.append("DESCRIPTION")
-    lines.append(f"  {desc or '(no description)'}")
-    lines.append("")
-    lines.append("PARAMETERS")
 
-    if isinstance(props, dict) and props:
-        for param_name in sorted(props.keys()):
-            info = props.get(param_name) or {}
-            ptype = info.get("type") or "any"
-            pdesc = (info.get("description") or "").strip()
-            req = " (Required)" if param_name in required else ""
-            default = info.get("default", None)
-            default_str = f" [default: {default!r}]" if default is not None else ""
-            tail = (pdesc + default_str).strip()
-            if tail:
-                lines.append(f"  -{param_name} <{ptype}>{req}  {tail}")
+def _get_write_allowed() -> bool:
+    # Dynamic at request time (no import-time caching).
+    return _parse_bool(os.environ.get("WRITE_ALLOWED")) is True
+
+
+def build_actions_compat_endpoint() -> Callable[[Request], Response]:
+    async def _endpoint(request: Request) -> Response:
+        # Always include parameters/schemas. ChatGPT needs them for tool calling.
+        from github_mcp.main_tools.introspection import list_all_actions
+
+        catalog = list_all_actions(include_parameters=True, compact=None)
+        tools = list(catalog.get("tools") or [])
+
+        write_allowed = _get_write_allowed()
+
+        actions = []
+        for t in tools:
+            name = t.get("name") or ""
+            if not name:
+                continue
+
+            # Normalize schema keys (some codepaths call it parameters, some inputSchema).
+            params = t.get("parameters")
+            if not isinstance(params, dict):
+                params = t.get("inputSchema")
+            if not isinstance(params, dict):
+                params = {"type": "object", "properties": {}, "additionalProperties": True}
+
+            meta = t.get("meta")
+            if meta is None:
+                meta = {}
+            elif isinstance(meta, dict):
+                meta = dict(meta)
             else:
-                lines.append(f"  -{param_name} <{ptype}>{req}")
-    else:
-        lines.append("  (none)")
+                # If meta is some other type, discard it rather than breaking the payload.
+                meta = {}
 
-    return "\n".join(lines)
+            # Force public visibility for every tool.
+            meta["chatgpt.com/visibility"] = "public"
 
+            # Your stated current condition: everything is treated as a write action.
+            meta["write_action"] = True
+            meta["write_allowed"] = bool(write_allowed)
 
-def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
-    actions: List[Dict[str, Any]] = []
+            actions.append(
+                {
+                    "name": name,
+                    "description": t.get("description") or "",
+                    "parameters": params,
+                    "visibility": "public",
+                    "meta": meta,
+                }
+            )
 
-    for tool, _func in getattr(server, "_REGISTERED_MCP_TOOLS", []):
-        schema = server._normalize_input_schema(tool)
-
-        annotations = getattr(tool, "annotations", None)
-        if hasattr(annotations, "model_dump"):
-            annotations = annotations.model_dump(exclude_none=True)
-        elif not isinstance(annotations, dict):
-            annotations = None
-
-        meta = getattr(tool, "meta", None)
-        if hasattr(meta, "model_dump"):
-            meta = meta.model_dump(exclude_none=True)
-        elif not isinstance(meta, dict):
-            meta = None
-
-        display_name = getattr(tool, "title", None)
-        if not display_name and isinstance(annotations, dict):
-            display_name = annotations.get("title")
-        if not display_name and isinstance(meta, dict):
-            display_name = meta.get("title") or meta.get("chatgpt.com/title")
-        display_name = display_name or tool.name
-
-        terminal_help = _terminal_help(tool.name, tool.description, schema or {})
-
-        actions.append(
-            {
-                "name": tool.name,
-                "display_name": display_name,
-                "title": display_name,
-                "description": tool.description,
-                "terminal_help": terminal_help,
-                "parameters": schema or {"type": "object", "properties": {}},
-                "annotations": annotations,
-                "meta": meta,
-            }
-        )
-
-    return actions
-
-
-def build_actions_endpoint(server: Any) -> Callable[[Request], JSONResponse]:
-    async def _endpoint(_: Request) -> JSONResponse:
-        return JSONResponse({"actions": serialize_actions_for_compatibility(server)})
+        return JSONResponse({"actions": actions, "write_allowed": bool(write_allowed)})
 
     return _endpoint
 
 
-def register_actions_compat_routes(app: Any, server: Any) -> None:
-    endpoint = build_actions_endpoint(server)
+def register_actions_compat_routes(app: Any) -> None:
+    endpoint = build_actions_compat_endpoint()
+    # Common compatibility routes used by connector clients.
     app.add_route("/v1/actions", endpoint, methods=["GET"])
     app.add_route("/actions", endpoint, methods=["GET"])
