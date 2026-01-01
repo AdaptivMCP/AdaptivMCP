@@ -21,6 +21,24 @@ def _strip_ui_fields(payload: object) -> object:
         payload.pop(k, None)
     return payload
 
+def _normalize_timeout_seconds(value: object, default: int) -> int:
+    if value is None or isinstance(value, bool):
+        return max(1, int(default))
+    if isinstance(value, int):
+        return max(1, value)
+    if isinstance(value, float):
+        return max(1, int(value))
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return max(1, int(default))
+        try:
+            return max(1, int(float(s)))
+        except Exception:
+            return max(1, int(default))
+    return max(1, int(default))
+
+
 
 
 @mcp_tool(write_action=True)
@@ -32,13 +50,14 @@ async def render_shell(
     push_new_branch: bool = True,
     ref: str = "main",
     branch: Optional[str] = None,
-    timeout_seconds: int = 300,
+    timeout_seconds: float = 300,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
 ) -> Dict[str, Any]:
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
     """Render-focused shell entry point for interacting with GitHub workspaces.
 
     The tool intentionally mirrors the Render deployment model by always
@@ -110,7 +129,7 @@ async def terminal_command(
     full_name: Optional[str] = None,
     ref: str = "main",
     command: str = "pytest",
-    timeout_seconds: int = 300,
+    timeout_seconds: float = 300,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -119,6 +138,7 @@ async def terminal_command(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
     """Run a shell command inside the repo workspace and return its result.
 
     Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
@@ -214,7 +234,7 @@ async def run_command(
     full_name: Optional[str] = None,
     ref: str = "main",
     command: str = "pytest",
-    timeout_seconds: int = 300,
+    timeout_seconds: float = 300,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -223,6 +243,7 @@ async def run_command(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
     """Deprecated alias for terminal_command.
 
     Use terminal_command for a clearer "terminal/PC gateway" mental model.
