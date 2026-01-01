@@ -7,9 +7,21 @@ import json
 import os  # noqa: E402  pylint: disable=wrong-import-position
 import sys
 import zipfile
+from types import SimpleNamespace
 from typing import Any, Dict, Mapping
 
 from .exceptions import ToolPreflightValidationError
+
+
+def _get_main_module():
+    """Return the active main module when running under different entrypoints.
+
+    In some environments the entrypoint is loaded as `__main__` instead of `main`.
+    Helpers use this for optional monkeypatch overrides without importing the
+    top-level entry module directly.
+    """
+
+    return sys.modules.get("main") or sys.modules.get("__main__") or SimpleNamespace()
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -24,7 +36,7 @@ def _env_flag(name: str, default: bool = False) -> bool:
 def _effective_ref_for_repo(full_name: str, ref: str | None) -> str:
     # Allow tests (and callers) to override controller settings by monkeypatching
     # the main module without needing to import this helper directly.
-    main_module = sys.modules.get("main")
+    main_module = _get_main_module()
     controller_repo_main = getattr(main_module, "CONTROLLER_REPO", CONTROLLER_REPO)
     controller_default_branch_main = getattr(
         main_module, "CONTROLLER_DEFAULT_BRANCH", CONTROLLER_DEFAULT_BRANCH
@@ -156,6 +168,7 @@ CONTROLLER_REPO = os.environ.get(
 CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main")
 
 __all__ = [
+    "_get_main_module",
     "REPO_DEFAULTS",
     "_decode_zipped_job_logs",
     "_default_branch_for_repo",

@@ -10,11 +10,12 @@ from typing import Any, Dict, Optional
 from .config import SANDBOX_CONTENT_BASE_URL
 from .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
-from .utils import _effective_ref_for_repo
+from .utils import _effective_ref_for_repo, _get_main_module
 
 
 async def _request(*args, **kwargs):
-    request_fn = getattr(sys.modules.get("main"), "_github_request", _github_request)
+    main_mod = _get_main_module()
+    request_fn = getattr(main_mod, "_github_request", _github_request)
     return await request_fn(*args, **kwargs)
 
 
@@ -47,8 +48,9 @@ async def _decode_github_content(
     path: str,
     ref: Optional[str] = None,
 ) -> Dict[str, Any]:
+    main_mod = _get_main_module()
     effective_ref_fn = getattr(
-        sys.modules.get("main"), "_effective_ref_for_repo", _effective_ref_for_repo
+        main_mod, "_effective_ref_for_repo", _effective_ref_for_repo
     )
     effective_ref = effective_ref_fn(full_name, ref)
     try:
