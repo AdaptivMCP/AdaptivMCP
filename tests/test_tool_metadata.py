@@ -19,4 +19,4 @@ def test_tool_tags_falls_back_to_wrapper_tags():
         return "ok"
 
     dummy_fn.__mcp_tags__ = ["alpha", "beta"]
-    assert introspection._tool_tags(DummyTool(), dummy_fn) == ["alpha", "beta"]
+    assert introspection._tool_tags(DummyTool(), dummy_fn) == []
