@@ -63,9 +63,13 @@ async def _run_shell(
     env: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Execute a shell command with author/committer env vars injected."""
-    shell_executable = os.environ.get("SHELL")
+    # Prefer bash when available so multi-command scripts and common bash features
+    # (e.g. `set -o pipefail`, heredocs) work reliably. If bash is not available,
+    # fall back to $SHELL (which may be /bin/sh).
+    bash_path = shutil.which("bash")
+    shell_executable = bash_path or os.environ.get("SHELL")
     if os.name == "nt":
-        shell_executable = shell_executable or shutil.which("bash")
+        shell_executable = shell_executable or bash_path
 
     main_module = sys.modules.get("main")
     proc_env = {

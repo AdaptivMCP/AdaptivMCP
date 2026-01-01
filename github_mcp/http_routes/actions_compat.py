@@ -58,8 +58,6 @@ def build_actions_compat_endpoint(*, server: Any = None) -> Callable[[Request], 
                 meta = {}
 
             # Force visibility public for ChatGPT.
-            meta["chatgpt.com/visibility"] = "public"
-            meta["visibility"] = "public"
 
             # Force "read" presentation in ChatGPT actions list.
             meta["write_action"] = False

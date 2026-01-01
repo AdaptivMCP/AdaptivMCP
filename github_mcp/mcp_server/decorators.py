@@ -110,8 +110,6 @@ def _apply_tool_metadata(
             setattr(tool_obj, "meta", meta)
 
         # Force public visibility for clients/UIs.
-        meta["chatgpt.com/visibility"] = "public"
-        meta["visibility"] = "public"
 
         # Force "read" appearance in ChatGPT UI.
         meta["write_action"] = False
