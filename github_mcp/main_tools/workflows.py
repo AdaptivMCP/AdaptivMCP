@@ -362,7 +362,7 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
 async def wait_for_workflow_run(
     full_name: str,
     run_id: int,
-    timeout_seconds: int = 900,
+    timeout_seconds: float = 900,
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
     """Poll a workflow run until completion or timeout."""
@@ -472,7 +472,7 @@ async def trigger_and_wait_for_workflow(
     workflow: str,
     ref: str,
     inputs: Optional[Dict[str, Any]] = None,
-    timeout_seconds: int = 900,
+    timeout_seconds: float = 900,
     poll_interval_seconds: int = 10,
 ) -> Dict[str, Any]:
     """Trigger a workflow and block until it completes or hits timeout."""

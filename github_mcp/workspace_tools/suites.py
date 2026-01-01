@@ -1,5 +1,22 @@
 # Split from github_mcp.tools_workspace (generated).
 
+def _normalize_timeout_seconds(value: object, default: int) -> int:
+    if value is None or isinstance(value, bool):
+        return max(1, int(default))
+    if isinstance(value, int):
+        return max(1, value)
+    if isinstance(value, float):
+        return max(1, int(value))
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return max(1, int(default))
+        try:
+            return max(1, int(float(s)))
+        except Exception:
+            return max(1, int(default))
+    return max(1, int(default))
+
 from typing import Any, Dict, List, Optional
 
 from github_mcp.server import mcp_tool
@@ -16,7 +33,7 @@ async def run_tests(
     full_name: str,
     ref: str = "main",
     test_command: str = "pytest",
-    timeout_seconds: int = 600,
+    timeout_seconds: float = 600,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -25,6 +42,7 @@ async def run_tests(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
     """Run the project's test command in the persistent workspace and summarize the result."""
 
     result = await _tw().terminal_command(
@@ -95,7 +113,7 @@ async def run_lint_suite(
     full_name: str,
     ref: str = "main",
     lint_command: str = "ruff check .",
-    timeout_seconds: int = 600,
+    timeout_seconds: float = 600,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -104,6 +122,7 @@ async def run_lint_suite(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
     """Run the lint or static-analysis command in the workspace."""
 
     return await _tw().terminal_command(
@@ -125,7 +144,7 @@ async def run_quality_suite(
     full_name: str,
     ref: str = "main",
     test_command: str = "pytest",
-    timeout_seconds: int = 600,
+    timeout_seconds: float = 600,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -135,6 +154,7 @@ async def run_quality_suite(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
     """Run lint and tests for a repo/ref.
 
     Steps:
