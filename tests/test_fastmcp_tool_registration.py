@@ -50,6 +50,7 @@ def test_register_with_fastmcp_requires_fn_positional(monkeypatch):
 
 
 def test_register_with_fastmcp_passes_tags(monkeypatch):
+    monkeypatch.setenv("EMIT_TOOL_OBJECT_METADATA", "1")
     captured = {}
 
     class FakeMCP:

@@ -60,27 +60,18 @@ def _apply_tool_metadata(
     write_action: Optional[bool] = None,
     write_allowed: Optional[bool] = None,
 ) -> None:
+    """Attach only safe, non-tagging metadata onto the registered tool object.
+
+    Some MCP clients interpret tool-object metadata (tags/meta/write_action) as
+    execution directives. That can lead to tools being mis-tagged or
+    misclassified. To avoid this, we keep classification and policy attributes
+    on the Python wrapper ("__mcp_*" attributes) and attach only the input
+    schema onto the tool object when needed for FastMCP.
+    """
+
     if tool_obj is None:
         return
 
-    try:
-        setattr(tool_obj, "__mcp_visibility__", visibility)
-    except Exception:
-        pass
-
-    if tags is not None:
-        try:
-            setattr(tool_obj, "tags", list(tags))
-        except Exception:
-            pass
-
-    if write_action is not None:
-        try:
-            setattr(tool_obj, "write_action", bool(write_action))
-        except Exception:
-            pass
-
-    # Always expose schema on the tool object if not already present.
     existing_schema = _normalize_input_schema(tool_obj)
     if not isinstance(existing_schema, Mapping):
         try:
@@ -90,19 +81,6 @@ def _apply_tool_metadata(
             if isinstance(meta, dict):
                 meta.setdefault("input_schema", schema)
 
-    # Attach structured metadata for clients/UIs.
-    try:
-        meta = getattr(tool_obj, "meta", None)
-        if not isinstance(meta, dict):
-            meta = {}
-            setattr(tool_obj, "meta", meta)
-        if write_action is not None:
-            meta["write_action"] = bool(write_action)
-        if write_allowed is not None and write_action is not None:
-            meta["write_enabled"] = (not bool(write_action)) or bool(write_allowed)
-            meta["write_allowed"] = bool(write_allowed)
-    except Exception:
-        pass
 
 def _require_jsonschema() -> Any:
     try:
@@ -502,16 +480,29 @@ def _register_with_fastmcp(
     style = _fastmcp_call_style(params)
 
     # Build kwargs in descending compatibility order.
-    normalized_tags = list(tags or [])
-    base: dict[str, Any] = {"name": name, "description": description}
-    full: dict[str, Any] = {
-        "name": name,
-        "description": description,
-        "tags": normalized_tags,
-        "meta": {},
-    }
+    #
+    # IMPORTANT: suppress tags by default. Some downstream clients treat tool
+    # tags as policy/execution hints and can mis-tag tools. We still pass an
+    # empty meta dict when supported (safe and backwards compatible).
+    emit_tool_object_metadata = _parse_bool(os.environ.get("EMIT_TOOL_OBJECT_METADATA", "0"))
 
-    attempts = [full, base, {"name": name}]
+    base: dict[str, Any] = {"name": name, "description": description}
+    base_with_meta: dict[str, Any] = {"name": name, "description": description, "meta": {}}
+    attempts = [base_with_meta, base, {"name": name}]
+
+    if emit_tool_object_metadata:
+        normalized_tags = list(tags or [])
+        attempts = [
+            {
+                "name": name,
+                "description": description,
+                "tags": normalized_tags,
+                "meta": {},
+            },
+            base_with_meta,
+            base,
+            {"name": name},
+        ]
 
     last_exc: Optional[Exception] = None
     tool_obj: Any = None
