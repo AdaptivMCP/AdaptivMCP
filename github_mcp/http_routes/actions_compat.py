@@ -15,12 +15,20 @@ def _parse_bool(value: Optional[str]) -> Optional[bool]:
 
 def _get_write_allowed() -> bool:
     # Dynamic at request time (no import-time caching).
-    return _parse_bool(os.environ.get("WRITE_ALLOWED")) is True
+    # Prefer MCP_WRITE_ALLOWED if present, otherwise fall back to WRITE_ALLOWED.
+    v = os.environ.get("MCP_WRITE_ALLOWED")
+    if v is None:
+        v = os.environ.get("WRITE_ALLOWED")
+    return _parse_bool(v) is True
 
 
-def build_actions_compat_endpoint() -> Callable[[Request], Response]:
+def build_actions_compat_endpoint(*, server: Any = None) -> Callable[[Request], Response]:
+    """
+    server is accepted for compatibility with older main.py call sites.
+    It is intentionally unused here.
+    """
     async def _endpoint(request: Request) -> Response:
-        # Always include parameters/schemas. ChatGPT needs them for tool calling.
+        # Always include parameters/schemas. Clients need them for tool calling.
         from github_mcp.main_tools.introspection import list_all_actions
 
         catalog = list_all_actions(include_parameters=True, compact=None)
@@ -34,7 +42,7 @@ def build_actions_compat_endpoint() -> Callable[[Request], Response]:
             if not name:
                 continue
 
-            # Normalize schema keys (some codepaths call it parameters, some inputSchema).
+            # Normalize schema key(s).
             params = t.get("parameters")
             if not isinstance(params, dict):
                 params = t.get("inputSchema")
@@ -47,15 +55,16 @@ def build_actions_compat_endpoint() -> Callable[[Request], Response]:
             elif isinstance(meta, dict):
                 meta = dict(meta)
             else:
-                # If meta is some other type, discard it rather than breaking the payload.
                 meta = {}
 
             # Force public visibility for every tool.
             meta["chatgpt.com/visibility"] = "public"
+            meta["visibility"] = "public"
 
-            # Your stated current condition: everything is treated as a write action.
+            # Per your current condition: everything is treated as write action.
             meta["write_action"] = True
             meta["write_allowed"] = bool(write_allowed)
+            meta["write_enabled"] = bool(write_allowed)
 
             actions.append(
                 {
@@ -72,8 +81,10 @@ def build_actions_compat_endpoint() -> Callable[[Request], Response]:
     return _endpoint
 
 
-def register_actions_compat_routes(app: Any) -> None:
-    endpoint = build_actions_compat_endpoint()
-    # Common compatibility routes used by connector clients.
+def register_actions_compat_routes(app: Any, server: Any = None) -> None:
+    """
+    Backward compatible signature: main.py/tests may pass (app, server).
+    """
+    endpoint = build_actions_compat_endpoint(server=server)
     app.add_route("/v1/actions", endpoint, methods=["GET"])
     app.add_route("/actions", endpoint, methods=["GET"])
