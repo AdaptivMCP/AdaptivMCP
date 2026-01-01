@@ -149,38 +149,6 @@ def _parse_tool_list(value: str) -> set[str]:
 
 
 DEFAULT_TOOL_DENYLIST = {
-    "ensure_workspace_clone",
-    "get_workspace_file_contents",
-    "set_workspace_file_contents",
-    "list_workspace_files",
-    "search_workspace",
-    "run_command",
-    "workspace_create_branch",
-    "workspace_delete_branch",
-    "workspace_self_heal_branch",
-    "commit_workspace",
-    "commit_workspace_files",
-    "get_workspace_changes_summary",
-    "build_pr_summary",
-    "run_tests",
-    "run_quality_suite",
-    "run_lint_suite",
-    "get_file_contents",
-    "fetch_files",
-    "get_cached_files",
-    "cache_files",
-    "list_repository_tree",
-    "search",
-    "create_file",
-    "apply_text_update_and_commit",
-    "move_file",
-    "delete_file",
-    "update_file_from_workspace",
-    "update_files_and_open_pr",
-    "apply_patch_and_commit",
-    "get_file_slice",
-    "get_file_with_line_numbers",
-    "open_file_context",
 }
 
 
