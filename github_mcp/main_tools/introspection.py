@@ -9,19 +9,6 @@ from github_mcp.mcp_server.context import get_write_allowed
 from ._main import _main
 
 _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = {
-    "apply_text_update_and_commit",
-    "commit_workspace",
-    "commit_workspace_files",
-    "create_branch",
-    "create_file",
-    "ensure_branch",
-    "merge_pull_request",
-    "move_file",
-    "pr_smoke_test",
-    "update_files_and_open_pr",
-    "workspace_create_branch",
-    "workspace_delete_branch",
-    "workspace_self_heal_branch",
 }
 
 
