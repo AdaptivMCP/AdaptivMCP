@@ -7,7 +7,9 @@ import json
 import os
 import re
 import types
+import typing
 from typing import Any, Dict, Mapping, Optional, get_args, get_origin
+
 
 def _jsonable(value: Any) -> Any:
     """Convert arbitrary Python values into something JSON-serializable.
@@ -45,6 +47,7 @@ def _jsonable(value: Any) -> Any:
     # Dataclasses.
     try:
         import dataclasses
+
         if dataclasses.is_dataclass(value):
             return _jsonable(dataclasses.asdict(value))
     except Exception:
@@ -71,7 +74,6 @@ def _jsonable(value: Any) -> Any:
             return str(value)
         except Exception:
             return f"<{type(value).__name__}>"
-
 
 
 _TOOL_ARGS_PREVIEW_MAX_CHARS = int(os.environ.get("MCP_TOOL_ARGS_PREVIEW_MAX_CHARS", "0"))
@@ -170,6 +172,34 @@ def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
         if annotation is dict:
             return {"type": "object"}
         return {}
+
+    # typing.Literal[...] support (critical for correct schemas like Optional[Literal["asc","desc"]])
+    if origin is typing.Literal:
+        vals = get_args(annotation)
+        if not vals:
+            return {}
+
+        json_vals = [_jsonable(v) for v in vals]
+        type_set = {type(v) for v in vals}
+
+        schema: Dict[str, Any] = {"enum": json_vals}
+
+        # If all literal values are the same primitive type, emit an explicit JSON Schema type.
+        if type_set == {str}:
+            schema["type"] = "string"
+        elif type_set == {int}:
+            schema["type"] = "integer"
+        elif type_set == {float}:
+            schema["type"] = "number"
+        elif type_set == {bool}:
+            schema["type"] = "boolean"
+        elif type_set == {type(None)}:
+            schema["type"] = "null"
+        else:
+            # Mixed literals: keep enum without forcing a type.
+            pass
+
+        return schema
 
     if origin is list:
         args = get_args(annotation)
