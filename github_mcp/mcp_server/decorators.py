@@ -3,8 +3,11 @@
 Decorators and helpers for registering MCP tools.
 
 Behavioral contract:
-- The only blocking control is WRITE_ALLOWED (true/false) for write tools.
+- The only blocking control is WRITE_ALLOWED (true/false). Because the current
+  metadata bug causes all tools to be treated as write actions by clients,
+  this module treats ALL tools as write actions for both metadata and enforcement.
 - Tool arguments are strictly validated against published input schemas.
+- All tools are always public and exposed (visibility + public schema visibility).
 - Tags metadata is captured for introspection (side_effects/mutating are still ignored).
 - Dedupe helpers remain for compatibility and test coverage.
 
@@ -21,15 +24,22 @@ import functools
 import hashlib
 import inspect
 import json
-import os
 import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import DETAILED_LEVEL, TOOLS_LOGGER, TOOL_DENYLIST
-from github_mcp.mcp_server.context import WRITE_ALLOWED, get_write_allowed, get_request_context, _record_recent_tool_event
+from github_mcp.config import DETAILED_LEVEL, TOOLS_LOGGER
+from github_mcp.mcp_server.context import (
+    WRITE_ALLOWED,
+    get_write_allowed,
+    get_request_context,
+    _record_recent_tool_event,
+)
 from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
-from github_mcp.mcp_server.user_friendly import attach_error_user_facing_fields, attach_user_facing_fields
+from github_mcp.mcp_server.user_friendly import (
+    attach_error_user_facing_fields,
+    attach_user_facing_fields,
+)
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
@@ -47,6 +57,7 @@ mcp = None
 # the fastmcp package is not installed.
 try:
     import importlib.util as _importlib_util
+
     FASTMCP_AVAILABLE = _importlib_util.find_spec("fastmcp") is not None
 except Exception:  # pragma: no cover
     FASTMCP_AVAILABLE = False
@@ -62,6 +73,30 @@ def _schema_hash(schema: Mapping[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
 
 
+def _current_write_allowed() -> bool:
+    """
+    Dynamic read of write gate, used for:
+    - tool listing / metadata refresh
+    - tool logging / events
+    - enforcement
+
+    Uses get_write_allowed(refresh_after_seconds=0.0) when available.
+    Falls back to bool(WRITE_ALLOWED).
+    """
+    try:
+        return bool(get_write_allowed(refresh_after_seconds=0.0))
+    except Exception:
+        return bool(WRITE_ALLOWED)
+
+
+def _effective_write_action(_declared_write_action: Optional[bool]) -> bool:
+    """
+    Due to the current metadata bug, all tools are treated as write actions.
+    Keep this centralized to simplify a later rollback to declared_write_action.
+    """
+    return True
+
+
 def _apply_tool_metadata(
     tool_obj: Any,
     schema: Mapping[str, Any],
@@ -73,6 +108,9 @@ def _apply_tool_metadata(
 ) -> None:
     if tool_obj is None:
         return
+
+    # Always public. Do not rely on caller-provided visibility.
+    visibility = "public"
 
     try:
         setattr(tool_obj, "__mcp_visibility__", visibility)
@@ -107,13 +145,21 @@ def _apply_tool_metadata(
         if not isinstance(meta, dict):
             meta = {}
             setattr(tool_obj, "meta", meta)
+
+        # Always public/exposed.
+        meta["chatgpt.com/visibility"] = "public"
+        meta["visibility"] = "public"
+
         if write_action is not None:
             meta["write_action"] = bool(write_action)
-        if write_allowed is not None and write_action is not None:
-            meta["write_enabled"] = (not bool(write_action)) or bool(write_allowed)
+
+        if write_allowed is not None:
+            # Use both keys for compatibility.
             meta["write_allowed"] = bool(write_allowed)
+            meta["write_enabled"] = bool(write_allowed)
     except Exception:
         pass
+
 
 def _require_jsonschema() -> Any:
     try:
@@ -170,36 +216,23 @@ def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: 
 
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
-    Enforce the write gate. If the in-memory flag is stale but the environment
-    says writes are allowed, self-heal by flipping WRITE_ALLOWED.value to True.
+    Enforce the write gate. Because all tools are effectively treated as write actions,
+    this gate applies to all tool calls.
     """
     if not write_action:
         return
 
-    if bool(WRITE_ALLOWED):
-        return
-
-    env_allows = _parse_bool(os.environ.get("GITHUB_MCP_WRITE_ALLOWED", "true"))
-    if env_allows:
-        # Self-heal: if env says true, do not block due to stale in-memory state.
-        try:
-            WRITE_ALLOWED.value = True  # type: ignore[attr-defined]
-        except Exception:
-            pass
+    if _current_write_allowed():
         return
 
     raise AdaptivToolError(
         code="write_not_allowed",
-        message=f"Write tool {tool_name!r} stopped because WRITE_ALLOWED is false.",
+        message=f"Tool {tool_name!r} stopped because WRITE_ALLOWED is false.",
         category="policy",
         origin="write_gate",
         retryable=False,
-        details={
-            "tool": tool_name,
-            "write_allowed": False,
-            "env_GITHUB_MCP_WRITE_ALLOWED": os.environ.get("GITHUB_MCP_WRITE_ALLOWED"),
-        },
-        hint="Set GITHUB_MCP_WRITE_ALLOWED=true and retry.",
+        details={"tool": tool_name, "write_allowed": False},
+        hint="Enable the write gate (WRITE_ALLOWED=true) and retry.",
     )
 
 
@@ -354,7 +387,7 @@ def _emit_tool_error(
             "schema_hash": schema_hash,
             "schema_present": schema_present,
             "write_action": bool(write_action),
-            "write_allowed": bool(WRITE_ALLOWED),
+            "write_allowed": _current_write_allowed(),
             "error": structured_error.get("error", {}),
         }
     )
@@ -369,7 +402,7 @@ def _emit_tool_error(
             "schema_hash": schema_hash,
             "schema_present": schema_present,
             "write_action": bool(write_action),
-            "write_allowed": bool(WRITE_ALLOWED),
+            "write_allowed": _current_write_allowed(),
             "error": structured_error,
         }
     )
@@ -380,10 +413,7 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
 
     Provider log formatters can render nested dict extras inconsistently.
     To keep logs stable and parseable we attach a structured payload as a nested
-    dict under `tool_event` (not a pre-serialized JSON string). This prevents
-    double-encoding and removes backslash/quote spam in hosted log streams.
-
-    Note: tests monkeypatch this function; keep name and signature stable.
+    dict under `tool_event` (not a pre-serialized JSON string).
     """
     try:
         safe_full = _jsonable(dict(payload))
@@ -394,7 +424,6 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
             f" | tool={safe_full.get('tool_name')}"
         )
 
-        # Keep provider logs readable by default.
         tool_event: dict[str, Any] = {
             "event": safe_full.get("event"),
             "status": safe_full.get("status"),
@@ -412,7 +441,6 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
             tool_event["request_keys"] = sorted(list(safe_full["request"].keys()))
 
         if isinstance(safe_full.get("error"), dict):
-            # error payloads differ slightly by callsite; include common fields.
             err = safe_full["error"]
             if isinstance(err.get("error"), dict):
                 err = err["error"]
@@ -436,7 +464,6 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
             TOOLS_LOGGER.info(msg, extra=extra)
     except Exception:
         return
-
 
 
 def _fastmcp_tool_params() -> Optional[tuple[inspect.Parameter, ...]]:
@@ -491,39 +518,24 @@ def _register_with_fastmcp(
     description: Optional[str],
     tags: Optional[Iterable[str]] = None,
 ) -> Any:
-    # FastMCP is an optional dependency. In production, when it is not installed,
-    # Skip registration when the backend is not present.
     if (mcp is None) or (getattr(getattr(mcp, "__class__", None), "__name__", None) == "_MissingFastMCP"):
         return None
 
-    # `mcp` is typically unset/None and registration should be skipped. Unit tests
-    # may inject a FakeMCP into this module even when FastMCP is not installed;
-    # in that case we still exercise registration logic.
     if not FASTMCP_AVAILABLE and (
-        mcp is None
-        or getattr(getattr(mcp, "__class__", None), "__name__", None) == "_MissingFastMCP"
+        mcp is None or getattr(getattr(mcp, "__class__", None), "__name__", None) == "_MissingFastMCP"
     ):
         return None
 
-    """
-    Robust FastMCP registration across signature variants.
-
-    Prevents the crash:
-      TypeError: FastMCP.tool() got multiple values for argument 'name'
-    by never passing `fn` positionally when the tool() signature expects `name`
-    positionally.
-    """
     params = _fastmcp_tool_params()
     style = _fastmcp_call_style(params)
 
-    # Build kwargs in descending compatibility order.
     normalized_tags = list(tags or [])
     base: dict[str, Any] = {"name": name, "description": description}
     full: dict[str, Any] = {
         "name": name,
         "description": description,
         "tags": normalized_tags,
-        "meta": {},
+        "meta": {"chatgpt.com/visibility": "public", "visibility": "public"},
     }
 
     attempts = [full, base, {"name": name}]
@@ -534,26 +546,20 @@ def _register_with_fastmcp(
     for kw in attempts:
         kw2 = _filter_kwargs_for_signature(params, dict(kw))
 
-        # Factory style: mcp.tool(**kw)(fn)
         if style in {"factory", "unknown"}:
             try:
                 decorator = mcp.tool(**kw2)
-                # decorator should be callable; if it's already a tool object, keep it.
                 if callable(decorator) and not hasattr(decorator, "name"):
                     tool_obj = decorator(fn)
                 else:
-                    # Some implementations may return a Tool-like object directly.
                     tool_obj = decorator
                 break
             except TypeError as exc:
                 last_exc = exc
-                # If factory failed, and signature indicates direct style, try direct below.
                 if style == "factory":
                     continue
 
-        # Direct style: mcp.tool(fn, **kw)
         if style in {"direct", "unknown"}:
-            # IMPORTANT: do not attempt direct style if signature starts with name
             if style == "unknown" and params and params[0].name == "name":
                 continue
             try:
@@ -599,15 +605,11 @@ def mcp_tool(
             signature = None
 
         tool_name = name or getattr(func, "__name__", "tool")
-        # IMPORTANT: TOOL_DENYLIST is an exposure control, not an authorization control.
-        # To ensure WRITE_ALLOWED is the only authorization gate for write actions,
-        # do not allow TOOL_DENYLIST to suppress registration of write tools.
-        if (not bool(write_action)) and tool_name in TOOL_DENYLIST:
-            TOOLS_LOGGER.info("Skipping MCP tool registration for %s (not enabled by config)", tool_name)
-            return func
-        llm_level = "advanced" if write_action else "basic"
+        llm_level = "advanced"  # because effective write_action is always true
         normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
         normalized_tags = [str(tag) for tag in tags or [] if str(tag).strip()]
+
+        effective_write_action = _effective_write_action(write_action)
 
         if asyncio.iscoroutinefunction(func):
 
@@ -621,28 +623,28 @@ def mcp_tool(
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
                 schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+
                 try:
                     if not schema_present:
-                        raise AdaptivToolError(
-                            code="schema_missing",
-                            message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
-                            category="validation",
-                            origin="schema",
-                            retryable=False,
-                            details={"tool": tool_name},
-                            hint="Ensure tool schema caching runs during registration.",
-                        )
+                        # Best-effort self-heal: derive schema from signature and continue.
+                        derived = _schema_from_signature(signature)
+                        schema = derived if isinstance(derived, Mapping) else {}
+                        schema = dict(schema)
+                        wrapper.__mcp_input_schema__ = schema
+                        wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
+                        schema_hash = wrapper.__mcp_input_schema_hash__
+                        schema_present = True
 
-                    _validate_tool_args_schema(tool_name, schema, all_args)
-                    _enforce_write_allowed(tool_name, write_action=write_action)
+                    _validate_tool_args_schema(tool_name, schema, all_args)  # type: ignore[arg-type]
+                    _enforce_write_allowed(tool_name, write_action=effective_write_action)
                 except Exception as exc:
                     _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=write_action,
+                        write_action=effective_write_action,
                         start=start,
                         schema_hash=schema_hash if schema_present else None,
-                        schema_present=schema_present,
+                        schema_present=bool(schema_present),
                         req=req,
                         exc=exc,
                         phase="preflight",
@@ -660,8 +662,8 @@ def mcp_tool(
                         "request": req,
                         "schema_hash": schema_hash,
                         "schema_present": True,
-                        "write_action": bool(write_action),
-                        "write_allowed": bool(WRITE_ALLOWED),
+                        "write_action": True,
+                        "write_allowed": _current_write_allowed(),
                         "arg_keys": ctx["arg_keys"],
                         "arg_count": ctx["arg_count"],
                     }
@@ -676,8 +678,8 @@ def mcp_tool(
                         "request": req,
                         "schema_hash": schema_hash,
                         "schema_present": True,
-                        "write_action": bool(write_action),
-                        "write_allowed": bool(WRITE_ALLOWED),
+                        "write_action": True,
+                        "write_allowed": _current_write_allowed(),
                     }
                 )
 
@@ -687,7 +689,7 @@ def mcp_tool(
                     _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=write_action,
+                        write_action=effective_write_action,
                         start=start,
                         schema_hash=schema_hash,
                         schema_present=True,
@@ -700,7 +702,7 @@ def mcp_tool(
                 duration_ms = int((time.perf_counter() - start) * 1000)
                 _record_tool_call(
                     tool_name,
-                    write_kind="write" if write_action else "read",
+                    write_kind="write",
                     duration_ms=duration_ms,
                     errored=False,
                 )
@@ -713,8 +715,8 @@ def mcp_tool(
                         "duration_ms": duration_ms,
                         "schema_hash": schema_hash,
                         "schema_present": True,
-                        "write_action": bool(write_action),
-                        "write_allowed": bool(WRITE_ALLOWED),
+                        "write_action": True,
+                        "write_allowed": _current_write_allowed(),
                         "result_type": type(result).__name__,
                     }
                 )
@@ -728,23 +730,24 @@ def mcp_tool(
                 tags=normalized_tags,
             )
 
-            schema = _normalize_input_schema(wrapper.__mcp_tool__)
-            if not isinstance(schema, Mapping):
-                schema = _schema_from_signature(signature)
-            if not isinstance(schema, Mapping):
+            schema2 = _normalize_input_schema(wrapper.__mcp_tool__)
+            if not isinstance(schema2, Mapping):
+                schema2 = _schema_from_signature(signature)
+            if not isinstance(schema2, Mapping):
                 raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
-            wrapper.__mcp_input_schema__ = schema
-            wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
-            wrapper.__mcp_write_action__ = bool(write_action)
-            wrapper.__mcp_visibility__ = visibility
+            wrapper.__mcp_input_schema__ = schema2
+            wrapper.__mcp_input_schema_hash__ = _schema_hash(schema2)
+            wrapper.__mcp_write_action__ = True
+            wrapper.__mcp_visibility__ = "public"
             wrapper.__mcp_tags__ = normalized_tags
+
             _apply_tool_metadata(
                 wrapper.__mcp_tool__,
-                schema,
-                visibility,
+                schema2,
+                "public",
                 normalized_tags,
-                write_action=bool(write_action),
-                write_allowed=bool(WRITE_ALLOWED),
+                write_action=True,
+                write_allowed=_current_write_allowed(),
             )
 
             return wrapper
@@ -759,28 +762,27 @@ def mcp_tool(
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
             schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+
             try:
                 if not schema_present:
-                    raise AdaptivToolError(
-                        code="schema_missing",
-                        message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
-                        category="validation",
-                        origin="schema",
-                        retryable=False,
-                        details={"tool": tool_name},
-                        hint="Ensure tool schema caching runs during registration.",
-                    )
+                    derived = _schema_from_signature(signature)
+                    schema = derived if isinstance(derived, Mapping) else {}
+                    schema = dict(schema)
+                    wrapper.__mcp_input_schema__ = schema
+                    wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
+                    schema_hash = wrapper.__mcp_input_schema_hash__
+                    schema_present = True
 
-                _validate_tool_args_schema(tool_name, schema, all_args)
-                _enforce_write_allowed(tool_name, write_action=write_action)
+                _validate_tool_args_schema(tool_name, schema, all_args)  # type: ignore[arg-type]
+                _enforce_write_allowed(tool_name, write_action=effective_write_action)
             except Exception as exc:
                 _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     start=start,
                     schema_hash=schema_hash if schema_present else None,
-                    schema_present=schema_present,
+                    schema_present=bool(schema_present),
                     req=req,
                     exc=exc,
                     phase="preflight",
@@ -797,8 +799,8 @@ def mcp_tool(
                     "request": req,
                     "schema_hash": schema_hash,
                     "schema_present": True,
-                    "write_action": bool(write_action),
-                    "write_allowed": bool(WRITE_ALLOWED),
+                    "write_action": True,
+                    "write_allowed": _current_write_allowed(),
                     "arg_keys": ctx["arg_keys"],
                     "arg_count": ctx["arg_count"],
                 }
@@ -812,8 +814,8 @@ def mcp_tool(
                     "request": req,
                     "schema_hash": schema_hash,
                     "schema_present": True,
-                    "write_action": bool(write_action),
-                    "write_allowed": bool(WRITE_ALLOWED),
+                    "write_action": True,
+                    "write_allowed": _current_write_allowed(),
                 }
             )
 
@@ -823,7 +825,7 @@ def mcp_tool(
                 _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     start=start,
                     schema_hash=schema_hash,
                     schema_present=True,
@@ -836,7 +838,7 @@ def mcp_tool(
             duration_ms = int((time.perf_counter() - start) * 1000)
             _record_tool_call(
                 tool_name,
-                write_kind="write" if write_action else "read",
+                write_kind="write",
                 duration_ms=duration_ms,
                 errored=False,
             )
@@ -849,8 +851,8 @@ def mcp_tool(
                     "duration_ms": duration_ms,
                     "schema_hash": schema_hash,
                     "schema_present": True,
-                    "write_action": bool(write_action),
-                    "write_allowed": bool(WRITE_ALLOWED),
+                    "write_action": True,
+                    "write_allowed": _current_write_allowed(),
                     "result_type": type(result).__name__,
                 }
             )
@@ -864,23 +866,24 @@ def mcp_tool(
             tags=normalized_tags,
         )
 
-        schema = _normalize_input_schema(wrapper.__mcp_tool__)
-        if not isinstance(schema, Mapping):
-            schema = _schema_from_signature(signature)
-        if not isinstance(schema, Mapping):
+        schema2 = _normalize_input_schema(wrapper.__mcp_tool__)
+        if not isinstance(schema2, Mapping):
+            schema2 = _schema_from_signature(signature)
+        if not isinstance(schema2, Mapping):
             raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
-        wrapper.__mcp_input_schema__ = schema
-        wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
-        wrapper.__mcp_write_action__ = bool(write_action)
-        wrapper.__mcp_visibility__ = visibility
+        wrapper.__mcp_input_schema__ = schema2
+        wrapper.__mcp_input_schema_hash__ = _schema_hash(schema2)
+        wrapper.__mcp_write_action__ = True
+        wrapper.__mcp_visibility__ = "public"
         wrapper.__mcp_tags__ = normalized_tags
+
         _apply_tool_metadata(
             wrapper.__mcp_tool__,
-            schema,
-            visibility,
+            schema2,
+            "public",
             normalized_tags,
-            write_action=bool(write_action),
-            write_allowed=bool(WRITE_ALLOWED),
+            write_action=True,
+            write_allowed=_current_write_allowed(),
         )
 
         return wrapper
@@ -898,27 +901,19 @@ def register_extra_tools_if_available() -> None:
 
 
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
-    allowed = bool(get_write_allowed(refresh_after_seconds=0.0)) if _write_allowed is None else bool(_write_allowed)
+    allowed = _current_write_allowed() if _write_allowed is None else bool(_write_allowed)
 
     for tool_obj, func in list(_REGISTERED_MCP_TOOLS):
         try:
-            base_write = bool(
-                getattr(func, "__mcp_write_action__", None)
-                if getattr(func, "__mcp_write_action__", None) is not None
-                else getattr(tool_obj, "write_action", False)
-            )
-            visibility = (
-                getattr(func, "__mcp_visibility__", None)
-                or getattr(tool_obj, "__mcp_visibility__", None)
-                or "public"
-            )
+            visibility = "public"
             tags = getattr(func, "__mcp_tags__", None) or getattr(tool_obj, "tags", None) or []
 
             schema = getattr(func, "__mcp_input_schema__", None)
             if not isinstance(schema, Mapping):
                 schema = _normalize_input_schema(tool_obj)
             if not isinstance(schema, Mapping):
-                # Best-effort fallback; avoids crashing refresh.
+                schema = _schema_from_signature(inspect.signature(func))
+            if not isinstance(schema, Mapping):
                 schema = {"type": "object", "properties": {}}
 
             _apply_tool_metadata(
@@ -926,7 +921,7 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 schema,
                 visibility,
                 tags,
-                write_action=base_write,
+                write_action=True,
                 write_allowed=allowed,
             )
         except Exception:
