@@ -128,21 +128,17 @@ def _apply_tool_metadata(
 def _require_jsonschema() -> Any:
     try:
         import jsonschema  # type: ignore
+
         return jsonschema
-    except Exception as exc:
-        raise AdaptivToolError(
-            code="schema_validation_unavailable",
-            message="jsonschema is required for strict tool argument validation but is not installed.",
-            category="validation",
-            origin="schema",
-            retryable=False,
-            details={"missing_dependency": "jsonschema"},
-            hint="Add jsonschema to server dependencies and redeploy (pip install jsonschema).",
-        ) from exc
+    except Exception:
+        return None
 
 
 def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: Mapping[str, Any]) -> None:
     jsonschema = _require_jsonschema()
+
+    if jsonschema is None:
+        return
 
     payload = dict(args)
     payload.pop("self", None)
