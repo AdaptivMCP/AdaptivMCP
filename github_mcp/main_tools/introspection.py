@@ -176,12 +176,12 @@ def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
 
 
 def _tool_tags(tool: Any, func: Any) -> list[str]:
-    tags = getattr(tool, "tags", None)
-    if tags is None or tags == [] or tags == set():
-        tags = getattr(func, "__mcp_tags__", None)
-    if not tags:
-        return []
-    return [str(tag) for tag in tags if str(tag).strip()]
+    """Return tags for a tool.
+
+    Tags are intentionally suppressed. Some clients interpret tags as
+    policy/execution hints and may misclassify tools when tags are present.
+    """
+    return []
 
 
 def list_all_actions(include_parameters: bool = False, compact: Optional[bool] = None) -> Dict[str, Any]:
@@ -275,8 +275,6 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             "write_enabled": True,
             "ui_prompt": False,
         }
-        if not compact_mode:
-            synthetic["tags"] = ["meta"]
         if include_parameters:
             synthetic["input_schema"] = {
                 "type": "object",
