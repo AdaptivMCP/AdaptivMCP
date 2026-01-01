@@ -133,6 +133,7 @@ async def search_workspace(
     path: str = "",
     case_sensitive: bool = False,
     max_results: Optional[int] = None,
+    regex: Optional[bool] = None,
     max_file_bytes: Optional[int] = None,
     include_hidden: bool = False,
     *,
@@ -140,7 +141,13 @@ async def search_workspace(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Search text files in the workspace clone using a pattern (bounded, no shell)."""
+    """Search text files in the workspace clone (bounded, no shell).
+
+    Behavior for `query`:
+      - regex=None (default): treat as regex if valid; if invalid regex, fall back to literal search.
+      - regex=False: always literal search (regex metacharacters are escaped).
+      - regex=True: strict regex mode (invalid patterns error).
+    """
 
     if not isinstance(query, str) or not query:
         raise ValueError("query must be a non-empty string")
@@ -166,6 +173,7 @@ async def search_workspace(
                 "path": path,
                 "query": query,
                 "case_sensitive": case_sensitive,
+                "used_regex": False,
                 "results": [],
                 "truncated": False,
                 "files_scanned": 0,
@@ -175,10 +183,26 @@ async def search_workspace(
             }
 
         flags = 0 if case_sensitive else re.IGNORECASE
+
+        # Regex/literal handling:
+        # - regex=True: strict regex mode (error on invalid pattern)
+        # - regex=False: literal substring search
+        # - regex=None: try regex; fall back to literal if invalid
+        used_regex = True
+        pattern = query
+        if regex is False:
+            used_regex = False
+            pattern = re.escape(query)
+
         try:
-            matcher = re.compile(query, flags=flags)
+            matcher = re.compile(pattern, flags=flags)
         except re.error as exc:
-            raise ValueError(f"invalid pattern: {exc}") from exc
+            if regex is True:
+                raise ValueError(f"invalid pattern: {exc}") from exc
+            # Auto-fallback to literal search when regex is None (default)
+            used_regex = False
+            pattern = re.escape(query)
+            matcher = re.compile(pattern, flags=flags)
 
         results: list[dict[str, Any]] = []
         truncated = False
@@ -252,6 +276,7 @@ async def search_workspace(
             "path": path,
             "query": query,
             "case_sensitive": case_sensitive,
+            "used_regex": used_regex,
             "results": results,
             "truncated": truncated,
             "files_scanned": files_scanned,
