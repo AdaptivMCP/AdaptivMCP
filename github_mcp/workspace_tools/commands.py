@@ -14,6 +14,14 @@ def _tw():
     from github_mcp import tools_workspace as tw
     return tw
 
+def _strip_ui_fields(payload: object) -> object:
+    if not isinstance(payload, dict):
+        return payload
+    for k in ('controller_log', 'summary', 'user_message'):
+        payload.pop(k, None)
+    return payload
+
+
 
 @mcp_tool(write_action=True)
 async def render_shell(
@@ -194,6 +202,8 @@ async def terminal_command(
                         "missing_module": missing,
                         "message": "Missing python dependency. Re-run terminal_command with installing_dependencies=true.",
                     }
+        out = _strip_ui_fields(out)
+
         return out
     except Exception as exc:
         return _structured_tool_error(exc, context="terminal_command", tool_surface="terminal_command")
