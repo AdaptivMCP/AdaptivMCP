@@ -290,7 +290,6 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _emit_tool_error(
-    *,
     tool_name: str,
     call_id: str,
     write_action: bool,
@@ -300,7 +299,7 @@ def _emit_tool_error(
     req: Mapping[str, Any],
     exc: BaseException,
     phase: str,
-) -> None:
+) -> dict[str, Any]:
     duration_ms = int((time.perf_counter() - start) * 1000)
     _record_tool_call(
         tool_name,
@@ -339,6 +338,56 @@ def _emit_tool_error(
             "write_allowed": bool(WRITE_ALLOWED),
             "error": structured_error,
         }
+    )
+
+    return structured_error
+
+
+
+def _coerce_tool_exception(tool_name: str, exc: BaseException, structured: Mapping[str, Any]) -> BaseException:
+    """Coerce arbitrary exceptions into an AdaptivToolError with a concise, user-facing message.
+
+    This improves the tool error surface (Codex-like): users see a stable code/category and
+    a correlatable incident_id, while detailed diagnostics remain in provider logs.
+    """
+    if isinstance(exc, AdaptivToolError):
+        return exc
+
+    err = structured.get("error") if isinstance(structured.get("error"), Mapping) else {}
+    incident_id = str(err.get("incident_id") or "").strip()
+    code = str(err.get("code") or "unhandled_exception")
+    category = str(err.get("category") or "runtime")
+    origin = str(err.get("origin") or "exception")
+    retryable = bool(err.get("retryable", False))
+    hint = err.get("hint")
+    msg = str(err.get("message") or str(exc) or exc.__class__.__name__).strip()
+    msg = ' '.join(msg.replace('\n',' ').replace('\r',' ').split())
+    user_msg = f"{tool_name} failed: {msg}"
+    if incident_id:
+        user_msg += f" (incident {incident_id})"
+    if hint:
+        try:
+            hint_s = ' '.join(str(hint).replace('\n',' ').replace('\r',' ').split())
+            if hint_s:
+                user_msg += f" | hint: {hint_s}"
+        except Exception:
+            pass
+
+    details = {}
+    if isinstance(err.get("details"), Mapping):
+        details.update(dict(err.get("details")))
+    if incident_id:
+        details.setdefault("incident_id", incident_id)
+    details.setdefault("tool", tool_name)
+
+    return AdaptivToolError(
+        code=code,
+        message=user_msg,
+        category=category,
+        origin=origin,
+        retryable=retryable,
+        details=details,
+        hint=str(hint) if hint is not None else None,
     )
 
 
@@ -609,7 +658,7 @@ def mcp_tool(
                     _validate_tool_args_schema(tool_name, schema, all_args)
                     _enforce_write_allowed(tool_name, write_action=write_action)
                 except Exception as exc:
-                    _emit_tool_error(
+                    structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
                         write_action=write_action,
@@ -620,7 +669,10 @@ def mcp_tool(
                         exc=exc,
                         phase="preflight",
                     )
-                    raise
+                    coerced = _coerce_tool_exception(tool_name, exc, structured_error)
+                    if coerced is exc:
+                        raise
+                    raise coerced from exc
 
                 ctx = _extract_context(all_args)
 
@@ -657,7 +709,7 @@ def mcp_tool(
                 try:
                     result = await func(*args, **kwargs)
                 except Exception as exc:
-                    _emit_tool_error(
+                    structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
                         write_action=write_action,
@@ -668,7 +720,10 @@ def mcp_tool(
                         exc=exc,
                         phase="execute",
                     )
-                    raise
+                    coerced = _coerce_tool_exception(tool_name, exc, structured_error)
+                    if coerced is exc:
+                        raise
+                    raise coerced from exc
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
                 _record_tool_call(
@@ -747,7 +802,7 @@ def mcp_tool(
                 _validate_tool_args_schema(tool_name, schema, all_args)
                 _enforce_write_allowed(tool_name, write_action=write_action)
             except Exception as exc:
-                _emit_tool_error(
+                structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
                     write_action=write_action,
@@ -758,7 +813,10 @@ def mcp_tool(
                     exc=exc,
                     phase="preflight",
                 )
-                raise
+                coerced = _coerce_tool_exception(tool_name, exc, structured_error)
+                if coerced is exc:
+                    raise
+                raise coerced from exc
 
             ctx = _extract_context(all_args)
             _record_recent_tool_event(
@@ -793,7 +851,7 @@ def mcp_tool(
             try:
                 result = func(*args, **kwargs)
             except Exception as exc:
-                _emit_tool_error(
+                structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
                     write_action=write_action,
@@ -804,7 +862,10 @@ def mcp_tool(
                     exc=exc,
                     phase="execute",
                 )
-                raise
+                coerced = _coerce_tool_exception(tool_name, exc, structured_error)
+                if coerced is exc:
+                    raise
+                raise coerced from exc
 
             duration_ms = int((time.perf_counter() - start) * 1000)
             _record_tool_call(
