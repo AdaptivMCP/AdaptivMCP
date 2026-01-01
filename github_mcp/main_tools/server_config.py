@@ -22,7 +22,7 @@ from github_mcp.config import (
 import github_mcp.server as server
 from github_mcp.exceptions import GitHubAPIError, GitHubAuthError
 from github_mcp.server import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO, _github_request
-from github_mcp.utils import REPO_DEFAULTS
+from github_mcp.utils import REPO_DEFAULTS, _get_main_module
 
 
 async def get_server_config() -> Dict[str, Any]:
@@ -116,7 +116,7 @@ def validate_json_string(raw: str) -> Dict[str, Any]:
 async def get_repo_defaults(full_name: Optional[str] = None) -> Dict[str, Any]:
     """Return default configuration for a GitHub repository."""
 
-    main_mod = sys.modules.get("main")
+    main_mod = _get_main_module()
     controller_repo = getattr(main_mod, "CONTROLLER_REPO", CONTROLLER_REPO)
     controller_default_branch = getattr(main_mod, "CONTROLLER_DEFAULT_BRANCH", CONTROLLER_DEFAULT_BRANCH)
 
@@ -136,7 +136,7 @@ async def get_repo_defaults(full_name: Optional[str] = None) -> Dict[str, Any]:
             try:
                 # Minimal request for repo metadata
                 repo_info = await _github_request("GET", f"/repos/{full_name}")
-                default_branch = repo_info.get("default_branch") if isinstance(repo_info, dict) else None
+                default_branch = (repo_info.get("json") or {}).get("default_branch") if isinstance(repo_info, dict) else None
             except GitHubAuthError:
                 # If auth is missing/invalid, fall back to a common convention
                 default_branch = "main"

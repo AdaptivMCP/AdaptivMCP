@@ -14,8 +14,19 @@ from github_mcp.server import (
 
 
 def _resolve_main_helper(name: str, default):
-    main_mod = sys.modules.get("main")
-    return getattr(main_mod, name, default)
+    """Resolve an optional helper override from the entry module.
+
+    The server may be executed as `main` or as `__main__` depending on the
+    hosting environment. This helper keeps the compatibility surface stable
+    without requiring hard imports.
+    """
+    for mod_name in ("main", "__main__"):
+        mod = sys.modules.get(mod_name)
+        if mod is None:
+            continue
+        if hasattr(mod, name):
+            return getattr(mod, name)
+    return default
 
 
 async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -40,7 +51,13 @@ async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) 
         )
 
     # main.py historically returned only the parsed JSON for graphql_query.
-    return result.get("json")
+    payload_json = result.get("json")
+    if isinstance(payload_json, dict):
+        return payload_json
+    return structured_tool_error(
+        RuntimeError("GraphQL response did not include a JSON object"),
+        context="graphql_query",
+    )
 
 
 async def fetch_url(url: str) -> Dict[str, Any]:
@@ -62,7 +79,7 @@ async def fetch_url(url: str) -> Dict[str, Any]:
             resp = await client.get(url)
         except Exception as e:  # noqa: BLE001
             return structured_tool_error(
-                str(e),
+                e,
                 context="fetch_url",
                 path=url,
             )

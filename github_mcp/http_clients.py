@@ -13,6 +13,10 @@ from urllib.parse import urlencode
 
 import importlib.util
 
+def _get_main_module_for_patching():
+    return sys.modules.get("main") or sys.modules.get("__main__")
+
+
 if importlib.util.find_spec("httpx") is not None:
     import httpx
 else:
@@ -395,7 +399,7 @@ def _external_client_instance() -> httpx.AsyncClient:
     """Singleton async client for non-GitHub HTTP requests."""
 
     global _http_client_external, _http_client_external_loop
-    main_module = sys.modules.get("main")
+    main_module = _get_main_module_for_patching()
     patched_client = getattr(main_module, "_http_client_external", None) if main_module else None
     if patched_client is not None:
         _http_client_external = patched_client

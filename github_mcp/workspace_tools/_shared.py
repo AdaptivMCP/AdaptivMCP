@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import CONTROLLER_REPO
+from github_mcp.utils import _get_main_module
 from github_mcp.workspace import (
     _clone_repo,
     _prepare_temp_virtualenv,
@@ -160,7 +161,7 @@ def _workspace_deps() -> Dict[str, Any]:
     receives the GitHub auth header env (GIT_HTTP_EXTRAHEADER + config-env),
     enabling `git push`/`git fetch` in non-interactive environments.
     """
-    main_module = sys.modules.get("main")
+    main_module = _get_main_module()
     clone_repo_fn = getattr(main_module, "_clone_repo", _clone_repo)
     base_run_shell = getattr(main_module, "_run_shell", _run_shell)
     prepare_venv_fn = getattr(main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv)

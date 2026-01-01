@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 from . import config
 from .exceptions import GitHubAPIError, GitHubAuthError
 from .http_clients import _get_github_token
+from .utils import _get_main_module
 
 
 def _is_git_rate_limit_error(message: str) -> bool:
@@ -67,7 +68,7 @@ async def _run_shell(
     if os.name == "nt":
         shell_executable = shell_executable or shutil.which("bash")
 
-    main_module = sys.modules.get("main")
+    main_module = _get_main_module()
     proc_env = {
         **os.environ,
         "GIT_AUTHOR_NAME": getattr(main_module, "GIT_AUTHOR_NAME", config.GIT_AUTHOR_NAME),
@@ -225,7 +226,7 @@ def _raise_git_auth_error(operation: str, stderr: str) -> None:
 def _workspace_path(full_name: str, ref: str) -> str:
     repo_key = full_name.replace("/", "__")
 
-    main_module = sys.modules.get("main")
+    main_module = _get_main_module()
     base_dir = getattr(main_module, "WORKSPACE_BASE_DIR", config.WORKSPACE_BASE_DIR)
 
     workspace_dir = os.path.join(base_dir, repo_key, ref)
@@ -243,7 +244,7 @@ async def _clone_repo(
     workspace_dir = _workspace_path(full_name, effective_ref)
     os.makedirs(os.path.dirname(workspace_dir), exist_ok=True)
 
-    main_module = sys.modules.get("main")
+    main_module = _get_main_module()
     run_shell = getattr(main_module, "_run_shell", _run_shell)
     auth_env = _git_auth_env()
     no_auth_env = _git_no_auth_env()
@@ -358,7 +359,7 @@ async def _clone_repo(
 
 async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
     """Create an isolated virtualenv and return env vars that activate it."""
-    main_module = sys.modules.get("main")
+    main_module = _get_main_module()
     run_shell = getattr(main_module, "_run_shell", _run_shell)
 
     venv_dir = os.path.join(repo_dir, ".venv-mcp")

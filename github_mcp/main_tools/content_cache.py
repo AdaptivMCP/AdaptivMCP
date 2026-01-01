@@ -28,8 +28,8 @@ def _cache_file_result(*, full_name: str, path: str, ref: str, decoded: Dict[str
 async def _decode(full_name: str, path: str, ref: str | None) -> Dict[str, Any]:
     """Resolve decode function, preferring monkeypatched main._decode_github_content."""
 
-    main_mod = sys.modules.get("main")
-    fn = getattr(main_mod, "_decode_github_content", _decode_default)
+    main_mod = sys.modules.get("main") or sys.modules.get("__main__")
+    fn = getattr(main_mod, "_decode_github_content", _decode_default) if main_mod else _decode_default
     return await fn(full_name, path, ref)
 
 async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Dict[str, Any]:
@@ -52,7 +52,7 @@ async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Di
                 results[p] = cached
             except Exception as e:
                 results[p] = _structured_tool_error(
-                    str(e),
+                    e,
                     context="fetch_files",
                     path=p,
                 )

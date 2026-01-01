@@ -27,8 +27,8 @@ async def _perform_github_commit_and_refresh_workspace(
     failures are logged but never fail the commit itself.
     """
 
-    main_mod = sys.modules.get("main")
-    commit_fn = getattr(main_mod, "_perform_github_commit", _default_commit)
+    main_mod = sys.modules.get("main") or sys.modules.get("__main__")
+    commit_fn = getattr(main_mod, "_perform_github_commit", _default_commit) if main_mod else _default_commit
     commit_result = await commit_fn(
         full_name=full_name,
         path=path,
@@ -39,7 +39,7 @@ async def _perform_github_commit_and_refresh_workspace(
     )
 
     try:
-        ensure_fn = getattr(main_mod, "ensure_workspace_clone", _default_ensure_workspace_clone)
+        ensure_fn = getattr(main_mod, "ensure_workspace_clone", _default_ensure_workspace_clone) if main_mod else _default_ensure_workspace_clone
         refresh = await ensure_fn(
             full_name=full_name,
             ref=branch,
