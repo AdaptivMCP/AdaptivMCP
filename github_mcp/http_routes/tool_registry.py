@@ -88,9 +88,11 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any]) -> Any:
 
 def build_tool_registry_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
+        # Default MUST include schemas/parameters for public schema visibility.
         include_parameters = _parse_bool(request.query_params.get("include_parameters"))
         if include_parameters is None:
             include_parameters = True
+
         compact = _parse_bool(request.query_params.get("compact"))
         return JSONResponse(_tool_catalog(include_parameters=include_parameters, compact=compact))
 
@@ -116,7 +118,7 @@ def build_tool_invoke_endpoint() -> Callable[[Request], Response]:
         tool_name = request.path_params.get("tool_name")
         if not tool_name:
             return JSONResponse({"error": "tool_name is required"}, status_code=400)
-        payload = {}
+        payload: Dict[str, Any] = {}
         if request.method in {"POST", "PUT", "PATCH"}:
             try:
                 payload = await request.json()
