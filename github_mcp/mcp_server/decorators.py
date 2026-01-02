@@ -5,7 +5,7 @@ Decorators and helpers for registering MCP tools.
 Behavioral contract:
 - The only blocking control is WRITE_ALLOWED (true/false) for write tools.
 - Tool arguments are strictly validated against published input schemas.
-- Tags metadata is captured for introspection (side_effects/mutating are still ignored).
+- Tags metadata is captured for introspection.
 - Dedupe helpers remain for compatibility and test coverage.
 
 Dedupe contract:
@@ -613,8 +613,6 @@ def mcp_tool(
     tags: Optional[Iterable[str]] = None,
     description: str | None = None,
     visibility: str = "public",  # accepted, ignored
-    mutating: Any = None,  # accepted, ignored
-    side_effects: Any = None,  # accepted, ignored
     **_ignored: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
