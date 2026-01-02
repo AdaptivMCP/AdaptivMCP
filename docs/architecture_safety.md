@@ -136,18 +136,7 @@ Client (ChatGPT / connector)
 - `github_mcp/mcp_server/context.py` (`WRITE_ALLOWED`)
 - `github_mcp/mcp_server/decorators.py` (`_ui_prompt_required_for_tool` returns `False`)
 
-### 3.3 Side-effect classification
-
-Tools are classified as:
-- **READ_ONLY**
-- **LOCAL_MUTATION** (workspace changes)
-- **REMOTE_MUTATION** (GitHub writes)
-
-This classification is used for logging, metadata, and recent event buffers.
-
-**Relevant module:** `github_mcp/side_effects.py`
-
-### 3.4 Dedupe and retry behavior
+### 3.3 Dedupe and retry behavior
 
 - Tool calls are de-duplicated in-memory to mitigate retry storms.
 - GitHub API calls are retried with backoff when rate limits are detected.
@@ -158,7 +147,7 @@ This classification is used for logging, metadata, and recent event buffers.
 - `github_mcp/http_clients.py` (API retry/backoff)
 - `github_mcp/workspace.py` (`_run_git_with_retry`)
 
-### 3.5 Command execution safeguards
+### 3.4 Command execution safeguards
 
 - Shell commands run with:
   - explicit timeout handling
@@ -168,7 +157,7 @@ This classification is used for logging, metadata, and recent event buffers.
 
 **Relevant module:** `github_mcp/workspace.py`
 
-### 3.6 Caching and data minimization
+### 3.5 Caching and data minimization
 
 - File cache is in-memory only and bounded by entry count and byte size.
 - Metrics and recent tool events are in-memory only; they reset on restart.
@@ -180,7 +169,7 @@ This classification is used for logging, metadata, and recent event buffers.
 - `github_mcp/mcp_server/context.py` (recent events)
 - `github_mcp/mcp_server/schemas.py` (metadata sanitation)
 
-### 3.7 Health and observability
+### 3.6 Health and observability
 
 - `/healthz` reports whether a GitHub token is present.
 - Health payload includes current metrics snapshot and controller defaults.
