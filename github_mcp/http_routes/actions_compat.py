@@ -5,6 +5,40 @@ from typing import Any, Callable, Dict, List
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+
+def _tool_name(tool: Any, func: Any) -> str:
+    """Best-effort tool name extraction.
+
+    In most environments `tool` is a framework tool object (e.g., FastMCP Tool)
+    with a `.name`. In minimal/test environments it may be the underlying Python
+    function.
+    """
+
+    name = getattr(tool, "name", None) or getattr(func, "__name__", None) or getattr(tool, "__name__", None)
+    return str(name or "tool")
+
+
+def _tool_description(tool: Any, func: Any) -> str:
+    """Best-effort tool description extraction."""
+
+    desc = getattr(tool, "description", None)
+    if desc:
+        return str(desc)
+
+    # Fall back to function docstrings (the MCP decorator sets wrapper.__doc__).
+    doc = getattr(func, "__doc__", None) or getattr(tool, "__doc__", None)
+    return str(doc or "")
+
+
+def _tool_display_name(tool: Any, func: Any) -> str:
+    """Best-effort human-facing title."""
+
+    title = getattr(tool, "title", None)
+    if title:
+        return str(title)
+    return _tool_name(tool, func)
+
+
 def _terminal_help(name: str, description: str, schema: Any) -> str:
     desc = (description or "").strip()
     synopsis = (desc.splitlines()[0].strip() if desc else "").strip()
@@ -50,7 +84,10 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
 
     for tool, _func in getattr(server, "_REGISTERED_MCP_TOOLS", []):
-        schema = server._normalize_input_schema(tool)
+        tool_name = _tool_name(tool, _func)
+        tool_description = _tool_description(tool, _func)
+
+        schema = server._normalize_input_schema(tool) or server._normalize_input_schema(_func)
 
         annotations = getattr(tool, "annotations", None)
         if hasattr(annotations, "model_dump"):
@@ -69,16 +106,16 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
             display_name = annotations.get("title")
         if not display_name and isinstance(meta, dict):
             display_name = meta.get("title") or meta.get("chatgpt.com/title")
-        display_name = display_name or tool.name
+        display_name = str(display_name) if display_name else _tool_display_name(tool, _func)
 
-        terminal_help = _terminal_help(tool.name, tool.description, schema or {})
+        terminal_help = _terminal_help(tool_name, tool_description, schema or {})
 
         actions.append(
             {
-                "name": tool.name,
+                "name": tool_name,
                 "display_name": display_name,
                 "title": display_name,
-                "description": tool.description,
+                "description": tool_description,
                 "terminal_help": terminal_help,
                 "parameters": schema or {"type": "object", "properties": {}},
                 "annotations": annotations,
