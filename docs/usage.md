@@ -72,6 +72,7 @@ Typical flow:
 4. Re-clone or refresh when you need a clean snapshot
    - The local clone does not automatically reflect the live GitHub state unless you fetch/pull or recreate the clone.
    - If you need to ensure the clone exactly matches a branch’s remote state, re-clone the repo/ref (or delete and re-create the workspace clone).
+   - Use `workspace_sync_status` to see ahead/behind and uncommitted changes, then `workspace_sync_to_remote` to hard-reset the clone to the remote branch when needed.
 
 ### GitHub API usage guidance
 

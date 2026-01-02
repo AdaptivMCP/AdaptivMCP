@@ -53,6 +53,8 @@ run_command = _commands.run_command
 workspace_create_branch = _git_ops.workspace_create_branch
 workspace_delete_branch = _git_ops.workspace_delete_branch
 workspace_self_heal_branch = _git_ops.workspace_self_heal_branch
+workspace_sync_status = _git_ops.workspace_sync_status
+workspace_sync_to_remote = _git_ops.workspace_sync_to_remote
 
 commit_workspace = _commit.commit_workspace
 commit_workspace_files = _commit.commit_workspace_files
@@ -91,6 +93,8 @@ __all__ = [
     'workspace_create_branch',
     'workspace_delete_branch',
     'workspace_self_heal_branch',
+    'workspace_sync_status',
+    'workspace_sync_to_remote',
     'commit_workspace',
     'commit_workspace_files',
     'get_workspace_changes_summary',
