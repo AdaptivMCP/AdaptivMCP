@@ -277,6 +277,19 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
     }
 
 
+def list_write_actions(
+    include_parameters: bool = False, compact: Optional[bool] = None
+) -> Dict[str, Any]:
+    """Enumerate write-capable MCP tools with optional schemas."""
+    catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
+    tools = [tool for tool in catalog.get("tools", []) or [] if tool.get("write_action")]
+    return {
+        "compact": catalog.get("compact"),
+        "write_actions_enabled": catalog.get("write_actions_enabled"),
+        "tools": tools,
+    }
+
+
 async def list_tools(
     only_write: bool = False,
     only_read: bool = False,
