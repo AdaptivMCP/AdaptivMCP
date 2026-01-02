@@ -111,20 +111,6 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
     return bool(value)
 
 
-def _attach_meta(payload: Dict[str, Any], *, tool: str, attempts: int, write_action: bool, max_attempts: int) -> None:
-    """Attach _meta without breaking existing result payloads."""
-
-    meta = payload.get("_meta")
-    if not isinstance(meta, dict):
-        meta = {}
-        payload["_meta"] = meta
-
-    meta.setdefault("tool", tool)
-    meta.setdefault("attempts", int(attempts))
-    meta.setdefault("max_attempts", int(max_attempts))
-    meta.setdefault("write_action", bool(write_action))
-
-
 async def _preflight_validate(tool_name: str, args: Dict[str, Any]) -> Optional[JSONResponse]:
     """Validate args against the published schema without running the tool.
 
@@ -186,14 +172,6 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
             if inspect.isawaitable(result):
                 result = await result
             payload = result if isinstance(result, dict) else {"result": result}
-            if isinstance(payload, dict):
-                _attach_meta(
-                    payload,
-                    tool=tool_name,
-                    attempts=attempt,
-                    write_action=write_action,
-                    max_attempts=max_attempts,
-                )
             return JSONResponse(payload)
         except Exception as exc:
             from github_mcp.mcp_server.errors import _structured_tool_error
@@ -218,14 +196,6 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
                 await asyncio.sleep(delay)
                 continue
 
-            if isinstance(structured, dict):
-                _attach_meta(
-                    structured,
-                    tool=tool_name,
-                    attempts=attempt,
-                    write_action=write_action,
-                    max_attempts=max_attempts,
-                )
             return JSONResponse(structured, status_code=status_code, headers=headers)
 
 
