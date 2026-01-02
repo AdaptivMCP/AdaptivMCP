@@ -86,6 +86,7 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 - Workspace persistence: the persistent clone survives across tool calls until explicitly deleted or overwritten.
 - Request deduplication: the server uses request metadata (session + message) to avoid duplicate tool execution.
 - File caching: GitHub file contents may be cached in-memory to reduce repeated fetches.
+- Workspace file and listing tools reject paths that resolve outside the repository root.
 
 ## Configuration
 

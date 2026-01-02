@@ -16,6 +16,12 @@ def _tw():
     return tw
 
 
+def _path_within_repo(root: str, candidate: str) -> bool:
+    root = os.path.realpath(root)
+    candidate = os.path.realpath(candidate)
+    return candidate == root or candidate.startswith(root + os.sep)
+
+
 @mcp_tool(write_action=False)
 async def list_workspace_files(
     full_name: Optional[str] = None,
@@ -49,7 +55,7 @@ async def list_workspace_files(
 
         root = os.path.realpath(repo_dir)
         start = os.path.realpath(os.path.join(repo_dir, path)) if path else root
-        if not start.startswith(root):
+        if not _path_within_repo(root, start):
             raise ValueError("path must stay within repo")
 
         # If path points to a file, return that file (subject to include_hidden).
@@ -161,7 +167,7 @@ async def search_workspace(
 
         root = os.path.realpath(repo_dir)
         start = os.path.realpath(os.path.join(repo_dir, path)) if path else root
-        if not start.startswith(root):
+        if not _path_within_repo(root, start):
             raise ValueError("path must stay within repo")
 
         # Allow searching a single file path.
