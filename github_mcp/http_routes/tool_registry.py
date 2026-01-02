@@ -51,19 +51,28 @@ def _normalize_payload(payload: Any) -> Dict[str, Any]:
     if args is None:
         return {}
     if isinstance(args, dict):
-        return dict(args)
+        return {k: v for k, v in args.items() if k != "_meta"}
     if isinstance(args, (list, tuple)):
         normalized: Dict[str, Any] = {}
         for entry in args:
             if isinstance(entry, dict):
                 if "name" in entry:
-                    normalized[str(entry["name"])] = entry.get("value")
+                    name = str(entry["name"])
+                    if name == "_meta":
+                        continue
+                    normalized[name] = entry.get("value")
                 elif len(entry) == 1:
                     key, value = next(iter(entry.items()))
-                    normalized[str(key)] = value
+                    key_str = str(key)
+                    if key_str == "_meta":
+                        continue
+                    normalized[key_str] = value
             elif isinstance(entry, (list, tuple)) and len(entry) == 2:
                 key, value = entry
-                normalized[str(key)] = value
+                key_str = str(key)
+                if key_str == "_meta":
+                    continue
+                normalized[key_str] = value
         return normalized
     return {}
 

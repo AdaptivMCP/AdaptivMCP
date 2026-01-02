@@ -109,20 +109,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         elif not isinstance(annotations, dict):
             annotations = None
 
-        meta = getattr(tool, "meta", None)
-        if hasattr(meta, "model_dump"):
-            meta = meta.model_dump(exclude_none=True)
-        elif not isinstance(meta, dict):
-            meta = None
-        meta_payload = dict(meta or {})
-        meta_payload.setdefault("write_action", bool(write_action))
-        meta_payload.setdefault("write_enabled", bool(write_enabled))
-
         display_name = getattr(tool, "title", None)
         if not display_name and isinstance(annotations, dict):
             display_name = annotations.get("title")
-        if not display_name and isinstance(meta, dict):
-            display_name = meta.get("title") or meta.get("chatgpt.com/title")
         display_name = str(display_name) if display_name else _tool_display_name(tool, _func)
 
         terminal_help = _terminal_help(tool_name, tool_description, schema or {})
@@ -136,7 +125,6 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "terminal_help": terminal_help,
                 "parameters": schema or {"type": "object", "properties": {}},
                 "annotations": annotations,
-                "meta": meta_payload,
                 "write_action": bool(write_action),
                 "write_enabled": bool(write_enabled),
             }
