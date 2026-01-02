@@ -19,6 +19,64 @@ from ._shared import (
     _delete_branch_via_workspace,
 )
 
+async def _workspace_sync_snapshot(
+    deps: Dict[str, Any],
+    *,
+    repo_dir: str,
+    branch: str,
+) -> Dict[str, Any]:
+    fetch = await _run_shell_ok(
+        deps,
+        "git fetch --prune origin",
+        cwd=repo_dir,
+        timeout_seconds=300,
+    )
+    remote_ref = f"origin/{branch}"
+    head = await _run_shell_ok(deps, "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+    remote = await _run_shell_ok(
+        deps,
+        f"git rev-parse {shlex.quote(remote_ref)}",
+        cwd=repo_dir,
+        timeout_seconds=60,
+    )
+    rev_list = await _run_shell_ok(
+        deps,
+        f"git rev-list --left-right --count HEAD...{shlex.quote(remote_ref)}",
+        cwd=repo_dir,
+        timeout_seconds=120,
+    )
+    counts = (rev_list.get("stdout", "") or "").strip().split()
+    if len(counts) != 2:
+        raise GitHubAPIError(
+            f"Unexpected git rev-list output for {remote_ref}: {rev_list.get('stdout', '')}"
+        )
+    ahead = int(counts[0])
+    behind = int(counts[1])
+
+    status = await _run_shell_ok(
+        deps,
+        "git status --porcelain",
+        cwd=repo_dir,
+        timeout_seconds=60,
+    )
+    status_lines = [
+        line
+        for line in (status.get("stdout", "") or "").splitlines()
+        if line.strip()
+    ]
+
+    return {
+        "fetch": fetch,
+        "remote_ref": remote_ref,
+        "local_sha": (head.get("stdout", "") or "").strip(),
+        "remote_sha": (remote.get("stdout", "") or "").strip(),
+        "ahead": ahead,
+        "behind": behind,
+        "status_lines": status_lines,
+        "is_clean": not status_lines,
+        "diverged": bool(ahead or behind),
+    }
+
 def _tw():
     from github_mcp import tools_workspace as tw
     return tw
@@ -425,3 +483,85 @@ async def workspace_self_heal_branch(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_self_heal_branch")
+
+
+@mcp_tool(write_action=False)
+async def workspace_sync_status(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    *,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Report how a workspace clone differs from its remote branch."""
+    try:
+        deps = _tw()._workspace_deps()
+        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _tw()._resolve_ref(ref, branch=branch)
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+        snapshot.update(
+            {
+                "branch": effective_ref,
+                "full_name": full_name,
+                "repo_dir": repo_dir,
+            }
+        )
+        return snapshot
+    except Exception as exc:
+        return _structured_tool_error(exc, context="workspace_sync_status")
+
+
+@mcp_tool(write_action=True)
+async def workspace_sync_to_remote(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    *,
+    discard_local_changes: bool = False,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Reset a workspace clone to match the remote branch."""
+    try:
+        deps = _tw()._workspace_deps()
+        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _tw()._resolve_ref(ref, branch=branch)
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        before = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+
+        if (not discard_local_changes) and (not before["is_clean"] or before["ahead"] > 0):
+            raise GitHubAPIError(
+                "Workspace has local changes or unpushed commits. "
+                "Re-run with discard_local_changes=true to force sync."
+            )
+
+        await _run_shell_ok(
+            deps,
+            f"git reset --hard {shlex.quote(before['remote_ref'])}",
+            cwd=repo_dir,
+            timeout_seconds=300,
+        )
+        if discard_local_changes:
+            await _run_shell_ok(
+                deps,
+                "git clean -fd",
+                cwd=repo_dir,
+                timeout_seconds=120,
+            )
+
+        after = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+        return {
+            "branch": effective_ref,
+            "full_name": full_name,
+            "repo_dir": repo_dir,
+            "discard_local_changes": discard_local_changes,
+            "before": before,
+            "after": after,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="workspace_sync_to_remote")

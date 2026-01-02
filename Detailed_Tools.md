@@ -45,10 +45,10 @@ Files & content caching:
 - `get_file_contents`, `fetch_files`, `cache_files`, `get_cached_files`, `download_user_content`
 
 Workspace (persistent clone):
-- `ensure_workspace_clone`, `list_workspace_files`, `get_workspace_file_contents`, `set_workspace_file_contents`, `search_workspace`, `terminal_command`, `render_shell`, `get_workspace_changes_summary`, `commit_workspace`, `commit_workspace_files`, `update_file_from_workspace`
+- `ensure_workspace_clone`, `list_workspace_files`, `get_workspace_file_contents`, `set_workspace_file_contents`, `search_workspace`, `terminal_command`, `render_shell`, `get_workspace_changes_summary`, `commit_workspace`, `commit_workspace_files`, `workspace_sync_status`, `workspace_sync_to_remote`, `update_file_from_workspace`
 
 Branches & PRs:
-- `create_branch`, `ensure_branch`, `list_branches`, `workspace_create_branch`, `workspace_delete_branch`, `workspace_self_heal_branch`, `get_branch_summary`, `get_latest_branch_status`, `get_commit_combined_status`, `list_pull_requests`, `create_pull_request`, `open_pr_for_existing_branch`, `recent_prs_for_branch`, `fetch_pr`, `get_pr_info`, `get_pr_overview`, `list_pr_changed_filenames`, `fetch_pr_comments`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `build_pr_summary`, `update_files_and_open_pr`
+- `create_branch`, `ensure_branch`, `list_branches`, `workspace_create_branch`, `workspace_delete_branch`, `workspace_self_heal_branch`, `workspace_sync_status`, `workspace_sync_to_remote`, `get_branch_summary`, `get_latest_branch_status`, `get_commit_combined_status`, `list_pull_requests`, `create_pull_request`, `open_pr_for_existing_branch`, `recent_prs_for_branch`, `fetch_pr`, `get_pr_info`, `get_pr_overview`, `list_pr_changed_filenames`, `fetch_pr_comments`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `build_pr_summary`, `update_files_and_open_pr`
 
 Issues:
 - `list_recent_issues`, `list_repository_issues`, `fetch_issue`, `fetch_issue_comments`, `create_issue`, `update_issue`, `comment_on_issue`, `open_issue_context`, `get_issue_overview`, `resolve_handle`, `get_issue_comment_reactions`
@@ -751,6 +751,41 @@ Example:
 
 ```json
 {"tool":"workspace_self_heal_branch","args":{"full_name":"OWNER/REPO","branch":"feature/broken","new_branch":"feature/broken-healed"}}
+```
+
+## workspace_sync_status
+
+Purpose: Report whether the workspace clone is ahead/behind the remote branch and whether there are local uncommitted changes.
+
+Inputs:
+- `full_name` (string | null)
+- `ref` (string, default `main`)
+- `branch` (string | null, alias for `ref`)
+
+Outputs: Local/remote SHAs, ahead/behind counts, working tree cleanliness, and status lines.
+
+Example:
+
+```json
+{"tool":"workspace_sync_status","args":{"full_name":"OWNER/REPO","ref":"main"}}
+```
+
+## workspace_sync_to_remote
+
+Purpose: Hard-reset the workspace clone to match the remote branch, optionally discarding local changes and unpushed commits.
+
+Inputs:
+- `full_name` (string | null)
+- `ref` (string, default `main`)
+- `discard_local_changes` (bool, default false): must be true to drop uncommitted changes or unpushed commits.
+- `branch` (string | null, alias for `ref`)
+
+Outputs: Sync snapshots before and after the reset.
+
+Example:
+
+```json
+{"tool":"workspace_sync_to_remote","args":{"full_name":"OWNER/REPO","ref":"main","discard_local_changes":true}}
 ```
 
 ## get_branch_summary
