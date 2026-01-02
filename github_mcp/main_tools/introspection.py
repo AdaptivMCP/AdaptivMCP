@@ -441,7 +441,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
             or "public"
         ),
         "write_action": base_write_action,
-        "write_enabled": (not base_write_action) or write_allowed,
+        "write_enabled": (not base_write_action) or write_allowed or (tool_name in _ALWAYS_WRITE_ENABLED_TOOLS),
     }
 
 

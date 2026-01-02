@@ -5,6 +5,10 @@ from typing import Any, Callable, Dict, List
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from github_mcp.mcp_server.context import get_write_allowed
+
+_ALWAYS_WRITE_ENABLED_TOOLS: set[str] = {"authorize_write_actions"}
+
 
 def _tool_name(tool: Any, func: Any) -> str:
     """Best-effort tool name extraction.
@@ -37,6 +41,13 @@ def _tool_display_name(tool: Any, func: Any) -> str:
     if title:
         return str(title)
     return _tool_name(tool, func)
+
+
+def _is_write_action(tool: Any, func: Any) -> bool:
+    value = getattr(func, "__mcp_write_action__", None)
+    if value is None:
+        value = getattr(tool, "write_action", None)
+    return bool(value)
 
 
 def _terminal_help(name: str, description: str, schema: Any) -> str:
@@ -82,10 +93,13 @@ def _terminal_help(name: str, description: str, schema: Any) -> str:
 
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
+    write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
 
     for tool, _func in getattr(server, "_REGISTERED_MCP_TOOLS", []):
         tool_name = _tool_name(tool, _func)
         tool_description = _tool_description(tool, _func)
+        write_action = _is_write_action(tool, _func)
+        write_enabled = (not write_action) or write_allowed or (tool_name in _ALWAYS_WRITE_ENABLED_TOOLS)
 
         schema = server._normalize_input_schema(tool) or server._normalize_input_schema(_func)
 
@@ -100,6 +114,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
             meta = meta.model_dump(exclude_none=True)
         elif not isinstance(meta, dict):
             meta = None
+        meta_payload = dict(meta or {})
+        meta_payload.setdefault("write_action", bool(write_action))
+        meta_payload.setdefault("write_enabled", bool(write_enabled))
 
         display_name = getattr(tool, "title", None)
         if not display_name and isinstance(annotations, dict):
@@ -119,7 +136,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "terminal_help": terminal_help,
                 "parameters": schema or {"type": "object", "properties": {}},
                 "annotations": annotations,
-                "meta": meta,
+                "meta": meta_payload,
+                "write_action": bool(write_action),
+                "write_enabled": bool(write_enabled),
             }
         )
 
