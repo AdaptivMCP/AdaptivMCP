@@ -77,6 +77,21 @@ def _best_effort_details(exc: BaseException) -> Dict[str, Any]:
         return {"exception_type": exc.__class__.__name__}
 
 
+def _extract_raw_payloads(exc: BaseException) -> Dict[str, Any]:
+    raw: Dict[str, Any] = {}
+    response_payload = getattr(exc, "response_payload", None)
+    if response_payload is None:
+        response_payload = getattr(exc, "raw_response", None)
+    if response_payload is not None:
+        raw["raw_response"] = response_payload
+
+    raw_error = getattr(exc, "raw_error", None)
+    if raw_error is not None:
+        raw["raw_error"] = raw_error
+
+    return raw
+
+
 def _single_line(s: str) -> str:
     # Ensure messages are stable and don't introduce embedded newlines into logs/UI.
     s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
@@ -121,7 +136,7 @@ def _structured_tool_error(
     if adaptiv_exc is not None:
         err = adaptiv_exc.to_error_dict(incident_id=incident_id)
         user_message = _format_user_message(err, context=context, path=path)
-        return {
+        payload = {
             "error": err,
             "user_message": user_message,
             "tool_descriptor": tool_descriptor,
@@ -130,6 +145,8 @@ def _structured_tool_error(
             "routing_hint": routing_hint,
             "request": request,
         }
+        payload.update(_extract_raw_payloads(exc))
+        return payload
 
     if isinstance(exc, GitHubAuthError):
         msg = _single_line(str(exc) or "GitHub authentication failed.")
@@ -155,7 +172,7 @@ def _structured_tool_error(
             ),
         }
         user_message = _format_user_message(err, context=context, path=path)
-        return {
+        payload = {
             "error": err,
             "user_message": user_message,
             "tool_descriptor": tool_descriptor,
@@ -164,6 +181,8 @@ def _structured_tool_error(
             "routing_hint": routing_hint,
             "request": request,
         }
+        payload.update(_extract_raw_payloads(exc))
+        return payload
 
     if isinstance(exc, UsageError):
         msg = _single_line(str(exc) or "Invalid usage.")
@@ -198,7 +217,7 @@ def _structured_tool_error(
             "hint": hint,
         }
         user_message = _format_user_message(err, context=context, path=path)
-        return {
+        payload = {
             "error": err,
             "user_message": user_message,
             "tool_descriptor": tool_descriptor,
@@ -207,6 +226,8 @@ def _structured_tool_error(
             "routing_hint": routing_hint,
             "request": request,
         }
+        payload.update(_extract_raw_payloads(exc))
+        return payload
 
     # GitHub rate limit -> upstream, retryable, actionable (NOT a generic runtime error)
     if isinstance(exc, GitHubRateLimitError):
@@ -238,7 +259,7 @@ def _structured_tool_error(
             "hint": "Wait for the reset time, reduce request frequency, or use a higher-limit GitHub credential.",
         }
         user_message = _format_user_message(err, context=context, path=path)
-        return {
+        payload = {
             "error": err,
             "user_message": user_message,
             "tool_descriptor": tool_descriptor,
@@ -247,6 +268,8 @@ def _structured_tool_error(
             "routing_hint": routing_hint,
             "request": request,
         }
+        payload.update(_extract_raw_payloads(exc))
+        return payload
 
     # Generic exception -> normalized error
     err: Dict[str, Any] = {
@@ -268,7 +291,7 @@ def _structured_tool_error(
         err["details"]["path"] = path
 
     user_message = _format_user_message(err, context=context, path=path)
-    return {
+    payload = {
         "error": err,
         "user_message": user_message,
         "tool_descriptor": tool_descriptor,
@@ -277,6 +300,8 @@ def _structured_tool_error(
         "routing_hint": routing_hint,
         "request": request,
     }
+    payload.update(_extract_raw_payloads(exc))
+    return payload
 
 
 def _unwrap_adaptiv_error(exc: BaseException) -> Optional[AdaptivToolError]:

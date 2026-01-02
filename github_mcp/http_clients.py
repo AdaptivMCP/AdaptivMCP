@@ -498,9 +498,22 @@ def _request_with_metrics(
         raise GitHubAuthError("GitHub authentication failed. Check your token and permissions.")
 
     if response.is_error:
-        raise GitHubAPIError(f"GitHub API error {response.status_code}: {response.text[:200]}")
+        err = GitHubAPIError(f"GitHub API error {response.status_code}: {response.text[:200]}")
+        err.response_payload = _build_response_payload(response)
+        raise err
 
     return response
+
+
+def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "status_code": resp.status_code,
+        "headers": dict(resp.headers),
+        "text": resp.text,
+    }
+    if body is not None:
+        payload["json"] = body
+    return payload
 
 
 async def _github_request(
@@ -654,15 +667,13 @@ async def _github_request(
             )
 
         if error_flag:
-            raise GitHubAPIError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
+            err = GitHubAPIError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
+            err.response_payload = _build_response_payload(resp, body=body)
+            raise err
 
-        result: Dict[str, Any] = {
-            "status_code": resp.status_code,
-            "headers": dict(resp.headers),
-            "text": resp.text,
-        }
+        result = _build_response_payload(resp, body=body)
         if expect_json:
-            result["json"] = resp.json()
+            result["json"] = body if body is not None else resp.json()
         return result
 
 
