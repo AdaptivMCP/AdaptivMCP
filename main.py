@@ -884,6 +884,18 @@ def list_write_tools() -> Dict[str, Any]:
     return _impl()
 
 
+@mcp_tool(
+    write_action=False,
+    description="Enumerate write-capable MCP tools with optional schemas.",
+)
+def list_write_actions(
+    include_parameters: bool = False, compact: Optional[bool] = None
+) -> Dict[str, Any]:
+    """Enumerate write-capable MCP tools with optional schemas."""
+    from github_mcp.main_tools.introspection import list_write_actions as _impl
+    return _impl(include_parameters=include_parameters, compact=compact)
+
+
 
 @mcp_tool(write_action=False)
 async def get_repository(full_name: str) -> Dict[str, Any]:
