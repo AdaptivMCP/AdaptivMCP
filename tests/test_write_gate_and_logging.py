@@ -24,7 +24,7 @@ def test_authorize_write_actions_persists_shared_gate(tmp_path, monkeypatch):
 
     context.set_write_allowed(False)
 
-    result = main.authorize_write_actions.__wrapped__(approved=True)
+    result = main.authorize_write_actions(approved=True)
     assert result["write_allowed"] is True
 
     payload = json.loads(write_path.read_text())
