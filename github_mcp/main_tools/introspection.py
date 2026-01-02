@@ -10,7 +10,7 @@ from ._main import _main
 
 _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = {
 }
-_ALWAYS_WRITE_ENABLED_TOOLS: set[str] = {"authorize_write_actions"}
+_ALWAYS_WRITE_ENABLED_TOOLS: set[str] = set()
 
 
 def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed: bool) -> bool:
@@ -33,12 +33,6 @@ def list_write_tools() -> Dict[str, Any]:
     """
 
     tools = [
-        {
-            "name": "authorize_write_actions",
-            "category": "control",
-            "description": "Update the server's write-allowed state.",
-            "notes": "This toggles the WRITE_ALLOWED flag used by write gating.",
-        },
         {
             "name": "create_branch",
             "category": "branch",
