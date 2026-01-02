@@ -754,6 +754,14 @@ def mcp_tool(
                 tags=normalized_tags,
             )
 
+            # Ensure every registered tool has a stable docstring surface.
+            # Many tool wrappers intentionally omit explicit docstrings; without
+            # this, some clients display empty descriptions.
+            try:
+                wrapper.__doc__ = normalized_description
+            except Exception:
+                pass
+
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
                 schema = _schema_from_signature(signature)
@@ -895,6 +903,12 @@ def mcp_tool(
             description=normalized_description,
             tags=normalized_tags,
         )
+
+        # Ensure every registered tool has a stable docstring surface.
+        try:
+            wrapper.__doc__ = normalized_description
+        except Exception:
+            pass
 
         schema = _normalize_input_schema(wrapper.__mcp_tool__)
         if not isinstance(schema, Mapping):
