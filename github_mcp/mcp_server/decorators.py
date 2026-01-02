@@ -135,12 +135,18 @@ def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: 
     )
 
 
+_ALWAYS_ALLOW_WRITE_TOOLS = {"authorize_write_actions"}
+
+
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
     Enforce the write gate. If the in-memory flag is stale but the environment
     says writes are allowed, self-heal by flipping WRITE_ALLOWED.value to True.
     """
     if not write_action:
+        return
+
+    if tool_name in _ALWAYS_ALLOW_WRITE_TOOLS:
         return
 
     if bool(WRITE_ALLOWED):

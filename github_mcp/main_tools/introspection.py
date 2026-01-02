@@ -10,6 +10,7 @@ from ._main import _main
 
 _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = {
 }
+_ALWAYS_WRITE_ENABLED_TOOLS: set[str] = {"authorize_write_actions"}
 
 
 def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed: bool) -> bool:
@@ -213,7 +214,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         )
 
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
-        write_enabled = (not base_write_action) or write_allowed
+        write_enabled = (not base_write_action) or write_allowed or (name_str in _ALWAYS_WRITE_ENABLED_TOOLS)
 
         tool_info: Dict[str, Any] = {
             "name": name_str,
