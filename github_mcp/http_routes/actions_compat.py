@@ -7,7 +7,7 @@ from starlette.responses import JSONResponse
 
 from github_mcp.mcp_server.context import get_write_allowed
 
-_ALWAYS_WRITE_ENABLED_TOOLS: set[str] = {"authorize_write_actions"}
+_ALWAYS_WRITE_ENABLED_TOOLS: set[str] = set()
 
 
 def _tool_name(tool: Any, func: Any) -> str:

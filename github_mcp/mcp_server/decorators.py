@@ -135,7 +135,7 @@ def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: 
     )
 
 
-_ALWAYS_ALLOW_WRITE_TOOLS = {"authorize_write_actions"}
+_ALWAYS_ALLOW_WRITE_TOOLS: set[str] = set()
 
 
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:

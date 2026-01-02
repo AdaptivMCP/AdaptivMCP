@@ -90,7 +90,7 @@ WRITE_ALLOWED = _WriteAllowedFlag()
 def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     """
     Returns effective write gate. Reads the /tmp file periodically (cached),
-    so authorize_write_actions() changes apply across workers.
+    so write gate changes apply across workers.
     """
     now = time.time()
     if (now - WRITE_ALLOWED._cache.ts) < refresh_after_seconds:

@@ -45,7 +45,6 @@ async def get_server_config() -> Dict[str, Any]:
                 "When WRITE_ALLOWED is true, UI prompts are limited to commit/push-style tools. "
                 "When WRITE_ALLOWED is false, UI prompts are required for any write action."
             ),
-            "toggle_tool": "authorize_write_actions",
         },
         "git_identity": {
             "author_name": GIT_AUTHOR_NAME,
