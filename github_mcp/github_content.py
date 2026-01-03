@@ -60,7 +60,9 @@ async def _decode_github_content(
         )
     except GitHubAPIError as exc:
         raise GitHubAPIError(
-            f"Failed to fetch {full_name}/{path} at ref '{effective_ref}': {exc}"
+            f"Failed to fetch {full_name}/{path} at ref '{effective_ref}': {exc}",
+            status_code=getattr(exc, "status_code", None),
+            response_payload=getattr(exc, "response_payload", None),
         ) from exc
     if not isinstance(data.get("json"), dict):
         raise GitHubAPIError("Unexpected content response shape from GitHub")
