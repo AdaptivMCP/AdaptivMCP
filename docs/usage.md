@@ -113,9 +113,7 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 
 ### Output limits
 
-- TOOL_STDOUT_MAX_CHARS, TOOL_STDERR_MAX_CHARS, TOOL_STDIO_COMBINED_MAX_CHARS
-- WRITE_DIFF_LOG_MAX_LINES, WRITE_DIFF_LOG_MAX_CHARS
-- RUN_COMMAND_MAX_CHARS
+- WRITE_DIFF_LOG_MAX_LINES
 
 ### Tool registry controls
 

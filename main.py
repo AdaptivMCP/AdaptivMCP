@@ -27,9 +27,6 @@ from github_mcp.config import (
     MAX_CONCURRENCY,
     FILE_CACHE_MAX_BYTES,  # noqa: F401
     FILE_CACHE_MAX_ENTRIES,  # noqa: F401
-    TOOL_STDERR_MAX_CHARS,  # noqa: F401
-    TOOL_STDIO_COMBINED_MAX_CHARS,  # noqa: F401
-    TOOL_STDOUT_MAX_CHARS,  # noqa: F401
     WORKSPACE_BASE_DIR,  # noqa: F401
     )
 from github_mcp.exceptions import (
