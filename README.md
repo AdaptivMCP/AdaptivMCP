@@ -14,6 +14,16 @@ connected Adaptiv connector with multiple tasks and queries. Today it ships with
 GitHub and Render integrations, with plans for additional service integrations in
 future updates.
 
+## Development
+
+- Install dev dependencies: `make install-dev`
+- Lint: `make lint`
+- Format: `make format`
+- Test: `make test`
+- (Optional) Install + run pre-commit: `make precommit`
+
+See `CONTRIBUTING.md` for additional details.
+
 ## Tool registry defaults
 
 By default, this server does not disable any MCP tools (the built-in denylist is empty). Operators can optionally disable specific tools at deployment time by setting `MCP_TOOL_DENYLIST` to a comma-separated list of tool names.
