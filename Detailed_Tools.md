@@ -14,6 +14,120 @@ If you are looking for higher-level workflows ("how do I make a change and open 
 - Pagination is usually `per_page` + `page` (1-indexed).
 - Timestamps (when present) are usually ISO-8601 strings.
 
+## What Adaptiv MCP responses look like
+
+Adaptiv MCP tools return structured JSON. Most successful calls return an object with a top-level `result` field plus optional metadata used by the controller/UI.
+
+Common fields you may see:
+
+- `result`: Tool-specific payload (the "real" output).
+- `summary`: A compact, UI-friendly summary (title + optional bullets/next steps).
+- `user_message`: A short human-readable status message.
+- `controller_log`: Debug/trace breadcrumbs (may be empty).
+
+Some failures (or safety-gated runs) may return an error-shaped payload instead of `result`.
+
+### Example: successful `list_tools`
+
+```json
+{
+  "result": {
+    "write_actions_enabled": true,
+    "tools": [
+      {
+        "name": "get_repository",
+        "write_action": false,
+        "write_enabled": true,
+        "visibility": "public"
+      },
+      {
+        "name": "create_pull_request",
+        "write_action": true,
+        "write_enabled": true,
+        "visibility": "public"
+      }
+    ],
+    "controller_log": [],
+    "summary": {
+      "title": "list_tools: completed",
+      "bullets": [],
+      "next_steps": []
+    },
+    "user_message": "list_tools: completed"
+  }
+}
+```
+
+Notes:
+- The `tools` array is usually much larger than shown here.
+- Fields such as `risk_level` or `operation` may appear depending on deployment.
+
+### Example: successful `ensure_workspace_clone`
+
+```json
+{
+  "result": {
+    "branch": "main",
+    "reset": true,
+    "created": false,
+    "controller_log": [],
+    "summary": {
+      "title": "ensure_workspace_clone: completed",
+      "bullets": [],
+      "next_steps": []
+    },
+    "user_message": "ensure_workspace_clone: completed"
+  }
+}
+```
+
+### Example: successful `workspace_create_branch`
+
+```json
+{
+  "result": {
+    "base_ref": "main",
+    "new_branch": "docs/detailed-tools-response-examples",
+    "checkout": {
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "",
+      "stderr": "Switched to a new branch 'docs/detailed-tools-response-examples'
+"
+    },
+    "push": {
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "branch 'docs/detailed-tools-response-examples' set up to track 'origin/docs/detailed-tools-response-examples'.
+",
+      "stderr": "To https://github.com/Proofgate-Revocations/chatgpt-mcp-github.git
+ * [new branch]      docs/detailed-tools-response-examples -> docs/detailed-tools-response-examples
+"
+    },
+    "summary": {
+      "title": "workspace_create_branch: completed",
+      "bullets": [],
+      "next_steps": []
+    },
+    "user_message": "workspace_create_branch: completed"
+  }
+}
+```
+
+Notes:
+- Command outputs may be truncated in long-running operations (see `stdout_truncated` / `stderr_truncated` fields when present).
+
+### Example: error-shaped response
+
+```json
+{
+  "text": "Error executing tool open_file_context: ...",
+  "is_error": true
+}
+```
+
+---
+
 ## Safety, write actions, and the workspace
 
 There are two categories of tools:
