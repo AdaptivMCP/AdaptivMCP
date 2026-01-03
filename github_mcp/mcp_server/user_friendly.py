@@ -172,12 +172,21 @@ def attach_error_user_facing_fields(tool_name: str, payload: Any) -> Any:
     title = f"{tool_name}: failed"
     message = _safe_str(err.get("message") or out.get("user_message") or "Unknown error").strip()
     code = _safe_str(err.get("code") or "").strip()
+    category = _safe_str(err.get("category") or "").strip()
+    retryable = err.get("retryable")
+    critical = err.get("critical")
     hint = _safe_str(err.get("hint") or "").strip()
     incident = _safe_str(err.get("incident_id") or "").strip()
 
     bullets = _clean_lines(_preview_text(message))
     if code:
         bullets.append(f"code: {_preview_text(code)}")
+    if category:
+        bullets.append(f"category: {_preview_text(category)}")
+    if retryable is not None:
+        bullets.append(f"retryable: {'yes' if retryable else 'no'}")
+    if critical is not None:
+        bullets.append(f"critical: {'yes' if critical else 'no'}")
     if incident:
         bullets.append(f"incident: {_preview_text(incident)}")
 

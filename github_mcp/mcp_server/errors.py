@@ -66,6 +66,16 @@ def _is_retryable_exception(exc: BaseException) -> bool:
     return isinstance(exc, retryables)
 
 
+def _is_critical_error(category: Optional[str], retryable: bool) -> bool:
+    if category in {"validation", "configuration", "permission", "not_found", "conflict"}:
+        return False
+    if category in {"timeout", "upstream"}:
+        return not retryable
+    if category == "runtime":
+        return True
+    return True
+
+
 def _best_effort_details(exc: BaseException) -> Dict[str, Any]:
     # Keep details JSON-ish and bounded.
     try:
@@ -135,6 +145,7 @@ def _structured_tool_error(
     adaptiv_exc = _unwrap_adaptiv_error(exc)
     if adaptiv_exc is not None:
         err = adaptiv_exc.to_error_dict(incident_id=incident_id)
+        err.setdefault("critical", _is_critical_error(err.get("category"), bool(err.get("retryable"))))
         user_message = _format_user_message(err, context=context, path=path)
         payload = {
             "error": err,
@@ -158,6 +169,7 @@ def _structured_tool_error(
             "category": "permission",
             "origin": "github",
             "retryable": False,
+            "critical": _is_critical_error("permission", False),
             "details": {
                 "env_vars": list(GITHUB_TOKEN_ENV_VARS),
                 **({"context": context} if context else {}),
@@ -213,6 +225,7 @@ def _structured_tool_error(
             "category": category,
             "origin": origin,
             "retryable": False,
+            "critical": _is_critical_error(category, False),
             "details": details,
             "hint": hint,
         }
@@ -255,6 +268,7 @@ def _structured_tool_error(
             "category": "upstream",
             "origin": "github",
             "retryable": True,
+            "critical": _is_critical_error("upstream", True),
             "details": details,
             "hint": "Wait for the reset time, reduce request frequency, or use a higher-limit GitHub credential.",
         }
@@ -280,6 +294,7 @@ def _structured_tool_error(
         "category": "runtime",
         "origin": "exception",
         "retryable": _is_retryable_exception(exc),
+        "critical": _is_critical_error("runtime", _is_retryable_exception(exc)),
         "details": _best_effort_details(exc),
         "hint": None,
     }
@@ -345,6 +360,14 @@ def _format_user_message(err: Dict[str, Any], *, context: Optional[str], path: O
     origin = err.get("origin")
     if origin:
         parts.append(f"Origin: {origin}")
+
+    retryable = err.get("retryable")
+    if retryable is not None:
+        parts.append(f"Retryable: {'yes' if retryable else 'no'}")
+
+    critical = err.get("critical")
+    if critical is not None:
+        parts.append(f"Critical: {'yes' if critical else 'no'}")
 
     incident_id = err.get("incident_id")
     if incident_id:
