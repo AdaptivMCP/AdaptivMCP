@@ -1,13 +1,10 @@
 import asyncio
 import uuid
 
-import pytest
-
 from github_mcp.mcp_server import decorators
 
 
-@pytest.mark.asyncio
-async def test_async_dedupe_caches_result_within_loop():
+def test_async_dedupe_caches_result_within_loop():
     key = f"dedupe-{uuid.uuid4()}"
     counter = {"calls": 0}
 
@@ -15,8 +12,14 @@ async def test_async_dedupe_caches_result_within_loop():
         counter["calls"] += 1
         return "ok"
 
-    result1 = await decorators._maybe_dedupe_call(key, _work)
-    result2 = await decorators._maybe_dedupe_call(key, _work)
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        result1 = loop.run_until_complete(decorators._maybe_dedupe_call(key, _work))
+        result2 = loop.run_until_complete(decorators._maybe_dedupe_call(key, _work))
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
 
     assert result1 == "ok"
     assert result2 == "ok"

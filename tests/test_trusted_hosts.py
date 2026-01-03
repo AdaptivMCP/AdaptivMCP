@@ -54,3 +54,19 @@ def test_configure_trusted_hosts_includes_render_url(monkeypatch):
     allowed_hosts = _get_allowed_hosts(app, TrustedHostMiddleware)
     assert "api.example.test" in allowed_hosts
     assert "render.example.test" in allowed_hosts
+
+
+def test_configure_trusted_hosts_normalizes_allowed_host_urls(monkeypatch):
+    Starlette, TrustedHostMiddleware, main = _load_dependencies()
+
+    monkeypatch.setenv(
+        "ALLOWED_HOSTS",
+        "https://chatgpt.example.test/sse, https://api.example.test",
+    )
+
+    app = Starlette()
+    main._configure_trusted_hosts(app)
+
+    allowed_hosts = _get_allowed_hosts(app, TrustedHostMiddleware)
+    assert "chatgpt.example.test" in allowed_hosts
+    assert "api.example.test" in allowed_hosts
