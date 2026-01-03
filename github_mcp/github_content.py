@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import re
-import sys
 from typing import Any, Dict, Optional
 
 from .config import SANDBOX_CONTENT_BASE_URL

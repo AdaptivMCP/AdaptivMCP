@@ -59,7 +59,6 @@ from github_mcp.metrics import (
     _metrics_snapshot,  # noqa: F401
     _reset_metrics_for_tests,  # noqa: F401
 )
-from github_mcp.mcp_server.decorators import refresh_registered_tool_metadata
 from github_mcp.mcp_server.context import (
     REQUEST_MESSAGE_ID,
     REQUEST_PATH,

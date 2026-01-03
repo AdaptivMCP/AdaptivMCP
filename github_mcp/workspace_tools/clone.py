@@ -1,16 +1,18 @@
-# Split from github_mcp.tools_workspace (generated).
+"""Generated workspace clone helpers."""
+
+from __future__ import annotations
+
 import os
 from typing import Any, Dict, Optional
 
-from github_mcp.server import (
-    _structured_tool_error,
-    mcp_tool,
-)
+from github_mcp.server import _structured_tool_error, mcp_tool
 
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 @mcp_tool(write_action=False)
 async def ensure_workspace_clone(
@@ -32,9 +34,7 @@ async def ensure_workspace_clone(
         existed = os.path.isdir(os.path.join(workspace_dir, ".git"))
 
         deps = _tw()._workspace_deps()
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=not reset
-        )
+        await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=not reset)
 
         return {
             "branch": effective_ref,

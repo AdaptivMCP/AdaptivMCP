@@ -6,19 +6,17 @@ Implementation lives under `github_mcp.mcp_server.*`.
 
 from __future__ import annotations
 
-from github_mcp.utils import _env_flag  # noqa: F401
+from github_mcp.http_clients import _github_request  # noqa: F401
+from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO, _env_flag  # noqa: F401
 
 from github_mcp.mcp_server.context import (  # noqa: F401
     COMPACT_METADATA_DEFAULT,
-    CONTROLLER_DEFAULT_BRANCH,
-    CONTROLLER_REPO,
     RECENT_TOOL_EVENTS,
     RECENT_TOOL_EVENTS_CAPACITY,
     RECENT_TOOL_EVENTS_TOTAL,
     RECENT_TOOL_EVENTS_DROPPED,
     WRITE_ALLOWED,
     _TOOL_EXAMPLES,
-    _github_request,
     _record_recent_tool_event,
     mcp,
 )
@@ -32,6 +30,7 @@ from github_mcp.mcp_server.schemas import (  # noqa: F401
     _preflight_tool_args,
     _stringify_annotation,
 )
+
 __all__ = [
     "COMPACT_METADATA_DEFAULT",
     "CONTROLLER_DEFAULT_BRANCH",
