@@ -198,7 +198,7 @@ Example:
 
 ## get_server_config
 
-Purpose: Return a safe summary of server settings (timeouts, concurrency, output limits, and other runtime configuration).
+Purpose: Return a safe summary of server settings (timeouts, concurrency, output limits, and additional runtime configuration).
 
 Inputs: none.
 

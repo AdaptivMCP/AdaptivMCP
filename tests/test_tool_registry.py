@@ -10,7 +10,7 @@ def _install_starlette_stubs() -> None:
     These tests validate payload normalization and tool-registry glue code.
     The project supports running without Starlette installed, so we provide
     a minimal stub implementation. The stub set must be complete enough to
-    avoid breaking other tests that may import Starlette middleware helpers.
+    avoid breaking additional tests that may import Starlette middleware helpers.
     """
 
     starlette_module = types.ModuleType("starlette")

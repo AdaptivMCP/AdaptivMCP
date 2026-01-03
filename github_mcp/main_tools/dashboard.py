@@ -17,7 +17,7 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
 
     m = _main()
 
-    # Resolve the effective branch using the same helper as other tools.
+    # Resolve the effective branch using the same helper as additional tools.
     if branch is None:
         # Fall back to the default branch when available.
         defaults = await m.get_repo_defaults(full_name)

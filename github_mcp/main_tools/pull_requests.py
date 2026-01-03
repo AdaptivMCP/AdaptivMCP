@@ -308,7 +308,7 @@ async def open_pr_for_existing_branch(
 
     m = _main()
 
-    # Resolve the effective base branch using the same logic as other helpers.
+    # Resolve the effective base branch using the same logic as additional helpers.
     effective_base = m._effective_ref_for_repo(full_name, base)
     pr_title = title or f"{branch} -> {effective_base}"
 

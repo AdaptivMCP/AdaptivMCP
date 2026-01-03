@@ -1437,7 +1437,7 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
             "owner/repo" string.
         branch:
             Optional branch name. When omitted, the repository's default
-            branch is used via the same normalization logic as other tools.
+            branch is used via the same normalization logic as additional tools.
 
     Raises:
         ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
