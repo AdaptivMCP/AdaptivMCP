@@ -144,8 +144,7 @@ def _tool_write_allowed(write_action: bool) -> bool:
 
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
-    Enforce the write gate. If the in-memory flag is stale but the environment
-    says writes are allowed, self-heal by flipping WRITE_ALLOWED.value to True.
+    Enforce the write gate based on GITHUB_MCP_WRITE_ALLOWED.
     """
     if not write_action:
         return
@@ -154,15 +153,6 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
         return
 
     if bool(WRITE_ALLOWED):
-        return
-
-    env_allows = _parse_bool(os.environ.get("GITHUB_MCP_WRITE_ALLOWED", "true"))
-    if env_allows:
-        # Self-heal: if env says true, do not block due to stale in-memory state.
-        try:
-            WRITE_ALLOWED.value = True  # type: ignore[attr-defined]
-        except Exception:
-            pass
         return
 
     raise AdaptivToolError(
