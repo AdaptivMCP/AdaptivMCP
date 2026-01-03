@@ -108,7 +108,7 @@ else:
 
     httpx = _HttpxModule()
 
-from .config import (
+from .config import (  # noqa: E402
     GITHUB_API_BASE,
     GITHUB_API_BASE_URL,
     GITHUB_REQUEST_TIMEOUT_SECONDS,
@@ -122,8 +122,8 @@ from .config import (
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
 )
-from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError
-from .tool_logging import _record_github_request
+from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
+from .tool_logging import _record_github_request  # noqa: E402
 
 _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
     weakref.WeakKeyDictionary()

@@ -8,8 +8,7 @@ from github_mcp.config import TOOL_DENYLIST
 from github_mcp.mcp_server.context import get_write_allowed
 from ._main import _main
 
-_UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = {
-}
+_UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = set()
 _ALWAYS_WRITE_ENABLED_TOOLS: set[str] = set()
 
 
@@ -149,6 +148,7 @@ def list_write_tools() -> Dict[str, Any]:
 
 def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
     """Best-effort attribute resolution across tool and function wrappers."""
+
     if hasattr(tool, name):
         return getattr(tool, name)
     private = f"__mcp_{name}__"
@@ -163,6 +163,7 @@ def _tool_tags(tool: Any, func: Any) -> list[str]:
     Tags are intentionally suppressed. Some clients interpret tags as
     policy/execution hints and may misclassify tools when tags are present.
     """
+
     return []
 
 
@@ -173,6 +174,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
     - Inherent tool classification is always reported as write_action (True/False).
     - Dynamic gating is reported separately as write_enabled per tool.
     """
+
     m = _main()
     compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
 
@@ -281,6 +283,7 @@ def list_write_actions(
     include_parameters: bool = False, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
     """Enumerate write-capable MCP tools with optional schemas."""
+
     catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
     tools = [tool for tool in catalog.get("tools", []) or [] if tool.get("write_action")]
     return {
@@ -296,6 +299,7 @@ async def list_tools(
     name_prefix: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Lightweight tool catalog."""
+
     if only_write and only_read:
         raise ValueError("only_write and only_read cannot both be true")
 
@@ -326,7 +330,7 @@ async def list_tools(
         )
 
     tools.sort(key=lambda t: t["name"])
-    m = _main()
+
     return {
         "write_actions_enabled": bool(get_write_allowed(refresh_after_seconds=0.0)),
         "tools": tools,
@@ -340,6 +344,7 @@ async def describe_tool(
     tool_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Inspect one or more registered MCP tools by name."""
+
     # Back-compat: some callers pass tool_name.
     if not name and tool_name:
         name = tool_name
@@ -395,6 +400,7 @@ async def describe_tool(
 
 def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
+
     if args is not None and not isinstance(args, Mapping):
         raise TypeError("args must be a mapping")
 
@@ -458,6 +464,7 @@ async def validate_tool_args(
     tool_names: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Validate candidate payload(s) against tool input schemas without running them."""
+
     if not tool_names:
         if not tool_name:
             raise ValueError("validate_tool_args requires 'tool_name' or 'tool_names'.")

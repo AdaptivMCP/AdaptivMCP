@@ -1,4 +1,11 @@
-# Split from github_mcp.tools_workspace (generated).
+"""Generated wrappers for running test/lint suites in the persistent workspace."""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from github_mcp.server import mcp_tool
+
 
 def _normalize_timeout_seconds(value: object, default: int) -> int:
     if value is None or isinstance(value, bool):
@@ -16,10 +23,6 @@ def _normalize_timeout_seconds(value: object, default: int) -> int:
         except Exception:
             return max(1, int(default))
     return max(1, int(default))
-
-from typing import Any, Dict, List, Optional
-
-from github_mcp.server import mcp_tool
 
 
 def _tw():
@@ -42,8 +45,9 @@ async def run_tests(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
     """Run the project's test command in the persistent workspace and summarize the result."""
+
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
 
     result = await _tw().terminal_command(
         full_name=full_name,
@@ -122,8 +126,9 @@ async def run_lint_suite(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
     """Run the lint or static-analysis command in the workspace."""
+
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
 
     return await _tw().terminal_command(
         full_name=full_name,
@@ -154,7 +159,6 @@ async def run_quality_suite(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
     """Run lint and tests for a repo/ref.
 
     Steps:
@@ -164,6 +168,8 @@ async def run_quality_suite(
     This suite intentionally does not run token-like string scanning. Token
     logging happens at log/serialization boundaries.
     """
+
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
 
     controller_log: List[str] = [
         "Quality suite run:",

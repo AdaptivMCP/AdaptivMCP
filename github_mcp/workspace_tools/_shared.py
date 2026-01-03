@@ -1,7 +1,6 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
 import shlex
-import sys
 import re
 from typing import Any, Dict, Optional
 

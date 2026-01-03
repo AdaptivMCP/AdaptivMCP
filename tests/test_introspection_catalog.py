@@ -4,7 +4,6 @@ import types
 
 import asyncio
 
-import pytest
 
 import main
 from github_mcp.main_tools import introspection

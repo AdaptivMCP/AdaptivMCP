@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from typing import Any, Dict, Optional
 
 from github_mcp.config import (

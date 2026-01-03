@@ -8,7 +8,7 @@ import os  # noqa: E402  pylint: disable=wrong-import-position
 import sys
 import zipfile
 from types import SimpleNamespace
-from typing import Any, Dict, Mapping
+from typing import Any, Dict
 
 from .exceptions import ToolPreflightValidationError
 

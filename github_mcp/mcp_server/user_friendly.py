@@ -18,7 +18,7 @@ Policy:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping
 
 
 _UI_MAX_LINES = 12

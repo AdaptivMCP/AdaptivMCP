@@ -12,8 +12,6 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 from github_mcp.mcp_server.schemas import _jsonable
-from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
-from github_mcp.http_clients import _github_request
 
 # ------------------------------------------------------------------------------
 # Request-scoped context (used for correlation/logging/dedupe)
