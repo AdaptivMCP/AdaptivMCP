@@ -23,6 +23,8 @@ There are two categories of tools:
 
 Separately, "workspace" tools operate on a persistent, server-side git clone.
 
+Tool registry defaults: this server does not disable any tools by default (empty built-in denylist). Operators may optionally disable specific tools via `MCP_TOOL_DENYLIST` (see `docs/usage.md`).
+
 Recommended practice for changes:
 
 - Use `ensure_workspace_clone` (or a workspace tool that implicitly ensures a clone) and make edits in the persistent clone.
@@ -1674,7 +1676,7 @@ Purpose: Fetch reactions for a pull request.
 Inputs:
 - `full_name` (string)
 - `pull_number` (int)
-- `per_page` (int, default 30), `page` (int, default 1)
+- `per_page` (int, default 30), `page` (int, default 1).
 
 Outputs: Reaction list.
 
@@ -1691,7 +1693,7 @@ Purpose: Fetch reactions for a pull request review comment.
 Inputs:
 - `full_name` (string)
 - `comment_id` (int)
-- `per_page` (int, default 30), `page` (int, default 1)
+- `per_page` (int, default 30), `page` (int, default 1).
 
 Outputs: Reaction list.
 
@@ -1774,7 +1776,7 @@ Inputs:
 - `path` (string)
 - `branch` (string, default `main`)
 - `message` (string, optional)
-- `if_missing` (`error` | `noop`, default `error`)
+- `if_missing` (`error` | `noop`, default `error)
 
 Outputs: GitHub delete result.
 
