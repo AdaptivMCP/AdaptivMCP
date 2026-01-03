@@ -55,6 +55,7 @@ workspace_delete_branch = _git_ops.workspace_delete_branch
 workspace_self_heal_branch = _git_ops.workspace_self_heal_branch
 workspace_sync_status = _git_ops.workspace_sync_status
 workspace_sync_to_remote = _git_ops.workspace_sync_to_remote
+workspace_sync_bidirectional = _git_ops.workspace_sync_bidirectional
 
 commit_workspace = _commit.commit_workspace
 commit_workspace_files = _commit.commit_workspace_files
@@ -95,6 +96,7 @@ __all__ = [
     'workspace_self_heal_branch',
     'workspace_sync_status',
     'workspace_sync_to_remote',
+    'workspace_sync_bidirectional',
     'commit_workspace',
     'commit_workspace_files',
     'get_workspace_changes_summary',
