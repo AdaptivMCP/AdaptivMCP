@@ -10,7 +10,7 @@ The server is an ASGI application that exposes a Model Context Protocol (MCP) to
 - **Core MCP server plumbing**: `github_mcp/mcp_server/*`
 - **Tool families**: `github_mcp/main_tools/*` and `github_mcp/workspace_tools/*`
 - **GitHub API clients + caching**: `github_mcp/http_clients.py`, `github_mcp/github_content.py`, `github_mcp/file_cache.py`
-- **Observability + metrics**: `github_mcp/metrics.py`, `github_mcp/tool_logging.py`, `github_mcp/http_routes/healthz.py`
+- **Health endpoint**: `github_mcp/http_routes/healthz.py`
 
 ### Execution flow (simplified)
 
@@ -23,7 +23,6 @@ Client (ChatGPT / connector)
     │     └─ FastMCP server dispatch
     │
     └─> Tool registry (github_mcp/mcp_server/decorators.py)
-          ├─ Tool call logging + metrics
           ├─ Side-effect classification
           ├─ Best-effort dedupe for retries
           └─ Tool implementation (main_tools/*, workspace_tools/*)
@@ -45,15 +44,13 @@ Client (ChatGPT / connector)
 
 - **`github_mcp/mcp_server/context.py`**
   - Initializes `FastMCP` instance and shared contextvars for request metadata.
-  - Defines the write-allowed flag (`WRITE_ALLOWED`), tool examples, and recent tool event buffer.
+  - Defines the write-allowed flag (`WRITE_ALLOWED`) and tool examples.
   - Wraps MCP session response to suppress SSE disconnect noise.
 
 - **`github_mcp/mcp_server/decorators.py`**
   - Implements the `@mcp_tool` decorator:
     - Registers tools with FastMCP while keeping Python-callable functions.
     - Adapts registration to FastMCP tool signature variants (with or without tag support).
-    - Logs structured tool lifecycle events.
-    - Tracks metrics and recent tool events.
     - Performs best-effort dedupe to avoid double execution on retries.
   - Calculates side-effect class for each tool.
   - Explicitly disables UI approval prompts (`_ui_prompt_required_for_tool` returns `False`).
@@ -101,16 +98,10 @@ Client (ChatGPT / connector)
   - Injects Git author/committer environment variables for reproducible commits.
   - Builds authentication env for Git using `GIT_HTTP_EXTRAHEADER` and config env.
 
-### 2.6 Observability and health
-
-- **`github_mcp/metrics.py`**
-  - In-memory counters and timing metrics for tool and GitHub requests.
-
-- **`github_mcp/tool_logging.py`**
-  - Structured logging for GitHub API requests with URLs and derived human-friendly web URLs.
+### 2.6 Health
 
 - **`github_mcp/http_routes/healthz.py`**
-  - `/healthz` endpoint reporting uptime, token presence, controller defaults, and metrics snapshot.
+  - `/healthz` endpoint reporting uptime, token presence, and controller defaults.
 
 ## 3. Safety & security evaluation
 
@@ -160,24 +151,15 @@ Client (ChatGPT / connector)
 ### 3.5 Caching and data minimization
 
 - File cache is in-memory only and bounded by entry count and byte size.
-- Metrics and recent tool events are in-memory only; they reset on restart.
-- Log payloads are structured for readability and to avoid excessive verbosity.
-
 **Relevant modules:**
 - `github_mcp/file_cache.py`
-- `github_mcp/metrics.py`
-- `github_mcp/mcp_server/context.py` (recent events)
 - `github_mcp/mcp_server/schemas.py` (metadata sanitation)
 
-### 3.6 Health and observability
+### 3.6 Health
 
 - `/healthz` reports whether a GitHub token is present.
-- Health payload includes current metrics snapshot and controller defaults.
-- GitHub API logs include web URLs for operator-friendly debugging.
-
 **Relevant modules:**
 - `github_mcp/http_routes/healthz.py`
-- `github_mcp/tool_logging.py`
 
 ### 3.8 HTTP response caching controls
 
@@ -210,14 +192,6 @@ These are not necessarily flaws, but they are important operational assumptions 
 
 *Document generated from the codebase in `/workspace/chatgpt-mcp-github`.*
 
-## Tool-event logging
-
-The server emits structured tool lifecycle events to provider logs (e.g., Render) to make debugging and auditing straightforward.
-
-Each tool call emits up to three events:
-
-- `tool_call.start` — emitted after preflight validation but before execution
-- `tool_call.ok` — emitted after successful execution
 - `tool_call.error` — emitted on exceptions
 
 Console output is intentionally short and readable:

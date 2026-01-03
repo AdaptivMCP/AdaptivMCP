@@ -32,14 +32,12 @@ Setting `MCP_TOOL_DENYLIST` to `none` (also accepts `off`, `false`, or `0`) expl
 
 Note: Client/platform-level safety gating (if any) is independent of this server’s tool registry behavior.
 
-## Health and observability
+## Health
 
 The server exposes:
 
-- `/healthz` – small JSON health payload (uptime, controller defaults, token-present signal, in-memory metrics snapshot).
+- `/healthz` – small JSON health payload (uptime, controller defaults, token-present signal).
 - `/sse` – MCP transport endpoint.
-
-Metrics are in-memory only (reset on restart) and never include secrets.
 
 ## Documentation
 

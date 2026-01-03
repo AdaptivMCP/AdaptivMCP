@@ -11,13 +11,8 @@ from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO, _env_fl
 
 from github_mcp.mcp_server.context import (  # noqa: F401
     COMPACT_METADATA_DEFAULT,
-    RECENT_TOOL_EVENTS,
-    RECENT_TOOL_EVENTS_CAPACITY,
-    RECENT_TOOL_EVENTS_TOTAL,
-    RECENT_TOOL_EVENTS_DROPPED,
     WRITE_ALLOWED,
     _TOOL_EXAMPLES,
-    _record_recent_tool_event,
     mcp,
 )
 from github_mcp.mcp_server.decorators import mcp_tool, register_extra_tools_if_available
@@ -36,10 +31,6 @@ __all__ = [
     "CONTROLLER_DEFAULT_BRANCH",
     "CONTROLLER_REPO",
     "WRITE_ALLOWED",
-    "RECENT_TOOL_EVENTS",
-    "RECENT_TOOL_EVENTS_CAPACITY",
-    "RECENT_TOOL_EVENTS_TOTAL",
-    "RECENT_TOOL_EVENTS_DROPPED",
     "_TOOL_EXAMPLES",
     "_REGISTERED_MCP_TOOLS",
     "_find_registered_tool",

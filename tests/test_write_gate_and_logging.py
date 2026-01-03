@@ -1,49 +1,6 @@
 import pytest
 
 import github_mcp.mcp_server.context as context
-from github_mcp.mcp_server import decorators
-from github_mcp.mcp_server.errors import AdaptivToolError
-
-
-def test_preflight_error_logs_tool_event(monkeypatch):
-    events: list[dict[str, object]] = []
-
-    def fake_log(payload):
-        events.append(dict(payload))
-
-    def fake_validate(*args, **kwargs):
-        raise AdaptivToolError(
-            code="tool_args_invalid",
-            message="bad args",
-            category="validation",
-            origin="schema",
-            retryable=False,
-            details={"tool": "sample_tool"},
-        )
-
-    class FakeMCP:
-        def tool(self, **kwargs):
-            def decorator(fn):
-                return {"fn": fn, "name": kwargs.get("name")}
-
-            return decorator
-
-    monkeypatch.setattr(decorators, "_log_tool_json_event", fake_log)
-    monkeypatch.setattr(decorators, "_validate_tool_args_schema", fake_validate)
-    monkeypatch.setattr(decorators, "mcp", FakeMCP())
-    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
-
-    @decorators.mcp_tool(write_action=False)
-    def sample_tool(value: int = 1):
-        return value
-
-    with pytest.raises(AdaptivToolError):
-        sample_tool(value=1)
-
-    assert any(
-        event.get("event") == "tool_call.error" and event.get("phase") == "preflight"
-        for event in events
-    )
 
 
 @pytest.mark.asyncio

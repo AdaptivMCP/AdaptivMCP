@@ -28,6 +28,21 @@ def test_list_all_actions_includes_introspection_tools():
     assert {"list_tools", "list_all_actions", "list_write_actions"}.issubset(names)
 
 
+def test_list_all_actions_excludes_observability_tools():
+    catalog = introspection.list_all_actions(include_parameters=False, compact=True)
+    names = {tool.get("name") for tool in catalog.get("tools", [])}
+
+    removed = {
+        "get_recent_tool_events",
+        "get_recent_server_errors",
+        "get_recent_server_logs",
+        "list_render_logs",
+        "get_render_metrics",
+    }
+
+    assert names.isdisjoint(removed)
+
+
 def test_list_write_actions_filters_write_action(monkeypatch):
     registry = [
         (_make_tool("read_tool", False), _make_fn("read_tool")),

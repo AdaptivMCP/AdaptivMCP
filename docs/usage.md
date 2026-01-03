@@ -36,8 +36,7 @@ Note: Client/platform-level safety gating (if any) is independent of this server
 
 - MCP tool surface for GitHub operations: repositories, issues, PRs, actions, files
 - Workspace-backed commands for local edits (via the persistent clone)
-- Observability helpers: recent tool events, server logs, and health diagnostics
-- Render.com integration (optional): fetch service logs and metrics when configured
+- Health diagnostics via /healthz
 
 For a complete tool catalog, see `Detailed_Tools.md`.
 
@@ -46,7 +45,7 @@ For a complete tool catalog, see `Detailed_Tools.md`.
 The ASGI application is exposed in `main.py` as `app`.
 
 - GET /sse — MCP transport endpoint (SSE)
-- GET /healthz — JSON health status, controller defaults, and metrics snapshot
+- GET /healthz — JSON health status and controller defaults
 - GET /v1/actions and GET /actions — Actions-compatible tool listing
 - GET /static/* — static assets (if `assets/` is present)
 
@@ -106,12 +105,6 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 - GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, GITHUB_OAUTH_TOKEN — GitHub API token (first configured is used)
 - GITHUB_API_BASE — override GitHub API base URL
 
-### Render observability (optional)
-
-- RENDER_API_KEY — Render API authentication
-- RENDER_SERVICE_ID — default Render resource
-- RENDER_OWNER_ID — default owner identifier
-
 ### Workspace settings
 
 - MCP_WORKSPACE_BASE_DIR — base directory for persistent workspace clones
@@ -144,5 +137,3 @@ Once running, point your MCP client at /sse and verify /healthz is healthy.
 ## Troubleshooting tips
 
 - Use validate_environment to confirm GitHub tokens and defaults.
-- Use get_recent_server_logs or get_recent_tool_events when provider logs are unavailable.
-- For Render deployments, use list_render_logs and get_render_metrics after configuring RENDER_API_KEY.
