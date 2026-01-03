@@ -197,8 +197,12 @@ class _RequestContextMiddleware:
                 nonlocal more_body, total
                 while more_body:
                     msg = await receive()
-                    if msg.get('type') != 'http.request':
-                        continue
+                    msg_type = msg.get('type')
+                    if msg_type != 'http.request':
+                        # Avoid infinite loops if the client disconnects or sends
+                        # unexpected messages before completing the body.
+                        more_body = False
+                        break
                     chunk = msg.get('body', b'') or b''
                     if chunk:
                         body_chunks.append(chunk)
