@@ -310,7 +310,6 @@ def _emit_tool_error(
     exc: BaseException,
     phase: str,
 ) -> dict[str, Any]:
-    duration_ms = int((time.perf_counter() - start) * 1000)
     structured_error = _structured_tool_error(exc, context=tool_name, path=None)
     structured_error = attach_error_user_facing_fields(tool_name, structured_error)
 
@@ -582,8 +581,6 @@ def mcp_tool(
                         raise
                     raise coerced from exc
 
-                ctx = _extract_context(all_args)
-
                 try:
                     result = await func(*args, **kwargs)
                 except Exception as exc:
@@ -603,7 +600,6 @@ def mcp_tool(
                         raise
                     raise coerced from exc
 
-                duration_ms = int((time.perf_counter() - start) * 1000)
                 result = attach_user_facing_fields(tool_name, result)
                 return result
 
@@ -684,7 +680,6 @@ def mcp_tool(
                     raise
                 raise coerced from exc
 
-            ctx = _extract_context(all_args)
             try:
                 result = func(*args, **kwargs)
             except Exception as exc:
@@ -704,7 +699,6 @@ def mcp_tool(
                     raise
                 raise coerced from exc
 
-            duration_ms = int((time.perf_counter() - start) * 1000)
             result = attach_user_facing_fields(tool_name, result)
             return result
 
