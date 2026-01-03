@@ -1,9 +1,18 @@
-/__pycache__
-/tests/__pycache__
-.env
+__pycache__/
+*.py[cod]
 
-*.pyc
+.venv/
+venv/
 
-*.egg-info
+*.egg-info/
+dist/
+build/
+
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
 Proofgate-Revocations__chatgpt-mcp-github/
 main_fresh_clone/
