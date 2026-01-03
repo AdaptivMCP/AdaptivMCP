@@ -87,7 +87,6 @@ async def create_file(
             truncated = truncate_diff(
                 full_diff,
                 max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                max_chars=config.WRITE_DIFF_LOG_MAX_CHARS,
             )
             colored = colorize_unified_diff(truncated)
             config.TOOLS_LOGGER.detailed(
@@ -209,7 +208,6 @@ async def apply_text_update_and_commit(
             truncated = truncate_diff(
                 full_diff,
                 max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                max_chars=config.WRITE_DIFF_LOG_MAX_CHARS,
             )
             colored = colorize_unified_diff(truncated)
             config.TOOLS_LOGGER.detailed(
@@ -328,7 +326,6 @@ async def move_file(
                 truncated = truncate_diff(
                     delete_diff,
                     max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                    max_chars=config.WRITE_DIFF_LOG_MAX_CHARS,
                 )
                 colored = colorize_unified_diff(truncated)
                 config.TOOLS_LOGGER.detailed(

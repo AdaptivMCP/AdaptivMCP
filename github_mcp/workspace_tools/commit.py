@@ -16,19 +16,17 @@ def _tw():
     from github_mcp import tools_workspace as tw
     return tw
 
-def _slim_shell_result(result: Any, *, max_chars: int = 2000) -> Dict[str, Any]:
-    """Return a small, connector-safe view of a run_shell result."""
+def _slim_shell_result(result: Any) -> Dict[str, Any]:
+    """Return a connector-safe view of a run_shell result without truncation."""
     if not isinstance(result, dict):
-        return {"raw": str(result)[:max_chars]}
+        return {"raw": str(result)}
     stdout = (result.get("stdout") or "").strip()
     stderr = (result.get("stderr") or "").strip()
     return {
         "exit_code": result.get("exit_code"),
         "timed_out": result.get("timed_out", False),
-        "stdout": stdout[:max_chars] if stdout else "",
-        "stderr": stderr[:max_chars] if stderr else "",
-        "stdout_truncated": len(stdout) > max_chars,
-        "stderr_truncated": len(stderr) > max_chars,
+        "stdout": stdout,
+        "stderr": stderr,
     }
 
 
@@ -85,7 +83,7 @@ async def commit_workspace(
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
-        # Keep tool responses small to avoid connector transport issues.
+        # Collect commit metadata.
         rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
         head_sha = (rev.get("stdout", "").strip() if isinstance(rev, dict) else "")
         oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
@@ -105,7 +103,6 @@ async def commit_workspace(
                 truncated = truncate_diff(
                     diff_text,
                     max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                    max_chars=config.WRITE_DIFF_LOG_MAX_CHARS,
                 )
                 colored = colorize_unified_diff(truncated)
                 config.TOOLS_LOGGER.detailed(
@@ -183,7 +180,7 @@ async def commit_workspace_files(
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
-        # Keep tool responses small to avoid connector transport issues.
+        # Collect commit metadata.
         rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
         head_sha = (rev.get("stdout", "").strip() if isinstance(rev, dict) else "")
         oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
@@ -203,7 +200,6 @@ async def commit_workspace_files(
                 truncated = truncate_diff(
                     diff_text_files,
                     max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                    max_chars=config.WRITE_DIFF_LOG_MAX_CHARS,
                 )
                 colored = colorize_unified_diff(truncated)
                 config.TOOLS_LOGGER.detailed(

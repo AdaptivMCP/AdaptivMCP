@@ -12,7 +12,7 @@ When a tool returns a mapping payload, we add:
 Policy:
 - Do not remove or mutate machine-readable fields.
 - Do not introduce secrets into UI fields.
-- Keep UI fields bounded (length + line count).
+- Keep UI fields bounded by line count.
 """
 
 from __future__ import annotations
@@ -22,8 +22,6 @@ from typing import Any, Dict, List, Mapping
 
 
 _UI_MAX_LINES = 12
-_UI_MAX_CHARS_PER_LINE = 180
-_UI_MAX_TOTAL_CHARS = 1200
 
 
 def _single_line(value: str) -> str:
@@ -31,11 +29,8 @@ def _single_line(value: str) -> str:
     return " ".join(value.split()).strip()
 
 
-def _preview_text(value: str, *, max_chars: int = _UI_MAX_CHARS_PER_LINE) -> str:
-    s = _single_line(value)
-    if len(s) <= max_chars:
-        return s
-    return s[: max(0, max_chars - 1)] + "…"
+def _preview_text(value: str) -> str:
+    return _single_line(value)
 
 
 def _safe_str(value: Any) -> str:
@@ -46,19 +41,10 @@ def _safe_str(value: Any) -> str:
 
 
 def _bounded_lines(lines: List[str]) -> List[str]:
-    # Truncate per-line and cap line count.
+    # Cap line count while keeping full line content.
     trimmed = [_preview_text(line) for line in lines if line.strip()]
     trimmed = trimmed[:_UI_MAX_LINES]
-
-    # Cap total chars.
-    total = 0
-    out: List[str] = []
-    for line in trimmed:
-        if total + len(line) > _UI_MAX_TOTAL_CHARS:
-            break
-        out.append(line)
-        total += len(line)
-    return out
+    return trimmed
 
 
 def _clean_lines(*values: Any) -> List[str]:
@@ -117,8 +103,6 @@ def build_success_summary(tool_name: str, result: Mapping[str, Any]) -> ToolSumm
         title = f"{tool_name}: command finished"
         if cmd:
             bullets.append(f"Command: {_preview_text(cmd)}")
-            if len(_single_line(cmd)) > _UI_MAX_CHARS_PER_LINE:
-                bullets.append(f"Command length: {len(cmd)} chars")
 
         if exit_code is not None:
             bullets.append(f"Exit code: {exit_code}")

@@ -70,13 +70,13 @@ def diff_stats(diff_text: str) -> DiffStats:
     return DiffStats(added=added, removed=removed)
 
 
-def truncate_diff(diff_text: str, *, max_lines: int, max_chars: int) -> str:
-    """Truncate a diff by lines, then by chars (keeping a useful tail marker)."""
+def truncate_diff(diff_text: str, *, max_lines: int) -> str:
+    """Truncate a diff by lines (keeping a useful tail marker)."""
 
     if not diff_text:
         return diff_text
 
-    if max_lines <= 0 and max_chars <= 0:
+    if max_lines <= 0:
         return diff_text
 
     lines = diff_text.splitlines()
@@ -84,9 +84,6 @@ def truncate_diff(diff_text: str, *, max_lines: int, max_chars: int) -> str:
         kept = lines[:max_lines]
         kept.append(f"… (+{len(lines) - max_lines} lines)")
         diff_text = "\n".join(kept)
-
-    if max_chars > 0 and len(diff_text) > max_chars:
-        diff_text = f"{diff_text[:max_chars]}… (+{len(diff_text) - max_chars} chars)"
 
     return diff_text
 

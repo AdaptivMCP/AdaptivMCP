@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import inspect
 import json
-import os
 import re
 import types
 import typing
@@ -74,9 +73,6 @@ def _jsonable(value: Any) -> Any:
             return str(value)
         except Exception:
             return f"<{type(value).__name__}>"
-
-
-_TOOL_ARGS_PREVIEW_MAX_CHARS = int(os.environ.get("MCP_TOOL_ARGS_PREVIEW_MAX_CHARS", "0"))
 
 
 def _single_line(s: str) -> str:
@@ -253,13 +249,8 @@ def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, 
     return schema
 
 
-def _truncate_str(s: str, *, max_chars: Optional[int] = None) -> str:
-    limit = _TOOL_ARGS_PREVIEW_MAX_CHARS if max_chars is None else max_chars
-    if not limit or limit <= 0:
-        return s
-    if len(s) <= limit:
-        return s
-    return f"{s[:limit]}..."
+def _truncate_str(s: str) -> str:
+    return s
 
 
 def _normalize_and_truncate(s: str) -> str:

@@ -123,25 +123,8 @@ GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
 GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", "Ally")
 GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", "ally@example.com")
 
-# Upper bounds for tool stdout/stderr payloads returned to the connector. These
-# can be tuned via environment variables; set to 0 or a negative value to disable
-# truncation if a deployment prefers full logs at the cost of larger responses.
-#
-# Defaults now prefer no truncation so the connector can relay the complete
-# output unless a deployment explicitly opts into bounds via environment
-# variables.
-TOOL_STDOUT_MAX_CHARS = int(os.environ.get("TOOL_STDOUT_MAX_CHARS", "0"))
-TOOL_STDERR_MAX_CHARS = int(os.environ.get("TOOL_STDERR_MAX_CHARS", "0"))
-TOOL_STDIO_COMBINED_MAX_CHARS = int(os.environ.get("TOOL_STDIO_COMBINED_MAX_CHARS", "0"))
-
 # Upper bounds for unified diffs printed to stdout logs for write tools.
-# These are separate from TOOL_STDOUT_MAX_CHARS (tool return payload truncation).
 WRITE_DIFF_LOG_MAX_LINES = int(os.environ.get("WRITE_DIFF_LOG_MAX_LINES", "0"))
-WRITE_DIFF_LOG_MAX_CHARS = int(os.environ.get("WRITE_DIFF_LOG_MAX_CHARS", "0"))
-
-# Soft limit for run_command.command length to discourage huge inline scripts.
-# Defaults to unbounded unless overridden by deployment configuration.
-RUN_COMMAND_MAX_CHARS = int(os.environ.get("RUN_COMMAND_MAX_CHARS", "0"))
 
 
 def _parse_tool_list(value: str) -> set[str]:
@@ -408,14 +391,10 @@ __all__ = [
     "HTTPX_MAX_KEEPALIVE",
     "HTTPX_TIMEOUT",
     "MAX_CONCURRENCY",
-    "RUN_COMMAND_MAX_CHARS",
     "SERVER_START_TIME",
     "CHAT_LEVEL",
     "DETAILED_LEVEL",
     "TOOLS_LOGGER",
-    "TOOL_STDERR_MAX_CHARS",
-    "TOOL_STDIO_COMBINED_MAX_CHARS",
-    "TOOL_STDOUT_MAX_CHARS",
     "WORKSPACE_BASE_DIR",
     "SANDBOX_CONTENT_BASE_URL",
     "ERROR_LOG_HANDLER",

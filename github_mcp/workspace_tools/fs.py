@@ -170,7 +170,6 @@ async def set_workspace_file_contents(
                 truncated = truncate_diff(
                     full_diff,
                     max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                    max_chars=config.WRITE_DIFF_LOG_MAX_CHARS,
                 )
                 colored = colorize_unified_diff(truncated)
                 config.TOOLS_LOGGER.detailed(
