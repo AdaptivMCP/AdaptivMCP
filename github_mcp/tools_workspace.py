@@ -41,6 +41,7 @@ _workspace_read_text = _fs._workspace_read_text
 _workspace_write_text = _fs._workspace_write_text
 get_workspace_file_contents = _fs.get_workspace_file_contents
 set_workspace_file_contents = _fs.set_workspace_file_contents
+apply_patch = _fs.apply_patch
 
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace
@@ -83,6 +84,7 @@ __all__ = [
     'ensure_workspace_clone',
     'get_workspace_file_contents',
     'set_workspace_file_contents',
+    'apply_patch',
     'list_workspace_files',
     'search_workspace',
     'render_shell',

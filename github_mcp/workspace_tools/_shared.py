@@ -12,6 +12,7 @@ from github_mcp.workspace import (
     _prepare_temp_virtualenv,
     _run_shell,
     _git_auth_env,
+    _apply_patch_to_repo,
 )
 
 def _cmd_invokes_git(cmd: object) -> bool:
@@ -192,6 +193,7 @@ def _workspace_deps() -> Dict[str, Any]:
         "clone_repo": clone_repo_fn,
         "run_shell": run_shell_with_git_auth,
         "prepare_temp_virtualenv": prepare_venv_fn,
+        "apply_patch_to_repo": _apply_patch_to_repo,
     }
 
 

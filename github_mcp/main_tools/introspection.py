@@ -81,6 +81,12 @@ def list_write_tools() -> Dict[str, Any]:
             "notes": "Stages changes, commits with a provided message, and can push to the effective branch.",
         },
         {
+            "name": "apply_patch",
+            "category": "workspace",
+            "description": "Apply a unified diff patch inside the persistent workspace clone.",
+            "notes": "Use when you already have a patch to apply instead of rewriting files manually.",
+        },
+        {
             "name": "commit_workspace_files",
             "category": "workspace",
             "description": "Commit a specific list of files from the persistent workspace.",
