@@ -138,6 +138,12 @@ def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: 
 _ALWAYS_ALLOW_WRITE_TOOLS: set[str] = set()
 
 
+def _tool_write_allowed(write_action: bool) -> bool:
+    if not write_action:
+        return True
+    return bool(WRITE_ALLOWED)
+
+
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
     Enforce the write gate. If the in-memory flag is stale but the environment
@@ -326,7 +332,7 @@ def _emit_tool_error(
             "schema_hash": schema_hash,
             "schema_present": schema_present,
             "write_action": bool(write_action),
-            "write_allowed": bool(WRITE_ALLOWED),
+            "write_allowed": _tool_write_allowed(write_action),
             "error": structured_error.get("error", {}),
         }
     )
@@ -341,7 +347,7 @@ def _emit_tool_error(
             "schema_hash": schema_hash,
             "schema_present": schema_present,
             "write_action": bool(write_action),
-            "write_allowed": bool(WRITE_ALLOWED),
+            "write_allowed": _tool_write_allowed(write_action),
             "error": structured_error,
         }
     )
@@ -457,6 +463,7 @@ def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
         else:
             TOOLS_LOGGER.info(msg, extra=extra)
     except Exception:
+        TOOLS_LOGGER.exception("Failed to log tool event.")
         return
 
 
@@ -690,7 +697,7 @@ def mcp_tool(
                         "schema_hash": schema_hash,
                         "schema_present": True,
                         "write_action": bool(write_action),
-                        "write_allowed": bool(WRITE_ALLOWED),
+                        "write_allowed": _tool_write_allowed(write_action),
                         "arg_keys": ctx["arg_keys"],
                         "arg_count": ctx["arg_count"],
                     }
@@ -706,7 +713,7 @@ def mcp_tool(
                         "schema_hash": schema_hash,
                         "schema_present": True,
                         "write_action": bool(write_action),
-                        "write_allowed": bool(WRITE_ALLOWED),
+                        "write_allowed": _tool_write_allowed(write_action),
                     }
                 )
 
@@ -746,7 +753,7 @@ def mcp_tool(
                         "schema_hash": schema_hash,
                         "schema_present": True,
                         "write_action": bool(write_action),
-                        "write_allowed": bool(WRITE_ALLOWED),
+                        "write_allowed": _tool_write_allowed(write_action),
                         "result_type": type(result).__name__,
                     }
                 )
@@ -784,7 +791,7 @@ def mcp_tool(
                 visibility,
                 normalized_tags,
                 write_action=bool(write_action),
-                write_allowed=bool(WRITE_ALLOWED),
+                write_allowed=_tool_write_allowed(write_action),
             )
 
             return wrapper
@@ -841,7 +848,7 @@ def mcp_tool(
                     "schema_hash": schema_hash,
                     "schema_present": True,
                     "write_action": bool(write_action),
-                    "write_allowed": bool(WRITE_ALLOWED),
+                    "write_allowed": _tool_write_allowed(write_action),
                     "arg_keys": ctx["arg_keys"],
                     "arg_count": ctx["arg_count"],
                 }
@@ -856,7 +863,7 @@ def mcp_tool(
                     "schema_hash": schema_hash,
                     "schema_present": True,
                     "write_action": bool(write_action),
-                    "write_allowed": bool(WRITE_ALLOWED),
+                    "write_allowed": _tool_write_allowed(write_action),
                 }
             )
 
@@ -896,7 +903,7 @@ def mcp_tool(
                     "schema_hash": schema_hash,
                     "schema_present": True,
                     "write_action": bool(write_action),
-                    "write_allowed": bool(WRITE_ALLOWED),
+                    "write_allowed": _tool_write_allowed(write_action),
                     "result_type": type(result).__name__,
                 }
             )
@@ -932,7 +939,7 @@ def mcp_tool(
             visibility,
             normalized_tags,
             write_action=bool(write_action),
-            write_allowed=bool(WRITE_ALLOWED),
+            write_allowed=_tool_write_allowed(write_action),
         )
 
         return wrapper

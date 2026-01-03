@@ -111,6 +111,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 (not write_action) or write_allowed or (tool_name in _ALWAYS_WRITE_ENABLED_TOOLS),
             )
         )
+        tool_write_allowed = bool(catalog_entry.get("write_allowed", (not write_action) or write_allowed))
 
         schema = (
             catalog_entry.get("input_schema")
@@ -144,6 +145,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "parameters": schema or {"type": "object", "properties": {}},
                 "annotations": annotations,
                 "write_action": bool(write_action),
+                "write_allowed": bool(tool_write_allowed),
                 "write_enabled": bool(write_enabled),
                 "visibility": str(visibility),
             }

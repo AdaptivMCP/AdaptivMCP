@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from collections import Counter, deque
@@ -24,6 +25,7 @@ REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID",
 REQUEST_PATH: ContextVar[Optional[str]] = ContextVar("REQUEST_PATH", default=None)
 REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar("REQUEST_RECEIVED_AT", default=None)
 
+_LOGGER = logging.getLogger(__name__)
 
 def get_request_context() -> dict[str, Any]:
     return {
@@ -103,6 +105,10 @@ def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
             return val
     except Exception:
         # Fall back to env/cache on read/parse issues
+        _LOGGER.warning(
+            "Failed to read write-allowed file; falling back to env default.",
+            exc_info=True,
+        )
         pass
 
     # Fallback to env
@@ -199,6 +205,7 @@ def record_tool_event(event: dict[str, Any]) -> None:
         RECENT_TOOL_EVENTS_TOTAL = _recent_tool_events_total
     except Exception:
         # Telemetry must never break execution.
+        _LOGGER.exception("Failed to record recent tool event.")
         return
 
 
