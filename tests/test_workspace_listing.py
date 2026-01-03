@@ -1,4 +1,4 @@
-import pytest
+import asyncio
 
 from github_mcp.workspace_tools import listing as workspace_listing
 
@@ -23,8 +23,7 @@ class DummyWorkspaceTools:
         return ref
 
 
-@pytest.mark.asyncio
-async def test_list_workspace_files_blocks_path_escape(tmp_path, monkeypatch):
+def test_list_workspace_files_blocks_path_escape(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     sibling = tmp_path / "repo-sibling"
@@ -34,14 +33,13 @@ async def test_list_workspace_files_blocks_path_escape(tmp_path, monkeypatch):
     dummy = DummyWorkspaceTools(str(repo_dir))
     monkeypatch.setattr(workspace_listing, "_tw", lambda: dummy)
 
-    result = await workspace_listing.list_workspace_files(path="../repo-sibling")
+    result = asyncio.run(workspace_listing.list_workspace_files(path="../repo-sibling"))
 
     assert "error" in result
     assert result["error"]["message"] == "path must stay within repo"
 
 
-@pytest.mark.asyncio
-async def test_search_workspace_blocks_path_escape(tmp_path, monkeypatch):
+def test_search_workspace_blocks_path_escape(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     sibling = tmp_path / "repo-sibling"
@@ -51,10 +49,10 @@ async def test_search_workspace_blocks_path_escape(tmp_path, monkeypatch):
     dummy = DummyWorkspaceTools(str(repo_dir))
     monkeypatch.setattr(workspace_listing, "_tw", lambda: dummy)
 
-    result = await workspace_listing.search_workspace(
+    result = asyncio.run(workspace_listing.search_workspace(
         query="nope",
         path="../repo-sibling/secret.txt",
-    )
+    ))
 
     assert "error" in result
     assert result["error"]["message"] == "path must stay within repo"

@@ -378,7 +378,11 @@ def _render_external_hosts() -> list[str]:
 def _configure_trusted_hosts(app_instance) -> None:
     allowed_hosts_env = os.getenv("ALLOWED_HOSTS")
     if allowed_hosts_env:
-        allowed_hosts = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
+        allowed_hosts = []
+        for host in allowed_hosts_env.split(","):
+            cleaned = _extract_hostname(host) or host.strip()
+            if cleaned:
+                allowed_hosts.append(cleaned)
     else:
         allowed_hosts = ["*"]
 
