@@ -9,7 +9,7 @@ import shutil
 import shlex
 import sys
 import tempfile
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from . import config
 from .exceptions import GitHubAPIError, GitHubAuthError
@@ -423,10 +423,191 @@ def _maybe_unescape_unified_diff(patch: str) -> str:
         return patch.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
 
 
+def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
+    if not isinstance(rel_path, str) or not rel_path.strip():
+        raise GitHubAPIError("path must be a non-empty string")
+    root = os.path.realpath(repo_dir)
+    raw_path = rel_path.strip()
+    if os.path.isabs(raw_path):
+        candidate = os.path.realpath(raw_path)
+    else:
+        rel_path = raw_path.lstrip("/\\")
+        candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
+    if candidate == root or not candidate.startswith(root + os.sep):
+        raise GitHubAPIError("path escapes repository root")
+    return candidate
+
+
+def _split_text_lines(text: str) -> Tuple[List[str], bool]:
+    ends_with_newline = text.endswith("\n")
+    lines = text.splitlines()
+    return lines, ends_with_newline
+
+
+def _join_text_lines(lines: List[str], ends_with_newline: bool) -> str:
+    text = "\n".join(lines)
+    if ends_with_newline and (text or lines):
+        text = text + "\n"
+    return text
+
+
+def _find_subsequence(lines: List[str], subseq: List[str], start: int) -> Optional[int]:
+    if not subseq:
+        return start
+    max_idx = len(lines) - len(subseq)
+    for idx in range(start, max_idx + 1):
+        if lines[idx : idx + len(subseq)] == subseq:
+            return idx
+    return None
+
+
+def _apply_patch_hunks(lines: List[str], hunks: List[List[str]], path: str) -> List[str]:
+    search_start = 0
+    for hunk in hunks:
+        old_seq = [line[1:] for line in hunk if line[:1] in (" ", "-")]
+        new_seq = [line[1:] for line in hunk if line[:1] in (" ", "+")]
+        if not old_seq:
+            lines[search_start:search_start] = new_seq
+            search_start += len(new_seq)
+            continue
+
+        match_idx = _find_subsequence(lines, old_seq, search_start)
+        if match_idx is None:
+            match_idx = _find_subsequence(lines, old_seq, 0)
+        if match_idx is None:
+            raise GitHubAPIError(f"Patch does not apply to {path}")
+
+        lines[match_idx : match_idx + len(old_seq)] = new_seq
+        search_start = match_idx + len(new_seq)
+    return lines
+
+
+def _parse_apply_patch_blocks(patch: str) -> List[Dict[str, Any]]:
+    lines = patch.splitlines()
+    if not lines or lines[0].strip() != "*** Begin Patch":
+        raise GitHubAPIError("Patch missing Begin Patch header")
+
+    blocks: List[Dict[str, Any]] = []
+    idx = 1
+    while idx < len(lines):
+        line = lines[idx]
+        if line.strip() == "*** End Patch":
+            return blocks
+        if line.startswith("*** Add File: "):
+            path = line[len("*** Add File: ") :].strip()
+            idx += 1
+            content_lines: List[str] = []
+            while idx < len(lines) and not lines[idx].startswith("*** "):
+                patch_line = lines[idx]
+                if not patch_line.startswith("+"):
+                    raise GitHubAPIError(f"Invalid add-file line in patch for {path}")
+                content_lines.append(patch_line[1:])
+                idx += 1
+            blocks.append({"action": "add", "path": path, "lines": content_lines})
+            continue
+        if line.startswith("*** Delete File: "):
+            path = line[len("*** Delete File: ") :].strip()
+            idx += 1
+            blocks.append({"action": "delete", "path": path})
+            continue
+        if line.startswith("*** Update File: "):
+            path = line[len("*** Update File: ") :].strip()
+            idx += 1
+            move_to = None
+            if idx < len(lines) and lines[idx].startswith("*** Move to: "):
+                move_to = lines[idx][len("*** Move to: ") :].strip()
+                idx += 1
+
+            hunks: List[List[str]] = []
+            current_hunk: List[str] = []
+            while idx < len(lines) and not lines[idx].startswith("*** "):
+                patch_line = lines[idx]
+                if patch_line == "*** End of File":
+                    idx += 1
+                    continue
+                if patch_line.startswith("@@"):
+                    if current_hunk:
+                        hunks.append(current_hunk)
+                        current_hunk = []
+                    idx += 1
+                    continue
+                if patch_line[:1] not in (" ", "+", "-"):
+                    raise GitHubAPIError(f"Invalid patch line in update for {path}")
+                current_hunk.append(patch_line)
+                idx += 1
+            if current_hunk:
+                hunks.append(current_hunk)
+            blocks.append(
+                {"action": "update", "path": path, "move_to": move_to, "hunks": hunks}
+            )
+            continue
+
+        raise GitHubAPIError("Unexpected patch content")
+
+    raise GitHubAPIError("Patch missing End Patch footer")
+
+
+def _apply_tool_patch(repo_dir: str, patch: str) -> None:
+    blocks = _parse_apply_patch_blocks(patch)
+    for block in blocks:
+        action = block["action"]
+        if action == "add":
+            path = block["path"]
+            abs_path = _safe_repo_path(repo_dir, path)
+            if os.path.exists(abs_path):
+                raise GitHubAPIError(f"File already exists: {path}")
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            content = "\n".join(block["lines"])
+            if block["lines"]:
+                content += "\n"
+            with open(abs_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            continue
+
+        if action == "delete":
+            path = block["path"]
+            abs_path = _safe_repo_path(repo_dir, path)
+            if not os.path.exists(abs_path):
+                raise GitHubAPIError(f"File does not exist: {path}")
+            os.remove(abs_path)
+            continue
+
+        if action == "update":
+            path = block["path"]
+            abs_path = _safe_repo_path(repo_dir, path)
+            if not os.path.exists(abs_path):
+                raise GitHubAPIError(f"File does not exist: {path}")
+            with open(abs_path, "r", encoding="utf-8") as f:
+                text = f.read()
+            lines, ends_with_newline = _split_text_lines(text)
+            hunks = block["hunks"]
+            updated_lines = _apply_patch_hunks(lines, hunks, path)
+            updated_text = _join_text_lines(updated_lines, ends_with_newline)
+
+            move_to = block.get("move_to")
+            if move_to:
+                new_abs_path = _safe_repo_path(repo_dir, move_to)
+                os.makedirs(os.path.dirname(new_abs_path), exist_ok=True)
+                with open(new_abs_path, "w", encoding="utf-8") as f:
+                    f.write(updated_text)
+                if new_abs_path != abs_path:
+                    os.remove(abs_path)
+            else:
+                with open(abs_path, "w", encoding="utf-8") as f:
+                    f.write(updated_text)
+            continue
+
+        raise GitHubAPIError("Unsupported patch action")
+
+
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     """Write a unified diff to disk and apply it with ``git apply``."""
     if not patch or not patch.strip():
         raise GitHubAPIError("Received empty patch to apply in workspace")
+
+    if patch.lstrip().startswith("*** Begin Patch"):
+        _apply_tool_patch(repo_dir, patch)
+        return
 
     patch = _maybe_unescape_unified_diff(patch)
 
