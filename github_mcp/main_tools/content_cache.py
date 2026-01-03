@@ -7,14 +7,14 @@ from github_mcp.config import FETCH_FILES_CONCURRENCY
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.file_cache import bulk_get_cached, cache_payload, cache_stats
 from github_mcp.server import _github_request, _structured_tool_error
-from github_mcp.utils import _effective_ref_for_repo, _normalize_repo_path
+from github_mcp.utils import _effective_ref_for_repo, _normalize_repo_path_for_repo
 import sys
 
 from github_mcp.github_content import _decode_github_content as _decode_default
 
 
 def _cache_file_result(*, full_name: str, path: str, ref: str, decoded: Dict[str, Any]) -> Dict[str, Any]:
-    normalized_path = _normalize_repo_path(path)
+    normalized_path = _normalize_repo_path_for_repo(full_name, path)
     effective_ref = _effective_ref_for_repo(full_name, ref)
     return cache_payload(
         full_name=full_name,
@@ -39,7 +39,7 @@ async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Di
     sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
 
     async def _fetch_single(p: str) -> None:
-        normalized_path = _normalize_repo_path(p)
+        normalized_path = _normalize_repo_path_for_repo(full_name, p)
         async with sem:
             try:
                 decoded = await _decode(full_name, normalized_path, ref)
@@ -65,7 +65,7 @@ async def get_cached_files(full_name: str, paths: List[str], ref: str = "main") 
     """Return cached file entries and list any missing paths."""
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
-    normalized_paths = [_normalize_repo_path(p) for p in paths]
+    normalized_paths = [_normalize_repo_path_for_repo(full_name, p) for p in paths]
     cached = bulk_get_cached(full_name, effective_ref, normalized_paths)
     missing = [p for p in normalized_paths if p not in cached]
 
@@ -88,7 +88,7 @@ async def cache_files(
 
     results: Dict[str, Any] = {}
     effective_ref = _effective_ref_for_repo(full_name, ref)
-    normalized_paths = [_normalize_repo_path(p) for p in paths]
+    normalized_paths = [_normalize_repo_path_for_repo(full_name, p) for p in paths]
 
     cached_existing: Dict[str, Any] = {}
     if not refresh:
@@ -171,7 +171,7 @@ async def list_repository_tree(
         if normalized_prefix and not path.startswith(normalized_prefix):
             continue
 
-        normalized_path = _normalize_repo_path(path)
+        normalized_path = _normalize_repo_path_for_repo(full_name, path)
 
         filtered_entries.append(
             {

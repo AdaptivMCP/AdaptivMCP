@@ -95,6 +95,46 @@ def _normalize_repo_path(path: str) -> str:
     return normalized
 
 
+def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
+    """Normalize a repo-relative path while forgiving common assistant prefixes."""
+
+    if not isinstance(path, str):
+        raise ToolPreflightValidationError("<server>", "path must be a string")
+
+    normalized = path.strip().replace("\\", "/")
+    full_name_clean = full_name.strip().lstrip("/") if isinstance(full_name, str) else ""
+    if full_name_clean:
+        api_prefixes = (
+            f"/repos/{full_name_clean}/contents/",
+            f"repos/{full_name_clean}/contents/",
+        )
+        for prefix in api_prefixes:
+            if normalized.startswith(prefix):
+                normalized = normalized[len(prefix) :]
+                break
+
+        repo_prefixes = (
+            f"/{full_name_clean}/",
+            f"{full_name_clean}/",
+        )
+        for prefix in repo_prefixes:
+            if normalized.startswith(prefix):
+                normalized = normalized[len(prefix) :]
+                break
+        repo_name = full_name_clean.split("/")[-1]
+        if repo_name:
+            short_prefixes = (
+                f"/{repo_name}/",
+                f"{repo_name}/",
+            )
+            for prefix in short_prefixes:
+                if normalized.startswith(prefix):
+                    normalized = normalized[len(prefix) :]
+                    break
+
+    return _normalize_repo_path(normalized)
+
+
 def _normalize_branch(full_name: str, branch: str | None) -> str:
     """Normalize a branch name while honoring controller defaults."""
 
@@ -124,7 +164,7 @@ def _normalize_write_context(
     effective_branch = _normalize_branch(full_name, branch)
     normalized_path: str | None = None
     if path is not None:
-        normalized_path = _normalize_repo_path(path)
+        normalized_path = _normalize_repo_path_for_repo(full_name, path)
     return effective_branch, normalized_path
 
 
@@ -198,6 +238,7 @@ __all__ = [
     "extract_sha",
     "_normalize_branch",
     "_normalize_repo_path",
+    "_normalize_repo_path_for_repo",
     "_normalize_write_context",
     "require_text",
     "_render_visible_whitespace",

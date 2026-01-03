@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 from .config import SANDBOX_CONTENT_BASE_URL
 from .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
-from .utils import _effective_ref_for_repo, _get_main_module
+from .utils import _effective_ref_for_repo, _get_main_module, _normalize_repo_path_for_repo
 
 
 async def _request(*args, **kwargs):
@@ -52,15 +52,16 @@ async def _decode_github_content(
         main_mod, "_effective_ref_for_repo", _effective_ref_for_repo
     )
     effective_ref = effective_ref_fn(full_name, ref)
+    normalized_path = _normalize_repo_path_for_repo(full_name, path)
     try:
         data = await _request(
             "GET",
-            f"/repos/{full_name}/contents/{path}",
+            f"/repos/{full_name}/contents/{normalized_path}",
             params={"ref": effective_ref},
         )
     except GitHubAPIError as exc:
         raise GitHubAPIError(
-            f"Failed to fetch {full_name}/{path} at ref '{effective_ref}': {exc}",
+            f"Failed to fetch {full_name}/{normalized_path} at ref '{effective_ref}': {exc}",
             status_code=getattr(exc, "status_code", None),
             response_payload=getattr(exc, "response_payload", None),
         ) from exc
@@ -154,6 +155,7 @@ async def _perform_github_commit(
     if not isinstance(body_bytes, (bytes, bytearray)):
         raise TypeError("body_bytes must be bytes")
 
+    normalized_path = _normalize_repo_path_for_repo(full_name, path)
     content_b64 = base64.b64encode(body_bytes).decode("ascii")
     payload: Dict[str, Any] = {"message": message, "content": content_b64, "branch": branch}
     if sha:
@@ -165,7 +167,7 @@ async def _perform_github_commit(
 
     result = await _request(
         "PUT",
-        f"/repos/{full_name}/contents/{path}",
+        f"/repos/{full_name}/contents/{normalized_path}",
         json_body=payload,
     )
     if not isinstance(result.get("json"), dict):

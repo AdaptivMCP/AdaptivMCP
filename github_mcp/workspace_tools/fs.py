@@ -23,12 +23,13 @@ def _tw():
 def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
         raise ValueError("path must be a non-empty string")
-    rel_path = rel_path.lstrip("/\\")
-    if os.path.isabs(rel_path):
-        raise ValueError("path must be relative")
-
-    candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
     root = os.path.realpath(repo_dir)
+    raw_path = rel_path.strip()
+    if os.path.isabs(raw_path):
+        candidate = os.path.realpath(raw_path)
+    else:
+        rel_path = raw_path.lstrip("/\\")
+        candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
     if candidate == root or not candidate.startswith(root + os.sep):
         raise ValueError("path escapes repository root")
     return candidate
