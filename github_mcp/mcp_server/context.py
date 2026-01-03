@@ -1,13 +1,8 @@
 # github_mcp/mcp_server/context.py
 from __future__ import annotations
 
-import json
 import os
-import time
-import logging
 from contextvars import ContextVar
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
 
@@ -23,8 +18,6 @@ REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID",
 REQUEST_PATH: ContextVar[Optional[str]] = ContextVar("REQUEST_PATH", default=None)
 REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar("REQUEST_RECEIVED_AT", default=None)
 
-_LOGGER = logging.getLogger(__name__)
-
 def get_request_context() -> dict[str, Any]:
     return {
         "path": REQUEST_PATH.get(),
@@ -34,10 +27,8 @@ def get_request_context() -> dict[str, Any]:
     }
 
 # ------------------------------------------------------------------------------
-# Dynamic write gate (cross-worker)
+# Dynamic write gate (environment-based)
 # ------------------------------------------------------------------------------
-
-WRITE_ALLOWED_FILE = Path(os.environ.get("GITHUB_MCP_WRITE_ALLOWED_FILE", "/tmp/github_mcp_write_allowed.json"))
 
 
 def _parse_bool(value: Optional[str]) -> bool:
@@ -50,25 +41,17 @@ def _env_default_write_allowed() -> bool:
     return _parse_bool(os.environ.get("GITHUB_MCP_WRITE_ALLOWED", "true"))
 
 
-@dataclass
-class _WriteAllowedCache:
-    value: bool
-    ts: float
-    source: str
-
-
 class _WriteAllowedFlag:
     """
     Drop-in compatible:
       - bool(WRITE_ALLOWED)
       - WRITE_ALLOWED.value
       - WRITE_ALLOWED.value = True/False
-
-    Backed by a JSON file in /tmp so multiple workers/processes stay in sync.
+    Uses the GITHUB_MCP_WRITE_ALLOWED environment variable as the sole source of truth.
     """
 
     def __init__(self) -> None:
-        self._cache = _WriteAllowedCache(value=_env_default_write_allowed(), ts=0.0, source="env")
+        self._cache_value = _env_default_write_allowed()
 
     def __bool__(self) -> bool:
         return get_write_allowed()
@@ -87,59 +70,32 @@ WRITE_ALLOWED = _WriteAllowedFlag()
 
 def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     """
-    Returns effective write gate. Reads the /tmp file periodically (cached),
-    so write gate changes apply across workers.
+    Returns effective write gate based solely on GITHUB_MCP_WRITE_ALLOWED.
+    refresh_after_seconds is ignored but kept for backwards compatibility.
     """
-    now = time.time()
-    if (now - WRITE_ALLOWED._cache.ts) < refresh_after_seconds:
-        return WRITE_ALLOWED._cache.value
-
-    # Prefer file (dynamic)
-    try:
-        if WRITE_ALLOWED_FILE.exists():
-            data = json.loads(WRITE_ALLOWED_FILE.read_text(encoding="utf-8"))
-            val = bool(data.get("value", False))
-            WRITE_ALLOWED._cache = _WriteAllowedCache(value=val, ts=now, source="file")
-            return val
-    except Exception:
-        # Fall back to env/cache on read/parse issues
-        _LOGGER.warning(
-            "Failed to read write-allowed file; falling back to env default.",
-            exc_info=True,
-        )
-        pass
-
-    # Fallback to env
+    del refresh_after_seconds
     val = _env_default_write_allowed()
-    WRITE_ALLOWED._cache = _WriteAllowedCache(value=val, ts=now, source="env")
+    WRITE_ALLOWED._cache_value = val
     return val
 
 
 def set_write_allowed(approved: bool) -> bool:
     """
-    Persists write gate to /tmp so all workers see it.
+    Updates the process environment variable used for write gating.
     """
-    now = time.time()
-    WRITE_ALLOWED_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-    payload = {"value": bool(approved), "updated_at": now}
-    tmp_path = WRITE_ALLOWED_FILE.with_suffix(".tmp")
-    tmp_path.write_text(json.dumps(payload), encoding="utf-8")
-    tmp_path.replace(WRITE_ALLOWED_FILE)
-
-    WRITE_ALLOWED._cache = _WriteAllowedCache(value=bool(approved), ts=now, source="file")
-    return WRITE_ALLOWED._cache.value
+    value = bool(approved)
+    os.environ["GITHUB_MCP_WRITE_ALLOWED"] = "true" if value else "false"
+    WRITE_ALLOWED._cache_value = value
+    return value
 
 
 def get_write_allowed_debug() -> dict[str, Any]:
     return {
         "value": get_write_allowed(refresh_after_seconds=0.0),
         "env_default": _env_default_write_allowed(),
-        "file_path": str(WRITE_ALLOWED_FILE),
         "cache": {
-            "value": WRITE_ALLOWED._cache.value,
-            "source": WRITE_ALLOWED._cache.source,
-            "updated_at": WRITE_ALLOWED._cache.ts,
+            "value": WRITE_ALLOWED._cache_value,
+            "source": "env",
         },
     }
 
@@ -245,4 +201,3 @@ except Exception as exc:  # pragma: no cover - used when dependency missing
             raise AttributeError(name)
 
     mcp = _MissingFastMCP()
-
