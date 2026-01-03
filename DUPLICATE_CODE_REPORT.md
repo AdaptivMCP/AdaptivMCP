@@ -1,0 +1,212 @@
+# Duplicate Code Audit
+
+This report was generated automatically and focuses on:
+- Exact duplicate files (SHA-256 match)
+- Exact duplicate Python function/method bodies (normalized AST hash, ignoring names and docstrings)
+- Identical 10-line code blocks (whitespace-normalized)
+
+## Exact duplicate files
+No exact duplicate files found.
+
+## Duplicate Python functions / methods
+- Group of 8 (hash f3882ff744…):
+  - ./github_mcp/workspace_tools/commands.py:13 — def _tw
+  - ./github_mcp/workspace_tools/fs.py:19 — def _tw
+  - ./github_mcp/workspace_tools/listing.py:13 — def _tw
+  - ./github_mcp/workspace_tools/suites.py:28 — def _tw
+  - ./github_mcp/workspace_tools/clone.py:11 — def _tw
+  - ./github_mcp/workspace_tools/commit.py:15 — def _tw
+  - ./github_mcp/workspace_tools/git_ops.py:80 — def _tw
+  - ./github_mcp/workspace_tools/_shared.py:42 — def _tw
+- Group of 5 (hash 461f87b38f…):
+  - ./tests/test_tool_metadata.py:18 — def dummy_fn
+  - ./tests/test_introspection_catalog.py:17 — def _fn
+  - ./tests/test_fastmcp_tool_registration.py:23 — def sample_tool
+  - ./tests/test_fastmcp_tool_registration.py:42 — def positional_tool
+  - ./tests/test_fastmcp_tool_registration.py:70 — def tagged_tool
+- Group of 2 (hash 0ca76edf05…):
+  - ./main.py:105 — def _CacheControlMiddleware.__init__
+  - ./main.py:160 — def _RequestContextMiddleware.__init__
+- Group of 2 (hash 6e1c3eff05…):
+  - ./main.py:356 — def _extract_hostname
+  - ./github_mcp/mcp_server/context.py:155 — def _extract_hostname
+- Group of 2 (hash 0052b956cc…):
+  - ./main.py:369 — def _render_external_hosts
+  - ./github_mcp/mcp_server/context.py:168 — def _render_external_hosts
+- Group of 2 (hash 373137fbd9…):
+  - ./main.py:431 — def _cache_file_result
+  - ./github_mcp/main_tools/content_cache.py:16 — def _cache_file_result
+- Group of 2 (hash ea2146d0e2…):
+  - ./github_mcp/http_clients.py:65 — def Client.__init__
+  - ./github_mcp/http_clients.py:81 — def AsyncClient.__init__
+- Group of 2 (hash f93fcbd28d…):
+  - ./github_mcp/http_clients.py:71 — def Client.get
+  - ./github_mcp/http_clients.py:74 — def Client.post
+- Group of 2 (hash d826b392f1…):
+  - ./github_mcp/http_clients.py:77 — def Client.close
+  - ./github_mcp/http_clients.py:96 — def AsyncClient.close
+- Group of 2 (hash fab9f44317…):
+  - ./github_mcp/http_clients.py:87 — async def AsyncClient.get
+  - ./github_mcp/http_clients.py:90 — async def AsyncClient.post
+- Group of 2 (hash 26f20ffc9d…):
+  - ./github_mcp/http_clients.py:145 — def _GitHubClientProtocol.get
+  - ./github_mcp/http_clients.py:148 — def _GitHubClientProtocol.post
+- Group of 2 (hash a0b591b0f9…):
+  - ./github_mcp/mcp_server/schemas.py:78 — def _single_line
+  - ./github_mcp/mcp_server/errors.py:105 — def _single_line
+- Group of 2 (hash 3ed70be205…):
+  - ./github_mcp/mcp_server/context.py:43 — def _parse_bool
+  - ./github_mcp/mcp_server/decorators.py:42 — def _parse_bool
+- Group of 2 (hash db3f2fd163…):
+  - ./github_mcp/main_tools/issues.py:252 — def _normalize_user
+  - ./github_mcp/main_tools/pull_requests.py:525 — def _get_user
+- Group of 2 (hash 182e2a64cd…):
+  - ./github_mcp/workspace_tools/commands.py:24 — def _normalize_timeout_seconds
+  - ./github_mcp/workspace_tools/suites.py:10 — def _normalize_timeout_seconds
+- Group of 2 (hash 933f84af57…):
+  - ./tests/test_write_gate_and_logging.py:19 — def fake_structured
+  - ./tests/test_write_gate_and_logging.py:41 — def fake_structured
+- Group of 2 (hash c85b358f37…):
+  - ./tests/test_tool_dedupe.py:11 — async def _work
+  - ./tests/test_tool_dedupe.py:33 — async def _work
+- Group of 2 (hash 9260c4e241…):
+  - ./tests/test_introspection_catalog.py:53 — def fake_get_write_allowed
+  - ./tests/test_introspection_catalog.py:73 — def fake_get_write_allowed
+
+## Identical 10-line blocks (heuristic)
+- Block appears 5 times (hash 9801a2c507…):
+  - ./main.py:690
+  - ./main.py:691
+  - ./main.py:692
+  - ./main.py:693
+  - ./main.py:694
+- Block appears 5 times (hash 67afb636e3…):
+  - ./github_mcp/mcp_server/errors.py:149
+  - ./github_mcp/mcp_server/errors.py:185
+  - ./github_mcp/mcp_server/errors.py:220
+  - ./github_mcp/mcp_server/errors.py:263
+  - ./github_mcp/mcp_server/errors.py:296
+- Block appears 5 times (hash 02c664c5d6…):
+  - ./github_mcp/mcp_server/errors.py:150
+  - ./github_mcp/mcp_server/errors.py:186
+  - ./github_mcp/mcp_server/errors.py:221
+  - ./github_mcp/mcp_server/errors.py:264
+  - ./github_mcp/mcp_server/errors.py:297
+- Block appears 5 times (hash f688bc7f7b…):
+  - ./github_mcp/mcp_server/errors.py:151
+  - ./github_mcp/mcp_server/errors.py:187
+  - ./github_mcp/mcp_server/errors.py:222
+  - ./github_mcp/mcp_server/errors.py:265
+  - ./github_mcp/mcp_server/errors.py:298
+- Block appears 5 times (hash 2020e45423…):
+  - ./github_mcp/mcp_server/errors.py:152
+  - ./github_mcp/mcp_server/errors.py:188
+  - ./github_mcp/mcp_server/errors.py:223
+  - ./github_mcp/mcp_server/errors.py:266
+  - ./github_mcp/mcp_server/errors.py:299
+- Block appears 4 times (hash 5bccd55bf2…):
+  - ./main.py:367
+  - ./main.py:368
+  - ./github_mcp/mcp_server/context.py:166
+  - ./github_mcp/mcp_server/context.py:167
+- Block appears 4 times (hash d618fed907…):
+  - ./main.py:740
+  - ./main.py:741
+  - ./main.py:742
+  - ./main.py:743
+- Block appears 4 times (hash f6cae0d5d9…):
+  - ./main.py:928
+  - ./main.py:929
+  - ./main.py:930
+  - ./main.py:931
+- Block appears 4 times (hash ced9fe727a…):
+  - ./github_mcp/workspace_tools/commands.py:7
+  - ./github_mcp/workspace_tools/fs.py:12
+  - ./github_mcp/workspace_tools/fs.py:13
+  - ./github_mcp/workspace_tools/commit.py:9
+- Block appears 4 times (hash b473ad2451…):
+  - ./github_mcp/workspace_tools/git_ops.py:171
+  - ./github_mcp/workspace_tools/git_ops.py:172
+  - ./github_mcp/workspace_tools/git_ops.py:265
+  - ./github_mcp/workspace_tools/git_ops.py:266
+- Block appears 3 times (hash 3680caaa9a…):
+  - ./main.py:407
+  - ./main.py:408
+  - ./main.py:409
+- Block appears 3 times (hash caa2538515…):
+  - ./main.py:552
+  - ./main.py:553
+  - ./main.py:554
+- Block appears 3 times (hash 940fd0041d…):
+  - ./main.py:562
+  - ./main.py:563
+  - ./main.py:564
+- Block appears 3 times (hash 41b0714b86…):
+  - ./main.py:614
+  - ./main.py:615
+  - ./main.py:616
+- Block appears 3 times (hash 33af68f4b4…):
+  - ./main.py:682
+  - ./main.py:683
+  - ./main.py:684
+- Block appears 3 times (hash a8270d99f3…):
+  - ./main.py:715
+  - ./main.py:716
+  - ./main.py:717
+- Block appears 3 times (hash 57ba316f68…):
+  - ./main.py:724
+  - ./main.py:725
+  - ./main.py:726
+- Block appears 3 times (hash 2438829130…):
+  - ./main.py:804
+  - ./main.py:805
+  - ./main.py:806
+- Block appears 3 times (hash edc862f756…):
+  - ./main.py:864
+  - ./main.py:865
+  - ./main.py:866
+- Block appears 3 times (hash 2a117a6d96…):
+  - ./main.py:1151
+  - ./main.py:1152
+  - ./main.py:1153
+- Block appears 3 times (hash 3bb50ecdbd…):
+  - ./main.py:1303
+  - ./main.py:1304
+  - ./main.py:1305
+- Block appears 3 times (hash 97bbd104e2…):
+  - ./main.py:1392
+  - ./main.py:1393
+  - ./main.py:1394
+- Block appears 3 times (hash cbe553962e…):
+  - ./main.py:1402
+  - ./main.py:1403
+  - ./main.py:1404
+- Block appears 3 times (hash 11759ddeef…):
+  - ./main.py:1419
+  - ./main.py:1420
+  - ./main.py:1421
+- Block appears 3 times (hash 15ddfdd109…):
+  - ./main.py:1469
+  - ./main.py:1470
+  - ./github_mcp/main_tools/pull_requests.py:141
+- Block appears 3 times (hash 576de8e7b9…):
+  - ./main.py:1490
+  - ./github_mcp/main_tools/pull_requests.py:231
+  - ./github_mcp/main_tools/pull_requests.py:232
+- Block appears 3 times (hash a31324870c…):
+  - ./main.py:1509
+  - ./github_mcp/main_tools/pull_requests.py:291
+  - ./github_mcp/main_tools/pull_requests.py:292
+- Block appears 3 times (hash e68baa2313…):
+  - ./github_mcp/file_cache.py:74
+  - ./github_mcp/file_cache.py:75
+  - ./github_mcp/file_cache.py:76
+- Block appears 3 times (hash 2de40f25e5…):
+  - ./github_mcp/github_content.py:95
+  - ./github_mcp/github_content.py:96
+  - ./github_mcp/github_content.py:97
+- Block appears 3 times (hash c50a7ddcd4…):
+  - ./github_mcp/exceptions.py:23
+  - ./github_mcp/exceptions.py:24
+  - ./github_mcp/exceptions.py:25
+... (598 more groups omitted)
