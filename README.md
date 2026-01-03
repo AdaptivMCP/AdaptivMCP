@@ -14,6 +14,14 @@ connected Adaptiv connector with multiple tasks and queries. Today it ships with
 GitHub and Render integrations, with plans for additional service integrations in
 future updates.
 
+## Tool policy (default allow)
+
+All MCP tools implemented by this server are enabled and exposed by default. The server does not maintain an allowlist, and the built-in default denylist is empty.
+
+If you need to disable specific tools in a particular deployment, set `MCP_TOOL_DENYLIST` to a comma-separated list of tool names. To explicitly ensure no tools are disabled, set `MCP_TOOL_DENYLIST` to `none` (also accepts `off`, `false`, or `0`).
+
+Note: Some clients/platforms may still apply their own safety gating on tool execution; that is independent of this server's tool registry policy.
+
 ## Health and observability
 
 The server exposes:
