@@ -22,6 +22,16 @@ Because the workspace holds the clone, the two terms are closely related, but th
 - Workspace tools: operate on the persistent clone (local filesystem + git).
 - GitHub API tools: inspect or mutate GitHub’s remote state (issues, PRs, Actions, contents API, etc.).
 
+## Tool registry defaults
+
+By default, this server does not disable any MCP tools (the built-in denylist is empty). There is no allowlist mechanism.
+
+Operators can optionally disable specific tools at deployment time by setting `MCP_TOOL_DENYLIST` to a comma-separated list of tool names.
+
+To explicitly ensure the denylist is disabled, set `MCP_TOOL_DENYLIST` to `none` (also accepts `off`, `false`, or `0`).
+
+Note: Client/platform-level safety gating (if any) is independent of this server’s tool registry behavior.
+
 ## What this server provides
 
 - MCP tool surface for GitHub operations: repositories, issues, PRs, actions, files
@@ -117,7 +127,7 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 
 ### Tool registry controls
 
-- MCP_TOOL_DENYLIST — comma-separated tool names to disable (set to none to allow all)
+- MCP_TOOL_DENYLIST — comma-separated tool names to disable (set to none to disable the denylist)
 
 ### Logging
 
