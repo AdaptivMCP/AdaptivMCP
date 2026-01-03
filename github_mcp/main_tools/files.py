@@ -1,16 +1,48 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, NotRequired, TypedDict
 
 import github_mcp.config as config
-from github_mcp.diff_utils import (
-    build_unified_diff,
-    colorize_unified_diff,
-    diff_stats,
-    truncate_diff,
-)
+from github_mcp.diff_utils import build_unified_diff
+from github_mcp.utils import _normalize_write_context, extract_sha, require_text
+from github_mcp.write_logging import log_write_diff
 
 from ._main import _main
+
+
+class WriteVerification(TypedDict):
+    sha_before: str | None
+    sha_after: str | None
+    html_url: str | None
+
+
+class WriteResultBase(TypedDict):
+    full_name: str
+    path: str
+    branch: str
+    message: str
+    commit: Any
+    verification: WriteVerification
+
+
+class WriteResultCreated(WriteResultBase):
+    status: str
+    diff: NotRequired[str | None]
+
+
+class WriteResultCommitted(WriteResultBase):
+    status: str
+    diff: NotRequired[str | None]
+
+
+class WriteResultMoved(TypedDict):
+    status: str
+    full_name: str
+    branch: str
+    from_path: str
+    to_path: str
+    write_result: WriteResultCommitted
+    delete_result: dict[str, Any]
 
 
 async def create_file(
@@ -19,24 +51,23 @@ async def create_file(
     content: str,
     *,
     branch: str = "main",
-    message: Optional[str] = None,
+    message: str | None = None,
     return_diff: bool = False,
-) -> Dict[str, Any]:
+) -> WriteResultCreated:
     """Create a new text file in a repository after normalizing path and branch."""
 
     m = _main()
-    _ = return_diff  # noqa: F841
 
-    effective_branch = m._effective_ref_for_repo(full_name, branch)
-    normalized_path = m._normalize_repo_path(path)
+    effective_branch, normalized_path = _normalize_write_context(full_name, branch, path)
+    if normalized_path is None:
+        raise ValueError("path must not be empty after normalization")
 
     # Ensure the file does not already exist.
     try:
         await m._decode_github_content(full_name, normalized_path, effective_branch)
     except m.GitHubAPIError as exc:  # type: ignore[attr-defined]
-        msg = str(exc)
-        if "404" in msg:
-            sha_before: Optional[str] = None
+        if getattr(exc, "status_code", None) == 404:
+            sha_before: str | None = None
         else:
             raise
     else:
@@ -57,13 +88,7 @@ async def create_file(
     )
 
     verified = await m._decode_github_content(full_name, normalized_path, effective_branch)
-    json_blob = verified.get("json")
-    sha_after: Optional[str]
-    if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
-        sha_after = json_blob["sha"]
-    else:
-        sha_value = verified.get("sha")
-        sha_after = sha_value if isinstance(sha_value, str) else None
+    sha_after = extract_sha(verified)
 
     # Render-log friendly diff logging (colored additions/removals).
     full_diff = build_unified_diff(
@@ -72,34 +97,9 @@ async def create_file(
         fromfile=f"a/{normalized_path}",
         tofile=f"b/{normalized_path}",
     )
-    stats = diff_stats(full_diff)
+    log_write_diff("Created", full_name=full_name, path=normalized_path, diff_text=full_diff)
 
-    try:
-        config.TOOLS_LOGGER.chat(
-            "Created %s (+%s -%s)",
-            normalized_path,
-            stats.added,
-            stats.removed,
-            extra={"repo": full_name, "path": normalized_path, "event": "write_diff_summary"},
-        )
-
-        if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and full_diff.strip():
-            truncated = truncate_diff(
-                full_diff,
-                max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-            )
-            colored = colorize_unified_diff(truncated)
-            config.TOOLS_LOGGER.detailed(
-                "Diff for %s\n%s",
-                normalized_path,
-                colored,
-                extra={"repo": full_name, "path": normalized_path, "event": "write_diff"},
-            )
-    except Exception:
-        # Diff logging should never break the tool.
-        pass
-
-    diff_text: Optional[str] = None
+    diff_text: str | None = None
     if return_diff:
         diff_text = full_diff
 
@@ -125,38 +125,26 @@ async def apply_text_update_and_commit(
     updated_content: str,
     *,
     branch: str = "main",
-    message: Optional[str] = None,
+    message: str | None = None,
     return_diff: bool = False,
-) -> Dict[str, Any]:
+) -> WriteResultCommitted:
     """Apply a text update to a single file on a branch, then verify it."""
 
     m = _main()
 
-    effective_branch = m._effective_ref_for_repo(full_name, branch)
-    normalized_path = m._normalize_repo_path(path)
+    effective_branch, normalized_path = _normalize_write_context(full_name, branch, path)
+    if normalized_path is None:
+        raise ValueError("path must not be empty after normalization")
 
     is_new_file = False
     old_text: str | None = None
 
-    def _extract_sha(decoded: Dict[str, Any]) -> Optional[str]:
-        if not isinstance(decoded, dict):
-            return None
-        json_blob = decoded.get("json")
-        if isinstance(json_blob, dict) and isinstance(json_blob.get("sha"), str):
-            return json_blob.get("sha")
-        sha_value = decoded.get("sha")
-        return sha_value if isinstance(sha_value, str) else None
-
     try:
         decoded = await m._decode_github_content(full_name, normalized_path, effective_branch)
-        _old_text = decoded.get("text")
-        if not isinstance(_old_text, str):
-            raise m.GitHubAPIError("Decoded content is not text")
-        old_text = _old_text  # type: ignore[attr-defined]
-        sha_before = _extract_sha(decoded)
+        old_text = require_text(decoded)
+        sha_before = extract_sha(decoded)
     except m.GitHubAPIError as exc:  # type: ignore[attr-defined]
-        msg = str(exc)
-        if "404" in msg:
+        if getattr(exc, "status_code", None) == 404:
             is_new_file = True
             sha_before = None
             old_text = ""
@@ -181,7 +169,7 @@ async def apply_text_update_and_commit(
     )
 
     verified = await m._decode_github_content(full_name, normalized_path, effective_branch)
-    sha_after = _extract_sha(verified)
+    sha_after = extract_sha(verified)
 
     # Render-log friendly diff logging (colored additions/removals).
     before = old_text or ""
@@ -192,35 +180,9 @@ async def apply_text_update_and_commit(
         fromfile=f"a/{normalized_path}",
         tofile=f"b/{normalized_path}",
     )
-    stats = diff_stats(full_diff)
+    log_write_diff("Committed", full_name=full_name, path=normalized_path, diff_text=full_diff)
 
-    # Minimal progress note (CHAT) + detailed colored diff when enabled.
-    try:
-        config.TOOLS_LOGGER.chat(
-            "Committed %s (+%s -%s)",
-            normalized_path,
-            stats.added,
-            stats.removed,
-            extra={"repo": full_name, "path": normalized_path, "event": "write_diff_summary"},
-        )
-
-        if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and full_diff.strip():
-            truncated = truncate_diff(
-                full_diff,
-                max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-            )
-            colored = colorize_unified_diff(truncated)
-            config.TOOLS_LOGGER.detailed(
-                "Diff for %s:\n%s",
-                normalized_path,
-                colored,
-                extra={"repo": full_name, "path": normalized_path, "event": "write_diff"},
-            )
-    except Exception:
-        # Diff logging should never break the tool.
-        pass
-
-    diff_text: Optional[str] = None
+    diff_text: str | None = None
     if return_diff:
         diff_text = full_diff
 
@@ -245,8 +207,8 @@ async def move_file(
     from_path: str,
     to_path: str,
     branch: str = "main",
-    message: Optional[str] = None,
-) -> Dict[str, Any]:
+    message: str | None = None,
+) -> WriteResultMoved:
     """Move or rename a file within a repository on a single branch."""
 
     m = _main()
@@ -254,24 +216,29 @@ async def move_file(
     if "/" not in full_name:
         raise ValueError("full_name must be in 'owner/repo' format")
 
-    effective_branch = m._effective_ref_for_repo(full_name, branch)
+    effective_branch, normalized_from_path = _normalize_write_context(
+        full_name, branch, from_path
+    )
+    if normalized_from_path is None:
+        raise ValueError("from_path must not be empty after normalization")
+    _, normalized_to_path = _normalize_write_context(full_name, effective_branch, to_path)
+    if normalized_to_path is None:
+        raise ValueError("to_path must not be empty after normalization")
 
-    from_path = m._normalize_repo_path(from_path)
-    to_path = m._normalize_repo_path(to_path)
-
-    if from_path == to_path:
+    if normalized_from_path == normalized_to_path:
         raise ValueError("from_path and to_path must be different")
 
-    source = await m._decode_github_content(full_name, from_path, effective_branch)
-    source_text = source.get("text")
-    if source_text is None:
-        raise m.GitHubAPIError("Source file contents missing or undecodable")  # type: ignore[attr-defined]
+    source = await m._decode_github_content(full_name, normalized_from_path, effective_branch)
+    source_text = require_text(
+        source,
+        error_message="Source file contents missing or undecodable",
+    )
 
-    commit_message = message or f"Move {from_path} to {to_path}"
+    commit_message = message or f"Move {normalized_from_path} to {normalized_to_path}"
 
-    write_result = await m.apply_text_update_and_commit(
+    write_result = await apply_text_update_and_commit(
         full_name=full_name,
-        path=to_path,
+        path=normalized_to_path,
         updated_content=source_text,
         branch=effective_branch,
         message=commit_message + " (add new path)",
@@ -282,17 +249,18 @@ async def move_file(
         "branch": effective_branch,
     }
     try:
-        delete_body["sha"] = await m._resolve_file_sha(full_name, from_path, effective_branch)
+        delete_body["sha"] = await m._resolve_file_sha(
+            full_name, normalized_from_path, effective_branch
+        )
     except m.GitHubAPIError as exc:  # type: ignore[attr-defined]
-        msg = str(exc)
-        if "404" in msg:
+        if getattr(exc, "status_code", None) == 404:
             delete_result = {"status": "noop", "reason": "source path missing"}
         else:
             raise
     else:
         delete_result = await m._github_request(
             "DELETE",
-            f"/repos/{full_name}/contents/{from_path}",
+            f"/repos/{full_name}/contents/{normalized_from_path}",
             json=delete_body,
         )
 
@@ -301,9 +269,14 @@ async def move_file(
     try:
         config.TOOLS_LOGGER.chat(
             "Moved %s -> %s",
-            from_path,
-            to_path,
-            extra={"repo": full_name, "from_path": from_path, "to_path": to_path, "event": "write_move"},
+            normalized_from_path,
+            normalized_to_path,
+            extra={
+                "repo": full_name,
+                "from_path": normalized_from_path,
+                "to_path": normalized_to_path,
+                "event": "write_move",
+            },
         )
 
         # If we actually deleted the old path, also show the deletion diff.
@@ -311,38 +284,33 @@ async def move_file(
             delete_diff = build_unified_diff(
                 source_text,
                 "",
-                fromfile=f"a/{from_path}",
-                tofile=f"b/{from_path}",
+                fromfile=f"a/{normalized_from_path}",
+                tofile=f"b/{normalized_from_path}",
             )
-            stats = diff_stats(delete_diff)
-            config.TOOLS_LOGGER.chat(
-                "Removed %s (+%s -%s)",
-                from_path,
-                stats.added,
-                stats.removed,
-                extra={"repo": full_name, "path": from_path, "event": "write_diff_summary"},
+            log_write_diff(
+                "Removed",
+                full_name=full_name,
+                path=normalized_from_path,
+                diff_text=delete_diff,
+                detail_suffix=" (deleted)",
             )
-            if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and delete_diff.strip():
-                truncated = truncate_diff(
-                    delete_diff,
-                    max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                )
-                colored = colorize_unified_diff(truncated)
-                config.TOOLS_LOGGER.detailed(
-                    "Diff for %s (deleted)\n%s",
-                    from_path,
-                    colored,
-                    extra={"repo": full_name, "path": from_path, "event": "write_diff"},
-                )
     except Exception:
-        pass
+        config.TOOLS_LOGGER.debug(
+            "Move diff logging failed",
+            exc_info=True,
+            extra={
+                "repo": full_name,
+                "from_path": normalized_from_path,
+                "to_path": normalized_to_path,
+            },
+        )
 
     return {
         "status": "moved",
         "full_name": full_name,
         "branch": effective_branch,
-        "from_path": from_path,
-        "to_path": to_path,
+        "from_path": normalized_from_path,
+        "to_path": normalized_to_path,
         "write_result": write_result,
         "delete_result": delete_result,
     }

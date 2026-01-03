@@ -8,9 +8,9 @@ import os  # noqa: E402  pylint: disable=wrong-import-position
 import sys
 import zipfile
 from types import SimpleNamespace
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
 
-from .exceptions import ToolPreflightValidationError
+from .exceptions import GitHubAPIError, ToolPreflightValidationError
 
 
 def _get_main_module():
@@ -128,6 +128,27 @@ def _normalize_write_context(
     return effective_branch, normalized_path
 
 
+def extract_sha(decoded: Mapping[str, Any]) -> str | None:
+    """Extract a SHA value from decoded GitHub content payloads."""
+
+    if not isinstance(decoded, Mapping):
+        return None
+    json_blob = decoded.get("json")
+    if isinstance(json_blob, Mapping) and isinstance(json_blob.get("sha"), str):
+        return json_blob["sha"]
+    sha_value = decoded.get("sha")
+    return sha_value if isinstance(sha_value, str) else None
+
+
+def require_text(decoded: Mapping[str, Any], *, error_message: str = "Decoded content is not text") -> str:
+    """Return decoded text content or raise a GitHubAPIError."""
+
+    text = decoded.get("text")
+    if not isinstance(text, str):
+        raise GitHubAPIError(error_message)
+    return text
+
+
 def _with_numbered_lines(text: str) -> list[Dict[str, Any]]:
     return [{"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)]
 
@@ -174,9 +195,11 @@ __all__ = [
     "_default_branch_for_repo",
     "_effective_ref_for_repo",
     "_env_flag",
+    "extract_sha",
     "_normalize_branch",
     "_normalize_repo_path",
     "_normalize_write_context",
+    "require_text",
     "_render_visible_whitespace",
     "_with_numbered_lines",
 ]

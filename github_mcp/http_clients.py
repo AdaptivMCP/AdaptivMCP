@@ -550,9 +550,12 @@ async def _github_request(
             )
 
         if error_flag:
-            err = GitHubAPIError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
-            err.response_payload = _build_response_payload(resp, body=body)
-            raise err
+            payload = _build_response_payload(resp, body=body)
+            raise GitHubAPIError(
+                f"GitHub API error {resp.status_code}: {resp.text[:200]}",
+                status_code=resp.status_code,
+                response_payload=payload,
+            )
 
         result = _build_response_payload(resp, body=body)
         if expect_json:
