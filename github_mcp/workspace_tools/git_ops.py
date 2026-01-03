@@ -565,3 +565,104 @@ async def workspace_sync_to_remote(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_sync_to_remote")
+
+
+@mcp_tool(write_action=True)
+async def workspace_sync_bidirectional(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    commit_message: str = "Sync workspace changes",
+    add_all: bool = True,
+    push: bool = True,
+    *,
+    discard_local_changes: bool = False,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Sync workspace changes to the remote and refresh local state from GitHub."""
+    try:
+        deps = _tw()._workspace_deps()
+        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _tw()._resolve_ref(ref, branch=branch)
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        actions: List[str] = []
+        before = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+        snapshot = before
+
+        if snapshot["behind"] > 0:
+            if snapshot["ahead"] > 0:
+                if not discard_local_changes:
+                    raise GitHubAPIError(
+                        "Workspace and remote have diverged. "
+                        "Re-run with discard_local_changes=true to reset to remote."
+                    )
+                actions.append("reset_diverged_to_remote")
+            elif not snapshot["is_clean"]:
+                if not discard_local_changes:
+                    raise GitHubAPIError(
+                        "Workspace is behind remote and has local changes. "
+                        "Commit local changes or re-run with discard_local_changes=true."
+                    )
+                actions.append("discard_local_changes")
+            else:
+                actions.append("fast_forward_from_remote")
+
+            await _run_shell_ok(
+                deps,
+                f"git reset --hard {shlex.quote(snapshot['remote_ref'])}",
+                cwd=repo_dir,
+                timeout_seconds=300,
+            )
+            if discard_local_changes:
+                await _run_shell_ok(
+                    deps,
+                    "git clean -fd",
+                    cwd=repo_dir,
+                    timeout_seconds=120,
+                )
+            snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+
+        if not snapshot["is_clean"]:
+            if add_all:
+                add_result = await deps["run_shell"]("git add -A", cwd=repo_dir, timeout_seconds=120)
+                if add_result.get("exit_code", 0) != 0:
+                    stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
+                    raise GitHubAPIError(f"git add failed: {stderr}")
+
+            status_result = await deps["run_shell"](
+                "git status --porcelain", cwd=repo_dir, timeout_seconds=60
+            )
+            status_lines = (status_result.get("stdout", "") or "").strip().splitlines()
+            if status_lines:
+                commit_cmd = f"git commit -m {shlex.quote(commit_message)}"
+                commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
+                if commit_result.get("exit_code", 0) != 0:
+                    stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
+                    raise GitHubAPIError(f"git commit failed: {stderr}")
+                actions.append("committed_local_changes")
+
+            snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+
+        if push and snapshot["ahead"] > 0:
+            push_cmd = f"git push origin HEAD:{effective_ref}"
+            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
+            if push_result.get("exit_code", 0) != 0:
+                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
+                raise GitHubAPIError(f"git push failed: {stderr}")
+            actions.append("pushed_to_remote")
+            snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+
+        return {
+            "branch": effective_ref,
+            "full_name": full_name,
+            "repo_dir": repo_dir,
+            "discard_local_changes": discard_local_changes,
+            "actions": actions,
+            "before": before,
+            "after": snapshot,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="workspace_sync_bidirectional")
