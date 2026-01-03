@@ -490,7 +490,6 @@ async def _github_request(
     max_attempts = max(0, GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS)
 
     while True:
-        start = time.time()
         try:
             client = client_factory()
         except GitHubAuthError:
@@ -508,7 +507,6 @@ async def _github_request(
         except httpx.HTTPError as exc:  # pragma: no cover - defensive
             raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
 
-        duration_ms = int((time.time() - start) * 1000)
         error_flag = getattr(resp, "is_error", None)
         if error_flag is None:
             error_flag = resp.status_code >= 400
