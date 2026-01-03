@@ -6,6 +6,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from github_mcp.mcp_server.context import get_write_allowed
+from github_mcp.main_tools.introspection import list_all_actions
 
 _ALWAYS_WRITE_ENABLED_TOOLS: set[str] = set()
 
@@ -94,14 +95,31 @@ def _terminal_help(name: str, description: str, schema: Any) -> str:
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
     write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
+    catalog = list_all_actions(include_parameters=True, compact=False)
+    catalog_index = {
+        entry.get("name"): entry for entry in (catalog.get("tools") or []) if entry.get("name")
+    }
 
     for tool, _func in getattr(server, "_REGISTERED_MCP_TOOLS", []):
         tool_name = _tool_name(tool, _func)
-        tool_description = _tool_description(tool, _func)
-        write_action = _is_write_action(tool, _func)
-        write_enabled = (not write_action) or write_allowed or (tool_name in _ALWAYS_WRITE_ENABLED_TOOLS)
+        catalog_entry = catalog_index.get(tool_name) or {}
+        tool_description = catalog_entry.get("description") or _tool_description(tool, _func)
+        write_action = bool(catalog_entry.get("write_action", _is_write_action(tool, _func)))
+        write_enabled = bool(
+            catalog_entry.get(
+                "write_enabled",
+                (not write_action) or write_allowed or (tool_name in _ALWAYS_WRITE_ENABLED_TOOLS),
+            )
+        )
 
-        schema = server._normalize_input_schema(tool) or server._normalize_input_schema(_func)
+        schema = (
+            catalog_entry.get("input_schema")
+            or server._normalize_input_schema(tool)
+            or server._normalize_input_schema(_func)
+        )
+        visibility = catalog_entry.get("visibility") or getattr(_func, "__mcp_visibility__", None) or getattr(
+            tool, "__mcp_visibility__", None
+        ) or "public"
 
         annotations = getattr(tool, "annotations", None)
         if hasattr(annotations, "model_dump"):
@@ -127,6 +145,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "annotations": annotations,
                 "write_action": bool(write_action),
                 "write_enabled": bool(write_enabled),
+                "visibility": str(visibility),
             }
         )
 
