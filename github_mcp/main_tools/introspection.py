@@ -217,12 +217,15 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
 
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
         write_enabled = (not base_write_action) or write_allowed or (name_str in _ALWAYS_WRITE_ENABLED_TOOLS)
+        tool_write_allowed = (not base_write_action) or write_allowed
 
         tool_info: Dict[str, Any] = {
             "name": name_str,
             "visibility": str(visibility),
             # Correct semantic classification:
             "write_action": base_write_action,
+            # Gate status (always true for read tools).
+            "write_allowed": bool(tool_write_allowed),
             # Dynamic gating:
             "write_enabled": bool(write_enabled),
             # UI policy hint (separate from write_action):
@@ -262,6 +265,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
             "description": "Enumerate every available MCP tool with optional schemas.",
             "visibility": "public",
             "write_action": False,
+            "write_allowed": True,
             "write_enabled": True,
             "ui_prompt": False,
         }
@@ -328,6 +332,7 @@ async def list_tools(
             {
                 "name": name,
                 "write_action": write_action,
+                "write_allowed": bool(entry.get("write_allowed", True)),
                 "write_enabled": bool(entry.get("write_enabled", True)),
                 "operation": entry.get("operation"),
                 "risk_level": entry.get("risk_level"),
@@ -460,6 +465,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
             or "public"
         ),
         "write_action": base_write_action,
+        "write_allowed": (not base_write_action) or write_allowed,
         "write_enabled": (not base_write_action) or write_allowed or (tool_name in _ALWAYS_WRITE_ENABLED_TOOLS),
     }
 
