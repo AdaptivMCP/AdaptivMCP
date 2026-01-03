@@ -11,6 +11,7 @@ from main import (
     _resolve_file_sha,
     _workspace_path,
 )
+from github_mcp.utils import _normalize_repo_path_for_repo
 
 
 class ToolDecorator(Protocol):
@@ -45,8 +46,9 @@ async def get_file_slice(
         raise ValueError("max_lines must be > 0")
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
+    normalized_path = _normalize_repo_path_for_repo(full_name, path)
 
-    decoded = await _decode_github_content(full_name, path, effective_ref)
+    decoded = await _decode_github_content(full_name, normalized_path, effective_ref)
     text = decoded.get("text", "")
     all_lines = str(text).splitlines(keepends=False)
     total_lines = len(all_lines)
@@ -54,7 +56,7 @@ async def get_file_slice(
     if total_lines == 0:
         return {
             "full_name": full_name,
-            "path": path,
+            "path": normalized_path,
             "ref": effective_ref,
             "start_line": 1,
             "end_line": 0,
@@ -72,7 +74,7 @@ async def get_file_slice(
 
     return {
         "full_name": full_name,
-        "path": path,
+        "path": normalized_path,
         "ref": effective_ref,
         "start_line": start_idx + 1,
         "end_line": end_idx,
@@ -102,8 +104,9 @@ async def get_file_with_line_numbers(
         raise ValueError("max_lines must be > 0")
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
+    normalized_path = _normalize_repo_path_for_repo(full_name, path)
 
-    decoded = await _decode_github_content(full_name, path, effective_ref)
+    decoded = await _decode_github_content(full_name, normalized_path, effective_ref)
     text = decoded.get("text", "")
     all_lines = str(text).splitlines(keepends=False)
     total_lines = len(all_lines)
@@ -111,7 +114,7 @@ async def get_file_with_line_numbers(
     if total_lines == 0:
         return {
             "full_name": full_name,
-            "path": path,
+            "path": normalized_path,
             "ref": effective_ref,
             "start_line": 1,
             "end_line": 0,
@@ -135,7 +138,7 @@ async def get_file_with_line_numbers(
 
     return {
         "full_name": full_name,
-        "path": path,
+        "path": normalized_path,
         "ref": effective_ref,
         "start_line": start_idx + 1,
         "end_line": end_idx,
@@ -163,9 +166,11 @@ async def open_file_context(
     if max_lines <= 0:
         raise ValueError("max_lines must be > 0")
 
+    normalized_path = _normalize_repo_path_for_repo(full_name, path)
+
     slice_result = await get_file_slice(
         full_name=full_name,
-        path=path,
+        path=normalized_path,
         ref=ref,
         start_line=normalized_start_line,
         max_lines=max_lines,
@@ -183,7 +188,7 @@ async def open_file_context(
     if should_expand_small_file:
         slice_result = await get_file_slice(
             full_name=full_name,
-            path=path,
+            path=normalized_path,
             ref=ref,
             start_line=1,
             max_lines=int(total_lines),
@@ -196,7 +201,7 @@ async def open_file_context(
 
     response: Dict[str, Any] = {
         "full_name": slice_result.get("full_name", full_name),
-        "path": slice_result.get("path", path),
+        "path": slice_result.get("path", normalized_path),
         "ref": slice_result.get("ref", ref),
         "start_line": slice_result.get("start_line"),
         "end_line": slice_result.get("end_line"),
@@ -225,22 +230,25 @@ async def delete_file(
         raise ValueError("if_missing must be 'error' or 'noop'")
 
     effective_branch = _effective_ref_for_repo(full_name, branch)
+    normalized_path = _normalize_repo_path_for_repo(full_name, path)
 
-    sha = await _resolve_file_sha(full_name, path, effective_branch)
+    sha = await _resolve_file_sha(full_name, normalized_path, effective_branch)
     if sha is None:
         if if_missing == "noop":
             return {
                 "status": "noop",
                 "full_name": full_name,
-                "path": path,
+                "path": normalized_path,
                 "branch": effective_branch,
             }
-        raise FileNotFoundError(f"File not found: {path} on {effective_branch}")
+        raise FileNotFoundError(
+            f"File not found: {normalized_path} on {effective_branch}"
+        )
 
     payload = {"message": message, "sha": sha, "branch": effective_branch}
     result = await _github_request(
         "DELETE",
-        f"/repos/{full_name}/contents/{path}",
+        f"/repos/{full_name}/contents/{normalized_path}",
         json_body=payload,
         expect_json=True,
     )
@@ -248,7 +256,7 @@ async def delete_file(
     return {
         "status": "deleted",
         "full_name": full_name,
-        "path": path,
+        "path": normalized_path,
         "branch": effective_branch,
         "commit": result,
     }
@@ -265,18 +273,27 @@ async def update_file_from_workspace(
 
     effective_ref = _effective_ref_for_repo(full_name, branch)
 
-    workspace_root = _workspace_path(full_name, effective_ref)
+    workspace_root = Path(_workspace_path(full_name, effective_ref)).resolve()
+    workspace_candidate = Path(workspace_path)
+    if workspace_candidate.is_absolute():
+        workspace_file = workspace_candidate.resolve()
+    else:
+        workspace_file = (workspace_root / workspace_path).resolve()
 
-    workspace_file = Path(workspace_root) / workspace_path
+    if workspace_root not in workspace_file.parents and workspace_file != workspace_root:
+        raise ValueError("workspace_path must stay within the workspace root")
+
     if not workspace_file.is_file():
         raise FileNotFoundError(
             f"Workspace file {workspace_path!r} not found in {workspace_root!r}"
         )
 
+    normalized_target_path = _normalize_repo_path_for_repo(full_name, target_path)
+
     content_bytes = workspace_file.read_bytes()
     encoded = base64.b64encode(content_bytes).decode("ascii")
 
-    sha = await _resolve_file_sha(full_name, target_path, effective_ref)
+    sha = await _resolve_file_sha(full_name, normalized_target_path, effective_ref)
 
     payload: Dict[str, Any] = {
         "message": message,
@@ -288,16 +305,18 @@ async def update_file_from_workspace(
 
     result = await _github_request(
         "PUT",
-        f"/repos/{full_name}/contents/{target_path}",
+        f"/repos/{full_name}/contents/{normalized_target_path}",
         json_body=payload,
         expect_json=True,
     )
 
+    relative_workspace_path = workspace_file.relative_to(workspace_root).as_posix()
+
     return {
         "full_name": full_name,
         "branch": effective_ref,
-        "workspace_path": workspace_path,
-        "target_path": target_path,
+        "workspace_path": relative_workspace_path,
+        "target_path": normalized_target_path,
         "commit": result,
     }
 

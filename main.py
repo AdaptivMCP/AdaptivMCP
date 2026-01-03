@@ -72,7 +72,7 @@ from github_mcp.server import (
 from github_mcp.tools_workspace import commit_workspace, ensure_workspace_clone, render_shell  # noqa: F401
 from github_mcp.utils import (
     _effective_ref_for_repo,
-    _normalize_repo_path,
+    _normalize_repo_path_for_repo,
     _with_numbered_lines,
 )
 from github_mcp.workspace import (
@@ -431,7 +431,7 @@ register_tool_registry_routes(app)
 def _cache_file_result(
     *, full_name: str, path: str, ref: str, decoded: Dict[str, Any]
 ) -> Dict[str, Any]:
-    normalized_path = _normalize_repo_path(path)
+    normalized_path = _normalize_repo_path_for_repo(full_name, path)
     effective_ref = _effective_ref_for_repo(full_name, ref)
     return cache_payload(
         full_name=full_name,
