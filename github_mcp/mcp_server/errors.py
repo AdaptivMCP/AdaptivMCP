@@ -179,8 +179,7 @@ def _structured_tool_error(
             "hint": (
                 "GitHub repository access is not available to this process (or git cannot use the configured credentials). "
                 "If you rely on platform-injected secrets (e.g., Render runtime env), confirm they are attached to the service "
-                "and visible to the git subprocess. If you use env vars, set one of the supported GitHub token variables. "
-                "Note: Render observability tools require RENDER_API_KEY; that is separate from GitHub repository auth."
+                "and visible to the git subprocess. If you use env vars, set one of the supported GitHub token variables."
             ),
         }
         user_message = _format_user_message(err, context=context, path=path)
@@ -205,17 +204,6 @@ def _structured_tool_error(
         category = "validation"
         origin = "tool"
         hint = None
-
-        if "RENDER_API_KEY" in msg:
-            category = "configuration"
-            origin = "render"
-            details.setdefault("required_env", ["RENDER_API_KEY"])
-            hint = "Set RENDER_API_KEY before calling Render observability tools."
-        elif "RENDER_SERVICE_ID" in msg:
-            category = "configuration"
-            origin = "render"
-            details.setdefault("required_env", ["RENDER_SERVICE_ID"])
-            hint = "Set RENDER_SERVICE_ID or pass resourceId when requesting Render metrics."
 
         err = {
             "incident_id": incident_id,

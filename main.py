@@ -51,11 +51,6 @@ from github_mcp.http_clients import (
     _get_github_token,  # noqa: F401
     _github_client_instance,  # noqa: F401
 )
-from github_mcp.metrics import (
-    _METRICS,  # noqa: F401
-    _metrics_snapshot,  # noqa: F401
-    _reset_metrics_for_tests,  # noqa: F401
-)
 from github_mcp.mcp_server.context import (
     REQUEST_MESSAGE_ID,
     REQUEST_PATH,
@@ -253,7 +248,6 @@ __all__ = [
     "CONTROLLER_REPO",
     "CONTROLLER_DEFAULT_BRANCH",
     "_github_request",
-    "get_recent_server_logs",
 ]
 # Exposed for tests that monkeypatch the external HTTP client used for sandbox: URLs.
 _http_client_external: httpx.AsyncClient | None = None
@@ -544,97 +538,6 @@ async def commit_workspace_files(
 # Read-only tools
 
 
-@mcp_tool(
-    write_action=False,
-    description="List recent tool invocation events captured in memory.",
-    tags=["observability", "tools", "events"],
-)
-def get_recent_tool_events(limit: int = 50, include_success: bool = True) -> Dict[str, Any]:
-    """Delegates to github_mcp.main_tools.observability.get_recent_tool_events."""
-    from github_mcp.main_tools.observability import get_recent_tool_events as _impl
-    return _impl(limit=limit, include_success=include_success)
-
-
-@mcp_tool(
-    write_action=False,
-    description="List recent server-side errors captured in memory.",
-    tags=["observability", "logs", "errors"],
-)
-def get_recent_server_errors(limit: int = 50) -> Dict[str, Any]:
-    """Delegates to github_mcp.main_tools.observability.get_recent_server_errors."""
-    from github_mcp.main_tools.observability import get_recent_server_errors as _impl
-    return _impl(limit=limit)
-
-
-@mcp_tool(
-    write_action=False,
-    description="Return recent server-side logs captured in memory (useful when provider logs are unavailable).",
-    tags=["observability", "logs"],
-)
-def get_recent_server_logs(limit: int = 100, min_level: str = "INFO") -> Dict[str, Any]:
-    """Return recent server-side logs captured in memory.
-
-    Use this when debugging tool behavior in environments where you cannot
-    access provider logs.
-    """
-
-    from github_mcp.main_tools.server_logs import get_recent_server_logs as _impl
-
-    return _impl(limit=limit, min_level=min_level)
-
-
-@mcp_tool(
-    write_action=False,
-    description="Fetch recent logs from Render (requires RENDER_API_KEY). Render /logs requires ownerId; pass ownerId or set RENDER_OWNER_ID; otherwise the tool will attempt to resolve it from the service id.",
-    tags=["render", "observability", "logs"],
-)
-async def list_render_logs(
-    ownerId: Optional[str] = None,
-    resource: Optional[List[str]] = None,
-    level: Optional[List[str]] = None,
-    type: Optional[List[str]] = None,
-    text: Optional[List[str]] = None,
-    startTime: Optional[str] = None,
-    endTime: Optional[str] = None,
-    direction: Optional[str] = None,
-    limit: Optional[int] = 100,
-) -> Any:
-    from github_mcp.main_tools.render_observability import list_render_logs as _impl
-
-    return await _impl(
-        ownerId=ownerId,
-        resource=resource,
-        level=level,
-        type=type,
-        text=text,
-        startTime=startTime,
-        endTime=endTime,
-        direction=direction,
-        limit=limit,
-    )
-
-
-@mcp_tool(
-    write_action=False,
-    description="Fetch basic Render service metrics (defaults to RENDER_SERVICE_ID when resourceId is omitted; requires RENDER_API_KEY).",
-    tags=["render", "observability", "metrics"],
-)
-async def get_render_metrics(
-    metricTypes: List[str],
-    resourceId: Optional[str] = None,
-    startTime: Optional[str] = None,
-    endTime: Optional[str] = None,
-    resolution: Optional[int] = None,
-) -> Dict[str, Any]:
-    from github_mcp.main_tools.render_observability import get_render_metrics as _impl
-
-    return await _impl(
-        metricTypes=metricTypes,
-        resourceId=resourceId,
-        startTime=startTime,
-        endTime=endTime,
-        resolution=resolution,
-    )
 # ------------------------------------------------------------------------------
 
 @mcp_tool(write_action=False)

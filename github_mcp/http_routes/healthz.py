@@ -9,7 +9,6 @@ from starlette.responses import JSONResponse
 from github_mcp.config import SERVER_START_TIME
 from github_mcp.exceptions import GitHubAuthError
 from github_mcp.http_clients import _get_github_token
-from github_mcp.metrics import _metrics_snapshot
 from github_mcp.server import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
 
 
@@ -37,7 +36,6 @@ def _build_health_payload() -> dict[str, Any]:
             "repo": CONTROLLER_REPO,
             "default_branch": CONTROLLER_DEFAULT_BRANCH,
         },
-        "metrics": _metrics_snapshot(),
     }
 
 

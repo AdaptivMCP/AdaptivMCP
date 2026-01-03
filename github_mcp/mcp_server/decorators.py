@@ -26,8 +26,8 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import DETAILED_LEVEL, TOOLS_LOGGER, TOOL_DENYLIST
-from github_mcp.mcp_server.context import WRITE_ALLOWED, _record_recent_tool_event, get_request_context, mcp, FASTMCP_AVAILABLE
+from github_mcp.config import TOOLS_LOGGER, TOOL_DENYLIST
+from github_mcp.mcp_server.context import WRITE_ALLOWED, get_request_context, mcp, FASTMCP_AVAILABLE
 from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
 from github_mcp.mcp_server.user_friendly import attach_error_user_facing_fields, attach_user_facing_fields
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
@@ -36,9 +36,7 @@ from github_mcp.mcp_server.schemas import (
     _schema_from_signature,
     _normalize_input_schema,
     _normalize_tool_description,
-    _jsonable,
 )
-from github_mcp.metrics import _record_tool_call
 
 
 def _parse_bool(value: Optional[str]) -> bool:
@@ -313,44 +311,8 @@ def _emit_tool_error(
     phase: str,
 ) -> dict[str, Any]:
     duration_ms = int((time.perf_counter() - start) * 1000)
-    _record_tool_call(
-        tool_name,
-        write_kind="write" if write_action else "read",
-        duration_ms=duration_ms,
-        errored=True,
-    )
     structured_error = _structured_tool_error(exc, context=tool_name, path=None)
     structured_error = attach_error_user_facing_fields(tool_name, structured_error)
-    _record_recent_tool_event(
-        {
-            "ts": time.time(),
-            "event": "tool_error",
-            "phase": phase,
-            "tool_name": tool_name,
-            "call_id": call_id,
-            "request": req,
-            "schema_hash": schema_hash,
-            "schema_present": schema_present,
-            "write_action": bool(write_action),
-            "write_allowed": _tool_write_allowed(write_action),
-            "error": structured_error.get("error", {}),
-        }
-    )
-    _log_tool_json_event(
-        {
-            "event": "tool_call.error",
-            "status": "error",
-            "phase": phase,
-            "tool_name": tool_name,
-            "call_id": call_id,
-            "duration_ms": duration_ms,
-            "schema_hash": schema_hash,
-            "schema_present": schema_present,
-            "write_action": bool(write_action),
-            "write_allowed": _tool_write_allowed(write_action),
-            "error": structured_error,
-        }
-    )
 
     return structured_error
 
@@ -401,71 +363,6 @@ def _coerce_tool_exception(tool_name: str, exc: BaseException, structured: Mappi
         details=details,
         hint=str(hint) if hint is not None else None,
     )
-
-
-def _log_tool_json_event(payload: Mapping[str, Any]) -> None:
-    """Emit a structured tool event to provider logs.
-
-    Provider log formatters can render nested dict extras inconsistently.
-    To keep logs stable and parseable we attach a structured payload as a nested
-    dict under `tool_event` (not a pre-serialized JSON string). This prevents
-    double-encoding and removes backslash/quote spam in hosted log streams.
-
-    Note: tests monkeypatch this function; keep name and signature stable.
-    """
-    try:
-        safe_full = _jsonable(dict(payload))
-
-        msg = (
-            f"[tool event] {safe_full.get('event','tool')}"
-            f" | status={safe_full.get('status')}"
-            f" | tool={safe_full.get('tool_name')}"
-        )
-
-        # Keep provider logs readable by default.
-        tool_event: dict[str, Any] = {
-            "event": safe_full.get("event"),
-            "status": safe_full.get("status"),
-            "phase": safe_full.get("phase"),
-            "tool_name": safe_full.get("tool_name"),
-            "call_id": safe_full.get("call_id"),
-            "duration_ms": safe_full.get("duration_ms"),
-            "schema_hash": safe_full.get("schema_hash"),
-            "schema_present": safe_full.get("schema_present"),
-            "write_action": safe_full.get("write_action"),
-            "write_allowed": safe_full.get("write_allowed"),
-        }
-
-        if isinstance(safe_full.get("request"), dict):
-            tool_event["request_keys"] = sorted(list(safe_full["request"].keys()))
-
-        if isinstance(safe_full.get("error"), dict):
-            # error payloads differ slightly by callsite; include common fields.
-            err = safe_full["error"]
-            if isinstance(err.get("error"), dict):
-                err = err["error"]
-            tool_event["error"] = {
-                "code": err.get("code"),
-                "message": err.get("message"),
-                "category": err.get("category"),
-            }
-
-        extra = {
-            "event": "tool_event",
-            "tool_event": tool_event,
-            "tool_name": tool_event.get("tool_name"),
-            "call_id": tool_event.get("call_id"),
-        }
-
-        log_fn = getattr(TOOLS_LOGGER, "detailed", None)
-        if callable(log_fn) and TOOLS_LOGGER.isEnabledFor(DETAILED_LEVEL):
-            log_fn(msg, extra=extra)
-        else:
-            TOOLS_LOGGER.info(msg, extra=extra)
-    except Exception:
-        TOOLS_LOGGER.exception("Failed to log tool event.")
-        return
-
 
 
 def _fastmcp_tool_params() -> Optional[tuple[inspect.Parameter, ...]]:
@@ -687,36 +584,6 @@ def mcp_tool(
 
                 ctx = _extract_context(all_args)
 
-                _record_recent_tool_event(
-                    {
-                        "ts": time.time(),
-                        "event": "tool_start",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                        "request": req,
-                        "schema_hash": schema_hash,
-                        "schema_present": True,
-                        "write_action": bool(write_action),
-                        "write_allowed": _tool_write_allowed(write_action),
-                        "arg_keys": ctx["arg_keys"],
-                        "arg_count": ctx["arg_count"],
-                    }
-                )
-
-                _log_tool_json_event(
-                    {
-                        "event": "tool_call.start",
-                        "status": "start",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                        "request": req,
-                        "schema_hash": schema_hash,
-                        "schema_present": True,
-                        "write_action": bool(write_action),
-                        "write_allowed": _tool_write_allowed(write_action),
-                    }
-                )
-
                 try:
                     result = await func(*args, **kwargs)
                 except Exception as exc:
@@ -737,26 +604,6 @@ def mcp_tool(
                     raise coerced from exc
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                _record_tool_call(
-                    tool_name,
-                    write_kind="write" if write_action else "read",
-                    duration_ms=duration_ms,
-                    errored=False,
-                )
-                _log_tool_json_event(
-                    {
-                        "event": "tool_call.ok",
-                        "status": "ok",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                        "duration_ms": duration_ms,
-                        "schema_hash": schema_hash,
-                        "schema_present": True,
-                        "write_action": bool(write_action),
-                        "write_allowed": _tool_write_allowed(write_action),
-                        "result_type": type(result).__name__,
-                    }
-                )
                 result = attach_user_facing_fields(tool_name, result)
                 return result
 
@@ -838,35 +685,6 @@ def mcp_tool(
                 raise coerced from exc
 
             ctx = _extract_context(all_args)
-            _record_recent_tool_event(
-                {
-                    "ts": time.time(),
-                    "event": "tool_start",
-                    "tool_name": tool_name,
-                    "call_id": call_id,
-                    "request": req,
-                    "schema_hash": schema_hash,
-                    "schema_present": True,
-                    "write_action": bool(write_action),
-                    "write_allowed": _tool_write_allowed(write_action),
-                    "arg_keys": ctx["arg_keys"],
-                    "arg_count": ctx["arg_count"],
-                }
-            )
-            _log_tool_json_event(
-                {
-                    "event": "tool_call.start",
-                    "status": "start",
-                    "tool_name": tool_name,
-                    "call_id": call_id,
-                    "request": req,
-                    "schema_hash": schema_hash,
-                    "schema_present": True,
-                    "write_action": bool(write_action),
-                    "write_allowed": _tool_write_allowed(write_action),
-                }
-            )
-
             try:
                 result = func(*args, **kwargs)
             except Exception as exc:
@@ -887,26 +705,6 @@ def mcp_tool(
                 raise coerced from exc
 
             duration_ms = int((time.perf_counter() - start) * 1000)
-            _record_tool_call(
-                tool_name,
-                write_kind="write" if write_action else "read",
-                duration_ms=duration_ms,
-                errored=False,
-            )
-            _log_tool_json_event(
-                {
-                    "event": "tool_call.ok",
-                    "status": "ok",
-                    "tool_name": tool_name,
-                    "call_id": call_id,
-                    "duration_ms": duration_ms,
-                    "schema_hash": schema_hash,
-                    "schema_present": True,
-                    "write_action": bool(write_action),
-                    "write_allowed": _tool_write_allowed(write_action),
-                    "result_type": type(result).__name__,
-                }
-            )
             result = attach_user_facing_fields(tool_name, result)
             return result
 

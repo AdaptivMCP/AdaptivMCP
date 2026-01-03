@@ -7,7 +7,6 @@ import logging
 import os
 import tempfile
 import time
-from collections import deque
 
 from github_mcp.mcp_server.schemas import _jsonable
 
@@ -80,12 +79,6 @@ GITHUB_PAT = os.environ.get("GITHUB_PAT")
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
 GITHUB_API_BASE_URL = GITHUB_API_BASE
 
-# Render Public API (optional, for provider-side logs/metrics).
-RENDER_API_BASE = os.environ.get("RENDER_API_BASE", "https://api.render.com/v1")
-RENDER_API_KEY = os.environ.get("RENDER_API_KEY")
-# Default Render service id for render_* observability tools.
-RENDER_SERVICE_ID = os.environ.get("RENDER_SERVICE_ID")
-RENDER_OWNER_ID = os.environ.get("RENDER_OWNER_ID")
 SANDBOX_CONTENT_BASE_URL = os.environ.get("SANDBOX_CONTENT_BASE_URL")
 
 # Base directory for persistent workspaces used by run_command and related tools.
@@ -155,14 +148,6 @@ LOG_FORMAT = os.environ.get(
     "LOG_FORMAT",
     "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
-
-# Use a non-colored formatter for in-memory logs (these often show up in JSON
-# tool results and should stay plain text).
-LOG_FORMAT_PLAIN = os.environ.get(
-    "LOG_FORMAT_PLAIN",
-    "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
-
 
 class _ColorFormatter(logging.Formatter):
     """Level-colored formatter for stdout logs.
@@ -268,106 +253,6 @@ BASE_LOGGER = logging.getLogger("github_mcp")
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
 
-ERROR_LOG_CAPACITY = int(os.environ.get("MCP_ERROR_LOG_CAPACITY", "200"))
-LOG_RECORD_CAPACITY = int(os.environ.get("MCP_LOG_RECORD_CAPACITY", "500"))
-
-
-class _InMemoryErrorLogHandler(logging.Handler):
-    """Capture recent error-level log records in memory for MCP tools."""
-
-    def __init__(self, capacity: int = 200) -> None:
-        super().__init__(level=logging.ERROR)
-        self._capacity = int(capacity)
-        self._formatter = logging.Formatter(LOG_FORMAT_PLAIN)
-        if self._capacity <= 0:
-            self._records: list[dict[str, object]] = []
-        else:
-            self._records = deque(maxlen=max(1, self._capacity))
-
-    @property
-    def records(self) -> list[dict[str, object]]:
-        return list(self._records)
-
-    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover
-        try:
-            message = self._formatter.format(record)
-        except Exception:  # noqa: BLE001
-            message = record.getMessage()
-
-        payload = {
-            "logger": record.name,
-            "level": record.levelname,
-            "message": message,
-            "created": record.created,
-            "tool_name": getattr(record, "tool_name", None),
-            "call_id": getattr(record, "call_id", None),
-            "tool_context": getattr(record, "tool_context", None),
-            "tool_error_type": getattr(record, "tool_error_type", None),
-            "tool_error_message": getattr(record, "tool_error_message", None),
-            "tool_error_origin": getattr(record, "tool_error_origin", None),
-            "tool_error_category": getattr(record, "tool_error_category", None),
-            "tool_error_code": getattr(record, "tool_error_code", None),
-            "tool_error_retryable": getattr(record, "tool_error_retryable", None),
-            "extra": _extract_log_extras(record),
-        }
-
-        self._records.append(payload)
-
-
-ERROR_LOG_HANDLER = _InMemoryErrorLogHandler(capacity=ERROR_LOG_CAPACITY)
-BASE_LOGGER.addHandler(ERROR_LOG_HANDLER)
-
-
-class _InMemoryLogHandler(logging.Handler):
-    """Capture recent log records in memory for MCP diagnostics tools."""
-
-    def __init__(self, capacity: int = 500) -> None:
-        super().__init__(level=DETAILED_LEVEL)
-        self._capacity = int(capacity)
-        self._formatter = logging.Formatter(LOG_FORMAT_PLAIN)
-        if self._capacity <= 0:
-            self._records: list[dict[str, object]] = []
-        else:
-            self._records = deque(maxlen=max(1, self._capacity))
-
-    @property
-    def records(self) -> list[dict[str, object]]:
-        return list(self._records)
-
-    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover
-        if not record.name.startswith("github_mcp"):
-            return
-
-        try:
-            message = self._formatter.format(record)
-        except Exception:  # noqa: BLE001
-            message = record.getMessage()
-
-        payload = {
-            "logger": record.name,
-            "level": record.levelname,
-            "message": message,
-            "created": record.created,
-            "tool_name": getattr(record, "tool_name", None),
-            "call_id": getattr(record, "call_id", None),
-            "repo": getattr(record, "repo", None),
-            "ref": getattr(record, "ref", None),
-            "path": getattr(record, "path", None),
-            "status": getattr(record, "status", None),
-            "write_action": getattr(record, "write_action", None),
-            "duration_ms": getattr(record, "duration_ms", None),
-            "tags": getattr(record, "tags", None),
-            "error_category": getattr(record, "error_category", None),
-            "error_origin": getattr(record, "error_origin", None),
-            "extra": _extract_log_extras(record),
-        }
-
-        self._records.append(payload)
-
-
-LOG_RECORD_HANDLER = _InMemoryLogHandler(capacity=LOG_RECORD_CAPACITY)
-BASE_LOGGER.addHandler(LOG_RECORD_HANDLER)
-
 SERVER_START_TIME = time.time()
 
 __all__ = [
@@ -383,10 +268,6 @@ __all__ = [
     "GITHUB_TOKEN_ENV_VARS",
     "GITHUB_LOGGER",
     "GITHUB_PAT",
-    "RENDER_API_BASE",
-    "RENDER_API_KEY",
-    "RENDER_OWNER_ID",
-    "RENDER_SERVICE_ID",
     "HTTPX_MAX_CONNECTIONS",
     "HTTPX_MAX_KEEPALIVE",
     "HTTPX_TIMEOUT",
@@ -397,8 +278,4 @@ __all__ = [
     "TOOLS_LOGGER",
     "WORKSPACE_BASE_DIR",
     "SANDBOX_CONTENT_BASE_URL",
-    "ERROR_LOG_HANDLER",
-    "ERROR_LOG_CAPACITY",
-    "LOG_RECORD_HANDLER",
-    "LOG_RECORD_CAPACITY",
 ]

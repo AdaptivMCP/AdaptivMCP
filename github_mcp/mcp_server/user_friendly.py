@@ -124,13 +124,6 @@ def build_success_summary(tool_name: str, result: Mapping[str, Any]) -> ToolSumm
             bullets.append(f"Missing module: {_safe_str(dep.get('missing_module'))}")
             next_steps.append("Re-run with installing_dependencies=true (or install the missing module).")
 
-    elif tool_name == "list_render_logs":
-        title = "Render logs: fetched"
-        count = result.get("log_count")
-        if isinstance(count, int):
-            bullets.append(f"Entries: {count}")
-        bullets.append("Raw payload is available under `logs`.")
-
     # Prefer any existing controller_log already provided by the tool, but keep it bounded.
     existing = result.get("controller_log")
     if isinstance(existing, list) and existing:

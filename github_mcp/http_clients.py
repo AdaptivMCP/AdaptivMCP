@@ -1,4 +1,4 @@
-"""Async HTTP client helpers with lightweight metrics and logging wrappers."""
+"""Async HTTP client helpers for GitHub and external HTTP requests."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import sys
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
 import weakref
-from urllib.parse import urlencode
 
 import importlib.util
 
@@ -123,7 +122,6 @@ from .config import (  # noqa: E402
     MAX_CONCURRENCY,
 )
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
-from .tool_logging import _record_github_request  # noqa: E402
 
 _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
     weakref.WeakKeyDictionary()
@@ -420,89 +418,8 @@ def _external_client_instance() -> httpx.AsyncClient:
 
 
 # ---------------------------------------------------------------------------
-# Request helpers with metrics
+# Request helpers
 # ---------------------------------------------------------------------------
-
-
-def _github_api_url_for_logs(path: str, params: Optional[Dict[str, Any]] = None) -> str:
-    """Build an absolute GitHub API URL for logging.
-
-    We want stable, clickable links in provider logs even when a request fails
-    before an httpx.Response exists.
-    """
-
-    base = (GITHUB_API_BASE or 'https://api.github.com').rstrip('/')
-    normalized = path if path.startswith('/') else f'/{path}'
-    url = f'{base}{normalized}'
-    if params:
-        cleaned: Dict[str, Any] = {k: v for k, v in params.items() if v is not None}
-        qs = urlencode(cleaned, doseq=True)
-        if qs:
-            url = f'{url}?{qs}'
-    return url
-
-
-def _request_with_metrics(
-    method: str,
-    url: str,
-    *,
-    client_factory: Optional[callable] = None,
-    **kwargs: Any,
-) -> httpx.Response:
-    """Perform an HTTP request and record lightweight timing/response metadata."""
-
-    start = time.time()
-    client_factory = client_factory or _build_default_client
-
-    try:
-        client = client_factory()
-    except GitHubAuthError:
-        _record_github_request(
-            method=method,
-            url=url,
-            status_code=None,
-            duration_ms=int((time.time() - start) * 1000),
-            error=True,
-        )
-        raise
-
-    try:
-        response = client.request(method, url, **kwargs)
-    except httpx.HTTPError as exc:  # pragma: no cover - network failures are hard to force
-        _record_github_request(
-            method=method,
-            url=url,
-            status_code=None,
-            duration_ms=int((time.time() - start) * 1000),
-            error=True,
-            exc=exc,
-        )
-        raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
-    finally:
-        client.close()
-
-    error_flag = getattr(response, "is_error", None)
-    if error_flag is None:
-        error_flag = response.status_code >= 400
-
-    _record_github_request(
-        method=method,
-        url=url,
-        status_code=response.status_code,
-        duration_ms=int((time.time() - start) * 1000),
-        error=error_flag,
-        resp=response,
-    )
-
-    if response.status_code == 401:
-        raise GitHubAuthError("GitHub authentication failed. Check your token and permissions.")
-
-    if response.is_error:
-        err = GitHubAPIError(f"GitHub API error {response.status_code}: {response.text[:200]}")
-        err.response_payload = _build_response_payload(response)
-        raise err
-
-    return response
 
 
 def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> Dict[str, Any]:
@@ -526,10 +443,8 @@ async def _github_request(
     expect_json: bool = True,
     client_factory: Optional[callable] = None,
 ) -> Dict[str, Any]:
-    """Async GitHub request wrapper with structured errors and metrics."""
+    """Async GitHub request wrapper with structured errors."""
     client_factory = client_factory or _github_client_instance
-    api_url_for_logs = _github_api_url_for_logs(path, params=params)
-
     # Unit tests run without live GitHub network access. Provide deterministic
     # synthetic responses for this repository so smoke tests can exercise the
     # controller flow without external calls.
@@ -579,13 +494,6 @@ async def _github_request(
         try:
             client = client_factory()
         except GitHubAuthError:
-            _record_github_request(
-                method=method,
-                url=api_url_for_logs,
-                status_code=None,
-                duration_ms=int((time.time() - start) * 1000),
-                error=True,
-            )
             raise
 
         try:
@@ -595,40 +503,15 @@ async def _github_request(
                 resp = await client.request(
                     method, path, params=params, json=json_body, headers=headers
                 )
-        except httpx.TimeoutException as exc:
-            _record_github_request(
-                method=method,
-                url=api_url_for_logs,
-                status_code=None,
-                duration_ms=int((time.time() - start) * 1000),
-                error=True,
-                exc=exc,
-            )
+        except httpx.TimeoutException:
             raise
         except httpx.HTTPError as exc:  # pragma: no cover - defensive
-            _record_github_request(
-                method=method,
-                url=api_url_for_logs,
-                status_code=None,
-                duration_ms=int((time.time() - start) * 1000),
-                error=True,
-                exc=exc,
-            )
             raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
 
         duration_ms = int((time.time() - start) * 1000)
         error_flag = getattr(resp, "is_error", None)
         if error_flag is None:
             error_flag = resp.status_code >= 400
-
-        _record_github_request(
-            method=method,
-            url=api_url_for_logs,
-            status_code=resp.status_code,
-            duration_ms=duration_ms,
-            error=error_flag,
-            resp=resp,
-        )
 
         body: Any | None = None
         if hasattr(resp, "json"):
@@ -685,5 +568,4 @@ __all__ = [
     "_github_request",
     "_http_client_external",
     "_http_client_github",
-    "_request_with_metrics",
 ]

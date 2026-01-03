@@ -149,7 +149,7 @@ Recommended practice for changes:
 ## Quick index
 
 Environment & diagnostics:
-- `validate_environment`, `get_server_config`, `get_rate_limit`, `get_user_login`, `ping_extensions`
+- `validate_environment`, `get_server_config`, `get_rate_limit`, `get_user_login`, `ping_extensions`, `get_repo_dashboard`
 
 Tool introspection:
 - `list_tools`, `describe_tool`, `list_all_actions`, `validate_tool_args`
@@ -171,9 +171,6 @@ Issues:
 
 Actions / CI:
 - `list_workflow_runs`, `get_workflow_run`, `get_workflow_run_overview`, `list_workflow_run_jobs`, `get_job_logs`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`, `wait_for_workflow_run`, `list_recent_failures`, `run_tests`, `run_lint_suite`, `run_quality_suite`
-
-Observability:
-- `get_recent_tool_events`, `get_recent_server_logs`, `get_recent_server_errors`, `list_render_logs`, `get_render_metrics`, `get_repo_dashboard`
 
 Misc file navigation helpers:
 - `get_file_slice`, `get_file_with_line_numbers`, `open_file_context`
@@ -1618,87 +1615,6 @@ Example:
 ```
 
 ---
-
-# Observability & operations
-
-## get_recent_tool_events
-
-Purpose: Return recent tool invocation events captured in memory.
-
-Inputs:
-- `limit` (int, default 50)
-- `include_success` (bool, default true)
-
-Outputs: Event list.
-
-Example:
-
-```json
-{"tool":"get_recent_tool_events","args":{"limit":25,"include_success":false}}
-```
-
-## get_recent_server_logs
-
-Purpose: Return recent server-side logs captured in memory.
-
-Inputs:
-- `limit` (int, default 100)
-- `min_level` (string, default `INFO`)
-
-Outputs: Log entries.
-
-Example:
-
-```json
-{"tool":"get_recent_server_logs","args":{"limit":200,"min_level":"WARNING"}}
-```
-
-## get_recent_server_errors
-
-Purpose: Return recent server-side errors captured in memory.
-
-Inputs:
-- `limit` (int, default 50)
-
-Outputs: Error list.
-
-Example:
-
-```json
-{"tool":"get_recent_server_errors","args":{"limit":50}}
-```
-
-## list_render_logs
-
-Purpose: Fetch recent logs from Render (requires `RENDER_API_KEY`).
-
-Inputs: Render query filters such as `ownerId`, `resource`, `level`, `type`, `text`, `startTime`, `endTime`, `direction`, `limit`.
-
-Outputs: Render log lines.
-
-Example:
-
-```json
-{"tool":"list_render_logs","args":{"limit":100,"text":["error"]}}
-```
-
-## get_render_metrics
-
-Purpose: Fetch basic Render service metrics (requires `RENDER_API_KEY`).
-
-Inputs:
-- `metricTypes` (string[]): Render metric types
-- `resourceId` (string | null)
-- `startTime` / `endTime` (string | null)
-- `resolution` (int | null)
-
-Outputs: Metric series.
-
-Example:
-
-```json
-{"tool":"get_render_metrics","args":{"metricTypes":["cpu","memory"],"resolution":60}}
-```
 
 ## get_repo_dashboard
 
