@@ -22,6 +22,11 @@ def _path_within_repo(root: str, candidate: str) -> bool:
     return candidate == root or candidate.startswith(root + os.sep)
 
 
+def _normalize_workspace_path(path: str) -> str:
+    normalized = path.strip().replace("\\", "/")
+    return normalized.lstrip("/")
+
+
 @mcp_tool(write_action=False)
 async def list_workspace_files(
     full_name: Optional[str] = None,
@@ -58,7 +63,12 @@ async def list_workspace_files(
         )
 
         root = os.path.realpath(repo_dir)
-        start = os.path.realpath(os.path.join(repo_dir, path)) if path else root
+        normalized_path = _normalize_workspace_path(path) if path else ""
+        start = (
+            os.path.realpath(os.path.join(repo_dir, normalized_path))
+            if normalized_path
+            else root
+        )
         if not _path_within_repo(root, start):
             raise ValueError("path must stay within repo")
 
@@ -69,7 +79,7 @@ async def list_workspace_files(
                 return {
                     "full_name": full_name,
                     "ref": effective_ref,
-                    "path": path,
+                    "path": normalized_path or path,
                     "files": [],
                     "truncated": False,
                     "max_files": max_files,
@@ -78,7 +88,7 @@ async def list_workspace_files(
             return {
                 "full_name": full_name,
                 "ref": effective_ref,
-                "path": path,
+                "path": normalized_path or path,
                 "files": [rp],
                 "truncated": False,
                 "max_files": max_files,
@@ -129,7 +139,7 @@ async def list_workspace_files(
         return {
             "full_name": full_name,
             "ref": effective_ref,
-            "path": path,
+            "path": normalized_path or path,
             "files": out,
             "truncated": truncated,
             "max_files": max_files,
@@ -176,7 +186,12 @@ async def search_workspace(
         )
 
         root = os.path.realpath(repo_dir)
-        start = os.path.realpath(os.path.join(repo_dir, path)) if path else root
+        normalized_path = _normalize_workspace_path(path) if path else ""
+        start = (
+            os.path.realpath(os.path.join(repo_dir, normalized_path))
+            if normalized_path
+            else root
+        )
         if not _path_within_repo(root, start):
             raise ValueError("path must stay within repo")
 
@@ -190,7 +205,7 @@ async def search_workspace(
             return {
                 "full_name": full_name,
                 "ref": effective_ref,
-                "path": path,
+                "path": normalized_path or path,
                 "query": query,
                 "case_sensitive": case_sensitive,
                 "used_regex": False,
@@ -305,7 +320,7 @@ async def search_workspace(
         return {
             "full_name": full_name,
             "ref": effective_ref,
-            "path": path,
+            "path": normalized_path or path,
             "query": query,
             "case_sensitive": case_sensitive,
             "used_regex": used_regex,
