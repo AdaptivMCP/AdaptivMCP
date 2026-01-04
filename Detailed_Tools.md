@@ -1932,14 +1932,4 @@ Example:
 
 # Appendix: hidden/internal tools
 
-Some deployments mark certain tools as hidden (for example `run_command`). If your client can call them, they behave similarly to their public equivalents.
-
-## run_command (hidden)
-
-Purpose: Run a command (similar to `terminal_command`). Prefer `terminal_command` unless you have a compatibility need.
-
-Example:
-
-```json
-{"tool":"run_command","args":{"full_name":"OWNER/REPO","ref":"main","command":"pytest"}}
-```
+Some deployments mark certain tools as hidden. If your client can call them, they behave similarly to their public equivalents.
