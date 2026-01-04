@@ -41,6 +41,6 @@ jobs:
 
       - name: Run tests
         env:
-          MCP_WRITE_ALLOWED: "false"
+          GITHUB_MCP_WRITE_ALLOWED: "false"
         run: |
           pytest -q

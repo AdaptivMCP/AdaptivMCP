@@ -8,9 +8,6 @@ from starlette.responses import JSONResponse
 from github_mcp.mcp_server.context import get_write_allowed
 from github_mcp.main_tools.introspection import list_all_actions
 
-_ALWAYS_WRITE_ENABLED_TOOLS: set[str] = set()
-
-
 def _tool_name(tool: Any, func: Any) -> str:
     """Best-effort tool name extraction.
 
@@ -108,7 +105,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         write_enabled = bool(
             catalog_entry.get(
                 "write_enabled",
-                (not write_action) or write_allowed or (tool_name in _ALWAYS_WRITE_ENABLED_TOOLS),
+                (not write_action) or write_allowed,
             )
         )
         tool_write_allowed = bool(catalog_entry.get("write_allowed", (not write_action) or write_allowed))

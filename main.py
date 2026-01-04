@@ -308,9 +308,16 @@ def __getattr__(name: str):
 
 
 # Recalculate write-allowed state on first import to honor updated environment variables when
-# ``main`` is reloaded in tests without clobbering runtime toggles.
+# ``main`` is reloaded in tests, while keeping the env var as the sole source of truth.
 if not getattr(server, "_WRITE_ALLOWED_INITIALIZED", False):
-    server.WRITE_ALLOWED = server.WRITE_ALLOWED if hasattr(server, "WRITE_ALLOWED") else True
+    from github_mcp.mcp_server.context import (
+        WRITE_ALLOWED as _CONTEXT_WRITE_ALLOWED,
+        get_write_allowed as _get_write_allowed,
+    )
+
+    # Ensure the exported server attribute always references the context-backed flag object (not a bool).
+    server.WRITE_ALLOWED = _CONTEXT_WRITE_ALLOWED
+    _get_write_allowed(refresh_after_seconds=0.0)
     server._WRITE_ALLOWED_INITIALIZED = True
 
 register_extra_tools_if_available()
