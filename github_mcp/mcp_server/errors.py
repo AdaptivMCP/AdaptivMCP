@@ -67,7 +67,13 @@ def _is_retryable_exception(exc: BaseException) -> bool:
 
 
 def _is_critical_error(category: Optional[str], retryable: bool) -> bool:
-    if category in {"validation", "configuration", "permission", "not_found", "conflict"}:
+    if category in {
+        "validation",
+        "configuration",
+        "permission",
+        "not_found",
+        "conflict",
+    }:
         return False
     if category in {"timeout", "upstream"}:
         return not retryable
@@ -145,7 +151,10 @@ def _structured_tool_error(
     adaptiv_exc = _unwrap_adaptiv_error(exc)
     if adaptiv_exc is not None:
         err = adaptiv_exc.to_error_dict(incident_id=incident_id)
-        err.setdefault("critical", _is_critical_error(err.get("category"), bool(err.get("retryable"))))
+        err.setdefault(
+            "critical",
+            _is_critical_error(err.get("category"), bool(err.get("retryable"))),
+        )
         user_message = _format_user_message(err, context=context, path=path)
         payload = {
             "error": err,
@@ -324,7 +333,9 @@ def _unwrap_adaptiv_error(exc: BaseException) -> Optional[AdaptivToolError]:
     return None
 
 
-def _format_user_message(err: Dict[str, Any], *, context: Optional[str], path: Optional[str]) -> str:
+def _format_user_message(
+    err: Dict[str, Any], *, context: Optional[str], path: Optional[str]
+) -> str:
     # High-signal user message, still deterministic.
     parts = []
 

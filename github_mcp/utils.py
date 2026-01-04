@@ -83,7 +83,8 @@ def _normalize_repo_path(path: str) -> str:
     parts = [part for part in normalized.split("/") if part not in ("", ".")]
     if any(part == ".." for part in parts):
         raise ToolPreflightValidationError(
-            "<server>", f"Invalid path {path!r}: parent-directory segments are not allowed."
+            "<server>",
+            f"Invalid path {path!r}: parent-directory segments are not allowed.",
         )
 
     normalized = "/".join(parts)
@@ -102,7 +103,9 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
         raise ToolPreflightValidationError("<server>", "path must be a string")
 
     normalized = path.strip().replace("\\", "/")
-    full_name_clean = full_name.strip().lstrip("/") if isinstance(full_name, str) else ""
+    full_name_clean = (
+        full_name.strip().lstrip("/") if isinstance(full_name, str) else ""
+    )
     if full_name_clean:
         api_prefixes = (
             f"/repos/{full_name_clean}/contents/",
@@ -180,7 +183,9 @@ def extract_sha(decoded: Mapping[str, Any]) -> str | None:
     return sha_value if isinstance(sha_value, str) else None
 
 
-def require_text(decoded: Mapping[str, Any], *, error_message: str = "Decoded content is not text") -> str:
+def require_text(
+    decoded: Mapping[str, Any], *, error_message: str = "Decoded content is not text"
+) -> str:
     """Return decoded text content or raise a GitHubAPIError."""
 
     text = decoded.get("text")
@@ -190,7 +195,9 @@ def require_text(decoded: Mapping[str, Any], *, error_message: str = "Decoded co
 
 
 def _with_numbered_lines(text: str) -> list[Dict[str, Any]]:
-    return [{"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)]
+    return [
+        {"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)
+    ]
 
 
 def _render_visible_whitespace(text: str) -> str:
@@ -206,14 +213,15 @@ def _render_visible_whitespace(text: str) -> str:
     return "\n".join(rendered_lines)
 
 
-
 def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
     """Extract and concatenate text files from a zipped job log archive."""
 
     try:
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zip_file:
             parts: list[str] = []
-            for name in sorted(entry for entry in zip_file.namelist() if not entry.endswith("/")):
+            for name in sorted(
+                entry for entry in zip_file.namelist() if not entry.endswith("/")
+            ):
                 with zip_file.open(name) as handle:
                     content = handle.read().decode("utf-8", errors="replace")
                 parts.append(f"[{name}]\n{content}".rstrip())
@@ -222,7 +230,9 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
         return ""
 
 
-REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(os.environ.get("GITHUB_REPO_DEFAULTS", "{}"))
+REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(
+    os.environ.get("GITHUB_REPO_DEFAULTS", "{}")
+)
 CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
 )

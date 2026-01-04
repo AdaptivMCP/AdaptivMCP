@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import os
 import types
 
 import pytest
@@ -64,8 +63,12 @@ def test_decorators_enforce_write_gate_without_bypass(monkeypatch):
 
 def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
     # Create a fake server with registered tools.
-    read_tool = types.SimpleNamespace(name="read_tool", write_action=False, description="read")
-    write_tool = types.SimpleNamespace(name="write_tool", write_action=True, description="write")
+    read_tool = types.SimpleNamespace(
+        name="read_tool", write_action=False, description="read"
+    )
+    write_tool = types.SimpleNamespace(
+        name="write_tool", write_action=True, description="write"
+    )
 
     def read_fn():
         return "ok"
@@ -140,4 +143,3 @@ def test_no_legacy_write_gate_env_var_in_ci():
 
     assert re.search(r"(^|\s)MCP_WRITE_ALLOWED\s*:", ci, flags=re.MULTILINE) is None
     assert re.search(r"(^|\s)WRITE_ALLOWED\s*:", ci, flags=re.MULTILINE) is None
-

@@ -9,7 +9,11 @@ from typing import Any, Dict, Optional
 from .config import SANDBOX_CONTENT_BASE_URL
 from .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
-from .utils import _effective_ref_for_repo, _get_main_module, _normalize_repo_path_for_repo
+from .utils import (
+    _effective_ref_for_repo,
+    _get_main_module,
+    _normalize_repo_path_for_repo,
+)
 
 
 async def _request(*args, **kwargs):
@@ -116,8 +120,9 @@ async def _resolve_file_sha(full_name: str, path: str, branch: str) -> Optional[
         return None
 
 
-
-def _strip_large_fields_from_commit_response(response_json: Dict[str, Any]) -> Dict[str, Any]:
+def _strip_large_fields_from_commit_response(
+    response_json: Dict[str, Any],
+) -> Dict[str, Any]:
     """Remove large fields from GitHub Contents API responses.
 
     The GitHub Contents write endpoints often return base64-encoded file bodies in
@@ -157,7 +162,11 @@ async def _perform_github_commit(
 
     normalized_path = _normalize_repo_path_for_repo(full_name, path)
     content_b64 = base64.b64encode(body_bytes).decode("ascii")
-    payload: Dict[str, Any] = {"message": message, "content": content_b64, "branch": branch}
+    payload: Dict[str, Any] = {
+        "message": message,
+        "content": content_b64,
+        "branch": branch,
+    }
     if sha:
         payload["sha"] = sha
     if committer:
@@ -186,7 +195,9 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
     if content_url.startswith("github:"):
         spec = content_url[len("github:") :].strip()
         if not spec:
-            raise GitHubAPIError("github: content_url must include owner/repo:path[@ref]")
+            raise GitHubAPIError(
+                "github: content_url must include owner/repo:path[@ref]"
+            )
 
         if "/" not in spec or ":" not in spec:
             raise GitHubAPIError("github: content_url must be owner/repo:path[@ref]")
@@ -198,7 +209,9 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         full_name = owner_repo
         path_part, _, ref = path_ref.partition("@")
         if not path_part:
-            raise GitHubAPIError("github: content_url must specify a file path after ':'")
+            raise GitHubAPIError(
+                "github: content_url must specify a file path after ':'"
+            )
 
         decoded = await _decode_github_content(
             full_name=full_name,
@@ -249,7 +262,8 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             return _read_local(local_path, sandbox_hint)
         except GitHubAPIError:
             if rewrite_base and (
-                rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
+                rewrite_base.startswith("http://")
+                or rewrite_base.startswith("https://")
             ):
                 return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
             raise GitHubAPIError(
@@ -269,7 +283,8 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             return _read_local(content_url, missing_hint)
         except GitHubAPIError:
             if rewrite_base and (
-                rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
+                rewrite_base.startswith("http://")
+                or rewrite_base.startswith("https://")
             ):
                 return await _fetch_rewritten_path(content_url, base_url=rewrite_base)
             raise GitHubAPIError(

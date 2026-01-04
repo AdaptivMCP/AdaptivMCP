@@ -54,7 +54,6 @@ async def list_recent_failures(
     if limit <= 0:
         raise ValueError("limit must be > 0")
 
-
     m = _main()
 
     per_page = min(max(limit, 10), 50)
@@ -84,7 +83,12 @@ async def list_recent_failures(
 
         if conclusion in failure_conclusions:
             include = True
-        elif status == "completed" and conclusion not in (None, "success", "neutral", "skipped"):
+        elif status == "completed" and conclusion not in (
+            None,
+            "success",
+            "neutral",
+            "skipped",
+        ):
             include = True
         else:
             include = False
@@ -166,8 +170,6 @@ async def get_workflow_run_overview(
 
     if max_jobs <= 0:
         raise ValueError("max_jobs must be > 0")
-
-
 
     m = _main()
 
@@ -393,7 +395,9 @@ async def wait_for_workflow_run(
                 f"/repos/{full_name}/actions/runs/{run_id}",
             )
         if resp.status_code >= 400:
-            raise GitHubAPIError(f"GitHub workflow run error {resp.status_code}: {resp.text}")
+            raise GitHubAPIError(
+                f"GitHub workflow run error {resp.status_code}: {resp.text}"
+            )
 
         data = resp.json()
         status = data.get("status")
@@ -450,7 +454,9 @@ async def trigger_workflow_dispatch(
             json=payload,
         )
     if resp.status_code not in (204, 201):
-        raise GitHubAPIError(f"GitHub workflow dispatch error {resp.status_code}: {resp.text}")
+        raise GitHubAPIError(
+            f"GitHub workflow dispatch error {resp.status_code}: {resp.text}"
+        )
 
     summary_lines = [
         "Triggered workflow dispatch:",
@@ -525,8 +531,8 @@ async def trigger_and_wait_for_workflow(
                 continue
 
             # Ensure this is the workflow we triggered.
-            path = (run.get("path") or "")
-            if workflow.endswith(('.yml', '.yaml')) and path and path != workflow:
+            path = run.get("path") or ""
+            if workflow.endswith((".yml", ".yaml")) and path and path != workflow:
                 continue
 
             created_at = _parse_created(run.get("created_at"))
@@ -541,7 +547,11 @@ async def trigger_and_wait_for_workflow(
 
         if candidates:
             # Pick the most recent matching run.
-            candidates.sort(key=lambda r: _parse_created(r.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+            candidates.sort(
+                key=lambda r: _parse_created(r.get("created_at"))
+                or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True,
+            )
             run_id = candidates[0].get("id")
             break
 

@@ -49,10 +49,12 @@ def test_search_workspace_blocks_path_escape(tmp_path, monkeypatch):
     dummy = DummyWorkspaceTools(str(repo_dir))
     monkeypatch.setattr(workspace_listing, "_tw", lambda: dummy)
 
-    result = asyncio.run(workspace_listing.search_workspace(
-        query="nope",
-        path="../repo-sibling/secret.txt",
-    ))
+    result = asyncio.run(
+        workspace_listing.search_workspace(
+            query="nope",
+            path="../repo-sibling/secret.txt",
+        )
+    )
 
     assert "error" in result
     assert result["error"]["message"] == "path must stay within repo"

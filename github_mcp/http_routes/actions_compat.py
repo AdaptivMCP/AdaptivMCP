@@ -8,6 +8,7 @@ from starlette.responses import JSONResponse
 from github_mcp.mcp_server.context import get_write_allowed
 from github_mcp.main_tools.introspection import list_all_actions
 
+
 def _tool_name(tool: Any, func: Any) -> str:
     """Best-effort tool name extraction.
 
@@ -16,7 +17,11 @@ def _tool_name(tool: Any, func: Any) -> str:
     function.
     """
 
-    name = getattr(tool, "name", None) or getattr(func, "__name__", None) or getattr(tool, "__name__", None)
+    name = (
+        getattr(tool, "name", None)
+        or getattr(func, "__name__", None)
+        or getattr(tool, "__name__", None)
+    )
     return str(name or "tool")
 
 
@@ -94,30 +99,41 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
     catalog = list_all_actions(include_parameters=True, compact=False)
     catalog_index = {
-        entry.get("name"): entry for entry in (catalog.get("tools") or []) if entry.get("name")
+        entry.get("name"): entry
+        for entry in (catalog.get("tools") or [])
+        if entry.get("name")
     }
 
     for tool, _func in getattr(server, "_REGISTERED_MCP_TOOLS", []):
         tool_name = _tool_name(tool, _func)
         catalog_entry = catalog_index.get(tool_name) or {}
-        tool_description = catalog_entry.get("description") or _tool_description(tool, _func)
-        write_action = bool(catalog_entry.get("write_action", _is_write_action(tool, _func)))
+        tool_description = catalog_entry.get("description") or _tool_description(
+            tool, _func
+        )
+        write_action = bool(
+            catalog_entry.get("write_action", _is_write_action(tool, _func))
+        )
         write_enabled = bool(
             catalog_entry.get(
                 "write_enabled",
                 (not write_action) or write_allowed,
             )
         )
-        tool_write_allowed = bool(catalog_entry.get("write_allowed", (not write_action) or write_allowed))
+        tool_write_allowed = bool(
+            catalog_entry.get("write_allowed", (not write_action) or write_allowed)
+        )
 
         schema = (
             catalog_entry.get("input_schema")
             or server._normalize_input_schema(tool)
             or server._normalize_input_schema(_func)
         )
-        visibility = catalog_entry.get("visibility") or getattr(_func, "__mcp_visibility__", None) or getattr(
-            tool, "__mcp_visibility__", None
-        ) or "public"
+        visibility = (
+            catalog_entry.get("visibility")
+            or getattr(_func, "__mcp_visibility__", None)
+            or getattr(tool, "__mcp_visibility__", None)
+            or "public"
+        )
 
         annotations = getattr(tool, "annotations", None)
         if hasattr(annotations, "model_dump"):
@@ -128,7 +144,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         display_name = getattr(tool, "title", None)
         if not display_name and isinstance(annotations, dict):
             display_name = annotations.get("title")
-        display_name = str(display_name) if display_name else _tool_display_name(tool, _func)
+        display_name = (
+            str(display_name) if display_name else _tool_display_name(tool, _func)
+        )
 
         terminal_help = _terminal_help(tool_name, tool_description, schema or {})
 

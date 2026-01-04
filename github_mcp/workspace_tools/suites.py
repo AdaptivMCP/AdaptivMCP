@@ -387,7 +387,9 @@ async def run_quality_suite(
         diagnostics["git_status"] = git_status.get("summary")
         steps.extend([py, pip, git_status])
 
-    async def maybe_run_optional(name: str, command: Optional[str]) -> Optional[Dict[str, Any]]:
+    async def maybe_run_optional(
+        name: str, command: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
         if not command:
             return None
         step = await _run_named_step(
@@ -449,7 +451,9 @@ async def run_quality_suite(
         # Back-compat: return the lint raw payload shape when possible.
         raw = lint_step.get("raw")
         if isinstance(raw, dict):
-            raw.setdefault("controller_log", controller_log + ["- Aborted: lint failed"])
+            raw.setdefault(
+                "controller_log", controller_log + ["- Aborted: lint failed"]
+            )
             raw["suite"] = suite
             raw["steps"] = _prune_raw_steps(steps, include_raw_step_outputs)
             raw["diagnostics"] = diagnostics
@@ -505,8 +509,14 @@ async def run_quality_suite(
     controller_log.append(f"- Tests: {tests_status}")
 
     # Always attach suite metadata + step summaries.
-    overall_failed = any(step.get("status") == "failed" for step in steps if step.get("name") in {"format", "lint", "typecheck", "security"})
-    overall_status = "failed" if (overall_failed or tests_status == "failed") else "passed"
+    overall_failed = any(
+        step.get("status") == "failed"
+        for step in steps
+        if step.get("name") in {"format", "lint", "typecheck", "security"}
+    )
+    overall_status = (
+        "failed" if (overall_failed or tests_status == "failed") else "passed"
+    )
 
     if not fail_fast:
         return {
@@ -531,7 +541,9 @@ async def run_quality_suite(
     return tests_result
 
 
-def _prune_raw_steps(steps: List[Dict[str, Any]], include_raw: bool) -> List[Dict[str, Any]]:
+def _prune_raw_steps(
+    steps: List[Dict[str, Any]], include_raw: bool
+) -> List[Dict[str, Any]]:
     """Optionally drop raw payloads to keep the result lighter."""
     out: List[Dict[str, Any]] = []
     for step in steps:

@@ -80,7 +80,10 @@ def test_list_tools_filters_and_prefix(monkeypatch):
     assert only_write["tools"][0]["write_enabled"] is False
 
     only_read = asyncio.run(introspection.list_tools(only_read=True))
-    assert [tool["name"] for tool in only_read["tools"]] == ["list_all_actions", "read_tool"]
+    assert [tool["name"] for tool in only_read["tools"]] == [
+        "list_all_actions",
+        "read_tool",
+    ]
 
     prefixed = asyncio.run(introspection.list_tools(name_prefix="read"))
     assert [tool["name"] for tool in prefixed["tools"]] == ["read_tool"]

@@ -27,9 +27,17 @@ import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
 from github_mcp.config import TOOLS_LOGGER, TOOL_DENYLIST
-from github_mcp.mcp_server.context import WRITE_ALLOWED, get_request_context, mcp, FASTMCP_AVAILABLE
+from github_mcp.mcp_server.context import (
+    WRITE_ALLOWED,
+    get_request_context,
+    mcp,
+    FASTMCP_AVAILABLE,
+)
 from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
-from github_mcp.mcp_server.user_friendly import attach_error_user_facing_fields, attach_user_facing_fields
+from github_mcp.mcp_server.user_friendly import (
+    attach_error_user_facing_fields,
+    attach_user_facing_fields,
+)
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
@@ -97,7 +105,9 @@ def _require_jsonschema() -> Any:
         ) from exc
 
 
-def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: Mapping[str, Any]) -> None:
+def _validate_tool_args_schema(
+    tool_name: str, schema: Mapping[str, Any], args: Mapping[str, Any]
+) -> None:
     jsonschema = _require_jsonschema()
 
     payload = dict(args)
@@ -208,7 +218,11 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
 
     async with lock:
         # Opportunistic cleanup for this loop.
-        expired = [k for k, (exp, _) in _DEDUPE_ASYNC_CACHE.items() if k[0] == lid and exp < now]
+        expired = [
+            k
+            for k, (exp, _) in _DEDUPE_ASYNC_CACHE.items()
+            if k[0] == lid and exp < now
+        ]
         for k in expired:
             _DEDUPE_ASYNC_CACHE.pop(k, None)
 
@@ -265,7 +279,12 @@ def _maybe_dedupe_call_sync(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> A
 # Internal helpers
 # -----------------------------------------------------------------------------
 
-def _bind_call_args(signature: Optional[inspect.Signature], args: tuple[Any, ...], kwargs: dict[str, Any]) -> Dict[str, Any]:
+
+def _bind_call_args(
+    signature: Optional[inspect.Signature],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Dict[str, Any]:
     if signature is None:
         return dict(kwargs)
     try:
@@ -300,8 +319,9 @@ def _emit_tool_error(
     return structured_error
 
 
-
-def _coerce_tool_exception(tool_name: str, exc: BaseException, structured: Mapping[str, Any]) -> BaseException:
+def _coerce_tool_exception(
+    tool_name: str, exc: BaseException, structured: Mapping[str, Any]
+) -> BaseException:
     """Coerce arbitrary exceptions into an AdaptivToolError with a concise, user-facing message.
 
     This improves the tool error surface (Codex-like): users see a stable code/category and
@@ -310,7 +330,9 @@ def _coerce_tool_exception(tool_name: str, exc: BaseException, structured: Mappi
     if isinstance(exc, AdaptivToolError):
         return exc
 
-    err = structured.get("error") if isinstance(structured.get("error"), Mapping) else {}
+    err = (
+        structured.get("error") if isinstance(structured.get("error"), Mapping) else {}
+    )
     incident_id = str(err.get("incident_id") or "").strip()
     code = str(err.get("code") or "unhandled_exception")
     category = str(err.get("category") or "runtime")
@@ -318,13 +340,13 @@ def _coerce_tool_exception(tool_name: str, exc: BaseException, structured: Mappi
     retryable = bool(err.get("retryable", False))
     hint = err.get("hint")
     msg = str(err.get("message") or str(exc) or exc.__class__.__name__).strip()
-    msg = ' '.join(msg.replace('\n',' ').replace('\r',' ').split())
+    msg = " ".join(msg.replace("\n", " ").replace("\r", " ").split())
     user_msg = f"{tool_name} failed: {msg}"
     if incident_id:
         user_msg += f" (incident {incident_id})"
     if hint:
         try:
-            hint_s = ' '.join(str(hint).replace('\n',' ').replace('\r',' ').split())
+            hint_s = " ".join(str(hint).replace("\n", " ").replace("\r", " ").split())
             if hint_s:
                 user_msg += f" | hint: {hint_s}"
         except Exception:
@@ -371,7 +393,8 @@ def _filter_kwargs_for_signature(
     allowed = {
         param.name
         for param in params
-        if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        if param.kind
+        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
     }
     return {k: v for k, v in kwargs.items() if k in allowed}
 
@@ -406,7 +429,8 @@ def _register_with_fastmcp(
     # in that case we still exercise registration logic.
     if not FASTMCP_AVAILABLE and (
         mcp is None
-        or getattr(getattr(mcp, "__class__", None), "__name__", None) == "_MissingFastMCP"
+        or getattr(getattr(mcp, "__class__", None), "__name__", None)
+        == "_MissingFastMCP"
     ):
         return None
 
@@ -426,10 +450,16 @@ def _register_with_fastmcp(
     # IMPORTANT: suppress tags by default. Some downstream clients treat tool
     # tags as policy/execution hints and can mis-tag tools. We still pass an
     # empty meta dict when supported (safe and backwards compatible).
-    emit_tool_object_metadata = _parse_bool(os.environ.get("EMIT_TOOL_OBJECT_METADATA", "0"))
+    emit_tool_object_metadata = _parse_bool(
+        os.environ.get("EMIT_TOOL_OBJECT_METADATA", "0")
+    )
 
     base: dict[str, Any] = {"name": name, "description": description}
-    base_with_meta: dict[str, Any] = {"name": name, "description": description, "meta": {}}
+    base_with_meta: dict[str, Any] = {
+        "name": name,
+        "description": description,
+        "meta": {},
+    }
     attempts = [base_with_meta, base, {"name": name}]
 
     if emit_tool_object_metadata:
@@ -499,6 +529,7 @@ def _register_with_fastmcp(
 # Public decorator
 # -----------------------------------------------------------------------------
 
+
 def mcp_tool(
     *,
     name: str | None = None,
@@ -516,10 +547,14 @@ def mcp_tool(
 
         tool_name = name or getattr(func, "__name__", "tool")
         if tool_name in TOOL_DENYLIST:
-            TOOLS_LOGGER.info("Skipping MCP tool registration for %s (denied by config)", tool_name)
+            TOOLS_LOGGER.info(
+                "Skipping MCP tool registration for %s (denied by config)", tool_name
+            )
             return func
         llm_level = "advanced" if write_action else "basic"
-        normalized_description = description or _normalize_tool_description(func, signature, llm_level=llm_level)
+        normalized_description = description or _normalize_tool_description(
+            func, signature, llm_level=llm_level
+        )
         normalized_tags = [str(tag) for tag in tags or [] if str(tag).strip()]
 
         if asyncio.iscoroutinefunction(func):
@@ -533,7 +568,9 @@ def mcp_tool(
 
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-                schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+                schema_present = isinstance(schema, Mapping) and isinstance(
+                    schema_hash, str
+                )
                 try:
                     if not schema_present:
                         raise AdaptivToolError(
@@ -606,7 +643,9 @@ def mcp_tool(
             if not isinstance(schema, Mapping):
                 schema = _schema_from_signature(signature)
             if not isinstance(schema, Mapping):
-                raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
+                raise RuntimeError(
+                    f"Failed to derive input schema for tool {tool_name!r}."
+                )
             wrapper.__mcp_input_schema__ = schema
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_write_action__ = bool(write_action)
@@ -632,7 +671,9 @@ def mcp_tool(
 
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-            schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+            schema_present = isinstance(schema, Mapping) and isinstance(
+                schema_hash, str
+            )
             try:
                 if not schema_present:
                     raise AdaptivToolError(
@@ -747,7 +788,11 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 or getattr(tool_obj, "__mcp_visibility__", None)
                 or "public"
             )
-            tags = getattr(func, "__mcp_tags__", None) or getattr(tool_obj, "tags", None) or []
+            tags = (
+                getattr(func, "__mcp_tags__", None)
+                or getattr(tool_obj, "tags", None)
+                or []
+            )
 
             schema = getattr(func, "__mcp_input_schema__", None)
             if not isinstance(schema, Mapping):

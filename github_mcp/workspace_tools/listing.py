@@ -44,14 +44,18 @@ async def list_workspace_files(
         if max_files is None:
             max_files = max_results
         elif max_files != max_results:
-            raise ValueError("max_files and max_results must match when both are provided")
+            raise ValueError(
+                "max_files and max_results must match when both are provided"
+            )
 
     try:
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         root = os.path.realpath(repo_dir)
         start = os.path.realpath(os.path.join(repo_dir, path)) if path else root
@@ -101,7 +105,11 @@ async def list_workspace_files(
                     if not include_hidden and os.path.basename(rp).startswith("."):
                         continue
                     out.append(rp)
-                    if max_files is not None and max_files > 0 and len(out) >= max_files:
+                    if (
+                        max_files is not None
+                        and max_files > 0
+                        and len(out) >= max_files
+                    ):
                         truncated = True
                         break
                 if truncated:
@@ -163,7 +171,9 @@ async def search_workspace(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         root = os.path.realpath(repo_dir)
         start = os.path.realpath(os.path.join(repo_dir, path)) if path else root
@@ -172,7 +182,11 @@ async def search_workspace(
 
         # Allow searching a single file path.
         single_file = os.path.isfile(start)
-        if single_file and (not include_hidden) and os.path.basename(start).startswith("."):
+        if (
+            single_file
+            and (not include_hidden)
+            and os.path.basename(start).startswith(".")
+        ):
             return {
                 "full_name": full_name,
                 "ref": effective_ref,
@@ -215,7 +229,11 @@ async def search_workspace(
         files_scanned = 0
         files_skipped = 0
 
-        walk_iter = [(os.path.dirname(start), [], [os.path.basename(start)])] if single_file else os.walk(start)
+        walk_iter = (
+            [(os.path.dirname(start), [], [os.path.basename(start)])]
+            if single_file
+            else os.walk(start)
+        )
         for cur_dir, dirnames, filenames in walk_iter:
             dirnames[:] = [d for d in dirnames if d != ".git"]
             if not include_hidden:
@@ -232,7 +250,11 @@ async def search_workspace(
                     files_skipped += 1
                     continue
 
-                if max_file_bytes is not None and max_file_bytes > 0 and st.st_size > max_file_bytes:
+                if (
+                    max_file_bytes is not None
+                    and max_file_bytes > 0
+                    and st.st_size > max_file_bytes
+                ):
                     files_skipped += 1
                     continue
 
@@ -263,7 +285,11 @@ async def search_workspace(
                                     "text": line.rstrip("\n")[:400],
                                 }
                             )
-                            if max_results is not None and max_results > 0 and len(results) >= max_results:
+                            if (
+                                max_results is not None
+                                and max_results > 0
+                                and len(results) >= max_results
+                            ):
                                 truncated = True
                                 break
                 except OSError:

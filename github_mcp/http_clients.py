@@ -12,6 +12,7 @@ import weakref
 
 import importlib.util
 
+
 def _get_main_module_for_patching():
     return sys.modules.get("main") or sys.modules.get("__main__")
 
@@ -19,6 +20,7 @@ def _get_main_module_for_patching():
 if importlib.util.find_spec("httpx") is not None:
     import httpx
 else:
+
     class HTTPError(Exception):
         """Fallback HTTP error when httpx is unavailable."""
 
@@ -123,12 +125,8 @@ from .config import (  # noqa: E402
 )
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
 
-_loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
-    weakref.WeakKeyDictionary()
-)
-_search_rate_limit_states: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, Dict[str, Any]]" = (
-    weakref.WeakKeyDictionary()
-)
+_loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = weakref.WeakKeyDictionary()
+_search_rate_limit_states: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, Dict[str, Any]]" = weakref.WeakKeyDictionary()
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_github_loop: Optional[asyncio.AbstractEventLoop] = None
 _http_client_github_token: Optional[str] = None
@@ -139,13 +137,19 @@ _http_client_external_loop: Optional[asyncio.AbstractEventLoop] = None
 class _GitHubClientProtocol:
     """Structural protocol for httpx.Client-like objects used in this module."""
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: no cover - protocol only
+    def __init__(
+        self, *args: Any, **kwargs: Any
+    ) -> None:  # pragma: no cover - protocol only
         ...
 
-    def get(self, url: str, **kwargs: Any) -> httpx.Response:  # pragma: no cover - protocol only
+    def get(
+        self, url: str, **kwargs: Any
+    ) -> httpx.Response:  # pragma: no cover - protocol only
         ...
 
-    def post(self, url: str, **kwargs: Any) -> httpx.Response:  # pragma: no cover - protocol only
+    def post(
+        self, url: str, **kwargs: Any
+    ) -> httpx.Response:  # pragma: no cover - protocol only
         ...
 
     def close(self) -> None:  # pragma: no cover - protocol only
@@ -354,7 +358,9 @@ def _refresh_async_client(
 def _build_default_client() -> httpx.Client:
     """Return a default httpx.Client configured for GitHub's API."""
 
-    return httpx.Client(base_url=GITHUB_API_BASE_URL, timeout=GITHUB_REQUEST_TIMEOUT_SECONDS)
+    return httpx.Client(
+        base_url=GITHUB_API_BASE_URL, timeout=GITHUB_REQUEST_TIMEOUT_SECONDS
+    )
 
 
 def _github_client_instance() -> httpx.AsyncClient:
@@ -398,7 +404,9 @@ def _external_client_instance() -> httpx.AsyncClient:
 
     global _http_client_external, _http_client_external_loop
     main_module = _get_main_module_for_patching()
-    patched_client = getattr(main_module, "_http_client_external", None) if main_module else None
+    patched_client = (
+        getattr(main_module, "_http_client_external", None) if main_module else None
+    )
     if patched_client is not None:
         _http_client_external = patched_client
 
@@ -422,7 +430,9 @@ def _external_client_instance() -> httpx.AsyncClient:
 # ---------------------------------------------------------------------------
 
 
-def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> Dict[str, Any]:
+def _build_response_payload(
+    resp: httpx.Response, *, body: Any | None = None
+) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "status_code": resp.status_code,
         "headers": dict(resp.headers),
@@ -448,15 +458,27 @@ async def _github_request(
     # Unit tests run without live GitHub network access. Provide deterministic
     # synthetic responses for this repository so smoke tests can exercise the
     # controller flow without external calls.
-    if os.environ.get("PYTEST_CURRENT_TEST") and "Proofgate-Revocations/chatgpt-mcp-github" in path:
-        if method.upper() == "GET" and path.rstrip("/") == "/repos/Proofgate-Revocations/chatgpt-mcp-github":
+    if (
+        os.environ.get("PYTEST_CURRENT_TEST")
+        and "Proofgate-Revocations/chatgpt-mcp-github" in path
+    ):
+        if (
+            method.upper() == "GET"
+            and path.rstrip("/") == "/repos/Proofgate-Revocations/chatgpt-mcp-github"
+        ):
             return {
                 "status_code": 200,
                 "headers": {},
                 "text": "",
-                "json": {"default_branch": "main", "full_name": "Proofgate-Revocations/chatgpt-mcp-github"},
+                "json": {
+                    "default_branch": "main",
+                    "full_name": "Proofgate-Revocations/chatgpt-mcp-github",
+                },
             }
-        if method.upper() == "GET" and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path:
+        if (
+            method.upper() == "GET"
+            and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path
+        ):
             return {
                 "status_code": 200,
                 "headers": {},
@@ -464,26 +486,45 @@ async def _github_request(
                 "json": {
                     "sha": "test-sha",
                     "tree": [
-                        {"path": "docs/start_session.md", "type": "blob", "mode": "100644", "size": 0},
+                        {
+                            "path": "docs/start_session.md",
+                            "type": "blob",
+                            "mode": "100644",
+                            "size": 0,
+                        },
                     ],
                     "truncated": False,
                 },
             }
-        if "Proofgate-Revocations/chatgpt-mcp-github/contents/docs/start_session.md" in path and method.upper() == "GET":
+        if (
+            "Proofgate-Revocations/chatgpt-mcp-github/contents/docs/start_session.md"
+            in path
+            and method.upper() == "GET"
+        ):
             content_bytes = b"Sample doc content\n"
             encoded = base64.b64encode(content_bytes).decode()
             return {
                 "status_code": 200,
                 "headers": {},
                 "text": "",
-                "json": {"sha": "synthetic-sha", "content": encoded, "encoding": "base64"},
+                "json": {
+                    "sha": "synthetic-sha",
+                    "content": encoded,
+                    "encoding": "base64",
+                },
             }
-        if "Proofgate-Revocations/chatgpt-mcp-github/contents/" in path and method.upper() in {"PUT", "DELETE"}:
+        if (
+            "Proofgate-Revocations/chatgpt-mcp-github/contents/" in path
+            and method.upper() in {"PUT", "DELETE"}
+        ):
             return {
                 "status_code": 200,
                 "headers": {},
                 "text": "",
-                "json": {"content": {"sha": "synthetic-write-sha"}, "commit": {"sha": "synthetic-commit"}},
+                "json": {
+                    "content": {"sha": "synthetic-write-sha"},
+                    "commit": {"sha": "synthetic-commit"},
+                },
             }
 
     attempt = 0
@@ -520,8 +561,12 @@ async def _github_request(
 
         message = body.get("message", "") if isinstance(body, dict) else ""
         message_lower = message.lower() if isinstance(message, str) else ""
-        if _is_rate_limit_response(resp=resp, message_lower=message_lower, error_flag=error_flag):
-            reset_hint = resp.headers.get("X-RateLimit-Reset") or resp.headers.get("Retry-After")
+        if _is_rate_limit_response(
+            resp=resp, message_lower=message_lower, error_flag=error_flag
+        ):
+            reset_hint = resp.headers.get("X-RateLimit-Reset") or resp.headers.get(
+                "Retry-After"
+            )
             retry_delay = _parse_rate_limit_delay_seconds(resp)
             if retry_delay is None:
                 retry_delay = GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)

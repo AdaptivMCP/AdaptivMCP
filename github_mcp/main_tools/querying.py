@@ -29,7 +29,9 @@ def _resolve_main_helper(name: str, default):
     return default
 
 
-async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def graphql_query(
+    query: str, variables: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """Execute a GitHub GraphQL query using the shared HTTP client."""
 
     github_request = _resolve_main_helper("_github_request", _default_github_request)
@@ -125,7 +127,9 @@ async def search(
 
     headers = None
     if search_type == "commits":
-        headers = {"Accept": "application/vnd.github+json,application/vnd.github.cloak-preview+json"}
+        headers = {
+            "Accept": "application/vnd.github+json,application/vnd.github.cloak-preview+json"
+        }
 
     try:
         return await github_request(

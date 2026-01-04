@@ -15,6 +15,7 @@ from github_mcp.workspace import (
     _apply_patch_to_repo,
 )
 
+
 def _cmd_invokes_git(cmd: object) -> bool:
     """Return True if a shell command string invokes git anywhere as a command segment.
 
@@ -26,21 +27,22 @@ def _cmd_invokes_git(cmd: object) -> bool:
     s = cmd.strip()
     if not s:
         return False
-    if s.startswith('git '):
+    if s.startswith("git "):
         return True
     # Treat newlines as command separators.
-    s = s.replace('\n', ';')
-    for sep in ('&&', '||', ';', '|'):
+    s = s.replace("\n", ";")
+    for sep in ("&&", "||", ";", "|"):
         if sep in s:
             parts = s.split(sep)
             for part in parts[1:]:
-                if part.lstrip().startswith('git '):
+                if part.lstrip().startswith("git "):
                     return True
     return False
 
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
 
 
@@ -59,7 +61,9 @@ def _safe_branch_slug(value: str, *, max_len: int = 200) -> str:
     return cleaned
 
 
-async def _run_shell_ok(deps: Dict[str, Any], cmd: str, *, cwd: str, timeout_seconds: int) -> Dict[str, Any]:
+async def _run_shell_ok(
+    deps: Dict[str, Any], cmd: str, *, cwd: str, timeout_seconds: int
+) -> Dict[str, Any]:
     res = await deps["run_shell"](cmd, cwd=cwd, timeout_seconds=timeout_seconds)
     if res.get("exit_code", 0) != 0:
         stderr = res.get("stderr", "") or res.get("stdout", "")
@@ -73,7 +77,9 @@ def _git_state_markers(repo_dir: str) -> Dict[str, bool]:
         "merge_in_progress": os.path.exists(os.path.join(git_dir, "MERGE_HEAD")),
         "rebase_in_progress": os.path.isdir(os.path.join(git_dir, "rebase-apply"))
         or os.path.isdir(os.path.join(git_dir, "rebase-merge")),
-        "cherry_pick_in_progress": os.path.exists(os.path.join(git_dir, "CHERRY_PICK_HEAD")),
+        "cherry_pick_in_progress": os.path.exists(
+            os.path.join(git_dir, "CHERRY_PICK_HEAD")
+        ),
         "revert_in_progress": os.path.exists(os.path.join(git_dir, "REVERT_HEAD")),
     }
 
@@ -89,7 +95,9 @@ async def _diagnose_workspace_branch(
     diag["show_current_exit_code"] = show_branch.get("exit_code")
     diag["current_branch"] = (show_branch.get("stdout", "") or "").strip() or None
 
-    status = await deps["run_shell"]("git status --porcelain", cwd=repo_dir, timeout_seconds=60)
+    status = await deps["run_shell"](
+        "git status --porcelain", cwd=repo_dir, timeout_seconds=60
+    )
     diag["status_exit_code"] = status.get("exit_code")
     diag["status_is_clean"] = not (status.get("stdout", "") or "").strip()
 
@@ -130,13 +138,17 @@ async def _delete_branch_via_workspace(
         raise GitHubAPIError(f"Refusing to delete default branch {default_branch!r}")
 
     effective_ref = _tw()._effective_ref_for_repo(full_name, default_branch)
-    repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+    repo_dir = await deps["clone_repo"](
+        full_name, ref=effective_ref, preserve_changes=True
+    )
     await deps["run_shell"](
         f"git checkout {shlex.quote(effective_ref)}", cwd=repo_dir, timeout_seconds=120
     )
 
     delete_remote = await deps["run_shell"](
-        f"git push origin --delete {shlex.quote(branch)}", cwd=repo_dir, timeout_seconds=300
+        f"git push origin --delete {shlex.quote(branch)}",
+        cwd=repo_dir,
+        timeout_seconds=300,
     )
     if delete_remote.get("exit_code", 0) != 0:
         stderr = delete_remote.get("stderr", "") or delete_remote.get("stdout", "")
@@ -164,7 +176,9 @@ def _workspace_deps() -> Dict[str, Any]:
     main_module = _get_main_module()
     clone_repo_fn = getattr(main_module, "_clone_repo", _clone_repo)
     base_run_shell = getattr(main_module, "_run_shell", _run_shell)
-    prepare_venv_fn = getattr(main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv)
+    prepare_venv_fn = getattr(
+        main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv
+    )
 
     async def run_shell_with_git_auth(
         cmd: str,
@@ -202,7 +216,12 @@ def _resolve_full_name(
 ) -> str:
     if isinstance(full_name, str) and full_name.strip():
         return full_name.strip()
-    if isinstance(owner, str) and owner.strip() and isinstance(repo, str) and repo.strip():
+    if (
+        isinstance(owner, str)
+        and owner.strip()
+        and isinstance(repo, str)
+        and repo.strip()
+    ):
         return f"{owner.strip()}/{repo.strip()}"
     return CONTROLLER_REPO
 

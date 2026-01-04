@@ -18,7 +18,9 @@ from github_mcp.server import (
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
@@ -33,6 +35,8 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if candidate == root or not candidate.startswith(root + os.sep):
         raise ValueError("path escapes repository root")
     return candidate
+
+
 def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
     abs_path = _workspace_safe_join(repo_dir, path)
     if not os.path.exists(abs_path):
@@ -62,6 +66,8 @@ def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
         "had_decoding_errors": had_errors,
         "size_bytes": len(data),
     }
+
+
 def _workspace_write_text(
     repo_dir: str,
     path: str,
@@ -88,6 +94,8 @@ def _workspace_write_text(
         "size_bytes": len(data),
         "encoding": "utf-8",
     }
+
+
 @mcp_tool(write_action=False)
 async def get_workspace_file_contents(
     full_name: Optional[str] = None,
@@ -105,13 +113,17 @@ async def get_workspace_file_contents(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         info = _workspace_read_text(repo_dir, path)
         info.update({"full_name": full_name, "ref": effective_ref})
         return info
     except Exception as exc:
         return _structured_tool_error(exc, context="get_workspace_file_contents")
+
+
 @mcp_tool(write_action=True)
 async def set_workspace_file_contents(
     full_name: Optional[str] = None,
@@ -139,7 +151,9 @@ async def set_workspace_file_contents(
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
         before_info = _workspace_read_text(repo_dir, path)
         before_text = before_info.get("text") if before_info.get("exists") else ""
         write_info = _workspace_write_text(
@@ -167,7 +181,10 @@ async def set_workspace_file_contents(
                 extra={"repo": full_name, "path": path, "event": "write_diff_summary"},
             )
 
-            if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and full_diff.strip():
+            if (
+                config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
+                and full_diff.strip()
+            ):
                 truncated = truncate_diff(
                     full_diff,
                     max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
@@ -188,7 +205,9 @@ async def set_workspace_file_contents(
             **write_info,
         }
     except Exception as exc:
-        return _structured_tool_error(exc, context="set_workspace_file_contents", path=path)
+        return _structured_tool_error(
+            exc, context="set_workspace_file_contents", path=path
+        )
 
 
 @mcp_tool(write_action=True)
@@ -211,7 +230,9 @@ async def apply_patch(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
         await deps["apply_patch_to_repo"](repo_dir, patch)
         return {"branch": effective_ref, "status": "patched"}
     except Exception as exc:
