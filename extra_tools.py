@@ -1,17 +1,23 @@
+"""Optional extra tools.
+
+These tools are registered opportunistically at server startup via
+``register_extra_tools_if_available``.
+
+Important: avoid importing ``main`` here. The main module imports the server,
+and the server imports this module to register tools. Importing ``main`` would
+create a cycle, causing registration to fail and the tools to be omitted.
+"""
+
 from __future__ import annotations
 
 import base64
 from pathlib import Path
 from typing import Any, Callable, Dict, Literal, Protocol
 
-from main import (
-    _decode_github_content,
-    _effective_ref_for_repo,
-    _github_request,
-    _resolve_file_sha,
-    _workspace_path,
-)
-from github_mcp.utils import _normalize_repo_path_for_repo
+from github_mcp.github_content import _decode_github_content, _resolve_file_sha
+from github_mcp.http_clients import _github_request
+from github_mcp.utils import _effective_ref_for_repo, _normalize_repo_path_for_repo
+from github_mcp.workspace import _workspace_path
 
 
 class ToolDecorator(Protocol):
