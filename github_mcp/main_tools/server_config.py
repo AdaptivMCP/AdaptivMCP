@@ -25,13 +25,13 @@ from github_mcp.server import (
     CONTROLLER_REPO,
     _github_request,
 )
-from github_mcp.utils import REPO_DEFAULTS, _get_main_module
+from github_mcp.utils import REPO_DEFAULTS, REPO_DEFAULTS_PARSE_ERROR, _get_main_module
 
 
 async def get_server_config() -> Dict[str, Any]:
     """Return a safe summary of MCP connector and runtime settings."""
 
-    return {
+    config_payload = {
         "write_allowed": bool(server.WRITE_ALLOWED),
         "github_api_base": GITHUB_API_BASE,
         "http": {
@@ -64,6 +64,10 @@ async def get_server_config() -> Dict[str, Any]:
             ),
         },
     }
+    if REPO_DEFAULTS_PARSE_ERROR:
+        config_payload["warnings"] = [REPO_DEFAULTS_PARSE_ERROR]
+
+    return config_payload
 
 
 def validate_json_string(raw: str) -> Dict[str, Any]:
