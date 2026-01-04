@@ -60,7 +60,7 @@ def test_list_write_actions_filters_write_action(monkeypatch):
     assert result["write_actions_enabled"] is False
     assert [tool["name"] for tool in result["tools"]] == ["write_tool"]
     assert result["tools"][0]["write_action"] is True
-    assert result["tools"][0]["write_enabled"] is False
+    assert result["tools"][0]["write_enabled"] is True
 
 
 def test_list_tools_filters_and_prefix(monkeypatch):
@@ -77,7 +77,7 @@ def test_list_tools_filters_and_prefix(monkeypatch):
 
     only_write = asyncio.run(introspection.list_tools(only_write=True))
     assert [tool["name"] for tool in only_write["tools"]] == ["write_tool"]
-    assert only_write["tools"][0]["write_enabled"] is False
+    assert only_write["tools"][0]["write_enabled"] is True
 
     only_read = asyncio.run(introspection.list_tools(only_read=True))
     assert [tool["name"] for tool in only_read["tools"]] == [

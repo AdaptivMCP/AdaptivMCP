@@ -3,9 +3,6 @@ from __future__ import annotations
 import importlib
 import types
 
-import pytest
-
-
 def _reload_context(monkeypatch, value: str | None):
     """Reload github_mcp.mcp_server.context after setting env var.
 
@@ -40,25 +37,17 @@ def test_write_gate_env_var_is_single_source_of_truth(monkeypatch):
     assert bool(context.WRITE_ALLOWED) is True
 
 
-def test_decorators_enforce_write_gate_without_bypass(monkeypatch):
-    # Ensure write is disallowed.
+def test_decorators_do_not_block_write_tools_when_gate_is_false(monkeypatch):
+    # Ensure write is not auto-approved.
     _reload_context(monkeypatch, "false")
 
     from github_mcp.mcp_server.decorators import _enforce_write_allowed
-    from github_mcp.mcp_server.errors import AdaptivToolError
 
     # Read tool is always allowed.
     _enforce_write_allowed("read_tool", write_action=False)
 
-    # Write tool must be blocked.
-    with pytest.raises(AdaptivToolError) as excinfo:
-        _enforce_write_allowed("write_tool", write_action=True)
-
-    err = excinfo.value
-    assert err.code == "write_not_allowed"
-    assert err.category == "policy"
-    assert err.origin == "write_gate"
-    assert "GITHUB_MCP_WRITE_ALLOWED" in (err.hint or "")
+    # Write tool should not be blocked; clients are expected to prompt.
+    _enforce_write_allowed("write_tool", write_action=True)
 
 
 def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
@@ -121,8 +110,8 @@ def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
     assert idx["read_tool"]["write_enabled"] is True
     assert idx["read_tool"]["write_allowed"] is True
     assert idx["write_tool"]["write_action"] is True
-    assert idx["write_tool"]["write_enabled"] is False
-    assert idx["write_tool"]["write_allowed"] is False
+    assert idx["write_tool"]["write_enabled"] is True
+    assert idx["write_tool"]["write_allowed"] is True
 
     # Gate on.
     monkeypatch.setenv("GITHUB_MCP_WRITE_ALLOWED", "true")
