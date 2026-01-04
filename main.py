@@ -10,7 +10,7 @@ import base64
 import json
 import os
 import time
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
 
@@ -42,7 +42,6 @@ from github_mcp.github_content import (
     _resolve_file_sha,  # noqa: F401
 )
 from github_mcp.file_cache import (
-    cache_payload,
     clear_cache,
 )
 from github_mcp.http_clients import (
@@ -70,8 +69,8 @@ from github_mcp.server import (
     _normalize_input_schema,
 )
 from github_mcp.utils import (
-    _effective_ref_for_repo,
-    _normalize_repo_path_for_repo,
+    _extract_hostname,
+    _render_external_hosts,
     _with_numbered_lines,
 )
 from github_mcp.workspace import (
@@ -371,28 +370,6 @@ else:
     app = Starlette()
 
 
-def _extract_hostname(value: str | None) -> str | None:
-    if not value:
-        return None
-    cleaned = value.strip()
-    if not cleaned:
-        return None
-    if "://" in cleaned:
-        parsed = urlparse(cleaned)
-        host = parsed.hostname or parsed.netloc
-        return host or None
-    return cleaned
-
-
-def _render_external_hosts() -> list[str]:
-    hostnames: list[str] = []
-    for env_name in ("RENDER_EXTERNAL_HOSTNAME", "RENDER_EXTERNAL_URL"):
-        hostname = _extract_hostname(os.getenv(env_name))
-        if hostname:
-            hostnames.append(hostname)
-    return hostnames
-
-
 def _configure_trusted_hosts(app_instance) -> None:
     allowed_hosts_env = os.getenv("ALLOWED_HOSTS")
     if allowed_hosts_env:
@@ -445,19 +422,6 @@ except Exception:
 register_actions_compat_routes(app, server)
 register_healthz_route(app)
 register_tool_registry_routes(app)
-
-
-def _cache_file_result(
-    *, full_name: str, path: str, ref: str, decoded: Dict[str, Any]
-) -> Dict[str, Any]:
-    normalized_path = _normalize_repo_path_for_repo(full_name, path)
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    return cache_payload(
-        full_name=full_name,
-        ref=effective_ref,
-        path=normalized_path,
-        decoded=decoded,
-    )
 
 
 def _reset_file_cache_for_tests() -> None:
@@ -947,7 +911,10 @@ async def get_file_contents(
         ref = branch
 
     decoded = await _decode_github_content(full_name, path, ref)
-    _cache_file_result(full_name=full_name, path=path, ref=ref, decoded=decoded)
+    # Keep the local cache warm for subsequent reads.
+    from github_mcp.main_tools.content_cache import _cache_file_result as _cache_impl
+
+    _cache_impl(full_name=full_name, path=path, ref=ref, decoded=decoded)
     return decoded
 
 
