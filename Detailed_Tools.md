@@ -149,7 +149,7 @@ Recommended practice for changes:
 ## Quick index
 
 Environment & diagnostics:
-- `validate_environment`, `get_server_config`, `get_rate_limit`, `get_user_login`, `ping_extensions`, `get_repo_dashboard`
+- `validate_environment`, `get_server_config`, `get_rate_limit`, `get_user_login`, `ping_extensions`, `get_repo_dashboard`, `get_repo_dashboard_graphql`
 
 Tool introspection:
 - `list_tools`, `describe_tool`, `list_all_actions`, `validate_tool_args`
@@ -167,10 +167,10 @@ Branches & PRs:
 - `create_branch`, `ensure_branch`, `list_branches`, `workspace_create_branch`, `workspace_delete_branch`, `workspace_self_heal_branch`, `workspace_sync_status`, `workspace_sync_to_remote`, `get_branch_summary`, `get_latest_branch_status`, `get_commit_combined_status`, `list_pull_requests`, `create_pull_request`, `open_pr_for_existing_branch`, `recent_prs_for_branch`, `fetch_pr`, `get_pr_info`, `get_pr_overview`, `list_pr_changed_filenames`, `fetch_pr_comments`, `comment_on_pull_request`, `merge_pull_request`, `close_pull_request`, `build_pr_summary`, `update_files_and_open_pr`
 
 Issues:
-- `list_recent_issues`, `list_repository_issues`, `fetch_issue`, `fetch_issue_comments`, `create_issue`, `update_issue`, `comment_on_issue`, `open_issue_context`, `get_issue_overview`, `resolve_handle`, `get_issue_comment_reactions`
+- `list_recent_issues`, `list_repository_issues`, `list_open_issues_graphql`, `fetch_issue`, `fetch_issue_comments`, `create_issue`, `update_issue`, `comment_on_issue`, `open_issue_context`, `get_issue_overview`, `resolve_handle`, `get_issue_comment_reactions`
 
 Actions / CI:
-- `list_workflow_runs`, `get_workflow_run`, `get_workflow_run_overview`, `list_workflow_run_jobs`, `get_job_logs`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`, `wait_for_workflow_run`, `list_recent_failures`, `run_tests`, `run_lint_suite`, `run_quality_suite`
+- `list_workflow_runs`, `list_workflow_runs_graphql`, `get_workflow_run`, `get_workflow_run_overview`, `list_workflow_run_jobs`, `get_job_logs`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`, `wait_for_workflow_run`, `list_recent_failures`, `list_recent_failures_graphql`, `run_tests`, `run_lint_suite`, `run_quality_suite`
 
 Misc file navigation helpers:
 - `get_file_slice`, `get_file_with_line_numbers`, `open_file_context`
@@ -1248,6 +1248,24 @@ Example:
 {"tool":"list_repository_issues","args":{"full_name":"OWNER/REPO","state":"open"}}
 ```
 
+## list_open_issues_graphql
+
+Purpose: List open issues (excluding PRs) via GraphQL, with cursor-based pagination.
+
+Inputs:
+- `full_name` (string)
+- `state` (string, default `open`) — `open`, `closed`, or `all`
+- `per_page` (int, default 30)
+- `cursor` (string | null) — pass the prior response `page_info.end_cursor`
+
+Outputs: Issue list + pagination info.
+
+Example:
+
+```json
+{"tool":"list_open_issues_graphql","args":{"full_name":"OWNER/REPO","state":"open","per_page":25}}
+```
+
 ## fetch_issue
 
 Purpose: Fetch a single issue by number.
@@ -1420,6 +1438,24 @@ Example:
 {"tool":"list_workflow_runs","args":{"full_name":"OWNER/REPO","branch":"main","per_page":10}}
 ```
 
+## list_workflow_runs_graphql
+
+Purpose: List recent GitHub Actions workflow runs via GraphQL with cursor-based pagination.
+
+Inputs:
+- `full_name` (string)
+- `per_page` (int, default 30)
+- `cursor` (string | null) — pass the prior response `page_info.end_cursor`
+- optional: `branch` (string | null) — filter to a branch locally
+
+Outputs: Workflow run list + pagination info.
+
+Example:
+
+```json
+{"tool":"list_workflow_runs_graphql","args":{"full_name":"OWNER/REPO","per_page":20}}
+```
+
 ## get_workflow_run
 
 Purpose: Retrieve a specific workflow run including conclusion and timing.
@@ -1555,6 +1591,23 @@ Example:
 {"tool":"list_recent_failures","args":{"full_name":"OWNER/REPO","branch":"main","limit":5}}
 ```
 
+## list_recent_failures_graphql
+
+Purpose: List recent failed/cancelled workflow runs via GraphQL.
+
+Inputs:
+- `full_name` (string)
+- `branch` (string | null)
+- `limit` (int, default 10)
+
+Outputs: Filtered run list.
+
+Example:
+
+```json
+{"tool":"list_recent_failures_graphql","args":{"full_name":"OWNER/REPO","branch":"main","limit":5}}
+```
+
 ## run_tests
 
 Purpose: Run a test command in the workspace clone (default `pytest`).
@@ -1630,6 +1683,22 @@ Example:
 
 ```json
 {"tool":"get_repo_dashboard","args":{"full_name":"OWNER/REPO","branch":"main"}}
+```
+
+## get_repo_dashboard_graphql
+
+Purpose: GraphQL-backed fallback for `get_repo_dashboard` when REST helpers are blocked.
+
+Inputs:
+- `full_name` (string)
+- `branch` (string | null)
+
+Outputs: Dashboard object.
+
+Example:
+
+```json
+{"tool":"get_repo_dashboard_graphql","args":{"full_name":"OWNER/REPO","branch":"main"}}
 ```
 
 ---
