@@ -30,9 +30,13 @@ def _get_controller_revision_info() -> Dict[str, Any]:
     try:
         repo_root = _find_repo_root(Path(__file__).resolve())
         if repo_root is not None:
-            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_root, text=True).strip()
+            sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
+            ).strip()
             info["git_commit"] = sha
-            branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root, text=True).strip()
+            branch = subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root, text=True
+            ).strip()
             info["git_branch"] = branch
     except Exception:
         # Never fail env validation because git metadata is unavailable.
@@ -205,7 +209,9 @@ async def validate_environment() -> Dict[str, Any]:
             if isinstance(repo_payload, dict):
                 permissions = repo_payload.get("permissions") or {}
 
-            push_allowed = permissions.get("push") if isinstance(permissions, dict) else None
+            push_allowed = (
+                permissions.get("push") if isinstance(permissions, dict) else None
+            )
             if push_allowed is True:
                 add_check(
                     "controller_repo_push_permission",

@@ -20,7 +20,11 @@ async def pr_smoke_test(
     defaults = await m.get_repo_defaults(full_name=full_name)
     defaults_payload = defaults.get("defaults") or {}
     repo = defaults_payload.get("full_name") or full_name or m.CONTROLLER_REPO
-    base = base_branch or defaults_payload.get("default_branch") or m.CONTROLLER_DEFAULT_BRANCH
+    base = (
+        base_branch
+        or defaults_payload.get("default_branch")
+        or m.CONTROLLER_DEFAULT_BRANCH
+    )
 
     import uuid
 

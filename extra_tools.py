@@ -70,7 +70,9 @@ async def get_file_slice(
     start_idx = min(max(start_line - 1, 0), total_lines - 1)
     end_idx = min(start_idx + max_lines, total_lines)
 
-    slice_lines = [{"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)]
+    slice_lines = [
+        {"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)
+    ]
 
     return {
         "full_name": full_name,
@@ -129,7 +131,9 @@ async def get_file_with_line_numbers(
     start_idx = min(max(start_line - 1, 0), total_lines - 1)
     end_idx = min(start_idx + max_lines, total_lines)
 
-    slice_lines = [{"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)]
+    slice_lines = [
+        {"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)
+    ]
 
     width = len(str(total_lines)) if total_lines > 0 else 1
     numbered_text = "\n".join(
@@ -212,7 +216,9 @@ async def open_file_context(
     }
 
     if should_expand_small_file:
-        response["note"] = "File is small; returning full content instead of only max_lines."
+        response["note"] = (
+            "File is small; returning full content instead of only max_lines."
+        )
 
     return response
 
@@ -280,7 +286,10 @@ async def update_file_from_workspace(
     else:
         workspace_file = (workspace_root / workspace_path).resolve()
 
-    if workspace_root not in workspace_file.parents and workspace_file != workspace_root:
+    if (
+        workspace_root not in workspace_file.parents
+        and workspace_file != workspace_root
+    ):
         raise ValueError("workspace_path must stay within the workspace root")
 
     if not workspace_file.is_file():

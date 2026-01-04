@@ -6,7 +6,9 @@ import sys
 
 from github_mcp.config import BASE_LOGGER
 from github_mcp.github_content import _perform_github_commit as _default_commit
-from github_mcp.workspace_tools.clone import ensure_workspace_clone as _default_ensure_workspace_clone
+from github_mcp.workspace_tools.clone import (
+    ensure_workspace_clone as _default_ensure_workspace_clone,
+)
 
 LOGGER = BASE_LOGGER.getChild("workspace_sync")
 
@@ -28,7 +30,11 @@ async def _perform_github_commit_and_refresh_workspace(
     """
 
     main_mod = sys.modules.get("main") or sys.modules.get("__main__")
-    commit_fn = getattr(main_mod, "_perform_github_commit", _default_commit) if main_mod else _default_commit
+    commit_fn = (
+        getattr(main_mod, "_perform_github_commit", _default_commit)
+        if main_mod
+        else _default_commit
+    )
     commit_result = await commit_fn(
         full_name=full_name,
         path=path,
@@ -39,7 +45,11 @@ async def _perform_github_commit_and_refresh_workspace(
     )
 
     try:
-        ensure_fn = getattr(main_mod, "ensure_workspace_clone", _default_ensure_workspace_clone) if main_mod else _default_ensure_workspace_clone
+        ensure_fn = (
+            getattr(main_mod, "ensure_workspace_clone", _default_ensure_workspace_clone)
+            if main_mod
+            else _default_ensure_workspace_clone
+        )
         refresh = await ensure_fn(
             full_name=full_name,
             ref=branch,

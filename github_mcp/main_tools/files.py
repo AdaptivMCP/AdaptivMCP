@@ -58,7 +58,9 @@ async def create_file(
 
     m = _main()
 
-    effective_branch, normalized_path = _normalize_write_context(full_name, branch, path)
+    effective_branch, normalized_path = _normalize_write_context(
+        full_name, branch, path
+    )
     if normalized_path is None:
         raise ValueError("path must not be empty after normalization")
 
@@ -87,7 +89,9 @@ async def create_file(
         sha=sha_before,
     )
 
-    verified = await m._decode_github_content(full_name, normalized_path, effective_branch)
+    verified = await m._decode_github_content(
+        full_name, normalized_path, effective_branch
+    )
     sha_after = extract_sha(verified)
 
     # Render-log friendly diff logging (colored additions/removals).
@@ -97,7 +101,9 @@ async def create_file(
         fromfile=f"a/{normalized_path}",
         tofile=f"b/{normalized_path}",
     )
-    log_write_diff("Created", full_name=full_name, path=normalized_path, diff_text=full_diff)
+    log_write_diff(
+        "Created", full_name=full_name, path=normalized_path, diff_text=full_diff
+    )
 
     diff_text: str | None = None
     if return_diff:
@@ -132,7 +138,9 @@ async def apply_text_update_and_commit(
 
     m = _main()
 
-    effective_branch, normalized_path = _normalize_write_context(full_name, branch, path)
+    effective_branch, normalized_path = _normalize_write_context(
+        full_name, branch, path
+    )
     if normalized_path is None:
         raise ValueError("path must not be empty after normalization")
 
@@ -140,7 +148,9 @@ async def apply_text_update_and_commit(
     old_text: str | None = None
 
     try:
-        decoded = await m._decode_github_content(full_name, normalized_path, effective_branch)
+        decoded = await m._decode_github_content(
+            full_name, normalized_path, effective_branch
+        )
         old_text = require_text(decoded)
         sha_before = extract_sha(decoded)
     except m.GitHubAPIError as exc:  # type: ignore[attr-defined]
@@ -168,7 +178,9 @@ async def apply_text_update_and_commit(
         sha=sha_before,
     )
 
-    verified = await m._decode_github_content(full_name, normalized_path, effective_branch)
+    verified = await m._decode_github_content(
+        full_name, normalized_path, effective_branch
+    )
     sha_after = extract_sha(verified)
 
     # Render-log friendly diff logging (colored additions/removals).
@@ -180,7 +192,9 @@ async def apply_text_update_and_commit(
         fromfile=f"a/{normalized_path}",
         tofile=f"b/{normalized_path}",
     )
-    log_write_diff("Committed", full_name=full_name, path=normalized_path, diff_text=full_diff)
+    log_write_diff(
+        "Committed", full_name=full_name, path=normalized_path, diff_text=full_diff
+    )
 
     diff_text: str | None = None
     if return_diff:
@@ -221,14 +235,18 @@ async def move_file(
     )
     if normalized_from_path is None:
         raise ValueError("from_path must not be empty after normalization")
-    _, normalized_to_path = _normalize_write_context(full_name, effective_branch, to_path)
+    _, normalized_to_path = _normalize_write_context(
+        full_name, effective_branch, to_path
+    )
     if normalized_to_path is None:
         raise ValueError("to_path must not be empty after normalization")
 
     if normalized_from_path == normalized_to_path:
         raise ValueError("from_path and to_path must be different")
 
-    source = await m._decode_github_content(full_name, normalized_from_path, effective_branch)
+    source = await m._decode_github_content(
+        full_name, normalized_from_path, effective_branch
+    )
     source_text = require_text(
         source,
         error_message="Source file contents missing or undecodable",
@@ -263,7 +281,6 @@ async def move_file(
             f"/repos/{full_name}/contents/{normalized_from_path}",
             json=delete_body,
         )
-
 
     # Render-log friendly move/delete summaries.
     try:

@@ -5,7 +5,9 @@ from typing import Any, Dict, Optional
 from ._main import _main
 
 
-async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Dict[str, Any]:
+async def get_repo_dashboard(
+    full_name: str, branch: Optional[str] = None
+) -> Dict[str, Any]:
     """Return a compact, multi-signal dashboard for a repository.
 
     Implementation moved out of `main.py` to keep the main registration surface
@@ -22,7 +24,9 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
         # Fall back to the default branch when available.
         defaults = await m.get_repo_defaults(full_name)
         repo_defaults = defaults.get("defaults") or {}
-        effective_branch = repo_defaults.get("default_branch") or m._effective_ref_for_repo(
+        effective_branch = repo_defaults.get(
+            "default_branch"
+        ) or m._effective_ref_for_repo(
             full_name,
             "main",
         )

@@ -14,7 +14,9 @@ from github_mcp.server import (
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 def _slim_shell_result(result: Any) -> Dict[str, Any]:
     """Return a connector-safe view of a run_shell result without truncation."""
@@ -49,10 +51,14 @@ async def commit_workspace(
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         deps = _tw()._workspace_deps()
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         if add_all:
-            add_result = await deps["run_shell"]("git add -A", cwd=repo_dir, timeout_seconds=120)
+            add_result = await deps["run_shell"](
+                "git add -A", cwd=repo_dir, timeout_seconds=120
+            )
             if add_result["exit_code"] != 0:
                 stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
                 raise GitHubAPIError(f"git add failed: {stderr}")
@@ -64,13 +70,19 @@ async def commit_workspace(
         diff_before_commit = await deps["run_shell"](
             "git diff --cached --no-color", cwd=repo_dir, timeout_seconds=120
         )
-        diff_text = (diff_before_commit.get("stdout", "") if isinstance(diff_before_commit, dict) else "")
+        diff_text = (
+            diff_before_commit.get("stdout", "")
+            if isinstance(diff_before_commit, dict)
+            else ""
+        )
         status_lines = status_result.get("stdout", "").strip().splitlines()
         if not status_lines:
             raise GitHubAPIError("No changes to commit in workspace")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
+        commit_result = await deps["run_shell"](
+            commit_cmd, cwd=repo_dir, timeout_seconds=300
+        )
         if commit_result["exit_code"] != 0:
             stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
@@ -78,16 +90,24 @@ async def commit_workspace(
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
+            push_result = await deps["run_shell"](
+                push_cmd, cwd=repo_dir, timeout_seconds=300
+            )
             if push_result["exit_code"] != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         # Collect commit metadata.
-        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
-        head_sha = (rev.get("stdout", "").strip() if isinstance(rev, dict) else "")
-        oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
-        head_summary = (oneline.get("stdout", "").strip() if isinstance(oneline, dict) else "")
+        rev = await deps["run_shell"](
+            "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60
+        )
+        head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
+        oneline = await deps["run_shell"](
+            "git log -1 --oneline", cwd=repo_dir, timeout_seconds=60
+        )
+        head_summary = (
+            oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
+        )
 
         try:
             stats = diff_stats(diff_text)
@@ -96,10 +116,17 @@ async def commit_workspace(
                 len(status_lines),
                 stats.added,
                 stats.removed,
-                extra={"repo": full_name, "ref": effective_ref, "event": "workspace_commit_diff_summary"},
+                extra={
+                    "repo": full_name,
+                    "ref": effective_ref,
+                    "event": "workspace_commit_diff_summary",
+                },
             )
 
-            if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and diff_text.strip():
+            if (
+                config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
+                and diff_text.strip()
+            ):
                 truncated = truncate_diff(
                     diff_text,
                     max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
@@ -108,7 +135,11 @@ async def commit_workspace(
                 config.TOOLS_LOGGER.detailed(
                     "Workspace commit diff\n%s",
                     colored,
-                    extra={"repo": full_name, "ref": effective_ref, "event": "workspace_commit_diff"},
+                    extra={
+                        "repo": full_name,
+                        "ref": effective_ref,
+                        "event": "workspace_commit_diff",
+                    },
                 )
         except Exception:
             pass
@@ -120,10 +151,14 @@ async def commit_workspace(
             "commit_sha": head_sha,
             "commit_summary": head_summary,
             "commit": _slim_shell_result(commit_result),
-            "push": _slim_shell_result(push_result) if push_result is not None else None,
+            "push": _slim_shell_result(push_result)
+            if push_result is not None
+            else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace")
+
+
 @mcp_tool(write_action=True)
 async def commit_workspace_files(
     full_name: Optional[str],
@@ -146,7 +181,9 @@ async def commit_workspace_files(
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         deps = _tw()._workspace_deps()
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         add_cmd = "git add -- " + " ".join(shlex.quote(path) for path in files)
         add_result = await deps["run_shell"](add_cmd, cwd=repo_dir, timeout_seconds=120)
@@ -161,13 +198,19 @@ async def commit_workspace_files(
         diff_before_commit_files = await deps["run_shell"](
             "git diff --cached --no-color", cwd=repo_dir, timeout_seconds=120
         )
-        diff_text_files = (diff_before_commit_files.get("stdout", "") if isinstance(diff_before_commit_files, dict) else "")
+        diff_text_files = (
+            diff_before_commit_files.get("stdout", "")
+            if isinstance(diff_before_commit_files, dict)
+            else ""
+        )
         staged_files = staged_files_result.get("stdout", "").strip().splitlines()
         if not staged_files:
             raise GitHubAPIError("No staged changes to commit for provided files")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
+        commit_result = await deps["run_shell"](
+            commit_cmd, cwd=repo_dir, timeout_seconds=300
+        )
         if commit_result["exit_code"] != 0:
             stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
@@ -175,16 +218,24 @@ async def commit_workspace_files(
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
+            push_result = await deps["run_shell"](
+                push_cmd, cwd=repo_dir, timeout_seconds=300
+            )
             if push_result["exit_code"] != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         # Collect commit metadata.
-        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
-        head_sha = (rev.get("stdout", "").strip() if isinstance(rev, dict) else "")
-        oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
-        head_summary = (oneline.get("stdout", "").strip() if isinstance(oneline, dict) else "")
+        rev = await deps["run_shell"](
+            "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60
+        )
+        head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
+        oneline = await deps["run_shell"](
+            "git log -1 --oneline", cwd=repo_dir, timeout_seconds=60
+        )
+        head_summary = (
+            oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
+        )
 
         try:
             stats = diff_stats(diff_text_files)
@@ -193,10 +244,17 @@ async def commit_workspace_files(
                 len(staged_files),
                 stats.added,
                 stats.removed,
-                extra={"repo": full_name, "ref": effective_ref, "event": "workspace_commit_diff_summary"},
+                extra={
+                    "repo": full_name,
+                    "ref": effective_ref,
+                    "event": "workspace_commit_diff_summary",
+                },
             )
 
-            if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and diff_text_files.strip():
+            if (
+                config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
+                and diff_text_files.strip()
+            ):
                 truncated = truncate_diff(
                     diff_text_files,
                     max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
@@ -205,11 +263,14 @@ async def commit_workspace_files(
                 config.TOOLS_LOGGER.detailed(
                     "Workspace commit diff\n%s",
                     colored,
-                    extra={"repo": full_name, "ref": effective_ref, "event": "workspace_commit_diff"},
+                    extra={
+                        "repo": full_name,
+                        "ref": effective_ref,
+                        "event": "workspace_commit_diff",
+                    },
                 )
         except Exception:
             pass
-
 
         return {
             "branch": effective_ref,
@@ -218,10 +279,14 @@ async def commit_workspace_files(
             "commit_sha": head_sha,
             "commit_summary": head_summary,
             "commit": _slim_shell_result(commit_result),
-            "push": _slim_shell_result(push_result) if push_result is not None else None,
+            "push": _slim_shell_result(push_result)
+            if push_result is not None
+            else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_workspace_files")
+
+
 @mcp_tool(write_action=False)
 async def get_workspace_changes_summary(
     full_name: str,
@@ -233,7 +298,9 @@ async def get_workspace_changes_summary(
 
     deps = _tw()._workspace_deps()
     effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-    repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+    repo_dir = await deps["clone_repo"](
+        full_name, ref=effective_ref, preserve_changes=True
+    )
 
     status_result = await deps["run_shell"](
         "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=60
@@ -308,6 +375,8 @@ async def get_workspace_changes_summary(
         "summary": summary,
         "changes": changes,
     }
+
+
 @mcp_tool(write_action=False)
 async def build_pr_summary(
     full_name: str,
@@ -328,5 +397,7 @@ async def build_pr_summary(
         "changed_files": changed_files or [],
         "tests_status": tests_status or "unknown",
         "lint_status": lint_status or "unknown",
-        "breaking_changes": bool(breaking_changes) if breaking_changes is not None else None,
+        "breaking_changes": bool(breaking_changes)
+        if breaking_changes is not None
+        else None,
     }

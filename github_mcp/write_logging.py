@@ -33,7 +33,10 @@ def log_write_diff(
             },
         )
 
-        if config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL) and diff_text.strip():
+        if (
+            config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
+            and diff_text.strip()
+        ):
             truncated = truncate_diff(
                 diff_text,
                 max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
@@ -44,7 +47,12 @@ def log_write_diff(
                 path,
                 detail_suffix,
                 colored,
-                extra={"repo": full_name, "path": path, "event": "write_diff", "action": action},
+                extra={
+                    "repo": full_name,
+                    "path": path,
+                    "event": "write_diff",
+                    "action": action,
+                },
             )
     except Exception:
         config.TOOLS_LOGGER.debug(

@@ -11,12 +11,19 @@ from urllib.parse import urlparse
 # Request-scoped context (used for correlation/logging/dedupe)
 # ------------------------------------------------------------------------------
 
-REQUEST_MESSAGE_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_MESSAGE_ID", default=None)
-REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID", default=None)
+REQUEST_MESSAGE_ID: ContextVar[Optional[str]] = ContextVar(
+    "REQUEST_MESSAGE_ID", default=None
+)
+REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar(
+    "REQUEST_SESSION_ID", default=None
+)
 
 # These are imported by main.py in your repo; keep names stable.
 REQUEST_PATH: ContextVar[Optional[str]] = ContextVar("REQUEST_PATH", default=None)
-REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar("REQUEST_RECEIVED_AT", default=None)
+REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar(
+    "REQUEST_RECEIVED_AT", default=None
+)
+
 
 def get_request_context() -> dict[str, Any]:
     return {
@@ -25,6 +32,7 @@ def get_request_context() -> dict[str, Any]:
         "session_id": REQUEST_SESSION_ID.get(),
         "message_id": REQUEST_MESSAGE_ID.get(),
     }
+
 
 # ------------------------------------------------------------------------------
 # Dynamic write gate (environment-based)
@@ -100,7 +108,9 @@ def get_write_allowed_debug() -> dict[str, Any]:
     }
 
 
-COMPACT_METADATA_DEFAULT = _parse_bool(os.environ.get("GITHUB_MCP_COMPACT_METADATA_DEFAULT", "true"))
+COMPACT_METADATA_DEFAULT = _parse_bool(
+    os.environ.get("GITHUB_MCP_COMPACT_METADATA_DEFAULT", "true")
+)
 _TOOL_EXAMPLES: dict[str, Any] = {}
 try:
     from mcp.server.fastmcp import FastMCP  # type: ignore
@@ -120,7 +130,6 @@ try:
             return host or None
         return cleaned
 
-
     def _render_external_hosts() -> list[str]:
         hostnames: list[str] = []
         for env_name in ("RENDER_EXTERNAL_HOSTNAME", "RENDER_EXTERNAL_URL"):
@@ -129,7 +138,6 @@ try:
                 hostnames.append(hostname)
         return hostnames
 
-
     def _normalize_allowed_hosts(hosts: list[str]) -> list[str]:
         normalized: list[str] = []
         for host in hosts:
@@ -137,7 +145,6 @@ try:
             if cleaned and cleaned not in normalized:
                 normalized.append(cleaned)
         return normalized
-
 
     def _expand_allowed_hosts(hosts: list[str]) -> list[str]:
         expanded: list[str] = []
@@ -149,7 +156,6 @@ try:
                 if wildcard not in expanded:
                     expanded.append(wildcard)
         return expanded
-
 
     def _build_allowed_origins(hosts: list[str]) -> list[str]:
         origins: list[str] = []
@@ -164,10 +170,13 @@ try:
                     origins.append(origin)
         return origins
 
-
     def _build_transport_security_settings() -> TransportSecuritySettings | None:
         allowed_hosts_env = os.getenv("ALLOWED_HOSTS")
-        allowed_hosts = [host.strip() for host in (allowed_hosts_env or "").split(",") if host.strip()]
+        allowed_hosts = [
+            host.strip()
+            for host in (allowed_hosts_env or "").split(",")
+            if host.strip()
+        ]
         if "*" in allowed_hosts:
             return TransportSecuritySettings(enable_dns_rebinding_protection=False)
 
@@ -186,7 +195,6 @@ try:
             allowed_hosts=expanded_hosts,
             allowed_origins=allowed_origins,
         )
-
 
     mcp = FastMCP("github-mcp", transport_security=_build_transport_security_settings())
 except Exception as exc:  # pragma: no cover - used when dependency missing

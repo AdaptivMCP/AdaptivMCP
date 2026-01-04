@@ -13,7 +13,9 @@ import sys
 from github_mcp.github_content import _decode_github_content as _decode_default
 
 
-def _cache_file_result(*, full_name: str, path: str, ref: str, decoded: Dict[str, Any]) -> Dict[str, Any]:
+def _cache_file_result(
+    *, full_name: str, path: str, ref: str, decoded: Dict[str, Any]
+) -> Dict[str, Any]:
     normalized_path = _normalize_repo_path_for_repo(full_name, path)
     effective_ref = _effective_ref_for_repo(full_name, ref)
     return cache_payload(
@@ -24,15 +26,21 @@ def _cache_file_result(*, full_name: str, path: str, ref: str, decoded: Dict[str
     )
 
 
-
 async def _decode(full_name: str, path: str, ref: str | None) -> Dict[str, Any]:
     """Resolve decode function, preferring monkeypatched main._decode_github_content."""
 
     main_mod = sys.modules.get("main") or sys.modules.get("__main__")
-    fn = getattr(main_mod, "_decode_github_content", _decode_default) if main_mod else _decode_default
+    fn = (
+        getattr(main_mod, "_decode_github_content", _decode_default)
+        if main_mod
+        else _decode_default
+    )
     return await fn(full_name, path, ref)
 
-async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Dict[str, Any]:
+
+async def fetch_files(
+    full_name: str, paths: List[str], ref: str = "main"
+) -> Dict[str, Any]:
     """Fetch multiple files concurrently with per-file error isolation."""
 
     results: Dict[str, Any] = {}
@@ -61,7 +69,9 @@ async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Di
     return {"files": results}
 
 
-async def get_cached_files(full_name: str, paths: List[str], ref: str = "main") -> Dict[str, Any]:
+async def get_cached_files(
+    full_name: str, paths: List[str], ref: str = "main"
+) -> Dict[str, Any]:
     """Return cached file entries and list any missing paths."""
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -136,7 +146,9 @@ async def list_repository_tree(
         raise ValueError("max_entries must be a positive integer")
 
     params = {"recursive": 1 if recursive else 0}
-    data = await _github_request("GET", f"/repos/{full_name}/git/trees/{ref}", params=params)
+    data = await _github_request(
+        "GET", f"/repos/{full_name}/git/trees/{ref}", params=params
+    )
 
     payload = data.get("json") or {}
     tree = payload.get("tree")

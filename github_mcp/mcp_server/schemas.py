@@ -209,14 +209,19 @@ def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
         args = get_args(annotation)
         if args and args[-1] is ...:
             return {"type": "array", "items": _annotation_to_schema(args[0])}
-        return {"type": "array", "prefixItems": [_annotation_to_schema(arg) for arg in args]}
+        return {
+            "type": "array",
+            "prefixItems": [_annotation_to_schema(arg) for arg in args],
+        }
     if origin is set:
         args = get_args(annotation)
         items = _annotation_to_schema(args[0]) if args else {}
         return {"type": "array", "items": items, "uniqueItems": True}
     if origin is type(None):
         return {"type": "null"}
-    if origin is __import__("typing").Union or origin is getattr(types, "UnionType", None):
+    if origin is __import__("typing").Union or origin is getattr(
+        types, "UnionType", None
+    ):
         args = get_args(annotation)
         return {"anyOf": [_annotation_to_schema(arg) for arg in args]}
 
@@ -233,7 +238,10 @@ def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, 
     for param in signature.parameters.values():
         if param.name == "self":
             continue
-        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+        if param.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
             continue
         param_schema: Dict[str, Any] = _annotation_to_schema(param.annotation)
         if param.default is inspect.Parameter.empty:
@@ -243,7 +251,11 @@ def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, 
             param_schema["default"] = _jsonable(param.default)
         properties[param.name] = param_schema
 
-    schema: Dict[str, Any] = {"type": "object", "properties": properties, "additionalProperties": False}
+    schema: Dict[str, Any] = {
+        "type": "object",
+        "properties": properties,
+        "additionalProperties": False,
+    }
     if required:
         schema["required"] = required
     return schema
@@ -311,7 +323,9 @@ def _preflight_tool_args(
             "args": _jsonable(dict(args)),
         }
         if compact:
-            raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            raw = json.dumps(
+                payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            )
             return {"tool": tool_name, "preview": _normalize_and_truncate(raw)}
         return payload
     except Exception:

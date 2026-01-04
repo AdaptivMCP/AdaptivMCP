@@ -23,7 +23,9 @@ def test_register_with_fastmcp_skips_unsupported_kwargs(monkeypatch):
     def sample_tool():
         return "ok"
 
-    tool_obj = decorators._register_with_fastmcp(sample_tool, name="sample_tool", description="sample description")
+    tool_obj = decorators._register_with_fastmcp(
+        sample_tool, name="sample_tool", description="sample description"
+    )
     assert tool_obj["fn"] is sample_tool
     assert tool_obj["name"] == "sample_tool"
 
@@ -54,12 +56,23 @@ def test_register_with_fastmcp_passes_tags(monkeypatch):
     captured = {}
 
     class FakeMCP:
-        def tool(self, fn=None, *, name=None, description=None, tags=None, meta=None, annotations=None):
+        def tool(
+            self,
+            fn=None,
+            *,
+            name=None,
+            description=None,
+            tags=None,
+            meta=None,
+            annotations=None,
+        ):
             captured["tags"] = tags
 
             if fn is None:
+
                 def decorator(inner):
                     return {"fn": inner, "name": name, "tags": tags}
+
                 return decorator
             return {"fn": fn, "name": name, "tags": tags}
 

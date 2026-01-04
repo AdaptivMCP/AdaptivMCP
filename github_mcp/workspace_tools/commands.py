@@ -12,14 +12,17 @@ from github_mcp.server import (
 
 def _tw():
     from github_mcp import tools_workspace as tw
+
     return tw
+
 
 def _strip_ui_fields(payload: object) -> object:
     if not isinstance(payload, dict):
         return payload
-    for k in ('controller_log', 'summary', 'user_message'):
+    for k in ("controller_log", "summary", "user_message"):
         payload.pop(k, None)
     return payload
+
 
 def _normalize_timeout_seconds(value: object, default: int) -> int:
     if value is None or isinstance(value, bool):
@@ -37,8 +40,6 @@ def _normalize_timeout_seconds(value: object, default: int) -> int:
         except Exception:
             return max(1, int(default))
     return max(1, int(default))
-
-
 
 
 @mcp_tool(write_action=True)
@@ -121,7 +122,9 @@ async def render_shell(
             "command": command_result,
         }
     except Exception as exc:
-        return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
+        return _structured_tool_error(
+            exc, context="render_shell", tool_surface="render_shell"
+        )
 
 
 @mcp_tool(write_action=True)
@@ -151,7 +154,9 @@ async def terminal_command(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
 
@@ -164,9 +169,15 @@ async def terminal_command(
             preferred = os.path.join(repo_dir, "dev-requirements.txt")
             fallback = os.path.join(repo_dir, "requirements.txt")
             req_path = preferred if os.path.exists(preferred) else fallback
-            req_file = ("dev-requirements.txt" if os.path.exists(preferred) else "requirements.txt")
+            req_file = (
+                "dev-requirements.txt"
+                if os.path.exists(preferred)
+                else "requirements.txt"
+            )
             cmd_lower = command.lower()
-            already_installing = ("pip install" in cmd_lower) or ("pip3 install" in cmd_lower)
+            already_installing = ("pip install" in cmd_lower) or (
+                "pip3 install" in cmd_lower
+            )
             if (not already_installing) and os.path.exists(req_path):
                 install_result = await deps["run_shell"](
                     f"python -m pip install -r {req_file}",
@@ -174,11 +185,15 @@ async def terminal_command(
                     timeout_seconds=max(600, timeout_seconds),
                     env=env,
                 )
-                if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
+                if (
+                    isinstance(install_result, dict)
+                    and install_result.get("exit_code", 0) != 0
+                ):
                     stderr = install_result.get("stderr") or ""
                     stdout = install_result.get("stdout") or ""
                     raise GitHubAPIError(
-                        "Dependency installation failed: " + (stderr.strip() or stdout.strip())
+                        "Dependency installation failed: "
+                        + (stderr.strip() or stdout.strip())
                     )
 
         result = await deps["run_shell"](
@@ -204,12 +219,12 @@ async def terminal_command(
             stdout = result.get("stdout") or ""
             combined = f"{stderr}\n{stdout}"
             # Lightweight dependency hint (no regex).
-            marker = 'ModuleNotFoundError: No module named '
+            marker = "ModuleNotFoundError: No module named "
             pos = combined.find(marker)
             if pos != -1:
-                tail = combined[pos + len(marker):].strip()
+                tail = combined[pos + len(marker) :].strip()
                 missing = ""
-                if tail[:1] in ("\"", "'"):
+                if tail[:1] in ('"', "'"):
                     q = tail[0]
                     tail2 = tail[1:]
                     endq = tail2.find(q)
@@ -226,7 +241,9 @@ async def terminal_command(
 
         return out
     except Exception as exc:
-        return _structured_tool_error(exc, context="terminal_command", tool_surface="terminal_command")
+        return _structured_tool_error(
+            exc, context="terminal_command", tool_surface="terminal_command"
+        )
 
 
 @mcp_tool(write_action=True, visibility="hidden")
