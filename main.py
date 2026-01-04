@@ -69,6 +69,7 @@ from github_mcp.server import (
     _normalize_input_schema,
 )
 from github_mcp.utils import (
+    _effective_ref_for_repo,  # noqa: F401
     _extract_hostname,
     _render_external_hosts,
     _with_numbered_lines,
