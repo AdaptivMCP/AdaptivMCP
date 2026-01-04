@@ -10,6 +10,8 @@ from github_mcp.config import (
     GIT_AUTHOR_NAME,
     GIT_COMMITTER_EMAIL,
     GIT_COMMITTER_NAME,
+    GIT_IDENTITY_PLACEHOLDER_ACTIVE,
+    GIT_IDENTITY_SOURCES,
     GITHUB_API_BASE,
     GITHUB_TOKEN_ENV_VARS,
     HTTPX_MAX_CONNECTIONS,
@@ -17,6 +19,7 @@ from github_mcp.config import (
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
     SANDBOX_CONTENT_BASE_URL,
+    git_identity_warnings,
 )
 import github_mcp.server as server
 from github_mcp.exceptions import GitHubAPIError, GitHubAuthError
@@ -54,6 +57,8 @@ async def get_server_config() -> Dict[str, Any]:
             "author_email": GIT_AUTHOR_EMAIL,
             "committer_name": GIT_COMMITTER_NAME,
             "committer_email": GIT_COMMITTER_EMAIL,
+            "sources": GIT_IDENTITY_SOURCES,
+            "placeholder_active": GIT_IDENTITY_PLACEHOLDER_ACTIVE,
         },
         "sandbox": {
             "sandbox_content_base_url_configured": bool(SANDBOX_CONTENT_BASE_URL),
@@ -64,8 +69,12 @@ async def get_server_config() -> Dict[str, Any]:
             ),
         },
     }
+    warnings: list[str] = []
     if REPO_DEFAULTS_PARSE_ERROR:
-        config_payload["warnings"] = [REPO_DEFAULTS_PARSE_ERROR]
+        warnings.append(REPO_DEFAULTS_PARSE_ERROR)
+    warnings.extend(git_identity_warnings())
+    if warnings:
+        config_payload["warnings"] = warnings
 
     return config_payload
 

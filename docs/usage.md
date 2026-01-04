@@ -105,6 +105,36 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 - GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, GITHUB_OAUTH_TOKEN — GitHub API token (first configured is used)
 - GITHUB_API_BASE — override GitHub API base URL
 
+### Git identity for workspace commits
+
+Workspace-backed commit tools read Git identity from explicit MCP env vars first, then fall back
+to legacy `GIT_*` env vars, then GitHub App metadata, and finally to placeholders. Configure the
+explicit variables to ensure commits are attributed correctly:
+
+- GITHUB_MCP_GIT_AUTHOR_NAME
+- GITHUB_MCP_GIT_AUTHOR_EMAIL
+- GITHUB_MCP_GIT_COMMITTER_NAME
+- GITHUB_MCP_GIT_COMMITTER_EMAIL
+
+Legacy (still supported):
+
+- GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL
+- GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL
+
+Optional GitHub App metadata used when explicit values are not provided:
+
+- GITHUB_APP_NAME (used for the name)
+- GITHUB_APP_SLUG or GITHUB_APP_ID (used to build a bot login and noreply email)
+
+Example:
+
+```bash
+export GITHUB_MCP_GIT_AUTHOR_NAME="Octo Bot"
+export GITHUB_MCP_GIT_AUTHOR_EMAIL="octo-bot[bot]@users.noreply.github.com"
+export GITHUB_MCP_GIT_COMMITTER_NAME="Octo Bot"
+export GITHUB_MCP_GIT_COMMITTER_EMAIL="octo-bot[bot]@users.noreply.github.com"
+```
+
 ### Workspace settings
 
 - MCP_WORKSPACE_BASE_DIR — base directory for persistent workspace clones
