@@ -133,9 +133,6 @@ def _validate_tool_args_schema(tool_name: str, schema: Mapping[str, Any], args: 
     )
 
 
-_ALWAYS_ALLOW_WRITE_TOOLS: set[str] = set()
-
-
 def _tool_write_allowed(write_action: bool) -> bool:
     if not write_action:
         return True
@@ -147,9 +144,6 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     Enforce the write gate based on GITHUB_MCP_WRITE_ALLOWED.
     """
     if not write_action:
-        return
-
-    if tool_name in _ALWAYS_ALLOW_WRITE_TOOLS:
         return
 
     if bool(WRITE_ALLOWED):

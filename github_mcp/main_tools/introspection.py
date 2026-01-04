@@ -9,7 +9,6 @@ from github_mcp.mcp_server.context import get_write_allowed
 from ._main import _main
 
 _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = set()
-_ALWAYS_WRITE_ENABLED_TOOLS: set[str] = set()
 
 
 def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed: bool) -> bool:
@@ -216,7 +215,7 @@ def list_all_actions(include_parameters: bool = False, compact: Optional[bool] =
         )
 
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
-        write_enabled = (not base_write_action) or write_allowed or (name_str in _ALWAYS_WRITE_ENABLED_TOOLS)
+        write_enabled = (not base_write_action) or write_allowed
         tool_write_allowed = (not base_write_action) or write_allowed
 
         tool_info: Dict[str, Any] = {
@@ -466,7 +465,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         ),
         "write_action": base_write_action,
         "write_allowed": (not base_write_action) or write_allowed,
-        "write_enabled": (not base_write_action) or write_allowed or (tool_name in _ALWAYS_WRITE_ENABLED_TOOLS),
+        "write_enabled": (not base_write_action) or write_allowed,
     }
 
 
