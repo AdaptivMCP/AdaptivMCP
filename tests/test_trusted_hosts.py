@@ -70,3 +70,20 @@ def test_configure_trusted_hosts_normalizes_allowed_host_urls(monkeypatch):
     allowed_hosts = _get_allowed_hosts(app, TrustedHostMiddleware)
     assert "chatgpt.example.test" in allowed_hosts
     assert "api.example.test" in allowed_hosts
+
+
+def test_configure_trusted_hosts_strips_ports_and_paths(monkeypatch):
+    Starlette, TrustedHostMiddleware, main = _load_dependencies()
+
+    monkeypatch.setenv(
+        "ALLOWED_HOSTS",
+        "localhost:3000, api.example.test/path, [::1]:8080",
+    )
+
+    app = Starlette()
+    main._configure_trusted_hosts(app)
+
+    allowed_hosts = _get_allowed_hosts(app, TrustedHostMiddleware)
+    assert "localhost" in allowed_hosts
+    assert "api.example.test" in allowed_hosts
+    assert "::1" in allowed_hosts

@@ -50,9 +50,10 @@ def _extract_hostname(value: str | None) -> str | None:
         return None
     if "://" in cleaned:
         parsed = urlparse(cleaned)
-        host = parsed.hostname or parsed.netloc
-        return host or None
-    return cleaned
+    else:
+        parsed = urlparse(f"http://{cleaned}")
+    host = parsed.hostname or parsed.netloc
+    return host or None
 
 
 def _render_external_hosts() -> list[str]:
