@@ -422,49 +422,61 @@ async def run_quality_suite(
             }
             return out
 
-    lint_step = await _run_named_step(
-        name="lint",
-        full_name=full_name,
-        ref=ref,
-        command=lint_command,
-        timeout_seconds=timeout_seconds_i,
-        workdir=workdir,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        owner=owner,
-        repo=repo,
-        branch=branch,
-    )
-    steps.append(lint_step)
-    controller_log.append(f"- Lint: {lint_step.get('status')}")
-
-    if lint_step.get("status") == "failed" and lint_step.get("missing_module"):
-        controller_log.append(
-            f"- Hint: missing module '{lint_step.get('missing_module')}'. Consider installing dependencies (installing_dependencies=true)."
+    lint_step: Dict[str, Any]
+    if lint_command:
+        lint_step = await _run_named_step(
+            name="lint",
+            full_name=full_name,
+            ref=ref,
+            command=lint_command,
+            timeout_seconds=timeout_seconds_i,
+            workdir=workdir,
+            use_temp_venv=use_temp_venv,
+            installing_dependencies=installing_dependencies,
+            owner=owner,
+            repo=repo,
+            branch=branch,
         )
-    if lint_step.get("status") == "failed" and lint_step.get("command_not_found_hint"):
-        controller_log.append(
-            "- Hint: lint command not found. Ensure the tool is installed (or update lint_command)."
-        )
+        steps.append(lint_step)
+        controller_log.append(f"- Lint: {lint_step.get('status')}")
 
-    if fail_fast and lint_step.get("status") == "failed":
-        # Back-compat: return the lint raw payload shape when possible.
-        raw = lint_step.get("raw")
-        if isinstance(raw, dict):
-            raw.setdefault(
-                "controller_log", controller_log + ["- Aborted: lint failed"]
+        if lint_step.get("status") == "failed" and lint_step.get("missing_module"):
+            controller_log.append(
+                f"- Hint: missing module '{lint_step.get('missing_module')}'. Consider installing dependencies (installing_dependencies=true)."
             )
-            raw["suite"] = suite
-            raw["steps"] = _prune_raw_steps(steps, include_raw_step_outputs)
-            raw["diagnostics"] = diagnostics
-            return raw
-        return {
-            "status": "failed",
-            "suite": suite,
-            "steps": _prune_raw_steps(steps, include_raw_step_outputs),
-            "diagnostics": diagnostics,
-            "controller_log": controller_log + ["- Aborted: lint failed"],
+        if lint_step.get("status") == "failed" and lint_step.get(
+            "command_not_found_hint"
+        ):
+            controller_log.append(
+                "- Hint: lint command not found. Ensure the tool is installed (or update lint_command)."
+            )
+
+        if fail_fast and lint_step.get("status") == "failed":
+            # Back-compat: return the lint raw payload shape when possible.
+            raw = lint_step.get("raw")
+            if isinstance(raw, dict):
+                raw.setdefault(
+                    "controller_log", controller_log + ["- Aborted: lint failed"]
+                )
+                raw["suite"] = suite
+                raw["steps"] = _prune_raw_steps(steps, include_raw_step_outputs)
+                raw["diagnostics"] = diagnostics
+                return raw
+            return {
+                "status": "failed",
+                "suite": suite,
+                "steps": _prune_raw_steps(steps, include_raw_step_outputs),
+                "diagnostics": diagnostics,
+                "controller_log": controller_log + ["- Aborted: lint failed"],
+            }
+    else:
+        lint_step = {
+            "name": "lint",
+            "status": "skipped",
+            "summary": {"command": None, "reason": "No lint_command provided"},
         }
+        steps.append(lint_step)
+        controller_log.append("- Lint: skipped (no lint_command provided)")
 
     type_step = await maybe_run_optional("typecheck", typecheck_command)
     if type_step is not None:
