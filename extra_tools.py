@@ -42,13 +42,13 @@ async def get_file_slice(
     path: str,
     ref: str | None = None,
     start_line: int = 1,
-    max_lines: int = 200,
+    max_lines: int | None = None,
 ) -> Dict[str, Any]:
     """Fetch a line-range slice of a text file."""
 
     if start_line < 1:
         raise ValueError("start_line must be >= 1")
-    if max_lines <= 0:
+    if max_lines is not None and max_lines <= 0:
         raise ValueError("max_lines must be > 0")
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -74,24 +74,24 @@ async def get_file_slice(
         }
 
     start_idx = min(max(start_line - 1, 0), total_lines - 1)
-    end_idx = min(start_idx + max_lines, total_lines)
+    end_idx = total_lines
 
     slice_lines = [
         {"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)
     ]
 
-    return {
-        "full_name": full_name,
-        "path": normalized_path,
-        "ref": effective_ref,
-        "start_line": start_idx + 1,
-        "end_line": end_idx,
-        "max_lines": max_lines,
-        "total_lines": total_lines,
-        "has_more_above": start_idx > 0,
-        "has_more_below": end_idx < total_lines,
-        "lines": slice_lines,
-    }
+        return {
+            "full_name": full_name,
+            "path": normalized_path,
+            "ref": effective_ref,
+            "start_line": start_idx + 1,
+            "end_line": end_idx,
+            "max_lines": max_lines,
+            "total_lines": total_lines,
+            "has_more_above": start_idx > 0,
+            "has_more_below": False,
+            "lines": slice_lines,
+        }
 
 
 async def get_file_with_line_numbers(
@@ -99,16 +99,16 @@ async def get_file_with_line_numbers(
     path: str,
     ref: str | None = None,
     start_line: int = 1,
-    max_lines: int = 5000,
+    max_lines: int | None = None,
 ) -> Dict[str, Any]:
     """Return a line-numbered string and structured lines for a file slice.
 
-    Assistants are not allowed to change default max_lines.
+    Line limits are not enforced; full content is returned from start_line.
     """
 
     if start_line < 1:
         raise ValueError("start_line must be >= 1")
-    if max_lines <= 0:
+    if max_lines is not None and max_lines <= 0:
         raise ValueError("max_lines must be > 0")
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -135,7 +135,7 @@ async def get_file_with_line_numbers(
         }
 
     start_idx = min(max(start_line - 1, 0), total_lines - 1)
-    end_idx = min(start_idx + max_lines, total_lines)
+    end_idx = total_lines
 
     slice_lines = [
         {"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)
@@ -146,19 +146,19 @@ async def get_file_with_line_numbers(
         f"{entry['line']:>{width}}| {entry['text']}" for entry in slice_lines
     )
 
-    return {
-        "full_name": full_name,
-        "path": normalized_path,
-        "ref": effective_ref,
-        "start_line": start_idx + 1,
-        "end_line": end_idx,
-        "max_lines": max_lines,
-        "total_lines": total_lines,
-        "has_more_above": start_idx > 0,
-        "has_more_below": end_idx < total_lines,
-        "lines": slice_lines,
-        "numbered_text": numbered_text,
-    }
+        return {
+            "full_name": full_name,
+            "path": normalized_path,
+            "ref": effective_ref,
+            "start_line": start_idx + 1,
+            "end_line": end_idx,
+            "max_lines": max_lines,
+            "total_lines": total_lines,
+            "has_more_above": start_idx > 0,
+            "has_more_below": False,
+            "lines": slice_lines,
+            "numbered_text": numbered_text,
+        }
 
 
 async def open_file_context(
@@ -166,14 +166,14 @@ async def open_file_context(
     path: str,
     ref: str | None = None,
     start_line: int | None = None,
-    max_lines: int = 200,
+    max_lines: int | None = None,
 ) -> Dict[str, Any]:
-    """Fetch a bounded file slice with explicit line numbers and content list."""
+    """Fetch a file slice with explicit line numbers and content list."""
 
     normalized_start_line = 1 if start_line is None else start_line
     if normalized_start_line < 1:
         raise ValueError("start_line must be >= 1")
-    if max_lines <= 0:
+    if max_lines is not None and max_lines <= 0:
         raise ValueError("max_lines must be > 0")
 
     normalized_path = _normalize_repo_path_for_repo(full_name, path)
@@ -185,24 +185,6 @@ async def open_file_context(
         start_line=normalized_start_line,
         max_lines=max_lines,
     )
-
-    total_lines = slice_result.get("total_lines")
-    should_expand_small_file = (
-        normalized_start_line == 1
-        and isinstance(total_lines, int)
-        and total_lines > 0
-        and total_lines <= 120
-        and slice_result.get("end_line", 0) < total_lines
-    )
-
-    if should_expand_small_file:
-        slice_result = await get_file_slice(
-            full_name=full_name,
-            path=normalized_path,
-            ref=ref,
-            start_line=1,
-            max_lines=int(total_lines),
-        )
 
     content_entries = [
         {"line": entry["line"], "text": entry["text"]}
@@ -220,11 +202,6 @@ async def open_file_context(
         "has_more_above": slice_result.get("has_more_above", False),
         "has_more_below": slice_result.get("has_more_below", False),
     }
-
-    if should_expand_small_file:
-        response["note"] = (
-            "File is small; returning full content instead of only max_lines."
-        )
 
     return response
 

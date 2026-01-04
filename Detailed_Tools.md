@@ -1716,14 +1716,14 @@ Inputs:
 - `path` (string)
 - `ref` (string | null)
 - `start_line` (int, default 1)
-- `max_lines` (int, default 200)
+- `max_lines` (int | null, optional; not enforced)
 
 Outputs: Text slice.
 
 Example:
 
 ```json
-{"tool":"get_file_slice","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1,"max_lines":50}}
+{"tool":"get_file_slice","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1}}
 ```
 
 ## get_file_with_line_numbers
@@ -1735,14 +1735,14 @@ Inputs:
 - `path` (string)
 - `ref` (string | null)
 - `start_line` (int, default 1)
-- `max_lines` (int, default 5000)
+- `max_lines` (int | null, optional; not enforced)
 
 Outputs: Line-numbered excerpt.
 
 Example:
 
 ```json
-{"tool":"get_file_with_line_numbers","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1,"max_lines":200}}
+{"tool":"get_file_with_line_numbers","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1}}
 ```
 
 ## open_file_context
@@ -1754,14 +1754,14 @@ Inputs:
 - `path` (string)
 - `ref` (string | null)
 - `start_line` (int | null)
-- `max_lines` (int, default 200)
+- `max_lines` (int | null, optional; not enforced)
 
 Outputs: Structured slice.
 
 Example:
 
 ```json
-{"tool":"open_file_context","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1,"max_lines":120}}
+{"tool":"open_file_context","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1}}
 ```
 
 ---

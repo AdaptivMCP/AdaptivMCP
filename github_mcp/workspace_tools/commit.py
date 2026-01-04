@@ -3,7 +3,7 @@ import shlex
 from typing import Any, Dict, List, Optional
 
 import github_mcp.config as config
-from github_mcp.diff_utils import colorize_unified_diff, diff_stats, truncate_diff
+from github_mcp.diff_utils import colorize_unified_diff, diff_stats
 
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
@@ -127,11 +127,7 @@ async def commit_workspace(
                 config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
                 and diff_text.strip()
             ):
-                truncated = truncate_diff(
-                    diff_text,
-                    max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                )
-                colored = colorize_unified_diff(truncated)
+                colored = colorize_unified_diff(diff_text)
                 config.TOOLS_LOGGER.detailed(
                     "Workspace commit diff\n%s",
                     colored,
@@ -146,8 +142,8 @@ async def commit_workspace(
 
         return {
             "branch": effective_ref,
-            "changed_files": status_lines[:200],
-            "changed_files_truncated": len(status_lines) > 200,
+            "changed_files": status_lines,
+            "changed_files_truncated": False,
             "commit_sha": head_sha,
             "commit_summary": head_summary,
             "commit": _slim_shell_result(commit_result),
@@ -255,11 +251,7 @@ async def commit_workspace_files(
                 config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
                 and diff_text_files.strip()
             ):
-                truncated = truncate_diff(
-                    diff_text_files,
-                    max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                )
-                colored = colorize_unified_diff(truncated)
+                colored = colorize_unified_diff(diff_text_files)
                 config.TOOLS_LOGGER.detailed(
                     "Workspace commit diff\n%s",
                     colored,
@@ -274,8 +266,8 @@ async def commit_workspace_files(
 
         return {
             "branch": effective_ref,
-            "staged_files": staged_files[:200],
-            "staged_files_truncated": len(staged_files) > 200,
+            "staged_files": staged_files,
+            "staged_files_truncated": False,
             "commit_sha": head_sha,
             "commit_summary": head_summary,
             "commit": _slim_shell_result(commit_result),

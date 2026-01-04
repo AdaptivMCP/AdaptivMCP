@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import github_mcp.config as config
-from github_mcp.diff_utils import colorize_unified_diff, diff_stats, truncate_diff
+from github_mcp.diff_utils import colorize_unified_diff, diff_stats
 
 
 def log_write_diff(
@@ -37,11 +37,7 @@ def log_write_diff(
             config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
             and diff_text.strip()
         ):
-            truncated = truncate_diff(
-                diff_text,
-                max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-            )
-            colored = colorize_unified_diff(truncated)
+            colored = colorize_unified_diff(diff_text)
             config.TOOLS_LOGGER.detailed(
                 "Diff for %s%s\n%s",
                 path,
