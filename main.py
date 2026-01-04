@@ -740,6 +740,26 @@ async def list_repository_issues(
 
 
 @mcp_tool(write_action=False)
+async def list_open_issues_graphql(
+    full_name: str,
+    state: Literal["open", "closed", "all"] = "open",
+    per_page: int = 30,
+    cursor: Optional[str] = None,
+) -> Dict[str, Any]:
+    """List issues (excluding PRs) using GraphQL, with cursor-based pagination."""
+    from github_mcp.main_tools.graphql_dashboard import (
+        list_open_issues_graphql as _impl,
+    )
+
+    return await _impl(
+        full_name=full_name,
+        state=state,
+        per_page=per_page,
+        cursor=cursor,
+    )
+
+
+@mcp_tool(write_action=False)
 async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
     from github_mcp.main_tools.issues import fetch_issue as _impl
 
@@ -1098,6 +1118,26 @@ async def list_workflow_runs(
 
 
 @mcp_tool(write_action=False)
+async def list_workflow_runs_graphql(
+    full_name: str,
+    per_page: int = 30,
+    cursor: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """List recent workflow runs using GraphQL with cursor-based pagination."""
+    from github_mcp.main_tools.graphql_dashboard import (
+        list_workflow_runs_graphql as _impl,
+    )
+
+    return await _impl(
+        full_name=full_name,
+        per_page=per_page,
+        cursor=cursor,
+        branch=branch,
+    )
+
+
+@mcp_tool(write_action=False)
 async def list_recent_failures(
     full_name: str,
     branch: Optional[str] = None,
@@ -1111,6 +1151,20 @@ async def list_recent_failures(
     debugging flows.
     """
     from github_mcp.main_tools.workflows import list_recent_failures as _impl
+
+    return await _impl(full_name=full_name, branch=branch, limit=limit)
+
+
+@mcp_tool(write_action=False)
+async def list_recent_failures_graphql(
+    full_name: str,
+    branch: Optional[str] = None,
+    limit: int = 10,
+) -> Dict[str, Any]:
+    """List recent workflow failures using GraphQL as a fallback."""
+    from github_mcp.main_tools.graphql_dashboard import (
+        list_recent_failures_graphql as _impl,
+    )
 
     return await _impl(full_name=full_name, branch=branch, limit=limit)
 
@@ -1602,6 +1656,18 @@ async def get_repo_dashboard(
         its corresponding "*_error" field is populated instead of raising.
     """
     from github_mcp.main_tools.dashboard import get_repo_dashboard as _impl
+
+    return await _impl(full_name=full_name, branch=branch)
+
+
+@mcp_tool(write_action=False)
+async def get_repo_dashboard_graphql(
+    full_name: str, branch: Optional[str] = None
+) -> Dict[str, Any]:
+    """Return a compact dashboard using GraphQL as a fallback."""
+    from github_mcp.main_tools.graphql_dashboard import (
+        get_repo_dashboard_graphql as _impl,
+    )
 
     return await _impl(full_name=full_name, branch=branch)
 

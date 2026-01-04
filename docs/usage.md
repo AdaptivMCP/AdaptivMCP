@@ -59,6 +59,12 @@ Use GitHub API read tools for discovery and inspection:
 - list_recent_issues, list_repository_issues, fetch_issue
 - fetch_pr, get_pr_info, list_pr_changed_filenames
 
+If REST helpers are blocked by client safety gating, use the GraphQL fallbacks:
+
+- list_open_issues_graphql
+- list_workflow_runs_graphql, list_recent_failures_graphql
+- get_repo_dashboard_graphql
+
 ### Edit workflows (clone-first)
 
 Edits should be done in the persistent clone.
