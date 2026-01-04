@@ -613,8 +613,8 @@ def mcp_tool(
                     raise coerced from exc
 
                 try:
-                result = await func(*args, **kwargs)
-            except Exception as exc:
+                    result = await func(*args, **kwargs)
+                except Exception as exc:
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
