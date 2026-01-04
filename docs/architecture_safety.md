@@ -97,11 +97,14 @@ Client (ChatGPT / connector)
   - Git operations with retry on rate limit errors.
   - Injects Git author/committer environment variables for reproducible commits.
   - Builds authentication env for Git using `GIT_HTTP_EXTRAHEADER` and config env.
+  - Git identity defaults prefer explicit `GITHUB_MCP_GIT_*` env vars, then legacy `GIT_*`,
+    then GitHub App metadata, and finally placeholders (which trigger warnings).
 
 ### 2.6 Health
 
 - **`github_mcp/http_routes/healthz.py`**
-  - `/healthz` endpoint reporting uptime, token presence, and controller defaults.
+  - `/healthz` endpoint reporting uptime, token presence, controller defaults, and
+    warnings for placeholder git identity.
 
 ## 3. Safety & security evaluation
 

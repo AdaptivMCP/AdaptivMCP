@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import tempfile
 import time
 
@@ -115,10 +116,162 @@ GITHUB_SEARCH_MIN_INTERVAL_SECONDS = float(
     os.environ.get("GITHUB_SEARCH_MIN_INTERVAL_SECONDS", "2")
 )
 
-GIT_AUTHOR_NAME = os.environ.get("GIT_AUTHOR_NAME", "Ally")
-GIT_AUTHOR_EMAIL = os.environ.get("GIT_AUTHOR_EMAIL", "ally@example.com")
-GIT_COMMITTER_NAME = os.environ.get("GIT_COMMITTER_NAME", "Ally")
-GIT_COMMITTER_EMAIL = os.environ.get("GIT_COMMITTER_EMAIL", "ally@example.com")
+GITHUB_MCP_GIT_IDENTITY_ENV_VARS = (
+    "GITHUB_MCP_GIT_AUTHOR_NAME",
+    "GITHUB_MCP_GIT_AUTHOR_EMAIL",
+    "GITHUB_MCP_GIT_COMMITTER_NAME",
+    "GITHUB_MCP_GIT_COMMITTER_EMAIL",
+)
+
+DEFAULT_GIT_IDENTITY = {
+    "author_name": "Ally",
+    "author_email": "ally@example.com",
+    "committer_name": "Ally",
+    "committer_email": "ally@example.com",
+}
+
+
+def _slugify_app_name(value: str | None) -> str | None:
+    if not value:
+        return None
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
+    return slug or None
+
+
+def _resolve_app_identity() -> dict[str, str] | None:
+    app_name = os.environ.get("GITHUB_APP_NAME")
+    app_slug = os.environ.get("GITHUB_APP_SLUG") or _slugify_app_name(app_name)
+    app_id = os.environ.get("GITHUB_APP_ID") or os.environ.get(
+        "GITHUB_APP_INSTALLATION_ID"
+    )
+
+    bot_login = None
+    if app_slug:
+        bot_login = f"{app_slug}[bot]"
+    elif app_id:
+        bot_login = f"github-app-{app_id}[bot]"
+
+    if not (app_name or bot_login or app_id):
+        return None
+
+    name = app_name or bot_login or "GitHub App"
+    email = None
+    if bot_login:
+        email = f"{bot_login}@users.noreply.github.com"
+    elif app_id:
+        email = f"app+{app_id}@users.noreply.github.com"
+
+    if not email:
+        return None
+
+    return {"name": name, "email": email}
+
+
+def _resolve_git_identity() -> dict[str, object]:
+    app_identity = _resolve_app_identity() or {}
+
+    def resolve_value(
+        *,
+        explicit_env: str | None,
+        legacy_env: str | None,
+        app_value: str | None,
+        default_value: str,
+    ) -> tuple[str, str]:
+        if explicit_env:
+            return explicit_env, "explicit_env"
+        if legacy_env:
+            return legacy_env, "legacy_env"
+        if app_value:
+            return app_value, "app_metadata"
+        return default_value, "default_placeholder"
+
+    author_name, author_name_source = resolve_value(
+        explicit_env=os.environ.get("GITHUB_MCP_GIT_AUTHOR_NAME"),
+        legacy_env=os.environ.get("GIT_AUTHOR_NAME"),
+        app_value=app_identity.get("name"),
+        default_value=DEFAULT_GIT_IDENTITY["author_name"],
+    )
+    author_email, author_email_source = resolve_value(
+        explicit_env=os.environ.get("GITHUB_MCP_GIT_AUTHOR_EMAIL"),
+        legacy_env=os.environ.get("GIT_AUTHOR_EMAIL"),
+        app_value=app_identity.get("email"),
+        default_value=DEFAULT_GIT_IDENTITY["author_email"],
+    )
+
+    committer_name_env = os.environ.get("GITHUB_MCP_GIT_COMMITTER_NAME")
+    legacy_committer_name = os.environ.get("GIT_COMMITTER_NAME")
+    committer_name = None
+    committer_name_source = None
+    if committer_name_env:
+        committer_name = committer_name_env
+        committer_name_source = "explicit_env"
+    elif legacy_committer_name:
+        committer_name = legacy_committer_name
+        committer_name_source = "legacy_env"
+    elif app_identity.get("name"):
+        committer_name = app_identity.get("name")
+        committer_name_source = "app_metadata"
+    else:
+        committer_name = author_name
+        committer_name_source = "author_fallback"
+
+    committer_email_env = os.environ.get("GITHUB_MCP_GIT_COMMITTER_EMAIL")
+    legacy_committer_email = os.environ.get("GIT_COMMITTER_EMAIL")
+    committer_email = None
+    committer_email_source = None
+    if committer_email_env:
+        committer_email = committer_email_env
+        committer_email_source = "explicit_env"
+    elif legacy_committer_email:
+        committer_email = legacy_committer_email
+        committer_email_source = "legacy_env"
+    elif app_identity.get("email"):
+        committer_email = app_identity.get("email")
+        committer_email_source = "app_metadata"
+    else:
+        committer_email = author_email
+        committer_email_source = "author_fallback"
+
+    sources = {
+        "author_name": author_name_source,
+        "author_email": author_email_source,
+        "committer_name": committer_name_source,
+        "committer_email": committer_email_source,
+    }
+
+    placeholder_active = any(
+        source == "default_placeholder" for source in sources.values()
+    )
+
+    return {
+        "author_name": author_name,
+        "author_email": author_email,
+        "committer_name": committer_name,
+        "committer_email": committer_email,
+        "sources": sources,
+        "placeholder_active": placeholder_active,
+    }
+
+
+_GIT_IDENTITY = _resolve_git_identity()
+
+GIT_AUTHOR_NAME = _GIT_IDENTITY["author_name"]
+GIT_AUTHOR_EMAIL = _GIT_IDENTITY["author_email"]
+GIT_COMMITTER_NAME = _GIT_IDENTITY["committer_name"]
+GIT_COMMITTER_EMAIL = _GIT_IDENTITY["committer_email"]
+GIT_IDENTITY_SOURCES = _GIT_IDENTITY["sources"]
+GIT_IDENTITY_PLACEHOLDER_ACTIVE = bool(_GIT_IDENTITY["placeholder_active"])
+
+
+def git_identity_warnings() -> list[str]:
+    if not GIT_IDENTITY_PLACEHOLDER_ACTIVE:
+        return []
+    return [
+        "Git identity is using placeholder values. Configure GITHUB_MCP_GIT_AUTHOR_NAME, "
+        "GITHUB_MCP_GIT_AUTHOR_EMAIL, GITHUB_MCP_GIT_COMMITTER_NAME, and "
+        "GITHUB_MCP_GIT_COMMITTER_EMAIL (or set GitHub App metadata) to ensure commits "
+        "are attributed correctly."
+    ]
 
 # Upper bounds for unified diffs printed to stdout logs for write tools.
 WRITE_DIFF_LOG_MAX_LINES = int(os.environ.get("WRITE_DIFF_LOG_MAX_LINES", "0"))
@@ -271,7 +424,10 @@ __all__ = [
     "GIT_AUTHOR_NAME",
     "GIT_COMMITTER_EMAIL",
     "GIT_COMMITTER_NAME",
+    "GIT_IDENTITY_PLACEHOLDER_ACTIVE",
+    "GIT_IDENTITY_SOURCES",
     "GITHUB_API_BASE",
+    "GITHUB_MCP_GIT_IDENTITY_ENV_VARS",
     "GITHUB_TOKEN_ENV_VARS",
     "GITHUB_LOGGER",
     "GITHUB_PAT",
@@ -285,4 +441,5 @@ __all__ = [
     "TOOLS_LOGGER",
     "WORKSPACE_BASE_DIR",
     "SANDBOX_CONTENT_BASE_URL",
+    "git_identity_warnings",
 ]

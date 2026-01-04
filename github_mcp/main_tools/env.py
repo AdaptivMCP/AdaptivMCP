@@ -7,7 +7,16 @@ from typing import Any, Dict, List, Optional
 
 
 from ._main import _main
-from github_mcp.config import GITHUB_TOKEN_ENV_VARS
+from github_mcp.config import (
+    GIT_AUTHOR_EMAIL,
+    GIT_AUTHOR_NAME,
+    GIT_COMMITTER_EMAIL,
+    GIT_COMMITTER_NAME,
+    GIT_IDENTITY_PLACEHOLDER_ACTIVE,
+    GIT_IDENTITY_SOURCES,
+    GITHUB_MCP_GIT_IDENTITY_ENV_VARS,
+    GITHUB_TOKEN_ENV_VARS,
+)
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -134,27 +143,48 @@ async def validate_environment() -> Dict[str, Any]:
         _get_controller_revision_info(),
     )
 
-    # Git identity env vars (presence).
+    # Git identity env vars / placeholders.
     identity_envs = {
+        name: os.environ.get(name) for name in GITHUB_MCP_GIT_IDENTITY_ENV_VARS
+    }
+    legacy_identity_envs = {
         "GIT_AUTHOR_NAME": os.environ.get("GIT_AUTHOR_NAME"),
         "GIT_AUTHOR_EMAIL": os.environ.get("GIT_AUTHOR_EMAIL"),
         "GIT_COMMITTER_NAME": os.environ.get("GIT_COMMITTER_NAME"),
         "GIT_COMMITTER_EMAIL": os.environ.get("GIT_COMMITTER_EMAIL"),
     }
-    missing_identity = [name for name, value in identity_envs.items() if not value]
-    if missing_identity:
+    configured_identity_envs = [
+        name for name, value in identity_envs.items() if value and value.strip()
+    ]
+    configured_legacy_envs = [
+        name for name, value in legacy_identity_envs.items() if value and value.strip()
+    ]
+
+    identity_details = {
+        "explicit_env_vars": configured_identity_envs,
+        "legacy_env_vars": configured_legacy_envs,
+        "sources": GIT_IDENTITY_SOURCES,
+        "effective": {
+            "author_name": GIT_AUTHOR_NAME,
+            "author_email": GIT_AUTHOR_EMAIL,
+            "committer_name": GIT_COMMITTER_NAME,
+            "committer_email": GIT_COMMITTER_EMAIL,
+        },
+    }
+
+    if GIT_IDENTITY_PLACEHOLDER_ACTIVE:
         add_check(
             "git_identity_env",
             "warning",
-            "Git identity env vars are not fully configured; defaults may be used for commits",
-            {"missing": missing_identity},
+            "Git identity is using placeholder values; configure explicit identity env vars",
+            identity_details,
         )
     else:
         add_check(
             "git_identity_env",
             "ok",
-            "Git identity env vars are configured",
-            {},
+            "Git identity is configured",
+            identity_details,
         )
 
     # HTTP / concurrency config (always informational; defaults are fine).
