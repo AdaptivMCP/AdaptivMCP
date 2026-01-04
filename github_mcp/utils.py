@@ -230,9 +230,26 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
         return ""
 
 
-REPO_DEFAULTS: Dict[str, Dict[str, str]] = json.loads(
-    os.environ.get("GITHUB_REPO_DEFAULTS", "{}")
-)
+def _load_repo_defaults() -> tuple[Dict[str, Dict[str, str]], str | None]:
+    raw_value = os.environ.get("GITHUB_REPO_DEFAULTS")
+    if raw_value is None:
+        return {}, None
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        return (
+            {},
+            f"Invalid JSON in GITHUB_REPO_DEFAULTS; defaults ignored ({exc.msg}).",
+        )
+    if not isinstance(parsed, dict):
+        return (
+            {},
+            "GITHUB_REPO_DEFAULTS must be a JSON object; defaults ignored.",
+        )
+    return parsed, None
+
+
+REPO_DEFAULTS, REPO_DEFAULTS_PARSE_ERROR = _load_repo_defaults()
 CONTROLLER_REPO = os.environ.get(
     "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
 )
@@ -240,6 +257,7 @@ CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main
 
 __all__ = [
     "_get_main_module",
+    "REPO_DEFAULTS_PARSE_ERROR",
     "REPO_DEFAULTS",
     "_decode_zipped_job_logs",
     "_default_branch_for_repo",

@@ -10,6 +10,7 @@ from github_mcp.config import SERVER_START_TIME
 from github_mcp.exceptions import GitHubAuthError
 from github_mcp.http_clients import _get_github_token
 from github_mcp.server import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
+from github_mcp.utils import REPO_DEFAULTS_PARSE_ERROR
 
 
 def _github_token_present() -> bool:
@@ -28,7 +29,7 @@ def _build_health_payload() -> dict[str, Any]:
 
     uptime_seconds = max(0, int(time.time() - SERVER_START_TIME))
 
-    return {
+    payload = {
         "status": "ok" if github_token_present else "warning",
         "uptime_seconds": uptime_seconds,
         "github_token_present": github_token_present,
@@ -37,6 +38,10 @@ def _build_health_payload() -> dict[str, Any]:
             "default_branch": CONTROLLER_DEFAULT_BRANCH,
         },
     }
+    if REPO_DEFAULTS_PARSE_ERROR:
+        payload["warnings"] = [REPO_DEFAULTS_PARSE_ERROR]
+
+    return payload
 
 
 def build_healthz_endpoint() -> Callable[[Request], JSONResponse]:
