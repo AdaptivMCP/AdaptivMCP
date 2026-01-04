@@ -273,10 +273,6 @@ def git_identity_warnings() -> list[str]:
         "are attributed correctly."
     ]
 
-# Upper bounds for unified diffs printed to stdout logs for write tools.
-WRITE_DIFF_LOG_MAX_LINES = int(os.environ.get("WRITE_DIFF_LOG_MAX_LINES", "0"))
-
-
 def _parse_tool_list(value: str) -> set[str]:
     return {item.strip() for item in (value or "").split(",") if item.strip()}
 

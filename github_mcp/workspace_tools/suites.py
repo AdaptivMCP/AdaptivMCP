@@ -39,12 +39,11 @@ def _tw():
     return tw
 
 
-def _tail_lines(text: str, max_lines: int = 50, max_chars: int = 4000) -> str:
-    """Return a bounded tail preview of a potentially large blob."""
+def _tail_lines(text: str, max_chars: int = 4000) -> str:
+    """Return a tail preview without line limits."""
     if not text:
         return ""
-    lines = text.splitlines()[-max_lines:]
-    out = "\n".join(lines)
+    out = text
     if len(out) > max_chars:
         out = out[-max_chars:]
     return out

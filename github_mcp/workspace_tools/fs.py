@@ -7,7 +7,6 @@ from github_mcp.diff_utils import (
     build_unified_diff,
     colorize_unified_diff,
     diff_stats,
-    truncate_diff,
 )
 
 from github_mcp.server import (
@@ -191,11 +190,7 @@ async def set_workspace_file_contents(
                 config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
                 and full_diff.strip()
             ):
-                truncated = truncate_diff(
-                    full_diff,
-                    max_lines=config.WRITE_DIFF_LOG_MAX_LINES,
-                )
-                colored = colorize_unified_diff(truncated)
+                colored = colorize_unified_diff(full_diff)
                 config.TOOLS_LOGGER.detailed(
                     "Workspace diff for %s:\n%s",
                     path,

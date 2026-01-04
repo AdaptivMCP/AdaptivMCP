@@ -70,24 +70,6 @@ def diff_stats(diff_text: str) -> DiffStats:
     return DiffStats(added=added, removed=removed)
 
 
-def truncate_diff(diff_text: str, *, max_lines: int) -> str:
-    """Truncate a diff by lines (keeping a useful tail marker)."""
-
-    if not diff_text:
-        return diff_text
-
-    if max_lines <= 0:
-        return diff_text
-
-    lines = diff_text.splitlines()
-    if max_lines > 0 and len(lines) > max_lines:
-        kept = lines[:max_lines]
-        kept.append(f"… (+{len(lines) - max_lines} lines)")
-        diff_text = "\n".join(kept)
-
-    return diff_text
-
-
 def colorize_unified_diff(diff_text: str) -> str:
     """Colorize a unified diff using ANSI.
 
