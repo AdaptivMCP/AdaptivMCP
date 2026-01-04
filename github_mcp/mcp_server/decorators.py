@@ -17,6 +17,7 @@ Dedupe contract:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import functools
 import hashlib
 import inspect
@@ -778,11 +779,33 @@ def mcp_tool(
 
 
 def register_extra_tools_if_available() -> None:
-    try:
-        from extra_tools import register_extra_tools  # type: ignore
+    """Register optional tools from ``extra_tools`` if the module is present.
 
+    Historically this function swallowed all exceptions, which makes failures
+    (e.g., import cycles or syntax errors) appear as "tool not listed" at
+    runtime. We keep the best-effort behavior, but emit a warning so operator
+    logs show *why* optional tools were skipped.
+    """
+
+    try:
+        mod = importlib.import_module("extra_tools")
+        register_extra_tools = getattr(mod, "register_extra_tools", None)
+        if not callable(register_extra_tools):
+            TOOLS_LOGGER.warning(
+                "extra_tools module loaded but register_extra_tools is missing or not callable"
+            )
+            return None
         register_extra_tools(mcp_tool)
-    except Exception:
+    except ModuleNotFoundError:
+        # Optional module; safe to ignore.
+        return None
+    except Exception as exc:
+        # Do not crash server startup, but make failures visible in logs.
+        TOOLS_LOGGER.warning(
+            "Failed to register optional extra_tools; tools will be omitted: %s",
+            exc,
+            exc_info=True,
+        )
         return None
 
 
