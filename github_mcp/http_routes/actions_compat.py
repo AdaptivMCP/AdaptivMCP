@@ -96,7 +96,9 @@ def _terminal_help(name: str, description: str, schema: Any) -> str:
 
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
-    write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
+    # Keep parity with the main introspection surface.
+    # write_allowed indicates auto-approval vs approval-gated writes.
+    _ = bool(get_write_allowed(refresh_after_seconds=0.0))
     catalog = list_all_actions(include_parameters=True, compact=False)
     catalog_index = {
         entry.get("name"): entry
@@ -113,15 +115,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         write_action = bool(
             catalog_entry.get("write_action", _is_write_action(tool, _func))
         )
-        write_enabled = bool(
-            catalog_entry.get(
-                "write_enabled",
-                (not write_action) or write_allowed,
-            )
-        )
-        tool_write_allowed = bool(
-            catalog_entry.get("write_allowed", (not write_action) or write_allowed)
-        )
+        # Approval-gated writes: keep actions enabled even when write_allowed is false.
+        write_enabled = bool(catalog_entry.get("write_enabled", True))
+        tool_write_allowed = bool(catalog_entry.get("write_allowed", True))
 
         schema = (
             catalog_entry.get("input_schema")

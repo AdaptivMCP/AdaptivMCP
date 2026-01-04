@@ -48,8 +48,8 @@ async def get_server_config() -> Dict[str, Any]:
         },
         "approval_policy": {
             "notes": (
-                "When WRITE_ALLOWED is true, UI prompts are limited to commit/push-style tools. "
-                "When WRITE_ALLOWED is false, UI prompts are required for any write action."
+                "When WRITE_ALLOWED is true, write tools are auto-approved and UI prompts are limited to commit/push-style tools. "
+                "When WRITE_ALLOWED is false, write tools remain available but UI prompts are required for any write action."
             ),
         },
         "git_identity": {

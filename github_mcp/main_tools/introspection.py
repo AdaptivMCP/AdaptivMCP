@@ -17,6 +17,7 @@ def _ui_prompt_write_action(
     # UI policy only (does not define whether the tool is a write tool).
     if not write_action:
         return False
+    # When write_allowed is false, require confirmation for any write action.
     if not write_allowed:
         return True
     if tool_name in _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS:
@@ -213,8 +214,12 @@ def list_all_actions(
         )
 
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
-        write_enabled = (not base_write_action) or write_allowed
-        tool_write_allowed = (not base_write_action) or write_allowed
+        # Approval-gated writes:
+        # - All tools are enabled.
+        # - write_allowed indicates whether writes are auto-approved (true) or
+        #   require a confirmation prompt (false).
+        write_enabled = True
+        tool_write_allowed = True
 
         tool_info: Dict[str, Any] = {
             "name": name_str,
@@ -281,6 +286,8 @@ def list_all_actions(
 
     return {
         "compact": compact_mode,
+        # write_actions_enabled represents whether writes are auto-approved.
+        # When false, clients should prompt before executing write tools.
         "write_actions_enabled": bool(get_write_allowed(refresh_after_seconds=0.0)),
         "tools": tools,
     }

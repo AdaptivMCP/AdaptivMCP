@@ -3,7 +3,9 @@
 Decorators and helpers for registering MCP tools.
 
 Behavioral contract:
-- The only blocking control is WRITE_ALLOWED (true/false) for write tools.
+- WRITE_ALLOWED controls whether write tools are auto-approved by the client.
+  When WRITE_ALLOWED is false, write tools remain available but clients should
+  prompt for confirmation before execution.
 - Tool arguments are strictly validated against published input schemas.
 - Tags metadata is captured for introspection.
 - Dedupe helpers remain for compatibility and test coverage.
@@ -145,9 +147,13 @@ def _validate_tool_args_schema(
 
 
 def _tool_write_allowed(write_action: bool) -> bool:
-    if not write_action:
-        return True
-    return bool(WRITE_ALLOWED)
+    # This value is used for metadata/introspection and by some clients as a hint
+    # for whether a confirmation prompt is required.
+    #
+    # Semantics:
+    # - read tools: always allowed
+    # - write tools: allowed, but may require confirmation when WRITE_ALLOWED is false
+    return True
 
 
 def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
@@ -163,27 +169,18 @@ def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
 
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
-    Enforce the write gate based on GITHUB_MCP_WRITE_ALLOWED.
+    Legacy enforcement hook.
+
+    Historically, write tools were hard-blocked when WRITE_ALLOWED was false.
+    The current policy is approval-gated writes:
+      - When WRITE_ALLOWED is true, writes should execute without extra prompts.
+      - When WRITE_ALLOWED is false, writes remain executable but clients (e.g.
+        ChatGPT) should ask the user to confirm/deny.
+    
+    This function is intentionally a no-op for compatibility.
     """
-    if not write_action:
-        return
-
-    if bool(WRITE_ALLOWED):
-        return
-
-    raise AdaptivToolError(
-        code="write_not_allowed",
-        message=f"Write tool {tool_name!r} blocked because WRITE_ALLOWED is false.",
-        category="policy",
-        origin="write_gate",
-        retryable=False,
-        details={
-            "tool": tool_name,
-            "write_allowed": False,
-            "env_GITHUB_MCP_WRITE_ALLOWED": os.environ.get("GITHUB_MCP_WRITE_ALLOWED"),
-        },
-        hint="Set GITHUB_MCP_WRITE_ALLOWED=true and retry.",
-    )
+    del tool_name, write_action
+    return
 
 
 # -----------------------------------------------------------------------------
