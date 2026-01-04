@@ -4,7 +4,8 @@ from __future__ import annotations
 import os
 from contextvars import ContextVar
 from typing import Any, Optional
-from urllib.parse import urlparse
+
+from github_mcp.utils import _extract_hostname, _render_external_hosts
 
 
 # ------------------------------------------------------------------------------
@@ -117,26 +118,6 @@ try:
     from mcp.server.transport_security import TransportSecuritySettings  # type: ignore
 
     FASTMCP_AVAILABLE = True
-
-    def _extract_hostname(value: str | None) -> str | None:
-        if not value:
-            return None
-        cleaned = value.strip()
-        if not cleaned:
-            return None
-        if "://" in cleaned:
-            parsed = urlparse(cleaned)
-            host = parsed.hostname or parsed.netloc
-            return host or None
-        return cleaned
-
-    def _render_external_hosts() -> list[str]:
-        hostnames: list[str] = []
-        for env_name in ("RENDER_EXTERNAL_HOSTNAME", "RENDER_EXTERNAL_URL"):
-            hostname = _extract_hostname(os.getenv(env_name))
-            if hostname:
-                hostnames.append(hostname)
-        return hostnames
 
     def _normalize_allowed_hosts(hosts: list[str]) -> list[str]:
         normalized: list[str] = []

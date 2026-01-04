@@ -9,6 +9,7 @@ import sys
 import zipfile
 from types import SimpleNamespace
 from typing import Any, Dict, Mapping
+from urllib.parse import urlparse
 
 from .exceptions import GitHubAPIError, ToolPreflightValidationError
 
@@ -31,6 +32,38 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if val is None:
         return default
     return val.lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _extract_hostname(value: str | None) -> str | None:
+    """Extract a hostname from an env-var style value.
+
+    Supports values that may be:
+    - raw hostnames ("example.com")
+    - full URLs ("https://example.com/sse")
+    - whitespace-padded strings
+    """
+
+    if not value:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if "://" in cleaned:
+        parsed = urlparse(cleaned)
+        host = parsed.hostname or parsed.netloc
+        return host or None
+    return cleaned
+
+
+def _render_external_hosts() -> list[str]:
+    """Return Render external hostnames derived from standard env vars."""
+
+    hostnames: list[str] = []
+    for env_name in ("RENDER_EXTERNAL_HOSTNAME", "RENDER_EXTERNAL_URL"):
+        hostname = _extract_hostname(os.getenv(env_name))
+        if hostname:
+            hostnames.append(hostname)
+    return hostnames
 
 
 def _effective_ref_for_repo(full_name: str, ref: str | None) -> str:
@@ -262,6 +295,7 @@ __all__ = [
     "_decode_zipped_job_logs",
     "_default_branch_for_repo",
     "_effective_ref_for_repo",
+    "_extract_hostname",
     "_env_flag",
     "extract_sha",
     "_normalize_branch",
@@ -269,6 +303,7 @@ __all__ = [
     "_normalize_repo_path_for_repo",
     "_normalize_write_context",
     "require_text",
+    "_render_external_hosts",
     "_render_visible_whitespace",
     "_with_numbered_lines",
 ]
