@@ -149,6 +149,17 @@ def _tool_write_allowed(write_action: bool) -> bool:
     return bool(WRITE_ALLOWED)
 
 
+def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
+    """Return True when the call is associated with an inbound MCP request."""
+    if req.get("path"):
+        return True
+    if req.get("session_id"):
+        return True
+    if req.get("message_id"):
+        return True
+    return False
+
+
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
     Enforce the write gate based on GITHUB_MCP_WRITE_ALLOWED.
@@ -584,7 +595,8 @@ def mcp_tool(
                         )
 
                     _validate_tool_args_schema(tool_name, schema, all_args)
-                    _enforce_write_allowed(tool_name, write_action=write_action)
+                    if _should_enforce_write_gate(req):
+                        _enforce_write_allowed(tool_name, write_action=write_action)
                 except Exception as exc:
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
@@ -687,7 +699,8 @@ def mcp_tool(
                     )
 
                 _validate_tool_args_schema(tool_name, schema, all_args)
-                _enforce_write_allowed(tool_name, write_action=write_action)
+                if _should_enforce_write_gate(req):
+                    _enforce_write_allowed(tool_name, write_action=write_action)
             except Exception as exc:
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
