@@ -436,10 +436,11 @@ def _build_response_payload(
     payload: Dict[str, Any] = {
         "status_code": resp.status_code,
         "headers": dict(resp.headers),
-        "text": resp.text,
     }
     if body is not None:
         payload["json"] = body
+    else:
+        payload["text"] = resp.text
     return payload
 
 
