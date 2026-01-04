@@ -70,12 +70,6 @@ def list_write_tools() -> Dict[str, Any]:
             "notes": "Clones if missing and can optionally reset to the remote ref.",
         },
         {
-            "name": "run_command",
-            "category": "workspace",
-            "description": "Run an arbitrary shell command in a persistent workspace clone.",
-            "notes": "Shares the same persistent workspace used by commit tools so edits survive across calls.",
-        },
-        {
             "name": "commit_workspace",
             "category": "workspace",
             "description": "Commit and optionally push changes from the persistent workspace.",
@@ -97,7 +91,7 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "run_tests",
             "category": "workspace",
             "description": "Run tests (default: pytest) inside the persistent workspace clone.",
-            "notes": "Preferred way to run tests; shares the persistent workspace with run_command and commit helpers.",
+            "notes": "Preferred way to run tests; shares the persistent workspace with terminal_command and commit helpers.",
         },
         {
             "name": "trigger_workflow_dispatch",

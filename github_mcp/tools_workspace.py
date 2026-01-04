@@ -48,7 +48,6 @@ search_workspace = _listing.search_workspace
 
 render_shell = _commands.render_shell
 terminal_command = _commands.terminal_command
-run_command = _commands.run_command
 
 workspace_create_branch = _git_ops.workspace_create_branch
 workspace_delete_branch = _git_ops.workspace_delete_branch
@@ -90,7 +89,6 @@ __all__ = [
     "search_workspace",
     "render_shell",
     "terminal_command",
-    "run_command",
     "workspace_create_branch",
     "workspace_delete_branch",
     "workspace_self_heal_branch",

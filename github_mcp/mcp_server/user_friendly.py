@@ -96,7 +96,7 @@ def build_success_summary(tool_name: str, result: Mapping[str, Any]) -> ToolSumm
     next_steps: List[str] = []
 
     # Command-style tools: avoid dumping full command/stdout/stderr into UI.
-    if tool_name in {"terminal_command", "render_shell", "run_command"}:
+    if tool_name in {"terminal_command", "render_shell"}:
         cmd = _safe_str(
             result.get("command_input") or result.get("command") or ""
         ).strip()

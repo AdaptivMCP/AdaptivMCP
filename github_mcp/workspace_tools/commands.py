@@ -246,42 +246,6 @@ async def terminal_command(
         )
 
 
-@mcp_tool(write_action=True, visibility="hidden")
-async def run_command(
-    full_name: Optional[str] = None,
-    ref: str = "main",
-    command: str = "pytest",
-    timeout_seconds: float = 300,
-    workdir: Optional[str] = None,
-    use_temp_venv: bool = True,
-    installing_dependencies: bool = False,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
-    """Deprecated alias for terminal_command.
 
-    Use terminal_command for a clearer "terminal/PC gateway" mental model.
-    """
-
-    out = await terminal_command(
-        full_name=full_name,
-        ref=ref,
-        command=command,
-        timeout_seconds=timeout_seconds,
-        workdir=workdir,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        owner=owner,
-        repo=repo,
-        branch=branch,
-    )
-    if isinstance(out, dict):
-        log = out.get("controller_log")
-        if not isinstance(log, list):
-            log = []
-        log.insert(0, "run_command is deprecated; use terminal_command instead.")
-        out["controller_log"] = log
-    return out
+# NOTE: The legacy tool name `run_command` has been removed.
+# Use `terminal_command` instead.

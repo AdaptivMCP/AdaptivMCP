@@ -462,13 +462,15 @@ async def run_command(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
 ) -> Dict[str, Any]:
-    """Thin wrapper around github_mcp.tools_workspace.terminal_command (via run_command alias).
+    """Legacy shim retained for tests/backwards-compat.
 
-    Tests import run_command from main so this helper forwards to the
-    workspace tool while still allowing monkeypatching of internal
-    dependencies like _clone_repo and _run_shell on the main module.
+    The MCP tool name `run_command` has been removed from the server tool
+    surface. This function remains as a Python-level helper for tests or
+    callers importing `main.run_command` directly.
+
+    It forwards to terminal_command.
     """
-    return await tools_workspace.run_command(
+    return await tools_workspace.terminal_command(
         full_name=full_name,
         ref=ref,
         command=command,
@@ -1702,7 +1704,7 @@ async def open_pr_for_existing_branch(
         the same head/base pair, it will return that existing PR instead of failing
         or creating a duplicate.
 
-    If this tool call fails in the hosted environment, use the workspace flow: `run_command` to create or reuse the PR.
+    If this tool call fails in the hosted environment, use the workspace flow: `terminal_command` to create or reuse the PR.
     """
     from github_mcp.main_tools.pull_requests import open_pr_for_existing_branch as _impl
 
