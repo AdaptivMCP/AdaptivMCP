@@ -613,8 +613,8 @@ def mcp_tool(
                     raise coerced from exc
 
                 try:
-                    result = await func(*args, **kwargs)
-                except Exception as exc:
+                result = await func(*args, **kwargs)
+            except Exception as exc:
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
@@ -631,6 +631,10 @@ def mcp_tool(
                         raise
                     raise coerced from exc
 
+                if result is None:
+                    result = {}
+                if not isinstance(result, Mapping):
+                    result = {"result": result}
                 result = attach_user_facing_fields(tool_name, result)
                 return result
 
@@ -735,6 +739,10 @@ def mcp_tool(
                     raise
                 raise coerced from exc
 
+            if result is None:
+                result = {}
+            if not isinstance(result, Mapping):
+                result = {"result": result}
             result = attach_user_facing_fields(tool_name, result)
             return result
 
