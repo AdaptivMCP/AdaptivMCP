@@ -30,9 +30,7 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
         candidate = os.path.realpath(raw_path)
         if candidate == root or candidate.startswith(root + os.sep):
             return candidate
-        raw_path = raw_path.lstrip("/\\")
-        if not raw_path:
-            raise ValueError("path must be a non-empty string")
+        raise ValueError("path escapes repository root")
     rel_path = raw_path.lstrip("/\\")
     if not rel_path:
         raise ValueError("path must be a non-empty string")
