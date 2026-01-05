@@ -80,18 +80,18 @@ async def get_file_slice(
         {"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)
     ]
 
-        return {
-            "full_name": full_name,
-            "path": normalized_path,
-            "ref": effective_ref,
-            "start_line": start_idx + 1,
-            "end_line": end_idx,
-            "max_lines": max_lines,
-            "total_lines": total_lines,
-            "has_more_above": start_idx > 0,
-            "has_more_below": False,
-            "lines": slice_lines,
-        }
+    return {
+        "full_name": full_name,
+        "path": normalized_path,
+        "ref": effective_ref,
+        "start_line": start_idx + 1,
+        "end_line": end_idx,
+        "max_lines": max_lines,
+        "total_lines": total_lines,
+        "has_more_above": start_idx > 0,
+        "has_more_below": False,
+        "lines": slice_lines,
+    }
 
 
 async def get_file_with_line_numbers(
@@ -146,19 +146,19 @@ async def get_file_with_line_numbers(
         f"{entry['line']:>{width}}| {entry['text']}" for entry in slice_lines
     )
 
-        return {
-            "full_name": full_name,
-            "path": normalized_path,
-            "ref": effective_ref,
-            "start_line": start_idx + 1,
-            "end_line": end_idx,
-            "max_lines": max_lines,
-            "total_lines": total_lines,
-            "has_more_above": start_idx > 0,
-            "has_more_below": False,
-            "lines": slice_lines,
-            "numbered_text": numbered_text,
-        }
+    return {
+        "full_name": full_name,
+        "path": normalized_path,
+        "ref": effective_ref,
+        "start_line": start_idx + 1,
+        "end_line": end_idx,
+        "max_lines": max_lines,
+        "total_lines": total_lines,
+        "has_more_above": start_idx > 0,
+        "has_more_below": False,
+        "lines": slice_lines,
+        "numbered_text": numbered_text,
+    }
 
 
 async def open_file_context(
