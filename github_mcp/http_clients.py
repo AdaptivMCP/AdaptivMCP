@@ -616,7 +616,7 @@ async def _github_request(
 
         result = _build_response_payload(resp, body=body)
         if expect_json:
-            result["json"] = body if body is not None else resp.json()
+            result["json"] = body if body is not None else {}
         return result
 
 
