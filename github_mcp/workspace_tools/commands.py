@@ -42,6 +42,26 @@ def _normalize_timeout_seconds(value: object, default: int) -> int:
     return max(1, int(default))
 
 
+def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
+    if not workdir:
+        return os.path.realpath(repo_dir)
+    if not isinstance(workdir, str):
+        raise ValueError("workdir must be a string")
+    normalized = workdir.strip().replace("\\", "/")
+    if not normalized:
+        return os.path.realpath(repo_dir)
+    if os.path.isabs(normalized):
+        candidate = os.path.realpath(normalized)
+    else:
+        candidate = os.path.realpath(os.path.join(repo_dir, normalized))
+    root = os.path.realpath(repo_dir)
+    if candidate != root and not candidate.startswith(root + os.sep):
+        raise ValueError("workdir must stay within repo")
+    if not os.path.isdir(candidate):
+        raise ValueError("workdir must point to a directory")
+    return candidate
+
+
 @mcp_tool(write_action=True)
 async def render_shell(
     full_name: Optional[str] = None,
@@ -160,9 +180,7 @@ async def terminal_command(
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
 
-        cwd = repo_dir
-        if workdir:
-            cwd = os.path.join(repo_dir, workdir)
+        cwd = _resolve_workdir(repo_dir, workdir)
 
         install_result = None
         if installing_dependencies and use_temp_venv:
