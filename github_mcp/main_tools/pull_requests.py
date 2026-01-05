@@ -6,6 +6,45 @@ from typing import Any, Dict, List, Optional
 from ._main import _main
 
 
+def _strip_heads_prefix(ref: str) -> str:
+    """Normalize common git ref prefixes for branch-like inputs."""
+
+    cleaned = (ref or "").strip()
+    for prefix in ("refs/heads/", "heads/"):
+        if cleaned.startswith(prefix):
+            return cleaned[len(prefix) :]
+    return cleaned
+
+
+def _parse_head_ref(head: str) -> tuple[Optional[str], str]:
+    """Parse a PR head ref.
+
+    Returns (owner, branch). Owner is None when the head is unqualified.
+
+    GitHub accepts:
+      - "branch" for same-repo PRs
+      - "owner:branch" for fork PRs
+    """
+
+    cleaned = _strip_heads_prefix(head)
+    if ":" in cleaned:
+        owner, branch = cleaned.split(":", 1)
+        return (owner.strip() or None, _strip_heads_prefix(branch))
+    return (None, cleaned)
+
+
+def _head_for_api(head: str) -> str:
+    owner, branch = _parse_head_ref(head)
+    return f"{owner}:{branch}" if owner else branch
+
+
+def _head_branch_only(head: str) -> str:
+    """Return the branch portion of a head ref (suitable for Actions filters)."""
+
+    _owner, branch = _parse_head_ref(head)
+    return branch
+
+
 async def list_pull_requests(
     full_name: str,
     state: str = "open",
@@ -162,9 +201,8 @@ async def _build_default_pr_body(
     of raising and breaking the overall tool call.
     """
 
-    m = _main()
-
     lines: List[str] = []
+    head_branch = _head_branch_only(head)
 
     # Summary
     lines.append("## Summary")
@@ -185,33 +223,10 @@ async def _build_default_pr_body(
     # CI & quality: look at recent workflow runs on this branch.
     lines.append("## CI & quality")
     lines.append("")
-    workflows: List[Dict[str, Any]] = []
-    try:
-        runs_resp = await m.list_workflow_runs(
-            full_name=full_name,
-            branch=head,
-            per_page=3,
-            page=1,
-        )
-        runs_json = runs_resp.get("json") if isinstance(runs_resp, dict) else None
-        if isinstance(runs_json, dict):
-            workflows = runs_json.get("workflow_runs") or []
-    except Exception:
-        workflows = []
-
-    if workflows:
-        latest = workflows[0] if isinstance(workflows[0], dict) else {}
-        name = latest.get("name") or latest.get("id")
-        status = latest.get("status") or "unknown"
-        conclusion = latest.get("conclusion") or "unknown"
-        url = latest.get("html_url")
-
-        lines.append(f"- Latest workflow: **{name}**")
-        lines.append(f"- Status: `{status}` / Conclusion: `{conclusion}`")
-        if url:
-            lines.append(f"- URL: {url}")
-    else:
-        lines.append("- No recent workflow runs found for this branch.")
+    # Intentionally do not call other tools here: PR creation should remain
+    # reliable even when workflow endpoints are unavailable or the head is
+    # qualified (e.g. forks).
+    lines.append(f"- CI: check GitHub Actions for branch `{head_branch}`.")
 
     lines.append("")
     lines.append("## Testing")
@@ -261,13 +276,15 @@ async def create_pull_request(
 
     try:
         effective_base = m._effective_ref_for_repo(full_name, base)
+
+        normalized_head = _head_for_api(head)
         effective_body = body
         if effective_body is None or not str(effective_body).strip():
             try:
                 effective_body = await _build_default_pr_body(
                     full_name=full_name,
                     title=title,
-                    head=head,
+                    head=normalized_head,
                     effective_base=effective_base,
                     draft=draft,
                 )
@@ -279,7 +296,7 @@ async def create_pull_request(
 
         payload: Dict[str, Any] = {
             "title": title,
-            "head": head,
+            "head": normalized_head,
             "base": effective_base,
             "draft": draft,
         }
@@ -328,7 +345,8 @@ async def open_pr_for_existing_branch(
     # GitHub's API expects the head in the form "owner:branch" when used
     # with the head filter on the pulls listing endpoint.
     owner, _repo = full_name.split("/", 1)
-    head_ref = f"{owner}:{branch}"
+    branch_owner, branch_name = _parse_head_ref(branch)
+    head_ref = f"{branch_owner}:{branch_name}" if branch_owner else f"{owner}:{branch_name}"
 
     # 1) Check for an existing open PR for this head/base pair.
     existing_json: Any = []
@@ -371,7 +389,7 @@ async def open_pr_for_existing_branch(
     pr = await create_pull_request(
         full_name=full_name,
         title=pr_title,
-        head=branch,
+        head=head_ref,
         base=effective_base,
         body=body,
         draft=draft,
@@ -656,7 +674,10 @@ async def recent_prs_for_branch(
         raise ValueError("branch must be a non-empty string")
 
     owner, _repo = full_name.split("/", 1)
-    head_filter = f"{owner}:{branch}"
+    branch_owner, branch_name = _parse_head_ref(branch)
+    head_filter = (
+        f"{branch_owner}:{branch_name}" if branch_owner else f"{owner}:{branch_name}"
+    )
 
     normalize = getattr(m, "_normalize_pr_payload", None)
 
