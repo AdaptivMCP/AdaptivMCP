@@ -449,7 +449,7 @@ def _validate_single_tool_args(
     if schema is None:
         raise ValueError(f"Tool {tool_name!r} does not expose an input schema")
 
-    normalized_args = dict(args or {})
+    normalized_args = {k: v for k, v in dict(args or {}).items() if k != "_meta"}
 
     validator_cls = jsonschema.validators.validator_for(schema)
     validator_cls.check_schema(schema)

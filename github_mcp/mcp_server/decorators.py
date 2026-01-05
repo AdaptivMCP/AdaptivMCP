@@ -303,6 +303,12 @@ def _bind_call_args(
         return dict(kwargs)
 
 
+def _strip_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
+    if not kwargs:
+        return {}
+    return {k: v for k, v in kwargs.items() if k != "_meta"}
+
+
 def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "arg_keys": sorted(all_args.keys()),
@@ -571,7 +577,8 @@ def mcp_tool(
             @functools.wraps(func)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 call_id = str(uuid.uuid4())
-                all_args = _bind_call_args(signature, args, kwargs)
+                clean_kwargs = _strip_tool_meta(kwargs)
+                all_args = _bind_call_args(signature, args, clean_kwargs)
                 req = get_request_context()
                 start = time.perf_counter()
 
@@ -613,7 +620,7 @@ def mcp_tool(
                     raise coerced from exc
 
                 try:
-                    result = await func(*args, **kwargs)
+                    result = await func(*args, **clean_kwargs)
                 except Exception as exc:
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
@@ -679,7 +686,8 @@ def mcp_tool(
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             call_id = str(uuid.uuid4())
-            all_args = _bind_call_args(signature, args, kwargs)
+            clean_kwargs = _strip_tool_meta(kwargs)
+            all_args = _bind_call_args(signature, args, clean_kwargs)
             req = get_request_context()
             start = time.perf_counter()
 
@@ -721,7 +729,7 @@ def mcp_tool(
                 raise coerced from exc
 
             try:
-                result = func(*args, **kwargs)
+                result = func(*args, **clean_kwargs)
             except Exception as exc:
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
