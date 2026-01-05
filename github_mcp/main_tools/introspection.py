@@ -6,6 +6,7 @@ import jsonschema
 
 from github_mcp.config import TOOL_DENYLIST
 from github_mcp.mcp_server.context import get_write_allowed
+from github_mcp.mcp_server.schemas import _jsonable
 from ._main import _main
 
 _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = set()
@@ -257,7 +258,10 @@ def list_all_actions(
                 schema = m._normalize_input_schema(tool)
             if schema is None:
                 schema = {"type": "object", "properties": {}}
-            tool_info["input_schema"] = schema
+            safe_schema = _jsonable(schema)
+            if not isinstance(safe_schema, Mapping):
+                safe_schema = {"type": "object", "properties": {}}
+            tool_info["input_schema"] = safe_schema
 
         tools.append(tool_info)
 
@@ -468,7 +472,7 @@ def _validate_single_tool_args(
         "tool": tool_name,
         "valid": len(errors) == 0,
         "errors": errors,
-        "schema": schema,
+        "schema": _jsonable(schema),
         "visibility": (
             getattr(func, "__mcp_visibility__", None)
             or getattr(tool, "__mcp_visibility__", None)

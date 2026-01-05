@@ -6,6 +6,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from github_mcp.mcp_server.context import get_write_allowed
+from github_mcp.mcp_server.schemas import _jsonable
 from github_mcp.main_tools.introspection import list_all_actions
 
 
@@ -124,6 +125,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
             or server._normalize_input_schema(tool)
             or server._normalize_input_schema(_func)
         )
+        safe_schema = _jsonable(schema or {"type": "object", "properties": {}})
+        if not isinstance(safe_schema, dict):
+            safe_schema = {"type": "object", "properties": {}}
         visibility = (
             catalog_entry.get("visibility")
             or getattr(_func, "__mcp_visibility__", None)
@@ -144,7 +148,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
             str(display_name) if display_name else _tool_display_name(tool, _func)
         )
 
-        terminal_help = _terminal_help(tool_name, tool_description, schema or {})
+        terminal_help = _terminal_help(tool_name, tool_description, safe_schema)
 
         actions.append(
             {
@@ -153,7 +157,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "title": display_name,
                 "description": tool_description,
                 "terminal_help": terminal_help,
-                "parameters": schema or {"type": "object", "properties": {}},
+                "parameters": safe_schema,
                 "annotations": annotations,
                 "write_action": bool(write_action),
                 "write_allowed": bool(tool_write_allowed),
