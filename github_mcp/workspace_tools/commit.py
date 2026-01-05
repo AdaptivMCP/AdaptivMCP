@@ -2,9 +2,6 @@
 import shlex
 from typing import Any, Dict, List, Optional
 
-import github_mcp.config as config
-from github_mcp.diff_utils import colorize_unified_diff, diff_stats
-
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
@@ -67,14 +64,6 @@ async def commit_workspace(
             "git status --porcelain", cwd=repo_dir, timeout_seconds=60
         )
 
-        diff_before_commit = await deps["run_shell"](
-            "git diff --cached --no-color", cwd=repo_dir, timeout_seconds=120
-        )
-        diff_text = (
-            diff_before_commit.get("stdout", "")
-            if isinstance(diff_before_commit, dict)
-            else ""
-        )
         status_lines = status_result.get("stdout", "").strip().splitlines()
         if not status_lines:
             raise GitHubAPIError("No changes to commit in workspace")
@@ -108,37 +97,6 @@ async def commit_workspace(
         head_summary = (
             oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
         )
-
-        try:
-            stats = diff_stats(diff_text)
-            config.TOOLS_LOGGER.chat(
-                "Committed workspace changes (%s files) (+%s -%s)",
-                len(status_lines),
-                stats.added,
-                stats.removed,
-                extra={
-                    "repo": full_name,
-                    "ref": effective_ref,
-                    "event": "workspace_commit_diff_summary",
-                },
-            )
-
-            if (
-                config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
-                and diff_text.strip()
-            ):
-                colored = colorize_unified_diff(diff_text)
-                config.TOOLS_LOGGER.detailed(
-                    "Workspace commit diff\n%s",
-                    colored,
-                    extra={
-                        "repo": full_name,
-                        "ref": effective_ref,
-                        "event": "workspace_commit_diff",
-                    },
-                )
-        except Exception:
-            pass
 
         return {
             "branch": effective_ref,
@@ -191,14 +149,6 @@ async def commit_workspace_files(
             "git diff --cached --name-only", cwd=repo_dir, timeout_seconds=60
         )
 
-        diff_before_commit_files = await deps["run_shell"](
-            "git diff --cached --no-color", cwd=repo_dir, timeout_seconds=120
-        )
-        diff_text_files = (
-            diff_before_commit_files.get("stdout", "")
-            if isinstance(diff_before_commit_files, dict)
-            else ""
-        )
         staged_files = staged_files_result.get("stdout", "").strip().splitlines()
         if not staged_files:
             raise GitHubAPIError("No staged changes to commit for provided files")
@@ -232,37 +182,6 @@ async def commit_workspace_files(
         head_summary = (
             oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
         )
-
-        try:
-            stats = diff_stats(diff_text_files)
-            config.TOOLS_LOGGER.chat(
-                "Committed selected workspace changes (%s files) (+%s -%s)",
-                len(staged_files),
-                stats.added,
-                stats.removed,
-                extra={
-                    "repo": full_name,
-                    "ref": effective_ref,
-                    "event": "workspace_commit_diff_summary",
-                },
-            )
-
-            if (
-                config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
-                and diff_text_files.strip()
-            ):
-                colored = colorize_unified_diff(diff_text_files)
-                config.TOOLS_LOGGER.detailed(
-                    "Workspace commit diff\n%s",
-                    colored,
-                    extra={
-                        "repo": full_name,
-                        "ref": effective_ref,
-                        "event": "workspace_commit_diff",
-                    },
-                )
-        except Exception:
-            pass
 
         return {
             "branch": effective_ref,

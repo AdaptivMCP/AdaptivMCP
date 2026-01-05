@@ -2,13 +2,6 @@
 import os
 from typing import Any, Dict, Optional
 
-import github_mcp.config as config
-from github_mcp.diff_utils import (
-    build_unified_diff,
-    colorize_unified_diff,
-    diff_stats,
-)
-
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
@@ -165,38 +158,6 @@ async def set_workspace_file_contents(
             content,
             create_parents=create_parents,
         )
-
-        # Render-log friendly diff logging (colored additions/removals).
-        full_diff = build_unified_diff(
-            before_text or "",
-            content or "",
-            fromfile=f"a/{path}",
-            tofile=f"b/{path}",
-        )
-        stats = diff_stats(full_diff)
-
-        try:
-            config.TOOLS_LOGGER.chat(
-                "Workspace wrote %s (+%s -%s)",
-                path,
-                stats.added,
-                stats.removed,
-                extra={"repo": full_name, "path": path, "event": "write_diff_summary"},
-            )
-
-            if (
-                config.TOOLS_LOGGER.isEnabledFor(config.DETAILED_LEVEL)
-                and full_diff.strip()
-            ):
-                colored = colorize_unified_diff(full_diff)
-                config.TOOLS_LOGGER.detailed(
-                    "Workspace diff for %s:\n%s",
-                    path,
-                    colored,
-                    extra={"repo": full_name, "path": path, "event": "write_diff"},
-                )
-        except Exception:
-            pass
 
         return {
             "branch": effective_ref,

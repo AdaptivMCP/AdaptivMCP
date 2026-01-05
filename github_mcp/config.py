@@ -11,46 +11,6 @@ import time
 
 from github_mcp.mcp_server.schemas import _jsonable
 
-# Custom log levels
-# ------------------------------------------------------------------------------
-#
-# CHAT: user-facing, chat-like progress messages intended to keep the human
-# informed while long tools run.
-# DETAILED: verbose operational logging that is more detailed than INFO but less
-# noisy than full DEBUG.
-
-DETAILED_LEVEL = 15
-CHAT_LEVEL = 25
-
-
-def _install_custom_log_levels() -> None:
-    # Make them visible as logging.CHAT / logging.DETAILED, etc.
-    if not hasattr(logging, "DETAILED"):
-        logging.addLevelName(DETAILED_LEVEL, "DETAILED")
-        setattr(logging, "DETAILED", DETAILED_LEVEL)
-
-    if not hasattr(logging, "CHAT"):
-        logging.addLevelName(CHAT_LEVEL, "CHAT")
-        setattr(logging, "CHAT", CHAT_LEVEL)
-
-    # Add Logger helpers: logger.chat(...), logger.detailed(...)
-    if not hasattr(logging.Logger, "detailed"):
-
-        def detailed(self: logging.Logger, msg, *args, **kwargs):
-            if self.isEnabledFor(DETAILED_LEVEL):
-                self._log(DETAILED_LEVEL, msg, args, **kwargs)
-
-        logging.Logger.detailed = detailed  # type: ignore[attr-defined]
-
-    if not hasattr(logging.Logger, "chat"):
-
-        def chat(self: logging.Logger, msg, *args, **kwargs):
-            if self.isEnabledFor(CHAT_LEVEL):
-                self._log(CHAT_LEVEL, msg, args, **kwargs)
-
-        logging.Logger.chat = chat  # type: ignore[attr-defined]
-
-
 def _resolve_log_level(level_name: str | None) -> int:
     if not level_name:
         return logging.INFO
@@ -66,15 +26,7 @@ def _resolve_log_level(level_name: str | None) -> int:
         except Exception:
             return logging.INFO
 
-    if name == "DETAILED":
-        return DETAILED_LEVEL
-    if name == "CHAT":
-        return CHAT_LEVEL
-
     return getattr(logging, name, logging.INFO)
-
-
-_install_custom_log_levels()
 
 # Configuration and globals
 # ------------------------------------------------------------------------------
@@ -407,7 +359,6 @@ _configure_logging()
 
 BASE_LOGGER = logging.getLogger("github_mcp")
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
-TOOLS_LOGGER = logging.getLogger("github_mcp.tools")
 
 SERVER_START_TIME = time.time()
 
@@ -432,9 +383,6 @@ __all__ = [
     "HTTPX_TIMEOUT",
     "MAX_CONCURRENCY",
     "SERVER_START_TIME",
-    "CHAT_LEVEL",
-    "DETAILED_LEVEL",
-    "TOOLS_LOGGER",
     "WORKSPACE_BASE_DIR",
     "SANDBOX_CONTENT_BASE_URL",
     "git_identity_warnings",
