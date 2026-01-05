@@ -26,7 +26,15 @@ class DiffStats:
 
 
 def sha1_8(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()[:8]
+    """Return a stable 8-hex digest for text.
+
+    Historically this function used SHA-1. We keep the public name for
+    backwards compatibility but use BLAKE2s to avoid insecure hashing
+    primitives while preserving the short, deterministic output.
+    """
+
+    # 4 bytes -> 8 hex characters.
+    return hashlib.blake2s(text.encode("utf-8", errors="replace"), digest_size=4).hexdigest()
 
 
 def build_unified_diff(
