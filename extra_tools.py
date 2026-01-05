@@ -94,116 +94,6 @@ async def get_file_slice(
     }
 
 
-async def get_file_with_line_numbers(
-    full_name: str,
-    path: str,
-    ref: str | None = None,
-    start_line: int = 1,
-    max_lines: int | None = None,
-) -> Dict[str, Any]:
-    """Return a line-numbered string and structured lines for a file slice.
-
-    Line limits are not enforced; full content is returned from start_line.
-    """
-
-    if start_line < 1:
-        raise ValueError("start_line must be >= 1")
-    if max_lines is not None and max_lines <= 0:
-        raise ValueError("max_lines must be > 0")
-
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    normalized_path = _normalize_repo_path_for_repo(full_name, path)
-
-    decoded = await _decode_github_content(full_name, normalized_path, effective_ref)
-    text = decoded.get("text", "")
-    all_lines = str(text).splitlines(keepends=False)
-    total_lines = len(all_lines)
-
-    if total_lines == 0:
-        return {
-            "full_name": full_name,
-            "path": normalized_path,
-            "ref": effective_ref,
-            "start_line": 1,
-            "end_line": 0,
-            "max_lines": max_lines,
-            "total_lines": 0,
-            "has_more_above": False,
-            "has_more_below": False,
-            "lines": [],
-            "numbered_text": "",
-        }
-
-    start_idx = min(max(start_line - 1, 0), total_lines - 1)
-    end_idx = total_lines
-
-    slice_lines = [
-        {"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)
-    ]
-
-    width = len(str(total_lines)) if total_lines > 0 else 1
-    numbered_text = "\n".join(
-        f"{entry['line']:>{width}}| {entry['text']}" for entry in slice_lines
-    )
-
-    return {
-        "full_name": full_name,
-        "path": normalized_path,
-        "ref": effective_ref,
-        "start_line": start_idx + 1,
-        "end_line": end_idx,
-        "max_lines": max_lines,
-        "total_lines": total_lines,
-        "has_more_above": start_idx > 0,
-        "has_more_below": False,
-        "lines": slice_lines,
-        "numbered_text": numbered_text,
-    }
-
-
-async def open_file_context(
-    full_name: str,
-    path: str,
-    ref: str | None = None,
-    start_line: int | None = None,
-    max_lines: int | None = None,
-) -> Dict[str, Any]:
-    """Fetch a file slice with explicit line numbers and content list."""
-
-    normalized_start_line = 1 if start_line is None else start_line
-    if normalized_start_line < 1:
-        raise ValueError("start_line must be >= 1")
-    if max_lines is not None and max_lines <= 0:
-        raise ValueError("max_lines must be > 0")
-
-    normalized_path = _normalize_repo_path_for_repo(full_name, path)
-
-    slice_result = await get_file_slice(
-        full_name=full_name,
-        path=normalized_path,
-        ref=ref,
-        start_line=normalized_start_line,
-        max_lines=max_lines,
-    )
-
-    content_entries = [
-        {"line": entry["line"], "text": entry["text"]}
-        for entry in slice_result.get("lines", [])
-    ]
-
-    response: Dict[str, Any] = {
-        "full_name": slice_result.get("full_name", full_name),
-        "path": slice_result.get("path", normalized_path),
-        "ref": slice_result.get("ref", ref),
-        "start_line": slice_result.get("start_line"),
-        "end_line": slice_result.get("end_line"),
-        "total_lines": slice_result.get("total_lines"),
-        "content": content_entries,
-        "has_more_above": slice_result.get("has_more_above", False),
-        "has_more_below": slice_result.get("has_more_below", False),
-    }
-
-    return response
 
 
 async def delete_file(
@@ -330,21 +220,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         tags=["github", "read", "files", "context"],
     )(get_file_slice)  # type: ignore[arg-type]
 
-    mcp_tool(
-        write_action=False,
-        description=(
-            "Render a compact, line-numbered view of a file to simplify manual edits."
-        ),
-        tags=["github", "read", "files", "ergonomics"],
-    )(get_file_with_line_numbers)  # type: ignore[arg-type]
-
-    mcp_tool(
-        write_action=False,
-        description=(
-            "Return a citation-friendly slice of a file with line numbers and content entries."
-        ),
-        tags=["github", "read", "files", "context"],
-    )(open_file_context)  # type: ignore[arg-type]
 
     # write actions
     mcp_tool(

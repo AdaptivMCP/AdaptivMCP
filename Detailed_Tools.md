@@ -121,7 +121,7 @@ Notes:
 
 ```json
 {
-  "text": "Error executing tool open_file_context: ...",
+  "text": "Error executing tool get_file_slice: ...",
   "is_error": true
 }
 ```
@@ -173,7 +173,7 @@ Actions / CI:
 - `list_workflow_runs`, `list_workflow_runs_graphql`, `get_workflow_run`, `get_workflow_run_overview`, `list_workflow_run_jobs`, `get_job_logs`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`, `wait_for_workflow_run`, `list_recent_failures`, `list_recent_failures_graphql`, `run_tests`, `run_lint_suite`, `run_quality_suite`
 
 Misc file navigation helpers:
-- `get_file_slice`, `get_file_with_line_numbers`, `open_file_context`
+- `get_file_slice`
 
 Administration:
 - `authorize_write_actions` (if enabled in your deployment)
@@ -1724,44 +1724,6 @@ Example:
 
 ```json
 {"tool":"get_file_slice","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1}}
-```
-
-## get_file_with_line_numbers
-
-Purpose: Return a file excerpt with line numbers for manual editing.
-
-Inputs:
-- `full_name` (string)
-- `path` (string)
-- `ref` (string | null)
-- `start_line` (int, default 1)
-- `max_lines` (int | null, optional; not enforced)
-
-Outputs: Line-numbered excerpt.
-
-Example:
-
-```json
-{"tool":"get_file_with_line_numbers","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1}}
-```
-
-## open_file_context
-
-Purpose: Return a citation-friendly slice with line numbers and content entries.
-
-Inputs:
-- `full_name` (string)
-- `path` (string)
-- `ref` (string | null)
-- `start_line` (int | null)
-- `max_lines` (int | null, optional; not enforced)
-
-Outputs: Structured slice.
-
-Example:
-
-```json
-{"tool":"open_file_context","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1}}
 ```
 
 ---
