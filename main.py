@@ -13,6 +13,7 @@ import time
 from urllib.parse import parse_qs
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
+import anyio
 
 import github_mcp.server as server  # noqa: F401
 import github_mcp.tools_workspace as tools_workspace  # noqa: F401
@@ -232,6 +233,23 @@ class _RequestContextMiddleware:
         return await self.app(scope, receive, send)
 
 
+class _SuppressClientDisconnectMiddleware:
+    """Suppress disconnect errors from streaming responses."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        try:
+            return await self.app(scope, receive, send)
+        except anyio.ClosedResourceError:
+            return
+        except ExceptionGroup as exc:
+            if all(isinstance(err, anyio.ClosedResourceError) for err in exc.exceptions):
+                return
+            raise
+
+
 # Re-exported symbols used by helper modules and tests that import `main`.
 __all__ = [
     "GitHubAPIError",
@@ -402,6 +420,8 @@ if app is not None:
     app.add_middleware(_CacheControlMiddleware)
 if app is not None:
     app.add_middleware(_RequestContextMiddleware)
+if app is not None:
+    app.add_middleware(_SuppressClientDisconnectMiddleware)
 
 
 async def _handle_value_error(request, exc):
