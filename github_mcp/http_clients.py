@@ -335,6 +335,8 @@ def _refresh_async_client(
         needs_refresh = True
 
     if not needs_refresh:
+        # `client` is guaranteed non-None here because `needs_refresh` is false.
+        assert client is not None
         return client, client_loop or loop
 
     try:
@@ -342,7 +344,18 @@ def _refresh_async_client(
             if client_loop is not None and not client_loop.is_closed():
                 client_loop.create_task(client.aclose())
             else:
-                client.close()
+                # httpx.AsyncClient does not implement `close()`; use `aclose()`.
+                # Best-effort shutdown without assuming an active running loop.
+                try:
+                    loop.create_task(client.aclose())
+                except Exception:
+                    try:
+                        if not loop.is_closed() and not loop.is_running():
+                            loop.run_until_complete(client.aclose())
+                        else:
+                            asyncio.run(client.aclose())
+                    except Exception:
+                        pass
     except Exception:
         pass
 
