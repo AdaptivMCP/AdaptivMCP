@@ -24,7 +24,30 @@ def _path_within_repo(root: str, candidate: str) -> bool:
 
 def _normalize_workspace_path(path: str) -> str:
     normalized = path.strip().replace("\\", "/")
-    return normalized.lstrip("/")
+    while "//" in normalized:
+        normalized = normalized.replace("//", "/")
+    return normalized
+
+
+def _resolve_workspace_start(repo_dir: str, path: str) -> tuple[str, str]:
+    root = os.path.realpath(repo_dir)
+    normalized_path = _normalize_workspace_path(path) if path else ""
+    if not normalized_path:
+        return "", root
+
+    if os.path.isabs(normalized_path):
+        start = os.path.realpath(normalized_path)
+        if not _path_within_repo(root, start):
+            raise ValueError("path must stay within repo")
+        rel_path = os.path.relpath(start, root)
+        if rel_path == os.curdir:
+            rel_path = ""
+        return rel_path, start
+
+    start = os.path.realpath(os.path.join(repo_dir, normalized_path))
+    if not _path_within_repo(root, start):
+        raise ValueError("path must stay within repo")
+    return normalized_path, start
 
 
 @mcp_tool(write_action=False)
@@ -63,14 +86,7 @@ async def list_workspace_files(
         )
 
         root = os.path.realpath(repo_dir)
-        normalized_path = _normalize_workspace_path(path) if path else ""
-        start = (
-            os.path.realpath(os.path.join(repo_dir, normalized_path))
-            if normalized_path
-            else root
-        )
-        if not _path_within_repo(root, start):
-            raise ValueError("path must stay within repo")
+        normalized_path, start = _resolve_workspace_start(repo_dir, path)
 
         # If path points to a file, return that file (subject to include_hidden).
         if os.path.isfile(start):
@@ -186,14 +202,7 @@ async def search_workspace(
         )
 
         root = os.path.realpath(repo_dir)
-        normalized_path = _normalize_workspace_path(path) if path else ""
-        start = (
-            os.path.realpath(os.path.join(repo_dir, normalized_path))
-            if normalized_path
-            else root
-        )
-        if not _path_within_repo(root, start):
-            raise ValueError("path must stay within repo")
+        normalized_path, start = _resolve_workspace_start(repo_dir, path)
 
         # Allow searching a single file path.
         single_file = os.path.isfile(start)
