@@ -439,23 +439,6 @@ async def run_quality_suite(
             step["default_skipped"] = True
         return step
 
-    # Optional steps (developer-controlled).
-    fmt_step = await maybe_run_optional(
-        "format", format_command, is_default=bool(defaulted.get("format"))
-    )
-    if fmt_step is not None:
-        steps.append(fmt_step)
-        controller_log.append(f"- Format: {fmt_step.get('status')}")
-        if fail_fast and fmt_step.get("status") == "failed":
-            out = {
-                "status": "failed",
-                "suite": suite,
-                "steps": _prune_raw_steps(steps, include_raw_step_outputs),
-                "diagnostics": diagnostics,
-                "controller_log": controller_log + ["- Aborted: format step failed"],
-            }
-            return out
-
     lint_step: Dict[str, Any]
     if lint_command:
         lint_step = await _run_named_step(
@@ -521,6 +504,23 @@ async def run_quality_suite(
         }
         steps.append(lint_step)
         controller_log.append("- Lint: skipped (no lint_command provided)")
+
+    # Optional steps (developer-controlled).
+    # Run after lint so fail-fast lint behavior remains the primary gate.
+    fmt_step = await maybe_run_optional(
+        "format", format_command, is_default=bool(defaulted.get("format"))
+    )
+    if fmt_step is not None:
+        steps.append(fmt_step)
+        controller_log.append(f"- Format: {fmt_step.get('status')}")
+        if fail_fast and fmt_step.get("status") == "failed":
+            return {
+                "status": "failed",
+                "suite": suite,
+                "steps": _prune_raw_steps(steps, include_raw_step_outputs),
+                "diagnostics": diagnostics,
+                "controller_log": controller_log + ["- Aborted: format step failed"],
+            }
 
     type_step = await maybe_run_optional(
         "typecheck", typecheck_command, is_default=bool(defaulted.get("typecheck"))
