@@ -14,9 +14,7 @@ def _reload_utils(monkeypatch, raw_value):
 
 
 def test_repo_defaults_parses_valid_json(monkeypatch):
-    utils = _reload_utils(
-        monkeypatch, '{"octo/repo":{"default_branch":"develop"}}'
-    )
+    utils = _reload_utils(monkeypatch, '{"octo/repo":{"default_branch":"develop"}}')
 
     assert utils.REPO_DEFAULTS == {"octo/repo": {"default_branch": "develop"}}
     assert utils.REPO_DEFAULTS_PARSE_ERROR is None

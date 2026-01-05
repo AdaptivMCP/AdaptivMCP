@@ -245,7 +245,9 @@ class _SuppressClientDisconnectMiddleware:
         except anyio.ClosedResourceError:
             return
         except ExceptionGroup as exc:
-            if all(isinstance(err, anyio.ClosedResourceError) for err in exc.exceptions):
+            if all(
+                isinstance(err, anyio.ClosedResourceError) for err in exc.exceptions
+            ):
                 return
             raise
 

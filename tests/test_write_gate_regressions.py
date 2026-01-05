@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import types
 
+
 def _reload_context(monkeypatch, value: str | None):
     """Reload github_mcp.mcp_server.context after setting env var.
 

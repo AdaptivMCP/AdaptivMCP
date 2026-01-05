@@ -11,6 +11,7 @@ import time
 
 from github_mcp.mcp_server.schemas import _jsonable
 
+
 def _resolve_log_level(level_name: str | None) -> int:
     if not level_name:
         return logging.INFO
@@ -27,6 +28,7 @@ def _resolve_log_level(level_name: str | None) -> int:
             return logging.INFO
 
     return getattr(logging, name, logging.INFO)
+
 
 # Configuration and globals
 # ------------------------------------------------------------------------------
@@ -224,6 +226,7 @@ def git_identity_warnings() -> list[str]:
         "GITHUB_MCP_GIT_COMMITTER_EMAIL (or set GitHub App metadata) to ensure commits "
         "are attributed correctly."
     ]
+
 
 def _parse_tool_list(value: str) -> set[str]:
     return {item.strip() for item in (value or "").split(",") if item.strip()}

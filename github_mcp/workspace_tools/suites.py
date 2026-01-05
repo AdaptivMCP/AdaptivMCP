@@ -84,6 +84,75 @@ def _extract_command_not_found(stdout: str, stderr: str) -> str:
     return ""
 
 
+def _required_packages_for_command(command: str) -> List[str]:
+    """Best-effort mapping from a shell command to pip-installable packages.
+
+    This is intentionally conservative: we only map widely used dev tools.
+    """
+
+    if not command:
+        return []
+
+    c = command.strip()
+    lower = c.lower()
+
+    # Common Python quality tools.
+    if lower.startswith("ruff ") or lower == "ruff":
+        return ["ruff"]
+    if lower.startswith("mypy ") or lower == "mypy" or "python -m mypy" in lower:
+        return ["mypy"]
+    if lower.startswith("pytest") or " python -m pytest" in lower:
+        return ["pytest"]
+    if lower.startswith("black ") or lower == "black":
+        return ["black"]
+    if lower.startswith("isort ") or lower == "isort":
+        return ["isort"]
+    if lower.startswith("flake8 ") or lower == "flake8":
+        return ["flake8"]
+    if lower.startswith("bandit ") or lower == "bandit":
+        return ["bandit"]
+    if lower.startswith("pip-audit") or "pip-audit" in lower:
+        return ["pip-audit"]
+
+    return []
+
+
+async def _pip_install_tools(
+    *,
+    full_name: str,
+    ref: str,
+    packages: List[str],
+    timeout_seconds: int,
+    workdir: Optional[str],
+    use_temp_venv: bool,
+    owner: Optional[str],
+    repo: Optional[str],
+    branch: Optional[str],
+) -> Dict[str, Any]:
+    """Install one or more tool packages into the active environment."""
+
+    if not packages:
+        return {
+            "status": "skipped",
+            "summary": {"command": None, "reason": "No packages to install"},
+        }
+
+    cmd = "python -m pip install " + " ".join(packages)
+    return await _run_named_step(
+        name="auto_install_tools",
+        full_name=full_name,
+        ref=ref,
+        command=cmd,
+        timeout_seconds=min(timeout_seconds, 600),
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=False,
+        owner=owner,
+        repo=repo,
+        branch=branch,
+    )
+
+
 def _slim_terminal_command_payload(payload: Any) -> Dict[str, Any]:
     """Return a stable, bounded view of `terminal_command` output.
 
@@ -223,7 +292,12 @@ async def run_tests(
 
     cmd_result = result.get("result") or {}
     exit_code = cmd_result.get("exit_code")
-    status = "passed" if exit_code == 0 else "failed"
+
+    # Pytest exits with 5 when no tests are collected.
+    # Treat this as a distinct status so callers can decide whether to gate on it.
+    status = (
+        "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
+    )
 
     summary_lines = [
         "Completed test command in workspace:",
@@ -294,6 +368,7 @@ async def run_quality_suite(
     include_raw_step_outputs: bool = False,
     *,
     developer_defaults: bool = True,
+    auto_setup_repo: bool = True,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
     branch: Optional[str] = None,
@@ -326,6 +401,11 @@ async def run_quality_suite(
             typecheck_command = "mypy ."
             defaulted["typecheck"] = True
 
+        # If the caller did not specify a security command, prefer a lightweight
+        # dependency sanity check when available.
+        if security_command is None:
+            security_command = "python -m pip check"
+
     suite: Dict[str, Any] = {
         "repo": full_name,
         "ref": ref,
@@ -344,6 +424,7 @@ async def run_quality_suite(
             "use_temp_venv": bool(use_temp_venv),
             "installing_dependencies": bool(installing_dependencies),
             "developer_defaults": bool(developer_defaults),
+            "auto_setup_repo": bool(auto_setup_repo),
         },
     }
 
@@ -427,6 +508,43 @@ async def run_quality_suite(
             repo=repo,
             branch=branch,
         )
+
+        # Auto-setup: if a default step fails due to a missing tool, attempt to
+        # install the tool into the current environment and re-run once.
+        if (
+            auto_setup_repo
+            and step.get("status") == "failed"
+            and (step.get("missing_module") or step.get("command_not_found_hint"))
+        ):
+            pkgs = _required_packages_for_command(command)
+            if pkgs:
+                install_step = await _pip_install_tools(
+                    full_name=full_name,
+                    ref=ref,
+                    packages=pkgs,
+                    timeout_seconds=timeout_seconds_i,
+                    workdir=workdir,
+                    use_temp_venv=use_temp_venv,
+                    owner=owner,
+                    repo=repo,
+                    branch=branch,
+                )
+                steps.append(install_step)
+                if install_step.get("status") == "passed":
+                    step = await _run_named_step(
+                        name=name,
+                        full_name=full_name,
+                        ref=ref,
+                        command=command,
+                        timeout_seconds=timeout_seconds_i,
+                        workdir=workdir,
+                        use_temp_venv=use_temp_venv,
+                        installing_dependencies=installing_dependencies,
+                        owner=owner,
+                        repo=repo,
+                        branch=branch,
+                    )
+
         if (
             is_default
             and step.get("status") == "failed"
@@ -454,6 +572,43 @@ async def run_quality_suite(
             repo=repo,
             branch=branch,
         )
+
+        if (
+            auto_setup_repo
+            and lint_step.get("status") == "failed"
+            and (
+                lint_step.get("missing_module")
+                or lint_step.get("command_not_found_hint")
+            )
+        ):
+            pkgs = _required_packages_for_command(lint_command)
+            if pkgs:
+                install_step = await _pip_install_tools(
+                    full_name=full_name,
+                    ref=ref,
+                    packages=pkgs,
+                    timeout_seconds=timeout_seconds_i,
+                    workdir=workdir,
+                    use_temp_venv=use_temp_venv,
+                    owner=owner,
+                    repo=repo,
+                    branch=branch,
+                )
+                steps.append(install_step)
+                if install_step.get("status") == "passed":
+                    lint_step = await _run_named_step(
+                        name="lint",
+                        full_name=full_name,
+                        ref=ref,
+                        command=lint_command,
+                        timeout_seconds=timeout_seconds_i,
+                        workdir=workdir,
+                        use_temp_venv=use_temp_venv,
+                        installing_dependencies=installing_dependencies,
+                        owner=owner,
+                        repo=repo,
+                        branch=branch,
+                    )
         steps.append(lint_step)
         controller_log.append(f"- Lint: {lint_step.get('status')}")
 
@@ -572,9 +727,13 @@ async def run_quality_suite(
         for step in steps
         if step.get("name") in {"format", "lint", "typecheck", "security"}
     )
-    overall_status = (
-        "failed" if (overall_failed or tests_status == "failed") else "passed"
-    )
+    overall_status = "failed" if overall_failed else "passed"
+    if tests_status == "failed":
+        overall_status = "failed"
+
+    # Preserve "no_tests" explicitly: the suite itself passed, but tests were absent.
+    if overall_status == "passed" and tests_status == "no_tests":
+        overall_status = "passed_with_warnings"
 
     if not fail_fast:
         return {
