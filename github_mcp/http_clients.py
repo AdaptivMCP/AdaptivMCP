@@ -448,6 +448,15 @@ def _external_client_instance() -> httpx.AsyncClient:
 # ---------------------------------------------------------------------------
 
 
+def _extract_response_body(resp: httpx.Response) -> Any | None:
+    if hasattr(resp, "json"):
+        try:
+            return resp.json()
+        except Exception:
+            return None
+    return None
+
+
 def _build_response_payload(
     resp: httpx.Response, *, body: Any | None = None
 ) -> Dict[str, Any]:
@@ -460,6 +469,27 @@ def _build_response_payload(
     else:
         payload["text"] = resp.text
     return payload
+
+
+async def _send_request(
+    client: httpx.AsyncClient,
+    *,
+    method: str,
+    path: str,
+    params: Optional[Dict[str, Any]],
+    json_body: Optional[Dict[str, Any]],
+    headers: Optional[Dict[str, str]],
+) -> httpx.Response:
+    if path.lstrip("/").startswith("search/"):
+        await _throttle_search_requests()
+    async with _get_concurrency_semaphore():
+        return await client.request(
+            method,
+            path,
+            params=params,
+            json=json_body,
+            headers=headers,
+        )
 
 
 async def _github_request(
@@ -556,12 +586,14 @@ async def _github_request(
             raise
 
         try:
-            if path.lstrip("/").startswith("search/"):
-                await _throttle_search_requests()
-            async with _get_concurrency_semaphore():
-                resp = await client.request(
-                    method, path, params=params, json=json_body, headers=headers
-                )
+            resp = await _send_request(
+                client,
+                method=method,
+                path=path,
+                params=params,
+                json_body=json_body,
+                headers=headers,
+            )
         except httpx.TimeoutException:
             raise
         except httpx.HTTPError as exc:  # pragma: no cover - defensive
@@ -571,12 +603,7 @@ async def _github_request(
         if error_flag is None:
             error_flag = resp.status_code >= 400
 
-        body: Any | None = None
-        if hasattr(resp, "json"):
-            try:
-                body = resp.json()
-            except Exception:
-                body = None
+        body: Any | None = _extract_response_body(resp)
 
         message = body.get("message", "") if isinstance(body, dict) else ""
         message_lower = message.lower() if isinstance(message, str) else ""
