@@ -264,6 +264,5 @@ async def terminal_command(
         )
 
 
-
 # NOTE: The legacy tool name `run_command` has been removed.
 # Use `terminal_command` instead.

@@ -39,9 +39,7 @@ def test_list_workspace_files_blocks_path_escape(tmp_path, monkeypatch):
     assert result["error"]["message"] == "path must stay within repo"
 
 
-def test_list_workspace_files_allows_absolute_path_inside_repo(
-    tmp_path, monkeypatch
-):
+def test_list_workspace_files_allows_absolute_path_inside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     target = repo_dir / "docs" / "readme.md"
@@ -51,18 +49,14 @@ def test_list_workspace_files_allows_absolute_path_inside_repo(
     dummy = DummyWorkspaceTools(str(repo_dir))
     monkeypatch.setattr(workspace_listing, "_tw", lambda: dummy)
 
-    result = asyncio.run(
-        workspace_listing.list_workspace_files(path=str(target))
-    )
+    result = asyncio.run(workspace_listing.list_workspace_files(path=str(target)))
 
     assert "error" not in result
     assert result["files"] == ["docs/readme.md"]
     assert result["path"] == "docs/readme.md"
 
 
-def test_list_workspace_files_blocks_absolute_path_outside_repo(
-    tmp_path, monkeypatch
-):
+def test_list_workspace_files_blocks_absolute_path_outside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     outside = tmp_path / "outside"
@@ -73,9 +67,7 @@ def test_list_workspace_files_blocks_absolute_path_outside_repo(
     dummy = DummyWorkspaceTools(str(repo_dir))
     monkeypatch.setattr(workspace_listing, "_tw", lambda: dummy)
 
-    result = asyncio.run(
-        workspace_listing.list_workspace_files(path=str(target))
-    )
+    result = asyncio.run(workspace_listing.list_workspace_files(path=str(target)))
 
     assert "error" in result
     assert result["error"]["message"] == "path must stay within repo"
@@ -102,9 +94,7 @@ def test_search_workspace_blocks_path_escape(tmp_path, monkeypatch):
     assert result["error"]["message"] == "path must stay within repo"
 
 
-def test_search_workspace_blocks_absolute_path_outside_repo(
-    tmp_path, monkeypatch
-):
+def test_search_workspace_blocks_absolute_path_outside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     outside = tmp_path / "outside"

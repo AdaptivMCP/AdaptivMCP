@@ -94,8 +94,6 @@ async def get_file_slice(
     }
 
 
-
-
 async def delete_file(
     full_name: str,
     path: str,
@@ -219,7 +217,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         description="Return a citation-friendly slice of a file.",
         tags=["github", "read", "files", "context"],
     )(get_file_slice)  # type: ignore[arg-type]
-
 
     # write actions
     mcp_tool(

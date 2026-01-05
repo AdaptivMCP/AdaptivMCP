@@ -346,7 +346,9 @@ async def open_pr_for_existing_branch(
     # with the head filter on the pulls listing endpoint.
     owner, _repo = full_name.split("/", 1)
     branch_owner, branch_name = _parse_head_ref(branch)
-    head_ref = f"{branch_owner}:{branch_name}" if branch_owner else f"{owner}:{branch_name}"
+    head_ref = (
+        f"{branch_owner}:{branch_name}" if branch_owner else f"{owner}:{branch_name}"
+    )
 
     # 1) Check for an existing open PR for this head/base pair.
     existing_json: Any = []

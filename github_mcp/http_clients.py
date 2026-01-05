@@ -360,7 +360,9 @@ def _refresh_async_client(
                             asyncio.run(client.aclose())
                     except Exception:
                         # Shutdown is best-effort; never raise during refresh.
-                        logging.debug("Failed to close AsyncClient during refresh", exc_info=True)
+                        logging.debug(
+                            "Failed to close AsyncClient during refresh", exc_info=True
+                        )
     except Exception:
         logging.debug("Failed to refresh AsyncClient", exc_info=True)
 

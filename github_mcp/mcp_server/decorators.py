@@ -176,7 +176,7 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
       - When WRITE_ALLOWED is true, writes should execute without extra prompts.
       - When WRITE_ALLOWED is false, writes remain executable but clients (e.g.
         ChatGPT) should ask the user to confirm/deny.
-    
+
     This function is intentionally a no-op for compatibility.
     """
     del tool_name, write_action

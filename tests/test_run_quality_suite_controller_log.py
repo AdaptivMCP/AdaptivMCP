@@ -6,7 +6,9 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_run_quality_suite_merges_controller_log_on_lint_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_run_quality_suite_merges_controller_log_on_lint_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Regression: fail-fast lint path must not drop suite controller_log.
 
     Prior behavior used dict.setdefault('controller_log', ...), which does not
