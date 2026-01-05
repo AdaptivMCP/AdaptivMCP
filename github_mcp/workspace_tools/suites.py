@@ -454,9 +454,19 @@ async def run_quality_suite(
             # Back-compat: return the lint raw payload shape when possible.
             raw = lint_step.get("raw")
             if isinstance(raw, dict):
-                raw.setdefault(
-                    "controller_log", controller_log + ["- Aborted: lint failed"]
-                )
+                # Merge any existing terminal_command controller_log with the suite log.
+                # NOTE: terminal_command frequently returns a controller_log key; using
+                # setdefault would drop suite context when the key exists.
+                merged_log: List[str] = []
+                existing = raw.get("controller_log")
+                if isinstance(existing, list):
+                    merged_log.extend([str(x) for x in existing])
+                elif existing:
+                    merged_log.append(str(existing))
+                merged_log.extend(controller_log)
+                merged_log.append("- Aborted: lint failed")
+                raw["controller_log"] = merged_log
+                raw["status"] = "failed"
                 raw["suite"] = suite
                 raw["steps"] = _prune_raw_steps(steps, include_raw_step_outputs)
                 raw["diagnostics"] = diagnostics
