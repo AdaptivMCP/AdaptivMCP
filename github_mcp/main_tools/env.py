@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -38,13 +39,14 @@ def _get_controller_revision_info() -> Dict[str, Any]:
 
     try:
         repo_root = _find_repo_root(Path(__file__).resolve())
-        if repo_root is not None:
+        git_bin = shutil.which("git")
+        if repo_root is not None and git_bin:
             sha = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
+                [git_bin, "rev-parse", "HEAD"], cwd=repo_root, text=True
             ).strip()
             info["git_commit"] = sha
             branch = subprocess.check_output(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root, text=True
+                [git_bin, "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root, text=True
             ).strip()
             info["git_branch"] = branch
     except Exception:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import os
 import sys
 import time
@@ -335,9 +336,12 @@ def _refresh_async_client(
         needs_refresh = True
 
     if not needs_refresh:
-        # `client` is guaranteed non-None here because `needs_refresh` is false.
-        assert client is not None
-        return client, client_loop or loop
+        # `client` should be non-None here because `needs_refresh` is false.
+        # Avoid `assert` in runtime code paths so optimized runs don't elide checks.
+        if client is None:
+            needs_refresh = True
+        else:
+            return client, client_loop or loop
 
     try:
         if client is not None and not getattr(client, "is_closed", False):
@@ -355,9 +359,10 @@ def _refresh_async_client(
                         else:
                             asyncio.run(client.aclose())
                     except Exception:
-                        pass
+                        # Shutdown is best-effort; never raise during refresh.
+                        logging.debug("Failed to close AsyncClient during refresh", exc_info=True)
     except Exception:
-        pass
+        logging.debug("Failed to refresh AsyncClient", exc_info=True)
 
     fresh_client = rebuild()
     return fresh_client, loop
