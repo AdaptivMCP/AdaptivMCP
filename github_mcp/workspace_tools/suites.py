@@ -293,6 +293,7 @@ async def run_quality_suite(
     fail_fast: bool = True,
     include_raw_step_outputs: bool = False,
     *,
+    developer_defaults: bool = True,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
     branch: Optional[str] = None,
@@ -308,6 +309,22 @@ async def run_quality_suite(
     """
 
     timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
+
+    # Developer defaults:
+    # When enabled, run common developer checks by default (format, typecheck,
+    # and a lightweight dependency sanity check). Callers may override any
+    # command explicitly.
+    defaulted: Dict[str, bool] = {"format": False, "typecheck": False}
+
+    if developer_defaults:
+        if format_command is None:
+            # Ruff is already the default linter; format-check is a common extra gate.
+            format_command = "ruff format --check ."
+            defaulted["format"] = True
+        if typecheck_command is None:
+            # Enable a conventional typecheck by default.
+            typecheck_command = "mypy ."
+            defaulted["typecheck"] = True
 
     suite: Dict[str, Any] = {
         "repo": full_name,
@@ -326,6 +343,7 @@ async def run_quality_suite(
             "fail_fast": bool(fail_fast),
             "use_temp_venv": bool(use_temp_venv),
             "installing_dependencies": bool(installing_dependencies),
+            "developer_defaults": bool(developer_defaults),
         },
     }
 
@@ -334,6 +352,11 @@ async def run_quality_suite(
         f"- Repo: {full_name}",
         f"- Ref: {ref}",
     ]
+
+    if developer_defaults:
+        controller_log.append(
+            "- Developer defaults: enabled (format/typecheck may run by default)"
+        )
     steps: List[Dict[str, Any]] = []
     diagnostics: Dict[str, Any] = {}
 
@@ -387,7 +410,7 @@ async def run_quality_suite(
         steps.extend([py, pip, git_status])
 
     async def maybe_run_optional(
-        name: str, command: Optional[str]
+        name: str, command: Optional[str], *, is_default: bool
     ) -> Optional[Dict[str, Any]]:
         if not command:
             return None
@@ -404,22 +427,17 @@ async def run_quality_suite(
             repo=repo,
             branch=branch,
         )
+        if (
+            is_default
+            and step.get("status") == "failed"
+            and (step.get("missing_module") or step.get("command_not_found_hint"))
+        ):
+            step["status"] = "skipped"
+            summary = step.get("summary")
+            if isinstance(summary, dict):
+                summary["note"] = "Skipped default step because tool was not available"
+            step["default_skipped"] = True
         return step
-
-    # Optional steps (developer-controlled).
-    fmt_step = await maybe_run_optional("format", format_command)
-    if fmt_step is not None:
-        steps.append(fmt_step)
-        controller_log.append(f"- Format: {fmt_step.get('status')}")
-        if fail_fast and fmt_step.get("status") == "failed":
-            out = {
-                "status": "failed",
-                "suite": suite,
-                "steps": _prune_raw_steps(steps, include_raw_step_outputs),
-                "diagnostics": diagnostics,
-                "controller_log": controller_log + ["- Aborted: format step failed"],
-            }
-            return out
 
     lint_step: Dict[str, Any]
     if lint_command:
@@ -487,7 +505,26 @@ async def run_quality_suite(
         steps.append(lint_step)
         controller_log.append("- Lint: skipped (no lint_command provided)")
 
-    type_step = await maybe_run_optional("typecheck", typecheck_command)
+    # Optional steps (developer-controlled).
+    # Run after lint so fail-fast lint behavior remains the primary gate.
+    fmt_step = await maybe_run_optional(
+        "format", format_command, is_default=bool(defaulted.get("format"))
+    )
+    if fmt_step is not None:
+        steps.append(fmt_step)
+        controller_log.append(f"- Format: {fmt_step.get('status')}")
+        if fail_fast and fmt_step.get("status") == "failed":
+            return {
+                "status": "failed",
+                "suite": suite,
+                "steps": _prune_raw_steps(steps, include_raw_step_outputs),
+                "diagnostics": diagnostics,
+                "controller_log": controller_log + ["- Aborted: format step failed"],
+            }
+
+    type_step = await maybe_run_optional(
+        "typecheck", typecheck_command, is_default=bool(defaulted.get("typecheck"))
+    )
     if type_step is not None:
         steps.append(type_step)
         controller_log.append(f"- Typecheck: {type_step.get('status')}")
@@ -500,7 +537,7 @@ async def run_quality_suite(
                 "controller_log": controller_log + ["- Aborted: typecheck failed"],
             }
 
-    sec_step = await maybe_run_optional("security", security_command)
+    sec_step = await maybe_run_optional("security", security_command, is_default=False)
     if sec_step is not None:
         steps.append(sec_step)
         controller_log.append(f"- Security: {sec_step.get('status')}")
