@@ -29,7 +29,7 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import TOOLS_LOGGER, TOOL_DENYLIST
+from github_mcp.config import TOOL_DENYLIST
 from github_mcp.mcp_server.context import (
     WRITE_ALLOWED,
     get_request_context,
@@ -562,9 +562,6 @@ def mcp_tool(
 
         tool_name = name or getattr(func, "__name__", "tool")
         if tool_name in TOOL_DENYLIST:
-            TOOLS_LOGGER.info(
-                "Skipping MCP tool registration for %s (denied by config)", tool_name
-            )
             return func
         llm_level = "advanced" if write_action else "basic"
         normalized_description = description or _normalize_tool_description(
@@ -804,21 +801,13 @@ def register_extra_tools_if_available() -> None:
         mod = importlib.import_module("extra_tools")
         register_extra_tools = getattr(mod, "register_extra_tools", None)
         if not callable(register_extra_tools):
-            TOOLS_LOGGER.warning(
-                "extra_tools module loaded but register_extra_tools is missing or not callable"
-            )
             return None
         register_extra_tools(mcp_tool)
     except ModuleNotFoundError:
         # Optional module; safe to ignore.
         return None
     except Exception as exc:
-        # Do not crash server startup, but make failures visible in logs.
-        TOOLS_LOGGER.warning(
-            "Failed to register optional extra_tools; tools will be omitted: %s",
-            exc,
-            exc_info=True,
-        )
+        del exc
         return None
 
 

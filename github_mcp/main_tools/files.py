@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from typing import Any, NotRequired, TypedDict
 
-import github_mcp.config as config
 from github_mcp.diff_utils import build_unified_diff
 from github_mcp.utils import _normalize_write_context, extract_sha, require_text
-from github_mcp.write_logging import log_write_diff
 
 from ._main import _main
 
@@ -94,19 +92,14 @@ async def create_file(
     )
     sha_after = extract_sha(verified)
 
-    # Render-log friendly diff logging (colored additions/removals).
-    full_diff = build_unified_diff(
-        "",
-        content,
-        fromfile=f"a/{normalized_path}",
-        tofile=f"b/{normalized_path}",
-    )
-    log_write_diff(
-        "Created", full_name=full_name, path=normalized_path, diff_text=full_diff
-    )
-
     diff_text: str | None = None
     if return_diff:
+        full_diff = build_unified_diff(
+            "",
+            content,
+            fromfile=f"a/{normalized_path}",
+            tofile=f"b/{normalized_path}",
+        )
         diff_text = full_diff
 
     return {
@@ -183,21 +176,16 @@ async def apply_text_update_and_commit(
     )
     sha_after = extract_sha(verified)
 
-    # Render-log friendly diff logging (colored additions/removals).
-    before = old_text or ""
-    after = updated_content
-    full_diff = build_unified_diff(
-        before,
-        after,
-        fromfile=f"a/{normalized_path}",
-        tofile=f"b/{normalized_path}",
-    )
-    log_write_diff(
-        "Committed", full_name=full_name, path=normalized_path, diff_text=full_diff
-    )
-
     diff_text: str | None = None
     if return_diff:
+        before = old_text or ""
+        after = updated_content
+        full_diff = build_unified_diff(
+            before,
+            after,
+            fromfile=f"a/{normalized_path}",
+            tofile=f"b/{normalized_path}",
+        )
         diff_text = full_diff
 
     return {
@@ -280,46 +268,6 @@ async def move_file(
             "DELETE",
             f"/repos/{full_name}/contents/{normalized_from_path}",
             json=delete_body,
-        )
-
-    # Render-log friendly move/delete summaries.
-    try:
-        config.TOOLS_LOGGER.chat(
-            "Moved %s -> %s",
-            normalized_from_path,
-            normalized_to_path,
-            extra={
-                "repo": full_name,
-                "from_path": normalized_from_path,
-                "to_path": normalized_to_path,
-                "event": "write_move",
-            },
-        )
-
-        # If we actually deleted the old path, also show the deletion diff.
-        if isinstance(delete_result, dict) and delete_result.get("status") != "noop":
-            delete_diff = build_unified_diff(
-                source_text,
-                "",
-                fromfile=f"a/{normalized_from_path}",
-                tofile=f"b/{normalized_from_path}",
-            )
-            log_write_diff(
-                "Removed",
-                full_name=full_name,
-                path=normalized_from_path,
-                diff_text=delete_diff,
-                detail_suffix=" (deleted)",
-            )
-    except Exception:
-        config.TOOLS_LOGGER.debug(
-            "Move diff logging failed",
-            exc_info=True,
-            extra={
-                "repo": full_name,
-                "from_path": normalized_from_path,
-                "to_path": normalized_to_path,
-            },
         )
 
     return {
