@@ -99,7 +99,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
     # Keep parity with the main introspection surface.
     # write_allowed indicates auto-approval vs approval-gated writes.
-    _ = bool(get_write_allowed(refresh_after_seconds=0.0))
+    write_allowed_gate = bool(get_write_allowed(refresh_after_seconds=0.0))
     catalog = list_all_actions(include_parameters=True, compact=False)
     catalog_index = {
         entry.get("name"): entry
@@ -118,7 +118,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         )
         # Approval-gated writes: keep actions enabled even when write_allowed is false.
         write_enabled = bool(catalog_entry.get("write_enabled", True))
-        tool_write_allowed = bool(catalog_entry.get("write_allowed", True))
+        tool_write_allowed = (not write_action) or write_allowed_gate
 
         schema = (
             catalog_entry.get("input_schema")
