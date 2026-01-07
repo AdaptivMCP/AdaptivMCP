@@ -216,11 +216,11 @@ def list_all_actions(
 
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
         # Approval-gated writes:
-        # - All tools are enabled.
+        # - All tools remain enabled.
         # - write_allowed indicates whether writes are auto-approved (true) or
         #   require a confirmation prompt (false).
         write_enabled = True
-        tool_write_allowed = True
+        tool_write_allowed = (not base_write_action) or write_allowed
 
         tool_info: Dict[str, Any] = {
             "name": name_str,
@@ -480,7 +480,7 @@ def _validate_single_tool_args(
         ),
         "write_action": base_write_action,
         "write_allowed": (not base_write_action) or write_allowed,
-        "write_enabled": (not base_write_action) or write_allowed,
+        "write_enabled": True,
     }
 
 

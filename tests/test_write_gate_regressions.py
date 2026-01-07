@@ -112,7 +112,7 @@ def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
     assert idx["read_tool"]["write_allowed"] is True
     assert idx["write_tool"]["write_action"] is True
     assert idx["write_tool"]["write_enabled"] is True
-    assert idx["write_tool"]["write_allowed"] is True
+    assert idx["write_tool"]["write_allowed"] is False
 
     # Gate on.
     monkeypatch.setenv("GITHUB_MCP_WRITE_ALLOWED", "true")
