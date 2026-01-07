@@ -11,6 +11,7 @@ import json
 import os
 import time
 from urllib.parse import parse_qs
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Literal
 import httpx  # noqa: F401
 import anyio
@@ -437,7 +438,10 @@ if app is not None:
 
 
 try:
-    app.mount("/static", StaticFiles(directory="assets"), name="static")
+    # Use an absolute path so static mounting works regardless of CWD
+    # (e.g., running via uvicorn, pytest, or hosted platforms like Render).
+    _assets_dir = Path(__file__).resolve().parent / "assets"
+    app.mount("/static", StaticFiles(directory=str(_assets_dir)), name="static")
 except Exception:
     # Static assets are optional; failures should not prevent server startup.
     pass
