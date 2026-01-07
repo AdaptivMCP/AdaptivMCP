@@ -106,6 +106,12 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 
 ## Configuration
 
+### Minimum required configuration
+
+At minimum, set one GitHub authentication token so the server can access the API:
+
+- GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, or GITHUB_OAUTH_TOKEN
+
 ### GitHub authentication
 
 - GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, GITHUB_OAUTH_TOKEN — GitHub API token (first configured is used)

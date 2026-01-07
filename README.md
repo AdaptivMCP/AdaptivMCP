@@ -14,6 +14,22 @@ connected Adaptiv connector with multiple tasks and queries. Today it ships with
 GitHub and Render integrations, with plans for additional service integrations in
 future updates.
 
+## Quickstart
+
+1. Export a GitHub token so the server can authenticate:
+
+   ```bash
+   export GITHUB_TOKEN="ghp_your_token_here"
+   ```
+
+2. Run the server:
+
+   ```bash
+   uvicorn main:app --host 0.0.0.0 --port 8000
+   ```
+
+3. Point your MCP client to `/sse` and verify `/healthz` is healthy.
+
 ## Development
 
 - Install dev dependencies: `make install-dev`
