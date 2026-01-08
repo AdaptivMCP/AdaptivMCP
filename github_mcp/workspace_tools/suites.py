@@ -76,6 +76,9 @@ def _extract_command_not_found(stdout: str, stderr: str) -> str:
     combined = f"{stderr}\n{stdout}".lower()
     for marker in (
         "command not found",
+        # Common POSIX shell output: "/bin/sh: 1: ruff: not found".
+        # We intentionally look for the generic suffix to catch many tools.
+        ": not found",
         "no such file or directory",
         "is not recognized as an internal or external command",
     ):
