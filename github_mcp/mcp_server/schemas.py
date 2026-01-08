@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
 import re
 import types
 import typing
@@ -287,7 +288,27 @@ def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, 
 
 
 def _truncate_str(s: str) -> str:
-    return s
+    """Truncate long strings used in log previews.
+
+    Tool schemas and log previews can become extremely large when args include
+    embedded content (e.g., job logs, file contents). Provider log streams and
+    downstream UIs often have size limits; overly large records can be dropped
+    or become unreadable.
+
+    This truncation applies ONLY to preview strings (not tool args themselves).
+    The limit is configurable via MCP_TOOL_PREVIEW_MAX_CHARS.
+    """
+
+    try:
+        limit = int(os.environ.get("MCP_TOOL_PREVIEW_MAX_CHARS", "4000"))
+    except Exception:
+        limit = 4000
+
+    if limit <= 0:
+        return s
+    if len(s) <= limit:
+        return s
+    return f"{s[:limit]}…<truncated {len(s) - limit} chars>"
 
 
 def _normalize_and_truncate(s: str) -> str:
