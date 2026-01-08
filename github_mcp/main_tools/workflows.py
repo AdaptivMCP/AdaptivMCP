@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import datetime, timedelta, timezone
+import os
+
 from typing import Any, Dict, List, Optional
 
 from github_mcp.exceptions import GitHubAPIError
@@ -348,7 +350,11 @@ async def get_workflow_run_overview(
 
 
 async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
-    """Fetch raw logs for a GitHub Actions job without truncation."""
+    """Fetch raw logs for a GitHub Actions job.
+
+    Note: Large job logs can exceed downstream UI/log size limits. This tool
+    caps the returned log size via MCP_JOB_LOGS_MAX_CHARS.
+    """
 
     m = _main()
 
@@ -372,10 +378,22 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     else:
         logs = resp.text
 
+    # Avoid returning unbounded logs in tool output.
+    try:
+        max_chars = int(os.environ.get("MCP_JOB_LOGS_MAX_CHARS", "200000"))
+    except Exception:
+        max_chars = 200_000
+    truncated = False
+    if max_chars > 0 and isinstance(logs, str) and len(logs) > max_chars:
+        logs = f"{logs[:max_chars]}…"
+        truncated = True
+
     return {
         "status_code": resp.status_code,
         "logs": logs,
         "content_type": content_type,
+        "logs_truncated": truncated,
+        "max_chars": max_chars,
     }
 
 
