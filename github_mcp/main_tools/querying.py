@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import sys
+import ipaddress
 import os
+import socket
+import urllib.parse
 
 from typing import Any, Dict, Literal, Optional
 
@@ -72,6 +75,109 @@ def _get_int_env(name: str, default: int) -> int:
         return default
 
 
+def _get_csv_env(name: str) -> list[str]:
+    raw = os.environ.get(name, "")
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+
+def _is_ip_blocked(ip: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip)
+    except Exception:
+        return True
+
+    # Block anything that isn't globally routable.
+    return not addr.is_global
+
+
+def _host_matches_suffix(host: str, suffixes: list[str]) -> bool:
+    h = (host or "").lower().strip().rstrip(".")
+    for s in suffixes:
+        s2 = s.lower().strip().lstrip(".")
+        if not s2:
+            continue
+        if h == s2 or h.endswith("." + s2):
+            return True
+    return False
+
+
+def _validate_external_url(url: str) -> tuple[bool, str]:
+    """Block obvious SSRF targets for fetch_url.
+
+    This is a defense-in-depth check. It is intentionally conservative.
+    Operators can allow specific hosts via MCP_FETCH_URL_ALLOW_HOSTS or
+    MCP_FETCH_URL_ALLOW_HOST_SUFFIXES.
+    """
+
+    allow_hosts = {
+        h.lower().strip().rstrip(".") for h in _get_csv_env("MCP_FETCH_URL_ALLOW_HOSTS")
+    }
+    allow_suffixes = _get_csv_env("MCP_FETCH_URL_ALLOW_HOST_SUFFIXES")
+    deny_hosts = {
+        h.lower().strip().rstrip(".") for h in _get_csv_env("MCP_FETCH_URL_DENY_HOSTS")
+    }
+    deny_suffixes = _get_csv_env("MCP_FETCH_URL_DENY_HOST_SUFFIXES")
+
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except Exception:
+        return False, "Invalid URL"
+
+    if parsed.scheme not in {"http", "https"}:
+        return False, "Only http/https URLs are allowed"
+
+    host = (parsed.hostname or "").strip().rstrip(".")
+    if not host:
+        return False, "URL must include a hostname"
+
+    host_l = host.lower()
+    if host_l in deny_hosts or _host_matches_suffix(host_l, deny_suffixes):
+        return False, "Host is not allowed"
+
+    # If allowlists are set, require a match.
+    if allow_hosts or allow_suffixes:
+        if host_l not in allow_hosts and not _host_matches_suffix(
+            host_l, allow_suffixes
+        ):
+            return False, "Host is not in allowlist"
+
+    # Common local/reserved hostnames.
+    if host_l in {"localhost", "localhost.localdomain"}:
+        return False, "Localhost is not allowed"
+    if host_l.endswith(".local") or host_l.endswith(".internal"):
+        return False, "Local domains are not allowed"
+
+    # If hostname is an IP literal, validate directly.
+    try:
+        ipaddress.ip_address(host_l)
+        if _is_ip_blocked(host_l):
+            return False, "IP address is not allowed"
+        return True, ""
+    except Exception:
+        pass
+
+    # Resolve A/AAAA and reject non-global IPs.
+    try:
+        infos = socket.getaddrinfo(
+            host,
+            parsed.port or (443 if parsed.scheme == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
+    except Exception:
+        return False, "Unable to resolve hostname"
+
+    for family, _socktype, _proto, _canon, sockaddr in infos:
+        ip = None
+        if family == socket.AF_INET:
+            ip = sockaddr[0]
+        elif family == socket.AF_INET6:
+            ip = sockaddr[0]
+        if ip and _is_ip_blocked(ip):
+            return False, "Resolved IP is not allowed"
+
+    return True, ""
+
+
 async def fetch_url(url: str) -> Dict[str, Any]:
     """Fetch an arbitrary HTTP/HTTPS URL via the shared external client.
 
@@ -96,6 +202,14 @@ async def fetch_url(url: str) -> Dict[str, Any]:
     client = external_client_instance()
     max_bytes = _get_int_env("MCP_FETCH_URL_MAX_BYTES", 200_000)
     timeout_s = _get_int_env("MCP_FETCH_URL_TIMEOUT_SECONDS", 30)
+
+    ok, reason = _validate_external_url(url)
+    if not ok:
+        return {
+            "status": "error",
+            "message": f"fetch_url blocked: {reason}",
+            "url": url,
+        }
     async with get_concurrency_semaphore():
         try:
             # Stream to avoid buffering unbounded responses.
