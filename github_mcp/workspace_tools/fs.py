@@ -1,5 +1,6 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
+import tempfile
 
 from typing import Any, Dict, Optional
 
@@ -102,12 +103,63 @@ def _workspace_write_text(
         os.makedirs(parent, exist_ok=True)
 
     existed = os.path.exists(abs_path)
+    prev_mode: Optional[int] = None
+    if existed:
+        try:
+            prev_mode = os.stat(abs_path).st_mode
+        except Exception:
+            prev_mode = None
+
     data = (text or "").encode("utf-8")
 
-    tmp_path = abs_path + ".tmp"
-    with open(tmp_path, "wb") as f:
-        f.write(data)
-    os.replace(tmp_path, abs_path)
+    # Use a unique temp file name in the same directory so os.replace is atomic
+    # across filesystems. Avoid fixed suffixes that can collide under concurrent
+    # writes.
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=os.path.basename(abs_path) + ".",
+        suffix=".tmp",
+        dir=parent,
+    )
+    try:
+        with os.fdopen(fd, "wb") as f:
+            fd = -1
+            f.write(data)
+            try:
+                f.flush()
+                os.fsync(f.fileno())
+            except Exception:
+                # Best-effort durability; atomicity is provided by os.replace.
+                pass
+
+        # Preserve the previous file mode when overwriting an existing file.
+        if prev_mode is not None:
+            try:
+                os.chmod(tmp_path, prev_mode)
+            except Exception:
+                pass
+
+        os.replace(tmp_path, abs_path)
+
+        # Best-effort directory fsync so the rename is durable on POSIX.
+        try:
+            dir_fd = os.open(parent, os.O_DIRECTORY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except Exception:
+            pass
+    finally:
+        if fd not in (-1, None):
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
     return {
         "path": path,
