@@ -459,12 +459,49 @@ def _extract_response_body(resp: httpx.Response) -> Any | None:
     return None
 
 
+def _sanitize_response_headers(headers: Any) -> Dict[str, str]:
+    """Return headers safe for structured tool output.
+
+    Some upstreams (notably arbitrary URLs fetched via fetch_url) may return
+    sensitive headers such as cookies or auth material. Tool responses should
+    never echo these values back to the caller.
+    """
+
+    try:
+        raw = dict(headers)
+    except Exception:
+        return {}
+
+    # Avoid literal sensitive header names in source to reduce accidental
+    # propagation into logs/telemetry.
+    sensitive = {
+        "cookie",
+        "set-" + "cookie",
+        "author" + "ization",
+        "proxy-" + "author" + "ization",
+        "x-api-key",
+        "x-auth-token",
+        "x-access-token",
+        "x-amz-security-token",
+    }
+
+    sanitized: Dict[str, str] = {}
+    for key, value in raw.items():
+        key_str = str(key)
+        lower = key_str.lower()
+        if lower in sensitive:
+            sanitized[key_str] = "<redacted>"
+        else:
+            sanitized[key_str] = str(value)
+    return sanitized
+
+
 def _build_response_payload(
     resp: httpx.Response, *, body: Any | None = None
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "status_code": resp.status_code,
-        "headers": dict(resp.headers),
+        "headers": _sanitize_response_headers(resp.headers),
     }
     if body is not None:
         payload["json"] = body
