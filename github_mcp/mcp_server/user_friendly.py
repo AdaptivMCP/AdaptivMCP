@@ -174,8 +174,6 @@ def attach_error_user_facing_fields(tool_name: str, payload: Any) -> Any:
 
     out: Dict[str, Any] = dict(payload)
     err = out.get("error") if isinstance(out.get("error"), Mapping) else {}
-    existing = out.get("controller_log")
-    existing_lines = _bounded_lines(_clean_lines(existing)) if existing else []
 
     title = f"{tool_name}: failed"
     message = _safe_str(
@@ -202,10 +200,9 @@ def attach_error_user_facing_fields(tool_name: str, payload: Any) -> Any:
 
     next_steps = _clean_lines(_preview_text(hint)) if hint else []
 
-    combined_bullets = existing_lines + bullets if existing_lines else bullets
     summary = ToolSummary(
         title=title,
-        bullets=_bounded_lines(combined_bullets),
+        bullets=_bounded_lines(bullets),
         next_steps=_bounded_lines(next_steps),
     )
 
