@@ -6,6 +6,7 @@ from typing import Any, Dict, Literal, Optional
 from github_mcp.http_clients import (
     _external_client_instance as _default_external_client_instance,
     _get_concurrency_semaphore as _default_get_concurrency_semaphore,
+    _sanitize_response_headers as _default_sanitize_response_headers,
 )
 from github_mcp.server import (
     _github_request as _default_github_request,
@@ -74,6 +75,9 @@ async def fetch_url(url: str) -> Dict[str, Any]:
     structured_tool_error = _resolve_main_helper(
         "_structured_tool_error", _default_structured_tool_error
     )
+    sanitize_response_headers = _resolve_main_helper(
+        "_sanitize_response_headers", _default_sanitize_response_headers
+    )
 
     client = external_client_instance()
     async with get_concurrency_semaphore():
@@ -88,7 +92,7 @@ async def fetch_url(url: str) -> Dict[str, Any]:
 
     return {
         "status_code": resp.status_code,
-        "headers": dict(resp.headers),
+        "headers": sanitize_response_headers(resp.headers),
         "content": resp.text,
     }
 
