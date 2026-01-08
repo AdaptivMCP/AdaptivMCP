@@ -459,6 +459,23 @@ def _extract_response_body(resp: httpx.Response) -> Any | None:
     return None
 
 
+def _safe_text_excerpt(text: Any, *, limit: int = 500) -> str:
+    """Best-effort short excerpt for exception messages.
+
+    Avoid emitting very large upstream responses in exception messages.
+    """
+
+    try:
+        raw = str(text)
+    except Exception:
+        return "<unprintable>"
+    if limit <= 0:
+        return raw
+    if len(raw) <= limit:
+        return raw
+    return f"{raw[:limit]}…"
+
+
 def _sanitize_response_headers(headers: Any) -> Dict[str, str]:
     """Return headers safe for structured tool output.
 

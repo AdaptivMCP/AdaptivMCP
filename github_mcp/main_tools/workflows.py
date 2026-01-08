@@ -10,6 +10,22 @@ from github_mcp.exceptions import GitHubAPIError
 from ._main import _main
 
 
+def _safe_resp_text(resp: Any, limit: int = 500) -> str:
+    try:
+        text = getattr(resp, "text", "")
+    except Exception:
+        text = ""
+
+    try:
+        raw = str(text)
+    except Exception:
+        return "<unprintable>"
+
+    if limit <= 0 or len(raw) <= limit:
+        return raw
+    return f"{raw[:limit]}…"
+
+
 async def list_workflow_runs(
     full_name: str,
     branch: Optional[str] = None,
@@ -345,7 +361,9 @@ async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
     async with m._get_concurrency_semaphore():
         resp = await client.send(request, follow_redirects=True)
     if resp.status_code >= 400:
-        raise GitHubAPIError(f"GitHub job logs error {resp.status_code}: {resp.text}")
+        raise GitHubAPIError(
+            f"GitHub job logs error {resp.status_code}: {_safe_resp_text(resp)}"
+        )
 
     content_type = resp.headers.get("Content-Type", "")
     if "zip" in content_type.lower():
@@ -396,7 +414,7 @@ async def wait_for_workflow_run(
             )
         if resp.status_code >= 400:
             raise GitHubAPIError(
-                f"GitHub workflow run error {resp.status_code}: {resp.text}"
+                f"GitHub workflow run error {resp.status_code}: {_safe_resp_text(resp)}"
             )
 
         data = resp.json()
@@ -455,7 +473,7 @@ async def trigger_workflow_dispatch(
         )
     if resp.status_code not in (204, 201):
         raise GitHubAPIError(
-            f"GitHub workflow dispatch error {resp.status_code}: {resp.text}"
+            f"GitHub workflow dispatch error {resp.status_code}: {_safe_resp_text(resp)}"
         )
 
     summary_lines = [

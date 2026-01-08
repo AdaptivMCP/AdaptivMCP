@@ -6,6 +6,22 @@ from typing import Any, Dict, Optional
 from ._main import _main
 
 
+def _safe_resp_text(resp: Any, limit: int = 500) -> str:
+    try:
+        text = getattr(resp, "text", "")
+    except Exception:
+        text = ""
+
+    try:
+        raw = str(text)
+    except Exception:
+        return "<unprintable>"
+
+    if limit <= 0 or len(raw) <= limit:
+        return raw
+    return f"{raw[:limit]}…"
+
+
 async def create_branch(
     full_name: str,
     branch: str,
@@ -50,7 +66,7 @@ async def create_branch(
                 base_sha = obj.get("sha")
     else:
         raise m.GitHubAPIError(
-            f"GitHub create_branch base ref error {resp.status_code}: {resp.text}"
+            f"GitHub create_branch base ref error {resp.status_code}: {_safe_resp_text(resp)}"
         )
 
     if base_sha is None:
@@ -71,7 +87,7 @@ async def create_branch(
         return {"status_code": create_resp.status_code, "json": create_resp.json()}
 
     raise m.GitHubAPIError(
-        f"GitHub create_branch error {create_resp.status_code}: {create_resp.text}"
+        f"GitHub create_branch error {create_resp.status_code}: {_safe_resp_text(create_resp)}"
     )
 
 
@@ -91,7 +107,7 @@ async def ensure_branch(
         return await create_branch(full_name, branch, from_ref)
     if resp.status_code >= 400:
         raise m.GitHubAPIError(
-            f"GitHub ensure_branch error {resp.status_code}: {resp.text}"
+            f"GitHub ensure_branch error {resp.status_code}: {_safe_resp_text(resp)}"
         )
     return {"status_code": resp.status_code, "json": resp.json()}
 
