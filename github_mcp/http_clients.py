@@ -629,7 +629,7 @@ async def _github_request(
 
             raise GitHubRateLimitError(
                 (
-                    f"GitHub rate limit exceeded; retry after {reset_hint} (resets after {reset_hint})"
+                    f"GitHub rate limit exceeded; retry after {reset_hint}"
                     if reset_hint
                     else "GitHub rate limit exceeded"
                 )
