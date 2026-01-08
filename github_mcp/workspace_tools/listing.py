@@ -1,6 +1,7 @@
 # Split from github_mcp.tools_workspace (generated).
 
 import os
+import posixpath
 import re
 from typing import Any, Dict, Optional
 
@@ -26,6 +27,11 @@ def _normalize_workspace_path(path: str) -> str:
     normalized = path.strip().replace("\\", "/")
     while "//" in normalized:
         normalized = normalized.replace("//", "/")
+    # Collapse dot segments while preserving relative semantics.
+    # `posixpath.normpath` is safe here because we already normalized separators.
+    normalized = posixpath.normpath(normalized)
+    if normalized == ".":
+        normalized = ""
     return normalized
 
 
