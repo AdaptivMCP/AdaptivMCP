@@ -23,7 +23,11 @@ Common fields you may see:
 - `result`: Tool-specific payload (the "real" output).
 - `summary`: A compact, UI-friendly summary (title + optional bullets/next steps).
 - `user_message`: A short human-readable status message.
-- `controller_log`: Debug/trace breadcrumbs (may be empty).
+- `controller_log`: UI-oriented execution trace (always bounded; typically includes tool name, args preview, status, duration).
+
+Notes:
+- Many tools return `summary`, `user_message`, and `controller_log` inside the tool payload (i.e. inside `result`). Some transports/UIs may also wrap these at a higher level depending on how they display tool results.
+- The controller/UI treats `controller_log` as the primary short-form status field; it is intentionally concise (bounded to 12 lines).
 
 Some failures (or safety-gated runs) may return an error-shaped payload instead of `result`.
 
@@ -47,13 +51,23 @@ Some failures (or safety-gated runs) may return an error-shaped payload instead 
         "visibility": "public"
       }
     ],
-    "controller_log": [],
+    "controller_log": [
+      "Tool: list_tools",
+      "Args: {\"only_write\": false}",
+      "Status: success",
+      "Duration: <elapsed>"
+    ],
     "summary": {
       "title": "list_tools: completed",
-      "bullets": [],
+      "bullets": [
+        "Tool: list_tools",
+        "Args: {\"only_write\": false}",
+        "Status: success",
+        "Duration: <elapsed>"
+      ],
       "next_steps": []
     },
-    "user_message": "list_tools: completed"
+    "user_message": "list_tools: completed\n- Tool: list_tools\n- Args: {\"only_write\": false}\n- Status: success\n- Duration: <elapsed>"
   }
 }
 ```
@@ -70,13 +84,23 @@ Notes:
     "branch": "main",
     "reset": true,
     "created": false,
-    "controller_log": [],
+    "controller_log": [
+      "Tool: ensure_workspace_clone",
+      "Args: {\"ref\": \"main\"}",
+      "Status: success",
+      "Duration: <elapsed>"
+    ],
     "summary": {
       "title": "ensure_workspace_clone: completed",
-      "bullets": [],
+      "bullets": [
+        "Tool: ensure_workspace_clone",
+        "Args: {\"ref\": \"main\"}",
+        "Status: success",
+        "Duration: <elapsed>"
+      ],
       "next_steps": []
     },
-    "user_message": "ensure_workspace_clone: completed"
+    "user_message": "ensure_workspace_clone: completed\n- Tool: ensure_workspace_clone\n- Args: {\"ref\": \"main\"}\n- Status: success\n- Duration: <elapsed>"
   }
 }
 ```
@@ -104,12 +128,23 @@ Notes:
  * [new branch]      docs/detailed-tools-response-examples -> docs/detailed-tools-response-examples
 "
     },
+    "controller_log": [
+      "Tool: workspace_create_branch",
+      "Args: {\"base_ref\": \"main\", \"new_branch\": \"docs/detailed-tools-response-examples\"}",
+      "Status: success",
+      "Duration: <elapsed>"
+    ],
     "summary": {
       "title": "workspace_create_branch: completed",
-      "bullets": [],
+      "bullets": [
+        "Tool: workspace_create_branch",
+        "Args: {\"base_ref\": \"main\", \"new_branch\": \"docs/detailed-tools-response-examples\"}",
+        "Status: success",
+        "Duration: <elapsed>"
+      ],
       "next_steps": []
     },
-    "user_message": "workspace_create_branch: completed"
+    "user_message": "workspace_create_branch: completed\n- Tool: workspace_create_branch\n- Args: {\"base_ref\": \"main\", \"new_branch\": \"docs/detailed-tools-response-examples\"}\n- Status: success\n- Duration: <elapsed>"
   }
 }
 ```

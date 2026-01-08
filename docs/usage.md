@@ -173,6 +173,10 @@ practical UI/provider limits:
 
 - MCP_TOOL_DENYLIST — comma-separated tool names to disable (set to none to disable the denylist)
 
+FastMCP registration metadata:
+
+- EMIT_TOOL_OBJECT_METADATA — when set to a truthy value, the server will emit additional tool object metadata (such as tags) during tool registration. This is disabled by default because some downstream clients treat tags as policy/execution hints and may mis-classify tools.
+
 ### fetch_url SSRF guardrails
 
 The `fetch_url` tool is intentionally constrained to reduce SSRF risk.
@@ -195,7 +199,23 @@ destinations.
 
 ### Logging
 
-- LOG_LEVEL, LOG_FORMAT, LOG_STYLE
+The server emits two kinds of logs:
+
+1) Server/runtime logs (stdout/stderr logs emitted by Python logging).
+2) Per-tool UI logs returned in tool results (see `controller_log` below).
+
+Runtime logging configuration:
+
+- LOG_LEVEL — minimum log level (e.g. DEBUG, INFO, WARNING).
+- LOG_CHAT_LEVEL — numeric level used for the custom CHAT log level (default 25). This is used for high-volume, user-facing traces that you may want to suppress in production.
+- LOG_FORMAT — log formatter pattern (default is a compact time|level|logger|message format).
+- LOG_STYLE — formatting style (e.g. `color` when supported by the deployment environment).
+
+Tool result logging fields:
+
+Most tools return a `controller_log` list of short, UI-oriented lines (bounded to 12 lines). For wrapped tools, the server populates this with a compact execution trace (tool name, args preview, status, duration). Tools may also return their own `controller_log`; when present, it will be preferred but still bounded to keep UI payloads small.
+
+Tool argument previews in `controller_log` are truncated according to `MCP_TOOL_PREVIEW_MAX_CHARS` (see Output limits).
 
 ## Local development
 
