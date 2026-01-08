@@ -1,5 +1,6 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
+
 from typing import Any, Dict, Optional
 
 from github_mcp.server import (
@@ -33,7 +34,12 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     return candidate
 
 
-def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
+def _workspace_read_text(
+    repo_dir: str,
+    path: str,
+    *,
+    max_bytes: int = 200_000,
+) -> Dict[str, Any]:
     abs_path = _workspace_safe_join(repo_dir, path)
     if not os.path.exists(abs_path):
         return {
@@ -42,10 +48,25 @@ def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
             "text": "",
             "encoding": "utf-8",
             "had_decoding_errors": False,
+            "content_truncated": False,
+            "max_bytes": max_bytes,
         }
 
+    try:
+        total_size = os.path.getsize(abs_path)
+    except Exception:
+        total_size = None
+
+    # Avoid reading arbitrarily large files into memory and returning huge tool
+    # payloads. This cap is for the *returned content*, not a permission check.
+    if max_bytes is None or max_bytes < 0:
+        max_bytes = 200_000
+
     with open(abs_path, "rb") as f:
-        data = f.read()
+        data = f.read(max_bytes + 1)
+    truncated = len(data) > max_bytes
+    if truncated:
+        data = data[:max_bytes]
 
     had_errors = False
     try:
@@ -60,7 +81,11 @@ def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
         "text": text,
         "encoding": "utf-8",
         "had_decoding_errors": had_errors,
-        "size_bytes": len(data),
+        # Preserve size_bytes as the on-disk size when available.
+        "size_bytes": total_size if total_size is not None else len(data),
+        "returned_bytes": len(data),
+        "content_truncated": truncated,
+        "max_bytes": max_bytes,
     }
 
 
@@ -113,7 +138,12 @@ async def get_workspace_file_contents(
             full_name, ref=effective_ref, preserve_changes=True
         )
 
-        info = _workspace_read_text(repo_dir, path)
+        try:
+            max_bytes = int(os.environ.get("MCP_WORKSPACE_FILE_MAX_BYTES", "200000"))
+        except Exception:
+            max_bytes = 200_000
+
+        info = _workspace_read_text(repo_dir, path, max_bytes=max_bytes)
         info.update({"full_name": full_name, "ref": effective_ref})
         return info
     except Exception as exc:
