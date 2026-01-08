@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from github_mcp.utils import _normalize_repo_path_for_repo
+
 from ._main import _main
 
 
@@ -112,7 +114,8 @@ async def get_repo_dashboard(
             if "/" in path:
                 continue
 
-            normalized_path = m._normalize_repo_path(path)
+            # `path` should already be repo-relative, but normalize defensively.
+            normalized_path = _normalize_repo_path_for_repo(full_name, path)
             top_level_tree.append(
                 {
                     "path": normalized_path,
