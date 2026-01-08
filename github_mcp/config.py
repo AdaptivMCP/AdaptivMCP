@@ -249,25 +249,12 @@ TOOL_DENYLIST = _resolve_tool_denylist()
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 LOG_STYLE = os.environ.get("LOG_STYLE", "color").lower()
-CHAT_LEVEL = int(os.environ.get("LOG_CHAT_LEVEL", "25"))
 
 # Default to a compact, scannable format.
 LOG_FORMAT = os.environ.get(
     "LOG_FORMAT",
     "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
-
-if not hasattr(logging, "CHAT"):
-    logging.addLevelName(CHAT_LEVEL, "CHAT")
-    logging.CHAT = CHAT_LEVEL  # type: ignore[attr-defined]
-
-if not hasattr(logging.Logger, "chat"):
-
-    def _chat(self: logging.Logger, message: str, *args: object, **kwargs: object) -> None:
-        if self.isEnabledFor(CHAT_LEVEL):
-            self.log(CHAT_LEVEL, message, *args, **kwargs)
-
-    logging.Logger.chat = _chat  # type: ignore[assignment]
 
 
 class _ColorFormatter(logging.Formatter):
@@ -390,7 +377,6 @@ __all__ = [
     "GIT_IDENTITY_PLACEHOLDER_ACTIVE",
     "GIT_IDENTITY_SOURCES",
     "GITHUB_API_BASE",
-    "CHAT_LEVEL",
     "GITHUB_MCP_GIT_IDENTITY_ENV_VARS",
     "GITHUB_TOKEN_ENV_VARS",
     "GITHUB_LOGGER",

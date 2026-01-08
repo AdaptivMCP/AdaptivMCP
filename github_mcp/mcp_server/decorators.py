@@ -30,7 +30,7 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import CHAT_LEVEL, TOOL_DENYLIST
+from github_mcp.config import TOOL_DENYLIST
 from github_mcp.mcp_server.context import (
     WRITE_ALLOWED,
     get_request_context,
@@ -52,96 +52,6 @@ from github_mcp.mcp_server.schemas import (
 
 
 _log = logging.getLogger(__name__)
-_tool_log = logging.getLogger("github_mcp.tool")
-
-
-def _single_line(value: str) -> str:
-    value = (
-        value.replace("\r\n", " ")
-        .replace("\r", " ")
-        .replace("\n", " ")
-        .replace("\t", " ")
-    )
-    return " ".join(value.split()).strip()
-
-
-def _format_duration(duration_s: float) -> str:
-    return f"{duration_s:.2f}s"
-
-
-def _preview_error(exc: BaseException) -> str:
-    msg = _single_line(str(exc) or exc.__class__.__name__)
-    if msg and msg != exc.__class__.__name__:
-        return f"{exc.__class__.__name__}: {msg}"
-    return exc.__class__.__name__
-
-
-def _tool_log_lines(
-    tool_name: str,
-    *,
-    args_preview: str,
-    status: str,
-    duration_s: float | None = None,
-    error: str | None = None,
-) -> list[str]:
-    lines = [f"Tool: {tool_name}"]
-    if args_preview:
-        lines.append(f"Args: {args_preview}")
-    if status:
-        lines.append(f"Status: {status}")
-    if duration_s is not None:
-        lines.append(f"Duration: {_format_duration(duration_s)}")
-    if error:
-        lines.append(f"Error: {error}")
-    return lines
-
-
-def _tool_log_extra(
-    tool_name: str,
-    *,
-    call_id: str,
-    req: Mapping[str, Any],
-    args_preview: str,
-    status: str,
-    duration_s: float | None = None,
-    error: str | None = None,
-    write_action: bool,
-) -> dict[str, Any]:
-    extra: dict[str, Any] = {
-        "tool": tool_name,
-        "call_id": call_id,
-        "status": status,
-        "write_action": write_action,
-        "arg_preview": args_preview,
-        "session_id": req.get("session_id"),
-        "message_id": req.get("message_id"),
-        "path": req.get("path"),
-    }
-    if duration_s is not None:
-        extra["duration_s"] = duration_s
-    if error:
-        extra["error"] = error
-    return extra
-
-
-def _emit_tool_log(
-    message: str, *, extra: Mapping[str, Any] | None = None
-) -> None:
-    _tool_log.log(CHAT_LEVEL, message, extra=dict(extra or {}))
-
-
-def _merge_controller_log(
-    result: Mapping[str, Any], new_lines: list[str]
-) -> dict[str, Any]:
-    merged = list(new_lines)
-    existing = result.get("controller_log")
-    if isinstance(existing, list):
-        merged.extend(_single_line(str(item)) for item in existing if str(item).strip())
-    elif existing not in (None, ""):
-        merged.append(_single_line(str(existing)))
-    out = dict(result)
-    out["controller_log"] = merged
-    return out
 
 
 def _parse_bool(value: Optional[str]) -> bool:
@@ -421,11 +331,8 @@ def _emit_tool_error(
     req: Mapping[str, Any],
     exc: BaseException,
     phase: str,
-    controller_log: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     structured_error = _structured_tool_error(exc, context=tool_name, path=None)
-    if controller_log:
-        structured_error["controller_log"] = controller_log
     structured_error = attach_error_user_facing_fields(tool_name, structured_error)
 
     return structured_error
@@ -675,18 +582,6 @@ def mcp_tool(
                 all_args = _bind_call_args(signature, args, clean_kwargs)
                 req = get_request_context()
                 start = time.perf_counter()
-                args_preview = _format_tool_args_preview(all_args)
-                _emit_tool_log(
-                    f"tool {tool_name} → start | args: {args_preview}",
-                    extra=_tool_log_extra(
-                        tool_name,
-                        call_id=call_id,
-                        req=req,
-                        args_preview=args_preview,
-                        status="start",
-                        write_action=write_action,
-                    ),
-                )
 
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
@@ -709,28 +604,6 @@ def mcp_tool(
                     if _should_enforce_write_gate(req):
                         _enforce_write_allowed(tool_name, write_action=write_action)
                 except Exception as exc:
-                    duration_s = time.perf_counter() - start
-                    error_preview = _preview_error(exc)
-                    _emit_tool_log(
-                        f"tool {tool_name} ✗ failed | duration: {_format_duration(duration_s)} | error: {error_preview}",
-                        extra=_tool_log_extra(
-                            tool_name,
-                            call_id=call_id,
-                            req=req,
-                            args_preview=args_preview,
-                            status="failed",
-                            duration_s=duration_s,
-                            error=error_preview,
-                            write_action=write_action,
-                        ),
-                    )
-                    controller_log = _tool_log_lines(
-                        tool_name,
-                        args_preview=args_preview,
-                        status="failed",
-                        duration_s=duration_s,
-                        error=error_preview,
-                    )
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
@@ -741,7 +614,6 @@ def mcp_tool(
                         req=req,
                         exc=exc,
                         phase="preflight",
-                        controller_log=controller_log,
                     )
                     coerced = _coerce_tool_exception(tool_name, exc, structured_error)
                     if coerced is exc:
@@ -751,28 +623,6 @@ def mcp_tool(
                 try:
                     result = await func(*args, **clean_kwargs)
                 except Exception as exc:
-                    duration_s = time.perf_counter() - start
-                    error_preview = _preview_error(exc)
-                    _emit_tool_log(
-                        f"tool {tool_name} ✗ failed | duration: {_format_duration(duration_s)} | error: {error_preview}",
-                        extra=_tool_log_extra(
-                            tool_name,
-                            call_id=call_id,
-                            req=req,
-                            args_preview=args_preview,
-                            status="failed",
-                            duration_s=duration_s,
-                            error=error_preview,
-                            write_action=write_action,
-                        ),
-                    )
-                    controller_log = _tool_log_lines(
-                        tool_name,
-                        args_preview=args_preview,
-                        status="failed",
-                        duration_s=duration_s,
-                        error=error_preview,
-                    )
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
@@ -783,7 +633,6 @@ def mcp_tool(
                         req=req,
                         exc=exc,
                         phase="execute",
-                        controller_log=controller_log,
                     )
                     coerced = _coerce_tool_exception(tool_name, exc, structured_error)
                     if coerced is exc:
@@ -794,26 +643,6 @@ def mcp_tool(
                     result = {}
                 if not isinstance(result, Mapping):
                     result = {"result": result}
-                duration_s = time.perf_counter() - start
-                _emit_tool_log(
-                    f"tool {tool_name} ✓ success | duration: {_format_duration(duration_s)}",
-                    extra=_tool_log_extra(
-                        tool_name,
-                        call_id=call_id,
-                        req=req,
-                        args_preview=args_preview,
-                        status="success",
-                        duration_s=duration_s,
-                        write_action=write_action,
-                    ),
-                )
-                controller_log = _tool_log_lines(
-                    tool_name,
-                    args_preview=args_preview,
-                    status="success",
-                    duration_s=duration_s,
-                )
-                result = _merge_controller_log(result, controller_log)
                 result = attach_user_facing_fields(tool_name, result)
                 return result
 
@@ -862,18 +691,6 @@ def mcp_tool(
             all_args = _bind_call_args(signature, args, clean_kwargs)
             req = get_request_context()
             start = time.perf_counter()
-            args_preview = _format_tool_args_preview(all_args)
-            _emit_tool_log(
-                f"tool {tool_name} → start | args: {args_preview}",
-                extra=_tool_log_extra(
-                    tool_name,
-                    call_id=call_id,
-                    req=req,
-                    args_preview=args_preview,
-                    status="start",
-                    write_action=write_action,
-                ),
-            )
 
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
@@ -896,28 +713,6 @@ def mcp_tool(
                 if _should_enforce_write_gate(req):
                     _enforce_write_allowed(tool_name, write_action=write_action)
             except Exception as exc:
-                duration_s = time.perf_counter() - start
-                error_preview = _preview_error(exc)
-                _emit_tool_log(
-                    f"tool {tool_name} ✗ failed | duration: {_format_duration(duration_s)} | error: {error_preview}",
-                    extra=_tool_log_extra(
-                        tool_name,
-                        call_id=call_id,
-                        req=req,
-                        args_preview=args_preview,
-                        status="failed",
-                        duration_s=duration_s,
-                        error=error_preview,
-                        write_action=write_action,
-                    ),
-                )
-                controller_log = _tool_log_lines(
-                    tool_name,
-                    args_preview=args_preview,
-                    status="failed",
-                    duration_s=duration_s,
-                    error=error_preview,
-                )
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
@@ -928,7 +723,6 @@ def mcp_tool(
                     req=req,
                     exc=exc,
                     phase="preflight",
-                    controller_log=controller_log,
                 )
                 coerced = _coerce_tool_exception(tool_name, exc, structured_error)
                 if coerced is exc:
@@ -938,28 +732,6 @@ def mcp_tool(
             try:
                 result = func(*args, **clean_kwargs)
             except Exception as exc:
-                duration_s = time.perf_counter() - start
-                error_preview = _preview_error(exc)
-                _emit_tool_log(
-                    f"tool {tool_name} ✗ failed | duration: {_format_duration(duration_s)} | error: {error_preview}",
-                    extra=_tool_log_extra(
-                        tool_name,
-                        call_id=call_id,
-                        req=req,
-                        args_preview=args_preview,
-                        status="failed",
-                        duration_s=duration_s,
-                        error=error_preview,
-                        write_action=write_action,
-                    ),
-                )
-                controller_log = _tool_log_lines(
-                    tool_name,
-                    args_preview=args_preview,
-                    status="failed",
-                    duration_s=duration_s,
-                    error=error_preview,
-                )
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
@@ -970,7 +742,6 @@ def mcp_tool(
                     req=req,
                     exc=exc,
                     phase="execute",
-                    controller_log=controller_log,
                 )
                 coerced = _coerce_tool_exception(tool_name, exc, structured_error)
                 if coerced is exc:
@@ -981,26 +752,6 @@ def mcp_tool(
                 result = {}
             if not isinstance(result, Mapping):
                 result = {"result": result}
-            duration_s = time.perf_counter() - start
-            _emit_tool_log(
-                f"tool {tool_name} ✓ success | duration: {_format_duration(duration_s)}",
-                extra=_tool_log_extra(
-                    tool_name,
-                    call_id=call_id,
-                    req=req,
-                    args_preview=args_preview,
-                    status="success",
-                    duration_s=duration_s,
-                    write_action=write_action,
-                ),
-            )
-            controller_log = _tool_log_lines(
-                tool_name,
-                args_preview=args_preview,
-                status="success",
-                duration_s=duration_s,
-            )
-            result = _merge_controller_log(result, controller_log)
             result = attach_user_facing_fields(tool_name, result)
             return result
 
