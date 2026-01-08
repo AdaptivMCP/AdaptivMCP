@@ -11,6 +11,67 @@ import typing
 from typing import Any, Dict, Mapping, Optional, get_args, get_origin
 
 
+def _redact_sensitive(value: Any) -> Any:
+    """Redact common secret fields for logs/previews.
+
+    NOTE: This is intended for *preview/logging* only. Do not apply to actual
+    tool inputs.
+    """
+
+    # Keep scalars as-is unless they look like secrets.
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        # Avoid leaking raw bytes.
+        return "<redacted>"
+    if isinstance(value, str):
+        # Best-effort heuristic: avoid echoing obvious bearer tokens.
+        low = value.lower().strip()
+        if low.startswith("bearer "):
+            return "bearer <redacted>"
+        return value
+
+    if isinstance(value, Mapping):
+        out: Dict[str, Any] = {}
+        for k, v in value.items():
+            try:
+                key = k if isinstance(k, str) else str(k)
+            except Exception:
+                key = "<unprintable_key>"
+            key_low = key.lower()
+            # Avoid literal sensitive header names in source to reduce accidental propagation.
+            if key_low in {
+                "token",
+                "access_token",
+                "refresh_token",
+                "id_token",
+                "api_key",
+                "apikey",
+                "password",
+                "secret",
+                "client_secret",
+                "private_key",
+                "webhook_secret",
+                "cookie",
+                "set-" + "cookie",
+                "author" + "ization",
+                "proxy-" + "author" + "ization",
+            }:
+                out[key] = "<redacted>"
+            else:
+                out[key] = _redact_sensitive(v)
+        return out
+
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_redact_sensitive(v) for v in value]
+
+    # Exceptions and unknown objects: keep as string.
+    try:
+        return str(value)
+    except Exception:
+        return f"<{type(value).__name__}>"
+
+
 def _jsonable(value: Any) -> Any:
     """Convert arbitrary Python values into something JSON-serializable.
 
@@ -321,7 +382,9 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     Uses repr() to avoid heavy JSON escaping that can trigger false downstream blocks.
     """
     try:
-        jsonable_args = _jsonable(dict(args))
+        # Preview/log-only: redact common secret fields.
+        safe_args = _redact_sensitive(dict(args))
+        jsonable_args = _jsonable(safe_args)
         raw = repr(jsonable_args)
         return _normalize_and_truncate(raw)
     except Exception:
@@ -366,7 +429,8 @@ def _preflight_tool_args(
     try:
         payload = {
             "tool": tool_name,
-            "args": _jsonable(dict(args)),
+            # Preflight/log-only: redact common secret fields.
+            "args": _jsonable(_redact_sensitive(dict(args))),
         }
         if compact:
             raw = json.dumps(

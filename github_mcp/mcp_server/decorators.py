@@ -25,6 +25,7 @@ import hashlib
 import inspect
 import json
 import os
+import logging
 import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
@@ -48,6 +49,9 @@ from github_mcp.mcp_server.schemas import (
     _normalize_input_schema,
     _normalize_tool_description,
 )
+
+
+_log = logging.getLogger(__name__)
 
 
 def _parse_bool(value: Optional[str]) -> bool:
@@ -807,7 +811,13 @@ def register_extra_tools_if_available() -> None:
         # Optional module; safe to ignore.
         return None
     except Exception as exc:
-        del exc
+        # Best-effort behavior, but surface a warning for operators.
+        # Avoid logging full tracebacks by default to reduce noise.
+        _log.warning(
+            "Failed to import/register extra_tools; optional tools will be unavailable (%s: %s)",
+            exc.__class__.__name__,
+            str(exc),
+        )
         return None
 
 
