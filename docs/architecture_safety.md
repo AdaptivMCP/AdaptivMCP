@@ -114,9 +114,16 @@ Client (ChatGPT / connector)
 - Token usage is localized to request helpers; tokens are **not** stored in files.
 - Git authentication for `git` commands uses `GIT_HTTP_EXTRAHEADER` and config env injection, keeping secrets out of CLI arguments.
 
+Additional protections:
+
+- Tool outputs sanitize response headers to avoid returning cookies/auth material.
+- Tool arg previews and preflight payloads redact common secret fields.
+
 **Relevant modules:**
 - `github_mcp/http_clients.py` (`_get_github_token`)
 - `github_mcp/workspace.py` (`_git_auth_env`)
+- `github_mcp/http_clients.py` (`_sanitize_response_headers`)
+- `github_mcp/mcp_server/schemas.py` (`_redact_sensitive`)
 
 ### 3.2 Write allow-listing & approvals
 
@@ -148,6 +155,13 @@ Client (ChatGPT / connector)
   - best-effort termination for hung processes
   - optional truncation of stdout/stderr
 - Workspace git commands avoid exposing auth tokens on the CLI.
+
+### 3.4.1 External fetch safety
+
+- `fetch_url` streams responses and enforces size/time limits to prevent huge tool payloads.
+- `fetch_url` includes SSRF guardrails: only http/https, blocks localhost and local domains, and rejects non-globally-routable resolved IPs.
+
+**Relevant module:** `github_mcp/main_tools/querying.py` (`fetch_url`, `_validate_external_url`)
 
 **Relevant module:** `github_mcp/workspace.py`
 
