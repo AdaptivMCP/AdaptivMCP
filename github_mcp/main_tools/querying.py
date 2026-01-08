@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import os
+
 from typing import Any, Dict, Literal, Optional
 
 from github_mcp.http_clients import (
@@ -63,8 +65,20 @@ async def graphql_query(
     )
 
 
+def _get_int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except Exception:
+        return default
+
+
 async def fetch_url(url: str) -> Dict[str, Any]:
-    """Fetch an arbitrary HTTP/HTTPS URL via the shared external client."""
+    """Fetch an arbitrary HTTP/HTTPS URL via the shared external client.
+
+    Safety: this tool returns response content. To avoid extremely large payloads
+    (and downstream UI/log size limits), content is capped to a maximum number
+    of bytes.
+    """
 
     external_client_instance = _resolve_main_helper(
         "_external_client_instance", _default_external_client_instance
@@ -80,21 +94,44 @@ async def fetch_url(url: str) -> Dict[str, Any]:
     )
 
     client = external_client_instance()
+    max_bytes = _get_int_env("MCP_FETCH_URL_MAX_BYTES", 200_000)
+    timeout_s = _get_int_env("MCP_FETCH_URL_TIMEOUT_SECONDS", 30)
     async with get_concurrency_semaphore():
         try:
-            resp = await client.get(url)
+            # Stream to avoid buffering unbounded responses.
+            async with client.stream("GET", url, timeout=timeout_s) as resp:
+                collected = bytearray()
+                truncated = False
+                async for chunk in resp.aiter_bytes():
+                    if not chunk:
+                        continue
+                    remaining = max_bytes - len(collected)
+                    if remaining <= 0:
+                        truncated = True
+                        break
+                    if len(chunk) > remaining:
+                        collected.extend(chunk[:remaining])
+                        truncated = True
+                        break
+                    collected.extend(chunk)
+
+                # Decode best-effort.
+                encoding = resp.encoding or "utf-8"
+                content = bytes(collected).decode(encoding, errors="replace")
+
+                return {
+                    "status_code": resp.status_code,
+                    "headers": sanitize_response_headers(resp.headers),
+                    "content": content,
+                    "content_truncated": truncated,
+                    "max_bytes": max_bytes,
+                }
         except Exception as e:  # noqa: BLE001
             return structured_tool_error(
                 e,
                 context="fetch_url",
                 path=url,
             )
-
-    return {
-        "status_code": resp.status_code,
-        "headers": sanitize_response_headers(resp.headers),
-        "content": resp.text,
-    }
 
 
 async def search(
