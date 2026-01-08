@@ -708,10 +708,13 @@ async def run_quality_suite(
                 "controller_log": controller_log + ["- Aborted: security step failed"],
             }
 
-    tests_result = await run_tests(
+    # Tests step: mirror lint/tool auto-setup behavior so missing `pytest` (or
+    # similar test runners) can be auto-installed when auto_setup_repo is true.
+    tests_step = await _run_named_step(
+        name="tests",
         full_name=full_name,
         ref=ref,
-        test_command=test_command,
+        command=test_command,
         timeout_seconds=timeout_seconds_i,
         workdir=workdir,
         use_temp_venv=use_temp_venv,
@@ -720,8 +723,68 @@ async def run_quality_suite(
         repo=repo,
         branch=branch,
     )
+    if (
+        auto_setup_repo
+        and tests_step.get("status") == "failed"
+        and (
+            tests_step.get("missing_module") or tests_step.get("command_not_found_hint")
+        )
+    ):
+        pkgs = _required_packages_for_command(test_command)
+        if pkgs:
+            install_step = await _pip_install_tools(
+                full_name=full_name,
+                ref=ref,
+                packages=pkgs,
+                timeout_seconds=timeout_seconds_i,
+                workdir=workdir,
+                use_temp_venv=use_temp_venv,
+                owner=owner,
+                repo=repo,
+                branch=branch,
+            )
+            steps.append(install_step)
+            if install_step.get("status") == "passed":
+                tests_step = await _run_named_step(
+                    name="tests",
+                    full_name=full_name,
+                    ref=ref,
+                    command=test_command,
+                    timeout_seconds=timeout_seconds_i,
+                    workdir=workdir,
+                    use_temp_venv=use_temp_venv,
+                    installing_dependencies=installing_dependencies,
+                    owner=owner,
+                    repo=repo,
+                    branch=branch,
+                )
 
-    tests_status = tests_result.get("status") or "unknown"
+    steps.append(tests_step)
+
+    # Build a run_tests-compatible payload for back-compat.
+    tests_raw = tests_step.get("raw") if isinstance(tests_step, dict) else None
+    cmd_result = tests_raw.get("result") if isinstance(tests_raw, dict) else {}
+    exit_code = cmd_result.get("exit_code") if isinstance(cmd_result, dict) else None
+    tests_status = (
+        "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
+    )
+
+    tests_result: Dict[str, Any] = {
+        "status": tests_status,
+        "command": test_command,
+        "exit_code": exit_code,
+        "workdir": tests_raw.get("workdir") if isinstance(tests_raw, dict) else workdir,
+        "result": cmd_result,
+        "controller_log": [
+            "Completed test command in workspace:",
+            f"- Repo: {full_name}",
+            f"- Ref: {ref}",
+            f"- Command: {test_command}",
+            f"- Status: {tests_status}",
+            f"- Exit code: {exit_code}",
+        ],
+    }
+
     controller_log.append(f"- Tests: {tests_status}")
 
     # Always attach suite metadata + step summaries.

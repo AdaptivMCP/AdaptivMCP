@@ -350,7 +350,59 @@ async def open_pr_for_existing_branch(
         f"{branch_owner}:{branch_name}" if branch_owner else f"{owner}:{branch_name}"
     )
 
-    # 1) Check for an existing open PR for this head/base pair.
+    # 1) Try creating the PR first. This avoids an extra network call and
+    # tends to be more reliable in hosted environments where listing endpoints
+    # can intermittently stall.
+    pr = await create_pull_request(
+        full_name=full_name,
+        title=pr_title,
+        head=head_ref,
+        base=effective_base,
+        body=body,
+        draft=draft,
+    )
+
+    pr_json = pr.get("json") or {}
+    if isinstance(pr_json, dict) and pr_json.get("number"):
+        return {
+            "status": "ok",
+            "pull_request": pr_json,
+            "pr_number": pr_json.get("number"),
+            "pr_url": pr_json.get("html_url"),
+        }
+
+    # If PR creation failed, `create_pull_request` returns a structured error
+    # dict rather than raising. If it's a "PR already exists" conflict, fall
+    # back to listing and reuse the existing PR.
+    raw_error = pr.get("error") if isinstance(pr, dict) else None
+    raw_message = ""
+    if isinstance(raw_error, dict):
+        raw_message = str(raw_error.get("message") or "")
+    status_code = None
+    raw_resp = None
+    if isinstance(pr, dict):
+        raw_resp = pr.get("raw_response") or pr.get("raw_response_payload")
+    if isinstance(raw_resp, dict):
+        status_code = raw_resp.get("status_code")
+
+    conflict_hint = (raw_message or "").lower()
+    is_existing_pr_conflict = bool(
+        status_code == 422
+        and (
+            "already exists" in conflict_hint
+            or "a pull request already exists" in conflict_hint
+            or "pull request already exists" in conflict_hint
+        )
+    )
+
+    if not is_existing_pr_conflict:
+        return {
+            "status": "error",
+            "raw_response": pr,
+            "message": "create_pull_request did not return a PR document with a number",
+        }
+
+    # 2) Conflict implies a PR exists already; locate it via the list endpoint.
     existing_json: Any = []
     try:
         existing_resp = await m.list_pull_requests(
@@ -363,15 +415,13 @@ async def open_pr_for_existing_branch(
         )
         existing_json = existing_resp.get("json") or []
     except Exception as exc:
-        # If listing PRs fails for any reason, surface the structured error
-        # details back to the caller instead of silently claiming success.
         return m._structured_tool_error(
-            exc, context="open_pr_for_existing_branch:list_pull_requests"
+            exc,
+            context="open_pr_for_existing_branch:list_pull_requests",
+            path=f"{full_name} {head_ref}->{effective_base}",
         )
 
     if isinstance(existing_json, list) and existing_json:
-        # Reuse the first matching PR, and normalize the shape so assistants can
-        # consistently see the PR number/URL.
         pr_obj = existing_json[0]
         if isinstance(pr_obj, dict):
             return {
@@ -387,31 +437,10 @@ async def open_pr_for_existing_branch(
             "raw_entry": pr_obj,
         }
 
-    # 2) No existing PR found; create a new one via the lower-level helper.
-    pr = await create_pull_request(
-        full_name=full_name,
-        title=pr_title,
-        head=head_ref,
-        base=effective_base,
-        body=body,
-        draft=draft,
-    )
-
-    pr_json = pr.get("json") or {}
-    if not isinstance(pr_json, dict) or not pr_json.get("number"):
-        # Bubble through the structured error shape so the caller can inspect
-        # status/message and decide how to recover.
-        return {
-            "status": "error",
-            "raw_response": pr,
-            "message": "create_pull_request did not return a PR document with a number",
-        }
-
     return {
-        "status": "ok",
-        "pull_request": pr_json,
-        "pr_number": pr_json.get("number"),
-        "pr_url": pr_json.get("html_url"),
+        "status": "error",
+        "message": "PR creation reported an existing-PR conflict, but no matching open PR was found.",
+        "raw_response": pr,
     }
 
 
