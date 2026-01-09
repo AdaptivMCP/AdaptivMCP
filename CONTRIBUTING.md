@@ -5,6 +5,15 @@
 - Install development dependencies: `make install-dev`
 - (Optional) Install git hooks: `make precommit`
 
+Optional but recommended tooling:
+
+- `ripgrep` (binary `rg`) for fast codebase search.
+
+Installation examples:
+
+- macOS (Homebrew): `brew install ripgrep`
+- Ubuntu/Debian: `sudo apt-get update && sudo apt-get install -y ripgrep`
+
 ## Common tasks
 
 - Lint: `make lint`
