@@ -1,0 +1,7 @@
+This repository vendors a prebuilt ripgrep (rg) binary for environments that
+cannot install OS packages at build time.
+
+Upstream project: ripgrep (https://github.com/BurntSushi/ripgrep)
+Version: (see VERSION)
+
+ripgrep is dual-licensed under The Unlicense and MIT. See licenses/.

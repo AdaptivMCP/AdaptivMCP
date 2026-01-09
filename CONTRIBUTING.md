@@ -9,6 +9,8 @@ Optional but recommended tooling:
 
 - `ripgrep` (binary `rg`) for fast codebase search.
 
+If you are working in a constrained environment (for example, a hosted build environment that cannot install OS packages), this repository also vendors a prebuilt `rg` binary under `vendor/rg/` and provides Render helper scripts in `scripts/`.
+
 Installation examples:
 
 - macOS (Homebrew): `brew install ripgrep`
