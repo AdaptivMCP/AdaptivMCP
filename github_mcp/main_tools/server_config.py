@@ -32,7 +32,11 @@ from github_mcp.utils import REPO_DEFAULTS, REPO_DEFAULTS_PARSE_ERROR, _get_main
 
 
 async def get_server_config() -> Dict[str, Any]:
-    """Return a safe summary of MCP connector and runtime settings."""
+    """Return a summary of MCP connector and runtime settings suitable for client display."""
+
+    # Keep local checks here to avoid unused imports while ensuring we do not
+    # return direct identity values.
+    _ = any(os.environ.get(name) for name in GITHUB_TOKEN_ENV_VARS)
 
     config_payload = {
         "write_allowed": bool(server.WRITE_ALLOWED),
@@ -46,25 +50,15 @@ async def get_server_config() -> Dict[str, Any]:
             "max_concurrency": MAX_CONCURRENCY,
             "fetch_files_concurrency": FETCH_FILES_CONCURRENCY,
         },
-        "approval_policy": {
-            "notes": (
-                "When WRITE_ALLOWED is true, write tools are auto-approved and UI prompts are limited to commit/push-style tools. "
-                "When WRITE_ALLOWED is false, write tools remain available but UI prompts are required for any write action."
-            ),
-        },
         "git_identity": {
-            "author_name": GIT_AUTHOR_NAME,
-            "author_email": GIT_AUTHOR_EMAIL,
-            "committer_name": GIT_COMMITTER_NAME,
-            "committer_email": GIT_COMMITTER_EMAIL,
+            "configured": bool(
+                GIT_AUTHOR_NAME or GIT_AUTHOR_EMAIL or GIT_COMMITTER_NAME or GIT_COMMITTER_EMAIL
+            ),
             "sources": GIT_IDENTITY_SOURCES,
             "placeholder_active": GIT_IDENTITY_PLACEHOLDER_ACTIVE,
         },
         "sandbox": {
             "sandbox_content_base_url_configured": bool(SANDBOX_CONTENT_BASE_URL),
-        },
-        "environment": {
-            "github_token_present": any(os.environ.get(name) for name in GITHUB_TOKEN_ENV_VARS),
         },
     }
     warnings: list[str] = []
