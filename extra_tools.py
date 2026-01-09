@@ -31,10 +31,15 @@ class ToolDecorator(Protocol):
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
-def ping_extensions() -> str:
-    """Simple ping used for diagnostics."""
+def ping_extensions() -> Dict[str, Any]:
+    """Simple ping used for diagnostics.
 
-    return "Adaptiv Connected."
+    Note: The MCP tool wrapper standardizes all tool returns into a mapping and
+    attaches user-facing fields (summary/controller_log/user_message). Returning
+    a mapping here avoids a return-shape mismatch with the generated tool schema.
+    """
+
+    return {"status": "ok", "message": "Adaptiv Connected."}
 
 
 async def get_file_slice(
