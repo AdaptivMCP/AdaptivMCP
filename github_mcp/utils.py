@@ -9,7 +9,7 @@ import sys
 import zipfile
 from types import SimpleNamespace
 from typing import Any, Dict, Mapping
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from .exceptions import GitHubAPIError, ToolPreflightValidationError
 
@@ -137,6 +137,53 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
         raise ToolPreflightValidationError("<server>", "path must be a string")
 
     normalized = path.strip().replace("\\", "/")
+    # Accept common GitHub URL forms (html, raw, api) and extract the repo-relative
+    # path portion.
+    if normalized:
+        url_candidate = normalized
+        if url_candidate.startswith(
+            ("github.com/", "www.github.com/", "raw.githubusercontent.com/", "api.github.com/")
+        ):
+            url_candidate = f"https://{url_candidate}"
+
+        if "://" in url_candidate:
+            parsed = urlparse(url_candidate)
+            host = (parsed.hostname or parsed.netloc or "").lower()
+            parsed_path = unquote(parsed.path or "")
+            parsed_path = parsed_path.replace("\\", "/")
+            parsed_path = parsed_path.lstrip("/")
+
+            if host in {"github.com", "www.github.com"}:
+                parts = [p for p in parsed_path.split("/") if p]
+                if len(parts) >= 2:
+                    remainder = parts[2:]
+                    # Handle common GitHub UI URL shapes:
+                    # - /<owner>/<repo>/blob/<ref>/<path>
+                    # - /<owner>/<repo>/tree/<ref>/<path>
+                    # - /<owner>/<repo>/raw/<ref>/<path>
+                    if len(remainder) >= 2 and remainder[0] in {"blob", "tree", "raw"}:
+                        remainder = remainder[2:]
+
+                    # If this URL points at a different repo than the caller
+                    # expects, we still strip to the remainder to avoid leaking
+                    # repo prefixes into the normalization layer.
+                    normalized = "/".join(remainder)
+                else:
+                    normalized = ""
+            elif host == "raw.githubusercontent.com":
+                parts = [p for p in parsed_path.split("/") if p]
+                # /<owner>/<repo>/<ref>/<path>
+                if len(parts) >= 4:
+                    normalized = "/".join(parts[3:])
+                else:
+                    normalized = ""
+            elif host == "api.github.com":
+                # Preserve the leading slash so existing API-prefix stripping
+                # logic can match.
+                normalized = f"/{parsed_path}"
+            else:
+                # Unknown host: best-effort use of the URL path.
+                normalized = parsed_path
     full_name_clean = full_name.strip().lstrip("/") if isinstance(full_name, str) else ""
     if full_name_clean:
         api_prefixes = (
@@ -166,6 +213,16 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
                 if normalized.startswith(prefix):
                     normalized = normalized[len(prefix) :]
                     break
+
+    # After stripping common prefixes, ensure we still have a concrete path.
+    # Many callers mistakenly pass repository URLs or repo roots; surface a
+    # clearer error than "empty after normalization".
+    cleaned = normalized.strip().replace("\\", "/")
+    if cleaned in {"", "/", ".", "./"}:
+        raise ToolPreflightValidationError(
+            "<server>",
+            f"Invalid path {path!r}: expected a repository-relative file path (for example 'docs/readme.md'), got an empty/root path.",
+        )
 
     return _normalize_repo_path(normalized)
 
