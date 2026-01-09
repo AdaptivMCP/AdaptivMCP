@@ -42,6 +42,29 @@ def _normalize_timeout_seconds(value: object, default: int) -> int:
     return max(1, int(default))
 
 
+def _looks_like_python_work(command: str) -> bool:
+    """Heuristic: does this command likely require Python deps in the venv?"""
+
+    if not isinstance(command, str):
+        return False
+    s = command.strip().lower()
+    if not s:
+        return False
+    # Common python tooling / test invocations.
+    tokens = (
+        "python",
+        "pytest",
+        "ruff",
+        "mypy",
+        "pip ",
+        "pip3 ",
+        "uvicorn",
+        "gunicorn",
+        "fastapi",
+    )
+    return any(t in s for t in tokens)
+
+
 def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
     if not workdir:
         return os.path.realpath(repo_dir)
@@ -202,7 +225,10 @@ async def terminal_command(
         cwd = _resolve_workdir(repo_dir, workdir)
 
         install_result = None
-        if installing_dependencies and use_temp_venv:
+        # Auto-install runtime deps for python-centric commands to avoid
+        # confusing "blocked" behavior when the temp venv is empty.
+        auto_install = bool(use_temp_venv and (installing_dependencies or _looks_like_python_work(command)))
+        if auto_install and use_temp_venv:
             preferred = os.path.join(repo_dir, "dev-requirements.txt")
             fallback = os.path.join(repo_dir, "requirements.txt")
             req_path = preferred if os.path.exists(preferred) else fallback
