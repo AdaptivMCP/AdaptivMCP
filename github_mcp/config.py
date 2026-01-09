@@ -248,8 +248,6 @@ def _resolve_tool_denylist() -> set[str]:
 TOOL_DENYLIST = _resolve_tool_denylist()
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-LOG_STYLE = os.environ.get("LOG_STYLE", "color").lower()
-
 # Default to a compact, scannable format.
 LOG_FORMAT = os.environ.get(
     "LOG_FORMAT",
@@ -257,49 +255,21 @@ LOG_FORMAT = os.environ.get(
 )
 
 
-class _ColorFormatter(logging.Formatter):
-    """Level-colored formatter for stdout logs.
-
-    Render's log viewer can display ANSI sequences; if it doesn't, the output
-    will still remain readable.
-    """
-
-    _C = {
-        "DEBUG": "\x1b[36m",  # cyan
-        "DETAILED": "\x1b[36m",  # cyan
-        "INFO": "\x1b[32m",  # green
-        "CHAT": "\x1b[34m",  # blue
-        "WARNING": "\x1b[33m",  # yellow
-        "ERROR": "\x1b[31m",  # red
-        "CRITICAL": "\x1b[35m",  # magenta
-        "RESET": "\x1b[0m",
-    }
-
-    def __init__(self, fmt: str, *, use_color: bool) -> None:
-        super().__init__(fmt)
-        self._use_color = bool(use_color)
+class _StructuredFormatter(logging.Formatter):
+    """Formatter that appends structured extra fields as JSON."""
 
     def format(self, record: logging.LogRecord) -> str:  # pragma: no cover - formatting
-        levelname = record.levelname
-        if self._use_color and levelname in self._C:
-            record.levelname = f"{self._C[levelname]}{levelname}{self._C['RESET']}"
-        try:
-            base = super().format(record)
-            extra_payload = _extract_log_extras(record)
-            if extra_payload:
-                # CHAT logs are the primary human console surface in Render; keep them message-only.
-                if levelname == "CHAT":
-                    return base
-                extra_json = json.dumps(
-                    extra_payload,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-                return f"{base} | data={extra_json}"
-            return base
-        finally:
-            record.levelname = levelname
+        base = super().format(record)
+        extra_payload = _extract_log_extras(record)
+        if extra_payload:
+            extra_json = json.dumps(
+                extra_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            return f"{base} | data={extra_json}"
+        return base
 
 
 _STANDARD_LOG_FIELDS = set(
@@ -333,10 +303,8 @@ def _configure_logging() -> None:
     if getattr(root, "_github_mcp_configured", False):
         return
 
-    use_color = LOG_STYLE in {"color", "ansi", "colored"}
-
     console_handler = logging.StreamHandler()
-    console_handler.setFormatter(_ColorFormatter(LOG_FORMAT, use_color=use_color))
+    console_handler.setFormatter(_StructuredFormatter(LOG_FORMAT))
 
     logging.basicConfig(
         level=_resolve_log_level(LOG_LEVEL),
