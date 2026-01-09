@@ -1,7 +1,9 @@
 # Adaptiv GitHub MCP server usage
 
 This document describes the current functionality, behavior, and recommended usage
-patterns for the self-hosted GitHub MCP (Model Context Protocol) server.
+patterns for the GitHub MCP (Model Context Protocol) server.
+
+Deployment note: Adaptiv MCP is deployed **only via Render.com** in production. Local execution (for development) is still supported.
 
 ## Key concepts
 
@@ -106,6 +108,16 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 
 ## Configuration
 
+## Deployment (Render.com only)
+
+Adaptiv MCP is deployed exclusively through Render.com as a web service. Production deployments should be managed via Render (build + deploy + environment variables). Local execution is supported for development and testing only.
+
+Render-specific notes:
+
+- Render injects `PORT` automatically; ensure the process binds to `$PORT`.
+- Configure GitHub authentication via Render environment variables (for example `GITHUB_TOKEN`).
+- Use `/healthz` after deploy to verify token detection and baseline health.
+
 ### Minimum required configuration
 
 At minimum, set one GitHub authentication token so the server can access the API:
@@ -171,7 +183,7 @@ export GITHUB_MCP_GIT_COMMITTER_EMAIL="octo-bot[bot]@users.noreply.github.com"
 ## Local development
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
 ```
 
 Once running, point your MCP client at /sse and verify /healthz is healthy.

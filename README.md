@@ -16,19 +16,31 @@ future updates.
 
 ## Quickstart
 
+Production deployment for Adaptiv MCP is **Render.com only**. The steps below are for local development.
+
 1. Export a GitHub token so the server can authenticate:
 
    ```bash
    export GITHUB_TOKEN="ghp_your_token_here"
    ```
 
-2. Run the server:
+2. Run the server locally:
 
    ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8000
+   uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
    ```
 
 3. Point your MCP client to `/sse` and verify `/healthz` is healthy.
+
+## Deployment (Render.com only)
+
+Adaptiv MCP is deployed exclusively via Render.com as a web service. For production, do not run this server via ad-hoc self-hosting. Instead, deploy through Render and configure environment variables in the Render service settings.
+
+Operational notes:
+
+- Render injects `PORT` automatically for web services; the server should bind to `$PORT`.
+- Configure a GitHub authentication token in Render (for example `GITHUB_TOKEN`), along with any optional variables documented in `docs/usage.md` and `.env.example`.
+- Use `/healthz` to validate that the service is healthy and that token detection/config defaults are as expected.
 
 ## Development
 
