@@ -78,7 +78,6 @@ async def render_shell(
     owner: Optional[str] = None,
     repo: Optional[str] = None,
 ) -> Dict[str, Any]:
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
     """Render-focused shell entry point for interacting with GitHub workspaces.
 
     The tool intentionally mirrors the Render deployment model by always
@@ -87,6 +86,8 @@ async def render_shell(
     fresh branch from that ref, and then executes the supplied shell command
     inside the clone.
     """
+
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 
     try:
         requested_command = command
@@ -133,14 +134,35 @@ async def render_shell(
             branch=effective_branch_arg,
         )
 
-        return {
+        # terminal_command is itself a tool surface and may contain UI-facing
+        # fields (controller_log/summary/user_message). render_shell should
+        # return a stable machine-readable shape so the outer decorator can
+        # build summaries consistently.
+        cleaned_command = _strip_ui_fields(command_result)
+
+        # Align with terminal_command's top-level shape so user_friendly summary
+        # logic can report exit code/stdout/stderr for render_shell as well.
+        out: Dict[str, Any] = {
             "full_name": full_name,
             "base_ref": effective_ref,
             "target_ref": target_ref,
             "branch": branch_creation,
+            "workdir": cleaned_command.get("workdir")
+            if isinstance(cleaned_command, dict)
+            else None,
             "command_input": requested_command,
-            "command": command_result,
+            "command": cleaned_command.get("command")
+            if isinstance(cleaned_command, dict)
+            else command,
+            "install": cleaned_command.get("install")
+            if isinstance(cleaned_command, dict)
+            else None,
+            "result": cleaned_command.get("result") if isinstance(cleaned_command, dict) else None,
         }
+        if isinstance(cleaned_command, dict) and cleaned_command.get("dependency_hint"):
+            out["dependency_hint"] = cleaned_command["dependency_hint"]
+
+        return out
     except Exception as exc:
         return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
 
@@ -159,11 +181,12 @@ async def terminal_command(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
     """Run a shell command inside the repo workspace and return its result.
 
     Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
     persists across calls so installed dependencies and edits are reused."""
+
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 
     env: Optional[Dict[str, str]] = None
     requested_command = command
