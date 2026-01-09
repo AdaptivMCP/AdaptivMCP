@@ -38,9 +38,7 @@ async def _decode(full_name: str, path: str, ref: str | None) -> Dict[str, Any]:
     return await fn(full_name, path, ref)
 
 
-async def fetch_files(
-    full_name: str, paths: List[str], ref: str = "main"
-) -> Dict[str, Any]:
+async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Dict[str, Any]:
     """Fetch multiple files concurrently with per-file error isolation."""
 
     results: Dict[str, Any] = {}
@@ -69,9 +67,7 @@ async def fetch_files(
     return {"files": results}
 
 
-async def get_cached_files(
-    full_name: str, paths: List[str], ref: str = "main"
-) -> Dict[str, Any]:
+async def get_cached_files(full_name: str, paths: List[str], ref: str = "main") -> Dict[str, Any]:
     """Return cached file entries and list any missing paths."""
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -146,9 +142,7 @@ async def list_repository_tree(
         raise ValueError("max_entries must be a positive integer")
 
     params = {"recursive": 1 if recursive else 0}
-    data = await _github_request(
-        "GET", f"/repos/{full_name}/git/trees/{ref}", params=params
-    )
+    data = await _github_request("GET", f"/repos/{full_name}/git/trees/{ref}", params=params)
 
     payload = data.get("json") or {}
     tree = payload.get("tree")

@@ -137,9 +137,7 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
         raise ToolPreflightValidationError("<server>", "path must be a string")
 
     normalized = path.strip().replace("\\", "/")
-    full_name_clean = (
-        full_name.strip().lstrip("/") if isinstance(full_name, str) else ""
-    )
+    full_name_clean = full_name.strip().lstrip("/") if isinstance(full_name, str) else ""
     if full_name_clean:
         api_prefixes = (
             f"/repos/{full_name_clean}/contents/",
@@ -229,9 +227,7 @@ def require_text(
 
 
 def _with_numbered_lines(text: str) -> list[Dict[str, Any]]:
-    return [
-        {"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)
-    ]
+    return [{"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)]
 
 
 def _render_visible_whitespace(text: str) -> str:
@@ -253,9 +249,7 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
     try:
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zip_file:
             parts: list[str] = []
-            for name in sorted(
-                entry for entry in zip_file.namelist() if not entry.endswith("/")
-            ):
+            for name in sorted(entry for entry in zip_file.namelist() if not entry.endswith("/")):
                 with zip_file.open(name) as handle:
                     content = handle.read().decode("utf-8", errors="replace")
                 parts.append(f"[{name}]\n{content}".rstrip())

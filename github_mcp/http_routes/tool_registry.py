@@ -16,9 +16,7 @@ def _parse_bool(value: Optional[str]) -> Optional[bool]:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-def _tool_catalog(
-    *, include_parameters: bool, compact: Optional[bool]
-) -> Dict[str, Any]:
+def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[str, Any]:
     from github_mcp.main_tools.introspection import list_all_actions
 
     catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
@@ -122,9 +120,7 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
     return bool(value)
 
 
-async def _preflight_validate(
-    tool_name: str, args: Dict[str, Any]
-) -> Optional[JSONResponse]:
+async def _preflight_validate(tool_name: str, args: Dict[str, Any]) -> Optional[JSONResponse]:
     """Validate args against the published schema without running the tool.
 
     This prevents raw TypeErrors (e.g., unexpected kwargs) from bubbling up as 500s.
@@ -165,9 +161,7 @@ async def _preflight_validate(
         return None
 
 
-async def _invoke_tool(
-    tool_name: str, args: Dict[str, Any], *, max_attempts: int = 3
-) -> Response:
+async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: int = 3) -> Response:
     resolved = _find_registered_tool(tool_name)
     if not resolved:
         return JSONResponse({"error": f"Unknown tool {tool_name!r}."}, status_code=404)
@@ -219,13 +213,9 @@ async def _invoke_tool(
 
 def build_tool_registry_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
-        include_parameters = (
-            _parse_bool(request.query_params.get("include_parameters")) or False
-        )
+        include_parameters = _parse_bool(request.query_params.get("include_parameters")) or False
         compact = _parse_bool(request.query_params.get("compact"))
-        return JSONResponse(
-            _tool_catalog(include_parameters=include_parameters, compact=compact)
-        )
+        return JSONResponse(_tool_catalog(include_parameters=include_parameters, compact=compact))
 
     return _endpoint
 
@@ -238,9 +228,7 @@ def build_tool_detail_endpoint() -> Callable[[Request], Response]:
         catalog = _tool_catalog(include_parameters=True, compact=None)
         tools = [t for t in catalog.get("tools", []) if t.get("name") == tool_name]
         if not tools:
-            return JSONResponse(
-                {"error": f"Unknown tool {tool_name!r}."}, status_code=404
-            )
+            return JSONResponse({"error": f"Unknown tool {tool_name!r}."}, status_code=404)
         return JSONResponse(tools[0])
 
     return _endpoint

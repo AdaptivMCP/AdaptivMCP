@@ -95,9 +95,7 @@ def _slugify_app_name(value: str | None) -> str | None:
 def _resolve_app_identity() -> dict[str, str] | None:
     app_name = os.environ.get("GITHUB_APP_NAME")
     app_slug = os.environ.get("GITHUB_APP_SLUG") or _slugify_app_name(app_name)
-    app_id = os.environ.get("GITHUB_APP_ID") or os.environ.get(
-        "GITHUB_APP_INSTALLATION_ID"
-    )
+    app_id = os.environ.get("GITHUB_APP_ID") or os.environ.get("GITHUB_APP_INSTALLATION_ID")
 
     bot_login = None
     if app_slug:
@@ -193,9 +191,7 @@ def _resolve_git_identity() -> dict[str, object]:
         "committer_email": committer_email_source,
     }
 
-    placeholder_active = any(
-        source == "default_placeholder" for source in sources.values()
-    )
+    placeholder_active = any(source == "default_placeholder" for source in sources.values())
 
     return {
         "author_name": author_name,
@@ -272,9 +268,7 @@ class _StructuredFormatter(logging.Formatter):
         return base
 
 
-_STANDARD_LOG_FIELDS = set(
-    logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys()
-)
+_STANDARD_LOG_FIELDS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys())
 
 
 def _extract_log_extras(record: logging.LogRecord) -> dict[str, object]:

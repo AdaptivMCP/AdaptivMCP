@@ -298,9 +298,7 @@ async def run_tests(
 
     # Pytest exits with 5 when no tests are collected.
     # Treat this as a distinct status so callers can decide whether to gate on it.
-    status = (
-        "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
-    )
+    status = "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
 
     summary_lines = [
         "Completed test command in workspace:",
@@ -438,9 +436,7 @@ async def run_quality_suite(
     ]
 
     if developer_defaults:
-        controller_log.append(
-            "- Developer defaults: enabled (format/typecheck may run by default)"
-        )
+        controller_log.append("- Developer defaults: enabled (format/typecheck may run by default)")
     steps: List[Dict[str, Any]] = []
     diagnostics: Dict[str, Any] = {}
 
@@ -579,10 +575,7 @@ async def run_quality_suite(
         if (
             auto_setup_repo
             and lint_step.get("status") == "failed"
-            and (
-                lint_step.get("missing_module")
-                or lint_step.get("command_not_found_hint")
-            )
+            and (lint_step.get("missing_module") or lint_step.get("command_not_found_hint"))
         ):
             pkgs = _required_packages_for_command(lint_command)
             if pkgs:
@@ -619,9 +612,7 @@ async def run_quality_suite(
             controller_log.append(
                 f"- Hint: missing module '{lint_step.get('missing_module')}'. Consider installing dependencies (installing_dependencies=true)."
             )
-        if lint_step.get("status") == "failed" and lint_step.get(
-            "command_not_found_hint"
-        ):
+        if lint_step.get("status") == "failed" and lint_step.get("command_not_found_hint"):
             controller_log.append(
                 "- Hint: lint command not found. Ensure the tool is installed (or update lint_command)."
             )
@@ -726,9 +717,7 @@ async def run_quality_suite(
     if (
         auto_setup_repo
         and tests_step.get("status") == "failed"
-        and (
-            tests_step.get("missing_module") or tests_step.get("command_not_found_hint")
-        )
+        and (tests_step.get("missing_module") or tests_step.get("command_not_found_hint"))
     ):
         pkgs = _required_packages_for_command(test_command)
         if pkgs:
@@ -765,9 +754,7 @@ async def run_quality_suite(
     tests_raw = tests_step.get("raw") if isinstance(tests_step, dict) else None
     cmd_result = tests_raw.get("result") if isinstance(tests_raw, dict) else {}
     exit_code = cmd_result.get("exit_code") if isinstance(cmd_result, dict) else None
-    tests_status = (
-        "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
-    )
+    tests_status = "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
 
     tests_result: Dict[str, Any] = {
         "status": tests_status,
@@ -824,9 +811,7 @@ async def run_quality_suite(
     return tests_result
 
 
-def _prune_raw_steps(
-    steps: List[Dict[str, Any]], include_raw: bool
-) -> List[Dict[str, Any]]:
+def _prune_raw_steps(steps: List[Dict[str, Any]], include_raw: bool) -> List[Dict[str, Any]]:
     """Optionally drop raw payloads to keep the result lighter."""
     out: List[Dict[str, Any]] = []
     for step in steps:

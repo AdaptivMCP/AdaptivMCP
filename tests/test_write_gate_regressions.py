@@ -53,12 +53,8 @@ def test_decorators_do_not_block_write_tools_when_gate_is_false(monkeypatch):
 
 def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
     # Create a fake server with registered tools.
-    read_tool = types.SimpleNamespace(
-        name="read_tool", write_action=False, description="read"
-    )
-    write_tool = types.SimpleNamespace(
-        name="write_tool", write_action=True, description="write"
-    )
+    read_tool = types.SimpleNamespace(name="read_tool", write_action=False, description="read")
+    write_tool = types.SimpleNamespace(name="write_tool", write_action=True, description="write")
 
     def read_fn():
         return "ok"
