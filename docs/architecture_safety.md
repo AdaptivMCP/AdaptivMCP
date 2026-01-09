@@ -182,6 +182,7 @@ Client (ChatGPT / connector)
 
 3. **Security posture relies on environment trust.**
    - The server assumes that environment variables and process isolation are controlled by deployment.
+   - In this project, production deployment is Render.com only; security posture and isolation assumptions are therefore tied to Render service configuration.
 
 These are not necessarily flaws, but they are important operational assumptions for safe use.
 
