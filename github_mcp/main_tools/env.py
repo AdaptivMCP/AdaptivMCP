@@ -146,9 +146,7 @@ async def validate_environment() -> Dict[str, Any]:
     )
 
     # Git identity env vars / placeholders.
-    identity_envs = {
-        name: os.environ.get(name) for name in GITHUB_MCP_GIT_IDENTITY_ENV_VARS
-    }
+    identity_envs = {name: os.environ.get(name) for name in GITHUB_MCP_GIT_IDENTITY_ENV_VARS}
     legacy_identity_envs = {
         "GIT_AUTHOR_NAME": os.environ.get("GIT_AUTHOR_NAME"),
         "GIT_AUTHOR_EMAIL": os.environ.get("GIT_AUTHOR_EMAIL"),
@@ -241,9 +239,7 @@ async def validate_environment() -> Dict[str, Any]:
             if isinstance(repo_payload, dict):
                 permissions = repo_payload.get("permissions") or {}
 
-            push_allowed = (
-                permissions.get("push") if isinstance(permissions, dict) else None
-            )
+            push_allowed = permissions.get("push") if isinstance(permissions, dict) else None
             if push_allowed is True:
                 add_check(
                     "controller_repo_push_permission",

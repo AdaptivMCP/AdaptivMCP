@@ -18,9 +18,7 @@ def _assert_host_allowed(settings, host: str) -> None:
 
 def test_transport_security_includes_render_host(monkeypatch):
     monkeypatch.setenv("ALLOWED_HOSTS", "localhost")
-    monkeypatch.setenv(
-        "RENDER_EXTERNAL_HOSTNAME", "chatgpt-mcp-github-iu2y.onrender.com"
-    )
+    monkeypatch.setenv("RENDER_EXTERNAL_HOSTNAME", "chatgpt-mcp-github-iu2y.onrender.com")
 
     context = _reload_context()
     settings = context.mcp.settings.transport_security

@@ -31,9 +31,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r dev-requirements.txt
 
+      - name: Format (ruff)
+        run: |
+          ruff format --check .
+
       - name: Lint (ruff)
         run: |
-          ruff check github_mcp tests main.py extra_tools.py
+          ruff check .
+
+      - name: Typecheck (mypy)
+        run: |
+          mypy .
+
+      - name: Dependency sanity (pip check)
+        run: |
+          python -m pip check
 
       - name: Compile
         run: |

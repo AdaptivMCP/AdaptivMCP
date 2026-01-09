@@ -115,9 +115,7 @@ async def create_repository(
         if "/" in name or name.endswith(".git"):
             raise ValueError("name must not contain '/' and must not end with '.git'")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", name):
-            raise ValueError(
-                "name must match [A-Za-z0-9][A-Za-z0-9_.-]{0,99} (max 100 chars)"
-            )
+            raise ValueError("name must match [A-Za-z0-9][A-Za-z0-9_.-]{0,99} (max 100 chars)")
 
         if visibility is not None and private is not None:
             inferred_private = visibility != "public"
@@ -131,9 +129,7 @@ async def create_repository(
         else:
             effective_private = False
 
-        target_owner = (
-            owner.strip() if isinstance(owner, str) and owner.strip() else None
-        )
+        target_owner = owner.strip() if isinstance(owner, str) and owner.strip() else None
         authenticated_login: Optional[str] = None
 
         # Resolve the authenticated user (needed for auto owner and template generation).
@@ -152,21 +148,13 @@ async def create_repository(
             use_org_endpoint = True
         elif owner_type == "user":
             use_org_endpoint = False
-            if (
-                target_owner
-                and authenticated_login
-                and target_owner != authenticated_login
-            ):
+            if target_owner and authenticated_login and target_owner != authenticated_login:
                 warnings.append(
                     f"owner '{target_owner}' differs from authenticated user '{authenticated_login}'; using user endpoint"
                 )
         else:
             # auto: if caller provided an owner different from auth login, assume org.
-            if (
-                target_owner
-                and authenticated_login
-                and target_owner != authenticated_login
-            ):
+            if target_owner and authenticated_login and target_owner != authenticated_login:
                 use_org_endpoint = True
 
         create_target_desc = (
@@ -236,9 +224,7 @@ async def create_repository(
                 create_payload["security_and_analysis"] = security_and_analysis
 
             create_payload = _apply_overrides(create_payload, create_payload_overrides)
-            created_resp = await m._github_request(
-                "POST", endpoint, json_body=create_payload
-            )
+            created_resp = await m._github_request("POST", endpoint, json_body=create_payload)
 
         repo_json = created_resp.get("json") if isinstance(created_resp, dict) else None
         full_name = repo_json.get("full_name") if isinstance(repo_json, dict) else None
@@ -269,9 +255,7 @@ async def create_repository(
 
         workspace_dir = None
         if clone_to_workspace and full_name:
-            steps.append(
-                f"Cloning {full_name}@{clone_ref or 'default'} into workspace."
-            )
+            steps.append(f"Cloning {full_name}@{clone_ref or 'default'} into workspace.")
             workspace_dir = await m._clone_repo(full_name, ref=clone_ref)
 
         return {

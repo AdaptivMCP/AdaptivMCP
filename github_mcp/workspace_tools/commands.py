@@ -142,9 +142,7 @@ async def render_shell(
             "command": command_result,
         }
     except Exception as exc:
-        return _structured_tool_error(
-            exc, context="render_shell", tool_surface="render_shell"
-        )
+        return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
 
 
 @mcp_tool(write_action=True)
@@ -174,9 +172,7 @@ async def terminal_command(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
 
@@ -187,15 +183,9 @@ async def terminal_command(
             preferred = os.path.join(repo_dir, "dev-requirements.txt")
             fallback = os.path.join(repo_dir, "requirements.txt")
             req_path = preferred if os.path.exists(preferred) else fallback
-            req_file = (
-                "dev-requirements.txt"
-                if os.path.exists(preferred)
-                else "requirements.txt"
-            )
+            req_file = "dev-requirements.txt" if os.path.exists(preferred) else "requirements.txt"
             cmd_lower = command.lower()
-            already_installing = ("pip install" in cmd_lower) or (
-                "pip3 install" in cmd_lower
-            )
+            already_installing = ("pip install" in cmd_lower) or ("pip3 install" in cmd_lower)
             if (not already_installing) and os.path.exists(req_path):
                 install_result = await deps["run_shell"](
                     f"python -m pip install -r {req_file}",
@@ -203,15 +193,11 @@ async def terminal_command(
                     timeout_seconds=max(600, timeout_seconds),
                     env=env,
                 )
-                if (
-                    isinstance(install_result, dict)
-                    and install_result.get("exit_code", 0) != 0
-                ):
+                if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
                     stderr = install_result.get("stderr") or ""
                     stdout = install_result.get("stdout") or ""
                     raise GitHubAPIError(
-                        "Dependency installation failed: "
-                        + (stderr.strip() or stdout.strip())
+                        "Dependency installation failed: " + (stderr.strip() or stdout.strip())
                     )
 
         result = await deps["run_shell"](

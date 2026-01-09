@@ -23,13 +23,8 @@ def test_async_clients_refresh_when_event_loop_changes():
         github_client1 = _run_in_loop(loop1, http_clients._github_client_instance)
         external_client1 = _run_in_loop(loop1, http_clients._external_client_instance)
 
-        assert (
-            _run_in_loop(loop1, http_clients._github_client_instance) is github_client1
-        )
-        assert (
-            _run_in_loop(loop1, http_clients._external_client_instance)
-            is external_client1
-        )
+        assert _run_in_loop(loop1, http_clients._github_client_instance) is github_client1
+        assert _run_in_loop(loop1, http_clients._external_client_instance) is external_client1
     finally:
         loop1.run_until_complete(github_client1.aclose())
         loop1.run_until_complete(external_client1.aclose())
@@ -43,13 +38,8 @@ def test_async_clients_refresh_when_event_loop_changes():
 
         assert github_client2 is not github_client1
         assert external_client2 is not external_client1
-        assert (
-            _run_in_loop(loop2, http_clients._github_client_instance) is github_client2
-        )
-        assert (
-            _run_in_loop(loop2, http_clients._external_client_instance)
-            is external_client2
-        )
+        assert _run_in_loop(loop2, http_clients._github_client_instance) is github_client2
+        assert _run_in_loop(loop2, http_clients._external_client_instance) is external_client2
     finally:
         loop2.run_until_complete(github_client2.aclose())
         loop2.run_until_complete(external_client2.aclose())

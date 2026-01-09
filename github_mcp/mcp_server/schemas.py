@@ -244,9 +244,7 @@ def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
         return {"type": "array", "items": items, "uniqueItems": True}
     if origin is type(None):
         return {"type": "null"}
-    if origin is __import__("typing").Union or origin is getattr(
-        types, "UnionType", None
-    ):
+    if origin is __import__("typing").Union or origin is getattr(types, "UnionType", None):
         args = get_args(annotation)
         return {"anyOf": [_annotation_to_schema(arg) for arg in args]}
 
@@ -348,9 +346,7 @@ def _preflight_tool_args(
             "args": _jsonable(dict(args)),
         }
         if compact:
-            raw = json.dumps(
-                payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-            )
+            raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             return {"tool": tool_name, "preview": _normalize_and_truncate(raw)}
         return payload
     except Exception:

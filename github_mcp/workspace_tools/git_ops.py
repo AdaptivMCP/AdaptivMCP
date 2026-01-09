@@ -33,9 +33,7 @@ async def _workspace_sync_snapshot(
         timeout_seconds=300,
     )
     remote_ref = f"origin/{branch}"
-    head = await _run_shell_ok(
-        deps, "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60
-    )
+    head = await _run_shell_ok(deps, "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
     remote = await _run_shell_ok(
         deps,
         f"git rev-parse {shlex.quote(remote_ref)}",
@@ -62,9 +60,7 @@ async def _workspace_sync_snapshot(
         cwd=repo_dir,
         timeout_seconds=60,
     )
-    status_lines = [
-        line for line in (status.get("stdout", "") or "").splitlines() if line.strip()
-    ]
+    status_lines = [line for line in (status.get("stdout", "") or "").splitlines() if line.strip()]
 
     return {
         "fetch": fetch,
@@ -120,9 +116,7 @@ async def workspace_create_branch(
         if new_branch.endswith(".lock"):
             raise ValueError("new_branch must not end with '.lock'")
 
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_base, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_base, preserve_changes=True)
 
         checkout = await deps["run_shell"](
             f"git checkout -b {shlex.quote(new_branch)}",
@@ -198,9 +192,7 @@ async def workspace_delete_branch(
         # checked out on the branch we are about to delete.
         effective_ref = _tw()._effective_ref_for_repo(full_name, default_branch)
 
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         # Ensure the working copy is on the effective ref.
         await deps["run_shell"](
@@ -303,9 +295,7 @@ async def workspace_self_heal_branch(
             f"Checking whether branch '{branch}' is in a safe git state (repo {full_name}).",
         )
 
-        branch_repo_dir = await deps["clone_repo"](
-            full_name, ref=branch, preserve_changes=True
-        )
+        branch_repo_dir = await deps["clone_repo"](full_name, ref=branch, preserve_changes=True)
         diag = await _diagnose_workspace_branch(
             deps, repo_dir=branch_repo_dir, expected_branch=branch
         )
@@ -407,7 +397,9 @@ async def workspace_self_heal_branch(
         if new_branch:
             candidate = new_branch
         else:
-            candidate = f"heal/{_safe_branch_slug(branch, max_len=120)}-{_tw().uuid.uuid4().hex[:8]}"
+            candidate = (
+                f"heal/{_safe_branch_slug(branch, max_len=120)}-{_tw().uuid.uuid4().hex[:8]}"
+            )
         candidate = _safe_branch_slug(candidate)
 
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", candidate):
@@ -464,9 +456,7 @@ async def workspace_self_heal_branch(
             # Top-level entries (trim to keep responses small).
             try:
                 entries = [
-                    e
-                    for e in sorted(os.listdir(new_repo_dir))
-                    if e not in {".git", ".venv-mcp"}
+                    e for e in sorted(os.listdir(new_repo_dir)) if e not in {".git", ".venv-mcp"}
                 ]
             except Exception:
                 entries = []
@@ -520,12 +510,8 @@ async def workspace_sync_status(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
-        snapshot = await _workspace_sync_snapshot(
-            deps, repo_dir=repo_dir, branch=effective_ref
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
         snapshot.update(
             {
                 "branch": effective_ref,
@@ -554,17 +540,11 @@ async def workspace_sync_to_remote(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        before = await _workspace_sync_snapshot(
-            deps, repo_dir=repo_dir, branch=effective_ref
-        )
+        before = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
 
-        if (not discard_local_changes) and (
-            not before["is_clean"] or before["ahead"] > 0
-        ):
+        if (not discard_local_changes) and (not before["is_clean"] or before["ahead"] > 0):
             raise GitHubAPIError(
                 "Workspace has local changes or unpushed commits. "
                 "Re-run with discard_local_changes=true to force sync."
@@ -584,9 +564,7 @@ async def workspace_sync_to_remote(
                 timeout_seconds=120,
             )
 
-        after = await _workspace_sync_snapshot(
-            deps, repo_dir=repo_dir, branch=effective_ref
-        )
+        after = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
         return {
             "branch": effective_ref,
             "full_name": full_name,
@@ -618,14 +596,10 @@ async def workspace_sync_bidirectional(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         actions: List[str] = []
-        before = await _workspace_sync_snapshot(
-            deps, repo_dir=repo_dir, branch=effective_ref
-        )
+        before = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
         snapshot = before
 
         if snapshot["behind"] > 0:
@@ -659,9 +633,7 @@ async def workspace_sync_bidirectional(
                     cwd=repo_dir,
                     timeout_seconds=120,
                 )
-            snapshot = await _workspace_sync_snapshot(
-                deps, repo_dir=repo_dir, branch=effective_ref
-            )
+            snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
 
         if not snapshot["is_clean"]:
             if add_all:
@@ -669,9 +641,7 @@ async def workspace_sync_bidirectional(
                     "git add -A", cwd=repo_dir, timeout_seconds=120
                 )
                 if add_result.get("exit_code", 0) != 0:
-                    stderr = add_result.get("stderr", "") or add_result.get(
-                        "stdout", ""
-                    )
+                    stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
                     raise GitHubAPIError(f"git add failed: {stderr}")
 
             status_result = await deps["run_shell"](
@@ -684,28 +654,20 @@ async def workspace_sync_bidirectional(
                     commit_cmd, cwd=repo_dir, timeout_seconds=300
                 )
                 if commit_result.get("exit_code", 0) != 0:
-                    stderr = commit_result.get("stderr", "") or commit_result.get(
-                        "stdout", ""
-                    )
+                    stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
                     raise GitHubAPIError(f"git commit failed: {stderr}")
                 actions.append("committed_local_changes")
 
-            snapshot = await _workspace_sync_snapshot(
-                deps, repo_dir=repo_dir, branch=effective_ref
-            )
+            snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
 
         if push and snapshot["ahead"] > 0:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](
-                push_cmd, cwd=repo_dir, timeout_seconds=300
-            )
+            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
             if push_result.get("exit_code", 0) != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
             actions.append("pushed_to_remote")
-            snapshot = await _workspace_sync_snapshot(
-                deps, repo_dir=repo_dir, branch=effective_ref
-            )
+            snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
 
         return {
             "branch": effective_ref,

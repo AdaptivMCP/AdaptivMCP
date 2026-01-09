@@ -227,11 +227,7 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
 
     async with lock:
         # Opportunistic cleanup for this loop.
-        expired = [
-            k
-            for k, (exp, _) in _DEDUPE_ASYNC_CACHE.items()
-            if k[0] == lid and exp < now
-        ]
+        expired = [k for k, (exp, _) in _DEDUPE_ASYNC_CACHE.items() if k[0] == lid and exp < now]
         for k in expired:
             _DEDUPE_ASYNC_CACHE.pop(k, None)
 
@@ -345,9 +341,7 @@ def _coerce_tool_exception(
     if isinstance(exc, AdaptivToolError):
         return exc
 
-    err = (
-        structured.get("error") if isinstance(structured.get("error"), Mapping) else {}
-    )
+    err = structured.get("error") if isinstance(structured.get("error"), Mapping) else {}
     incident_id = str(err.get("incident_id") or "").strip()
     code = str(err.get("code") or "unhandled_exception")
     category = str(err.get("category") or "runtime")
@@ -408,8 +402,7 @@ def _filter_kwargs_for_signature(
     allowed = {
         param.name
         for param in params
-        if param.kind
-        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
     }
     return {k: v for k, v in kwargs.items() if k in allowed}
 
@@ -444,8 +437,7 @@ def _register_with_fastmcp(
     # in that case we still exercise registration logic.
     if not FASTMCP_AVAILABLE and (
         mcp is None
-        or getattr(getattr(mcp, "__class__", None), "__name__", None)
-        == "_MissingFastMCP"
+        or getattr(getattr(mcp, "__class__", None), "__name__", None) == "_MissingFastMCP"
     ):
         return None
 
@@ -465,9 +457,7 @@ def _register_with_fastmcp(
     # IMPORTANT: suppress tags by default. Some downstream clients treat tool
     # tags as policy/execution hints and can mis-tag tools. We still pass an
     # empty meta dict when supported (safe and backwards compatible).
-    emit_tool_object_metadata = _parse_bool(
-        os.environ.get("EMIT_TOOL_OBJECT_METADATA", "0")
-    )
+    emit_tool_object_metadata = _parse_bool(os.environ.get("EMIT_TOOL_OBJECT_METADATA", "0"))
 
     base: dict[str, Any] = {"name": name, "description": description}
     base_with_meta: dict[str, Any] = {
@@ -581,9 +571,7 @@ def mcp_tool(
 
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-                schema_present = isinstance(schema, Mapping) and isinstance(
-                    schema_hash, str
-                )
+                schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
                 try:
                     if not schema_present:
                         raise AdaptivToolError(
@@ -661,9 +649,7 @@ def mcp_tool(
             if not isinstance(schema, Mapping):
                 schema = _schema_from_signature(signature)
             if not isinstance(schema, Mapping):
-                raise RuntimeError(
-                    f"Failed to derive input schema for tool {tool_name!r}."
-                )
+                raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
             wrapper.__mcp_input_schema__ = schema
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_write_action__ = bool(write_action)
@@ -690,9 +676,7 @@ def mcp_tool(
 
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-            schema_present = isinstance(schema, Mapping) and isinstance(
-                schema_hash, str
-            )
+            schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
             try:
                 if not schema_present:
                     raise AdaptivToolError(
@@ -826,11 +810,7 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 or getattr(tool_obj, "__mcp_visibility__", None)
                 or "public"
             )
-            tags = (
-                getattr(func, "__mcp_tags__", None)
-                or getattr(tool_obj, "tags", None)
-                or []
-            )
+            tags = getattr(func, "__mcp_tags__", None) or getattr(tool_obj, "tags", None) or []
 
             schema = getattr(func, "__mcp_input_schema__", None)
             if not isinstance(schema, Mapping):

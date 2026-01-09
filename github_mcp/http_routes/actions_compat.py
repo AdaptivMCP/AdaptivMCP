@@ -102,20 +102,14 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     write_allowed_gate = bool(get_write_allowed(refresh_after_seconds=0.0))
     catalog = list_all_actions(include_parameters=True, compact=False)
     catalog_index = {
-        entry.get("name"): entry
-        for entry in (catalog.get("tools") or [])
-        if entry.get("name")
+        entry.get("name"): entry for entry in (catalog.get("tools") or []) if entry.get("name")
     }
 
     for tool, _func in getattr(server, "_REGISTERED_MCP_TOOLS", []):
         tool_name = _tool_name(tool, _func)
         catalog_entry = catalog_index.get(tool_name) or {}
-        tool_description = catalog_entry.get("description") or _tool_description(
-            tool, _func
-        )
-        write_action = bool(
-            catalog_entry.get("write_action", _is_write_action(tool, _func))
-        )
+        tool_description = catalog_entry.get("description") or _tool_description(tool, _func)
+        write_action = bool(catalog_entry.get("write_action", _is_write_action(tool, _func)))
         # Approval-gated writes: keep actions enabled even when write_allowed is false.
         write_enabled = bool(catalog_entry.get("write_enabled", True))
         tool_write_allowed = (not write_action) or write_allowed_gate
@@ -144,9 +138,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         display_name = getattr(tool, "title", None)
         if not display_name and isinstance(annotations, dict):
             display_name = annotations.get("title")
-        display_name = (
-            str(display_name) if display_name else _tool_display_name(tool, _func)
-        )
+        display_name = str(display_name) if display_name else _tool_display_name(tool, _func)
 
         terminal_help = _terminal_help(tool_name, tool_description, safe_schema)
 

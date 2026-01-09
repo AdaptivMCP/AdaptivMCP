@@ -1,4 +1,4 @@
-.PHONY: install install-dev lint test precommit
+.PHONY: install install-dev format format-check lint typecheck security test precommit
 
 install:
 	python -m pip install -r requirements.txt
@@ -6,8 +6,20 @@ install:
 install-dev:
 	python -m pip install -r dev-requirements.txt
 
+format:
+	ruff format .
+
+format-check:
+	ruff format --check .
+
 lint:
-	ruff check github_mcp tests main.py extra_tools.py
+	ruff check .
+
+typecheck:
+	mypy .
+
+security:
+	python -m pip check
 
 test:
 	pytest -q

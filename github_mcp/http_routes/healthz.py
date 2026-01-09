@@ -35,11 +35,7 @@ def _build_health_payload() -> dict[str, Any]:
     uptime_seconds = max(0, int(time.time() - SERVER_START_TIME))
 
     payload = {
-        "status": (
-            "ok"
-            if github_token_present and not identity_placeholder_active
-            else "warning"
-        ),
+        "status": ("ok" if github_token_present and not identity_placeholder_active else "warning"),
         "uptime_seconds": uptime_seconds,
         "github_token_present": github_token_present,
         "controller": {

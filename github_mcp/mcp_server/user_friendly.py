@@ -25,12 +25,7 @@ _UI_MAX_LINES = 12
 
 
 def _single_line(value: str) -> str:
-    value = (
-        value.replace("\r\n", " ")
-        .replace("\r", " ")
-        .replace("\n", " ")
-        .replace("\t", " ")
-    )
+    value = value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
     return " ".join(value.split()).strip()
 
 
@@ -97,9 +92,7 @@ def build_success_summary(tool_name: str, result: Mapping[str, Any]) -> ToolSumm
 
     # Command-style tools: avoid dumping full command/stdout/stderr into UI.
     if tool_name in {"terminal_command", "render_shell"}:
-        cmd = _safe_str(
-            result.get("command_input") or result.get("command") or ""
-        ).strip()
+        cmd = _safe_str(result.get("command_input") or result.get("command") or "").strip()
         res = result.get("result") if isinstance(result.get("result"), dict) else {}
 
         exit_code = res.get("exit_code") if isinstance(res, dict) else None
@@ -176,9 +169,7 @@ def attach_error_user_facing_fields(tool_name: str, payload: Any) -> Any:
     err = out.get("error") if isinstance(out.get("error"), Mapping) else {}
 
     title = f"{tool_name}: failed"
-    message = _safe_str(
-        err.get("message") or out.get("user_message") or "Unknown error"
-    ).strip()
+    message = _safe_str(err.get("message") or out.get("user_message") or "Unknown error").strip()
     code = _safe_str(err.get("code") or "").strip()
     category = _safe_str(err.get("category") or "").strip()
     retryable = err.get("retryable")

@@ -76,9 +76,7 @@ async def get_file_slice(
     start_idx = min(max(start_line - 1, 0), total_lines - 1)
     end_idx = total_lines
 
-    slice_lines = [
-        {"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)
-    ]
+    slice_lines = [{"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)]
 
     return {
         "full_name": full_name,
@@ -118,9 +116,7 @@ async def delete_file(
                 "path": normalized_path,
                 "branch": effective_branch,
             }
-        raise FileNotFoundError(
-            f"File not found: {normalized_path} on {effective_branch}"
-        )
+        raise FileNotFoundError(f"File not found: {normalized_path} on {effective_branch}")
 
     payload = {"message": message, "sha": sha, "branch": effective_branch}
     result = await _github_request(
@@ -157,10 +153,7 @@ async def update_file_from_workspace(
     else:
         workspace_file = (workspace_root / workspace_path).resolve()
 
-    if (
-        workspace_root not in workspace_file.parents
-        and workspace_file != workspace_root
-    ):
+    if workspace_root not in workspace_file.parents and workspace_file != workspace_root:
         raise ValueError("workspace_path must stay within the workspace root")
 
     if not workspace_file.is_file():

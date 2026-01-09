@@ -12,9 +12,7 @@ from ._main import _main
 _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = set()
 
 
-def _ui_prompt_write_action(
-    tool_name: str, write_action: bool, *, write_allowed: bool
-) -> bool:
+def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed: bool) -> bool:
     # UI policy only (does not define whether the tool is a write tool).
     if not write_action:
         return False
@@ -303,9 +301,7 @@ def list_write_actions(
     """Enumerate write-capable MCP tools with optional schemas."""
 
     catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
-    tools = [
-        tool for tool in catalog.get("tools", []) or [] if tool.get("write_action")
-    ]
+    tools = [tool for tool in catalog.get("tools", []) or [] if tool.get("write_action")]
     return {
         "compact": catalog.get("compact"),
         "write_actions_enabled": catalog.get("write_actions_enabled"),
@@ -419,9 +415,7 @@ async def describe_tool(
     return result
 
 
-def _validate_single_tool_args(
-    tool_name: str, args: Optional[Mapping[str, Any]]
-) -> Dict[str, Any]:
+def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
 
     if args is not None and not isinstance(args, Mapping):
@@ -437,9 +431,7 @@ def _validate_single_tool_args(
                 if getattr(tool, "name", None) or getattr(func, "__name__", None)
             )
         )
-        raise ValueError(
-            f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}"
-        )
+        raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
 
     tool, func = found
 

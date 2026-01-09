@@ -129,14 +129,10 @@ class _CacheControlMiddleware:
                 if path.startswith("/static/"):
                     # Honor any explicit Cache-Control set upstream; otherwise make static assets cacheable.
                     if not _has_cache_control(headers):
-                        headers.append(
-                            (b"cache-control", b"public, max-age=31536000, immutable")
-                        )
+                        headers.append((b"cache-control", b"public, max-age=31536000, immutable"))
                 else:
                     # Default to no-store for everything else so edge caching (or proxies) never cache dynamic endpoints.
-                    headers = [
-                        (k, v) for (k, v) in headers if k.lower() != b"cache-control"
-                    ]
+                    headers = [(k, v) for (k, v) in headers if k.lower() != b"cache-control"]
                     headers.append((b"cache-control", b"no-store"))
                 message["headers"] = headers
             elif message.get("type") == "http.response.body":
@@ -246,9 +242,7 @@ class _SuppressClientDisconnectMiddleware:
         except anyio.ClosedResourceError:
             return
         except ExceptionGroup as exc:
-            if all(
-                isinstance(err, anyio.ClosedResourceError) for err in exc.exceptions
-            ):
+            if all(isinstance(err, anyio.ClosedResourceError) for err in exc.exceptions):
                 return
             raise
 
@@ -626,9 +620,7 @@ async def list_repositories(
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.repositories import list_repositories as _impl
 
-    return await _impl(
-        affiliation=affiliation, visibility=visibility, per_page=per_page, page=page
-    )
+    return await _impl(affiliation=affiliation, visibility=visibility, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
@@ -765,9 +757,7 @@ async def fetch_issue_comments(
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.issues import fetch_issue_comments as _impl
 
-    return await _impl(
-        full_name=full_name, issue_number=issue_number, per_page=per_page, page=page
-    )
+    return await _impl(full_name=full_name, issue_number=issue_number, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
@@ -790,9 +780,7 @@ async def fetch_pr_comments(
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import fetch_pr_comments as _impl
 
-    return await _impl(
-        full_name=full_name, pull_number=pull_number, per_page=per_page, page=page
-    )
+    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
@@ -801,9 +789,7 @@ async def list_pr_changed_filenames(
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.pull_requests import list_pr_changed_filenames as _impl
 
-    return await _impl(
-        full_name=full_name, pull_number=pull_number, per_page=per_page, page=page
-    )
+    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
@@ -819,9 +805,7 @@ async def get_issue_comment_reactions(
 ) -> Dict[str, Any]:
     from github_mcp.main_tools.issues import get_issue_comment_reactions as _impl
 
-    return await _impl(
-        full_name=full_name, comment_id=comment_id, per_page=per_page, page=page
-    )
+    return await _impl(full_name=full_name, comment_id=comment_id, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
@@ -1062,9 +1046,7 @@ async def search(
 async def download_user_content(content_url: str) -> Dict[str, Any]:
     """Download user-provided content (sandbox/local/http) with base64 encoding."""
 
-    body_bytes = await _load_body_from_content_url(
-        content_url, context="download_user_content"
-    )
+    body_bytes = await _load_body_from_content_url(content_url, context="download_user_content")
     text: Optional[str]
     try:
         text = body_bytes.decode("utf-8")
@@ -1180,9 +1162,7 @@ async def list_tools(
     """Lightweight tool catalog."""
     from github_mcp.main_tools.introspection import list_tools as _impl
 
-    return await _impl(
-        only_write=only_write, only_read=only_read, name_prefix=name_prefix
-    )
+    return await _impl(only_write=only_write, only_read=only_read, name_prefix=name_prefix)
 
 
 @mcp_tool(write_action=False)
@@ -1243,18 +1223,14 @@ async def describe_tool(
         if name is None:
             name = tool_name
         elif name != tool_name:
-            raise ValueError(
-                "Provide only one of tool_name or name (or set them equal)."
-            )
+            raise ValueError("Provide only one of tool_name or name (or set them equal).")
 
     from github_mcp.main_tools.introspection import describe_tool as _impl
 
     return await _impl(name=name, names=names, include_parameters=include_parameters)
 
 
-def _validate_single_tool_args(
-    tool_name: str, args: Optional[Mapping[str, Any]]
-) -> Dict[str, Any]:
+def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
     from github_mcp.main_tools.introspection import _validate_single_tool_args as _impl
 
@@ -1598,9 +1574,7 @@ async def ensure_branch(
 
 
 @mcp_tool(write_action=False)
-async def get_branch_summary(
-    full_name: str, branch: str, base: str = "main"
-) -> Dict[str, Any]:
+async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
     from github_mcp.main_tools.branches import get_branch_summary as _impl
 
     return await _impl(full_name=full_name, branch=branch, base=base)
@@ -1616,9 +1590,7 @@ async def get_latest_branch_status(
 
 
 @mcp_tool(write_action=False)
-async def get_repo_dashboard(
-    full_name: str, branch: Optional[str] = None
-) -> Dict[str, Any]:
+async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Dict[str, Any]:
     """Return a compact, multi-signal dashboard for a repository.
 
     This helper aggregates several lower-level tools into a single call so
@@ -1808,9 +1780,7 @@ async def apply_text_update_and_commit(
 
 @mcp_tool(
     write_action=False,
-    description=(
-        "Return a compact overview of a pull request, including files and CI status."
-    ),
+    description=("Return a compact overview of a pull request, including files and CI status."),
 )
 async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
     # Summarize a pull request so I can decide what to do next.

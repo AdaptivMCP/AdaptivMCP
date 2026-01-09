@@ -12,18 +12,12 @@ from github_mcp.utils import _extract_hostname, _render_external_hosts
 # Request-scoped context (used for correlation/logging/dedupe)
 # ------------------------------------------------------------------------------
 
-REQUEST_MESSAGE_ID: ContextVar[Optional[str]] = ContextVar(
-    "REQUEST_MESSAGE_ID", default=None
-)
-REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar(
-    "REQUEST_SESSION_ID", default=None
-)
+REQUEST_MESSAGE_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_MESSAGE_ID", default=None)
+REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID", default=None)
 
 # These are imported by main.py in your repo; keep names stable.
 REQUEST_PATH: ContextVar[Optional[str]] = ContextVar("REQUEST_PATH", default=None)
-REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar(
-    "REQUEST_RECEIVED_AT", default=None
-)
+REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar("REQUEST_RECEIVED_AT", default=None)
 
 
 def get_request_context() -> dict[str, Any]:
@@ -154,9 +148,7 @@ try:
     def _build_transport_security_settings() -> TransportSecuritySettings | None:
         allowed_hosts_env = os.getenv("ALLOWED_HOSTS")
         allowed_hosts = [
-            host.strip()
-            for host in (allowed_hosts_env or "").split(",")
-            if host.strip()
+            host.strip() for host in (allowed_hosts_env or "").split(",") if host.strip()
         ]
         if "*" in allowed_hosts:
             return TransportSecuritySettings(enable_dns_rebinding_protection=False)

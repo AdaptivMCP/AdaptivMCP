@@ -109,9 +109,7 @@ async def get_workspace_file_contents(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         info = _workspace_read_text(repo_dir, path)
         info.update({"full_name": full_name, "ref": effective_ref})
@@ -147,9 +145,7 @@ async def set_workspace_file_contents(
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         write_info = _workspace_write_text(
             repo_dir,
             path,
@@ -163,9 +159,7 @@ async def set_workspace_file_contents(
             **write_info,
         }
     except Exception as exc:
-        return _structured_tool_error(
-            exc, context="set_workspace_file_contents", path=path
-        )
+        return _structured_tool_error(exc, context="set_workspace_file_contents", path=path)
 
 
 @mcp_tool(write_action=True)
@@ -188,9 +182,7 @@ async def apply_patch(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         await deps["apply_patch_to_repo"](repo_dir, patch)
         return {"branch": effective_ref, "status": "patched"}
     except Exception as exc:

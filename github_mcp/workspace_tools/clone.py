@@ -34,9 +34,7 @@ async def ensure_workspace_clone(
         existed = os.path.isdir(os.path.join(workspace_dir, ".git"))
 
         deps = _tw()._workspace_deps()
-        await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=not reset
-        )
+        await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=not reset)
 
         return {
             "branch": effective_ref,
