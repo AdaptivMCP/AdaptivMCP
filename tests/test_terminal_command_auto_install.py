@@ -47,7 +47,9 @@ def test_terminal_command_auto_installs_for_python_commands(monkeypatch):
 
     # Run a python-centric command; should auto-install.
     out = asyncio.run(
-        commands.terminal_command(full_name="org/repo", command="python -c 'print(1)'", use_temp_venv=True)
+        commands.terminal_command(
+            full_name="org/repo", command="python -c 'print(1)'", use_temp_venv=True
+        )
     )
 
     assert out["result"]["exit_code"] == 0
@@ -100,11 +102,12 @@ def test_terminal_command_does_not_auto_install_for_non_python_commands(monkeypa
     monkeypatch.setattr(commands.os.path, "exists", lambda p: True)
 
     out = asyncio.run(
-        commands.terminal_command(full_name="org/repo", command="echo non-python-ok", use_temp_venv=True)
+        commands.terminal_command(
+            full_name="org/repo", command="echo non-python-ok", use_temp_venv=True
+        )
     )
 
     assert out["result"]["exit_code"] == 0
     assert calls["prepare_venv"] == 1
     assert calls["install"] == 0
     assert calls["run"] == 1
-
