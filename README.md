@@ -32,6 +32,20 @@ Production deployment for Adaptiv MCP is **Render.com only**. The steps below ar
 
 3. Point your MCP client to `/sse` and verify `/healthz` is healthy.
 
+## Render build and start commands (native Python)
+
+Some Render Python environments do not allow installing OS packages during build. This repo vendors a prebuilt `rg` (ripgrep) binary and provides helper scripts.
+
+Build Command:
+
+- `./scripts/render-build.sh`
+
+Start Command:
+
+- `./scripts/render-start.sh`
+
+The start script prepends the vendored `rg` directory to `PATH` and validates `rg --version` before launching Uvicorn.
+
 ## Deployment (Render.com only)
 
 Adaptiv MCP is deployed exclusively via Render.com as a web service. For production, do not run this server via ad-hoc self-hosting. Instead, deploy through Render and configure environment variables in the Render service settings.
