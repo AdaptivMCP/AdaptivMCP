@@ -98,8 +98,8 @@ def _terminal_help(name: str, description: str, schema: Any) -> str:
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
     # Keep parity with the main introspection surface.
-    # write_allowed indicates auto-approval vs approval-gated writes.
-    write_allowed_gate = bool(get_write_allowed(refresh_after_seconds=0.0))
+    # write_actions_auto_approved indicates auto-approval vs approval-gated writes.
+    write_auto_approved = bool(get_write_allowed(refresh_after_seconds=0.0))
     catalog = list_all_actions(include_parameters=True, compact=False)
     catalog_index = {
         entry.get("name"): entry for entry in (catalog.get("tools") or []) if entry.get("name")
@@ -110,9 +110,11 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         catalog_entry = catalog_index.get(tool_name) or {}
         tool_description = catalog_entry.get("description") or _tool_description(tool, _func)
         write_action = bool(catalog_entry.get("write_action", _is_write_action(tool, _func)))
-        # Approval-gated writes: keep actions enabled even when write_allowed is false.
+        # Approval-gated writes: keep actions enabled even when auto-approval is off.
         write_enabled = bool(catalog_entry.get("write_enabled", True))
-        tool_write_allowed = (not write_action) or write_allowed_gate
+        approval_required = bool(write_action and not write_auto_approved)
+        tool_write_allowed = True
+        legacy_write_allowed = (not write_action) or write_auto_approved
 
         schema = (
             catalog_entry.get("input_schema")
@@ -154,6 +156,9 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "write_action": bool(write_action),
                 "write_allowed": bool(tool_write_allowed),
                 "write_enabled": bool(write_enabled),
+                "approval_required": approval_required,
+                "auto_approved": bool(write_action and write_auto_approved),
+                "write_allowed_legacy": bool(legacy_write_allowed),
                 "visibility": str(visibility),
             }
         )
