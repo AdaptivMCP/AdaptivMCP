@@ -162,7 +162,14 @@ async def list_repository_tree(
             "message": "Both blobs and trees were excluded; nothing to return.",
         }
 
-    normalized_prefix = path_prefix.lstrip("/") if path_prefix else None
+    normalized_prefix = None
+    if isinstance(path_prefix, str):
+        candidate = path_prefix.strip().replace("\\", "/")
+        # Treat common "root" markers as no prefix.
+        if candidate in {"", "/", ".", "./"}:
+            normalized_prefix = None
+        else:
+            normalized_prefix = candidate.lstrip("/")
 
     filtered_entries: List[Dict[str, Any]] = []
     for entry in tree:
