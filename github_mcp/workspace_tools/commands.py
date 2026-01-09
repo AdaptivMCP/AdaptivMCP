@@ -249,7 +249,9 @@ async def terminal_command(
         install_result = None
         # Auto-install runtime deps for python-centric commands to avoid
         # confusing "blocked" behavior when the temp venv is empty.
-        auto_install = bool(use_temp_venv and (installing_dependencies or _looks_like_python_work(command)))
+        auto_install = bool(
+            use_temp_venv and (installing_dependencies or _looks_like_python_work(command))
+        )
         if auto_install and use_temp_venv:
             preferred = os.path.join(repo_dir, "dev-requirements.txt")
             fallback = os.path.join(repo_dir, "requirements.txt")
