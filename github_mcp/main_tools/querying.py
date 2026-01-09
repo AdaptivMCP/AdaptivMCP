@@ -41,6 +41,10 @@ _FETCH_URL_ALLOWED_SCHEMES = {"http", "https"}
 # in a wrapper module if needed.
 _FETCH_URL_MAX_BYTES = 1_000_000  # 1 MB
 
+# Cap the returned text in the tool response to avoid excessively large payloads.
+# Note: this is separate from _FETCH_URL_MAX_BYTES (download cap).
+_FETCH_URL_MAX_CHARS = 200_000
+
 # Avoid leaking cookies/tokens set by upstream sites in tool results.
 _FETCH_URL_REDACT_RESPONSE_HEADERS = {
     "set-cookie",
@@ -211,6 +215,7 @@ async def fetch_url(url: str) -> Dict[str, Any]:
 
     client = external_client_instance()
     truncated = False
+    content_truncated = False
     content: str = ""
     headers: Dict[str, str] = {}
     status_code: int = 0
@@ -241,6 +246,10 @@ async def fetch_url(url: str) -> Dict[str, Any]:
                     content = bytes(collected).decode("utf-8", errors="replace")
                 except Exception:
                     content = ""
+
+                if len(content) > _FETCH_URL_MAX_CHARS:
+                    content = content[:_FETCH_URL_MAX_CHARS]
+                    content_truncated = True
         except Exception as e:  # noqa: BLE001
             return structured_tool_error(
                 e,
@@ -254,6 +263,8 @@ async def fetch_url(url: str) -> Dict[str, Any]:
         "content": content,
         "truncated": truncated,
         "max_bytes": _FETCH_URL_MAX_BYTES,
+        "content_truncated": content_truncated,
+        "max_chars": _FETCH_URL_MAX_CHARS,
     }
 
 
