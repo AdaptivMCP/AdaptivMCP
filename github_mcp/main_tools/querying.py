@@ -223,7 +223,14 @@ async def fetch_url(url: str) -> Dict[str, Any]:
     async with get_concurrency_semaphore():
         try:
             # Avoid following redirects to prevent SSRF via Location headers.
-            async with client.stream("GET", url, follow_redirects=False) as resp:
+            # Also avoid sending device/fingerprinting headers. We do not need
+            # to forward any headers for this tool.
+            async with client.stream(
+                "GET",
+                url,
+                follow_redirects=False,
+                headers={"User-Agent": "Mozilla/5.0"},
+            ) as resp:
                 status_code = int(getattr(resp, "status_code", 0) or 0)
                 headers = _sanitize_fetch_url_headers(dict(getattr(resp, "headers", {}) or {}))
 

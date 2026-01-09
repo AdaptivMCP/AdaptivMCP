@@ -125,6 +125,7 @@ from .config import (  # noqa: E402
     MAX_CONCURRENCY,
 )
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
+from .redaction import sanitize_headers, sanitize_obj  # noqa: E402
 
 _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
     weakref.WeakKeyDictionary()
@@ -448,12 +449,12 @@ def _extract_response_body(resp: httpx.Response) -> Any | None:
 def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "status_code": resp.status_code,
-        "headers": dict(resp.headers),
+        "headers": sanitize_headers(dict(resp.headers)),
     }
     if body is not None:
-        payload["json"] = body
+        payload["json"] = sanitize_obj(body)
     else:
-        payload["text"] = resp.text
+        payload["text"] = sanitize_obj(resp.text)
     return payload
 
 
@@ -623,7 +624,7 @@ async def _github_request(
 
         result = _build_response_payload(resp, body=body)
         if expect_json:
-            result["json"] = body if body is not None else {}
+            result["json"] = sanitize_obj(body if body is not None else {})
         return result
 
 
