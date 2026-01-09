@@ -6,6 +6,10 @@
 - (Optional) Install git hooks: `make precommit`
 
 Optional but recommended tooling:
+If you want to use the vendored `rg` without a path prefix, you can either:
+- Run `make rg-shell` to open a subshell with `rg` on PATH, or
+- Source `. ./scripts/rg-path.sh` in your current shell.
+
 
 - `ripgrep` (binary `rg`) for fast codebase search.
 
