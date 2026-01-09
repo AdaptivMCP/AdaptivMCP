@@ -47,22 +47,44 @@ def _looks_like_python_work(command: str) -> bool:
 
     if not isinstance(command, str):
         return False
-    s = command.strip().lower()
+    s = command.strip()
     if not s:
         return False
-    # Common python tooling / test invocations.
-    tokens = (
+
+    # Parse like a shell would so we can inspect the actual executable.
+    # If parsing fails, fall back to a conservative "no" to avoid surprise installs.
+    try:
+        argv = shlex.split(s, posix=True)
+    except Exception:
+        return False
+    if not argv:
+        return False
+
+    exe = (argv[0] or "").strip().lower()
+    if not exe:
+        return False
+
+    # Normalize common patterns.
+    if exe.endswith("/python") or exe.endswith("/python3"):
+        exe = "python"
+    if exe.endswith("/pip") or exe.endswith("/pip3"):
+        exe = "pip"
+
+    python_exes = {
         "python",
+        "python3",
+        "pip",
+        "pip3",
         "pytest",
         "ruff",
         "mypy",
-        "pip ",
-        "pip3 ",
         "uvicorn",
         "gunicorn",
         "fastapi",
-    )
-    return any(t in s for t in tokens)
+    }
+
+    # Only treat it as python work if the primary executable indicates so.
+    return exe in python_exes
 
 
 def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
