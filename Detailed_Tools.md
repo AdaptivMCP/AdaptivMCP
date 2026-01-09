@@ -244,7 +244,7 @@ Purpose: Health-check the MCP server “extensions surface” (used by some depl
 
 Inputs: none.
 
-Outputs: Simple acknowledgement.
+Outputs: Acknowledgement object.
 
 Example:
 
