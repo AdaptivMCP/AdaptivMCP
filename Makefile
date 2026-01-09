@@ -1,4 +1,4 @@
-.PHONY: install install-dev format format-check lint typecheck security test precommit
+.PHONY: install install-dev format format-check lint typecheck security test precommit rg-shell
 
 install:
 	python -m pip install -r requirements.txt
@@ -27,3 +27,7 @@ test:
 precommit:
 	pre-commit install
 	pre-commit run --all-files
+
+# Open an interactive shell with vendored `rg` on PATH.
+rg-shell:
+	./scripts/dev-shell.sh

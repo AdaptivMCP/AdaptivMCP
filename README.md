@@ -58,6 +58,11 @@ Operational notes:
 
 ## Development
 
+Vendored ripgrep (rg):
+
+- Start a shell with `rg` on PATH: `make rg-shell` (or `./scripts/dev-shell.sh`)
+- Or, in an existing shell: `. ./scripts/rg-path.sh`
+
 - Install dev dependencies: `make install-dev`
 - Lint: `make lint`
 - Format: `make format`
