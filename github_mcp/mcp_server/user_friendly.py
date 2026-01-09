@@ -12,16 +12,13 @@ When a tool returns a mapping payload, we add:
 Policy:
 - Do not remove or mutate machine-readable fields.
 - Do not introduce secrets into UI fields.
-- Keep UI fields bounded by line count.
+- Keep UI fields reasonably compact.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping
-
-
-_UI_MAX_LINES = 12
 
 
 def _single_line(value: str) -> str:
@@ -41,10 +38,8 @@ def _safe_str(value: Any) -> str:
 
 
 def _bounded_lines(lines: List[str]) -> List[str]:
-    # Cap line count while keeping full line content.
-    trimmed = [_preview_text(line) for line in lines if line.strip()]
-    trimmed = trimmed[:_UI_MAX_LINES]
-    return trimmed
+    # Normalize per-line whitespace and drop empty lines.
+    return [_preview_text(line) for line in lines if line.strip()]
 
 
 def _clean_lines(*values: Any) -> List[str]:
@@ -152,10 +147,10 @@ def attach_user_facing_fields(tool_name: str, payload: Any) -> Any:
     out["controller_log"] = summary.bullets
     out.setdefault("summary", summary.to_dict())
 
-    msg_lines = [summary.title] + [f"- {b}" for b in summary.bullets[:6]]
+    msg_lines = [summary.title] + [f"- {b}" for b in summary.bullets]
     if summary.next_steps:
         msg_lines.append("Next steps:")
-        msg_lines.extend([f"- {s}" for s in summary.next_steps[:4]])
+        msg_lines.extend([f"- {s}" for s in summary.next_steps])
     out["user_message"] = "\n".join(msg_lines)
 
     return out
@@ -200,7 +195,7 @@ def attach_error_user_facing_fields(tool_name: str, payload: Any) -> Any:
     out["summary"] = summary.to_dict()
     out["controller_log"] = summary.bullets
 
-    msg_lines = [title] + [f"- {b}" for b in summary.bullets[:6]]
+    msg_lines = [title] + [f"- {b}" for b in summary.bullets]
     if hint:
         msg_lines.append("Next steps:")
         msg_lines.append(f"- {_preview_text(hint)}")
