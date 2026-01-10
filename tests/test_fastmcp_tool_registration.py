@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import typing
+import pytest
 
 from github_mcp.mcp_server import decorators
 
@@ -94,21 +94,10 @@ def test_register_with_fastmcp_passes_tags(monkeypatch):
     assert captured["tags"] == ["alpha", "beta"]
 
 
-def _assert_return_annotation_is_mapping(fn):
-    ret = getattr(fn, "__annotations__", {}).get("return")
-    assert ret is not None
-    assert typing.get_origin(ret) is dict
-    assert typing.get_args(ret) == (str, typing.Any)
-
-
-def test_mcp_tool_sets_return_annotation_before_fastmcp_registration_sync(monkeypatch):
-    captured = {}
-
+def test_mcp_tool_preserves_scalar_returns_sync(monkeypatch):
     class FakeMCP:
         def tool(self, *, name=None, description=None, meta=None, annotations=None):
             def decorator(fn):
-                captured["name"] = name
-                _assert_return_annotation_is_mapping(fn)
                 return {"fn": fn, "name": name}
 
             return decorator
@@ -120,19 +109,14 @@ def test_mcp_tool_sets_return_annotation_before_fastmcp_registration_sync(monkey
     def sync_tool() -> str:
         return "ok"
 
-    # Wrapper should be returned and registered.
-    assert callable(sync_tool)
-    assert captured["name"] == "sync_tool"
+    assert sync_tool() == "ok"
 
 
-def test_mcp_tool_sets_return_annotation_before_fastmcp_registration_async(monkeypatch):
-    captured = {}
-
+@pytest.mark.asyncio
+async def test_mcp_tool_preserves_scalar_returns_async(monkeypatch):
     class FakeMCP:
         def tool(self, *, name=None, description=None, meta=None, annotations=None):
             def decorator(fn):
-                captured["name"] = name
-                _assert_return_annotation_is_mapping(fn)
                 return {"fn": fn, "name": name}
 
             return decorator
@@ -144,5 +128,26 @@ def test_mcp_tool_sets_return_annotation_before_fastmcp_registration_async(monke
     async def async_tool() -> str:
         return "ok"
 
-    assert callable(async_tool)
-    assert captured["name"] == "async_tool"
+    assert await async_tool() == "ok"
+
+
+def test_mcp_tool_attaches_user_facing_fields_for_mapping_returns(monkeypatch):
+    class FakeMCP:
+        def tool(self, *, name=None, description=None, meta=None, annotations=None):
+            def decorator(fn):
+                return {"fn": fn, "name": name}
+
+            return decorator
+
+    monkeypatch.setattr(decorators, "mcp", FakeMCP())
+    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
+
+    @decorators.mcp_tool(name="mapping_tool", write_action=False)
+    def mapping_tool() -> dict:
+        return {"foo": "bar"}
+
+    out = mapping_tool()
+    assert out["foo"] == "bar"
+    assert "controller_log" in out
+    assert "summary" in out
+    assert "user_message" in out
