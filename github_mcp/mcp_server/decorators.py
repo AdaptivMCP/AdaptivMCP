@@ -648,6 +648,17 @@ def mcp_tool(
                 result = attach_user_facing_fields(tool_name, result)
                 return result
 
+            # Ensure tool output schemas match the actual return shape.
+            # The wrapper always returns a mapping (scalar results are wrapped).
+            # IMPORTANT: this MUST be set before FastMCP registration so the
+            # published output schema matches runtime behavior.
+            try:
+                ann = dict(getattr(wrapper, "__annotations__", {}) or {})
+                ann["return"] = Dict[str, Any]
+                wrapper.__annotations__ = ann
+            except Exception:
+                pass
+
             wrapper.__mcp_tool__ = _register_with_fastmcp(
                 wrapper,
                 name=tool_name,
@@ -663,14 +674,7 @@ def mcp_tool(
             except Exception:
                 pass
 
-            # Ensure tool output schemas match the actual return shape.
-            # The wrapper always returns a mapping (scalar results are wrapped).
-            try:
-                ann = dict(getattr(wrapper, "__annotations__", {}) or {})
-                ann["return"] = Dict[str, Any]
-                wrapper.__annotations__ = ann
-            except Exception:
-                pass
+            # NOTE: return annotation is set before FastMCP registration above.
 
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
@@ -762,6 +766,17 @@ def mcp_tool(
             result = attach_user_facing_fields(tool_name, result)
             return result
 
+        # Ensure tool output schemas match the actual return shape.
+        # The wrapper always returns a mapping (scalar results are wrapped).
+        # IMPORTANT: this MUST be set before FastMCP registration so the
+        # published output schema matches runtime behavior.
+        try:
+            ann = dict(getattr(wrapper, "__annotations__", {}) or {})
+            ann["return"] = Dict[str, Any]
+            wrapper.__annotations__ = ann
+        except Exception:
+            pass
+
         wrapper.__mcp_tool__ = _register_with_fastmcp(
             wrapper,
             name=tool_name,
@@ -775,13 +790,7 @@ def mcp_tool(
         except Exception:
             pass
 
-        # Ensure tool output schemas match the actual return shape.
-        try:
-            ann = dict(getattr(wrapper, "__annotations__", {}) or {})
-            ann["return"] = Dict[str, Any]
-            wrapper.__annotations__ = ann
-        except Exception:
-            pass
+        # NOTE: return annotation is set before FastMCP registration above.
 
         schema = _normalize_input_schema(wrapper.__mcp_tool__)
         if not isinstance(schema, Mapping):
