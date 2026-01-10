@@ -304,7 +304,6 @@ def _unwrap_adaptiv_error(exc: BaseException) -> Optional[AdaptivToolError]:
     return None
 
 
-
 def _exception_trace(exc: BaseException) -> str:
     """
     Optional helper: stringify a traceback when you explicitly want it.

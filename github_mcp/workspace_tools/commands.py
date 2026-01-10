@@ -4,10 +4,7 @@ import shlex
 from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
-from github_mcp.server import (
-    _structured_tool_error,
-    mcp_tool,
-)
+from github_mcp.server import _structured_tool_error, mcp_tool
 
 
 def _tw():
@@ -165,7 +162,7 @@ async def render_shell(
 
         return out
     except Exception as exc:
-        return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
+        return _structured_tool_error(exc, context="render_shell")
 
 
 @mcp_tool(write_action=True)
@@ -265,14 +262,8 @@ async def terminal_command(
                         "missing_module": missing,
                         "message": "Missing python dependency. Re-run terminal_command with installing_dependencies=true.",
                     }
-        out = _strip_ui_fields(out)
+        out = _strip_nested_ui_fields(out)
 
         return out
     except Exception as exc:
-        return _structured_tool_error(
-            exc, context="terminal_command", tool_surface="terminal_command"
-        )
-
-
-# NOTE: The legacy tool name `run_command` has been removed.
-# Use `terminal_command` instead.
+        return _structured_tool_error(exc, context="terminal_command")

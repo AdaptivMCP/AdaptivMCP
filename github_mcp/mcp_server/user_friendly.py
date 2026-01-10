@@ -94,9 +94,7 @@ def _strip_legacy_ui_fields(payload: Dict[str, Any]) -> None:
     payload.pop("user_message", None)
 
     summary = payload.get("summary")
-    if isinstance(summary, Mapping) and {"title", "bullets", "next_steps"}.issubset(
-        summary.keys()
-    ):
+    if isinstance(summary, Mapping) and {"title", "bullets", "next_steps"}.issubset(summary.keys()):
         payload.pop("summary", None)
 
 
@@ -109,9 +107,7 @@ def _ui_from_legacy_fields(
 ) -> Optional[Dict[str, Any]]:
     """Convert legacy top-level UI fields into the new `ui` mapping."""
 
-    if isinstance(summary, Mapping) and {"title", "bullets", "next_steps"}.issubset(
-        summary.keys()
-    ):
+    if isinstance(summary, Mapping) and {"title", "bullets", "next_steps"}.issubset(summary.keys()):
         title = _safe_str(summary.get("title") or f"{tool_name}: completed").strip()
         bullets = _bounded_lines(_clean_lines(summary.get("bullets") or []))
         next_steps = _bounded_lines(_clean_lines(summary.get("next_steps") or []))
