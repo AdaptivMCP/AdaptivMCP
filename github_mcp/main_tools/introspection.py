@@ -150,11 +150,11 @@ def list_write_tools() -> Dict[str, Any]:
 def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
     """Best-effort attribute resolution across tool and function wrappers."""
 
-    if hasattr(tool, name):
-        return getattr(tool, name)
     private = f"__mcp_{name}__"
     if hasattr(func, private):
         return getattr(func, private)
+    if hasattr(tool, name):
+        return getattr(tool, name)
     return default
 
 
