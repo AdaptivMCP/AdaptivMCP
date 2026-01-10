@@ -35,7 +35,10 @@ async def get_server_config() -> Dict[str, Any]:
     """Return a safe summary of MCP connector and runtime settings."""
 
     config_payload = {
+        # Back-compat: historically surfaced as write_allowed, but this is the write
+        # auto-approval gate (sourced from GITHUB_MCP_WRITE_ALLOWED).
         "write_allowed": bool(server.WRITE_ALLOWED),
+        "write_auto_approved": bool(server.WRITE_ALLOWED),
         "github_api_base": GITHUB_API_BASE,
         "http": {
             "timeout": HTTPX_TIMEOUT,
@@ -48,8 +51,8 @@ async def get_server_config() -> Dict[str, Any]:
         },
         "approval_policy": {
             "notes": (
-                "When WRITE_ALLOWED is true, write tools are auto-approved and UI prompts are limited to commit/push-style tools. "
-                "When WRITE_ALLOWED is false, write tools remain available but UI prompts are required for any write action."
+                "When GITHUB_MCP_WRITE_ALLOWED is true, write tools are auto-approved. "
+                "When GITHUB_MCP_WRITE_ALLOWED is false, write tools remain available but clients should prompt/confirm before any write action."
             ),
         },
         "git_identity": {

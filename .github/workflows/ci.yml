@@ -58,8 +58,14 @@ jobs:
         run: |
           python -m compileall -q github_mcp main.py
 
-      - name: Run tests
+      - name: Run tests (write gate off)
         env:
           GITHUB_MCP_WRITE_ALLOWED: "false"
+        run: |
+          pytest -q
+
+      - name: Run tests (write gate on)
+        env:
+          GITHUB_MCP_WRITE_ALLOWED: "true"
         run: |
           pytest -q
