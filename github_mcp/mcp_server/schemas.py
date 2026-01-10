@@ -4,10 +4,72 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
 import re
 import types
 import typing
 from typing import Any, Dict, Mapping, Optional, get_args, get_origin
+
+
+# ---------------------------------------------------------------------------
+# Log-safety helpers
+# ---------------------------------------------------------------------------
+
+
+def _log_preview_max_chars() -> int:
+    """Max characters allowed in log previews.
+
+    This is intentionally dynamic so tests (and operators) can adjust the limit
+    via environment variables without requiring a module reload.
+    """
+
+    raw = os.environ.get("GITHUB_MCP_LOG_PREVIEW_MAX_CHARS", "2000")
+    try:
+        limit = int(str(raw).strip())
+    except Exception:
+        limit = 2000
+    return max(128, limit)
+
+
+# Conservative secret key detection for args previews.
+_SECRET_KEY_RE = re.compile(
+    r"(?i)^(?:authorization|auth|token|secret|password|passphrase|api[_-]?key|github[_-]?token|pat)$"
+)
+
+# Common token-ish value patterns (best-effort; avoids obvious leaks).
+_SECRET_VALUE_RE = re.compile(
+    r"(?x)(?:\bghp_[A-Za-z0-9]{20,}\b|\bgithub_pat_[A-Za-z0-9_]{20,}\b|\bAKIA[0-9A-Z]{16}\b)"
+)
+
+
+def _redact_for_logs(value: Any) -> Any:
+    """Return a redacted copy of a JSONable-ish structure for logs.
+
+    This is intentionally conservative: it redacts obvious secret-bearing keys
+    and obvious token-like values. It should only be used for log previews and
+    never for tool execution.
+    """
+
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        if _SECRET_VALUE_RE.search(value):
+            return "<redacted>"
+        return value
+    if isinstance(value, Mapping):
+        out: Dict[str, Any] = {}
+        for k, v in value.items():
+            key = k if isinstance(k, str) else str(k)
+            if _SECRET_KEY_RE.match(key.strip()):
+                out[key] = "<redacted>"
+            else:
+                out[key] = _redact_for_logs(v)
+        return out
+    if isinstance(value, (list, tuple)):
+        return [_redact_for_logs(v) for v in value]
+    if isinstance(value, (set, frozenset)):
+        return [_redact_for_logs(v) for v in value]
+    return value
 
 
 def _jsonable(value: Any) -> Any:
@@ -285,7 +347,11 @@ def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, 
 
 
 def _truncate_str(s: str) -> str:
-    return s
+    max_chars = _log_preview_max_chars()
+    if len(s) <= max_chars:
+        return s
+    # Leave room for a single ellipsis.
+    return s[: max_chars - 1] + "…"
 
 
 def _normalize_and_truncate(s: str) -> str:
@@ -299,7 +365,8 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     """
     try:
         jsonable_args = _jsonable(dict(args))
-        raw = repr(jsonable_args)
+        safe_args = _redact_for_logs(jsonable_args)
+        raw = repr(safe_args)
         return _normalize_and_truncate(raw)
     except Exception:
         try:
@@ -341,12 +408,13 @@ def _preflight_tool_args(
     - Ensure JSON-serializable output.
     """
     try:
-        payload = {
-            "tool": tool_name,
-            "args": _jsonable(dict(args)),
-        }
+        safe_args = _redact_for_logs(_jsonable(dict(args)))
+        payload = {"tool": tool_name, "args": safe_args}
         if compact:
-            raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            # Use repr() rather than JSON to avoid heavy escaping and to preserve
+            # argument order (helps ensure redaction indicators remain visible
+            # even when previews are truncated).
+            raw = repr(payload)
             return {"tool": tool_name, "preview": _normalize_and_truncate(raw)}
         return payload
     except Exception:
