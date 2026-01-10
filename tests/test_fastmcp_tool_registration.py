@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 from github_mcp.mcp_server import decorators
 
 
@@ -90,3 +92,57 @@ def test_register_with_fastmcp_passes_tags(monkeypatch):
         tags=["alpha", "beta"],
     )
     assert captured["tags"] == ["alpha", "beta"]
+
+
+def _assert_return_annotation_is_mapping(fn):
+    ret = getattr(fn, "__annotations__", {}).get("return")
+    assert ret is not None
+    assert typing.get_origin(ret) is dict
+    assert typing.get_args(ret) == (str, typing.Any)
+
+
+def test_mcp_tool_sets_return_annotation_before_fastmcp_registration_sync(monkeypatch):
+    captured = {}
+
+    class FakeMCP:
+        def tool(self, *, name=None, description=None, meta=None, annotations=None):
+            def decorator(fn):
+                captured["name"] = name
+                _assert_return_annotation_is_mapping(fn)
+                return {"fn": fn, "name": name}
+
+            return decorator
+
+    monkeypatch.setattr(decorators, "mcp", FakeMCP())
+    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
+
+    @decorators.mcp_tool(name="sync_tool", write_action=False)
+    def sync_tool() -> str:
+        return "ok"
+
+    # Wrapper should be returned and registered.
+    assert callable(sync_tool)
+    assert captured["name"] == "sync_tool"
+
+
+def test_mcp_tool_sets_return_annotation_before_fastmcp_registration_async(monkeypatch):
+    captured = {}
+
+    class FakeMCP:
+        def tool(self, *, name=None, description=None, meta=None, annotations=None):
+            def decorator(fn):
+                captured["name"] = name
+                _assert_return_annotation_is_mapping(fn)
+                return {"fn": fn, "name": name}
+
+            return decorator
+
+    monkeypatch.setattr(decorators, "mcp", FakeMCP())
+    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
+
+    @decorators.mcp_tool(name="async_tool", write_action=False)
+    async def async_tool() -> str:
+        return "ok"
+
+    assert callable(async_tool)
+    assert captured["name"] == "async_tool"
