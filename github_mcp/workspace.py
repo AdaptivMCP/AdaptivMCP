@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import hashlib
+import re
 import shutil
 import shlex
 import sys
@@ -228,9 +230,50 @@ def _workspace_path(full_name: str, ref: str) -> str:
     main_module = _get_main_module()
     base_dir = getattr(main_module, "WORKSPACE_BASE_DIR", config.WORKSPACE_BASE_DIR)
 
-    workspace_dir = os.path.join(base_dir, repo_key, ref)
+    safe_ref = _sanitize_workspace_ref(ref)
+
+    workspace_dir = os.path.join(base_dir, repo_key, safe_ref)
 
     return workspace_dir
+
+_WORKSPACE_REF_MAX_LEN = 80
+
+
+def _sanitize_workspace_ref(ref: str) -> str:
+    """Convert an arbitrary ref string into a safe workspace directory name.
+
+    The returned value is guaranteed to be a single path segment (no path
+    separators) and stable for the same input.
+    """
+
+    if not isinstance(ref, str) or not ref.strip():
+        return "main"
+
+    raw = ref.strip()
+
+    # Normalize separators and strip leading slashes to avoid absolute paths.
+    raw = raw.replace("\\", "/").lstrip("/")
+
+    # Collapse separators and Windows drive markers into safe tokens.
+    raw = raw.replace("/", "__").replace(":", "__")
+
+    # Allow a conservative set of characters; replace the rest.
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", raw)
+
+    # Collapse runs and trim punctuation.
+    slug = re.sub(r"_+", "_", slug).strip("._-")
+
+    if not slug:
+        return "main"
+
+    if len(slug) <= _WORKSPACE_REF_MAX_LEN:
+        return slug
+
+    digest = hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()[:12]
+    head = slug[: _WORKSPACE_REF_MAX_LEN - 13].rstrip("._-")
+    if not head:
+        head = "ref"
+    return f"{head}-{digest}"
 
 
 async def _clone_repo(
