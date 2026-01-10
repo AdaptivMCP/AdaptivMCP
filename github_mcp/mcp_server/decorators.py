@@ -29,7 +29,7 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import TOOL_DENYLIST
+from github_mcp.config import BASE_LOGGER, TOOL_DENYLIST
 from github_mcp.mcp_server.context import (
     WRITE_ALLOWED,
     get_request_context,
@@ -48,6 +48,9 @@ from github_mcp.mcp_server.schemas import (
     _normalize_input_schema,
     _normalize_tool_description,
 )
+
+
+LOGGER = BASE_LOGGER.getChild("mcp_server.decorators")
 
 
 def _parse_bool(value: Optional[str]) -> bool:
@@ -809,7 +812,9 @@ def register_extra_tools_if_available() -> None:
         # Optional module; safe to ignore.
         return None
     except Exception as exc:
-        del exc
+        # Keep best-effort behavior, but ensure operators can see why optional
+        # tools were skipped.
+        LOGGER.warning("Failed to import/register optional extra_tools", exc_info=exc)
         return None
 
 
