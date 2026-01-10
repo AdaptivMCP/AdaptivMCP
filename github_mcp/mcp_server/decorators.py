@@ -334,6 +334,112 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _tool_log_payload(
+    *,
+    tool_name: str,
+    call_id: str,
+    write_action: bool,
+    req: Mapping[str, Any],
+    schema_hash: Optional[str],
+    schema_present: bool,
+    all_args: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "tool": tool_name,
+        "call_id": call_id,
+        "write_action": bool(write_action),
+        "schema_hash": schema_hash if schema_present else None,
+        "schema_present": bool(schema_present),
+        "request": dict(req),
+    }
+    if all_args is not None:
+        payload.update(_extract_context(all_args))
+    return payload
+
+
+def _log_tool_start(
+    *,
+    tool_name: str,
+    call_id: str,
+    write_action: bool,
+    req: Mapping[str, Any],
+    schema_hash: Optional[str],
+    schema_present: bool,
+    all_args: Mapping[str, Any],
+) -> None:
+    payload = _tool_log_payload(
+        tool_name=tool_name,
+        call_id=call_id,
+        write_action=write_action,
+        req=req,
+        schema_hash=schema_hash,
+        schema_present=schema_present,
+        all_args=all_args,
+    )
+    LOGGER.info("Tool call started", extra=payload)
+
+
+def _log_tool_success(
+    *,
+    tool_name: str,
+    call_id: str,
+    write_action: bool,
+    req: Mapping[str, Any],
+    schema_hash: Optional[str],
+    schema_present: bool,
+    duration_ms: float,
+    result: Any,
+) -> None:
+    payload = _tool_log_payload(
+        tool_name=tool_name,
+        call_id=call_id,
+        write_action=write_action,
+        req=req,
+        schema_hash=schema_hash,
+        schema_present=schema_present,
+    )
+    payload.update(
+        {
+            "duration_ms": duration_ms,
+            "result_type": type(result).__name__,
+            "result_is_mapping": isinstance(result, Mapping),
+        }
+    )
+    LOGGER.info("Tool call completed", extra=payload)
+
+
+def _log_tool_failure(
+    *,
+    tool_name: str,
+    call_id: str,
+    write_action: bool,
+    req: Mapping[str, Any],
+    schema_hash: Optional[str],
+    schema_present: bool,
+    duration_ms: float,
+    phase: str,
+    exc: BaseException,
+    all_args: Mapping[str, Any],
+) -> None:
+    payload = _tool_log_payload(
+        tool_name=tool_name,
+        call_id=call_id,
+        write_action=write_action,
+        req=req,
+        schema_hash=schema_hash,
+        schema_present=schema_present,
+        all_args=all_args,
+    )
+    payload.update(
+        {
+            "duration_ms": duration_ms,
+            "phase": phase,
+            "error_type": exc.__class__.__name__,
+        }
+    )
+    LOGGER.warning("Tool call failed", extra=payload, exc_info=exc)
+
+
 def _emit_tool_error(
     tool_name: str,
     call_id: str,
@@ -593,6 +699,15 @@ def mcp_tool(
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
                 schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+                _log_tool_start(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    req=req,
+                    schema_hash=schema_hash if schema_present else None,
+                    schema_present=schema_present,
+                    all_args=all_args,
+                )
                 try:
                     if schema_present:
                         _validate_tool_args_schema(tool_name, schema, all_args)
@@ -609,6 +724,19 @@ def mcp_tool(
                     if _should_enforce_write_gate(req):
                         _enforce_write_allowed(tool_name, write_action=write_action)
                 except Exception as exc:
+                    duration_ms = (time.perf_counter() - start) * 1000
+                    _log_tool_failure(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        write_action=write_action,
+                        req=req,
+                        schema_hash=schema_hash if schema_present else None,
+                        schema_present=schema_present,
+                        duration_ms=duration_ms,
+                        phase="preflight",
+                        exc=exc,
+                        all_args=all_args,
+                    )
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
@@ -628,6 +756,19 @@ def mcp_tool(
                 try:
                     result = await func(*args, **clean_kwargs)
                 except Exception as exc:
+                    duration_ms = (time.perf_counter() - start) * 1000
+                    _log_tool_failure(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        write_action=write_action,
+                        req=req,
+                        schema_hash=schema_hash,
+                        schema_present=True,
+                        duration_ms=duration_ms,
+                        phase="execute",
+                        exc=exc,
+                        all_args=all_args,
+                    )
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
@@ -649,6 +790,17 @@ def mcp_tool(
                 # `result` field. Wrapping scalars here causes a double-wrap that
                 # breaks output validation (e.g., ping_extensionsOutput expects a
                 # string but receives an object).
+                duration_ms = (time.perf_counter() - start) * 1000
+                _log_tool_success(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    req=req,
+                    schema_hash=schema_hash if schema_present else None,
+                    schema_present=schema_present,
+                    duration_ms=duration_ms,
+                    result=result,
+                )
                 if isinstance(result, Mapping):
                     return attach_user_facing_fields(tool_name, result)
                 return result
@@ -700,6 +852,15 @@ def mcp_tool(
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
             schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+            _log_tool_start(
+                tool_name=tool_name,
+                call_id=call_id,
+                write_action=write_action,
+                req=req,
+                schema_hash=schema_hash if schema_present else None,
+                schema_present=schema_present,
+                all_args=all_args,
+            )
             try:
                 if schema_present:
                     _validate_tool_args_schema(tool_name, schema, all_args)
@@ -716,6 +877,19 @@ def mcp_tool(
                 if _should_enforce_write_gate(req):
                     _enforce_write_allowed(tool_name, write_action=write_action)
             except Exception as exc:
+                duration_ms = (time.perf_counter() - start) * 1000
+                _log_tool_failure(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    req=req,
+                    schema_hash=schema_hash if schema_present else None,
+                    schema_present=schema_present,
+                    duration_ms=duration_ms,
+                    phase="preflight",
+                    exc=exc,
+                    all_args=all_args,
+                )
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
@@ -735,6 +909,19 @@ def mcp_tool(
             try:
                 result = func(*args, **clean_kwargs)
             except Exception as exc:
+                duration_ms = (time.perf_counter() - start) * 1000
+                _log_tool_failure(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    req=req,
+                    schema_hash=schema_hash,
+                    schema_present=True,
+                    duration_ms=duration_ms,
+                    phase="execute",
+                    exc=exc,
+                    all_args=all_args,
+                )
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
@@ -752,6 +939,17 @@ def mcp_tool(
                 raise coerced from exc
 
             # Preserve scalar return types for tools that naturally return scalars.
+            duration_ms = (time.perf_counter() - start) * 1000
+            _log_tool_success(
+                tool_name=tool_name,
+                call_id=call_id,
+                write_action=write_action,
+                req=req,
+                schema_hash=schema_hash if schema_present else None,
+                schema_present=schema_present,
+                duration_ms=duration_ms,
+                result=result,
+            )
             if isinstance(result, Mapping):
                 return attach_user_facing_fields(tool_name, result)
             return result
