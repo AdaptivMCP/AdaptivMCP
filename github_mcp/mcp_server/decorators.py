@@ -641,23 +641,14 @@ def mcp_tool(
                         raise
                     raise coerced from exc
 
-                if result is None:
-                    result = {}
-                if not isinstance(result, Mapping):
-                    result = {"result": result}
-                result = attach_user_facing_fields(tool_name, result)
+                # Preserve scalar return types for tools that naturally return scalars.
+                # Some clients/servers already wrap tool outputs under a top-level
+                # `result` field. Wrapping scalars here causes a double-wrap that
+                # breaks output validation (e.g., ping_extensionsOutput expects a
+                # string but receives an object).
+                if isinstance(result, Mapping):
+                    return attach_user_facing_fields(tool_name, result)
                 return result
-
-            # Ensure tool output schemas match the actual return shape.
-            # The wrapper always returns a mapping (scalar results are wrapped).
-            # IMPORTANT: this MUST be set before FastMCP registration so the
-            # published output schema matches runtime behavior.
-            try:
-                ann = dict(getattr(wrapper, "__annotations__", {}) or {})
-                ann["return"] = Dict[str, Any]
-                wrapper.__annotations__ = ann
-            except Exception:
-                pass
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
                 wrapper,
@@ -673,8 +664,6 @@ def mcp_tool(
                 wrapper.__doc__ = normalized_description
             except Exception:
                 pass
-
-            # NOTE: return annotation is set before FastMCP registration above.
 
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
@@ -759,23 +748,10 @@ def mcp_tool(
                     raise
                 raise coerced from exc
 
-            if result is None:
-                result = {}
-            if not isinstance(result, Mapping):
-                result = {"result": result}
-            result = attach_user_facing_fields(tool_name, result)
+            # Preserve scalar return types for tools that naturally return scalars.
+            if isinstance(result, Mapping):
+                return attach_user_facing_fields(tool_name, result)
             return result
-
-        # Ensure tool output schemas match the actual return shape.
-        # The wrapper always returns a mapping (scalar results are wrapped).
-        # IMPORTANT: this MUST be set before FastMCP registration so the
-        # published output schema matches runtime behavior.
-        try:
-            ann = dict(getattr(wrapper, "__annotations__", {}) or {})
-            ann["return"] = Dict[str, Any]
-            wrapper.__annotations__ = ann
-        except Exception:
-            pass
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(
             wrapper,
@@ -789,8 +765,6 @@ def mcp_tool(
             wrapper.__doc__ = normalized_description
         except Exception:
             pass
-
-        # NOTE: return annotation is set before FastMCP registration above.
 
         schema = _normalize_input_schema(wrapper.__mcp_tool__)
         if not isinstance(schema, Mapping):
