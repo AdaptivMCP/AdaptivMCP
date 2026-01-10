@@ -323,6 +323,7 @@ async def list_tools(
         raise ValueError("only_write and only_read cannot both be true")
 
     catalog = list_all_actions(include_parameters=False, compact=True)
+    write_auto_approved = bool(get_write_allowed(refresh_after_seconds=0.0))
     tools: List[Dict[str, Any]] = []
     for entry in catalog.get("tools", []) or []:
         name = entry.get("name")
@@ -337,11 +338,18 @@ async def list_tools(
         if only_read and write_action:
             continue
 
+        tool_write_auto_approved = bool(entry.get("write_auto_approved", write_auto_approved))
+        tool_approval_required = bool(
+            entry.get("approval_required", bool(write_action and not tool_write_auto_approved))
+        )
+
         tools.append(
             {
                 "name": name,
                 "write_action": write_action,
                 "write_allowed": bool(entry.get("write_allowed", True)),
+                "write_auto_approved": bool(tool_write_auto_approved),
+                "approval_required": bool(tool_approval_required),
                 "write_enabled": bool(entry.get("write_enabled", True)),
                 "operation": entry.get("operation"),
                 "risk_level": entry.get("risk_level"),
@@ -352,7 +360,7 @@ async def list_tools(
     tools.sort(key=lambda t: t["name"])
 
     return {
-        "write_actions_enabled": bool(get_write_allowed(refresh_after_seconds=0.0)),
+        "write_actions_enabled": bool(write_auto_approved),
         "tools": tools,
     }
 

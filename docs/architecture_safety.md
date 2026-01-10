@@ -44,7 +44,7 @@ Client (ChatGPT / connector)
 
 - **`github_mcp/mcp_server/context.py`**
   - Initializes `FastMCP` instance and shared contextvars for request metadata.
-  - Defines the write-allowed flag (`WRITE_ALLOWED`) and tool examples.
+  - Defines the write auto-approval flag (`WRITE_ALLOWED`) sourced from the `GITHUB_MCP_WRITE_ALLOWED` environment variable.
   - Wraps MCP session response to suppress SSE disconnect noise.
 
 - **`github_mcp/mcp_server/decorators.py`**
@@ -53,7 +53,7 @@ Client (ChatGPT / connector)
     - Adapts registration to FastMCP tool signature variants (with or without tag support).
     - Performs best-effort dedupe to avoid double execution on retries.
   - Calculates side-effect class for each tool.
-  - Explicitly disables UI approval prompts (`_ui_prompt_required_for_tool` returns `False`).
+  - Emits structured tool-call logs with a scan-friendly message plus machine-readable `data=<json>`.
 
 - **`github_mcp/mcp_server/registry.py`, `errors.py`, `schemas.py`**
   - Registry for tool metadata and schema normalization.
@@ -118,17 +118,22 @@ Client (ChatGPT / connector)
 - `github_mcp/http_clients.py` (`_get_github_token`)
 - `github_mcp/workspace.py` (`_git_auth_env`)
 
-### 3.2 Write allow-listing & approvals
+### 3.2 Write gating & approvals
 
-- A write-allowed flag (`WRITE_ALLOWED`) is exposed via configuration and used for tool metadata.
-- UI approval prompts are explicitly disabled in the tool decorator.
+- The effective write auto-approval flag is sourced from `GITHUB_MCP_WRITE_ALLOWED` (via `WRITE_ALLOWED`).
+- Write tools remain executable when auto-approval is disabled; clients should prompt/confirm before invoking write tools.
+- Introspection surfaces three distinct concepts:
+  - `write_action`: whether the tool is classified as a write.
+  - `write_allowed`: whether the tool is executable (approval-gated writes still execute).
+  - `write_auto_approved` / `write_actions_enabled`: whether writes are auto-approved.
+  - `approval_required`: whether a client should prompt before invoking the tool.
 
 **Implication:**
-- Write safety is *metadata-based* and depends on operator configuration or external policy.
+- Write safety is *metadata-based* and depends on operator configuration and client behavior.
 
 **Relevant modules:**
-- `github_mcp/mcp_server/context.py` (`WRITE_ALLOWED`)
-- `github_mcp/mcp_server/decorators.py` (`_ui_prompt_required_for_tool` returns `False`)
+- `github_mcp/mcp_server/context.py` (`GITHUB_MCP_WRITE_ALLOWED`, `WRITE_ALLOWED`)
+- `github_mcp/main_tools/introspection.py` (introspection fields)
 
 ### 3.3 Dedupe and retry behavior
 
@@ -178,7 +183,8 @@ Client (ChatGPT / connector)
    - If enforcement is desired, it must be added or enforced upstream.
 
 2. **No UI approval prompts.**
-   - The server explicitly disables UI approval prompts for tool invocations.
+   - The server does not enforce approvals at runtime.
+   - Clients should use tool metadata (`approval_required`, `ui_prompt`) to determine whether to prompt/confirm.
 
 3. **Security posture relies on environment trust.**
    - The server assumes that environment variables and process isolation are controlled by deployment.
@@ -188,7 +194,7 @@ These are not necessarily flaws, but they are important operational assumptions 
 
 ## 5. Recommended follow-up checks (operational)
 
-- Ensure deployment has strong boundary controls around `WRITE_ALLOWED` and tool exposure.
+- Ensure deployment has strong boundary controls around `GITHUB_MCP_WRITE_ALLOWED` / `WRITE_ALLOWED` and tool exposure.
 - Validate that runtime environment is restricted (filesystem and network) per the intended risk profile.
 - Confirm log retention policies align with organizational requirements.
 
@@ -196,23 +202,24 @@ These are not necessarily flaws, but they are important operational assumptions 
 
 *Document generated from the codebase in `/workspace/chatgpt-mcp-github`.*
 
-- `tool_call.error` — emitted on exceptions
+Console output is intentionally short and readable, while preserving structured fields for machine parsing.
 
-Console output is intentionally short and readable:
+- Example start: `tool_call_started tool=terminal_command call_id=... write_action=True`
+- Example success: `tool_call_completed tool=terminal_command call_id=... duration_ms=475.12`
+- Example failure: `tool_call_failed tool=terminal_command call_id=... phase=execute duration_ms=12.34`
 
-- Example: `[tool] terminal_command ok 475ms (tool_call.ok)`
-
-The full structured payload is attached as a compact JSON string under the log extra field `tool_event`.
+The structured payload is appended to log lines as `data=<json>`.
 
 Canonical fields in the structured payload:
 
-- `event`: `tool_call.start` | `tool_call.ok` | `tool_call.error`
-- `status`: `start` | `ok` | `error`
-- `tool_name`
+- `event`: `tool_call_started` | `tool_call_completed` | `tool_call_failed`
+- `tool`
 - `call_id`
-- `duration_ms` (for ok/error)
+- `duration_ms` (for completed/failed)
+- `phase` (for failed)
 - `schema_hash` and `schema_present`
-- `write_action` and `write_allowed`
+- `write_action`
 - `request` (minimal): `path`, `received_at`, `session_id`, `message_id`
+- On failures (when available): `incident_id`, `error_code`, `error_category`, `error_origin`, `error_retryable`, `error_critical`
 
 This separation ensures provider logs stay readable while retaining the complete debug context.

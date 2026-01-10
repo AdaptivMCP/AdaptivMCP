@@ -37,12 +37,18 @@ Some failures (or safety-gated runs) may return an error-shaped payload instead 
       {
         "name": "get_repository",
         "write_action": false,
+        "write_allowed": true,
+        "write_auto_approved": true,
+        "approval_required": false,
         "write_enabled": true,
         "visibility": "public"
       },
       {
         "name": "create_pull_request",
         "write_action": true,
+        "write_allowed": true,
+        "write_auto_approved": true,
+        "approval_required": false,
         "write_enabled": true,
         "visibility": "public"
       }
@@ -61,6 +67,8 @@ Some failures (or safety-gated runs) may return an error-shaped payload instead 
 Notes:
 - The `tools` array is usually much larger than shown here.
 - Fields such as `risk_level` or `operation` may appear depending on deployment.
+- `write_actions_enabled` / `write_auto_approved` indicates whether write actions are auto-approved.
+- When `write_auto_approved` is false, write tools remain executable but `approval_required` will be true for write tools.
 
 ### Example: successful `ensure_workspace_clone`
 

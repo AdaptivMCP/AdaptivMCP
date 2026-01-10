@@ -34,6 +34,20 @@ To explicitly ensure the denylist is disabled, set `MCP_TOOL_DENYLIST` to `none`
 
 Note: Client/platform-level safety gating (if any) is independent of this server’s tool registry behavior.
 
+## Write gate (auto-approval)
+
+This server supports approval-gated write actions. The environment variable `GITHUB_MCP_WRITE_ALLOWED` controls whether write actions are auto-approved.
+
+- `GITHUB_MCP_WRITE_ALLOWED=true`: write tools are auto-approved.
+- `GITHUB_MCP_WRITE_ALLOWED=false`: write tools remain executable, but clients should prompt/confirm before invoking write tools.
+
+Introspection and actions-compat listings expose:
+
+- `write_action`: tool is classified as a write.
+- `write_allowed`: tool is executable (approval-gated writes still execute).
+- `write_actions_enabled` / `write_auto_approved`: writes are auto-approved.
+- `approval_required`: client should prompt before invoking the tool.
+
 ## What this server provides
 
 - MCP tool surface for GitHub operations: repositories, issues, PRs, actions, files
