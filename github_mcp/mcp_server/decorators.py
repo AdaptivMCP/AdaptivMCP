@@ -709,6 +709,23 @@ def _register_with_fastmcp(
 # -----------------------------------------------------------------------------
 
 
+def _infer_tool_name(func: Callable[..., Any]) -> str:
+    """Infer a stable, namespaced tool name from the function module path."""
+
+    mod = getattr(func, "__module__", "") or ""
+    fn = getattr(func, "__name__", "tool")
+
+    # Workspace / local-repo automation tools.
+    if mod.startswith("github_mcp.workspace_tools."):
+        return f"workspace.{fn}"
+
+    # Primary GitHub API tool surface (historically defined in main.py).
+    if mod in {"main", "__main__"} or mod.startswith("github_mcp.main_tools."):
+        return f"github.{fn}"
+
+    return f"tool.{fn}"
+
+
 def mcp_tool(
     *,
     name: str | None = None,
@@ -724,7 +741,7 @@ def mcp_tool(
         except Exception:
             signature = None
 
-        tool_name = name or getattr(func, "__name__", "tool")
+        tool_name = name or _infer_tool_name(func)
         if tool_name in TOOL_DENYLIST:
             return func
         llm_level = "advanced" if write_action else "basic"
@@ -849,6 +866,8 @@ def mcp_tool(
                     result=result,
                 )
                 if isinstance(result, Mapping):
+                    if isinstance(result.get("error"), Mapping):
+                        return attach_error_user_facing_fields(tool_name, result)
                     return attach_user_facing_fields(tool_name, result)
                 return result
 
@@ -998,6 +1017,8 @@ def mcp_tool(
                 result=result,
             )
             if isinstance(result, Mapping):
+                if isinstance(result.get("error"), Mapping):
+                    return attach_error_user_facing_fields(tool_name, result)
                 return attach_user_facing_fields(tool_name, result)
             return result
 

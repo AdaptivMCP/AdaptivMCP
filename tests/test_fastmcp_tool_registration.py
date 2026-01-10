@@ -148,6 +148,9 @@ def test_mcp_tool_attaches_user_facing_fields_for_mapping_returns(monkeypatch):
 
     out = mapping_tool()
     assert out["foo"] == "bar"
-    assert "controller_log" in out
-    assert "summary" in out
-    assert "user_message" in out
+    assert "ui" in out
+    assert isinstance(out["ui"], dict)
+    assert "message" in out["ui"]
+    assert "controller_log" not in out
+    assert "summary" not in out
+    assert "user_message" not in out

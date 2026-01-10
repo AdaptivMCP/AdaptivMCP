@@ -9,10 +9,10 @@ import pytest
 async def test_run_quality_suite_merges_controller_log_on_lint_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: fail-fast lint path must not drop suite controller_log.
+    """Regression: fail-fast lint path must return suite UI/log.
 
-    Prior behavior used dict.setdefault('controller_log', ...), which does not
-    overwrite when terminal_command already includes controller_log.
+    The suite should return a stable payload plus a UI summary and must not rely
+    on nested tool UI fields.
     """
 
     from github_mcp.workspace_tools import suites
@@ -50,21 +50,18 @@ async def test_run_quality_suite_merges_controller_log_on_lint_failure(
     )
 
     assert isinstance(out, dict)
-    # Back-compat path returns the raw lint payload, but should be enriched.
     assert out.get("status") == "failed"
     assert "suite" in out
     assert "steps" in out
 
-    log = out.get("controller_log")
+    ui = out.get("ui")
+    assert isinstance(ui, dict)
+    log = ui.get("bullets")
     assert isinstance(log, list)
 
-    # Existing terminal_command log must be preserved.
-    assert log[0] == "Command: fake"
-
-    # Suite log must be present (not dropped).
-    assert any(line == "Quality suite run:" for line in log)
-    assert any(line == "- Repo: OWNER/REPO" for line in log)
-    assert any(line == "- Ref: main" for line in log)
+    # Suite log must be present and must end with the abort marker.
+    assert log[0] == "Quality suite run:"
+    assert any(line == "- Lint: failed" for line in log)
 
     # Aborted marker must be appended.
     assert log[-1] == "- Aborted: lint failed"

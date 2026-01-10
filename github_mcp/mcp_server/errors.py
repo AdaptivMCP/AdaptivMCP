@@ -133,18 +133,14 @@ def _structured_tool_error(
     *,
     context: Optional[str] = None,
     path: Optional[str] = None,
-    tool_descriptor: Optional[Dict[str, Any]] = None,
-    tool_descriptor_text: Optional[str] = None,
-    tool_surface: Optional[str] = None,
-    routing_hint: Optional[Dict[str, Any]] = None,
     request: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Convert any exception into a structured payload.
 
     Contract:
-      - returns {"error": {...}, "user_message": "..."} so callers can safely do
-        payload.get("error", {}).
+      - returns {"error": {...}} so callers can safely do payload.get("error", {}).
+      - optional {"debug": {...}} includes raw upstream payloads when available.
     """
     incident_id = str(uuid.uuid4())
 
@@ -155,17 +151,12 @@ def _structured_tool_error(
             "critical",
             _is_critical_error(err.get("category"), bool(err.get("retryable"))),
         )
-        user_message = _format_user_message(err, context=context, path=path)
-        payload = {
-            "error": err,
-            "user_message": user_message,
-            "tool_descriptor": tool_descriptor,
-            "tool_descriptor_text": tool_descriptor_text,
-            "tool_surface": tool_surface,
-            "routing_hint": routing_hint,
-            "request": request,
-        }
-        payload.update(_extract_raw_payloads(exc))
+        payload = {"error": err}
+        if request is not None:
+            payload["request"] = request
+        debug = _extract_raw_payloads(exc)
+        if debug:
+            payload["debug"] = debug
         return payload
 
     if isinstance(exc, GitHubAuthError):
@@ -191,17 +182,12 @@ def _structured_tool_error(
                 "and visible to the git subprocess. If you use env vars, set one of the supported GitHub token variables."
             ),
         }
-        user_message = _format_user_message(err, context=context, path=path)
-        payload = {
-            "error": err,
-            "user_message": user_message,
-            "tool_descriptor": tool_descriptor,
-            "tool_descriptor_text": tool_descriptor_text,
-            "tool_surface": tool_surface,
-            "routing_hint": routing_hint,
-            "request": request,
-        }
-        payload.update(_extract_raw_payloads(exc))
+        payload = {"error": err}
+        if request is not None:
+            payload["request"] = request
+        debug = _extract_raw_payloads(exc)
+        if debug:
+            payload["debug"] = debug
         return payload
 
     if isinstance(exc, UsageError):
@@ -226,17 +212,12 @@ def _structured_tool_error(
             "details": details,
             "hint": hint,
         }
-        user_message = _format_user_message(err, context=context, path=path)
-        payload = {
-            "error": err,
-            "user_message": user_message,
-            "tool_descriptor": tool_descriptor,
-            "tool_descriptor_text": tool_descriptor_text,
-            "tool_surface": tool_surface,
-            "routing_hint": routing_hint,
-            "request": request,
-        }
-        payload.update(_extract_raw_payloads(exc))
+        payload = {"error": err}
+        if request is not None:
+            payload["request"] = request
+        debug = _extract_raw_payloads(exc)
+        if debug:
+            payload["debug"] = debug
         return payload
 
     # GitHub rate limit -> upstream, retryable, actionable (NOT a generic runtime error)
@@ -269,17 +250,12 @@ def _structured_tool_error(
             "details": details,
             "hint": "Wait for the reset time, reduce request frequency, or use a higher-limit GitHub credential.",
         }
-        user_message = _format_user_message(err, context=context, path=path)
-        payload = {
-            "error": err,
-            "user_message": user_message,
-            "tool_descriptor": tool_descriptor,
-            "tool_descriptor_text": tool_descriptor_text,
-            "tool_surface": tool_surface,
-            "routing_hint": routing_hint,
-            "request": request,
-        }
-        payload.update(_extract_raw_payloads(exc))
+        payload = {"error": err}
+        if request is not None:
+            payload["request"] = request
+        debug = _extract_raw_payloads(exc)
+        if debug:
+            payload["debug"] = debug
         return payload
 
     # Generic exception -> normalized error
@@ -302,17 +278,12 @@ def _structured_tool_error(
     if path:
         err["details"]["path"] = path
 
-    user_message = _format_user_message(err, context=context, path=path)
-    payload = {
-        "error": err,
-        "user_message": user_message,
-        "tool_descriptor": tool_descriptor,
-        "tool_descriptor_text": tool_descriptor_text,
-        "tool_surface": tool_surface,
-        "routing_hint": routing_hint,
-        "request": request,
-    }
-    payload.update(_extract_raw_payloads(exc))
+    payload = {"error": err}
+    if request is not None:
+        payload["request"] = request
+    debug = _extract_raw_payloads(exc)
+    if debug:
+        payload["debug"] = debug
     return payload
 
 
@@ -332,51 +303,6 @@ def _unwrap_adaptiv_error(exc: BaseException) -> Optional[AdaptivToolError]:
         current = cause or context
     return None
 
-
-def _format_user_message(
-    err: Dict[str, Any], *, context: Optional[str], path: Optional[str]
-) -> str:
-    # High-signal user message, still deterministic.
-    parts = []
-
-    if context:
-        parts.append(f"Tool: {context}")
-
-    msg = err.get("message") or "Unknown error."
-    parts.append(f"Error: {msg}")
-
-    if path:
-        parts.append(f"Path: {path}")
-
-    code = err.get("code")
-    if code:
-        parts.append(f"Code: {code}")
-
-    category = err.get("category")
-    if category:
-        parts.append(f"Category: {category}")
-
-    origin = err.get("origin")
-    if origin:
-        parts.append(f"Origin: {origin}")
-
-    retryable = err.get("retryable")
-    if retryable is not None:
-        parts.append(f"Retryable: {'yes' if retryable else 'no'}")
-
-    critical = err.get("critical")
-    if critical is not None:
-        parts.append(f"Critical: {'yes' if critical else 'no'}")
-
-    incident_id = err.get("incident_id")
-    if incident_id:
-        parts.append(f"Incident: {incident_id}")
-
-    hint = err.get("hint")
-    if hint:
-        parts.append(f"Hint: {hint}")
-
-    return " | ".join(parts)
 
 
 def _exception_trace(exc: BaseException) -> str:

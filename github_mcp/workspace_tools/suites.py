@@ -618,36 +618,20 @@ async def run_quality_suite(
             )
 
         if fail_fast and lint_step.get("status") == "failed":
-            # Back-compat: return the lint raw payload shape when possible.
-            raw = lint_step.get("raw")
-            if isinstance(raw, dict):
-                # Merge any existing terminal_command controller_log with the suite log.
-                # NOTE: terminal_command frequently returns a controller_log key; using
-                # setdefault would drop suite context when the key exists.
-                merged_log: List[str] = []
-                existing = raw.get("controller_log")
-                if isinstance(existing, list):
-                    merged_log.extend([str(x) for x in existing])
-                elif existing:
-                    merged_log.append(str(existing))
-                merged_log.extend(controller_log)
-                merged_log.append("- Aborted: lint failed")
-                raw["controller_log"] = merged_log
-                # Drop stale UI fields so the suite-level decorator can rebuild
-                # controller_log/summary/user_message from the merged log.
-                raw.pop("summary", None)
-                raw.pop("user_message", None)
-                raw["status"] = "failed"
-                raw["suite"] = suite
-                raw["steps"] = _prune_raw_steps(steps, include_raw_step_outputs)
-                raw["diagnostics"] = diagnostics
-                return raw
+            log_lines = controller_log + ["- Aborted: lint failed"]
+            ui = {
+                "title": "Quality suite: failed",
+                "bullets": log_lines,
+                "next_steps": ["Fix lint errors and rerun the suite."],
+                "message": "\n".join(["Quality suite: failed"] + [f"- {b}" for b in log_lines]),
+            }
             return {
                 "status": "failed",
                 "suite": suite,
                 "steps": _prune_raw_steps(steps, include_raw_step_outputs),
                 "diagnostics": diagnostics,
-                "controller_log": controller_log + ["- Aborted: lint failed"],
+                "log": log_lines,
+                "ui": ui,
             }
     else:
         lint_step = {
@@ -667,12 +651,19 @@ async def run_quality_suite(
         steps.append(fmt_step)
         controller_log.append(f"- Format: {fmt_step.get('status')}")
         if fail_fast and fmt_step.get("status") == "failed":
+            log_lines = controller_log + ["- Aborted: format step failed"]
             return {
                 "status": "failed",
                 "suite": suite,
                 "steps": _prune_raw_steps(steps, include_raw_step_outputs),
                 "diagnostics": diagnostics,
-                "controller_log": controller_log + ["- Aborted: format step failed"],
+                "log": log_lines,
+                "ui": {
+                    "title": "Quality suite: failed",
+                    "bullets": log_lines,
+                    "next_steps": ["Fix formatting issues and rerun the suite."],
+                    "message": "\n".join(["Quality suite: failed"] + [f"- {b}" for b in log_lines]),
+                },
             }
 
     type_step = await maybe_run_optional(
@@ -682,12 +673,19 @@ async def run_quality_suite(
         steps.append(type_step)
         controller_log.append(f"- Typecheck: {type_step.get('status')}")
         if fail_fast and type_step.get("status") == "failed":
+            log_lines = controller_log + ["- Aborted: typecheck failed"]
             return {
                 "status": "failed",
                 "suite": suite,
                 "steps": _prune_raw_steps(steps, include_raw_step_outputs),
                 "diagnostics": diagnostics,
-                "controller_log": controller_log + ["- Aborted: typecheck failed"],
+                "log": log_lines,
+                "ui": {
+                    "title": "Quality suite: failed",
+                    "bullets": log_lines,
+                    "next_steps": ["Fix typecheck errors and rerun the suite."],
+                    "message": "\n".join(["Quality suite: failed"] + [f"- {b}" for b in log_lines]),
+                },
             }
 
     sec_step = await maybe_run_optional("security", security_command, is_default=False)
@@ -695,12 +693,19 @@ async def run_quality_suite(
         steps.append(sec_step)
         controller_log.append(f"- Security: {sec_step.get('status')}")
         if fail_fast and sec_step.get("status") == "failed":
+            log_lines = controller_log + ["- Aborted: security step failed"]
             return {
                 "status": "failed",
                 "suite": suite,
                 "steps": _prune_raw_steps(steps, include_raw_step_outputs),
                 "diagnostics": diagnostics,
-                "controller_log": controller_log + ["- Aborted: security step failed"],
+                "log": log_lines,
+                "ui": {
+                    "title": "Quality suite: failed",
+                    "bullets": log_lines,
+                    "next_steps": ["Fix security findings and rerun the suite."],
+                    "message": "\n".join(["Quality suite: failed"] + [f"- {b}" for b in log_lines]),
+                },
             }
 
     # Tests step: mirror lint/tool auto-setup behavior so missing `pytest` (or
@@ -760,20 +765,12 @@ async def run_quality_suite(
     exit_code = cmd_result.get("exit_code") if isinstance(cmd_result, dict) else None
     tests_status = "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
 
-    tests_result: Dict[str, Any] = {
+    tests_info: Dict[str, Any] = {
         "status": tests_status,
         "command": test_command,
         "exit_code": exit_code,
         "workdir": tests_raw.get("workdir") if isinstance(tests_raw, dict) else workdir,
         "result": cmd_result,
-        "controller_log": [
-            "Completed test command in workspace:",
-            f"- Repo: {full_name}",
-            f"- Ref: {ref}",
-            f"- Command: {test_command}",
-            f"- Status: {tests_status}",
-            f"- Exit code: {exit_code}",
-        ],
     }
 
     controller_log.append(f"- Tests: {tests_status}")
@@ -792,27 +789,27 @@ async def run_quality_suite(
     if overall_status == "passed" and tests_status == "no_tests":
         overall_status = "passed_with_warnings"
 
-    if not fail_fast:
-        return {
-            "status": overall_status,
-            "suite": suite,
-            "lint": lint_step.get("raw"),
-            "tests": tests_result,
-            "steps": _prune_raw_steps(steps, include_raw_step_outputs),
-            "diagnostics": diagnostics,
-            "controller_log": controller_log,
-        }
+    title = "Quality suite: completed" if overall_status != "failed" else "Quality suite: failed"
+    next_steps: List[str] = []
+    if overall_status == "failed":
+        next_steps.append("Fix failing checks and rerun the suite.")
+    elif overall_status == "passed_with_warnings":
+        next_steps.append("Optional: add or enable tests for stronger coverage.")
 
-    # Back-compat: return tests_result as the primary shape, but enrich it.
-    existing_log = tests_result.get("controller_log")
-    if isinstance(existing_log, list) and existing_log:
-        controller_log.extend(existing_log)
-    tests_result["controller_log"] = controller_log
-    tests_result["status"] = overall_status
-    tests_result["suite"] = suite
-    tests_result["steps"] = _prune_raw_steps(steps, include_raw_step_outputs)
-    tests_result["diagnostics"] = diagnostics
-    return tests_result
+    return {
+        "status": overall_status,
+        "suite": suite,
+        "tests": tests_info,
+        "steps": _prune_raw_steps(steps, include_raw_step_outputs),
+        "diagnostics": diagnostics,
+        "log": controller_log,
+        "ui": {
+            "title": title,
+            "bullets": controller_log,
+            "next_steps": next_steps,
+            "message": "\n".join([title] + [f"- {b}" for b in controller_log]),
+        },
+    }
 
 
 def _prune_raw_steps(steps: List[Dict[str, Any]], include_raw: bool) -> List[Dict[str, Any]]:

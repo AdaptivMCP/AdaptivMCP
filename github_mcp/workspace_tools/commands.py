@@ -16,10 +16,12 @@ def _tw():
     return tw
 
 
-def _strip_ui_fields(payload: object) -> object:
+def _strip_nested_ui_fields(payload: object) -> object:
     if not isinstance(payload, dict):
         return payload
-    for k in ("controller_log", "summary", "user_message"):
+    # Nested tool surfaces may attach human-facing summaries.
+    # Strip them so this tool returns a stable, machine-readable payload.
+    for k in ("ui", "controller_log", "summary", "user_message"):
         payload.pop(k, None)
     return payload
 
@@ -135,10 +137,9 @@ async def render_shell(
         )
 
         # terminal_command is itself a tool surface and may contain UI-facing
-        # fields (controller_log/summary/user_message). render_shell should
-        # return a stable machine-readable shape so the outer decorator can
-        # build summaries consistently.
-        cleaned_command = _strip_ui_fields(command_result)
+        # fields. render_shell should return a stable machine-readable shape
+        # so the outer decorator can build summaries consistently.
+        cleaned_command = _strip_nested_ui_fields(command_result)
 
         # Align with terminal_command's top-level shape so user_friendly summary
         # logic can report exit code/stdout/stderr for render_shell as well.
