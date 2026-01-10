@@ -371,7 +371,22 @@ async def open_pr_for_existing_branch(
     if isinstance(raw_resp, dict):
         status_code = raw_resp.get("status_code")
 
-    conflict_hint = (raw_message or "").lower()
+    error_hint_parts: List[str] = []
+    if raw_message:
+        error_hint_parts.append(raw_message)
+    if isinstance(raw_resp, dict):
+        raw_json = raw_resp.get("json")
+        if isinstance(raw_json, dict):
+            errors = raw_json.get("errors")
+            if isinstance(errors, list):
+                for entry in errors:
+                    if isinstance(entry, dict):
+                        msg = entry.get("message")
+                        if isinstance(msg, str) and msg.strip():
+                            error_hint_parts.append(msg)
+
+    conflict_hint = "\n".join(error_hint_parts).lower()
+
     is_existing_pr_conflict = bool(
         status_code == 422
         and (
@@ -380,15 +395,16 @@ async def open_pr_for_existing_branch(
             or "pull request already exists" in conflict_hint
         )
     )
+    is_no_commits_conflict = bool(status_code == 422 and "no commits between" in conflict_hint)
 
-    if not is_existing_pr_conflict:
+    if not (is_existing_pr_conflict or is_no_commits_conflict):
         return {
             "status": "error",
             "raw_response": pr,
             "message": "create_pull_request did not return a PR document with a number",
         }
 
-    # 2) Conflict implies a PR exists already; locate it via the list endpoint.
+    # 2) The create attempt indicates we should look for an existing PR.
     existing_json: Any = []
     try:
         existing_resp = await m.list_pull_requests(
@@ -421,6 +437,17 @@ async def open_pr_for_existing_branch(
             "status": "error",
             "message": "Existing PR listing returned a non-dict entry",
             "raw_entry": pr_obj,
+        }
+
+    if is_no_commits_conflict:
+        # GitHub returns 422 when the head is identical to the base. Treat this
+        # as a no-op rather than a hard error so callers can remain idempotent.
+        return {
+            "status": "ok",
+            "noop": True,
+            "reason": "no_commits_between_branches",
+            "message": f"No commits between {effective_base} and {branch_name}; nothing to open as a PR.",
+            "raw_response": pr,
         }
 
     return {
