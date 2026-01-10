@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Mapping
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -95,6 +95,21 @@ def _terminal_help(name: str, description: str, schema: Any) -> str:
     return "\n".join(lines)
 
 
+def _strip_is_consequential_metadata(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        cleaned: Dict[str, Any] = {}
+        for key, item in value.items():
+            if key == "is_consequential":
+                continue
+            cleaned[key] = _strip_is_consequential_metadata(item)
+        return cleaned
+    if isinstance(value, list):
+        return [_strip_is_consequential_metadata(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_strip_is_consequential_metadata(item) for item in value)
+    return value
+
+
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
     # Keep parity with the main introspection surface.
@@ -134,6 +149,8 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
             annotations = annotations.model_dump(exclude_none=True)
         elif not isinstance(annotations, dict):
             annotations = None
+        if annotations is not None:
+            annotations = _strip_is_consequential_metadata(annotations)
 
         display_name = getattr(tool, "title", None)
         if not display_name and isinstance(annotations, dict):
