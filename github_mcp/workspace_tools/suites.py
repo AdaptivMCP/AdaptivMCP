@@ -633,6 +633,10 @@ async def run_quality_suite(
                 merged_log.extend(controller_log)
                 merged_log.append("- Aborted: lint failed")
                 raw["controller_log"] = merged_log
+                # Drop stale UI fields so the suite-level decorator can rebuild
+                # controller_log/summary/user_message from the merged log.
+                raw.pop("summary", None)
+                raw.pop("user_message", None)
                 raw["status"] = "failed"
                 raw["suite"] = suite
                 raw["steps"] = _prune_raw_steps(steps, include_raw_step_outputs)
