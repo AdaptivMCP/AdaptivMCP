@@ -236,6 +236,7 @@ def _workspace_path(full_name: str, ref: str) -> str:
 
     return workspace_dir
 
+
 _WORKSPACE_REF_MAX_LEN = 80
 
 
