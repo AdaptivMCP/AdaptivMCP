@@ -55,6 +55,16 @@ def _parse_bool(value: Optional[str]) -> bool:
     return v in ("1", "true", "t", "yes", "y", "on")
 
 
+def _strict_validation_enabled() -> bool:
+    """Return True when strict tool argument/schema validation is enabled.
+
+    Default is lenient. Set GITHUB_MCP_STRICT_VALIDATION=1 to re-enable strict
+    behavior (hard-fail on missing schemas or missing jsonschema).
+    """
+
+    return _parse_bool(os.environ.get("GITHUB_MCP_STRICT_VALIDATION", "0"))
+
+
 def _schema_hash(schema: Mapping[str, Any]) -> str:
     raw = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
@@ -92,26 +102,34 @@ def _apply_tool_metadata(
 
 
 def _require_jsonschema() -> Any:
+    """Return the jsonschema module, or None when unavailable in lenient mode."""
+
     try:
         import jsonschema  # type: ignore
 
         return jsonschema
     except Exception as exc:
-        raise AdaptivToolError(
-            code="schema_validation_unavailable",
-            message="jsonschema is required for strict tool argument validation but is not installed.",
-            category="validation",
-            origin="schema",
-            retryable=False,
-            details={"missing_dependency": "jsonschema"},
-            hint="Add jsonschema to server dependencies and redeploy (pip install jsonschema).",
-        ) from exc
+        if _strict_validation_enabled():
+            raise AdaptivToolError(
+                code="schema_validation_unavailable",
+                message="jsonschema is required for strict tool argument validation but is not installed.",
+                category="validation",
+                origin="schema",
+                retryable=False,
+                details={"missing_dependency": "jsonschema"},
+                hint="Add jsonschema to server dependencies and redeploy (pip install jsonschema).",
+            ) from exc
+        return None
 
 
 def _validate_tool_args_schema(
     tool_name: str, schema: Mapping[str, Any], args: Mapping[str, Any]
 ) -> None:
     jsonschema = _require_jsonschema()
+
+    # Lenient mode: if jsonschema isn't installed, skip schema validation.
+    if jsonschema is None:
+        return
 
     payload = dict(args)
     payload.pop("self", None)
@@ -573,7 +591,9 @@ def mcp_tool(
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
                 schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
                 try:
-                    if not schema_present:
+                    if schema_present:
+                        _validate_tool_args_schema(tool_name, schema, all_args)
+                    elif _strict_validation_enabled():
                         raise AdaptivToolError(
                             code="schema_missing",
                             message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
@@ -583,8 +603,6 @@ def mcp_tool(
                             details={"tool": tool_name},
                             hint="Ensure tool schema caching runs during registration.",
                         )
-
-                    _validate_tool_args_schema(tool_name, schema, all_args)
                     if _should_enforce_write_gate(req):
                         _enforce_write_allowed(tool_name, write_action=write_action)
                 except Exception as exc:
@@ -645,6 +663,15 @@ def mcp_tool(
             except Exception:
                 pass
 
+            # Ensure tool output schemas match the actual return shape.
+            # The wrapper always returns a mapping (scalar results are wrapped).
+            try:
+                ann = dict(getattr(wrapper, "__annotations__", {}) or {})
+                ann["return"] = Dict[str, Any]
+                wrapper.__annotations__ = ann
+            except Exception:
+                pass
+
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
                 schema = _schema_from_signature(signature)
@@ -678,7 +705,9 @@ def mcp_tool(
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
             schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
             try:
-                if not schema_present:
+                if schema_present:
+                    _validate_tool_args_schema(tool_name, schema, all_args)
+                elif _strict_validation_enabled():
                     raise AdaptivToolError(
                         code="schema_missing",
                         message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
@@ -688,8 +717,6 @@ def mcp_tool(
                         details={"tool": tool_name},
                         hint="Ensure tool schema caching runs during registration.",
                     )
-
-                _validate_tool_args_schema(tool_name, schema, all_args)
                 if _should_enforce_write_gate(req):
                     _enforce_write_allowed(tool_name, write_action=write_action)
             except Exception as exc:
@@ -745,6 +772,14 @@ def mcp_tool(
         # Ensure every registered tool has a stable docstring surface.
         try:
             wrapper.__doc__ = normalized_description
+        except Exception:
+            pass
+
+        # Ensure tool output schemas match the actual return shape.
+        try:
+            ann = dict(getattr(wrapper, "__annotations__", {}) or {})
+            ann["return"] = Dict[str, Any]
+            wrapper.__annotations__ = ann
         except Exception:
             pass
 
