@@ -376,7 +376,11 @@ def _log_tool_start(
         schema_present=schema_present,
         all_args=all_args,
     )
-    LOGGER.info("Tool call started", extra=payload)
+    # Human-readable message (scan-friendly) + machine-readable extras.
+    LOGGER.info(
+        f"tool_call_started tool={tool_name} call_id={call_id} write_action={bool(write_action)}",
+        extra={"event": "tool_call_started", **payload},
+    )
 
 
 def _log_tool_success(
@@ -405,7 +409,10 @@ def _log_tool_success(
             "result_is_mapping": isinstance(result, Mapping),
         }
     )
-    LOGGER.info("Tool call completed", extra=payload)
+    LOGGER.info(
+        f"tool_call_completed tool={tool_name} call_id={call_id} duration_ms={duration_ms:.2f}",
+        extra={"event": "tool_call_completed", **payload},
+    )
 
 
 def _log_tool_failure(
@@ -420,6 +427,7 @@ def _log_tool_failure(
     phase: str,
     exc: BaseException,
     all_args: Mapping[str, Any],
+    structured_error: Mapping[str, Any] | None = None,
 ) -> None:
     payload = _tool_log_payload(
         tool_name=tool_name,
@@ -437,7 +445,26 @@ def _log_tool_failure(
             "error_type": exc.__class__.__name__,
         }
     )
-    LOGGER.warning("Tool call failed", extra=payload, exc_info=exc)
+
+    # Attach a compact error summary for machine parsing without dumping large/raw payloads.
+    if structured_error and isinstance(structured_error.get("error"), Mapping):
+        err = structured_error.get("error")
+        payload.update(
+            {
+                "incident_id": err.get("incident_id"),
+                "error_code": err.get("code"),
+                "error_category": err.get("category"),
+                "error_origin": err.get("origin"),
+                "error_retryable": err.get("retryable"),
+                "error_critical": err.get("critical"),
+            }
+        )
+
+    LOGGER.warning(
+        f"tool_call_failed tool={tool_name} call_id={call_id} phase={phase} duration_ms={duration_ms:.2f}",
+        extra={"event": "tool_call_failed", **payload},
+        exc_info=exc,
+    )
 
 
 def _emit_tool_error(
@@ -451,8 +478,28 @@ def _emit_tool_error(
     exc: BaseException,
     phase: str,
 ) -> dict[str, Any]:
-    structured_error = _structured_tool_error(exc, context=tool_name, path=None)
+    duration_ms = (time.perf_counter() - start) * 1000
+    structured_error = _structured_tool_error(
+        exc,
+        context=tool_name,
+        path=None,
+        request=dict(req) if isinstance(req, Mapping) else None,
+    )
     structured_error = attach_error_user_facing_fields(tool_name, structured_error)
+
+    # Add correlation fields (non-breaking additions) so callers/logs can connect
+    # a user-visible error to provider logs.
+    structured_error.setdefault(
+        "tool_call",
+        {
+            "tool": tool_name,
+            "call_id": call_id,
+            "phase": phase,
+            "write_action": bool(write_action),
+            "duration_ms": duration_ms,
+            "schema_hash": schema_hash if schema_present else None,
+        },
+    )
 
     return structured_error
 

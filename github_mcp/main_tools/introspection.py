@@ -215,18 +215,21 @@ def list_all_actions(
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
         # Approval-gated writes:
         # - All tools remain enabled.
-        # - write_allowed indicates whether writes are auto-approved (true) or
-        #   require a confirmation prompt (false).
+        # - write_actions_enabled indicates whether writes are auto-approved.
+        # - write_allowed indicates whether the tool is executable.
         write_enabled = True
-        tool_write_allowed = (not base_write_action) or write_allowed
+        tool_write_allowed = bool(write_enabled)
+        approval_required = bool(base_write_action and not write_allowed)
 
         tool_info: Dict[str, Any] = {
             "name": name_str,
             "visibility": str(visibility),
             # Correct semantic classification:
             "write_action": base_write_action,
-            # Gate status (always true for read tools).
+            # Executability (approval-gated writes still execute).
             "write_allowed": bool(tool_write_allowed),
+            "write_auto_approved": bool(write_allowed),
+            "approval_required": bool(approval_required),
             # Dynamic gating:
             "write_enabled": bool(write_enabled),
             # UI policy hint (separate from write_action):
@@ -459,6 +462,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
 
     base_write_action = bool(_tool_attr(tool, func, "write_action", False))
     write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
+    approval_required = bool(base_write_action and not write_allowed)
 
     return {
         "tool": tool_name,
@@ -471,7 +475,10 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
             or "public"
         ),
         "write_action": base_write_action,
-        "write_allowed": (not base_write_action) or write_allowed,
+        # Tool is executable even when write auto-approval is off.
+        "write_allowed": True,
+        "write_auto_approved": bool(write_allowed),
+        "approval_required": bool(approval_required),
         "write_enabled": True,
     }
 

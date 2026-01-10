@@ -86,8 +86,8 @@ def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
                     "name": "write_tool",
                     "description": "write",
                     "write_action": True,
-                    # write_enabled/write_allowed should be overwritten by env gate,
-                    # but we set them true here to catch regressions.
+                    # write_auto_approved/approval_required should reflect env gate,
+                    # but we set other fields true here to catch regressions.
                     "write_enabled": True,
                     "write_allowed": True,
                     "input_schema": {"type": "object", "properties": {}},
@@ -108,7 +108,9 @@ def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
     assert idx["read_tool"]["write_allowed"] is True
     assert idx["write_tool"]["write_action"] is True
     assert idx["write_tool"]["write_enabled"] is True
-    assert idx["write_tool"]["write_allowed"] is False
+    assert idx["write_tool"]["write_allowed"] is True
+    assert idx["write_tool"]["write_auto_approved"] is False
+    assert idx["write_tool"]["approval_required"] is True
 
     # Gate on.
     monkeypatch.setenv("GITHUB_MCP_WRITE_ALLOWED", "true")
@@ -117,6 +119,8 @@ def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
     idx = {a["name"]: a for a in actions}
     assert idx["write_tool"]["write_enabled"] is True
     assert idx["write_tool"]["write_allowed"] is True
+    assert idx["write_tool"]["write_auto_approved"] is True
+    assert idx["write_tool"]["approval_required"] is False
 
 
 def test_no_legacy_write_gate_env_var_in_ci():
