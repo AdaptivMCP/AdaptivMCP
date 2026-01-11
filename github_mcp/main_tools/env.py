@@ -147,22 +147,12 @@ async def validate_environment() -> Dict[str, Any]:
 
     # Git identity env vars / placeholders.
     identity_envs = {name: os.environ.get(name) for name in GITHUB_MCP_GIT_IDENTITY_ENV_VARS}
-    legacy_identity_envs = {
-        "GIT_AUTHOR_NAME": os.environ.get("GIT_AUTHOR_NAME"),
-        "GIT_AUTHOR_EMAIL": os.environ.get("GIT_AUTHOR_EMAIL"),
-        "GIT_COMMITTER_NAME": os.environ.get("GIT_COMMITTER_NAME"),
-        "GIT_COMMITTER_EMAIL": os.environ.get("GIT_COMMITTER_EMAIL"),
-    }
     configured_identity_envs = [
         name for name, value in identity_envs.items() if value and value.strip()
-    ]
-    configured_legacy_envs = [
-        name for name, value in legacy_identity_envs.items() if value and value.strip()
     ]
 
     identity_details = {
         "explicit_env_vars": configured_identity_envs,
-        "legacy_env_vars": configured_legacy_envs,
         "sources": GIT_IDENTITY_SOURCES,
         "effective": {
             "author_name": GIT_AUTHOR_NAME,

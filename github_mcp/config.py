@@ -130,41 +130,32 @@ def _resolve_git_identity() -> dict[str, object]:
     def resolve_value(
         *,
         explicit_env: str | None,
-        legacy_env: str | None,
         app_value: str | None,
         default_value: str,
     ) -> tuple[str, str]:
         if explicit_env:
             return explicit_env, "explicit_env"
-        if legacy_env:
-            return legacy_env, "legacy_env"
         if app_value:
             return app_value, "app_metadata"
         return default_value, "default_placeholder"
 
     author_name, author_name_source = resolve_value(
         explicit_env=os.environ.get("GITHUB_MCP_GIT_AUTHOR_NAME"),
-        legacy_env=os.environ.get("GIT_AUTHOR_NAME"),
         app_value=app_identity.get("name"),
         default_value=DEFAULT_GIT_IDENTITY["author_name"],
     )
     author_email, author_email_source = resolve_value(
         explicit_env=os.environ.get("GITHUB_MCP_GIT_AUTHOR_EMAIL"),
-        legacy_env=os.environ.get("GIT_AUTHOR_EMAIL"),
         app_value=app_identity.get("email"),
         default_value=DEFAULT_GIT_IDENTITY["author_email"],
     )
 
     committer_name_env = os.environ.get("GITHUB_MCP_GIT_COMMITTER_NAME")
-    legacy_committer_name = os.environ.get("GIT_COMMITTER_NAME")
     committer_name = None
     committer_name_source = None
     if committer_name_env:
         committer_name = committer_name_env
         committer_name_source = "explicit_env"
-    elif legacy_committer_name:
-        committer_name = legacy_committer_name
-        committer_name_source = "legacy_env"
     elif app_identity.get("name"):
         committer_name = app_identity.get("name")
         committer_name_source = "app_metadata"
@@ -173,15 +164,11 @@ def _resolve_git_identity() -> dict[str, object]:
         committer_name_source = "author_fallback"
 
     committer_email_env = os.environ.get("GITHUB_MCP_GIT_COMMITTER_EMAIL")
-    legacy_committer_email = os.environ.get("GIT_COMMITTER_EMAIL")
     committer_email = None
     committer_email_source = None
     if committer_email_env:
         committer_email = committer_email_env
         committer_email_source = "explicit_env"
-    elif legacy_committer_email:
-        committer_email = legacy_committer_email
-        committer_email_source = "legacy_env"
     elif app_identity.get("email"):
         committer_email = app_identity.get("email")
         committer_email_source = "app_metadata"
@@ -227,26 +214,6 @@ def git_identity_warnings() -> list[str]:
         "GITHUB_MCP_GIT_COMMITTER_EMAIL (or set GitHub App metadata) to ensure commits "
         "are attributed correctly."
     ]
-
-
-def _parse_tool_list(value: str) -> set[str]:
-    return {item.strip() for item in (value or "").split(",") if item.strip()}
-
-
-DEFAULT_TOOL_DENYLIST: set[str] = set()
-
-
-def _resolve_tool_denylist() -> set[str]:
-    override = os.environ.get("MCP_TOOL_DENYLIST")
-    if override is None or not override.strip():
-        return set(DEFAULT_TOOL_DENYLIST)
-    normalized = override.strip().lower()
-    if normalized in {"none", "off", "false", "0"}:
-        return set()
-    return _parse_tool_list(override)
-
-
-TOOL_DENYLIST = _resolve_tool_denylist()
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 # Default to a compact, scannable format.
