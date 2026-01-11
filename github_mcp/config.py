@@ -70,6 +70,11 @@ GITHUB_SEARCH_MIN_INTERVAL_SECONDS = float(
     os.environ.get("GITHUB_SEARCH_MIN_INTERVAL_SECONDS", "2")
 )
 
+# Workspace diff application can be slow for large diffs. Keep this configurable.
+WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS = int(
+    os.environ.get("MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", "300")
+)
+
 GITHUB_MCP_GIT_IDENTITY_ENV_VARS = (
     "GITHUB_MCP_GIT_AUTHOR_NAME",
     "GITHUB_MCP_GIT_AUTHOR_EMAIL",

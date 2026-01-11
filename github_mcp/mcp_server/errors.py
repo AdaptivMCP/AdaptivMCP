@@ -13,52 +13,11 @@ import re
 import time
 import traceback
 import uuid
-from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 
 from github_mcp.config import GITHUB_TOKEN_ENV_VARS
 from github_mcp.exceptions import GitHubAuthError, GitHubRateLimitError, UsageError
 from github_mcp.mcp_server.context import get_request_id
-
-
-@dataclass
-class AdaptivToolError(Exception):
-    """
-    A structured error intended to be surfaced to the user and to automation.
-
-    Fields:
-      - code: stable identifier (snake_case).
-      - message: user-facing core message.
-      - category: broad bucket: permission|validation|upstream|runtime|configuration|not_found|conflict|timeout
-      - origin: subsystem that produced the error.
-      - retryable: whether retry is likely to succeed without changes.
-      - details: JSON-serializable object for debugging.
-      - hint: optional next step guidance.
-    """
-
-    code: str
-    message: str
-    category: str = "runtime"
-    origin: str = "server"
-    retryable: bool = False
-    details: Dict[str, Any] = field(default_factory=dict)
-    hint: Optional[str] = None
-
-    def __str__(self) -> str:
-        return self.message
-
-    def to_error_dict(self, *, incident_id: str) -> Dict[str, Any]:
-        return {
-            "incident_id": incident_id,
-            "type": self.__class__.__name__,
-            "code": self.code,
-            "message": self.message,
-            "category": self.category,
-            "origin": self.origin,
-            "retryable": bool(self.retryable),
-            "details": self.details or {},
-            "hint": self.hint,
-        }
 
 
 def _is_retryable_exception(exc: BaseException) -> bool:
@@ -129,6 +88,63 @@ def _parse_github_rate_limit_reset(message: str) -> Optional[int]:
         return None
 
 
+def _structured_exception_overrides(
+    exc: BaseException,
+    *,
+    incident_id: str,
+    request_id: Optional[str],
+    context: Optional[str],
+    path: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Best-effort support for exceptions that carry structured fields.
+
+    This avoids a bespoke exception type while still allowing callers to provide
+    stable error metadata. Any exception can opt-in by setting attributes:
+      - code (required)
+      - message (optional; falls back to str(exc))
+      - category, origin, retryable, details (dict), hint
+    """
+
+    code = getattr(exc, "code", None)
+    if not code:
+        return None
+
+    msg = getattr(exc, "message", None)
+    if not msg:
+        msg = str(exc) or exc.__class__.__name__
+
+    category = getattr(exc, "category", None) or "runtime"
+    origin = getattr(exc, "origin", None) or "exception"
+
+    retryable_attr = getattr(exc, "retryable", None)
+    retryable = bool(retryable_attr) if retryable_attr is not None else _is_retryable_exception(exc)
+
+    details: Dict[str, Any] = _best_effort_details(exc)
+    details_attr = getattr(exc, "details", None)
+    if isinstance(details_attr, dict):
+        details.update(details_attr)
+    if context:
+        details.setdefault("context", context)
+    if path:
+        details.setdefault("path", path)
+
+    hint = getattr(exc, "hint", None)
+
+    return {
+        "incident_id": incident_id,
+        "request_id": request_id,
+        "type": exc.__class__.__name__,
+        "code": str(code),
+        "message": _single_line(str(msg)),
+        "category": str(category),
+        "origin": str(origin),
+        "retryable": retryable,
+        "critical": _is_critical_error(str(category), retryable),
+        "details": details,
+        "hint": str(hint) if hint is not None else None,
+    }
+
+
 def _structured_tool_error(
     exc: BaseException,
     *,
@@ -144,25 +160,21 @@ def _structured_tool_error(
     Convert any exception into a structured payload.
 
     Contract:
-      - returns {"error": {...}, "user_message": "..."} so callers can safely do
-        payload.get("error", {}).
+      - returns {"error": {...}} so callers can safely do payload.get("error", {}).
     """
     incident_id = str(uuid.uuid4())
     request_id = get_request_id()
 
-    adaptiv_exc = _unwrap_adaptiv_error(exc)
-    if adaptiv_exc is not None:
-        err = adaptiv_exc.to_error_dict(incident_id=incident_id)
-        if request_id:
-            err.setdefault("request_id", request_id)
-        err.setdefault(
-            "critical",
-            _is_critical_error(err.get("category"), bool(err.get("retryable"))),
-        )
-        user_message = _format_user_message(err, context=context, path=path)
+    overridden = _structured_exception_overrides(
+        exc,
+        incident_id=incident_id,
+        request_id=request_id,
+        context=context,
+        path=path,
+    )
+    if overridden is not None:
         payload = {
-            "error": err,
-            "user_message": user_message,
+            "error": overridden,
             "tool_descriptor": tool_descriptor,
             "tool_descriptor_text": tool_descriptor_text,
             "tool_surface": tool_surface,
@@ -196,10 +208,8 @@ def _structured_tool_error(
                 "and visible to the git subprocess. If you use env vars, set one of the supported GitHub token variables."
             ),
         }
-        user_message = _format_user_message(err, context=context, path=path)
         payload = {
             "error": err,
-            "user_message": user_message,
             "tool_descriptor": tool_descriptor,
             "tool_descriptor_text": tool_descriptor_text,
             "tool_surface": tool_surface,
@@ -211,31 +221,34 @@ def _structured_tool_error(
 
     if isinstance(exc, UsageError):
         msg = _single_line(str(exc) or "Invalid usage.")
-        details = _best_effort_details(exc)
+        details: Dict[str, Any] = _best_effort_details(exc)
         details.update({"context": context} if context else {})
         details.update({"path": path} if path else {})
+        details_attr = getattr(exc, "details", None)
+        if isinstance(details_attr, dict):
+            details.update(details_attr)
 
-        category = "validation"
-        origin = "tool"
-        hint = None
+        category = getattr(exc, "category", None) or "validation"
+        origin = getattr(exc, "origin", None) or "tool"
+        hint = getattr(exc, "hint", None)
+        code = getattr(exc, "code", None) or "usage_error"
+        retryable = bool(getattr(exc, "retryable", False))
 
         err = {
             "incident_id": incident_id,
             "request_id": request_id,
             "type": exc.__class__.__name__,
-            "code": "usage_error",
+            "code": str(code),
             "message": msg,
-            "category": category,
-            "origin": origin,
-            "retryable": False,
-            "critical": _is_critical_error(category, False),
+            "category": str(category),
+            "origin": str(origin),
+            "retryable": retryable,
+            "critical": _is_critical_error(str(category), retryable),
             "details": details,
-            "hint": hint,
+            "hint": str(hint) if hint is not None else None,
         }
-        user_message = _format_user_message(err, context=context, path=path)
         payload = {
             "error": err,
-            "user_message": user_message,
             "tool_descriptor": tool_descriptor,
             "tool_descriptor_text": tool_descriptor_text,
             "tool_surface": tool_surface,
@@ -276,10 +289,8 @@ def _structured_tool_error(
             "details": details,
             "hint": "Wait for the reset time, reduce request frequency, or use a higher-limit GitHub credential.",
         }
-        user_message = _format_user_message(err, context=context, path=path)
         payload = {
             "error": err,
-            "user_message": user_message,
             "tool_descriptor": tool_descriptor,
             "tool_descriptor_text": tool_descriptor_text,
             "tool_surface": tool_surface,
@@ -310,10 +321,8 @@ def _structured_tool_error(
     if path:
         err["details"]["path"] = path
 
-    user_message = _format_user_message(err, context=context, path=path)
     payload = {
         "error": err,
-        "user_message": user_message,
         "tool_descriptor": tool_descriptor,
         "tool_descriptor_text": tool_descriptor_text,
         "tool_surface": tool_surface,
@@ -322,73 +331,6 @@ def _structured_tool_error(
     }
     payload.update(_extract_raw_payloads(exc))
     return payload
-
-
-def _unwrap_adaptiv_error(exc: BaseException) -> Optional[AdaptivToolError]:
-    if isinstance(exc, AdaptivToolError):
-        return exc
-    seen: Set[int] = set()
-    current: Optional[BaseException] = exc
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        cause = getattr(current, "__cause__", None)
-        if isinstance(cause, AdaptivToolError):
-            return cause
-        context = getattr(current, "__context__", None)
-        if isinstance(context, AdaptivToolError):
-            return context
-        current = cause or context
-    return None
-
-
-def _format_user_message(
-    err: Dict[str, Any], *, context: Optional[str], path: Optional[str]
-) -> str:
-    # High-signal user message, still deterministic.
-    parts = []
-
-    if context:
-        parts.append(f"Tool: {context}")
-
-    msg = err.get("message") or "Unknown error."
-    parts.append(f"Error: {msg}")
-
-    if path:
-        parts.append(f"Path: {path}")
-
-    code = err.get("code")
-    if code:
-        parts.append(f"Code: {code}")
-
-    category = err.get("category")
-    if category:
-        parts.append(f"Category: {category}")
-
-    origin = err.get("origin")
-    if origin:
-        parts.append(f"Origin: {origin}")
-
-    retryable = err.get("retryable")
-    if retryable is not None:
-        parts.append(f"Retryable: {'yes' if retryable else 'no'}")
-
-    critical = err.get("critical")
-    if critical is not None:
-        parts.append(f"Critical: {'yes' if critical else 'no'}")
-
-    incident_id = err.get("incident_id")
-    if incident_id:
-        parts.append(f"Incident: {incident_id}")
-
-    request_id = err.get("request_id")
-    if request_id:
-        parts.append(f"Request: {request_id}")
-
-    hint = err.get("hint")
-    if hint:
-        parts.append(f"Hint: {hint}")
-
-    return " | ".join(parts)
 
 
 def _exception_trace(exc: BaseException) -> str:

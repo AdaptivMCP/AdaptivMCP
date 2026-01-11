@@ -681,7 +681,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     apply_result = await _run_shell(
         f"git apply --whitespace=nowarn {patch_path}",
         cwd=repo_dir,
-        timeout_seconds=60,
+        timeout_seconds=max(1, int(config.WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS)),
     )
     if apply_result["exit_code"] != 0:
         stderr = apply_result.get("stderr", "") or apply_result.get("stdout", "")
