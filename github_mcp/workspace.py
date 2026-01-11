@@ -484,6 +484,153 @@ def _maybe_unescape_unified_diff(patch: str) -> str:
         return patch.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
 
 
+_HUNK_HEADER_WITH_RANGES_RE = re.compile(r"^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@")
+
+
+def _looks_like_rangeless_git_patch(patch: str) -> bool:
+    """Return True when a patch looks like a git diff but hunks omit ranges.
+
+    Some assistants emit `@@` lines without `-a,b +c,d` ranges. `git apply`
+    rejects these with "patch with only garbage". We detect that shape and
+    fall back to the internal hunk-applier (which matches by content).
+    """
+
+    if not isinstance(patch, str):
+        return False
+
+    lines = patch.splitlines()
+    in_diff = False
+    saw_rangeless_hunk = False
+    for line in lines:
+        if line.startswith("diff --git "):
+            in_diff = True
+            continue
+        if not in_diff:
+            continue
+        if line.startswith("@@"):
+            if _HUNK_HEADER_WITH_RANGES_RE.match(line):
+                return False
+            saw_rangeless_hunk = True
+    return saw_rangeless_hunk
+
+
+def _parse_rangeless_git_patch(patch: str) -> List[Dict[str, Any]]:
+    """Parse a minimal git-style diff that uses bare `@@` hunk separators.
+
+    Supports update diffs (including simple rename via a/b paths).
+    """
+
+    lines = patch.splitlines()
+    blocks: List[Dict[str, Any]] = []
+    idx = 0
+
+    diff_re = re.compile(r"^diff --git a/(.+?) b/(.+)$")
+
+    while idx < len(lines):
+        line = lines[idx]
+        m = diff_re.match(line)
+        if not m:
+            idx += 1
+            continue
+
+        a_path, b_path = m.group(1), m.group(2)
+        move_to = b_path if a_path != b_path else None
+        path = a_path
+        idx += 1
+
+        # Skip headers until we reach the file markers.
+        while idx < len(lines) and not lines[idx].startswith("--- "):
+            if lines[idx].startswith("diff --git "):
+                raise GitHubAPIError("Malformed patch: missing file header for diff")
+            idx += 1
+        if idx >= len(lines) or not lines[idx].startswith("--- "):
+            raise GitHubAPIError("Malformed patch: missing --- file header")
+        idx += 1
+        if idx >= len(lines) or not lines[idx].startswith("+++ "):
+            raise GitHubAPIError("Malformed patch: missing +++ file header")
+        idx += 1
+
+        hunks: List[List[str]] = []
+        current: List[str] = []
+
+        while idx < len(lines) and not lines[idx].startswith("diff --git "):
+            pline = lines[idx]
+            if pline.startswith("@@"):
+                # bare @@ acts as hunk delimiter (no ranges expected here).
+                if current:
+                    hunks.append(current)
+                    current = []
+                idx += 1
+                continue
+            if pline.startswith(r"\ No newline at end of file"):
+                idx += 1
+                continue
+            if pline[:1] in (" ", "+", "-"):
+                current.append(pline)
+                idx += 1
+                continue
+
+            # Ignore common metadata lines (index, mode changes) and blank separators.
+            if pline.startswith(
+                (
+                    "index ",
+                    "new file mode",
+                    "deleted file mode",
+                    "similarity index",
+                    "rename from",
+                    "rename to",
+                )
+            ):
+                idx += 1
+                continue
+            if pline.strip() == "":
+                # A blank diff line must still carry a prefix (' ', '+', '-').
+                raise GitHubAPIError("Malformed patch: blank line without diff prefix")
+
+            raise GitHubAPIError("Malformed patch: unexpected content in diff body")
+
+        if current:
+            hunks.append(current)
+
+        if not hunks:
+            raise GitHubAPIError("Malformed patch: no hunks found for diff")
+
+        blocks.append({"action": "update", "path": path, "move_to": move_to, "hunks": hunks})
+
+    if not blocks:
+        raise GitHubAPIError("Malformed patch: no diffs found")
+
+    return blocks
+
+
+def _apply_rangeless_git_patch(repo_dir: str, patch: str) -> None:
+    blocks = _parse_rangeless_git_patch(patch)
+    for block in blocks:
+        path = block["path"]
+        abs_path = _safe_repo_path(repo_dir, path)
+        if not os.path.exists(abs_path):
+            raise GitHubAPIError(f"File does not exist: {path}")
+
+        with open(abs_path, "r", encoding="utf-8") as f:
+            text = f.read()
+
+        lines, ends_with_newline = _split_text_lines(text)
+        updated_lines = _apply_patch_hunks(lines, block["hunks"], path)
+        updated_text = _join_text_lines(updated_lines, ends_with_newline)
+
+        move_to = block.get("move_to")
+        if move_to:
+            new_abs_path = _safe_repo_path(repo_dir, move_to)
+            os.makedirs(os.path.dirname(new_abs_path), exist_ok=True)
+            with open(new_abs_path, "w", encoding="utf-8") as f:
+                f.write(updated_text)
+            if new_abs_path != abs_path:
+                os.remove(abs_path)
+        else:
+            with open(abs_path, "w", encoding="utf-8") as f:
+                f.write(updated_text)
+
+
 def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
         raise GitHubAPIError("path must be a non-empty string")
@@ -660,7 +807,15 @@ def _apply_tool_patch(repo_dir: str, patch: str) -> None:
 
 
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
-    """Write a unified diff to disk and apply it with ``git apply``."""
+    """Write a unified diff to disk and apply it with ``git apply``.
+
+    This helper supports three patch formats:
+    1) The MCP "tool patch" format (*** Begin Patch ...), applied in-process.
+    2) Standard git unified diffs (diff --git / --- / +++ / @@ -a,b +c,d @@).
+    3) A minimal git-style diff that uses bare `@@` hunk separators (no ranges),
+       which some assistants emit. These are applied in-process.
+    """
+
     if not patch or not patch.strip():
         raise GitHubAPIError("Received empty patch to apply in workspace")
 
@@ -670,22 +825,45 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
 
     patch = _maybe_unescape_unified_diff(patch)
 
-    patch_path = os.path.join(repo_dir, "mcp_patch.diff")
+    # Fallback for assistant-generated diffs that omit hunk ranges.
+    if _looks_like_rangeless_git_patch(patch):
+        _apply_rangeless_git_patch(repo_dir, patch)
+        return
 
     if patch and not patch.endswith("\n"):
         patch = patch + "\n"
 
-    with open(patch_path, "w", encoding="utf-8") as f:
-        f.write(patch)
+    # Use a unique temporary file to avoid cross-call interference.
+    patch_fd, patch_path = tempfile.mkstemp(prefix="mcp_patch_", suffix=".diff", dir=repo_dir)
+    try:
+        with os.fdopen(patch_fd, "w", encoding="utf-8") as f:
+            f.write(patch)
 
-    apply_result = await _run_shell(
-        f"git apply --whitespace=nowarn {patch_path}",
-        cwd=repo_dir,
-        timeout_seconds=max(1, int(config.WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS)),
-    )
-    if apply_result["exit_code"] != 0:
-        stderr = apply_result.get("stderr", "") or apply_result.get("stdout", "")
-        raise GitHubAPIError(f"git apply failed while preparing workspace: {stderr}")
+        apply_result = await _run_shell(
+            f"git apply --recount --whitespace=nowarn {shlex.quote(patch_path)}",
+            cwd=repo_dir,
+            timeout_seconds=max(1, int(config.WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS)),
+        )
+        if apply_result["exit_code"] != 0:
+            stderr = apply_result.get("stderr", "") or apply_result.get("stdout", "")
+            lowered = (stderr or "").lower()
+            hint = ""
+            if (
+                "only garbage" in lowered
+                and "@@" in patch
+                and not _HUNK_HEADER_WITH_RANGES_RE.search(patch)
+            ):
+                hint = (
+                    " Patch hunks appear to use bare '@@' separators without line ranges. "
+                    "Use a standard unified diff hunk header like '@@ -1,3 +1,3 @@', "
+                    "or use the MCP tool patch format ('*** Begin Patch')."
+                )
+            raise GitHubAPIError(f"git apply failed while preparing workspace: {stderr}{hint}")
+    finally:
+        try:
+            os.remove(patch_path)
+        except Exception:
+            pass
 
 
 __all__ = [
