@@ -327,6 +327,14 @@ GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 
 SERVER_START_TIME = time.time()
 
+# Best-effort commit identifier for runtime diagnostics.
+SERVER_GIT_COMMIT = (
+    os.environ.get("RENDER_GIT_COMMIT")
+    or os.environ.get("GITHUB_SHA")
+    or os.environ.get("GIT_COMMIT")
+    or os.environ.get("SOURCE_VERSION")
+)
+
 __all__ = [
     "BASE_LOGGER",
     "FETCH_FILES_CONCURRENCY",
@@ -347,6 +355,7 @@ __all__ = [
     "HTTPX_MAX_KEEPALIVE",
     "HTTPX_TIMEOUT",
     "MAX_CONCURRENCY",
+    "SERVER_GIT_COMMIT",
     "SERVER_START_TIME",
     "WORKSPACE_BASE_DIR",
     "SANDBOX_CONTENT_BASE_URL",

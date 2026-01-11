@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import random
 import os
 import hashlib
 import re
@@ -24,6 +25,23 @@ def _is_git_rate_limit_error(message: str) -> bool:
     return any(
         marker in lowered for marker in ("rate limit", "secondary rate limit", "abuse detection")
     )
+
+
+def _jitter_sleep_seconds(delay_seconds: float) -> float:
+    """Apply jitter to retry sleeps to reduce synchronized git fetch/clone retries."""
+
+    try:
+        delay = float(delay_seconds)
+    except Exception:
+        return 0.0
+    if delay <= 0:
+        return 0.0
+
+    # Keep tests deterministic.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return delay
+
+    return random.uniform(0.0, delay)
 
 
 async def _run_git_with_retry(
@@ -51,7 +69,7 @@ async def _run_git_with_retry(
         if _is_git_rate_limit_error(stderr) and attempt < max_attempts:
             delay = config.GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
             delay = min(delay, config.GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS)
-            await asyncio.sleep(delay)
+            await asyncio.sleep(_jitter_sleep_seconds(delay))
             attempt += 1
             continue
 
