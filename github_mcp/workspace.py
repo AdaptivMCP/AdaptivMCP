@@ -502,12 +502,12 @@ def _looks_like_rangeless_git_patch(patch: str) -> bool:
     in_diff = False
     saw_rangeless_hunk = False
     for line in lines:
-        if line.startswith('diff --git '):
+        if line.startswith("diff --git "):
             in_diff = True
             continue
         if not in_diff:
             continue
-        if line.startswith('@@'):
+        if line.startswith("@@"):
             if _HUNK_HEADER_WITH_RANGES_RE.match(line):
                 return False
             saw_rangeless_hunk = True
@@ -524,7 +524,7 @@ def _parse_rangeless_git_patch(patch: str) -> List[Dict[str, Any]]:
     blocks: List[Dict[str, Any]] = []
     idx = 0
 
-    diff_re = re.compile(r'^diff --git a/(.+?) b/(.+)$')
+    diff_re = re.compile(r"^diff --git a/(.+?) b/(.+)$")
 
     while idx < len(lines):
         line = lines[idx]
@@ -539,23 +539,23 @@ def _parse_rangeless_git_patch(patch: str) -> List[Dict[str, Any]]:
         idx += 1
 
         # Skip headers until we reach the file markers.
-        while idx < len(lines) and not lines[idx].startswith('--- '):
-            if lines[idx].startswith('diff --git '):
-                raise GitHubAPIError('Malformed patch: missing file header for diff')
+        while idx < len(lines) and not lines[idx].startswith("--- "):
+            if lines[idx].startswith("diff --git "):
+                raise GitHubAPIError("Malformed patch: missing file header for diff")
             idx += 1
-        if idx >= len(lines) or not lines[idx].startswith('--- '):
-            raise GitHubAPIError('Malformed patch: missing --- file header')
+        if idx >= len(lines) or not lines[idx].startswith("--- "):
+            raise GitHubAPIError("Malformed patch: missing --- file header")
         idx += 1
-        if idx >= len(lines) or not lines[idx].startswith('+++ '):
-            raise GitHubAPIError('Malformed patch: missing +++ file header')
+        if idx >= len(lines) or not lines[idx].startswith("+++ "):
+            raise GitHubAPIError("Malformed patch: missing +++ file header")
         idx += 1
 
         hunks: List[List[str]] = []
         current: List[str] = []
 
-        while idx < len(lines) and not lines[idx].startswith('diff --git '):
+        while idx < len(lines) and not lines[idx].startswith("diff --git "):
             pline = lines[idx]
-            if pline.startswith('@@'):
+            if pline.startswith("@@"):
                 # bare @@ acts as hunk delimiter (no ranges expected here).
                 if current:
                     hunks.append(current)
@@ -565,31 +565,40 @@ def _parse_rangeless_git_patch(patch: str) -> List[Dict[str, Any]]:
             if pline.startswith(r"\ No newline at end of file"):
                 idx += 1
                 continue
-            if pline[:1] in (' ', '+', '-'):
+            if pline[:1] in (" ", "+", "-"):
                 current.append(pline)
                 idx += 1
                 continue
 
             # Ignore common metadata lines (index, mode changes) and blank separators.
-            if pline.startswith(('index ', 'new file mode', 'deleted file mode', 'similarity index', 'rename from', 'rename to')):
+            if pline.startswith(
+                (
+                    "index ",
+                    "new file mode",
+                    "deleted file mode",
+                    "similarity index",
+                    "rename from",
+                    "rename to",
+                )
+            ):
                 idx += 1
                 continue
-            if pline.strip() == '':
+            if pline.strip() == "":
                 # A blank diff line must still carry a prefix (' ', '+', '-').
-                raise GitHubAPIError('Malformed patch: blank line without diff prefix')
+                raise GitHubAPIError("Malformed patch: blank line without diff prefix")
 
-            raise GitHubAPIError('Malformed patch: unexpected content in diff body')
+            raise GitHubAPIError("Malformed patch: unexpected content in diff body")
 
         if current:
             hunks.append(current)
 
         if not hunks:
-            raise GitHubAPIError('Malformed patch: no hunks found for diff')
+            raise GitHubAPIError("Malformed patch: no hunks found for diff")
 
-        blocks.append({'action': 'update', 'path': path, 'move_to': move_to, 'hunks': hunks})
+        blocks.append({"action": "update", "path": path, "move_to": move_to, "hunks": hunks})
 
     if not blocks:
-        raise GitHubAPIError('Malformed patch: no diffs found')
+        raise GitHubAPIError("Malformed patch: no diffs found")
 
     return blocks
 
@@ -597,28 +606,28 @@ def _parse_rangeless_git_patch(patch: str) -> List[Dict[str, Any]]:
 def _apply_rangeless_git_patch(repo_dir: str, patch: str) -> None:
     blocks = _parse_rangeless_git_patch(patch)
     for block in blocks:
-        path = block['path']
+        path = block["path"]
         abs_path = _safe_repo_path(repo_dir, path)
         if not os.path.exists(abs_path):
-            raise GitHubAPIError(f'File does not exist: {path}')
+            raise GitHubAPIError(f"File does not exist: {path}")
 
-        with open(abs_path, 'r', encoding='utf-8') as f:
+        with open(abs_path, "r", encoding="utf-8") as f:
             text = f.read()
 
         lines, ends_with_newline = _split_text_lines(text)
-        updated_lines = _apply_patch_hunks(lines, block['hunks'], path)
+        updated_lines = _apply_patch_hunks(lines, block["hunks"], path)
         updated_text = _join_text_lines(updated_lines, ends_with_newline)
 
-        move_to = block.get('move_to')
+        move_to = block.get("move_to")
         if move_to:
             new_abs_path = _safe_repo_path(repo_dir, move_to)
             os.makedirs(os.path.dirname(new_abs_path), exist_ok=True)
-            with open(new_abs_path, 'w', encoding='utf-8') as f:
+            with open(new_abs_path, "w", encoding="utf-8") as f:
                 f.write(updated_text)
             if new_abs_path != abs_path:
                 os.remove(abs_path)
         else:
-            with open(abs_path, 'w', encoding='utf-8') as f:
+            with open(abs_path, "w", encoding="utf-8") as f:
                 f.write(updated_text)
 
 
@@ -797,7 +806,6 @@ def _apply_tool_patch(repo_dir: str, patch: str) -> None:
         raise GitHubAPIError("Unsupported patch action")
 
 
-
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     """Write a unified diff to disk and apply it with ``git apply``.
 
@@ -840,7 +848,11 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
             stderr = apply_result.get("stderr", "") or apply_result.get("stdout", "")
             lowered = (stderr or "").lower()
             hint = ""
-            if "only garbage" in lowered and "@@" in patch and not _HUNK_HEADER_WITH_RANGES_RE.search(patch):
+            if (
+                "only garbage" in lowered
+                and "@@" in patch
+                and not _HUNK_HEADER_WITH_RANGES_RE.search(patch)
+            ):
                 hint = (
                     " Patch hunks appear to use bare '@@' separators without line ranges. "
                     "Use a standard unified diff hunk header like '@@ -1,3 +1,3 @@', "
