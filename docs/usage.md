@@ -24,16 +24,6 @@ Because the workspace holds the clone, the two terms are closely related, but th
 - Workspace tools: operate on the persistent clone (local filesystem + git).
 - GitHub API tools: inspect or mutate GitHub’s remote state (issues, PRs, Actions, contents API, etc.).
 
-## Tool registry defaults
-
-By default, this server does not disable any MCP tools (the built-in denylist is empty). There is no allowlist mechanism.
-
-Operators can optionally disable specific tools at deployment time by setting `MCP_TOOL_DENYLIST` to a comma-separated list of tool names.
-
-To explicitly ensure the denylist is disabled, set `MCP_TOOL_DENYLIST` to `none` (also accepts `off`, `false`, or `0`).
-
-Note: Client/platform-level safety gating (if any) is independent of this server’s tool registry behavior.
-
 ## Write gate (auto-approval)
 
 This server supports approval-gated write actions. The environment variable `GITHUB_MCP_WRITE_ALLOWED` controls whether write actions are auto-approved.
@@ -146,18 +136,13 @@ At minimum, set one GitHub authentication token so the server can access the API
 ### Git identity for workspace commits
 
 Workspace-backed commit tools read Git identity from explicit MCP env vars first, then fall back
-to legacy `GIT_*` env vars, then GitHub App metadata, and finally to placeholders. Configure the
-explicit variables to ensure commits are attributed correctly:
+to GitHub App metadata, and finally to placeholders. Configure the explicit variables to ensure
+commits are attributed correctly:
 
 - GITHUB_MCP_GIT_AUTHOR_NAME
 - GITHUB_MCP_GIT_AUTHOR_EMAIL
 - GITHUB_MCP_GIT_COMMITTER_NAME
 - GITHUB_MCP_GIT_COMMITTER_EMAIL
-
-Legacy (still supported):
-
-- GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL
-- GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL
 
 Optional GitHub App metadata used when explicit values are not provided:
 
@@ -185,10 +170,6 @@ export GITHUB_MCP_GIT_COMMITTER_EMAIL="octo-bot[bot]@users.noreply.github.com"
 ### Output limits
 
 - WRITE_DIFF_LOG_MAX_LINES
-
-### Tool registry controls
-
-- MCP_TOOL_DENYLIST — comma-separated tool names to disable (set to none to disable the denylist)
 
 ### Logging
 

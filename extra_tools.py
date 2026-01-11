@@ -14,7 +14,7 @@ import base64
 from pathlib import Path
 from typing import Any, Callable, Dict, Literal, Protocol
 
-from github_mcp.github_content import _decode_github_content, _resolve_file_sha
+from github_mcp.github_content import _resolve_file_sha
 from github_mcp.http_clients import _github_request
 from github_mcp.utils import _effective_ref_for_repo, _normalize_repo_path_for_repo
 from github_mcp.workspace import _workspace_path
@@ -35,61 +35,6 @@ def ping_extensions() -> str:
     """Simple ping used for diagnostics."""
 
     return "Adaptiv Connected."
-
-
-async def get_file_slice(
-    full_name: str,
-    path: str,
-    ref: str | None = None,
-    start_line: int = 1,
-    max_lines: int | None = None,
-) -> Dict[str, Any]:
-    """Fetch a line-range slice of a text file."""
-
-    if start_line < 1:
-        raise ValueError("start_line must be >= 1")
-    if max_lines is not None and max_lines <= 0:
-        raise ValueError("max_lines must be > 0")
-
-    effective_ref = _effective_ref_for_repo(full_name, ref)
-    normalized_path = _normalize_repo_path_for_repo(full_name, path)
-
-    decoded = await _decode_github_content(full_name, normalized_path, effective_ref)
-    text = decoded.get("text", "")
-    all_lines = str(text).splitlines(keepends=False)
-    total_lines = len(all_lines)
-
-    if total_lines == 0:
-        return {
-            "full_name": full_name,
-            "path": normalized_path,
-            "ref": effective_ref,
-            "start_line": 1,
-            "end_line": 0,
-            "max_lines": max_lines,
-            "total_lines": 0,
-            "has_more_above": False,
-            "has_more_below": False,
-            "lines": [],
-        }
-
-    start_idx = min(max(start_line - 1, 0), total_lines - 1)
-    end_idx = total_lines
-
-    slice_lines = [{"line": i + 1, "text": all_lines[i]} for i in range(start_idx, end_idx)]
-
-    return {
-        "full_name": full_name,
-        "path": normalized_path,
-        "ref": effective_ref,
-        "start_line": start_idx + 1,
-        "end_line": end_idx,
-        "max_lines": max_lines,
-        "total_lines": total_lines,
-        "has_more_above": start_idx > 0,
-        "has_more_below": False,
-        "lines": slice_lines,
-    }
 
 
 async def delete_file(
@@ -203,13 +148,6 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         description="Ping the MCP server extensions surface.",
         tags=["meta", "diagnostics"],
     )(ping_extensions)  # type: ignore[arg-type]
-
-    # read/context helpers
-    mcp_tool(
-        write_action=False,
-        description="Return a citation-friendly slice of a file.",
-        tags=["github", "read", "files", "context"],
-    )(get_file_slice)  # type: ignore[arg-type]
 
     # write actions
     mcp_tool(

@@ -129,7 +129,7 @@ Notes:
 
 ```json
 {
-  "text": "Error executing tool get_file_slice: ...",
+  "text": "Error executing tool <tool_name>: ...",
   "is_error": true
 }
 ```
@@ -144,8 +144,6 @@ There are two categories of tools:
 2) Write tools: mutate GitHub state (issues/PRs/branches) or mutate the workspace filesystem/git state.
 
 Separately, "workspace" tools operate on a persistent, server-side git clone.
-
-Tool registry defaults: this server does not disable any tools by default (empty built-in denylist). Operators may optionally disable specific tools via `MCP_TOOL_DENYLIST` (see `docs/usage.md`).
 
 Recommended practice for changes:
 
@@ -181,8 +179,6 @@ Actions / CI:
 - `list_workflow_runs`, `list_workflow_runs_graphql`, `get_workflow_run`, `get_workflow_run_overview`, `list_workflow_run_jobs`, `get_job_logs`, `trigger_workflow_dispatch`, `trigger_and_wait_for_workflow`, `wait_for_workflow_run`, `list_recent_failures`, `list_recent_failures_graphql`, `run_tests`, `run_lint_suite`, `run_quality_suite`
 
 Misc file navigation helpers:
-- `get_file_slice`
-
 Administration:
 - `authorize_write_actions` (if enabled in your deployment)
 
@@ -302,7 +298,7 @@ Example:
 Purpose: Get the full schema and metadata for one tool (or a small list of tools) without enumerating everything.
 
 Inputs:
-- `name` / `tool_name` (string | null): single tool name.
+- `name` (string | null): single tool name.
 - `names` (string[] | null): multiple tool names.
 - `include_parameters` (bool, default true): include schema.
 
@@ -645,7 +641,7 @@ Outputs: Matched file paths and excerpts (bounded).
 Example:
 
 ```json
-{"tool":"search_workspace","args":{"full_name":"OWNER/REPO","ref":"main","query":"MCP_TOOL_DENYLIST","regex":false}}
+{"tool":"search_workspace","args":{"full_name":"OWNER/REPO","ref":"main","query":"GITHUB_MCP_WRITE_ALLOWED","regex":false}}
 ```
 
 ## terminal_command
@@ -1707,31 +1703,6 @@ Example:
 
 ```json
 {"tool":"get_repo_dashboard_graphql","args":{"full_name":"OWNER/REPO","branch":"main"}}
-```
-
----
-
-# File navigation helpers (workspace slices)
-
-These helpers are designed to produce citation-friendly excerpts.
-
-## get_file_slice
-
-Purpose: Return a slice of a repository file with stable boundaries.
-
-Inputs:
-- `full_name` (string)
-- `path` (string)
-- `ref` (string | null)
-- `start_line` (int, default 1)
-- `max_lines` (int | null, optional; not enforced)
-
-Outputs: Text slice.
-
-Example:
-
-```json
-{"tool":"get_file_slice","args":{"full_name":"OWNER/REPO","path":"README.md","ref":"main","start_line":1}}
 ```
 
 ---

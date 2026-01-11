@@ -71,14 +71,6 @@ Vendored ripgrep (rg):
 
 See `CONTRIBUTING.md` for additional details.
 
-## Tool registry defaults
-
-By default, this server does not disable any MCP tools (the built-in denylist is empty). Operators can optionally disable specific tools at deployment time by setting `MCP_TOOL_DENYLIST` to a comma-separated list of tool names.
-
-Setting `MCP_TOOL_DENYLIST` to `none` (also accepts `off`, `false`, or `0`) explicitly disables the denylist.
-
-Note: Client/platform-level safety gating (if any) is independent of this server’s tool registry behavior.
-
 ## Health
 
 The server exposes:

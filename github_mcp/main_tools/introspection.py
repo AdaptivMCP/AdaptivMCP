@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import jsonschema
 
-from github_mcp.config import TOOL_DENYLIST
 from github_mcp.mcp_server.context import get_write_allowed
 from github_mcp.mcp_server.schemas import _jsonable
 from ._main import _main
@@ -143,8 +142,7 @@ def list_write_tools() -> Dict[str, Any]:
         },
     ]
 
-    filtered = [tool for tool in tools if tool.get("name") not in TOOL_DENYLIST]
-    return {"tools": filtered}
+    return {"tools": tools}
 
 
 def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
@@ -369,13 +367,8 @@ async def describe_tool(
     name: Optional[str] = None,
     names: Optional[List[str]] = None,
     include_parameters: bool = True,
-    tool_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Inspect one or more registered MCP tools by name."""
-
-    # Back-compat: some callers pass tool_name.
-    if not name and tool_name:
-        name = tool_name
 
     if names is None or len(names) == 0:
         if not name:
