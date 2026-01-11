@@ -1,4 +1,4 @@
-# Adaptiv Controller – MCP Server
+# Adaptiv MCP (GitHub workspace MCP server)
 
 ## Workflow: clone vs GitHub live state
 
@@ -21,7 +21,7 @@ Production deployment for Adaptiv MCP is **Render.com only**. The steps below ar
 1. Export a GitHub token so the server can authenticate:
 
    ```bash
-   export GITHUB_TOKEN="ghp_your_token_here"
+   export GITHUB_TOKEN="YOUR_GITHUB_TOKEN"
    ```
 
 2. Run the server locally:

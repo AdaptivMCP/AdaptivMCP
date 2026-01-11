@@ -749,8 +749,6 @@ def mcp_tool(
             signature = None
 
         tool_name = name or getattr(func, "__name__", "tool")
-        if tool_name in TOOL_DENYLIST:
-            return func
         llm_level = "advanced" if write_action else "basic"
         normalized_description = description or _normalize_tool_description(
             func, signature, llm_level=llm_level

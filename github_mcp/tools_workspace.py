@@ -42,6 +42,7 @@ _workspace_write_text = _fs._workspace_write_text
 get_workspace_file_contents = _fs.get_workspace_file_contents
 set_workspace_file_contents = _fs.set_workspace_file_contents
 apply_patch = _fs.apply_patch
+delete_workspace_paths = _fs.delete_workspace_paths
 
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace
@@ -85,6 +86,7 @@ __all__ = [
     "get_workspace_file_contents",
     "set_workspace_file_contents",
     "apply_patch",
+    "delete_workspace_paths",
     "list_workspace_files",
     "search_workspace",
     "render_shell",
