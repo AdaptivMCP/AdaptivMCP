@@ -13,6 +13,46 @@ import sys
 from github_mcp.github_content import _decode_github_content as _decode_default
 
 
+async def _resolve_ref_snapshot(full_name: str, ref: str | None) -> Dict[str, Any]:
+    """Resolve a branch/tag/ref to an immutable commit SHA.
+
+    The content cache is keyed by (repo, ref, path). If callers pass a moving
+    ref (e.g. a branch name), caching by that ref string can serve stale payloads
+    after the branch advances. To avoid that, we resolve to the current commit
+    SHA and cache against that immutable identifier.
+
+    This helper is best-effort: on failure it falls back to the requested ref.
+    """
+
+    requested_ref = _effective_ref_for_repo(full_name, ref)
+    try:
+        commit_resp = await _github_request(
+            "GET",
+            f"/repos/{full_name}/commits/{requested_ref}",
+        )
+        payload = commit_resp.get("json") or {}
+        resolved_ref = payload.get("sha")
+        if not isinstance(resolved_ref, str) or not resolved_ref:
+            resolved_ref = requested_ref
+        commit_obj = payload.get("commit") if isinstance(payload, dict) else None
+        tree_sha = None
+        if isinstance(commit_obj, dict):
+            tree = commit_obj.get("tree")
+            if isinstance(tree, dict) and isinstance(tree.get("sha"), str):
+                tree_sha = tree.get("sha")
+        return {
+            "requested_ref": requested_ref,
+            "resolved_ref": resolved_ref,
+            "tree_sha": tree_sha,
+        }
+    except Exception:
+        return {
+            "requested_ref": requested_ref,
+            "resolved_ref": requested_ref,
+            "tree_sha": None,
+        }
+
+
 def _cache_file_result(
     *, full_name: str, path: str, ref: str, decoded: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -41,6 +81,10 @@ async def _decode(full_name: str, path: str, ref: str | None) -> Dict[str, Any]:
 async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Dict[str, Any]:
     """Fetch multiple files concurrently with per-file error isolation."""
 
+    snapshot = await _resolve_ref_snapshot(full_name, ref)
+    requested_ref = snapshot["requested_ref"]
+    resolved_ref = snapshot["resolved_ref"]
+
     results: Dict[str, Any] = {}
     sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
 
@@ -48,11 +92,13 @@ async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Di
         normalized_path = _normalize_repo_path_for_repo(full_name, p)
         async with sem:
             try:
-                decoded = await _decode(full_name, normalized_path, ref)
+                decoded = await _decode(full_name, normalized_path, resolved_ref)
+                if isinstance(decoded, dict):
+                    decoded = {**decoded, "requested_ref": requested_ref, "resolved_ref": resolved_ref}
                 cached = _cache_file_result(
                     full_name=full_name,
                     path=normalized_path,
-                    ref=ref,
+                    ref=resolved_ref,
                     decoded=decoded,
                 )
                 results[p] = cached
@@ -64,20 +110,23 @@ async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Di
                 )
 
     await asyncio.gather(*[_fetch_single(p) for p in paths])
-    return {"files": results}
+    return {"ref": requested_ref, "resolved_ref": resolved_ref, "files": results}
 
 
 async def get_cached_files(full_name: str, paths: List[str], ref: str = "main") -> Dict[str, Any]:
     """Return cached file entries and list any missing paths."""
 
-    effective_ref = _effective_ref_for_repo(full_name, ref)
+    snapshot = await _resolve_ref_snapshot(full_name, ref)
+    effective_ref = snapshot["requested_ref"]
+    resolved_ref = snapshot["resolved_ref"]
     normalized_paths = [_normalize_repo_path_for_repo(full_name, p) for p in paths]
-    cached = bulk_get_cached(full_name, effective_ref, normalized_paths)
+    cached = bulk_get_cached(full_name, resolved_ref, normalized_paths)
     missing = [p for p in normalized_paths if p not in cached]
 
     return {
         "full_name": full_name,
         "ref": effective_ref,
+        "resolved_ref": resolved_ref,
         "files": cached,
         "missing": missing,
         "cache": cache_stats(),
@@ -93,12 +142,14 @@ async def cache_files(
     """Fetch files and store them in the in-process cache."""
 
     results: Dict[str, Any] = {}
-    effective_ref = _effective_ref_for_repo(full_name, ref)
+    snapshot = await _resolve_ref_snapshot(full_name, ref)
+    effective_ref = snapshot["requested_ref"]
+    resolved_ref = snapshot["resolved_ref"]
     normalized_paths = [_normalize_repo_path_for_repo(full_name, p) for p in paths]
 
     cached_existing: Dict[str, Any] = {}
     if not refresh:
-        cached_existing = bulk_get_cached(full_name, effective_ref, normalized_paths)
+        cached_existing = bulk_get_cached(full_name, resolved_ref, normalized_paths)
 
     sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
 
@@ -108,10 +159,12 @@ async def cache_files(
                 results[p] = {**cached_existing[p], "cached": True}
                 return
 
-            decoded = await _decode(full_name, p, effective_ref)
+            decoded = await _decode(full_name, p, resolved_ref)
+            if isinstance(decoded, dict):
+                decoded = {**decoded, "requested_ref": effective_ref, "resolved_ref": resolved_ref}
             cached = cache_payload(
                 full_name=full_name,
-                ref=effective_ref,
+                ref=resolved_ref,
                 path=p,
                 decoded=decoded,
             )
@@ -122,6 +175,7 @@ async def cache_files(
     return {
         "full_name": full_name,
         "ref": effective_ref,
+        "resolved_ref": resolved_ref,
         "files": results,
         "cache": cache_stats(),
     }
@@ -141,8 +195,17 @@ async def list_repository_tree(
     if max_entries <= 0:
         raise ValueError("max_entries must be a positive integer")
 
+    snapshot = await _resolve_ref_snapshot(full_name, ref)
+    requested_ref = snapshot["requested_ref"]
+    resolved_ref = snapshot["resolved_ref"]
+
     params = {"recursive": 1 if recursive else 0}
-    data = await _github_request("GET", f"/repos/{full_name}/git/trees/{ref}", params=params)
+    tree_ref = snapshot.get("tree_sha") or resolved_ref
+    data = await _github_request(
+        "GET",
+        f"/repos/{full_name}/git/trees/{tree_ref}",
+        params=params,
+    )
 
     payload = data.get("json") or {}
     tree = payload.get("tree")
@@ -198,7 +261,9 @@ async def list_repository_tree(
 
     truncated = len(filtered_entries) > max_entries
     return {
-        "ref": payload.get("sha") or ref,
+        "ref": requested_ref,
+        "resolved_ref": resolved_ref,
+        "tree_sha": payload.get("sha") or snapshot.get("tree_sha") or tree_ref,
         "entry_count": len(filtered_entries),
         "truncated": truncated,
         "entries": filtered_entries[:max_entries],
