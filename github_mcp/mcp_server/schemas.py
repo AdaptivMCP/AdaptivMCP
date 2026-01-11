@@ -34,23 +34,6 @@ def _log_preview_max_chars() -> Optional[int]:
     return max(128, limit)
 
 
-# Conservative secret key detection for args previews.
-_SECRET_KEY_RE = re.compile(
-    r"(?i)^(?:authorization|auth|token|secret|password|passphrase|api[_-]?key|github[_-]?token|pat)$"
-)
-
-# Common token-ish value patterns (best-effort; avoids obvious leaks).
-_SECRET_VALUE_RE = re.compile(
-    r"(?x)(?:"
-    + "gh"
-    + "p_"
-    + r"[A-Za-z0-9]{20,}|"
-    + "github"
-    + "_pat_"
-    + r"[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})"
-)
-
-
 def _redact_for_logs(value: Any) -> Any:
     """Return a redacted copy of a JSONable-ish structure for logs.
 
