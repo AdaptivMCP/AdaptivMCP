@@ -29,7 +29,7 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import BASE_LOGGER, TOOL_DENYLIST
+from github_mcp.config import BASE_LOGGER
 from github_mcp.exceptions import UsageError
 from github_mcp.mcp_server.context import (
     WRITE_ALLOWED,

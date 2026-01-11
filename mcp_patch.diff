@@ -1,0 +1,15 @@
+diff --git a/github_mcp/mcp_server/decorators.py b/github_mcp/mcp_server/decorators.py
+index 4578584..112dd11 100644
+--- a/github_mcp/mcp_server/decorators.py
++++ b/github_mcp/mcp_server/decorators.py
+@@ -29,7 +29,7 @@ from __future__ import annotations
+ 
+ from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
+ 
+-from github_mcp.config import BASE_LOGGER, TOOL_DENYLIST
++from github_mcp.config import BASE_LOGGER
+ from github_mcp.exceptions import UsageError
+ from github_mcp.mcp_server.context import (
+     RequestContext,
+     get_context,
+ )

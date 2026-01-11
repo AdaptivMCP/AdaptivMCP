@@ -41,8 +41,16 @@ _SECRET_KEY_RE = re.compile(
 
 # Common token-ish value patterns (best-effort; avoids obvious leaks).
 _SECRET_VALUE_RE = re.compile(
-    r"(?x)(?:" + "gh" + "p_" + r"[A-Za-z0-9]{20,}|" + "github" + "_pat_" + r"[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})"
+    r"(?x)(?:"
+    + "gh"
+    + "p_"
+    + r"[A-Za-z0-9]{20,}|"
+    + "github"
+    + "_pat_"
+    + r"[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})"
 )
+
+
 def _redact_for_logs(value: Any) -> Any:
     """Return a redacted copy of a JSONable-ish structure for logs.
 
