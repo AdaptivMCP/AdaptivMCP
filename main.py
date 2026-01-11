@@ -956,11 +956,22 @@ async def get_file_contents(
     if branch:
         ref = branch
 
-    decoded = await _decode_github_content(full_name, path, ref)
+    # Resolve moving refs (like branch names) to an immutable commit SHA so the
+    # in-process cache never serves stale content after the branch advances.
+    from github_mcp.main_tools.content_cache import _resolve_ref_snapshot
+
+    snapshot = await _resolve_ref_snapshot(full_name, ref)
+    requested_ref = snapshot["requested_ref"]
+    resolved_ref = snapshot["resolved_ref"]
+
+    decoded = await _decode_github_content(full_name, path, resolved_ref)
+    if isinstance(decoded, dict):
+        decoded = {**decoded, "requested_ref": requested_ref, "resolved_ref": resolved_ref}
+
     # Keep the local cache warm for subsequent reads.
     from github_mcp.main_tools.content_cache import _cache_file_result as _cache_impl
 
-    _cache_impl(full_name=full_name, path=path, ref=ref, decoded=decoded)
+    _cache_impl(full_name=full_name, path=path, ref=resolved_ref, decoded=decoded)
     return decoded
 
 
