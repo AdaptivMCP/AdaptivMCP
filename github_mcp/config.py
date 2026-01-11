@@ -233,7 +233,7 @@ def _parse_tool_list(value: str) -> set[str]:
     return {item.strip() for item in (value or "").split(",") if item.strip()}
 
 
-DEFAULT_TOOL_DENYLIST = {}
+DEFAULT_TOOL_DENYLIST: set[str] = set()
 
 
 def _resolve_tool_denylist() -> set[str]:

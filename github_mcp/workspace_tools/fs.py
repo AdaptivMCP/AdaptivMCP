@@ -1,6 +1,7 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
-from typing import Any, Dict, Optional
+import shutil
+from typing import Any, Dict, List, Optional
 
 from github_mcp.server import (
     _structured_tool_error,
@@ -90,6 +91,86 @@ def _workspace_write_text(
         "size_bytes": len(data),
         "encoding": "utf-8",
     }
+
+
+@mcp_tool(write_action=True)
+async def delete_workspace_paths(
+    full_name: Optional[str] = None,
+    ref: str = "main",
+    paths: Optional[List[str]] = None,
+    *,
+    allow_missing: bool = True,
+    allow_recursive: bool = False,
+    owner: Optional[str] = None,
+    repo: Optional[str] = None,
+    branch: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Delete one or more paths from the workspace clone.
+
+    This tool exists because some environments can block patch-based file deletions.
+    Prefer this over embedding file deletions into patches.
+
+    Safety constraints:
+    - Paths are resolved relative to the repo root and cannot escape it.
+    - Deleting the repository root is forbidden.
+    - Directories require allow_recursive=True. Otherwise only empty directories
+      may be removed.
+    """
+
+    if paths is None:
+        paths = []
+    if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
+        raise TypeError("paths must be a list of strings")
+    if len(paths) == 0:
+        raise ValueError("paths must contain at least one path")
+
+    try:
+        deps = _tw()._workspace_deps()
+        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _tw()._resolve_ref(ref, branch=branch)
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        root = os.path.realpath(repo_dir)
+
+        removed: List[str] = []
+        missing: List[str] = []
+        failed: List[Dict[str, Any]] = []
+
+        for rel_path in paths:
+            try:
+                abs_path = _workspace_safe_join(repo_dir, rel_path)
+                if abs_path == root:
+                    raise ValueError("refusing to delete repository root")
+
+                if not os.path.exists(abs_path):
+                    if allow_missing:
+                        missing.append(rel_path)
+                        continue
+                    raise FileNotFoundError(rel_path)
+
+                if os.path.isdir(abs_path):
+                    if allow_recursive:
+                        shutil.rmtree(abs_path)
+                    else:
+                        os.rmdir(abs_path)
+                else:
+                    os.remove(abs_path)
+
+                removed.append(rel_path)
+            except Exception as exc:
+                failed.append({"path": rel_path, "error": str(exc)})
+
+        return {
+            "branch": effective_ref,
+            "status": "deleted",
+            "removed": removed,
+            "missing": missing,
+            "failed": failed,
+            "ok": len(failed) == 0,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="delete_workspace_paths")
 
 
 @mcp_tool(write_action=False)

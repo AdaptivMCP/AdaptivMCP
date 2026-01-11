@@ -71,7 +71,9 @@ def _extract_raw_payloads(exc: BaseException) -> Dict[str, Any]:
 def _single_line(s: str) -> str:
     # Ensure messages are stable and don't introduce embedded newlines into logs/UI.
     s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
-    return " ".join(s.split())
+    s = " ".join(s.split())
+
+    return s
 
 
 def _parse_github_rate_limit_reset(message: str) -> Optional[int]:
