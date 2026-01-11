@@ -626,7 +626,9 @@ async def _github_request(
                 retry_delay = GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
 
             if attempt < max_attempts and retry_delay <= GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS:
-                await asyncio.sleep(_jitter_sleep_seconds(retry_delay, respect_min=header_delay is not None))
+                await asyncio.sleep(
+                    _jitter_sleep_seconds(retry_delay, respect_min=header_delay is not None)
+                )
                 attempt += 1
                 continue
 

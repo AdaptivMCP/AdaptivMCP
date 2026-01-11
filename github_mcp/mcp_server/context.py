@@ -15,6 +15,10 @@ from github_mcp.utils import _extract_hostname, _render_external_hosts
 REQUEST_MESSAGE_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_MESSAGE_ID", default=None)
 REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID", default=None)
 
+# End-to-end correlation identifier for each HTTP request.
+# Derived from the incoming X-Request-Id header when present; otherwise generated server-side.
+REQUEST_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_ID", default=None)
+
 # These are imported by main.py in your repo; keep names stable.
 REQUEST_PATH: ContextVar[Optional[str]] = ContextVar("REQUEST_PATH", default=None)
 REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar("REQUEST_RECEIVED_AT", default=None)
@@ -22,11 +26,28 @@ REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar("REQUEST_RECEIVED_
 
 def get_request_context() -> dict[str, Any]:
     return {
+        "request_id": REQUEST_ID.get(),
         "path": REQUEST_PATH.get(),
         "received_at": REQUEST_RECEIVED_AT.get(),
         "session_id": REQUEST_SESSION_ID.get(),
         "message_id": REQUEST_MESSAGE_ID.get(),
     }
+
+
+def get_request_id() -> Optional[str]:
+    return REQUEST_ID.get()
+
+
+# Explicit export list for stable imports in assistants and downstream tooling.
+__all__ = [
+    "REQUEST_ID",
+    "REQUEST_MESSAGE_ID",
+    "REQUEST_PATH",
+    "REQUEST_RECEIVED_AT",
+    "REQUEST_SESSION_ID",
+    "get_request_context",
+    "get_request_id",
+]
 
 
 # ------------------------------------------------------------------------------

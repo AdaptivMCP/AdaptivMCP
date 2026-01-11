@@ -18,6 +18,7 @@ from typing import Any, Dict, Optional, Set
 
 from github_mcp.config import GITHUB_TOKEN_ENV_VARS
 from github_mcp.exceptions import GitHubAuthError, GitHubRateLimitError, UsageError
+from github_mcp.mcp_server.context import get_request_id
 
 
 @dataclass
@@ -147,10 +148,13 @@ def _structured_tool_error(
         payload.get("error", {}).
     """
     incident_id = str(uuid.uuid4())
+    request_id = get_request_id()
 
     adaptiv_exc = _unwrap_adaptiv_error(exc)
     if adaptiv_exc is not None:
         err = adaptiv_exc.to_error_dict(incident_id=incident_id)
+        if request_id:
+            err.setdefault("request_id", request_id)
         err.setdefault(
             "critical",
             _is_critical_error(err.get("category"), bool(err.get("retryable"))),
@@ -172,6 +176,7 @@ def _structured_tool_error(
         msg = _single_line(str(exc) or "GitHub authentication failed.")
         err = {
             "incident_id": incident_id,
+            "request_id": request_id,
             "type": exc.__class__.__name__,
             "code": "github_auth_failed",
             "message": msg,
@@ -216,6 +221,7 @@ def _structured_tool_error(
 
         err = {
             "incident_id": incident_id,
+            "request_id": request_id,
             "type": exc.__class__.__name__,
             "code": "usage_error",
             "message": msg,
@@ -259,6 +265,7 @@ def _structured_tool_error(
 
         err = {
             "incident_id": incident_id,
+            "request_id": request_id,
             "type": exc.__class__.__name__,
             "code": "github_rate_limited",
             "message": msg,
@@ -285,6 +292,7 @@ def _structured_tool_error(
     # Generic exception -> normalized error
     err: Dict[str, Any] = {
         "incident_id": incident_id,
+        "request_id": request_id,
         "type": exc.__class__.__name__,
         "code": "unhandled_exception",
         "message": _single_line(str(exc) or exc.__class__.__name__),
@@ -371,6 +379,10 @@ def _format_user_message(
     incident_id = err.get("incident_id")
     if incident_id:
         parts.append(f"Incident: {incident_id}")
+
+    request_id = err.get("request_id")
+    if request_id:
+        parts.append(f"Request: {request_id}")
 
     hint = err.get("hint")
     if hint:
