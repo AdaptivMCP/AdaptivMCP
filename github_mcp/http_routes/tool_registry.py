@@ -39,10 +39,26 @@ def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool = True) -> 
 
 
 def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[str, Any]:
-    from github_mcp.main_tools.introspection import list_all_actions
+    """Build a stable tool/resources catalog for HTTP clients.
 
-    catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
-    tools = list(catalog.get("tools") or [])
+    This endpoint is intentionally best-effort: callers use it for discovery.
+    If introspection fails (for example during partial startup), return a
+    structured error rather than a raw 500 so clients can render a useful
+    diagnostic.
+    """
+
+    try:
+        from github_mcp.main_tools.introspection import list_all_actions
+
+        catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
+        tools = list(catalog.get("tools") or [])
+        catalog_error: Optional[Dict[str, Any]] = None
+    except Exception as exc:
+        tools = []
+        catalog_error = {
+            "message": "Failed to build tool catalog.",
+            "type": type(exc).__name__,
+        }
 
     resources = []
     for entry in tools:
@@ -58,11 +74,10 @@ def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[
             }
         )
 
-    return {
-        "tools": tools,
-        "resources": resources,
-        "finite": True,
-    }
+    payload: Dict[str, Any] = {"tools": tools, "resources": resources, "finite": True}
+    if catalog_error is not None:
+        payload["error"] = catalog_error
+    return payload
 
 
 def _normalize_payload(payload: Any) -> Dict[str, Any]:
@@ -239,6 +254,28 @@ def build_tool_registry_endpoint() -> Callable[[Request], Response]:
     return _endpoint
 
 
+def build_resources_endpoint() -> Callable[[Request], Response]:
+    """Return only the resources list.
+
+    Some clients assume that GET /resources returns a resource list without the
+    parallel "tools" field used by GET /tools.
+    """
+
+    async def _endpoint(request: Request) -> Response:
+        include_parameters = _parse_bool(request.query_params.get("include_parameters")) or False
+        compact = _parse_bool(request.query_params.get("compact"))
+        catalog = _tool_catalog(include_parameters=include_parameters, compact=compact)
+        payload: Dict[str, Any] = {
+            "resources": list(catalog.get("resources") or []),
+            "finite": True,
+        }
+        if "error" in catalog:
+            payload["error"] = catalog["error"]
+        return JSONResponse(payload)
+
+    return _endpoint
+
+
 def build_tool_detail_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
         tool_name = request.path_params.get("tool_name")
@@ -278,10 +315,11 @@ def build_tool_invoke_endpoint() -> Callable[[Request], Response]:
 
 def register_tool_registry_routes(app: Any) -> None:
     registry_endpoint = build_tool_registry_endpoint()
+    resources_endpoint = build_resources_endpoint()
     detail_endpoint = build_tool_detail_endpoint()
     invoke_endpoint = build_tool_invoke_endpoint()
 
     app.add_route("/tools", registry_endpoint, methods=["GET"])
-    app.add_route("/resources", registry_endpoint, methods=["GET"])
+    app.add_route("/resources", resources_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", detail_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", invoke_endpoint, methods=["POST"])
