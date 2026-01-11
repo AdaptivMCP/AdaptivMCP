@@ -34,36 +34,6 @@ def _log_preview_max_chars() -> Optional[int]:
     return max(128, limit)
 
 
-def _redact_for_logs(value: Any) -> Any:
-    """Return a redacted copy of a JSONable-ish structure for logs.
-
-    This is intentionally conservative: it redacts obvious secret-bearing keys
-    and obvious token-like values. It should only be used for log previews and
-    never for tool execution.
-    """
-
-    if value is None or isinstance(value, (bool, int, float)):
-        return value
-    if isinstance(value, str):
-        if _SECRET_VALUE_RE.search(value):
-            return "<redacted>"
-        return value
-    if isinstance(value, Mapping):
-        out: Dict[str, Any] = {}
-        for k, v in value.items():
-            key = k if isinstance(k, str) else str(k)
-            if _SECRET_KEY_RE.match(key.strip()):
-                out[key] = "<redacted>"
-            else:
-                out[key] = _redact_for_logs(v)
-        return out
-    if isinstance(value, (list, tuple)):
-        return [_redact_for_logs(v) for v in value]
-    if isinstance(value, (set, frozenset)):
-        return [_redact_for_logs(v) for v in value]
-    return value
-
-
 def _jsonable(value: Any) -> Any:
     """Convert arbitrary Python values into something JSON-serializable.
 
@@ -359,8 +329,7 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     """
     try:
         jsonable_args = _jsonable(dict(args))
-        safe_args = _redact_for_logs(jsonable_args)
-        raw = repr(safe_args)
+        raw = repr(jsonable_args)
         return _normalize_and_truncate(raw)
     except Exception:
         try:
@@ -402,12 +371,10 @@ def _preflight_tool_args(
     - Ensure JSON-serializable output.
     """
     try:
-        safe_args = _redact_for_logs(_jsonable(dict(args)))
-        payload = {"tool": tool_name, "args": safe_args}
+        payload = {"tool": tool_name, "args": _jsonable(dict(args))}
         if compact:
             # Use repr() rather than JSON to avoid heavy escaping and to preserve
-            # argument order (helps ensure redaction indicators remain visible
-            # even when previews are truncated).
+            # argument order.
             raw = repr(payload)
             return {"tool": tool_name, "preview": _normalize_and_truncate(raw)}
         return payload

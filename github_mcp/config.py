@@ -215,6 +215,7 @@ def git_identity_warnings() -> list[str]:
         "are attributed correctly."
     ]
 
+
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 # Default to a compact, scannable format.
 LOG_FORMAT = os.environ.get(
