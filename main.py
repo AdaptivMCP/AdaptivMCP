@@ -10,6 +10,7 @@ import base64
 import json
 import os
 import time
+import uuid
 from urllib.parse import parse_qs
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Literal
@@ -53,6 +54,7 @@ from github_mcp.http_clients import (
     _github_client_instance,  # noqa: F401
 )
 from github_mcp.mcp_server.context import (
+    REQUEST_ID,
     REQUEST_MESSAGE_ID,
     REQUEST_PATH,
     REQUEST_RECEIVED_AT,
@@ -170,6 +172,37 @@ class _RequestContextMiddleware:
         REQUEST_RECEIVED_AT.set(time.time())
         REQUEST_SESSION_ID.set(None)
         REQUEST_MESSAGE_ID.set(None)
+        REQUEST_ID.set(None)
+
+        # Correlation id: honor upstream X-Request-Id if provided, else generate.
+        request_id: Optional[str] = None
+        try:
+            for k, v in scope.get("headers") or []:
+                if (k or b"").lower() == b"x-request-id":
+                    decoded = (v or b"").decode("utf-8", errors="ignore").strip()
+                    if decoded:
+                        request_id = decoded
+                        break
+        except Exception:
+            request_id = None
+
+        if not request_id:
+            request_id = uuid.uuid4().hex
+        REQUEST_ID.set(request_id)
+
+        started = False
+
+        async def send_wrapper(message):
+            nonlocal started
+            if message.get("type") == "http.response.start":
+                if started:
+                    return
+                started = True
+                headers = list(message.get("headers", []))
+                if not any((hk or b"").lower() == b"x-request-id" for hk, _ in headers):
+                    headers.append((b"x-request-id", request_id.encode("utf-8")))
+                message["headers"] = headers
+            await send(message)
 
         # Parse query string for session_id.
         try:
@@ -225,9 +258,9 @@ class _RequestContextMiddleware:
                 replayed = True
                 return {"type": "http.request", "body": body, "more_body": False}
 
-            return await self.app(scope, receive_replay, send)
+            return await self.app(scope, receive_replay, send_wrapper)
 
-        return await self.app(scope, receive, send)
+        return await self.app(scope, receive, send_wrapper)
 
 
 class _SuppressClientDisconnectMiddleware:
