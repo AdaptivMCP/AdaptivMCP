@@ -16,18 +16,21 @@ from typing import Any, Dict, Mapping, Optional, get_args, get_origin
 # ---------------------------------------------------------------------------
 
 
-def _log_preview_max_chars() -> int:
+def _log_preview_max_chars() -> Optional[int]:
     """Max characters allowed in log previews.
 
     This is intentionally dynamic so tests (and operators) can adjust the limit
     via environment variables without requiring a module reload.
     """
 
-    raw = os.environ.get("GITHUB_MCP_LOG_PREVIEW_MAX_CHARS", "2000")
+    # 0 (or negative) disables truncation.
+    raw = os.environ.get("GITHUB_MCP_LOG_PREVIEW_MAX_CHARS", "0")
     try:
         limit = int(str(raw).strip())
     except Exception:
-        limit = 2000
+        limit = 0
+    if limit <= 0:
+        return None
     return max(128, limit)
 
 
@@ -348,6 +351,8 @@ def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, 
 
 def _truncate_str(s: str) -> str:
     max_chars = _log_preview_max_chars()
+    if not max_chars:
+        return s
     if len(s) <= max_chars:
         return s
     # Leave room for a single ellipsis.

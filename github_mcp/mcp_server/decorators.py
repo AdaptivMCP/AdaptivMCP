@@ -30,13 +30,14 @@ import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
 from github_mcp.config import BASE_LOGGER, TOOL_DENYLIST
+from github_mcp.exceptions import UsageError
 from github_mcp.mcp_server.context import (
     WRITE_ALLOWED,
     get_request_context,
     mcp,
     FASTMCP_AVAILABLE,
 )
-from github_mcp.mcp_server.errors import AdaptivToolError, _structured_tool_error
+from github_mcp.mcp_server.errors import _structured_tool_error
 from github_mcp.mcp_server.user_friendly import (
     attach_error_user_facing_fields,
     attach_user_facing_fields,
@@ -51,6 +52,28 @@ from github_mcp.mcp_server.schemas import (
 
 
 LOGGER = BASE_LOGGER.getChild("mcp_server.decorators")
+
+
+def _usage_error(
+    message: str,
+    *,
+    code: str,
+    category: str = "validation",
+    origin: str = "tool",
+    retryable: bool = False,
+    details: Optional[Dict[str, Any]] = None,
+    hint: Optional[str] = None,
+) -> UsageError:
+    exc = UsageError(message)
+    setattr(exc, "code", code)
+    setattr(exc, "category", category)
+    setattr(exc, "origin", origin)
+    setattr(exc, "retryable", bool(retryable))
+    if isinstance(details, dict) and details:
+        setattr(exc, "details", details)
+    if hint:
+        setattr(exc, "hint", hint)
+    return exc
 
 
 def _parse_bool(value: Optional[str]) -> bool:
@@ -113,9 +136,9 @@ def _require_jsonschema() -> Any:
         return jsonschema
     except Exception as exc:
         if _strict_validation_enabled():
-            raise AdaptivToolError(
+            raise _usage_error(
+                "jsonschema is required for strict tool argument validation but is not installed.",
                 code="schema_validation_unavailable",
-                message="jsonschema is required for strict tool argument validation but is not installed.",
                 category="validation",
                 origin="schema",
                 retryable=False,
@@ -156,9 +179,9 @@ def _validate_tool_args_schema(
             }
         )
 
-    raise AdaptivToolError(
+    raise _usage_error(
+        f"Tool arguments did not match schema for {tool_name!r}.",
         code="tool_args_invalid",
-        message=f"Tool arguments did not match schema for {tool_name!r}.",
         category="validation",
         origin="schema",
         retryable=False,
@@ -507,12 +530,12 @@ def _emit_tool_error(
 def _coerce_tool_exception(
     tool_name: str, exc: BaseException, structured: Mapping[str, Any]
 ) -> BaseException:
-    """Coerce arbitrary exceptions into an AdaptivToolError with a concise, user-facing message.
+    """Coerce arbitrary exceptions into a UsageError with a concise, user-facing message.
 
-    This improves the tool error surface (Codex-like): users see a stable code/category and
-    a correlatable incident_id, while detailed diagnostics remain in provider logs.
+    Users see a stable code/category and a correlatable incident_id, while detailed
+    diagnostics remain in provider logs.
     """
-    if isinstance(exc, AdaptivToolError):
+    if isinstance(exc, UsageError) and getattr(exc, "code", None):
         return exc
 
     err = structured.get("error") if isinstance(structured.get("error"), Mapping) else {}
@@ -527,29 +550,30 @@ def _coerce_tool_exception(
     user_msg = f"{tool_name} failed: {msg}"
     if incident_id:
         user_msg += f" (incident {incident_id})"
+    hint_s: str | None = None
     if hint:
         try:
             hint_s = " ".join(str(hint).replace("\n", " ").replace("\r", " ").split())
             if hint_s:
                 user_msg += f" | hint: {hint_s}"
         except Exception:
-            pass
+            hint_s = None
 
-    details = {}
+    details: dict[str, Any] = {}
     if isinstance(err.get("details"), Mapping):
         details.update(dict(err.get("details")))
     if incident_id:
         details.setdefault("incident_id", incident_id)
     details.setdefault("tool", tool_name)
 
-    return AdaptivToolError(
+    return _usage_error(
+        user_msg,
         code=code,
-        message=user_msg,
         category=category,
         origin=origin,
         retryable=retryable,
         details=details,
-        hint=str(hint) if hint is not None else None,
+        hint=hint_s,
     )
 
 
@@ -759,9 +783,9 @@ def mcp_tool(
                     if schema_present:
                         _validate_tool_args_schema(tool_name, schema, all_args)
                     elif _strict_validation_enabled():
-                        raise AdaptivToolError(
+                        raise _usage_error(
+                            f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
                             code="schema_missing",
-                            message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
                             category="validation",
                             origin="schema",
                             retryable=False,
@@ -849,7 +873,9 @@ def mcp_tool(
                     result=result,
                 )
                 if isinstance(result, Mapping):
-                    return attach_user_facing_fields(tool_name, result)
+                    if isinstance(result.get("error"), Mapping):
+                        return attach_error_user_facing_fields(tool_name, dict(result))
+                    return attach_user_facing_fields(tool_name, dict(result))
                 return result
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -912,9 +938,9 @@ def mcp_tool(
                 if schema_present:
                     _validate_tool_args_schema(tool_name, schema, all_args)
                 elif _strict_validation_enabled():
-                    raise AdaptivToolError(
+                    raise _usage_error(
+                        f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
                         code="schema_missing",
-                        message=f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
                         category="validation",
                         origin="schema",
                         retryable=False,
@@ -998,7 +1024,9 @@ def mcp_tool(
                 result=result,
             )
             if isinstance(result, Mapping):
-                return attach_user_facing_fields(tool_name, result)
+                if isinstance(result.get("error"), Mapping):
+                    return attach_error_user_facing_fields(tool_name, dict(result))
+                return attach_user_facing_fields(tool_name, dict(result))
             return result
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(

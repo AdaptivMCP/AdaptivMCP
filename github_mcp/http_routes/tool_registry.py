@@ -152,27 +152,24 @@ async def _preflight_validate(tool_name: str, args: Dict[str, Any]) -> Optional[
 
     try:
         from github_mcp.main_tools.introspection import validate_tool_args
-        from github_mcp.mcp_server.errors import (
-            AdaptivToolError,
-            _structured_tool_error,
-        )
+        from github_mcp.mcp_server.errors import _structured_tool_error
+        from github_mcp.exceptions import UsageError
 
         result = await validate_tool_args(tool_name=tool_name, payload=args)
         valid = bool(result.get("valid", True))
         if valid:
             return None
 
-        err = AdaptivToolError(
-            code="tool_args_invalid",
-            message=f"Tool arguments did not match schema for {tool_name!r}.",
-            category="validation",
-            origin="schema",
-            retryable=False,
-            details={
-                "tool": tool_name,
-                "errors": result.get("errors") or [],
-            },
-            hint="Fetch the tool schema (/tools/<name> or describe_tool) and resend args exactly.",
+        err = UsageError(f"Tool arguments did not match schema for {tool_name!r}.")
+        setattr(err, "code", "tool_args_invalid")
+        setattr(err, "category", "validation")
+        setattr(err, "origin", "schema")
+        setattr(err, "retryable", False)
+        setattr(err, "details", {"tool": tool_name, "errors": result.get("errors") or []})
+        setattr(
+            err,
+            "hint",
+            "Fetch the tool schema (/tools/<name> or describe_tool) and resend args exactly.",
         )
         payload = _structured_tool_error(err, context=f"tool_http:{tool_name}")
         return JSONResponse(payload, status_code=400)
@@ -195,7 +192,7 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
     if preflight is not None:
         return preflight
 
-    max_attempts = max(1, min(int(max_attempts), 5))
+    max_attempts = max(1, int(max_attempts))
     base_backoff_s = 0.25
 
     attempt = 0

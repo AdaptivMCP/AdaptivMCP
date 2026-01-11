@@ -39,14 +39,9 @@ def _tw():
     return tw
 
 
-def _tail_lines(text: str, max_chars: int = 4000) -> str:
-    """Return a tail preview without line limits."""
-    if not text:
-        return ""
-    out = text
-    if len(out) > max_chars:
-        out = out[-max_chars:]
-    return out
+def _tail_lines(text: str) -> str:
+    """Return output text without truncation."""
+    return text or ""
 
 
 def _text_stats(text: str) -> Tuple[int, int]:
