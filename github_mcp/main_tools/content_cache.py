@@ -94,7 +94,11 @@ async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Di
             try:
                 decoded = await _decode(full_name, normalized_path, resolved_ref)
                 if isinstance(decoded, dict):
-                    decoded = {**decoded, "requested_ref": requested_ref, "resolved_ref": resolved_ref}
+                    decoded = {
+                        **decoded,
+                        "requested_ref": requested_ref,
+                        "resolved_ref": resolved_ref,
+                    }
                 cached = _cache_file_result(
                     full_name=full_name,
                     path=normalized_path,
