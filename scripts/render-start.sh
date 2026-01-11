@@ -28,4 +28,13 @@ export PATH="$(dirname "$RG_BIN"):$PATH"
 command -v rg >/dev/null 2>&1
 rg --version
 
-exec uvicorn main:app --host 0.0.0.0 --port "${PORT:-8000}"
+UVICORN_WORKERS="${WEB_CONCURRENCY:-1}"
+UVICORN_LOG_LEVEL="${LOG_LEVEL:-info}"
+
+exec uvicorn main:app \
+  --host 0.0.0.0 \
+  --port "${PORT:-8000}" \
+  --workers "${UVICORN_WORKERS}" \
+  --log-level "${UVICORN_LOG_LEVEL}" \
+  --proxy-headers \
+  --forwarded-allow-ips "*"

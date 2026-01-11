@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import platform
+import sys
 import time
 from typing import Any, Callable
 
@@ -8,6 +10,7 @@ from starlette.responses import JSONResponse
 
 from github_mcp.config import (
     SERVER_START_TIME,
+    SERVER_GIT_COMMIT,
     GIT_IDENTITY_PLACEHOLDER_ACTIVE,
     git_identity_warnings,
 )
@@ -36,8 +39,13 @@ def _build_health_payload() -> dict[str, Any]:
 
     payload = {
         "status": ("ok" if github_token_present and not identity_placeholder_active else "warning"),
+        "git_commit": SERVER_GIT_COMMIT,
         "uptime_seconds": uptime_seconds,
         "github_token_present": github_token_present,
+        "runtime": {
+            "python": sys.version.split()[0],
+            "platform": platform.platform(),
+        },
         "controller": {
             "repo": CONTROLLER_REPO,
             "default_branch": CONTROLLER_DEFAULT_BRANCH,

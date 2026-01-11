@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import random
 import logging
 import os
 import sys
@@ -244,6 +245,34 @@ def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> Optional[float]:
             return None
         return max(0.0, reset_epoch - time.time())
     return None
+
+
+def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool) -> float:
+    """Apply randomized jitter to sleep durations.
+
+    Jitter reduces synchronized retry storms across concurrent assistants.
+
+    When ``respect_min`` is True (e.g. Retry-After/X-RateLimit-Reset driven delays),
+    jitter is added *after* the minimum delay so the retry never happens early.
+    """
+
+    try:
+        delay = float(delay_seconds)
+    except Exception:
+        return 0.0
+
+    if delay <= 0:
+        return 0.0
+
+    # Keep tests deterministic.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return delay
+
+    if respect_min:
+        return delay + random.uniform(0.0, min(1.0, delay * 0.25))
+
+    # "Full jitter" for exponential backoff.
+    return random.uniform(0.0, delay)
 
 
 def _is_rate_limit_response(*, resp: httpx.Response, message_lower: str, error_flag: bool) -> bool:
@@ -591,12 +620,13 @@ async def _github_request(
         message_lower = message.lower() if isinstance(message, str) else ""
         if _is_rate_limit_response(resp=resp, message_lower=message_lower, error_flag=error_flag):
             reset_hint = resp.headers.get("X-RateLimit-Reset") or resp.headers.get("Retry-After")
-            retry_delay = _parse_rate_limit_delay_seconds(resp)
+            header_delay = _parse_rate_limit_delay_seconds(resp)
+            retry_delay = header_delay
             if retry_delay is None:
                 retry_delay = GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
 
             if attempt < max_attempts and retry_delay <= GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS:
-                await asyncio.sleep(retry_delay)
+                await asyncio.sleep(_jitter_sleep_seconds(retry_delay, respect_min=header_delay is not None))
                 attempt += 1
                 continue
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import os
+import random
 from typing import Any, Callable, Dict, Optional
 
 from starlette.requests import Request
@@ -14,6 +16,26 @@ def _parse_bool(value: Optional[str]) -> Optional[bool]:
     if value is None:
         return None
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool = True) -> float:
+    """Apply jitter to retry sleeps to reduce synchronized backoffs."""
+
+    try:
+        delay = float(delay_seconds)
+    except Exception:
+        return 0.0
+    if delay <= 0:
+        return 0.0
+
+    # Keep tests deterministic.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return delay
+
+    if respect_min:
+        return delay + random.uniform(0.0, min(0.25, delay * 0.25))
+
+    return random.uniform(0.0, delay)
 
 
 def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[str, Any]:
@@ -205,7 +227,7 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
                     retry_after = details.get("retry_after_seconds")
                     if isinstance(retry_after, (int, float)) and retry_after > 0:
                         delay = min(float(retry_after), 2.0)
-                await asyncio.sleep(delay)
+                await asyncio.sleep(_jitter_sleep_seconds(delay, respect_min=True))
                 continue
 
             return JSONResponse(structured, status_code=status_code, headers=headers)
