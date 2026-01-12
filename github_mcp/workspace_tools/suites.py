@@ -173,8 +173,9 @@ def _slim_terminal_command_payload(payload: Any) -> Dict[str, Any]:
         "timed_out": bool(res.get("timed_out")) if isinstance(res, dict) else False,
         "stdout_stats": {"chars": out_chars, "lines": out_lines},
         "stderr_stats": {"chars": err_chars, "lines": err_lines},
-        "stdout_tail": _tail_lines(stdout),
-        "stderr_tail": _tail_lines(stderr),
+        # Truncation is disabled. Provide full output in the step summary.
+        "stdout": stdout,
+        "stderr": stderr,
     }
 
 
@@ -539,16 +540,6 @@ async def run_quality_suite(
                         branch=branch,
                     )
 
-        if (
-            is_default
-            and step.get("status") == "failed"
-            and (step.get("missing_module") or step.get("command_not_found_hint"))
-        ):
-            step["status"] = "skipped"
-            summary = step.get("summary")
-            if isinstance(summary, dict):
-                summary["note"] = "Skipped default step because tool was not available"
-            step["default_skipped"] = True
         return step
 
     lint_step: Dict[str, Any]
@@ -602,15 +593,6 @@ async def run_quality_suite(
                     )
         steps.append(lint_step)
         controller_log.append(f"- Lint: {lint_step.get('status')}")
-
-        if lint_step.get("status") == "failed" and lint_step.get("missing_module"):
-            controller_log.append(
-                f"- Hint: missing module '{lint_step.get('missing_module')}'. Consider installing dependencies (installing_dependencies=true)."
-            )
-        if lint_step.get("status") == "failed" and lint_step.get("command_not_found_hint"):
-            controller_log.append(
-                "- Hint: lint command not found. Ensure the tool is installed (or update lint_command)."
-            )
 
         if fail_fast and lint_step.get("status") == "failed":
             # Back-compat: return the lint raw payload shape when possible.

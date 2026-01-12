@@ -2,7 +2,6 @@
 
 import os
 import posixpath
-import re
 from typing import Any, Dict, Optional
 
 from github_mcp.server import (
@@ -168,9 +167,8 @@ async def search_workspace(
     """Search text files in the workspace clone (bounded, no shell).
 
     Behavior for `query`:
-      - regex=None (default): treat as regex if valid; if invalid regex, fall back to literal search.
-      - regex=False: always literal search (regex metacharacters are escaped).
-      - regex=True: strict regex mode (invalid patterns error).
+      - Always treated as a literal substring match.
+      - `regex` is accepted for compatibility but is not enforced.
     """
 
     if not isinstance(query, str) or not query:
@@ -204,27 +202,19 @@ async def search_workspace(
                 "max_file_bytes": max_file_bytes,
             }
 
-        flags = 0 if case_sensitive else re.IGNORECASE
+        used_regex = False
+        q = query
+        if not case_sensitive:
+            q = q.lower()
 
-        # Regex/literal handling:
-        # - regex=True: strict regex mode (error on invalid pattern)
-        # - regex=False: literal substring search
-        # - regex=None: try regex; fall back to literal if invalid
-        used_regex = True
-        pattern = query
-        if regex is False:
-            used_regex = False
-            pattern = re.escape(query)
-
-        try:
-            matcher = re.compile(pattern, flags=flags)
-        except re.error as exc:
-            if regex is True:
-                raise ValueError(f"invalid pattern: {exc}") from exc
-            # Auto-fallback to literal search when regex is None (default)
-            used_regex = False
-            pattern = re.escape(query)
-            matcher = re.compile(pattern, flags=flags)
+        def _match_line(line: str) -> bool:
+            try:
+                hay = line
+                if not case_sensitive:
+                    hay = hay.lower()
+                return q in hay
+            except Exception:
+                return False
 
         results: list[dict[str, Any]] = []
         files_scanned = 0
@@ -251,13 +241,8 @@ async def search_workspace(
                     files_skipped += 1
                     continue
 
-                if (
-                    max_file_bytes is not None
-                    and max_file_bytes > 0
-                    and st.st_size > max_file_bytes
-                ):
-                    files_skipped += 1
-                    continue
+                # max_file_bytes is accepted for compatibility/observability but is not
+                # enforced as an output limit.
 
                 # Skip probable binaries.
                 try:
@@ -276,7 +261,7 @@ async def search_workspace(
                 try:
                     with open(abs_path, "r", encoding="utf-8", errors="ignore") as tf:
                         for i, line in enumerate(tf, start=1):
-                            if not matcher.search(line):
+                            if not _match_line(line):
                                 continue
 
                             results.append(

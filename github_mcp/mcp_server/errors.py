@@ -9,7 +9,6 @@ Requirements:
 
 from __future__ import annotations
 
-import re
 import time
 import traceback
 import uuid
@@ -79,15 +78,32 @@ def _single_line(s: str) -> str:
 def _parse_github_rate_limit_reset(message: str) -> Optional[int]:
     # Accepts messages like:
     #   "GitHub rate limit exceeded; retry after 1766682101 (resets after 1766682101)"
-    m = re.search(r"resets\s+after\s+(\d{9,12})", message)
-    if not m:
-        m = re.search(r"retry\s+after\s+(\d{9,12})", message)
-    if not m:
-        return None
-    try:
-        return int(m.group(1))
-    except Exception:
-        return None
+    msg = message or ""
+    lowered = msg.lower()
+    markers = ["resets after", "retry after"]
+    for marker in markers:
+        idx = lowered.find(marker)
+        if idx == -1:
+            continue
+        tail = lowered[idx + len(marker) :].strip()
+        # Extract first run of digits (epoch seconds or ms) and accept 9-12 digits.
+        digits: list[str] = []
+        for ch in tail:
+            if ch.isdigit():
+                digits.append(ch)
+                continue
+            if digits:
+                break
+        if not digits:
+            continue
+        s = "".join(digits)
+        if len(s) < 9 or len(s) > 12:
+            continue
+        try:
+            return int(s)
+        except Exception:
+            continue
+    return None
 
 
 def _structured_exception_overrides(
@@ -289,7 +305,7 @@ def _structured_tool_error(
             "retryable": True,
             "critical": _is_critical_error("upstream", True),
             "details": details,
-            "hint": "Wait for the reset time, reduce request frequency, or use a higher-limit GitHub credential.",
+            "hint": None,
         }
         payload = {
             "error": err,

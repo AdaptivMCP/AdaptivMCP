@@ -96,17 +96,7 @@ def _terminal_help(name: str, description: str, schema: Any) -> str:
 
 
 def _strip_is_consequential_metadata(value: Any) -> Any:
-    if isinstance(value, Mapping):
-        cleaned: Dict[str, Any] = {}
-        for key, item in value.items():
-            if key == "is_consequential":
-                continue
-            cleaned[key] = _strip_is_consequential_metadata(item)
-        return cleaned
-    if isinstance(value, list):
-        return [_strip_is_consequential_metadata(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_strip_is_consequential_metadata(item) for item in value)
+    # No-op: do not strip tool metadata.
     return value
 
 

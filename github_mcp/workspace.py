@@ -6,7 +6,6 @@ import asyncio
 import base64
 import random
 import os
-import re
 import shutil
 import shlex
 import sys
@@ -514,7 +513,35 @@ def _maybe_unescape_unified_diff(patch: str) -> str:
         return patch.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
 
 
-_HUNK_HEADER_WITH_RANGES_RE = re.compile(r"^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@")
+def _is_hunk_header_with_ranges(line: str) -> bool:
+    if not isinstance(line, str):
+        return False
+    s = line.strip()
+    if not (s.startswith("@@") and s.endswith("@@")):
+        return False
+    # Expected middle like: "@@ -a,b +c,d @@" (commas optional)
+    # Tokenize by whitespace.
+    parts = s.split()
+    if len(parts) < 4:
+        return False
+    if parts[0] != "@@" or parts[-1] != "@@":
+        return False
+
+    def _valid_range(tok: str, prefix: str) -> bool:
+        if not tok.startswith(prefix):
+            return False
+        rest = tok[len(prefix) :]
+        if not rest:
+            return False
+        # allow digits or digits, digits
+        nums = rest.split(",", 1)
+        if not nums[0].isdigit():
+            return False
+        if len(nums) == 2 and nums[1] and not nums[1].isdigit():
+            return False
+        return True
+
+    return _valid_range(parts[1], "-") and _valid_range(parts[2], "+")
 
 
 def _looks_like_rangeless_git_patch(patch: str) -> bool:
@@ -538,7 +565,7 @@ def _looks_like_rangeless_git_patch(patch: str) -> bool:
         if not in_diff:
             continue
         if line.startswith("@@"):
-            if _HUNK_HEADER_WITH_RANGES_RE.match(line):
+            if _is_hunk_header_with_ranges(line):
                 return False
             saw_rangeless_hunk = True
     return saw_rangeless_hunk
@@ -554,16 +581,33 @@ def _parse_rangeless_git_patch(patch: str) -> List[Dict[str, Any]]:
     blocks: List[Dict[str, Any]] = []
     idx = 0
 
-    diff_re = re.compile(r"^diff --git a/(.+?) b/(.+)$")
+    def _parse_diff_header(line: str) -> Optional[tuple[str, str]]:
+        if not line.startswith("diff --git "):
+            return None
+        rest = line[len("diff --git ") :]
+        if not rest.startswith("a/"):
+            return None
+        # split "a/<path> b/<path>"
+        try:
+            a_part, b_part = rest.split(" b/", 1)
+        except ValueError:
+            return None
+        if not a_part.startswith("a/"):
+            return None
+        a_path = a_part[len("a/") :]
+        b_path = b_part
+        if not a_path or not b_path:
+            return None
+        return a_path, b_path
 
     while idx < len(lines):
         line = lines[idx]
-        m = diff_re.match(line)
-        if not m:
+        parsed = _parse_diff_header(line)
+        if not parsed:
             idx += 1
             continue
 
-        a_path, b_path = m.group(1), m.group(2)
+        a_path, b_path = parsed
         move_to = b_path if a_path != b_path else None
         path = a_path
         idx += 1
