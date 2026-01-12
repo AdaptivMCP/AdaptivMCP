@@ -20,6 +20,24 @@ def test_repo_defaults_parses_valid_json(monkeypatch):
     assert utils.REPO_DEFAULTS_PARSE_ERROR is None
 
 
+def test_repo_defaults_accepts_string_shorthand(monkeypatch):
+    utils = _reload_utils(monkeypatch, '{"octo/repo":"develop"}')
+
+    assert utils.REPO_DEFAULTS == {"octo/repo": {"default_branch": "develop"}}
+    assert utils.REPO_DEFAULTS_PARSE_ERROR is None
+
+
+def test_repo_defaults_drops_invalid_entries(monkeypatch):
+    utils = _reload_utils(
+        monkeypatch,
+        '{"octo/repo": {"default_branch": "main"}, "bad": {"foo": "bar"}, "": "dev", "octo/other": {"default_branch": 123}}',
+    )
+
+    # Only the valid entry should remain.
+    assert utils.REPO_DEFAULTS == {"octo/repo": {"default_branch": "main"}}
+    assert utils.REPO_DEFAULTS_PARSE_ERROR is not None
+
+
 def test_repo_defaults_missing_env(monkeypatch):
     utils = _reload_utils(monkeypatch, None)
 

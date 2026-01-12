@@ -331,7 +331,39 @@ def _load_repo_defaults() -> tuple[Dict[str, Dict[str, str]], str | None]:
             {},
             "GITHUB_REPO_DEFAULTS must be a JSON object; defaults ignored.",
         )
-    return parsed, None
+
+    # Normalize and validate defaults. The server expects a mapping
+    # {"owner/repo": {"default_branch": "main"}}.
+    # For backwards compatibility, also accept {"owner/repo": "main"}.
+    normalized: Dict[str, Dict[str, str]] = {}
+    dropped: list[str] = []
+    for key, value in parsed.items():
+        if not isinstance(key, str) or not key.strip():
+            dropped.append(str(key))
+            continue
+
+        repo_key = key.strip()
+        default_branch: str | None = None
+        if isinstance(value, str):
+            default_branch = value.strip() or None
+        elif isinstance(value, dict):
+            branch_candidate = value.get("default_branch")
+            if isinstance(branch_candidate, str):
+                default_branch = branch_candidate.strip() or None
+
+        if not default_branch:
+            dropped.append(repo_key)
+            continue
+
+        normalized[repo_key] = {"default_branch": default_branch}
+
+    if dropped:
+        return (
+            normalized,
+            "GITHUB_REPO_DEFAULTS contained invalid entries; those defaults were ignored.",
+        )
+
+    return normalized, None
 
 
 REPO_DEFAULTS, REPO_DEFAULTS_PARSE_ERROR = _load_repo_defaults()
