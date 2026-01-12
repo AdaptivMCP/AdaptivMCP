@@ -157,7 +157,7 @@ Environment & diagnostics:
 - `validate_environment`, `get_server_config`, `get_rate_limit`, `get_user_login`, `ping_extensions`, `get_repo_dashboard`, `get_repo_dashboard_graphql`
 
 Tool introspection:
-- `list_tools`, `describe_tool`, `list_all_actions`, `validate_tool_args`
+- `list_tools`, `describe_tool`, `list_all_actions`
 
 Repositories & search:
 - `list_repositories`, `list_repositories_by_installation`, `get_repository`, `list_repository_tree`, `search`, `graphql_query`, `fetch_url`
@@ -311,26 +311,7 @@ Example:
 
 ## validate_tool_args
 
-Purpose: Return a tool's published input schema and run minimal shape checks on a candidate payload (object vs non-object). Adaptiv MCP does not enforce JSONSchema validation at runtime.
-
-Inputs:
-- `tool_name` (string | null): validate one tool.
-- `tool_names` (string[] | null): validate several tools (same `payload` applied to each).
-- `payload` (object | null): candidate arguments.
-
-Outputs: Minimal validation results and the tool's published schema (when available).
-
-Example:
-
-```json
-{
-  "tool":"validate_tool_args",
-  "args":{
-    "tool_name":"create_pull_request",
-    "payload":{"full_name":"OWNER/REPO","title":"Docs update","head":"docs/my-branch","base":"main"}
-  }
-}
-```
+This tool has been removed.
 
 ---
 

@@ -470,59 +470,6 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
     }
 
 
-async def validate_tool_args(
-    tool_name: Optional[str] = None,
-    payload: Optional[Mapping[str, Any]] = None,
-    tool_names: Optional[List[str]] = None,
-) -> Dict[str, Any]:
-    """Validate candidate payload(s) against tool input schemas without running them."""
-
-    if not tool_names:
-        if not tool_name:
-            raise ValueError("validate_tool_args requires 'tool_name' or 'tool_names'.")
-        return _validate_single_tool_args(tool_name, payload)
-
-    seen = set()
-    normalized: List[str] = []
-    for candidate in tool_names:
-        if not isinstance(candidate, str):
-            raise TypeError("tool_names must be a list of strings.")
-        if candidate not in seen:
-            seen.add(candidate)
-            normalized.append(candidate)
-
-    if tool_name and tool_name not in seen:
-        normalized.insert(0, tool_name)
-
-    if len(normalized) == 0:
-        raise ValueError("validate_tool_args requires at least one tool name.")
-    if len(normalized) > 10:
-        raise ValueError("validate_tool_args can validate at most 10 tools per call.")
-
-    results: List[Dict[str, Any]] = []
-    missing: List[str] = []
-
-    for name in normalized:
-        try:
-            result = _validate_single_tool_args(name, payload)
-        except ValueError as exc:
-            msg = str(exc)
-            if msg.startswith("Unknown tool ") and "Available tools:" in msg:
-                missing.append(name)
-                continue
-            raise
-        else:
-            results.append(result)
-
-    if not results:
-        raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
-
-    response: Dict[str, Any] = {"results": results}
-    first = results[0]
-    for key, value in first.items():
-        response.setdefault(key, value)
-
-    if missing:
-        response["missing_tools"] = sorted(set(missing))
-
-    return response
+async def validate_tool_args(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    """Deprecated. Schema validation has been removed."""
+    raise NotImplementedError("validate_tool_args has been removed")

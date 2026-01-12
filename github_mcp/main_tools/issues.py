@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, List, Literal, Optional
 
 from ._main import _main
@@ -180,15 +179,34 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
     branches_json = branches_resp.get("json") or []
     branch_names = [b.get("name") for b in branches_json if isinstance(b, dict)]
 
-    pattern = re.compile(rf"(?i)(?:^|[-_/]){re.escape(str(issue_number))}(?:$|[-_/])")
-    candidate_branches = [
-        name for name in branch_names if isinstance(name, str) and pattern.search(name)
-    ]
+    issue_str = str(issue_number)
+    seps = ("-", "_", "/")
+
+    def _tokenize(name: str) -> List[str]:
+        parts: List[str] = []
+        cur: List[str] = []
+        for ch in name:
+            if ch in seps:
+                if cur:
+                    parts.append("".join(cur))
+                    cur = []
+                continue
+            cur.append(ch)
+        if cur:
+            parts.append("".join(cur))
+        return parts
+
+    candidate_branches: List[str] = []
+    for name in branch_names:
+        if not isinstance(name, str):
+            continue
+        tokens = [t.lower() for t in _tokenize(name) if t]
+        if issue_str in tokens:
+            candidate_branches.append(name)
 
     prs_resp = await m.list_pull_requests(full_name, state="all")
     prs = prs_resp.get("json") or []
 
-    issue_str = str(issue_number)
     open_prs: List[Dict[str, Any]] = []
     closed_prs: List[Dict[str, Any]] = []
     for pr in prs:

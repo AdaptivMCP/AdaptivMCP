@@ -40,7 +40,6 @@ from github_mcp.mcp_server.context import (
 from github_mcp.mcp_server.errors import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
-    _format_tool_args_preview,
     _schema_from_signature,
     _normalize_input_schema,
     _normalize_tool_description,
@@ -270,7 +269,6 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "arg_keys": sorted(all_args.keys()),
         "arg_count": len(all_args),
-        "arg_preview": _format_tool_args_preview(all_args),
     }
 
 

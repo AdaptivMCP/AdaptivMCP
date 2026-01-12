@@ -237,15 +237,14 @@ async def get_workspace_changes_summary(
             change_type = "M"
             summary["modified"] += 1
 
-        if len(changes) < max_files:
-            changes.append(
-                {
-                    "status": change_type,
-                    "path": path,
-                    "src": src,
-                    "dst": dst,
-                }
-            )
+        changes.append(
+            {
+                "status": change_type,
+                "path": path,
+                "src": src,
+                "dst": dst,
+            }
+        )
 
     has_changes = any(summary.values())
     return {

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import re
 from typing import Any, Dict, Optional
 
 from .config import SANDBOX_CONTENT_BASE_URL
@@ -247,7 +246,18 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
     )
 
     def _is_windows_absolute_path(path: str) -> bool:
-        return bool(re.match(r"^[a-zA-Z]:[\\/].*", path) or path.startswith("\\\\"))
+        if not isinstance(path, str) or len(path) < 3:
+            return False
+        # UNC path
+        if path.startswith("\\\\"):
+            return True
+        # Drive letter + : + separator
+        letter = path[0]
+        if not ("A" <= letter <= "Z" or "a" <= letter <= "z"):
+            return False
+        if path[1] != ":":
+            return False
+        return path[2] in ("\\", "/")
 
     if content_url.startswith("sandbox:"):
         local_path = content_url[len("sandbox:") :]

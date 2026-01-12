@@ -1265,58 +1265,6 @@ async def describe_tool(
     return await _impl(name=name, names=names, include_parameters=include_parameters)
 
 
-def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
-    """Return a tool's published schema and run minimal shape checks.
-
-    The server does not enforce JSONSchema validation at runtime. This helper
-    exists for clients/UIs that want to fetch a schema and optionally run their
-    own validation.
-    """
-    from github_mcp.main_tools.introspection import _validate_single_tool_args as _impl
-
-    return _impl(tool_name=tool_name, args=args)
-
-
-@mcp_tool(write_action=False)
-async def validate_tool_args(
-    tool_name: Optional[str] = None,
-    payload: Optional[Mapping[str, Any]] = None,
-    tool_names: Optional[List[str]] = None,
-) -> Dict[str, Any]:
-    """Return tool schemas and run minimal shape checks on candidate payloads.
-
-    Adaptiv MCP publishes tool input schemas for introspection, but does not
-    enforce JSONSchema validation at runtime. This tool performs only minimal
-    checks (for example: payload must be an object) and returns the published
-    schema so clients can self-validate.
-
-    Args:
-        tool_name: Name of a single MCP tool to validate. This preserves the
-            legacy single-tool validate_tool_args API.
-        payload: Candidate arguments object to validate. In batch mode this
-            payload is applied to each tool in tool_names.
-        tool_names: Optional list of MCP tool names to validate in one call.
-            When provided, up to 10 tools are validated using the same payload.
-            Duplicates are ignored while preserving order.
-
-    Returns:
-        For single-tool calls, returns the legacy shape:
-
-            {"tool": ..., "valid": bool, "errors": [...], "schema": ...}
-
-        For batch calls (tool_names present), returns a dict with:
-
-            - results: list of per-tool validation results in call order
-            - missing_tools: optional list of unknown tool names
-
-        The first entry in results is mirrored at the top level (tool, valid,
-        errors, schema) for backwards compatibility with existing callers.
-    """
-    from github_mcp.main_tools.introspection import validate_tool_args as _impl
-
-    return await _impl(tool_name=tool_name, payload=payload, tool_names=tool_names)
-
-
 @mcp_tool(write_action=False)
 async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
     """Retrieve a specific workflow run including timing and conclusion."""

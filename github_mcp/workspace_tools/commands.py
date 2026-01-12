@@ -180,9 +180,6 @@ async def render_shell(
             else None,
             "result": cleaned_command.get("result") if isinstance(cleaned_command, dict) else None,
         }
-        if isinstance(cleaned_command, dict) and cleaned_command.get("dependency_hint"):
-            out["dependency_hint"] = cleaned_command["dependency_hint"]
-
         return out
     except Exception as exc:
         return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
@@ -265,34 +262,6 @@ async def terminal_command(
             "install": install_result,
             "result": result,
         }
-
-        if (
-            not installing_dependencies
-            and isinstance(result, dict)
-            and result.get("exit_code", 0) != 0
-        ):
-            stderr = result.get("stderr") or ""
-            stdout = result.get("stdout") or ""
-            combined = (stderr or "") + chr(10) + (stdout or "")
-            # Lightweight dependency hint (no regex).
-            marker = "ModuleNotFoundError: No module named "
-            pos = combined.find(marker)
-            if pos != -1:
-                tail = combined[pos + len(marker) :].strip()
-                missing = ""
-                if tail[:1] in ('"', "'"):
-                    q = tail[0]
-                    tail2 = tail[1:]
-                    endq = tail2.find(q)
-                    missing = tail2[:endq] if endq != -1 else tail2
-                else:
-                    missing = tail.split()[0] if tail else ""
-                missing = (missing or "").strip()
-                if missing:
-                    out["dependency_hint"] = {
-                        "missing_module": missing,
-                        "message": "Missing python dependency. Re-run terminal_command with installing_dependencies=true.",
-                    }
 
         return out
     except Exception as exc:

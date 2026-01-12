@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import inspect
-import json
-import re
 import types
 import typing
 from typing import Any, Dict, Mapping, Optional, get_args, get_origin
@@ -121,8 +119,18 @@ def _normalize_strings_for_logs(value: Any) -> Any:
 
 def _title_from_tool_name(name: str) -> str:
     # snake_case -> Title Case
-    parts = re.split(r"[_\-\s]+", name.strip())
-    parts = [p for p in parts if p]
+    stripped = name.strip()
+    parts = []
+    current = []
+    for ch in stripped:
+        if ch in ("_", "-", " ", "\t", "\r", "\n"):
+            if current:
+                parts.append("".join(current))
+                current = []
+            continue
+        current.append(ch)
+    if current:
+        parts.append("".join(current))
     if not parts:
         return "Tool"
     return " ".join(p[:1].upper() + p[1:] for p in parts)
@@ -330,24 +338,6 @@ def _normalize_and_truncate(s: str) -> str:
     return s
 
 
-def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
-    """Stable preview of tool args for logs.
-
-    Produces a single-line JSON preview with normalized whitespace.
-
-    This avoids repr()-style "\\n" escapes which can become "\\\\n" when the
-    preview is encoded again by downstream layers.
-    """
-    try:
-        jsonable_args = _jsonable(dict(args))
-        return json.dumps(jsonable_args, ensure_ascii=False)
-    except Exception:
-        try:
-            return str(args)
-        except Exception:
-            return "<unprintable_args>"
-
-
 # ---------------------------------------------------------------------------
 # Backwards-compatible helpers
 # ---------------------------------------------------------------------------
@@ -382,10 +372,8 @@ def _preflight_tool_args(
     """
     try:
         payload = {"tool": tool_name, "args": _jsonable(dict(args))}
-        if compact:
-            normalized = _normalize_strings_for_logs(payload)
-            raw = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
-            return {"tool": tool_name, "preview": _truncate_str(raw)}
+        # Compact mode no longer produces a string preview (which can be re-escaped
+        # by downstream layers). Return the JSONable object directly.
         return payload
     except Exception:
         return {"tool": tool_name, "preview": "<unprintable_args>"}
