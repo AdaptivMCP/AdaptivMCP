@@ -131,7 +131,7 @@ async def test_mcp_tool_preserves_scalar_returns_async(monkeypatch):
     assert await async_tool() == "ok"
 
 
-def test_mcp_tool_attaches_user_facing_fields_for_mapping_returns(monkeypatch):
+def test_mcp_tool_does_not_inject_ui_fields_for_mapping_returns(monkeypatch):
     class FakeMCP:
         def tool(self, *, name=None, description=None, meta=None, annotations=None):
             def decorator(fn):
@@ -147,7 +147,4 @@ def test_mcp_tool_attaches_user_facing_fields_for_mapping_returns(monkeypatch):
         return {"foo": "bar"}
 
     out = mapping_tool()
-    assert out["foo"] == "bar"
-    assert "controller_log" in out
-    assert "summary" in out
-    assert "user_message" in out
+    assert out == {"foo": "bar"}

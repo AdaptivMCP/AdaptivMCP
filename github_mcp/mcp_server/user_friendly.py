@@ -1,18 +1,6 @@
-"""Developer-friendly summaries for MCP tool results.
+"""Optional helpers to summarize tool payloads for humans.
 
-This module formats tool outputs for two audiences:
-1) Humans in ChatGPT (clear, compact summaries and next steps)
-2) Developers/automation (raw machine-readable payload remains intact)
-
-When a tool returns a mapping payload, we add:
-- controller_log: list[str] intended for UI display (compact)
-- summary: {title, bullets, next_steps}
-- user_message: multiline string for UIs that prefer a single message
-
-Policy:
-- Do not remove or mutate machine-readable fields.
-- Do not introduce secrets into UI fields.
-- Keep UI fields reasonably compact.
+These helpers are not applied automatically to tool results.
 """
 
 from __future__ import annotations
@@ -136,69 +124,4 @@ def build_success_summary(tool_name: str, result: Mapping[str, Any]) -> ToolSumm
     )
 
 
-def attach_user_facing_fields(tool_name: str, payload: Any) -> Any:
-    if not isinstance(payload, Mapping):
-        return payload
 
-    out: Dict[str, Any] = dict(payload)
-    summary = build_success_summary(tool_name, out)
-
-    # controller_log is the primary UI field.
-    out["controller_log"] = summary.bullets
-    out.setdefault("summary", summary.to_dict())
-
-    msg_lines = [summary.title] + [f"- {b}" for b in summary.bullets]
-    if summary.next_steps:
-        msg_lines.append("Next steps:")
-        msg_lines.extend([f"- {s}" for s in summary.next_steps])
-    out["user_message"] = "\n".join(msg_lines)
-
-    return out
-
-
-def attach_error_user_facing_fields(tool_name: str, payload: Any) -> Any:
-    if not isinstance(payload, Mapping):
-        return payload
-
-    out: Dict[str, Any] = dict(payload)
-    err = out.get("error") if isinstance(out.get("error"), Mapping) else {}
-
-    title = f"{tool_name}: failed"
-    message = _safe_str(err.get("message") or out.get("user_message") or "Unknown error").strip()
-    code = _safe_str(err.get("code") or "").strip()
-    category = _safe_str(err.get("category") or "").strip()
-    retryable = err.get("retryable")
-    critical = err.get("critical")
-    hint = _safe_str(err.get("hint") or "").strip()
-    incident = _safe_str(err.get("incident_id") or "").strip()
-
-    bullets = _clean_lines(_preview_text(message))
-    if code:
-        bullets.append(f"code: {_preview_text(code)}")
-    if category:
-        bullets.append(f"category: {_preview_text(category)}")
-    if retryable is not None:
-        bullets.append(f"retryable: {'yes' if retryable else 'no'}")
-    if critical is not None:
-        bullets.append(f"critical: {'yes' if critical else 'no'}")
-    if incident:
-        bullets.append(f"incident: {_preview_text(incident)}")
-
-    next_steps = _clean_lines(_preview_text(hint)) if hint else []
-
-    summary = ToolSummary(
-        title=title,
-        bullets=_bounded_lines(bullets),
-        next_steps=_bounded_lines(next_steps),
-    )
-
-    out["summary"] = summary.to_dict()
-    out["controller_log"] = summary.bullets
-
-    msg_lines = [title] + [f"- {b}" for b in summary.bullets]
-    if hint:
-        msg_lines.append("Next steps:")
-        msg_lines.append(f"- {_preview_text(hint)}")
-    out["user_message"] = "\n".join(msg_lines)
-
-    return out
