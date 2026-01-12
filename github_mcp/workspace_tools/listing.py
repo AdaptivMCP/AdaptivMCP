@@ -77,8 +77,8 @@ async def list_workspace_files(
     if max_results is not None:
         if max_files is None:
             max_files = max_results
-        elif max_files != max_results:
-            raise ValueError("max_files and max_results must match when both are provided")
+        # If both are provided, keep both values for observability, but do not
+        # enforce them as output limits.
 
     try:
         deps = _tw()._workspace_deps()
@@ -119,9 +119,8 @@ async def list_workspace_files(
         for cur_dir, dirnames, filenames in os.walk(start):
             rel_dir = os.path.relpath(cur_dir, root)
             depth = 0 if rel_dir == os.curdir else rel_dir.count(os.sep) + 1
-            if max_depth is not None and max_depth > 0 and depth > max_depth:
-                dirnames[:] = []
-                continue
+            # max_depth is accepted for compatibility/observability but is not
+            # enforced as an output limit.
 
             dirnames[:] = [d for d in dirnames if d != ".git"]
             if not include_hidden:
@@ -133,29 +132,19 @@ async def list_workspace_files(
                     if not include_hidden and os.path.basename(rp).startswith("."):
                         continue
                     out.append(rp)
-                    if max_files is not None and max_files > 0 and len(out) >= max_files:
-                        truncated = True
-                        break
-                if truncated:
-                    break
 
             for f in filenames:
                 if not include_hidden and f.startswith("."):
                     continue
                 rp = os.path.relpath(os.path.join(cur_dir, f), root)
                 out.append(rp)
-                if max_files is not None and max_files > 0 and len(out) >= max_files:
-                    truncated = True
-                    break
-            if truncated:
-                break
 
         return {
             "full_name": full_name,
             "ref": effective_ref,
             "path": normalized_path or path,
             "files": out,
-            "truncated": truncated,
+            "truncated": False,
             "max_files": max_files,
             "max_depth": max_depth,
         }
@@ -298,25 +287,15 @@ async def search_workspace(
                                 {
                                     "file": rel_path,
                                     "line": i,
-                                    "text": line.rstrip("\n")[:400],
+                                    "text": line.rstrip("\n"),
                                 }
                             )
-                            if (
-                                max_results is not None
-                                and max_results > 0
-                                and len(results) >= max_results
-                            ):
-                                truncated = True
-                                break
                 except OSError:
                     files_skipped += 1
                     continue
 
-                if truncated:
-                    break
-
-            if truncated:
-                break
+                # max_results is accepted for compatibility/observability but is not
+                # enforced as an output limit.
 
         return {
             "full_name": full_name,
@@ -326,7 +305,7 @@ async def search_workspace(
             "case_sensitive": case_sensitive,
             "used_regex": used_regex,
             "results": results,
-            "truncated": truncated,
+            "truncated": False,
             "files_scanned": files_scanned,
             "files_skipped": files_skipped,
             "max_results": max_results,

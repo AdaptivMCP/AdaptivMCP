@@ -46,7 +46,7 @@ def _tw():
     return tw
 
 
-def _safe_branch_slug(value: str, *, max_len: int = 200) -> str:
+def _safe_branch_slug(value: str) -> str:
     """Return a conservative branch slug derived from an arbitrary string."""
     cleaned = re.sub(r"[^A-Za-z0-9._/-]+", "-", (value or "").strip())
     cleaned = cleaned.strip("-/.")
@@ -54,10 +54,9 @@ def _safe_branch_slug(value: str, *, max_len: int = 200) -> str:
         cleaned = "branch"
     # Avoid invalid ref sequences.
     cleaned = cleaned.replace("..", "-").replace("@{", "-")
-    cleaned = cleaned[:max_len]
     # Ensure it starts with an allowed character.
     if not re.match(r"^[A-Za-z0-9]", cleaned):
-        cleaned = f"b-{cleaned}"[:max_len]
+        cleaned = f"b-{cleaned}"
     return cleaned
 
 

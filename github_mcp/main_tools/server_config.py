@@ -80,57 +80,6 @@ async def get_server_config() -> Dict[str, Any]:
     return config_payload
 
 
-def validate_json_string(raw: str) -> Dict[str, Any]:
-    """Validate a JSON string and report parse status and errors."""
-
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        context_window = 20
-        start = max(0, exc.pos - context_window)
-        end = min(len(raw), exc.pos + context_window)
-
-        line_start = raw.rfind("\n", 0, exc.pos) + 1
-        line_end = raw.find("\n", exc.pos)
-        if line_end == -1:
-            line_end = len(raw)
-
-        line_text = raw[line_start:line_end]
-        caret_prefix = " " * (exc.colno - 1)
-        pointer = f"{caret_prefix}^"
-
-        return {
-            "valid": False,
-            "error": exc.msg,
-            "line": exc.lineno,
-            "column": exc.colno,
-            "position": exc.pos,
-            "snippet": raw[start:end],
-            "line_snippet": line_text,
-            "pointer": pointer,
-        }
-
-    normalized = json.dumps(
-        parsed,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-
-    return {
-        "valid": True,
-        "parsed": parsed,
-        "parsed_type": type(parsed).__name__,
-        "normalized": normalized,
-        "normalized_pretty": json.dumps(
-            parsed,
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-        ),
-    }
-
-
 async def get_repo_defaults(full_name: Optional[str] = None) -> Dict[str, Any]:
     """Return default configuration for a GitHub repository."""
 

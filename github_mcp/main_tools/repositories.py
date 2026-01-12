@@ -114,8 +114,8 @@ async def create_repository(
 
         if "/" in name or name.endswith(".git"):
             raise ValueError("name must not contain '/' and must not end with '.git'")
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", name):
-            raise ValueError("name must match [A-Za-z0-9][A-Za-z0-9_.-]{0,99} (max 100 chars)")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
+            raise ValueError("name must match [A-Za-z0-9][A-Za-z0-9_.-]*")
 
         if visibility is not None and private is not None:
             inferred_private = visibility != "public"

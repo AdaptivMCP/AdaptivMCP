@@ -107,7 +107,7 @@ async def workspace_create_branch(
             raise ValueError("new_branch must be a non-empty string")
 
         # Conservative branch-name validation.
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", new_branch):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", new_branch):
             raise ValueError("new_branch contains invalid characters")
         if ".." in new_branch or "@{" in new_branch:
             raise ValueError("new_branch contains invalid ref sequence")
@@ -172,7 +172,7 @@ async def workspace_delete_branch(
         branch = branch.strip()
 
         # Conservative branch-name validation (mirror workspace_create_branch).
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", branch):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch):
             raise ValueError("branch contains invalid characters")
         if ".." in branch or "@{" in branch:
             raise ValueError("branch contains invalid ref sequence")
@@ -268,7 +268,7 @@ async def workspace_self_heal_branch(
         branch = branch.strip()
 
         # Conservative branch-name validation (mirror workspace_create_branch).
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", branch):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch):
             raise ValueError("branch contains invalid characters")
         if ".." in branch or "@{" in branch:
             raise ValueError("branch contains invalid ref sequence")
@@ -397,12 +397,10 @@ async def workspace_self_heal_branch(
         if new_branch:
             candidate = new_branch
         else:
-            candidate = (
-                f"heal/{_safe_branch_slug(branch, max_len=120)}-{_tw().uuid.uuid4().hex[:8]}"
-            )
+            candidate = f"heal/{_safe_branch_slug(branch)}-{_tw().uuid.uuid4().hex}"
         candidate = _safe_branch_slug(candidate)
 
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", candidate):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", candidate):
             raise ValueError("new_branch contains invalid characters")
         if ".." in candidate or "@{" in candidate:
             raise ValueError("new_branch contains invalid ref sequence")
@@ -470,7 +468,7 @@ async def workspace_self_heal_branch(
             snapshot = {
                 "head": (log_res.get("stdout", "") or "").strip() or None,
                 "clean": not (st_res.get("stdout", "") or "").strip(),
-                "top_level": entries[:50],
+                "top_level": entries,
                 "file_count": file_count,
             }
             step(

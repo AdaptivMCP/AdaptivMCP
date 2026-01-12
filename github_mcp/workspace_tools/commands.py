@@ -160,7 +160,6 @@ async def render_shell(
 
         cleaned_command = command_result
 
-        # Align with terminal_command's top-level shape so user_friendly summary
         # logic can report exit code/stdout/stderr for render_shell as well.
         out: Dict[str, Any] = {
             "full_name": full_name,

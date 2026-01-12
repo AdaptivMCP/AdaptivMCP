@@ -17,21 +17,8 @@ from typing import Any, Dict, Mapping, Optional, get_args, get_origin
 
 
 def _log_preview_max_chars() -> Optional[int]:
-    """Max characters allowed in log previews.
-
-    This is intentionally dynamic so tests (and operators) can adjust the limit
-    via environment variables without requiring a module reload.
-    """
-
-    # 0 (or negative) disables truncation.
-    raw = os.environ.get("GITHUB_MCP_LOG_PREVIEW_MAX_CHARS", "0")
-    try:
-        limit = int(str(raw).strip())
-    except Exception:
-        limit = 0
-    if limit <= 0:
-        return None
-    return max(128, limit)
+    # Truncation is disabled.
+    return None
 
 
 def _jsonable(value: Any) -> Any:
@@ -100,9 +87,8 @@ def _jsonable(value: Any) -> Any:
 
 
 def _single_line(s: str) -> str:
-    """Return a stable single-line string for logs."""
-    s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
-    return " ".join(s.split())
+    # Preserve content verbatim (no newline collapsing).
+    return s
 
 
 def _normalize_strings_for_logs(value: Any) -> Any:
@@ -119,7 +105,7 @@ def _normalize_strings_for_logs(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
-        return _single_line(value)
+        return value
     if isinstance(value, Mapping):
         out: Dict[str, Any] = {}
         for k, v in value.items():
@@ -338,17 +324,11 @@ def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, 
 
 
 def _truncate_str(s: str) -> str:
-    max_chars = _log_preview_max_chars()
-    if not max_chars:
-        return s
-    if len(s) <= max_chars:
-        return s
-    # Leave room for a single ellipsis.
-    return s[: max_chars - 1] + "…"
+    return s
 
 
 def _normalize_and_truncate(s: str) -> str:
-    return _truncate_str(_single_line(s))
+    return s
 
 
 def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
@@ -361,12 +341,10 @@ def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     """
     try:
         jsonable_args = _jsonable(dict(args))
-        normalized = _normalize_strings_for_logs(jsonable_args)
-        raw = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
-        return _truncate_str(raw)
+        return json.dumps(jsonable_args, ensure_ascii=False)
     except Exception:
         try:
-            return _normalize_and_truncate(str(args))
+            return str(args)
         except Exception:
             return "<unprintable_args>"
 

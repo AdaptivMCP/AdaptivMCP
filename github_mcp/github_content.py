@@ -233,7 +233,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         client = _external_client_instance()
         response = await client.get(rewritten_url)
         if response.status_code >= 400:
-            snippet = response.text[:500]
+            snippet = response.text
             raise GitHubAPIError(
                 f"Failed to fetch content from rewritten sandbox URL {rewritten_url}: "
                 f"{response.status_code}. Response: {snippet}"

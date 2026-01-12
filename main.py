@@ -593,17 +593,6 @@ async def get_server_config() -> Dict[str, Any]:
     return await _impl()
 
 
-@mcp_tool(
-    write_action=False,
-    description="Validate a JSON string and return a normalized form.",
-    tags=["meta", "json", "validation"],
-)
-def validate_json_string(raw: str) -> Dict[str, Any]:
-    from github_mcp.main_tools.server_config import validate_json_string as _impl
-
-    return _impl(raw=raw)
-
-
 @mcp_tool(write_action=False)
 async def get_repo_defaults(
     full_name: Optional[str] = None,
