@@ -100,6 +100,28 @@ async def _run_shell(
     if env is not None:
         proc_env.update(env)
 
+    # Ensure bundled ripgrep (vendor/rg) is available as `rg` in workspace shells.
+    # This avoids reliance on system packages in provider environments.
+    if cwd and os.name != "nt" and sys.platform.startswith("linux"):
+        try:
+            start_dir = os.path.realpath(cwd)
+            candidate = start_dir
+            for _ in range(10):
+                vendor_dir = os.path.join(candidate, "vendor", "rg", "linux-x64")
+                rg_path = os.path.join(vendor_dir, "rg")
+                if os.path.isfile(rg_path) and os.access(rg_path, os.X_OK):
+                    existing_path = proc_env.get("PATH", "")
+                    if vendor_dir not in existing_path.split(os.pathsep):
+                        proc_env["PATH"] = vendor_dir + os.pathsep + existing_path
+                    break
+                parent = os.path.dirname(candidate)
+                if parent == candidate:
+                    break
+                candidate = parent
+        except Exception:
+            # Never fail the tool due to PATH decoration.
+            pass
+
     start_new_session = os.name != "nt"
     proc = await asyncio.create_subprocess_shell(
         cmd,

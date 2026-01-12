@@ -28,6 +28,23 @@ class GitHubRateLimitError(GitHubAPIError):
     pass
 
 
+class RenderAuthError(Exception):
+    """Raised when Render API authentication is missing or invalid."""
+
+
+class RenderAPIError(Exception):
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        response_payload: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.response_payload = response_payload
+
+
 class WriteNotAuthorizedError(Exception):
     pass
 
@@ -61,6 +78,8 @@ __all__ = [
     "GitHubAPIError",
     "GitHubAuthError",
     "GitHubRateLimitError",
+    "RenderAPIError",
+    "RenderAuthError",
     "WriteNotAuthorizedError",
     "WriteApprovalRequiredError",
     "ToolPreflightValidationError",
