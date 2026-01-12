@@ -142,7 +142,9 @@ At minimum, set one GitHub authentication token so the server can access the API
 
 - GITHUB_MCP_CONTROLLER_REPO — controller repo full_name (owner/repo)
 - GITHUB_MCP_CONTROLLER_BRANCH — controller default branch
-- GITHUB_REPO_DEFAULTS — optional JSON object of repo defaults (to reduce API calls)
+- GITHUB_REPO_DEFAULTS — optional JSON object of repo defaults (to reduce API calls). Supported shapes:
+  - {"owner/repo": {"default_branch": "main"}}
+  - {"owner/repo": "main"} (shorthand)
 
 ### Write gate (auto-approval)
 
