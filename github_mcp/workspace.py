@@ -253,8 +253,6 @@ def _raise_git_auth_error(operation: str, stderr: str) -> None:
 
     # Best-effort context without dumping huge logs. Do not include any env content here.
     excerpt = " ".join((stderr or "").replace("\r", " ").replace("\n", " ").split())
-    if len(excerpt) > 240:
-        excerpt = excerpt[:240] + "..."
 
     raise GitHubAuthError(
         f"{operation} failed with an authentication-like git error while prompts are disabled. "
@@ -275,9 +273,6 @@ def _workspace_path(full_name: str, ref: str) -> str:
     workspace_dir = os.path.join(base_dir, repo_key, safe_ref)
 
     return workspace_dir
-
-
-_WORKSPACE_REF_MAX_LEN = 80
 
 
 def _sanitize_workspace_ref(ref: str) -> str:
@@ -307,14 +302,7 @@ def _sanitize_workspace_ref(ref: str) -> str:
     if not slug:
         return "main"
 
-    if len(slug) <= _WORKSPACE_REF_MAX_LEN:
-        return slug
-
-    digest = hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()[:12]
-    head = slug[: _WORKSPACE_REF_MAX_LEN - 13].rstrip("._-")
-    if not head:
-        head = "ref"
-    return f"{head}-{digest}"
+    return slug
 
 
 async def _clone_repo(

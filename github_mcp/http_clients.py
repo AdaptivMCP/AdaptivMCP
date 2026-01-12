@@ -648,7 +648,7 @@ async def _github_request(
         if error_flag:
             payload = _build_response_payload(resp, body=body)
             raise GitHubAPIError(
-                f"GitHub API error {resp.status_code}: {resp.text[:200]}",
+                f"GitHub API error {resp.status_code}: {resp.text}",
                 status_code=resp.status_code,
                 response_payload=payload,
             )

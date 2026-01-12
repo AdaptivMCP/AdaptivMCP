@@ -19,7 +19,7 @@ async def create_branch(
     if not branch:
         raise ValueError("branch must be non-empty")
 
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,199}", branch):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch):
         raise ValueError("branch contains invalid characters")
     if ".." in branch or "@{" in branch:
         raise ValueError("branch contains invalid ref sequence")

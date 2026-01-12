@@ -190,14 +190,11 @@ async def list_repository_tree(
     ref: str = "main",
     path_prefix: Optional[str] = None,
     recursive: bool = True,
-    max_entries: int = 1000,
+    max_entries: Optional[int] = None,
     include_blobs: bool = True,
     include_trees: bool = True,
 ) -> Dict[str, Any]:
     """List files and folders in a repository tree with optional filtering."""
-
-    if max_entries <= 0:
-        raise ValueError("max_entries must be a positive integer")
 
     snapshot = await _resolve_ref_snapshot(full_name, ref)
     requested_ref = snapshot["requested_ref"]
@@ -263,12 +260,12 @@ async def list_repository_tree(
             }
         )
 
-    truncated = len(filtered_entries) > max_entries
     return {
         "ref": requested_ref,
         "resolved_ref": resolved_ref,
         "tree_sha": payload.get("sha") or snapshot.get("tree_sha") or tree_ref,
         "entry_count": len(filtered_entries),
-        "truncated": truncated,
-        "entries": filtered_entries[:max_entries],
+        "truncated": False,
+        "max_entries": max_entries,
+        "entries": filtered_entries,
     }
