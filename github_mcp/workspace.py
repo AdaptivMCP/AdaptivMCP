@@ -544,6 +544,15 @@ def _is_hunk_header_with_ranges(line: str) -> bool:
     return _valid_range(parts[1], "-") and _valid_range(parts[2], "+")
 
 
+def _patch_has_hunk_header_with_ranges(patch: str) -> bool:
+    if not patch:
+        return False
+    for line in patch.splitlines():
+        if _is_hunk_header_with_ranges(line):
+            return True
+    return False
+
+
 def _looks_like_rangeless_git_patch(patch: str) -> bool:
     """Return True when a patch looks like a git diff but hunks omit ranges.
 
@@ -925,7 +934,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
             if (
                 "only garbage" in lowered
                 and "@@" in patch
-                and not _HUNK_HEADER_WITH_RANGES_RE.search(patch)
+                and not _patch_has_hunk_header_with_ranges(patch)
             ):
                 hint = (
                     " Patch hunks appear to use bare '@@' separators without line ranges. "
