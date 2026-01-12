@@ -111,7 +111,6 @@ async def create_repository(
             raise ValueError("name must be a non-empty string")
         name = name.strip()
 
-
         if visibility is not None and private is not None:
             inferred_private = visibility != "public"
             if inferred_private != private:

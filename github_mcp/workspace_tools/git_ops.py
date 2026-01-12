@@ -105,7 +105,6 @@ async def workspace_create_branch(
         if not isinstance(new_branch, str) or not new_branch:
             raise ValueError("new_branch must be a non-empty string")
 
-
         repo_dir = await deps["clone_repo"](full_name, ref=effective_base, preserve_changes=True)
 
         checkout = await deps["run_shell"](
@@ -160,7 +159,6 @@ async def workspace_delete_branch(
             raise ValueError("branch must be a non-empty string")
 
         branch = branch.strip()
-
 
         default_branch = _tw()._default_branch_for_repo(full_name)
         if branch == default_branch:
@@ -247,7 +245,6 @@ async def workspace_self_heal_branch(
         if not isinstance(branch, str) or not branch.strip():
             raise ValueError("branch must be a non-empty string")
         branch = branch.strip()
-
 
         effective_base = _tw()._effective_ref_for_repo(full_name, base_ref)
         steps: List[Dict[str, Any]] = []
