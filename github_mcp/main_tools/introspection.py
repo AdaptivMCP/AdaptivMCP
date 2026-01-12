@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional
 
-import jsonschema
-
 from github_mcp.mcp_server.context import get_write_allowed
 from github_mcp.mcp_server.schemas import _jsonable
 from ._main import _main
@@ -433,24 +431,21 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
     schema = getattr(func, "__mcp_input_schema__", None)
     if not isinstance(schema, Mapping):
         schema = m._normalize_input_schema(tool)
-    if schema is None:
-        raise ValueError(f"Tool {tool_name!r} does not expose an input schema")
 
-    normalized_args = {k: v for k, v in dict(args or {}).items() if k != "_meta"}
+    # Schema validation has been intentionally removed. This helper now performs
+    # only minimal shape checks (payload must be an object) and returns the
+    # tool's published schema (when available) so clients can self-validate.
+    errors: List[Dict[str, Any]] = []
 
-    validator_cls = jsonschema.validators.validator_for(schema)
-    validator_cls.check_schema(schema)
-    validator = validator_cls(schema)
-
-    errors = [
-        {
-            "message": error.message,
-            "path": list(error.absolute_path),
-            "validator": error.validator,
-            "validator_value": error.validator_value,
-        }
-        for error in sorted(validator.iter_errors(normalized_args), key=str)
-    ]
+    if args is not None and not isinstance(args, Mapping):
+        errors.append(
+            {
+                "message": "payload must be an object",
+                "path": [],
+                "validator": "type",
+                "validator_value": "object",
+            }
+        )
 
     base_write_action = bool(_tool_attr(tool, func, "write_action", False))
     write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
@@ -460,7 +455,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         "tool": tool_name,
         "valid": len(errors) == 0,
         "errors": errors,
-        "schema": _jsonable(schema),
+        "schema": _jsonable(schema) if isinstance(schema, Mapping) else None,
         "visibility": (
             getattr(func, "__mcp_visibility__", None)
             or getattr(tool, "__mcp_visibility__", None)

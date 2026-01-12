@@ -6,7 +6,8 @@ Behavioral contract:
 - WRITE_ALLOWED controls whether write tools are auto-approved by the client.
   When WRITE_ALLOWED is false, write tools remain available but clients should
   prompt for confirmation before execution.
-- Tool arguments are strictly validated against published input schemas.
+- Tools publish input schemas for introspection, but the server does NOT
+  enforce JSONSchema validation at runtime.
 - Tags are accepted for backwards compatibility but are not emitted to clients.
 - Dedupe helpers remain for compatibility and test coverage.
 
@@ -24,7 +25,6 @@ import functools
 import hashlib
 import inspect
 import json
-import os
 import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
@@ -72,21 +72,6 @@ def _usage_error(
     return exc
 
 
-def _parse_bool(value: Optional[str]) -> bool:
-    v = (value or "").strip().lower()
-    return v in ("1", "true", "t", "yes", "y", "on")
-
-
-def _strict_validation_enabled() -> bool:
-    """Return True when strict tool argument/schema validation is enabled.
-
-    Default is lenient. Set GITHUB_MCP_STRICT_VALIDATION=1 to re-enable strict
-    behavior (hard-fail on missing schemas or missing jsonschema).
-    """
-
-    return _parse_bool(os.environ.get("GITHUB_MCP_STRICT_VALIDATION", "0"))
-
-
 def _schema_hash(schema: Mapping[str, Any]) -> str:
     raw = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
@@ -120,69 +105,6 @@ def _apply_tool_metadata(
             meta = getattr(tool_obj, "meta", None)
             if isinstance(meta, dict):
                 meta.setdefault("input_schema", schema)
-
-
-def _require_jsonschema() -> Any:
-    """Return the jsonschema module, or None when unavailable in lenient mode."""
-
-    try:
-        import jsonschema  # type: ignore
-
-        return jsonschema
-    except Exception as exc:
-        if _strict_validation_enabled():
-            raise _usage_error(
-                "jsonschema is required for strict tool argument validation but is not installed.",
-                code="schema_validation_unavailable",
-                category="validation",
-                origin="schema",
-                retryable=False,
-                details={"missing_dependency": "jsonschema"},
-                hint="Add jsonschema to server dependencies and redeploy (pip install jsonschema).",
-            ) from exc
-        return None
-
-
-def _validate_tool_args_schema(
-    tool_name: str, schema: Mapping[str, Any], args: Mapping[str, Any]
-) -> None:
-    jsonschema = _require_jsonschema()
-
-    # Lenient mode: if jsonschema isn't installed, skip schema validation.
-    if jsonschema is None:
-        return
-
-    payload = dict(args)
-    payload.pop("self", None)
-
-    validator_cls = jsonschema.validators.validator_for(schema)
-    validator_cls.check_schema(schema)
-    validator = validator_cls(schema)
-
-    errors = sorted(validator.iter_errors(payload), key=str)
-    if not errors:
-        return
-
-    err_list: list[dict[str, Any]] = []
-    for err in errors[:50]:
-        err_list.append(
-            {
-                "message": getattr(err, "message", str(err)),
-                "path": list(getattr(err, "absolute_path", []) or []),
-                "validator": getattr(err, "validator", None),
-                "validator_value": getattr(err, "validator_value", None),
-            }
-        )
-
-    raise _usage_error(
-        f"Tool arguments did not match schema for {tool_name!r}.",
-        code="tool_args_invalid",
-        category="validation",
-        origin="schema",
-        retryable=False,
-        details={"tool": tool_name, "errors": err_list, "schema": dict(schema)},
-        hint="Fetch the tool schema (tool_spec/tool_schema or list_all_actions with include_parameters=true) and resend args exactly.",
-    )
 
 
 def _tool_write_allowed(write_action: bool) -> bool:
@@ -706,18 +628,6 @@ def mcp_tool(
                     all_args=all_args,
                 )
                 try:
-                    if schema_present:
-                        _validate_tool_args_schema(tool_name, schema, all_args)
-                    elif _strict_validation_enabled():
-                        raise _usage_error(
-                            f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
-                            code="schema_missing",
-                            category="validation",
-                            origin="schema",
-                            retryable=False,
-                            details={"tool": tool_name},
-                            hint="Ensure tool schema caching runs during registration.",
-                        )
                     if _should_enforce_write_gate(req):
                         _enforce_write_allowed(tool_name, write_action=write_action)
                 except Exception as exc:
@@ -853,18 +763,6 @@ def mcp_tool(
                 all_args=all_args,
             )
             try:
-                if schema_present:
-                    _validate_tool_args_schema(tool_name, schema, all_args)
-                elif _strict_validation_enabled():
-                    raise _usage_error(
-                        f"Tool schema missing for {tool_name!r}. Refusing to run to avoid schema guessing.",
-                        code="schema_missing",
-                        category="validation",
-                        origin="schema",
-                        retryable=False,
-                        details={"tool": tool_name},
-                        hint="Ensure tool schema caching runs during registration.",
-                    )
                 if _should_enforce_write_gate(req):
                     _enforce_write_allowed(tool_name, write_action=write_action)
             except Exception as exc:
