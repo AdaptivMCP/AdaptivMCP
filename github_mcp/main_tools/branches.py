@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, Optional
 
 from ._main import _main
@@ -18,15 +17,7 @@ async def create_branch(
     branch = branch.strip()
     if not branch:
         raise ValueError("branch must be non-empty")
-
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch):
-        raise ValueError("branch contains invalid characters")
-    if ".." in branch or "@{" in branch:
-        raise ValueError("branch contains invalid ref sequence")
-    if branch.startswith("/") or branch.endswith("/"):
-        raise ValueError("branch must not start or end with '/'")
-    if branch.endswith(".lock"):
-        raise ValueError("branch must not end with '.lock'")
+    # No pre-validation beyond non-empty; rely on Git/GitHub for validation.
 
     base_ref = m._effective_ref_for_repo(full_name, from_ref)
 
@@ -54,10 +45,7 @@ async def create_branch(
         )
 
     if base_sha is None:
-        if re.fullmatch(r"[0-9a-fA-F]{7,40}", from_ref.strip()):
-            base_sha = from_ref.strip()
-        else:
-            raise m.GitHubAPIError(f"Unable to resolve base ref {from_ref!r} in {full_name}")
+        base_sha = from_ref.strip()
 
     new_ref = f"refs/heads/{branch}"
     body = {"ref": new_ref, "sha": base_sha}

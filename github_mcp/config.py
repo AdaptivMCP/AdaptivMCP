@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import tempfile
 import time
 
@@ -55,8 +54,9 @@ HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", 200))
 
 MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 80))
 FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "80"))
-FILE_CACHE_MAX_ENTRIES = int(os.environ.get("FILE_CACHE_MAX_ENTRIES", "500"))
-FILE_CACHE_MAX_BYTES = int(os.environ.get("FILE_CACHE_MAX_BYTES", "52428800"))
+# File cache eviction caps. Set to 0 (or negative) to disable eviction.
+FILE_CACHE_MAX_ENTRIES = int(os.environ.get("FILE_CACHE_MAX_ENTRIES", "0"))
+FILE_CACHE_MAX_BYTES = int(os.environ.get("FILE_CACHE_MAX_BYTES", "0"))
 GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS = int(
     os.environ.get("GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS", "2")
 )
@@ -93,7 +93,18 @@ DEFAULT_GIT_IDENTITY = {
 def _slugify_app_name(value: str | None) -> str | None:
     if not value:
         return None
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
+    raw = value.strip().lower()
+    parts: list[str] = []
+    prev_dash = False
+    for ch in raw:
+        if ("a" <= ch <= "z") or ("0" <= ch <= "9"):
+            parts.append(ch)
+            prev_dash = False
+        else:
+            if not prev_dash:
+                parts.append("-")
+                prev_dash = True
+    slug = "".join(parts).strip("-")
     return slug or None
 
 

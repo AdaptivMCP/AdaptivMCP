@@ -1,102 +1,103 @@
+"""Handle parsing utilities.
+
+This module exists to normalize and interpret user-provided "handles" (e.g., #123,
+URLs, or other identifiers) used by higher-level tools.
+
+Design goals
+- No regex usage.
+- Minimal pre-validation. Prefer passing values through to downstream APIs.
+- Best-effort extraction of numeric issue/PR IDs from common formats.
+"""
+
 from __future__ import annotations
 
-import re
-from typing import Any, Dict, Optional
-
-from ._main import _main
+from dataclasses import dataclass
+from typing import Optional
 
 
-async def resolve_handle(full_name: str, handle: str) -> Dict[str, Any]:
-    """Resolve a lightweight GitHub handle into issue, PR, or branch details."""
+@dataclass(frozen=True)
+class ParsedHandle:
+    raw: str
+    number: Optional[int]
+    # The canonical "handle" form we surface in tool outputs.
+    canonical: str
 
-    m = _main()
 
-    original_handle = handle
-    handle = handle.strip()
-    lower_handle = handle.lower()
+def _strip(s: Optional[str]) -> str:
+    return (s or "").strip()
 
-    resolved_kinds: list[str] = []
-    issue: Optional[Dict[str, Any]] = None
-    pull_request: Optional[Dict[str, Any]] = None
-    branch: Optional[Dict[str, Any]] = None
 
-    def _append_kind(name: str, value: Optional[Dict[str, Any]]):
-        if value is not None:
-            resolved_kinds.append(name)
+def _extract_trailing_int(text: str) -> Optional[int]:
+    """Extract a trailing integer from the string without regex.
 
-    async def _try_fetch_issue(number: int) -> Optional[Dict[str, Any]]:
-        try:
-            result = await m.fetch_issue(full_name, number)
-        except Exception:
-            return None
-        normalize = getattr(m, "_normalize_issue_payload", None)
-        if callable(normalize):
-            return normalize(result)
-        return result if isinstance(result, dict) else None
+    Examples:
+      - "#123" -> 123
+      - ".../issues/123" -> 123
+      - "123" -> 123
+      - "abc" -> None
 
-    async def _try_fetch_pr(number: int) -> Optional[Dict[str, Any]]:
-        try:
-            result = await m.fetch_pr(full_name, number)
-        except Exception:
-            return None
-        normalize = getattr(m, "_normalize_pr_payload", None)
-        if callable(normalize):
-            return normalize(result)
-        return result if isinstance(result, dict) else None
+    This is intentionally permissive: it scans from the end and consumes digits
+    until the first non-digit.
+    """
 
-    async def _try_fetch_branch(name: str) -> Optional[Dict[str, Any]]:
-        try:
-            result = await m.get_branch_summary(full_name, name)
-        except Exception:
-            return None
-        normalize = getattr(m, "_normalize_branch_summary", None)
-        if callable(normalize):
-            return normalize(result)
-        return result if isinstance(result, dict) else None
+    if not text:
+        return None
 
-    def _parse_int(value: str) -> Optional[int]:
-        value = value.strip()
-        if not value.isdigit():
-            return None
-        try:
-            return int(value)
-        except ValueError:
-            return None
+    i = len(text) - 1
+    while i >= 0 and text[i].isdigit():
+        i -= 1
 
-    number: Optional[int] = None
+    # No trailing digits
+    if i == len(text) - 1:
+        return None
 
-    if lower_handle.startswith("issue:"):
-        number = _parse_int(handle.split(":", 1)[1])
-        if number is not None:
-            issue = await _try_fetch_issue(number)
-            _append_kind("issue", issue)
-    elif lower_handle.startswith("pr:"):
-        number = _parse_int(handle.split(":", 1)[1])
-        if number is not None:
-            pull_request = await _try_fetch_pr(number)
-            _append_kind("pull_request", pull_request)
-    else:
-        numeric_match = re.fullmatch(r"#?(\d+)", handle)
-        trailing_match = re.search(r"#(\d+)$", handle)
-        if numeric_match:
-            number = int(numeric_match.group(1))
-        elif trailing_match:
-            number = int(trailing_match.group(1))
+    digits = text[i + 1 :]
+    try:
+        return int(digits)
+    except Exception:
+        return None
 
-        if number is not None:
-            issue = await _try_fetch_issue(number)
-            _append_kind("issue", issue)
 
-            pull_request = await _try_fetch_pr(number)
-            _append_kind("pull_request", pull_request)
-        else:
-            branch = await _try_fetch_branch(handle)
-            _append_kind("branch", branch)
+def parse_handle(handle: Optional[str]) -> ParsedHandle:
+    """Parse a user-provided handle into a best-effort numeric ID.
 
-    return {
-        "input": {"full_name": full_name, "handle": original_handle},
-        "issue": issue,
-        "pull_request": pull_request,
-        "branch": branch,
-        "resolved_kinds": resolved_kinds,
-    }
+    Accepted examples (best-effort):
+      - "#123" / "123"
+      - "issue #123"
+      - "https://github.com/org/repo/issues/123"
+      - "https://github.com/org/repo/pull/123"
+
+    Notes:
+      - If a number cannot be derived, number=None.
+      - canonical is returned as "#<number>" when number is known, otherwise
+        the stripped raw input.
+    """
+
+    raw = _strip(handle)
+    if not raw:
+        return ParsedHandle(raw="", number=None, canonical="")
+
+    # Fast path: '#<digits>'
+    if raw.startswith("#"):
+        digits = raw[1:].strip()
+        if digits.isdigit():
+            n = int(digits)
+            return ParsedHandle(raw=raw, number=n, canonical=f"#{n}")
+
+    # Plain digits
+    if raw.isdigit():
+        n = int(raw)
+        return ParsedHandle(raw=raw, number=n, canonical=f"#{n}")
+
+    # URLs or other strings: attempt to extract trailing int
+    n = _extract_trailing_int(raw)
+    if n is not None:
+        return ParsedHandle(raw=raw, number=n, canonical=f"#{n}")
+
+    return ParsedHandle(raw=raw, number=None, canonical=raw)
+
+
+def coerce_issue_or_pr_number(handle: Optional[str]) -> Optional[int]:
+    """Return a numeric issue/PR number if it can be inferred, else None."""
+
+    return parse_handle(handle).number

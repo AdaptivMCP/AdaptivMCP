@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import re
+import string
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -483,7 +483,8 @@ async def trigger_and_wait_for_workflow(
     dispatched_at = datetime.now(timezone.utc)
 
     # Branch filter only works for branch names. For tags/SHAs we must query without the branch param.
-    is_sha = bool(re.fullmatch(r"[0-9a-fA-F]{40}", ref))
+    ref_str = (ref or "").strip()
+    is_sha = len(ref_str) == 40 and all(c in string.hexdigits for c in ref_str)
     branch_filter: Optional[str] = None if is_sha else ref
 
     poll_deadline = asyncio.get_running_loop().time() + 60
