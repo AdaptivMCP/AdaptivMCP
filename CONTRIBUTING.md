@@ -1,32 +1,44 @@
 # Contributing
 
-## Development setup
+This repository is the source code for the Adaptiv GitHub MCP server.
 
-- Install development dependencies: `make install-dev`
-- (Optional) Install git hooks: `make precommit`
+Principle: the Python code is the source of truth. Documentation and tests must follow the behavior of the code.
 
-Optional but recommended tooling:
-If you want to use the vendored `rg` without a path prefix, you can either:
-- Run `make rg-shell` to open a subshell with `rg` on PATH, or
-- Source `. ./scripts/rg-path.sh` in your current shell.
+## Local development
 
+1) Create a virtualenv and install dependencies
 
-- `ripgrep` (binary `rg`) for fast codebase search.
+- `make install-dev`
 
-If you are working in a constrained environment (for example, a hosted build environment that cannot install OS packages), this repository also vendors a prebuilt `rg` binary under `vendor/rg/` and provides Render helper scripts in `scripts/`.
+2) Run the server
 
-Installation examples:
+```bash
+uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+```
 
-- macOS (Homebrew): `brew install ripgrep`
-- Ubuntu/Debian: `sudo apt-get update && sudo apt-get install -y ripgrep`
+3) Run quality checks
 
-## Common tasks
+- `make format`
+- `make lint`
+- `make test`
 
-- Lint: `make lint`
-- Format: `make format`
-- Test: `make test`
+## Documentation workflow
 
-## Pull requests
+### Regenerating the tool catalog
 
-- Keep PRs small and focused.
-- Ensure lint and tests pass before requesting review.
+`Detailed_Tools.md` is generated from the running tool registry via `main.list_all_actions(...)`.
+
+If you add/remove tools or change tool signatures, regenerate it:
+
+```bash
+python scripts/generate_detailed_tools.py > Detailed_Tools.md
+```
+
+Then commit the updated file alongside code changes.
+
+### Updating usage and safety docs
+
+- `docs/usage.md` should describe stable behavior and configuration.
+- `docs/architecture_safety.md` should describe safety boundaries and guardrails.
+
+When there is any mismatch, update the docs to align with code.

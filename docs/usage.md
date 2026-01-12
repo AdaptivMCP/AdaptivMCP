@@ -3,7 +3,7 @@
 This document describes the current functionality, behavior, and recommended usage
 patterns for the GitHub MCP (Model Context Protocol) server.
 
-Deployment note: Adaptiv MCP is deployed **only via Render.com** in production. Local execution (for development) is still supported.
+Deployment note: Adaptiv MCP is deployed **only via Render.com** in production. Local execution (for development) is supported.
 
 ## Key concepts
 
@@ -44,7 +44,7 @@ Introspection and actions-compat listings expose:
 - Workspace-backed commands for local edits (via the persistent clone)
 - Health diagnostics via /healthz
 
-For a complete tool catalog, see `Detailed_Tools.md`.
+For a complete tool catalog and schemas, see `Detailed_Tools.md`.
 
 ## Runtime endpoints
 
@@ -78,22 +78,23 @@ Edits should be done in the persistent clone.
 Typical flow:
 
 1. Prepare or reuse the clone
-   - Use render_shell (or terminal_command) to enter the repo’s persistent clone.
-   - Run git status / git diff / tests locally against the clone.
+   - Use `ensure_workspace_clone` to create or re-use the persistent clone.
+   - Use `workspace_sync_status` to see whether the clone is ahead/behind or has uncommitted changes.
 
 2. Make changes in the clone
    - Edit files using workspace file tools or shell editors.
    - Validate changes using your normal commands (tests, linters, etc.).
 
 3. Commit and push from the clone
-   - git add
-   - git commit
-   - git push
+   - Use `terminal_command` (or the higher-level git helpers) to run:
+     - git add
+     - git commit
+     - git push
 
-4. Re-clone or refresh when you need a clean snapshot
+4. Refresh when you need a clean snapshot
    - The local clone does not automatically reflect the live GitHub state unless you fetch/pull or recreate the clone.
-   - If you need to ensure the clone exactly matches a branch’s remote state, re-clone the repo/ref (or delete and re-create the workspace clone).
-   - Use `workspace_sync_status` to see ahead/behind and uncommitted changes, then `workspace_sync_to_remote` to hard-reset the clone to the remote branch when needed.
+   - If you need to ensure the clone exactly matches a branch’s remote state, use `workspace_sync_to_remote`.
+   - As a last resort, re-clone with `ensure_workspace_clone(reset=true)`.
 
 ### GitHub API usage guidance
 
@@ -101,7 +102,7 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 
 - Use workspace tools for changes, then push.
 - After pushing, use GitHub API tools to confirm live state (PR status, CI, branch contents, etc.).
-- If you push and then need the clone to match GitHub exactly (for example, after a merge or force-update), re-clone/refresh the clone before continuing to work.
+- If you push and then need the clone to match GitHub exactly (for example, after a merge or force-update), re-sync/re-clone before continuing to work.
 
 ## Behavior notes
 
@@ -110,8 +111,9 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 - ChatGPT metadata: the server captures safe ChatGPT headers (conversation, assistant, project, org, session, user IDs) for correlation and includes them in request context/logging.
 - File caching: GitHub file contents may be cached in-memory to reduce repeated fetches.
 - Workspace file and listing tools reject paths that resolve outside the repository root.
-
-## Configuration
+- Workspace search is a bounded, non-shell search:
+  - `search_workspace.query` is always treated as a literal substring match (regex is accepted for compatibility but not enforced).
+  - `max_results` and `max_file_bytes` are accepted for compatibility/observability but are not enforced as output limits.
 
 ## Deployment (Render.com only)
 
@@ -122,6 +124,8 @@ Render-specific notes:
 - Render injects `PORT` automatically; ensure the process binds to `$PORT`.
 - Configure GitHub authentication via Render environment variables (for example `GITHUB_TOKEN`).
 - Use `/healthz` after deploy to verify token detection and baseline health.
+
+## Configuration
 
 ### Minimum required configuration
 
@@ -134,47 +138,54 @@ At minimum, set one GitHub authentication token so the server can access the API
 - GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, GITHUB_OAUTH_TOKEN — GitHub API token (first configured is used)
 - GITHUB_API_BASE — override GitHub API base URL
 
-### Git identity for workspace commits
+### Controller defaults
 
-Workspace-backed commit tools read Git identity from explicit MCP env vars first, then fall back
-to GitHub App metadata, and finally to placeholders. Configure the explicit variables to ensure
-commits are attributed correctly:
+- GITHUB_MCP_CONTROLLER_REPO — controller repo full_name (owner/repo)
+- GITHUB_MCP_CONTROLLER_BRANCH — controller default branch
+- GITHUB_REPO_DEFAULTS — optional JSON object of repo defaults (to reduce API calls)
 
-- GITHUB_MCP_GIT_AUTHOR_NAME
-- GITHUB_MCP_GIT_AUTHOR_EMAIL
-- GITHUB_MCP_GIT_COMMITTER_NAME
-- GITHUB_MCP_GIT_COMMITTER_EMAIL
+### Write gate (auto-approval)
 
-Optional GitHub App metadata used when explicit values are not provided:
+- GITHUB_MCP_WRITE_ALLOWED — when true, write tools are auto-approved; when false, clients should prompt
 
-- GITHUB_APP_NAME (used for the name)
-- GITHUB_APP_SLUG or GITHUB_APP_ID (used to build a bot login and noreply email)
+### Tool metadata verbosity
 
-Example:
-
-```bash
-export GITHUB_MCP_GIT_AUTHOR_NAME="Octo Bot"
-export GITHUB_MCP_GIT_AUTHOR_EMAIL="octo-bot[bot]@users.noreply.github.com"
-export GITHUB_MCP_GIT_COMMITTER_NAME="Octo Bot"
-export GITHUB_MCP_GIT_COMMITTER_EMAIL="octo-bot[bot]@users.noreply.github.com"
-```
+- GITHUB_MCP_COMPACT_METADATA_DEFAULT — default for whether tool listings return compact metadata
 
 ### Workspace settings
 
 - MCP_WORKSPACE_BASE_DIR — base directory for persistent workspace clones
+- MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS — timeout for applying diffs to the workspace clone
+
+### File cache (GitHub content fetches)
+
+- FILE_CACHE_MAX_ENTRIES — max number of cached file entries
+- FILE_CACHE_MAX_BYTES — max total bytes for cached file contents
 
 ### Concurrency and timeouts
 
 - HTTPX_TIMEOUT, HTTPX_MAX_CONNECTIONS, HTTPX_MAX_KEEPALIVE
 - MAX_CONCURRENCY, FETCH_FILES_CONCURRENCY
 
-### Output limits
+### GitHub rate limiting and search pacing
 
-- WRITE_DIFF_LOG_MAX_LINES
+- GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS
+- GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS
+- GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS
+- GITHUB_SEARCH_MIN_INTERVAL_SECONDS
+
+### Host filtering
+
+- ALLOWED_HOSTS — optional comma-separated list of allowed hosts (used for request host validation)
+
+### Sandbox/content rewrite (optional)
+
+- SANDBOX_CONTENT_BASE_URL — optional base URL used when rewriting content paths for sandboxed environments
 
 ### Logging
 
-- LOG_LEVEL, LOG_FORMAT, LOG_STYLE
+- LOG_LEVEL
+- LOG_FORMAT
 
 ## Local development
 
@@ -186,4 +197,4 @@ Once running, point your MCP client at /sse and verify /healthz is healthy.
 
 ## Troubleshooting tips
 
-- Use validate_environment to confirm GitHub tokens and defaults.
+- Use `validate_environment` to confirm GitHub tokens and defaults.
