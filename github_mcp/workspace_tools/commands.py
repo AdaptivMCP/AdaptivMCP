@@ -3,6 +3,47 @@ import os
 import shlex
 from typing import Any, Dict, Optional
 
+
+def _single_line(value: str) -> str:
+    """Collapse multi-line strings to a stable single-line representation.
+
+    This exists to avoid leaking literal newlines into tool payloads, which can
+    be double-escaped by downstream JSON layers and appear as "\\n" / "\\\\n".
+    """
+
+    value = (
+        value.replace("\r\n", " ")
+        .replace("\r", " ")
+        .replace("\n", " ")
+        .replace("\t", " ")
+    )
+    return " ".join(value.split()).strip()
+
+
+def _normalize_command_payload(
+    command: str,
+    command_lines: Optional[list[str]],
+) -> tuple[str, str, list[str]]:
+    """Normalize command inputs.
+
+    Returns:
+    - requested_command: the raw intended command (may contain newlines)
+    - command_preview: single-line command suitable for payloads/logs
+    - command_lines_out: list of command lines (never contains newlines)
+    """
+
+    requested = command
+    if command_lines is not None:
+        if not isinstance(command_lines, list) or any(
+            (not isinstance(line, str)) for line in command_lines
+        ):
+            raise ValueError("command_lines must be a list[str]")
+        requested = "\n".join(command_lines)
+
+    preview = _single_line(requested)
+    lines_out = requested.splitlines() if requested else []
+    return requested, preview, lines_out
+
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
@@ -67,6 +108,7 @@ async def render_shell(
     full_name: Optional[str] = None,
     *,
     command: str = "echo hello Render",
+    command_lines: Optional[list[str]] = None,
     create_branch: Optional[str] = None,
     push_new_branch: bool = True,
     ref: str = "main",
@@ -90,7 +132,13 @@ async def render_shell(
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 
     try:
-        requested_command = command
+        requested_command, command_preview, command_lines_out = _normalize_command_payload(
+            command,
+            command_lines,
+        )
+
+        # Execute the raw intended command (may contain newlines if provided via command_lines).
+        command = requested_command
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
 
         base_ref = _tw()._resolve_ref(ref, branch=branch)
@@ -150,7 +198,9 @@ async def render_shell(
             "workdir": cleaned_command.get("workdir")
             if isinstance(cleaned_command, dict)
             else None,
-            "command_input": requested_command,
+            # Keep payload fields newline-free to avoid downstream double-escaping.
+            "command_input": command_preview,
+            "command_lines": command_lines_out,
             "command": cleaned_command.get("command")
             if isinstance(cleaned_command, dict)
             else command,
@@ -172,6 +222,7 @@ async def terminal_command(
     full_name: Optional[str] = None,
     ref: str = "main",
     command: str = "pytest",
+    command_lines: Optional[list[str]] = None,
     timeout_seconds: float = 300,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
@@ -189,7 +240,10 @@ async def terminal_command(
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 
     env: Optional[Dict[str, str]] = None
-    requested_command = command
+    requested_command, command_preview, command_lines_out = _normalize_command_payload(
+        command,
+        command_lines,
+    )
     try:
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
@@ -223,6 +277,8 @@ async def terminal_command(
                         "Dependency installation failed: " + (stderr.strip() or stdout.strip())
                     )
 
+        # Execute the raw intended command (may contain newlines if provided via command_lines).
+        command = requested_command
         result = await deps["run_shell"](
             command,
             cwd=cwd,
@@ -231,8 +287,10 @@ async def terminal_command(
         )
         out: Dict[str, Any] = {
             "workdir": workdir,
-            "command_input": requested_command,
-            "command": command,
+            # Keep payload fields newline-free to avoid downstream double-escaping.
+            "command_input": command_preview,
+            "command_lines": command_lines_out,
+            "command": _single_line(command),
             "install": install_result,
             "result": result,
         }
