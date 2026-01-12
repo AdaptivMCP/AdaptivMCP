@@ -6,7 +6,6 @@ import asyncio
 import base64
 import random
 import os
-import hashlib
 import re
 import shutil
 import shlex

@@ -114,11 +114,8 @@ async def list_workspace_files(
             }
 
         out: list[str] = []
-        truncated = False
 
         for cur_dir, dirnames, filenames in os.walk(start):
-            rel_dir = os.path.relpath(cur_dir, root)
-            depth = 0 if rel_dir == os.curdir else rel_dir.count(os.sep) + 1
             # max_depth is accepted for compatibility/observability but is not
             # enforced as an output limit.
 
@@ -230,7 +227,6 @@ async def search_workspace(
             matcher = re.compile(pattern, flags=flags)
 
         results: list[dict[str, Any]] = []
-        truncated = False
         files_scanned = 0
         files_skipped = 0
 
