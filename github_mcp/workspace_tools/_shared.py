@@ -1,7 +1,6 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
 import shlex
-import re
 from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
@@ -48,14 +47,26 @@ def _tw():
 
 def _safe_branch_slug(value: str) -> str:
     """Return a conservative branch slug derived from an arbitrary string."""
-    cleaned = re.sub(r"[^A-Za-z0-9._/-]+", "-", (value or "").strip())
-    cleaned = cleaned.strip("-/.")
+    raw = (value or "").strip()
+    allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/-")
+    # Replace any disallowed runs with a single '-'.
+    parts: list[str] = []
+    prev_dash = False
+    for ch in raw:
+        if ch in allowed:
+            parts.append(ch)
+            prev_dash = False
+        else:
+            if not prev_dash:
+                parts.append("-")
+                prev_dash = True
+    cleaned = "".join(parts).strip("-/.")
     if not cleaned:
         cleaned = "branch"
     # Avoid invalid ref sequences.
     cleaned = cleaned.replace("..", "-").replace("@{", "-")
     # Ensure it starts with an allowed character.
-    if not re.match(r"^[A-Za-z0-9]", cleaned):
+    if cleaned and not cleaned[0].isalnum():
         cleaned = f"b-{cleaned}"
     return cleaned
 

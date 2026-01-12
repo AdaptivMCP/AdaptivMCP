@@ -293,11 +293,19 @@ def _sanitize_workspace_ref(ref: str) -> str:
     # Collapse separators and Windows drive markers into safe tokens.
     raw = raw.replace("/", "__").replace(":", "__")
 
-    # Allow a conservative set of characters; replace the rest.
-    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", raw)
-
-    # Collapse runs and trim punctuation.
-    slug = re.sub(r"_+", "_", slug).strip("._-")
+    # Allow a conservative set of characters; replace the rest (no regex).
+    allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+    parts: list[str] = []
+    prev_underscore = False
+    for ch in raw:
+        if ch in allowed:
+            parts.append(ch)
+            prev_underscore = False
+        else:
+            if not prev_underscore:
+                parts.append("_")
+                prev_underscore = True
+    slug = "".join(parts).strip("._-")
 
     if not slug:
         return "main"

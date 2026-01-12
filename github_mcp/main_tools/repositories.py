@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, List, Literal, Optional
 
 from ._main import _main
@@ -112,10 +111,6 @@ async def create_repository(
             raise ValueError("name must be a non-empty string")
         name = name.strip()
 
-        if "/" in name or name.endswith(".git"):
-            raise ValueError("name must not contain '/' and must not end with '.git'")
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
-            raise ValueError("name must match [A-Za-z0-9][A-Za-z0-9_.-]*")
 
         if visibility is not None and private is not None:
             inferred_private = visibility != "public"

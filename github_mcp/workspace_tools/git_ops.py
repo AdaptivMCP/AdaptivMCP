@@ -3,7 +3,6 @@ import os
 import shutil
 import time
 import shlex
-import re
 from typing import Any, Dict, List, Optional
 
 from github_mcp.exceptions import GitHubAPIError
@@ -106,15 +105,6 @@ async def workspace_create_branch(
         if not isinstance(new_branch, str) or not new_branch:
             raise ValueError("new_branch must be a non-empty string")
 
-        # Conservative branch-name validation.
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", new_branch):
-            raise ValueError("new_branch contains invalid characters")
-        if ".." in new_branch or "@{" in new_branch:
-            raise ValueError("new_branch contains invalid ref sequence")
-        if new_branch.startswith("/") or new_branch.endswith("/"):
-            raise ValueError("new_branch must not start or end with '/'")
-        if new_branch.endswith(".lock"):
-            raise ValueError("new_branch must not end with '.lock'")
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_base, preserve_changes=True)
 
@@ -171,15 +161,6 @@ async def workspace_delete_branch(
 
         branch = branch.strip()
 
-        # Conservative branch-name validation (mirror workspace_create_branch).
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch):
-            raise ValueError("branch contains invalid characters")
-        if ".." in branch or "@{" in branch:
-            raise ValueError("branch contains invalid ref sequence")
-        if branch.startswith("/") or branch.endswith("/"):
-            raise ValueError("branch must not start or end with '/'")
-        if branch.endswith(".lock"):
-            raise ValueError("branch must not end with '.lock'")
 
         default_branch = _tw()._default_branch_for_repo(full_name)
         if branch == default_branch:
@@ -267,15 +248,6 @@ async def workspace_self_heal_branch(
             raise ValueError("branch must be a non-empty string")
         branch = branch.strip()
 
-        # Conservative branch-name validation (mirror workspace_create_branch).
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch):
-            raise ValueError("branch contains invalid characters")
-        if ".." in branch or "@{" in branch:
-            raise ValueError("branch contains invalid ref sequence")
-        if branch.startswith("/") or branch.endswith("/"):
-            raise ValueError("branch must not start or end with '/'")
-        if branch.endswith(".lock"):
-            raise ValueError("branch must not end with '.lock'")
 
         effective_base = _tw()._effective_ref_for_repo(full_name, base_ref)
         steps: List[Dict[str, Any]] = []
@@ -400,8 +372,6 @@ async def workspace_self_heal_branch(
             candidate = f"heal/{_safe_branch_slug(branch)}-{_tw().uuid.uuid4().hex}"
         candidate = _safe_branch_slug(candidate)
 
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", candidate):
-            raise ValueError("new_branch contains invalid characters")
         if ".." in candidate or "@{" in candidate:
             raise ValueError("new_branch contains invalid ref sequence")
         if candidate.startswith("/") or candidate.endswith("/"):
