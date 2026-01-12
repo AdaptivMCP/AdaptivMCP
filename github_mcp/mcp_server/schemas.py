@@ -105,6 +105,35 @@ def _single_line(s: str) -> str:
     return " ".join(s.split())
 
 
+def _normalize_strings_for_logs(value: Any) -> Any:
+    """Normalize strings inside a JSONable structure for log/UI previews.
+
+    repr() encodes newlines as literal "\\n" sequences. If that preview is later
+    JSON-encoded (common in MCP transports and UIs), those backslashes get
+    escaped again, producing noisy "\\\\n" runs.
+
+    This helper collapses whitespace in strings before serialization so previews
+    remain single-line and stable.
+    """
+
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return _single_line(value)
+    if isinstance(value, Mapping):
+        out: Dict[str, Any] = {}
+        for k, v in value.items():
+            try:
+                key = k if isinstance(k, str) else str(k)
+            except Exception:
+                key = "<unprintable_key>"
+            out[key] = _normalize_strings_for_logs(v)
+        return out
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_normalize_strings_for_logs(v) for v in value]
+    return value
+
+
 def _title_from_tool_name(name: str) -> str:
     # snake_case -> Title Case
     parts = re.split(r"[_\-\s]+", name.strip())
@@ -325,12 +354,16 @@ def _normalize_and_truncate(s: str) -> str:
 def _format_tool_args_preview(args: Mapping[str, Any]) -> str:
     """Stable preview of tool args for logs.
 
-    Uses repr() to avoid heavy JSON escaping that can trigger false downstream blocks.
+    Produces a single-line JSON preview with normalized whitespace.
+
+    This avoids repr()-style "\\n" escapes which can become "\\\\n" when the
+    preview is encoded again by downstream layers.
     """
     try:
         jsonable_args = _jsonable(dict(args))
-        raw = repr(jsonable_args)
-        return _normalize_and_truncate(raw)
+        normalized = _normalize_strings_for_logs(jsonable_args)
+        raw = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
+        return _truncate_str(raw)
     except Exception:
         try:
             return _normalize_and_truncate(str(args))
@@ -373,10 +406,9 @@ def _preflight_tool_args(
     try:
         payload = {"tool": tool_name, "args": _jsonable(dict(args))}
         if compact:
-            # Use repr() rather than JSON to avoid heavy escaping and to preserve
-            # argument order.
-            raw = repr(payload)
-            return {"tool": tool_name, "preview": _normalize_and_truncate(raw)}
+            normalized = _normalize_strings_for_logs(payload)
+            raw = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
+            return {"tool": tool_name, "preview": _truncate_str(raw)}
         return payload
     except Exception:
         return {"tool": tool_name, "preview": "<unprintable_args>"}
