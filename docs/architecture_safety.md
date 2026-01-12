@@ -36,7 +36,7 @@ Client (ChatGPT / connector)
   - Sets up the FastMCP server as an ASGI app.
   - Implements middleware for:
     - **Cache-control**: no-store for dynamic endpoints; cacheable for static assets.
-    - **Request context**: extracts `session_id` and MCP JSON-RPC `id` for dedupe/logging.
+    - **Request context**: extracts `session_id`, MCP JSON-RPC `id`, and safe ChatGPT metadata headers for dedupe/logging.
   - Registers HTTP routes (health check, actions compat routes).
   - Exposes tool definitions and metadata through imported tool modules.
 
@@ -44,6 +44,7 @@ Client (ChatGPT / connector)
 
 - **`github_mcp/mcp_server/context.py`**
   - Initializes `FastMCP` instance and shared contextvars for request metadata.
+  - Captures safe ChatGPT metadata headers (conversation/assistant/org/project/session/user IDs) for log correlation.
   - Defines the write auto-approval flag (`WRITE_ALLOWED`) sourced from the `GITHUB_MCP_WRITE_ALLOWED` environment variable.
   - Wraps MCP session response to suppress SSE disconnect noise.
 
@@ -220,6 +221,7 @@ Canonical fields in the structured payload:
 - `schema_hash` and `schema_present`
 - `write_action`
 - `request` (minimal): `path`, `received_at`, `session_id`, `message_id`
+- `request.chatgpt` (when present): `conversation_id`, `assistant_id`, `organization_id`, `project_id`, `session_id`, `user_id`
 - On failures (when available): `incident_id`, `error_code`, `error_category`, `error_origin`, `error_retryable`, `error_critical`
 
 This separation ensures provider logs stay readable while retaining the complete debug context.

@@ -107,6 +107,7 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 
 - Workspace persistence: the persistent clone survives across tool calls until explicitly deleted or overwritten.
 - Request deduplication: the server uses request metadata (session + message) to avoid duplicate tool execution.
+- ChatGPT metadata: the server captures safe ChatGPT headers (conversation, assistant, project, org, session, user IDs) for correlation and includes them in request context/logging.
 - File caching: GitHub file contents may be cached in-memory to reduce repeated fetches.
 - Workspace file and listing tools reject paths that resolve outside the repository root.
 

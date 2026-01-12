@@ -55,10 +55,12 @@ from github_mcp.http_clients import (
 )
 from github_mcp.mcp_server.context import (
     REQUEST_ID,
+    REQUEST_CHATGPT_METADATA,
     REQUEST_MESSAGE_ID,
     REQUEST_PATH,
     REQUEST_RECEIVED_AT,
     REQUEST_SESSION_ID,
+    _extract_chatgpt_metadata,
 )
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
@@ -174,6 +176,7 @@ class _RequestContextMiddleware:
         REQUEST_SESSION_ID.set(None)
         REQUEST_MESSAGE_ID.set(None)
         REQUEST_ID.set(None)
+        REQUEST_CHATGPT_METADATA.set(None)
 
         # Correlation id: honor upstream X-Request-Id if provided, else generate.
         request_id: Optional[str] = None
@@ -190,6 +193,13 @@ class _RequestContextMiddleware:
         if not request_id:
             request_id = uuid.uuid4().hex
         REQUEST_ID.set(request_id)
+
+        try:
+            metadata = _extract_chatgpt_metadata(list(scope.get("headers") or []))
+            if metadata:
+                REQUEST_CHATGPT_METADATA.set(metadata)
+        except Exception:
+            pass
 
         started = False
 

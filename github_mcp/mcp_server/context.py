@@ -14,6 +14,9 @@ from github_mcp.utils import _extract_hostname, _render_external_hosts
 
 REQUEST_MESSAGE_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_MESSAGE_ID", default=None)
 REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID", default=None)
+REQUEST_CHATGPT_METADATA: ContextVar[Optional[dict[str, str]]] = ContextVar(
+    "REQUEST_CHATGPT_METADATA", default=None
+)
 
 # End-to-end correlation identifier for each HTTP request.
 # Derived from the incoming X-Request-Id header when present; otherwise generated server-side.
@@ -31,6 +34,7 @@ def get_request_context() -> dict[str, Any]:
         "received_at": REQUEST_RECEIVED_AT.get(),
         "session_id": REQUEST_SESSION_ID.get(),
         "message_id": REQUEST_MESSAGE_ID.get(),
+        "chatgpt": REQUEST_CHATGPT_METADATA.get(),
     }
 
 
@@ -45,9 +49,40 @@ __all__ = [
     "REQUEST_PATH",
     "REQUEST_RECEIVED_AT",
     "REQUEST_SESSION_ID",
+    "REQUEST_CHATGPT_METADATA",
     "get_request_context",
     "get_request_id",
 ]
+
+
+_CHATGPT_METADATA_HEADERS = {
+    "x-openai-assistant-id": "assistant_id",
+    "x-openai-conversation-id": "conversation_id",
+    "x-openai-organization-id": "organization_id",
+    "x-openai-project-id": "project_id",
+    "x-openai-session-id": "session_id",
+    "x-openai-user-id": "user_id",
+}
+
+
+def _extract_chatgpt_metadata(headers: list[tuple[bytes, bytes]]) -> dict[str, str]:
+    """Extract safe ChatGPT metadata headers for logging and request context."""
+
+    if not headers:
+        return {}
+
+    metadata: dict[str, str] = {}
+    for raw_key, raw_val in headers:
+        if not raw_key:
+            continue
+        key = raw_key.decode("utf-8", errors="ignore").strip().lower()
+        mapped = _CHATGPT_METADATA_HEADERS.get(key)
+        if not mapped:
+            continue
+        value = raw_val.decode("utf-8", errors="ignore").strip()
+        if value:
+            metadata[mapped] = value
+    return metadata
 
 
 # ------------------------------------------------------------------------------
