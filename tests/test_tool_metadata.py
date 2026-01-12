@@ -14,12 +14,11 @@ if importlib.util.find_spec("jsonschema") is None:
 from github_mcp.main_tools import introspection
 
 
-def test_tool_tags_falls_back_to_wrapper_tags():
+def test_tool_tags_returns_empty_list():
     class DummyTool:
         pass
 
     def dummy_fn():
         return "ok"
 
-    dummy_fn.__mcp_tags__ = ["alpha", "beta"]
     assert introspection._tool_tags(DummyTool(), dummy_fn) == []

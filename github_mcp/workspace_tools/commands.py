@@ -3,6 +3,12 @@ import os
 import shlex
 from typing import Any, Dict, Optional
 
+from github_mcp.exceptions import GitHubAPIError
+from github_mcp.server import (
+    _structured_tool_error,
+    mcp_tool,
+)
+
 
 def _normalize_command_payload(
     command: str,
@@ -17,7 +23,9 @@ def _normalize_command_payload(
 
     requested = command
     if command_lines is not None:
-        if not isinstance(command_lines, list) or any((not isinstance(line, str)) for line in command_lines):
+        if not isinstance(command_lines, list) or any(
+            (not isinstance(line, str)) for line in command_lines
+        ):
             raise ValueError("command_lines must be a list[str]")
         requested = chr(10).join(command_lines)
         lines_out = list(command_lines)
@@ -25,12 +33,6 @@ def _normalize_command_payload(
         lines_out = requested.splitlines() if requested else []
 
     return requested, lines_out
-
-from github_mcp.exceptions import GitHubAPIError
-from github_mcp.server import (
-    _structured_tool_error,
-    mcp_tool,
-)
 
 
 def _tw():
