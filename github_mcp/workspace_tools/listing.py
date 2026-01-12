@@ -236,7 +236,7 @@ async def search_workspace(
 
                 abs_path = os.path.join(cur_dir, fname)
                 try:
-                    st = os.stat(abs_path)
+                    os.stat(abs_path)
                 except OSError:
                     files_skipped += 1
                     continue

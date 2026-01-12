@@ -13,7 +13,7 @@ import time
 import uuid
 from urllib.parse import parse_qs
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal
 import httpx  # noqa: F401
 import anyio
 
