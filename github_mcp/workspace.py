@@ -305,6 +305,19 @@ def _sanitize_workspace_ref(ref: str) -> str:
                 parts.append("_")
                 prev_underscore = True
     slug = "".join(parts).strip("._-")
+    # Collapse underscore runs (no regex).
+    if slug:
+        collapsed: list[str] = []
+        prev_us = False
+        for ch in slug:
+            if ch == "_":
+                if not prev_us:
+                    collapsed.append(ch)
+                prev_us = True
+            else:
+                collapsed.append(ch)
+                prev_us = False
+        slug = "".join(collapsed).strip("._-")
 
     if not slug:
         return "main"
