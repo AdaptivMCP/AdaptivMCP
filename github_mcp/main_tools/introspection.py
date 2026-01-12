@@ -238,18 +238,11 @@ def list_all_actions(
             ),
         }
 
-        operation = _tool_attr(tool, func, "operation", None)
-        risk_level = _tool_attr(tool, func, "risk_level", None)
-        if operation is not None:
-            tool_info["operation"] = operation
-        if risk_level is not None:
-            tool_info["risk_level"] = risk_level
-
         if description:
             tool_info["description"] = description
 
-        if not compact_mode:
-            tool_info["tags"] = sorted(_tool_tags(tool, func))
+        # Do not surface tags or risk metadata. Tool classification is expressed
+        # exclusively via write_action plus the approval gating fields.
 
         if include_parameters:
             schema = getattr(func, "__mcp_input_schema__", None)
@@ -349,8 +342,6 @@ async def list_tools(
                 "write_auto_approved": bool(tool_write_auto_approved),
                 "approval_required": bool(tool_approval_required),
                 "write_enabled": bool(entry.get("write_enabled", True)),
-                "operation": entry.get("operation"),
-                "risk_level": entry.get("risk_level"),
                 "visibility": entry.get("visibility"),
             }
         )

@@ -53,8 +53,7 @@ def test_register_with_fastmcp_requires_fn_positional(monkeypatch):
     assert tool_obj["name"] == "positional_tool"
 
 
-def test_register_with_fastmcp_passes_tags(monkeypatch):
-    monkeypatch.setenv("EMIT_TOOL_OBJECT_METADATA", "1")
+def test_register_with_fastmcp_does_not_emit_tags(monkeypatch):
     captured = {}
 
     class FakeMCP:
@@ -91,7 +90,7 @@ def test_register_with_fastmcp_passes_tags(monkeypatch):
         description="tagged description",
         tags=["alpha", "beta"],
     )
-    assert captured["tags"] == ["alpha", "beta"]
+    assert captured["tags"] is None
 
 
 def test_mcp_tool_preserves_scalar_returns_sync(monkeypatch):

@@ -7,7 +7,7 @@ Behavioral contract:
   When WRITE_ALLOWED is false, write tools remain available but clients should
   prompt for confirmation before execution.
 - Tool arguments are strictly validated against published input schemas.
-- Tags metadata is captured for introspection.
+- Tags are accepted for backwards compatibility but are not emitted to clients.
 - Dedupe helpers remain for compatibility and test coverage.
 
 Dedupe contract:
@@ -95,19 +95,18 @@ def _schema_hash(schema: Mapping[str, Any]) -> str:
 def _apply_tool_metadata(
     tool_obj: Any,
     schema: Mapping[str, Any],
-    visibility: str,
-    tags: Optional[Iterable[str]] = None,
+    visibility: str,  # noqa: ARG001
+    tags: Optional[Iterable[str]] = None,  # noqa: ARG001
     *,
-    write_action: Optional[bool] = None,
-    write_allowed: Optional[bool] = None,
+    write_action: Optional[bool] = None,  # noqa: ARG001
+    write_allowed: Optional[bool] = None,  # noqa: ARG001
 ) -> None:
-    """Attach only safe, non-tagging metadata onto the registered tool object.
+    """Attach only safe metadata onto the registered tool object.
 
-    Some MCP clients interpret tool-object metadata (tags/meta/write_action) as
-    execution directives. That can lead to tools being mis-tagged or
-    misclassified. To avoid this, we keep classification and policy attributes
-    on the Python wrapper ("__mcp_*" attributes) and attach only the input
-    schema onto the tool object when needed for FastMCP.
+    Some MCP clients interpret tool-object metadata as execution directives.
+    To avoid misclassification, we keep policy and classification on the Python
+    wrapper ("__mcp_*" attributes) and attach only the input schema onto the
+    tool object when needed for FastMCP.
     """
 
     if tool_obj is None:
@@ -572,7 +571,7 @@ def _register_with_fastmcp(
     *,
     name: str,
     description: Optional[str],
-    tags: Optional[Iterable[str]] = None,
+    tags: Optional[Iterable[str]] = None,  # noqa: ARG001
 ) -> Any:
     # FastMCP is an optional dependency. In production, when it is not installed,
     # `mcp` is typically unset/None and registration should be skipped. Unit tests
@@ -597,10 +596,8 @@ def _register_with_fastmcp(
 
     # Build kwargs in descending compatibility order.
     #
-    # IMPORTANT: suppress tags by default. Some downstream clients treat tool
-    # tags as policy/execution hints and can mis-tag tools. We still pass an
-    # empty meta dict when supported (safe and backwards compatible).
-    emit_tool_object_metadata = _parse_bool(os.environ.get("EMIT_TOOL_OBJECT_METADATA", "0"))
+    # IMPORTANT: do not emit tags. Some downstream clients treat tags as
+    # policy/execution hints and may misclassify tools.
 
     base: dict[str, Any] = {"name": name, "description": description}
     base_with_meta: dict[str, Any] = {
@@ -609,20 +606,6 @@ def _register_with_fastmcp(
         "meta": {},
     }
     attempts = [base_with_meta, base, {"name": name}]
-
-    if emit_tool_object_metadata:
-        normalized_tags = list(tags or [])
-        attempts = [
-            {
-                "name": name,
-                "description": description,
-                "tags": normalized_tags,
-                "meta": {},
-            },
-            base_with_meta,
-            base,
-            {"name": name},
-        ]
 
     last_exc: Optional[Exception] = None
     tool_obj: Any = None
@@ -682,7 +665,7 @@ def mcp_tool(
     *,
     name: str | None = None,
     write_action: bool,
-    tags: Optional[Iterable[str]] = None,
+    tags: Optional[Iterable[str]] = None,  # noqa: ARG001
     description: str | None = None,
     visibility: str = "public",  # accepted, ignored
     **_ignored: Any,
@@ -698,7 +681,7 @@ def mcp_tool(
         normalized_description = description or _normalize_tool_description(
             func, signature, llm_level=llm_level
         )
-        normalized_tags = [str(tag) for tag in tags or [] if str(tag).strip()]
+        # Tags are accepted for backwards compatibility but intentionally ignored.
 
         if asyncio.iscoroutinefunction(func):
 
@@ -820,7 +803,6 @@ def mcp_tool(
                 wrapper,
                 name=tool_name,
                 description=normalized_description,
-                tags=normalized_tags,
             )
 
             # Ensure every registered tool has a stable docstring surface.
@@ -840,12 +822,10 @@ def mcp_tool(
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_write_action__ = bool(write_action)
             wrapper.__mcp_visibility__ = visibility
-            wrapper.__mcp_tags__ = normalized_tags
             _apply_tool_metadata(
                 wrapper.__mcp_tool__,
                 schema,
                 visibility,
-                normalized_tags,
                 write_action=bool(write_action),
                 write_allowed=_tool_write_allowed(write_action),
             )
@@ -966,7 +946,6 @@ def mcp_tool(
             wrapper,
             name=tool_name,
             description=normalized_description,
-            tags=normalized_tags,
         )
 
         # Ensure every registered tool has a stable docstring surface.
@@ -984,12 +963,10 @@ def mcp_tool(
         wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
         wrapper.__mcp_write_action__ = bool(write_action)
         wrapper.__mcp_visibility__ = visibility
-        wrapper.__mcp_tags__ = normalized_tags
         _apply_tool_metadata(
             wrapper.__mcp_tool__,
             schema,
             visibility,
-            normalized_tags,
             write_action=bool(write_action),
             write_allowed=_tool_write_allowed(write_action),
         )
@@ -1039,7 +1016,6 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 or getattr(tool_obj, "__mcp_visibility__", None)
                 or "public"
             )
-            tags = getattr(func, "__mcp_tags__", None) or getattr(tool_obj, "tags", None) or []
 
             schema = getattr(func, "__mcp_input_schema__", None)
             if not isinstance(schema, Mapping):
@@ -1052,7 +1028,6 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 tool_obj,
                 schema,
                 visibility,
-                tags,
                 write_action=base_write,
                 write_allowed=allowed,
             )

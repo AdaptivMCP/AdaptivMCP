@@ -122,6 +122,3 @@ def build_success_summary(tool_name: str, result: Mapping[str, Any]) -> ToolSumm
         bullets=_bounded_lines(bullets),
         next_steps=_bounded_lines(next_steps),
     )
-
-
-
