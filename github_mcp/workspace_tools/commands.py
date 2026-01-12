@@ -4,45 +4,27 @@ import shlex
 from typing import Any, Dict, Optional
 
 
-def _single_line(value: str) -> str:
-    """Collapse multi-line strings to a stable single-line representation.
-
-    This exists to avoid leaking literal newlines into tool payloads, which can
-    be double-escaped by downstream JSON layers and appear as "\\n" / "\\\\n".
-    """
-
-    value = (
-        value.replace("\r\n", " ")
-        .replace("\r", " ")
-        .replace("\n", " ")
-        .replace("\t", " ")
-    )
-    return " ".join(value.split()).strip()
-
-
 def _normalize_command_payload(
     command: str,
     command_lines: Optional[list[str]],
-) -> tuple[str, str, list[str]]:
+) -> tuple[str, list[str]]:
     """Normalize command inputs.
 
     Returns:
     - requested_command: the raw intended command (may contain newlines)
-    - command_preview: single-line command suitable for payloads/logs
     - command_lines_out: list of command lines (never contains newlines)
     """
 
     requested = command
     if command_lines is not None:
-        if not isinstance(command_lines, list) or any(
-            (not isinstance(line, str)) for line in command_lines
-        ):
+        if not isinstance(command_lines, list) or any((not isinstance(line, str)) for line in command_lines):
             raise ValueError("command_lines must be a list[str]")
-        requested = "\n".join(command_lines)
+        requested = chr(10).join(command_lines)
+        lines_out = list(command_lines)
+    else:
+        lines_out = requested.splitlines() if requested else []
 
-    preview = _single_line(requested)
-    lines_out = requested.splitlines() if requested else []
-    return requested, preview, lines_out
+    return requested, lines_out
 
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
@@ -55,14 +37,6 @@ def _tw():
     from github_mcp import tools_workspace as tw
 
     return tw
-
-
-def _strip_ui_fields(payload: object) -> object:
-    if not isinstance(payload, dict):
-        return payload
-    for k in ("controller_log", "summary", "user_message"):
-        payload.pop(k, None)
-    return payload
 
 
 def _normalize_timeout_seconds(value: object, default: int) -> int:
@@ -132,7 +106,7 @@ async def render_shell(
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 
     try:
-        requested_command, command_preview, command_lines_out = _normalize_command_payload(
+        requested_command, command_lines_out = _normalize_command_payload(
             command,
             command_lines,
         )
@@ -182,11 +156,7 @@ async def render_shell(
             branch=effective_branch_arg,
         )
 
-        # terminal_command is itself a tool surface and may contain UI-facing
-        # fields (controller_log/summary/user_message). render_shell should
-        # return a stable machine-readable shape so the outer decorator can
-        # build summaries consistently.
-        cleaned_command = _strip_ui_fields(command_result)
+        cleaned_command = command_result
 
         # Align with terminal_command's top-level shape so user_friendly summary
         # logic can report exit code/stdout/stderr for render_shell as well.
@@ -199,7 +169,7 @@ async def render_shell(
             if isinstance(cleaned_command, dict)
             else None,
             # Keep payload fields newline-free to avoid downstream double-escaping.
-            "command_input": command_preview,
+            "command_input": command,
             "command_lines": command_lines_out,
             "command": cleaned_command.get("command")
             if isinstance(cleaned_command, dict)
@@ -240,7 +210,7 @@ async def terminal_command(
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 
     env: Optional[Dict[str, str]] = None
-    requested_command, command_preview, command_lines_out = _normalize_command_payload(
+    requested_command, command_lines_out = _normalize_command_payload(
         command,
         command_lines,
     )
@@ -286,11 +256,11 @@ async def terminal_command(
             env=env,
         )
         out: Dict[str, Any] = {
-            "workdir": workdir,
+            "workdir": cwd,
             # Keep payload fields newline-free to avoid downstream double-escaping.
-            "command_input": command_preview,
+            "command_input": command,
             "command_lines": command_lines_out,
-            "command": _single_line(command),
+            "command": command,
             "install": install_result,
             "result": result,
         }
@@ -302,7 +272,7 @@ async def terminal_command(
         ):
             stderr = result.get("stderr") or ""
             stdout = result.get("stdout") or ""
-            combined = f"{stderr}\n{stdout}"
+            combined = (stderr or "") + chr(10) + (stdout or "")
             # Lightweight dependency hint (no regex).
             marker = "ModuleNotFoundError: No module named "
             pos = combined.find(marker)
@@ -322,7 +292,6 @@ async def terminal_command(
                         "missing_module": missing,
                         "message": "Missing python dependency. Re-run terminal_command with installing_dependencies=true.",
                     }
-        out = _strip_ui_fields(out)
 
         return out
     except Exception as exc:

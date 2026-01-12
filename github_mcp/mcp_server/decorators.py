@@ -38,10 +38,6 @@ from github_mcp.mcp_server.context import (
     FASTMCP_AVAILABLE,
 )
 from github_mcp.mcp_server.errors import _structured_tool_error
-from github_mcp.mcp_server.user_friendly import (
-    attach_error_user_facing_fields,
-    attach_user_facing_fields,
-)
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 from github_mcp.mcp_server.schemas import (
     _format_tool_args_preview,
@@ -508,7 +504,6 @@ def _emit_tool_error(
         path=None,
         request=dict(req) if isinstance(req, Mapping) else None,
     )
-    structured_error = attach_error_user_facing_fields(tool_name, structured_error)
 
     # Add correlation fields (non-breaking additions) so callers/logs can connect
     # a user-visible error to provider logs.
@@ -525,56 +520,6 @@ def _emit_tool_error(
     )
 
     return structured_error
-
-
-def _coerce_tool_exception(
-    tool_name: str, exc: BaseException, structured: Mapping[str, Any]
-) -> BaseException:
-    """Coerce arbitrary exceptions into a UsageError with a concise, user-facing message.
-
-    Users see a stable code/category and a correlatable incident_id, while detailed
-    diagnostics remain in provider logs.
-    """
-    if isinstance(exc, UsageError) and getattr(exc, "code", None):
-        return exc
-
-    err = structured.get("error") if isinstance(structured.get("error"), Mapping) else {}
-    incident_id = str(err.get("incident_id") or "").strip()
-    code = str(err.get("code") or "unhandled_exception")
-    category = str(err.get("category") or "runtime")
-    origin = str(err.get("origin") or "exception")
-    retryable = bool(err.get("retryable", False))
-    hint = err.get("hint")
-    msg = str(err.get("message") or str(exc) or exc.__class__.__name__).strip()
-    msg = " ".join(msg.replace("\n", " ").replace("\r", " ").split())
-    user_msg = f"{tool_name} failed: {msg}"
-    if incident_id:
-        user_msg += f" (incident {incident_id})"
-    hint_s: str | None = None
-    if hint:
-        try:
-            hint_s = " ".join(str(hint).replace("\n", " ").replace("\r", " ").split())
-            if hint_s:
-                user_msg += f" | hint: {hint_s}"
-        except Exception:
-            hint_s = None
-
-    details: dict[str, Any] = {}
-    if isinstance(err.get("details"), Mapping):
-        details.update(dict(err.get("details")))
-    if incident_id:
-        details.setdefault("incident_id", incident_id)
-    details.setdefault("tool", tool_name)
-
-    return _usage_error(
-        user_msg,
-        code=code,
-        category=category,
-        origin=origin,
-        retryable=retryable,
-        details=details,
-        hint=hint_s,
-    )
 
 
 def _fastmcp_tool_params() -> Optional[tuple[inspect.Parameter, ...]]:
@@ -794,18 +739,6 @@ def mcp_tool(
                         _enforce_write_allowed(tool_name, write_action=write_action)
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
-                    _log_tool_failure(
-                        tool_name=tool_name,
-                        call_id=call_id,
-                        write_action=write_action,
-                        req=req,
-                        schema_hash=schema_hash if schema_present else None,
-                        schema_present=schema_present,
-                        duration_ms=duration_ms,
-                        phase="preflight",
-                        exc=exc,
-                        all_args=all_args,
-                    )
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
@@ -817,27 +750,25 @@ def mcp_tool(
                         exc=exc,
                         phase="preflight",
                     )
-                    coerced = _coerce_tool_exception(tool_name, exc, structured_error)
-                    if coerced is exc:
-                        raise
-                    raise coerced from exc
+                    _log_tool_failure(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        write_action=write_action,
+                        req=req,
+                        schema_hash=schema_hash if schema_present else None,
+                        schema_present=schema_present,
+                        duration_ms=duration_ms,
+                        phase="preflight",
+                        exc=exc,
+                        all_args=all_args,
+                        structured_error=structured_error,
+                    )
+                    return structured_error
 
                 try:
                     result = await func(*args, **clean_kwargs)
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
-                    _log_tool_failure(
-                        tool_name=tool_name,
-                        call_id=call_id,
-                        write_action=write_action,
-                        req=req,
-                        schema_hash=schema_hash,
-                        schema_present=True,
-                        duration_ms=duration_ms,
-                        phase="execute",
-                        exc=exc,
-                        all_args=all_args,
-                    )
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
@@ -849,10 +780,20 @@ def mcp_tool(
                         exc=exc,
                         phase="execute",
                     )
-                    coerced = _coerce_tool_exception(tool_name, exc, structured_error)
-                    if coerced is exc:
-                        raise
-                    raise coerced from exc
+                    _log_tool_failure(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        write_action=write_action,
+                        req=req,
+                        schema_hash=schema_hash,
+                        schema_present=True,
+                        duration_ms=duration_ms,
+                        phase="execute",
+                        exc=exc,
+                        all_args=all_args,
+                        structured_error=structured_error,
+                    )
+                    return structured_error
 
                 # Preserve scalar return types for tools that naturally return scalars.
                 # Some clients/servers already wrap tool outputs under a top-level
@@ -871,9 +812,8 @@ def mcp_tool(
                     result=result,
                 )
                 if isinstance(result, Mapping):
-                    if isinstance(result.get("error"), Mapping):
-                        return attach_error_user_facing_fields(tool_name, dict(result))
-                    return attach_user_facing_fields(tool_name, dict(result))
+                    # Return tool payload as-is; do not inject UI-only fields.
+                    return dict(result)
                 return result
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -949,18 +889,6 @@ def mcp_tool(
                     _enforce_write_allowed(tool_name, write_action=write_action)
             except Exception as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
-                _log_tool_failure(
-                    tool_name=tool_name,
-                    call_id=call_id,
-                    write_action=write_action,
-                    req=req,
-                    schema_hash=schema_hash if schema_present else None,
-                    schema_present=schema_present,
-                    duration_ms=duration_ms,
-                    phase="preflight",
-                    exc=exc,
-                    all_args=all_args,
-                )
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
@@ -972,27 +900,25 @@ def mcp_tool(
                     exc=exc,
                     phase="preflight",
                 )
-                coerced = _coerce_tool_exception(tool_name, exc, structured_error)
-                if coerced is exc:
-                    raise
-                raise coerced from exc
+                _log_tool_failure(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    req=req,
+                    schema_hash=schema_hash if schema_present else None,
+                    schema_present=schema_present,
+                    duration_ms=duration_ms,
+                    phase="preflight",
+                    exc=exc,
+                    all_args=all_args,
+                    structured_error=structured_error,
+                )
+                return structured_error
 
             try:
                 result = func(*args, **clean_kwargs)
             except Exception as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
-                _log_tool_failure(
-                    tool_name=tool_name,
-                    call_id=call_id,
-                    write_action=write_action,
-                    req=req,
-                    schema_hash=schema_hash,
-                    schema_present=True,
-                    duration_ms=duration_ms,
-                    phase="execute",
-                    exc=exc,
-                    all_args=all_args,
-                )
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
@@ -1004,10 +930,20 @@ def mcp_tool(
                     exc=exc,
                     phase="execute",
                 )
-                coerced = _coerce_tool_exception(tool_name, exc, structured_error)
-                if coerced is exc:
-                    raise
-                raise coerced from exc
+                _log_tool_failure(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    req=req,
+                    schema_hash=schema_hash,
+                    schema_present=True,
+                    duration_ms=duration_ms,
+                    phase="execute",
+                    exc=exc,
+                    all_args=all_args,
+                    structured_error=structured_error,
+                )
+                return structured_error
 
             # Preserve scalar return types for tools that naturally return scalars.
             duration_ms = (time.perf_counter() - start) * 1000
@@ -1022,9 +958,8 @@ def mcp_tool(
                 result=result,
             )
             if isinstance(result, Mapping):
-                if isinstance(result.get("error"), Mapping):
-                    return attach_error_user_facing_fields(tool_name, dict(result))
-                return attach_user_facing_fields(tool_name, dict(result))
+                # Return tool payload as-is; do not inject UI-only fields.
+                return dict(result)
             return result
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(
