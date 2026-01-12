@@ -1,16 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
-
-import pytest
-
-
-if importlib.util.find_spec("jsonschema") is None:
-    pytest.skip(
-        "jsonschema is required for introspection metadata tests",
-        allow_module_level=True,
-    )
-
 from github_mcp.main_tools import introspection
 
 

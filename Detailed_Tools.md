@@ -257,7 +257,7 @@ Example:
 
 ---
 
-# Tool introspection & schema validation
+# Tool introspection & schemas
 
 ## list_tools
 
@@ -311,14 +311,14 @@ Example:
 
 ## validate_tool_args
 
-Purpose: Validate candidate payloads against tool input schemas without running them. Useful for testing and UI preflight validation.
+Purpose: Return a tool's published input schema and run minimal shape checks on a candidate payload (object vs non-object). Adaptiv MCP does not enforce JSONSchema validation at runtime.
 
 Inputs:
 - `tool_name` (string | null): validate one tool.
 - `tool_names` (string[] | null): validate several tools (same `payload` applied to each).
 - `payload` (object | null): candidate arguments.
 
-Outputs: Validation results and schema excerpt.
+Outputs: Minimal validation results and the tool's published schema (when available).
 
 Example:
 

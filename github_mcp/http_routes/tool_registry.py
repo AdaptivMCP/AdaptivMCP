@@ -157,44 +157,6 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
     return bool(value)
 
 
-async def _preflight_validate(tool_name: str, args: Dict[str, Any]) -> Optional[JSONResponse]:
-    """Validate args against the published schema without running the tool.
-
-    This prevents raw TypeErrors (e.g., unexpected kwargs) from bubbling up as 500s.
-
-    Returns a JSONResponse when invalid; None when valid or when preflight failed.
-    """
-
-    try:
-        from github_mcp.main_tools.introspection import validate_tool_args
-        from github_mcp.mcp_server.errors import _structured_tool_error
-        from github_mcp.exceptions import UsageError
-
-        result = await validate_tool_args(tool_name=tool_name, payload=args)
-        valid = bool(result.get("valid", True))
-        if valid:
-            return None
-
-        err = UsageError(f"Tool arguments did not match schema for {tool_name!r}.")
-        setattr(err, "code", "tool_args_invalid")
-        setattr(err, "category", "validation")
-        setattr(err, "origin", "schema")
-        setattr(err, "retryable", False)
-        setattr(err, "details", {"tool": tool_name, "errors": result.get("errors") or []})
-        setattr(
-            err,
-            "hint",
-            "Fetch the tool schema (/tools/<name> or describe_tool) and resend args exactly.",
-        )
-        payload = _structured_tool_error(err, context=f"tool_http:{tool_name}")
-        return JSONResponse(payload, status_code=400)
-    except ValueError:
-        return JSONResponse({"error": f"Unknown tool {tool_name!r}."}, status_code=404)
-    except Exception:
-        # Best-effort only; fall back to tool's own validation if this fails.
-        return None
-
-
 async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: int = 3) -> Response:
     resolved = _find_registered_tool(tool_name)
     if not resolved:
@@ -202,10 +164,6 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
 
     tool_obj, func = resolved
     write_action = _is_write_action(tool_obj, func)
-
-    preflight = await _preflight_validate(tool_name, args)
-    if preflight is not None:
-        return preflight
 
     max_attempts = max(1, int(max_attempts))
     base_backoff_s = 0.25
