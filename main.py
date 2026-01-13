@@ -380,15 +380,23 @@ class _SuppressClientDisconnectMiddleware:
             return await self.app(scope, receive, send)
         except (anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream):
             return
-        except ExceptionGroup as exc:
-            if all(
-                isinstance(
-                    err,
-                    (anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream),
-                )
-                for err in exc.exceptions
+        except Exception as exc:
+            # Python 3.11+ introduces ExceptionGroup / BaseExceptionGroup.
+            # Some runtimes (or dependency sets) may not expose these names at
+            # import time. To remain compatible, detect "exception group" shape
+            # via duck-typing rather than referencing ExceptionGroup directly.
+            excs = getattr(exc, "exceptions", None)
+            if exc.__class__.__name__ in {"ExceptionGroup", "BaseExceptionGroup"} and isinstance(
+                excs, tuple
             ):
-                return
+                if all(
+                    isinstance(
+                        err,
+                        (anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream),
+                    )
+                    for err in excs
+                ):
+                    return
             raise
 
 
