@@ -55,6 +55,37 @@ from github_mcp.mcp_server.schemas import (
 LOGGER = BASE_LOGGER.getChild("mcp_server.decorators")
 
 
+class _ToolStub:
+    """Minimal tool object used when FastMCP is unavailable.
+
+    The server still needs a stable tool registry for:
+    - HTTP tool discovery endpoints (/tools, /resources)
+    - Best-effort HTTP invocation via /tools/{name}
+    - Introspection tools (list_all_actions, describe_tool)
+
+    In these environments, we avoid calling into `mcp.tool()` (which raises),
+    but we still register a lightweight object so registry consumers can
+    resolve names and descriptions consistently.
+    """
+
+    __slots__ = ("name", "description", "input_schema", "meta")
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        description: Optional[str] = None,
+        input_schema: Optional[Mapping[str, Any]] = None,
+    ) -> None:
+        self.name = name
+        self.description = description or ""
+        self.input_schema = dict(input_schema) if input_schema else None
+        self.meta: dict[str, Any] = {}
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<ToolStub name={self.name!r}>"
+
+
 def _usage_error(
     message: str,
     *,
@@ -563,7 +594,16 @@ def _register_with_fastmcp(
         mcp is None
         or getattr(getattr(mcp, "__class__", None), "__name__", None) == "_MissingFastMCP"
     ):
-        return None
+        # FastMCP is not available (or explicitly missing). Still register a
+        # stub tool object so HTTP routes and introspection can function.
+        tool_obj: Any = _ToolStub(name=name, description=description)
+        _REGISTERED_MCP_TOOLS[:] = [
+            (t, f)
+            for (t, f) in _REGISTERED_MCP_TOOLS
+            if (getattr(t, "name", None) or getattr(f, "__name__", None)) != name
+        ]
+        _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
+        return tool_obj
 
     """
  Robust FastMCP registration across signature variants.
