@@ -342,6 +342,11 @@ async def _clone_repo(
 
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
         if preserve_changes:
+            # Workspace directories are keyed by ref, so callers expect the workspace
+            # checked out on ``effective_ref``. Some tools (e.g. shells that create
+            # branches) can mutate the checkout inside an existing workspace.
+            # When preserving changes we avoid destructive resets, but we still
+            # enforce the requested branch when the workspace is clean.
             fetch_result = await _run_git_with_retry(
                 run_shell,
                 "git fetch origin --prune",
@@ -368,11 +373,60 @@ async def _clone_repo(
                     f"Workspace fetch failed for {full_name}@{effective_ref}: {stderr}"
                 )
 
+            # Ensure we are on the expected branch/ref.
+            show_branch = await run_shell(
+                "git branch --show-current",
+                cwd=workspace_dir,
+                timeout_seconds=60,
+            )
+            current_branch = (show_branch.get("stdout", "") or "").strip() or None
+            if current_branch and current_branch != effective_ref:
+                status = await run_shell(
+                    "git status --porcelain",
+                    cwd=workspace_dir,
+                    timeout_seconds=60,
+                )
+                dirty = bool((status.get("stdout", "") or "").strip())
+                if dirty:
+                    raise GitHubAPIError(
+                        "Workspace is on the wrong branch and has local changes. "
+                        f"Expected '{effective_ref}', found '{current_branch}'. "
+                        "Commit/stash changes or use workspace_self_heal_branch to recover."
+                    )
+
+                # Best-effort: check out the requested ref without rewriting history.
+                q_ref = shlex.quote(effective_ref)
+                checkout = await _run_git_with_retry(
+                    run_shell,
+                    f"git checkout {q_ref}",
+                    cwd=workspace_dir,
+                    timeout_seconds=120,
+                    env=git_env,
+                )
+                if checkout.get("exit_code", 0) != 0:
+                    # If the local branch is missing, create/reset it from origin.
+                    checkout = await _run_git_with_retry(
+                        run_shell,
+                        f"git checkout -B {q_ref} origin/{q_ref}",
+                        cwd=workspace_dir,
+                        timeout_seconds=120,
+                        env=git_env,
+                    )
+                    if checkout.get("exit_code", 0) != 0:
+                        stderr = checkout.get("stderr", "") or checkout.get("stdout", "")
+                        raise GitHubAPIError(
+                            "Failed to restore workspace branch checkout. "
+                            f"Tried to check out '{effective_ref}'. git error: {stderr}"
+                        )
+
             return workspace_dir
 
         q_ref = shlex.quote(effective_ref)
+        # When not preserving changes, ensure we are on the requested branch/ref and
+        # hard-reset to match origin.
         refresh_steps = [
             ("git fetch origin --prune", 300),
+            (f"git checkout -B {q_ref} origin/{q_ref}", 120),
             (f"git reset --hard origin/{q_ref}", 120),
             ("git clean -fdx --exclude .venv-mcp", 120),
         ]
