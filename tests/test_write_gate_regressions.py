@@ -51,7 +51,7 @@ def test_decorators_do_not_block_write_tools_when_gate_is_false(monkeypatch):
     _enforce_write_allowed("write_tool", write_action=True)
 
 
-def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
+def test_actions_compat_reports_write_allowed(monkeypatch):
     # Create a fake server with registered tools.
     read_tool = types.SimpleNamespace(name="read_tool", write_action=False, description="read")
     write_tool = types.SimpleNamespace(name="write_tool", write_action=True, description="write")
@@ -77,7 +77,6 @@ def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
                     "name": "read_tool",
                     "description": "read",
                     "write_action": False,
-                    "write_enabled": True,
                     "write_allowed": True,
                     "input_schema": {"type": "object", "properties": {}},
                     "visibility": "public",
@@ -86,9 +85,6 @@ def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
                     "name": "write_tool",
                     "description": "write",
                     "write_action": True,
-                    # write_auto_approved/approval_required should reflect env gate,
-                    # but we set other fields true here to catch regressions.
-                    "write_enabled": True,
                     "write_allowed": True,
                     "input_schema": {"type": "object", "properties": {}},
                     "visibility": "public",
@@ -98,29 +94,11 @@ def test_actions_compat_write_enabled_tracks_env_gate(monkeypatch):
 
     monkeypatch.setattr(actions_compat, "list_all_actions", fake_catalog)
 
-    # Gate off.
-    monkeypatch.setenv("GITHUB_MCP_WRITE_ALLOWED", "false")
-    # Ensure actions_compat reads the updated env via its imported helper.
-    importlib.reload(actions_compat)
     actions = actions_compat.serialize_actions_for_compatibility(server)
     idx = {a["name"]: a for a in actions}
-    assert idx["read_tool"]["write_enabled"] is True
     assert idx["read_tool"]["write_allowed"] is True
     assert idx["write_tool"]["write_action"] is True
-    assert idx["write_tool"]["write_enabled"] is True
     assert idx["write_tool"]["write_allowed"] is True
-    assert idx["write_tool"]["write_auto_approved"] is False
-    assert idx["write_tool"]["approval_required"] is True
-
-    # Gate on.
-    monkeypatch.setenv("GITHUB_MCP_WRITE_ALLOWED", "true")
-    importlib.reload(actions_compat)
-    actions = actions_compat.serialize_actions_for_compatibility(server)
-    idx = {a["name"]: a for a in actions}
-    assert idx["write_tool"]["write_enabled"] is True
-    assert idx["write_tool"]["write_allowed"] is True
-    assert idx["write_tool"]["write_auto_approved"] is True
-    assert idx["write_tool"]["approval_required"] is False
 
 
 def test_no_legacy_write_gate_env_var_in_ci():

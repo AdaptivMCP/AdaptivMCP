@@ -1,27 +1,9 @@
 from __future__ import annotations
 
-import re
-
 from typing import Any, Dict, List, Mapping, Optional
 
-from github_mcp.mcp_server.context import get_write_allowed
 from github_mcp.mcp_server.schemas import _jsonable
 from ._main import _main
-
-_UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS: set[str] = set()
-
-
-def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed: bool) -> bool:
-    # UI policy only (does not define whether the tool is a write tool).
-    if not write_action:
-        return False
-    # When write_allowed is false, require confirmation for any write action.
-    if not write_allowed:
-        return True
-    if tool_name in _UI_PROMPT_WHEN_WRITE_ALLOWED_TOOLS:
-        return True
-    lowered = tool_name.lower()
-    return "commit" in lowered or "push" in lowered
 
 
 def list_write_tools() -> Dict[str, Any]:
@@ -151,13 +133,7 @@ def _tool_tags(tool: Any, func: Any) -> list[str]:
 def _clean_description(text: str) -> str:
     if not text:
         return text
-    s = str(text)
-    s = re.sub(r"should", "may", s, flags=re.I)
-    s = re.sub(r"must", "needs to", s, flags=re.I)
-    s = re.sub(r"only when", "when", s, flags=re.I)
-    s = re.sub(r"prefer", "typical", s, flags=re.I)
-    s = re.sub(r"[ 	]{2,}", " ", s)
-    return s.strip()
+    return str(text).strip()
 
 
 def list_all_actions(
@@ -167,7 +143,6 @@ def list_all_actions(
 
     Canonical “schema registry” used by assistants/clients.
     - Inherent tool classification is always reported as write_action (True/False).
-    - Dynamic gating is reported separately as write_enabled per tool.
     """
 
     m = _main()
@@ -175,8 +150,6 @@ def list_all_actions(
 
     tools: List[Dict[str, Any]] = []
     seen_names: set[str] = set()
-    write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
-
     for tool, func in m._REGISTERED_MCP_TOOLS:
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
         if not name:
@@ -206,31 +179,12 @@ def list_all_actions(
         )
 
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
-        # Approval-gated writes:
-        # - All tools remain enabled.
-        # - write_actions_enabled indicates whether writes are auto-approved.
-        # - write_allowed indicates whether the tool is executable.
-        write_enabled = True
-        tool_write_allowed = bool(write_enabled)
-        approval_required = bool(base_write_action and not write_allowed)
-
         tool_info: Dict[str, Any] = {
             "name": name_str,
             "visibility": str(visibility),
             # Correct semantic classification:
             "write_action": base_write_action,
-            # Executability (approval-gated writes still execute).
-            "write_allowed": bool(tool_write_allowed),
-            "write_auto_approved": bool(write_allowed),
-            "approval_required": bool(approval_required),
-            # Dynamic gating:
-            "write_enabled": bool(write_enabled),
-            # UI policy hint (separate from write_action):
-            "ui_prompt": _ui_prompt_write_action(
-                name_str,
-                base_write_action,
-                write_allowed=write_allowed,
-            ),
+            "write_allowed": True,
         }
 
         if description:
@@ -259,8 +213,6 @@ def list_all_actions(
             "visibility": "public",
             "write_action": False,
             "write_allowed": True,
-            "write_enabled": True,
-            "ui_prompt": False,
         }
         if include_parameters:
             synthetic["input_schema"] = {
@@ -277,9 +229,6 @@ def list_all_actions(
 
     return {
         "compact": compact_mode,
-        # write_actions_enabled represents whether writes are auto-approved.
-        # When false, clients should prompt before executing write tools.
-        "write_actions_enabled": bool(get_write_allowed(refresh_after_seconds=0.0)),
         "tools": tools,
     }
 
@@ -293,7 +242,6 @@ def list_write_actions(
     tools = [tool for tool in catalog.get("tools", []) or [] if tool.get("write_action")]
     return {
         "compact": catalog.get("compact"),
-        "write_actions_enabled": catalog.get("write_actions_enabled"),
         "tools": tools,
     }
 
@@ -309,7 +257,6 @@ async def list_tools(
         raise ValueError("only_write and only_read cannot both be true")
 
     catalog = list_all_actions(include_parameters=False, compact=True)
-    write_auto_approved = bool(get_write_allowed(refresh_after_seconds=0.0))
     tools: List[Dict[str, Any]] = []
     for entry in catalog.get("tools", []) or []:
         name = entry.get("name")
@@ -324,19 +271,11 @@ async def list_tools(
         if only_read and write_action:
             continue
 
-        tool_write_auto_approved = bool(entry.get("write_auto_approved", write_auto_approved))
-        tool_approval_required = bool(
-            entry.get("approval_required", bool(write_action and not tool_write_auto_approved))
-        )
-
         tools.append(
             {
                 "name": name,
                 "write_action": write_action,
                 "write_allowed": bool(entry.get("write_allowed", True)),
-                "write_auto_approved": bool(tool_write_auto_approved),
-                "approval_required": bool(tool_approval_required),
-                "write_enabled": bool(entry.get("write_enabled", True)),
                 "visibility": entry.get("visibility"),
             }
         )
@@ -344,7 +283,6 @@ async def list_tools(
     tools.sort(key=lambda t: t["name"])
 
     return {
-        "write_actions_enabled": bool(write_auto_approved),
         "tools": tools,
     }
 
@@ -445,9 +383,6 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         )
 
     base_write_action = bool(_tool_attr(tool, func, "write_action", False))
-    write_allowed = bool(get_write_allowed(refresh_after_seconds=0.0))
-    approval_required = bool(base_write_action and not write_allowed)
-
     return {
         "tool": tool_name,
         "valid": len(errors) == 0,
@@ -459,11 +394,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
             or "public"
         ),
         "write_action": base_write_action,
-        # Tool is executable even when write auto-approval is off.
         "write_allowed": True,
-        "write_auto_approved": bool(write_allowed),
-        "approval_required": bool(approval_required),
-        "write_enabled": True,
     }
 
 
