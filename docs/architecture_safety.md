@@ -26,6 +26,14 @@ Safety properties:
 
 Important: the tool surface is authoritative for what is allowed. Prefer the tool catalog (`Detailed_Tools.md`) to infer exactly which operations are exposed.
 
+## Boundary: HTTP handling
+
+The ASGI app wraps requests in middleware that supports safe request handling:
+
+- Cache control: dynamic endpoints (including `/sse` and `/messages`) are served with `Cache-Control: no-store`.
+- Request metadata: the server captures request IDs, MCP session/message IDs, and safe ChatGPT headers for deduplication and correlation.
+- Host validation: the `ALLOWED_HOSTS` environment variable configures trusted hosts when set.
+
 ## Boundary: bounded workspace search
 
 The `search_workspace` tool performs a bounded, non-shell search over text files in the workspace clone.

@@ -51,8 +51,14 @@ For a complete tool catalog and schemas, see `Detailed_Tools.md`.
 The ASGI application is exposed in `main.py` as `app`.
 
 - GET /sse — MCP transport endpoint (SSE)
+- POST /messages — MCP message submit endpoint used by the SSE transport
 - GET /healthz — JSON health status and controller defaults
+- GET /tools — tool registry for discovery
+- GET /resources — resource listing for MCP clients expecting a resource-only response
+- GET /tools/<name> — tool metadata (always includes parameters)
+- POST /tools/<name> — tool invocation endpoint
 - GET /v1/actions and GET /actions — Actions-compatible tool listing
+- GET /ui and GET /ui.json — lightweight UI diagnostics (serves `assets/index.html` when present)
 - GET /static/* — static assets (if `assets/` is present)
 
 ## Recommended workflows
@@ -109,6 +115,7 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 - Workspace persistence: the persistent clone survives across tool calls until explicitly deleted or overwritten.
 - Request deduplication: the server uses request metadata (session + message) to avoid duplicate tool execution.
 - ChatGPT metadata: the server captures safe ChatGPT headers (conversation, assistant, project, org, session, user IDs) for correlation and includes them in request context/logging.
+- Cache control: dynamic endpoints are served with `Cache-Control: no-store`; static assets under `/static` are cacheable.
 - File caching: GitHub file contents may be cached in-memory to reduce repeated fetches.
 - Workspace file and listing tools reject paths that resolve outside the repository root.
 - Workspace search is a bounded, non-shell search:
