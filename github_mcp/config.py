@@ -76,7 +76,16 @@ GITHUB_SEARCH_MIN_INTERVAL_SECONDS = float(
 # These settings only affect provider logs (Render / stdout). They do not change
 # tool outputs returned to the client.
 
-QUIET_LOGS = os.environ.get("QUIET_LOGS", "true").strip().lower() in (
+# Provider log verbosity.
+#
+# Historically this defaulted to "true" to keep hosted provider logs quiet.
+# In practice, hosted environments (Render) already expose request-level logs,
+# and operators typically need application/tool-level traces for debugging.
+#
+# Default to verbose (QUIET_LOGS=false) so Render application logs include
+# startup diagnostics, tool traces, and structured errors. Set QUIET_LOGS=true
+# explicitly if you want a near-silent log stream.
+QUIET_LOGS = os.environ.get("QUIET_LOGS", "false").strip().lower() in (
     "1",
     "true",
     "t",
@@ -98,7 +107,10 @@ HUMAN_LOGS = os.environ.get("HUMAN_LOGS", "true").strip().lower() in (
 
 # Log tool call start/completion lines to provider logs.
 # When disabled, only warnings/errors (tool_call_failed) are emitted.
-LOG_TOOL_CALLS = os.environ.get("LOG_TOOL_CALLS", "false").strip().lower() in (
+#
+# Default to enabled so operators can correlate behavior in Render logs without
+# turning on additional flags.
+LOG_TOOL_CALLS = os.environ.get("LOG_TOOL_CALLS", "true").strip().lower() in (
     "1",
     "true",
     "t",
@@ -140,8 +152,8 @@ LOG_GITHUB_HTTP_BODIES = os.environ.get("LOG_GITHUB_HTTP_BODIES", "false").strip
 )
 
 # Log inbound HTTP requests handled by the ASGI app (provider logs).
-# Default is disabled so hosted logs show platform access lines ([GET]/[POST]) and errors only.
-LOG_HTTP_REQUESTS = os.environ.get("LOG_HTTP_REQUESTS", "false").strip().lower() in (
+# Default to enabled so hosted logs capture request latency/correlation IDs.
+LOG_HTTP_REQUESTS = os.environ.get("LOG_HTTP_REQUESTS", "true").strip().lower() in (
     "1",
     "true",
     "t",
