@@ -29,7 +29,7 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import BASE_LOGGER
+from github_mcp.config import BASE_LOGGER, HUMAN_LOGS, LOG_TOOL_PAYLOADS
 from github_mcp.exceptions import UsageError
 from github_mcp.mcp_server.context import (
     WRITE_ALLOWED,
@@ -266,10 +266,21 @@ def _strip_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+    # Keep context small by default; full payloads are opt-in.
+    payload: dict[str, Any] = {
         "arg_keys": sorted(all_args.keys()),
         "arg_count": len(all_args),
     }
+    if LOG_TOOL_PAYLOADS:
+        # Preserve full args without truncation; ensure JSON-serializable.
+        try:
+            from github_mcp.mcp_server.schemas import _preflight_tool_args
+
+            preflight = _preflight_tool_args("<tool>", all_args, compact=False)
+            payload["args"] = preflight.get("args") if isinstance(preflight, Mapping) else dict(all_args)
+        except Exception:
+            payload["args"] = dict(all_args)
+    return payload
 
 
 def _tool_log_payload(
@@ -291,6 +302,7 @@ def _tool_log_payload(
         "request": dict(req),
     }
     if all_args is not None:
+        # _extract_context may inject full args if LOG_TOOL_PAYLOADS is enabled.
         payload.update(_extract_context(all_args))
     return payload
 
@@ -315,10 +327,23 @@ def _log_tool_start(
         all_args=all_args,
     )
     # Human-readable message (scan-friendly) + machine-readable extras.
-    LOGGER.info(
-        f"tool_call_started tool={tool_name} call_id={call_id} write_action={bool(write_action)}",
-        extra={"event": "tool_call_started", **payload},
-    )
+    if HUMAN_LOGS:
+        req_id = payload.get("request", {}).get("request_id")
+        msg_id = payload.get("request", {}).get("message_id")
+        session_id = payload.get("request", {}).get("session_id")
+        LOGGER.info(
+            (
+                "tool_call_started "
+                f"tool={tool_name} call_id={call_id} write_action={bool(write_action)} "
+                f"request_id={req_id} session_id={session_id} message_id={msg_id}"
+            ),
+            extra={"event": "tool_call_started", **payload},
+        )
+    else:
+        LOGGER.info(
+            f"tool_call_started tool={tool_name} call_id={call_id} write_action={bool(write_action)}",
+            extra={"event": "tool_call_started", **payload},
+        )
 
 
 def _log_tool_success(
@@ -347,10 +372,28 @@ def _log_tool_success(
             "result_is_mapping": isinstance(result, Mapping),
         }
     )
-    LOGGER.info(
-        f"tool_call_completed tool={tool_name} call_id={call_id} duration_ms={duration_ms:.2f}",
-        extra={"event": "tool_call_completed", **payload},
-    )
+    if LOG_TOOL_PAYLOADS:
+        try:
+            from github_mcp.mcp_server.schemas import _jsonable
+
+            payload["result"] = _jsonable(result)
+        except Exception:
+            payload["result"] = result
+
+    if HUMAN_LOGS:
+        req_id = payload.get("request", {}).get("request_id")
+        LOGGER.info(
+            (
+                "tool_call_completed "
+                f"tool={tool_name} call_id={call_id} duration_ms={duration_ms:.2f} request_id={req_id}"
+            ),
+            extra={"event": "tool_call_completed", **payload},
+        )
+    else:
+        LOGGER.info(
+            f"tool_call_completed tool={tool_name} call_id={call_id} duration_ms={duration_ms:.2f}",
+            extra={"event": "tool_call_completed", **payload},
+        )
 
 
 def _log_tool_failure(
