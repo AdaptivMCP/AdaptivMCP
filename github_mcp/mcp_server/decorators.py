@@ -277,7 +277,9 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
             from github_mcp.mcp_server.schemas import _preflight_tool_args
 
             preflight = _preflight_tool_args("<tool>", all_args, compact=False)
-            payload["args"] = preflight.get("args") if isinstance(preflight, Mapping) else dict(all_args)
+            payload["args"] = (
+                preflight.get("args") if isinstance(preflight, Mapping) else dict(all_args)
+            )
         except Exception:
             payload["args"] = dict(all_args)
     return payload

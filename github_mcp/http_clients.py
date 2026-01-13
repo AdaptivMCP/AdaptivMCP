@@ -658,7 +658,7 @@ async def _github_request(
                 payload["response_body"] = body if body is not None else getattr(resp, "text", "")
 
             GITHUB_LOGGER.info(
-                f"github_http method={str(method).upper()} path={path} status={getattr(resp,'status_code',None)} duration_ms={duration_ms:.2f}",
+                f"github_http method={str(method).upper()} path={path} status={getattr(resp, 'status_code', None)} duration_ms={duration_ms:.2f}",
                 extra=payload,
             )
 

@@ -256,9 +256,7 @@ class _RequestContextMiddleware:
                 }
                 if LOG_HTTP_BODIES and captured_body is not None and path.endswith("/messages"):
                     try:
-                        payload["request_body"] = captured_body.decode(
-                            "utf-8", errors="replace"
-                        )
+                        payload["request_body"] = captured_body.decode("utf-8", errors="replace")
                     except Exception:
                         payload["request_body"] = repr(captured_body)
 
