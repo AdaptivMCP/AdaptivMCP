@@ -133,4 +133,3 @@ async def commit_and_open_pr_from_workspace(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_and_open_pr_from_workspace")
-
