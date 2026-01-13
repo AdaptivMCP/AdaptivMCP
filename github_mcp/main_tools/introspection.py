@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional
 
+from github_mcp.mcp_server.context import get_write_allowed
 from github_mcp.mcp_server.schemas import _jsonable
 from ._main import _main
 
@@ -136,6 +137,19 @@ def _clean_description(text: str) -> str:
     return str(text).strip()
 
 
+def _write_gate_state() -> Dict[str, bool]:
+    auto_approved = bool(get_write_allowed(refresh_after_seconds=0.0))
+    return {
+        "write_auto_approved": auto_approved,
+        "write_actions_enabled": auto_approved,
+        "write_enabled": True,
+    }
+
+
+def _approval_required(write_action: bool, write_auto_approved: bool) -> bool:
+    return bool(write_action and not write_auto_approved)
+
+
 def list_all_actions(
     include_parameters: bool = False, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
@@ -149,6 +163,8 @@ def list_all_actions(
     compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
 
     tools: List[Dict[str, Any]] = []
+    gate = _write_gate_state()
+    write_auto_approved = gate["write_auto_approved"]
     seen_names: set[str] = set()
     for tool, func in m._REGISTERED_MCP_TOOLS:
         name = getattr(tool, "name", None) or getattr(func, "__name__", None)
@@ -179,12 +195,17 @@ def list_all_actions(
         )
 
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
+        approval_required = _approval_required(base_write_action, write_auto_approved)
         tool_info: Dict[str, Any] = {
             "name": name_str,
             "visibility": str(visibility),
             # Correct semantic classification:
             "write_action": base_write_action,
             "write_allowed": True,
+            "write_enabled": gate["write_enabled"],
+            "write_auto_approved": write_auto_approved,
+            "write_actions_enabled": gate["write_actions_enabled"],
+            "approval_required": approval_required,
         }
 
         if description:
@@ -207,12 +228,17 @@ def list_all_actions(
         tools.append(tool_info)
 
     if "list_all_actions" not in seen_names:
+        approval_required = _approval_required(False, write_auto_approved)
         synthetic: Dict[str, Any] = {
             "name": "list_all_actions",
             "description": "Enumerate every available MCP tool with optional schemas.",
             "visibility": "public",
             "write_action": False,
             "write_allowed": True,
+            "write_enabled": gate["write_enabled"],
+            "write_auto_approved": write_auto_approved,
+            "write_actions_enabled": gate["write_actions_enabled"],
+            "approval_required": approval_required,
         }
         if include_parameters:
             synthetic["input_schema"] = {
@@ -276,6 +302,9 @@ async def list_tools(
                 "name": name,
                 "write_action": write_action,
                 "write_allowed": bool(entry.get("write_allowed", True)),
+                "write_enabled": bool(entry.get("write_enabled", True)),
+                "write_auto_approved": bool(entry.get("write_auto_approved", True)),
+                "approval_required": bool(entry.get("approval_required", False)),
                 "visibility": entry.get("visibility"),
             }
         )
@@ -383,6 +412,8 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         )
 
     base_write_action = bool(_tool_attr(tool, func, "write_action", False))
+    gate = _write_gate_state()
+    write_auto_approved = gate["write_auto_approved"]
     return {
         "tool": tool_name,
         "valid": len(errors) == 0,
@@ -395,6 +426,10 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         ),
         "write_action": base_write_action,
         "write_allowed": True,
+        "write_enabled": gate["write_enabled"],
+        "write_auto_approved": write_auto_approved,
+        "write_actions_enabled": gate["write_actions_enabled"],
+        "approval_required": _approval_required(base_write_action, write_auto_approved),
     }
 
 
