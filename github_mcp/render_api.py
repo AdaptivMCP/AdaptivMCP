@@ -47,6 +47,53 @@ else:  # pragma: no cover
 _http_client_render: Optional["httpx.AsyncClient"] = None
 _http_client_render_loop: Optional[asyncio.AbstractEventLoop] = None
 _http_client_render_token: Optional[str] = None
+_http_client_render_base: Optional[str] = None
+_render_api_version_prefix: str = "/v1"
+
+
+def _normalize_render_api_base(raw_base: str) -> tuple[str, str]:
+    """Normalize Render API base URL and versioning.
+
+    Operators may set RENDER_API_BASE as either:
+    - https://api.render.com
+    - https://api.render.com/v1
+
+    If the base ends with /v1 and callers also pass /v1-prefixed paths, requests
+    become /v1/v1/... and Render returns 404.
+
+    This helper strips a trailing /v1 from the base URL and returns the version
+    prefix that should be applied to request paths.
+    """
+
+    base = (raw_base or "").strip()
+    if not base:
+        return "https://api.render.com", "/v1"
+
+    trimmed = base.rstrip("/")
+    if trimmed.endswith("/v1"):
+        stripped = trimmed[: -len("/v1")] or "https://api.render.com"
+        return stripped, "/v1"
+
+    return trimmed, "/v1"
+
+
+def _apply_render_version_prefix(path: str) -> str:
+    """Ensure exactly one version prefix is applied to the request path."""
+
+    p = (path or "").strip()
+    if not p.startswith("/"):
+        p = "/" + p
+
+    prefix = (_render_api_version_prefix or "").strip()
+    if not prefix:
+        return p
+    if not prefix.startswith("/"):
+        prefix = "/" + prefix
+    prefix = prefix.rstrip("/")
+
+    if p == prefix or p.startswith(prefix + "/"):
+        return p
+    return prefix + p
 
 
 def _active_event_loop() -> asyncio.AbstractEventLoop:
@@ -140,13 +187,24 @@ def _refresh_async_client(
 def _render_client_instance() -> "httpx.AsyncClient":
     """Singleton async client for Render API requests."""
 
-    global _http_client_render, _http_client_render_loop, _http_client_render_token
+    global \
+        _http_client_render, \
+        _http_client_render_loop, \
+        _http_client_render_token, \
+        _http_client_render_base, \
+        _render_api_version_prefix
 
     current_token = _get_optional_render_token()
     token_changed = current_token != _http_client_render_token
 
+    normalized_base, version_prefix = _normalize_render_api_base(RENDER_API_BASE)
+    base_changed = normalized_base != _http_client_render_base
+
     def _build_client() -> "httpx.AsyncClient":
         token = current_token or ""
+        # Keep base/path composition stable regardless of whether RENDER_API_BASE includes /v1.
+        nonlocal normalized_base, version_prefix
+        _render_api_version_prefix = version_prefix
         headers = {
             "Accept": "application/json",
             "Authorization": f"Bearer {token}",
@@ -156,7 +214,7 @@ def _render_client_instance() -> "httpx.AsyncClient":
             max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
         )
         return httpx.AsyncClient(
-            base_url=RENDER_API_BASE,
+            base_url=normalized_base,
             timeout=HTTPX_TIMEOUT,
             limits=limits,
             headers=headers,
@@ -166,9 +224,10 @@ def _render_client_instance() -> "httpx.AsyncClient":
         _http_client_render,
         client_loop=_http_client_render_loop,
         rebuild=_build_client,
-        force_refresh=token_changed,
+        force_refresh=token_changed or base_changed,
     )
     _http_client_render_token = current_token
+    _http_client_render_base = normalized_base
     return _http_client_render
 
 
@@ -255,11 +314,12 @@ async def render_request(
     while True:
         started = time.perf_counter()
         client = _render_client_instance()
+        effective_path = _apply_render_version_prefix(path)
         try:
             resp = await _send_request(
                 client,
                 method=method,
-                path=path,
+                path=effective_path,
                 params=params,
                 json_body=json_body,
                 headers=headers,
@@ -279,7 +339,7 @@ async def render_request(
                 "event": "render_http",
                 "request": dict(req) if isinstance(req, dict) else {},
                 "method": str(method).upper(),
-                "path": path,
+                "path": effective_path,
                 "status_code": getattr(resp, "status_code", None),
                 "duration_ms": duration_ms,
             }
@@ -295,7 +355,7 @@ async def render_request(
                 payload["response_body"] = body if body is not None else getattr(resp, "text", "")
 
             BASE_LOGGER.info(
-                f"render_http method={str(method).upper()} path={path} status={getattr(resp, 'status_code', None)} duration_ms={duration_ms:.2f}",
+                f"render_http method={str(method).upper()} path={effective_path} status={getattr(resp, 'status_code', None)} duration_ms={duration_ms:.2f}",
                 extra=payload,
             )
 
