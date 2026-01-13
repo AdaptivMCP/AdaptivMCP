@@ -5,7 +5,6 @@ from typing import Any, Callable, Dict, List
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from github_mcp.mcp_server.context import get_write_allowed
 from github_mcp.mcp_server.schemas import _jsonable
 from github_mcp.main_tools.introspection import list_all_actions
 
@@ -103,9 +102,6 @@ def _strip_is_consequential_metadata(value: Any) -> Any:
 def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
     # Keep parity with the main introspection surface.
-    # write_actions_enabled indicates whether write actions are auto-approved.
-    # Even when auto-approval is off, write tools remain executable (approval-gated).
-    write_auto_approved = bool(get_write_allowed(refresh_after_seconds=0.0))
     catalog = list_all_actions(include_parameters=True, compact=False)
     catalog_index = {
         entry.get("name"): entry for entry in (catalog.get("tools") or []) if entry.get("name")
@@ -116,12 +112,7 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         catalog_entry = catalog_index.get(tool_name) or {}
         tool_description = catalog_entry.get("description") or _tool_description(tool, _func)
         write_action = bool(catalog_entry.get("write_action", _is_write_action(tool, _func)))
-        # Approval-gated writes: keep actions enabled even when write_allowed is false.
-        write_enabled = bool(catalog_entry.get("write_enabled", True))
-        # Compatibility endpoint: "write_allowed" means the tool can execute.
-        # Auto-approval is exposed separately.
-        tool_write_allowed = bool(write_enabled)
-        approval_required = bool(write_action and not write_auto_approved)
+        tool_write_allowed = bool(catalog_entry.get("write_allowed", True))
 
         schema = (
             catalog_entry.get("input_schema")
@@ -164,9 +155,6 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "annotations": annotations,
                 "write_action": bool(write_action),
                 "write_allowed": bool(tool_write_allowed),
-                "write_auto_approved": bool(write_auto_approved),
-                "approval_required": bool(approval_required),
-                "write_enabled": bool(write_enabled),
                 "visibility": str(visibility),
             }
         )
