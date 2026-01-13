@@ -383,10 +383,16 @@ class _SuppressClientDisconnectMiddleware:
     async def __call__(self, scope, receive, send):
         try:
             return await self.app(scope, receive, send)
-        except anyio.ClosedResourceError:
+        except (anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream):
             return
         except ExceptionGroup as exc:
-            if all(isinstance(err, anyio.ClosedResourceError) for err in exc.exceptions):
+            if all(
+                isinstance(
+                    err,
+                    (anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream),
+                )
+                for err in exc.exceptions
+            ):
                 return
             raise
 
