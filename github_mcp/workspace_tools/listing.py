@@ -36,7 +36,10 @@ def _resolve_workspace_start(repo_dir: str, path: str) -> tuple[str, str]:
 
     if os.path.isabs(normalized_path):
         start = os.path.realpath(normalized_path)
-        return normalized_path, start
+        display_path = os.path.relpath(start, root)
+        if display_path == ".":
+            display_path = ""
+        return display_path, start
 
     start = os.path.realpath(os.path.join(repo_dir, normalized_path))
     return normalized_path, start
@@ -83,7 +86,7 @@ async def list_workspace_files(
                 return {
                     "full_name": full_name,
                     "ref": effective_ref,
-                    "path": normalized_path or path,
+                    "path": normalized_path if path else "",
                     "files": [],
                     "truncated": False,
                     "max_files": max_files,
@@ -92,7 +95,7 @@ async def list_workspace_files(
             return {
                 "full_name": full_name,
                 "ref": effective_ref,
-                "path": normalized_path or path,
+                "path": normalized_path if path else "",
                 "files": [rp],
                 "truncated": False,
                 "max_files": max_files,
@@ -125,7 +128,7 @@ async def list_workspace_files(
         return {
             "full_name": full_name,
             "ref": effective_ref,
-            "path": normalized_path or path,
+            "path": normalized_path if path else "",
             "files": out,
             "truncated": False,
             "max_files": max_files,
@@ -177,7 +180,7 @@ async def search_workspace(
             return {
                 "full_name": full_name,
                 "ref": effective_ref,
-                "path": normalized_path or path,
+                "path": normalized_path if path else "",
                 "query": query,
                 "case_sensitive": case_sensitive,
                 "used_regex": False,
@@ -265,10 +268,10 @@ async def search_workspace(
                 # max_results is accepted for compatibility/observability but is not
                 # enforced as an output limit.
 
-        return {
-            "full_name": full_name,
-            "ref": effective_ref,
-            "path": normalized_path or path,
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": normalized_path if path else "",
             "query": query,
             "case_sensitive": case_sensitive,
             "used_regex": used_regex,
