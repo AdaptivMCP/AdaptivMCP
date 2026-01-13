@@ -138,6 +138,27 @@ LOG_HTTP_BODIES = os.environ.get("LOG_HTTP_BODIES", "false").strip().lower() in 
     "on",
 )
 
+# When enabled, include outbound Render HTTP request/response details in logs.
+LOG_RENDER_HTTP = os.environ.get("LOG_RENDER_HTTP", "false").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
+# When enabled, include response bodies for Render HTTP logs.
+# WARNING: This can be very large for log endpoints.
+LOG_RENDER_HTTP_BODIES = os.environ.get("LOG_RENDER_HTTP_BODIES", "false").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
 # Workspace diff application can be slow for large diffs. Keep this configurable.
 WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS = int(
     os.environ.get("MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", "300")
@@ -387,6 +408,27 @@ SERVER_GIT_COMMIT = (
     or os.environ.get("SOURCE_VERSION")
 )
 
+# ------------------------------------------------------------------------------
+# Render API configuration
+# ------------------------------------------------------------------------------
+
+RENDER_API_BASE = os.environ.get("RENDER_API_BASE", "https://api.render.com")
+RENDER_TOKEN_ENV_VARS = (
+    "RENDER_API_KEY",
+    "RENDER_API_TOKEN",
+    "RENDER_TOKEN",
+)
+
+RENDER_RATE_LIMIT_RETRY_MAX_ATTEMPTS = int(
+    os.environ.get("RENDER_RATE_LIMIT_RETRY_MAX_ATTEMPTS", "2")
+)
+RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS = int(
+    os.environ.get("RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS", "30")
+)
+RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS = float(
+    os.environ.get("RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS", "1")
+)
+
 __all__ = [
     "BASE_LOGGER",
     "FETCH_FILES_CONCURRENCY",
@@ -406,7 +448,14 @@ __all__ = [
     "HTTPX_MAX_CONNECTIONS",
     "HTTPX_MAX_KEEPALIVE",
     "HTTPX_TIMEOUT",
+    "LOG_RENDER_HTTP",
+    "LOG_RENDER_HTTP_BODIES",
     "MAX_CONCURRENCY",
+    "RENDER_API_BASE",
+    "RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS",
+    "RENDER_RATE_LIMIT_RETRY_MAX_ATTEMPTS",
+    "RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS",
+    "RENDER_TOKEN_ENV_VARS",
     "SERVER_GIT_COMMIT",
     "SERVER_START_TIME",
     "WORKSPACE_BASE_DIR",

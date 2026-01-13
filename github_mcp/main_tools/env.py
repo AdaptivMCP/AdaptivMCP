@@ -17,7 +17,9 @@ from github_mcp.config import (
     GIT_IDENTITY_SOURCES,
     GITHUB_MCP_GIT_IDENTITY_ENV_VARS,
     GITHUB_TOKEN_ENV_VARS,
+    RENDER_TOKEN_ENV_VARS,
 )
+from github_mcp.render_api import _get_optional_render_token
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -57,7 +59,7 @@ def _get_controller_revision_info() -> Dict[str, Any]:
 
 
 async def validate_environment() -> Dict[str, Any]:
-    """Check GitHub-related environment settings and report problems."""
+    """Check environment settings for GitHub and Render and report problems."""
 
     m = _main()
 
@@ -314,6 +316,23 @@ async def validate_environment() -> Dict[str, Any]:
             "warning",
             "Skipped controller repo/branch remote validation because GitHub token is not configured",
             {},
+        )
+
+    # Render token checks (presence only; no network calls).
+    render_token = _get_optional_render_token()
+    if render_token is None:
+        add_check(
+            "render_token",
+            "warning",
+            "Render API token is not set; Render tools will fail with authentication errors",
+            {"env_vars": list(RENDER_TOKEN_ENV_VARS)},
+        )
+    else:
+        add_check(
+            "render_token",
+            "ok",
+            "Render API token is configured",
+            {"length": len(render_token)},
         )
 
     summary = {

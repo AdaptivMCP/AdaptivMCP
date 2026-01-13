@@ -34,6 +34,8 @@ from github_mcp.config import (
     HUMAN_LOGS,
     LOG_HTTP_REQUESTS,
     LOG_HTTP_BODIES,
+    LOG_RENDER_HTTP,  # noqa: F401
+    LOG_RENDER_HTTP_BODIES,  # noqa: F401
 )
 from github_mcp.exceptions import (
     GitHubAPIError,  # noqa: F401
@@ -716,6 +718,126 @@ async def validate_environment() -> Dict[str, Any]:
     from github_mcp.main_tools.env import validate_environment as _impl
 
     return await _impl()
+
+
+@mcp_tool(write_action=False)
+async def list_render_owners(cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
+    """List Render owners (workspaces + personal owners)."""
+
+    from github_mcp.main_tools.render import list_render_owners as _impl
+
+    return await _impl(cursor=cursor, limit=limit)
+
+
+@mcp_tool(write_action=False)
+async def list_render_services(
+    owner_id: Optional[str] = None,
+    cursor: Optional[str] = None,
+    limit: int = 20,
+) -> Dict[str, Any]:
+    """List Render services (optionally filtered by owner_id)."""
+
+    from github_mcp.main_tools.render import list_render_services as _impl
+
+    return await _impl(owner_id=owner_id, cursor=cursor, limit=limit)
+
+
+@mcp_tool(write_action=False)
+async def get_render_service(service_id: str) -> Dict[str, Any]:
+    """Fetch a Render service by id."""
+
+    from github_mcp.main_tools.render import get_render_service as _impl
+
+    return await _impl(service_id=service_id)
+
+
+@mcp_tool(write_action=False)
+async def list_render_deploys(
+    service_id: str,
+    cursor: Optional[str] = None,
+    limit: int = 20,
+) -> Dict[str, Any]:
+    """List deploys for a Render service."""
+
+    from github_mcp.main_tools.render import list_render_deploys as _impl
+
+    return await _impl(service_id=service_id, cursor=cursor, limit=limit)
+
+
+@mcp_tool(write_action=False)
+async def get_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+    """Fetch a specific deploy for a service."""
+
+    from github_mcp.main_tools.render import get_render_deploy as _impl
+
+    return await _impl(service_id=service_id, deploy_id=deploy_id)
+
+
+@mcp_tool(write_action=True)
+async def create_render_deploy(
+    service_id: str,
+    clear_cache: bool = False,
+    commit_id: Optional[str] = None,
+    image_url: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Trigger a new deploy for a Render service."""
+
+    from github_mcp.main_tools.render import create_render_deploy as _impl
+
+    return await _impl(
+        service_id=service_id,
+        clear_cache=clear_cache,
+        commit_id=commit_id,
+        image_url=image_url,
+    )
+
+
+@mcp_tool(write_action=True)
+async def cancel_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+    """Cancel an in-progress Render deploy."""
+
+    from github_mcp.main_tools.render import cancel_render_deploy as _impl
+
+    return await _impl(service_id=service_id, deploy_id=deploy_id)
+
+
+@mcp_tool(write_action=True)
+async def rollback_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+    """Roll back a service to the specified deploy."""
+
+    from github_mcp.main_tools.render import rollback_render_deploy as _impl
+
+    return await _impl(service_id=service_id, deploy_id=deploy_id)
+
+
+@mcp_tool(write_action=True)
+async def restart_render_service(service_id: str) -> Dict[str, Any]:
+    """Restart a Render service."""
+
+    from github_mcp.main_tools.render import restart_render_service as _impl
+
+    return await _impl(service_id=service_id)
+
+
+@mcp_tool(write_action=False)
+async def get_render_logs(
+    resource_type: str,
+    resource_id: str,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    limit: int = 200,
+) -> Dict[str, Any]:
+    """Fetch logs for a Render resource."""
+
+    from github_mcp.main_tools.render import get_render_logs as _impl
+
+    return await _impl(
+        resource_type=resource_type,
+        resource_id=resource_id,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit,
+    )
 
 
 @mcp_tool(write_action=True)

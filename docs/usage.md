@@ -138,6 +138,10 @@ At minimum, set one GitHub authentication token so the server can access the API
 
 - GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, or GITHUB_OAUTH_TOKEN
 
+For Render integration, set one Render API token so the server can access the Render API:
+
+- RENDER_API_KEY or RENDER_API_TOKEN (first configured token wins; see RENDER_TOKEN_ENV_VARS)
+
 ### GitHub authentication
 
 - GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, GITHUB_OAUTH_TOKEN — GitHub API token (first configured is used)
@@ -156,6 +160,8 @@ These flags control provider-side logs (for example, Render logs). They do not m
 - LOG_TOOL_PAYLOADS (default: false) — logs full tool input arguments and full tool results (no truncation).
 - LOG_GITHUB_HTTP (default: false) — logs outbound GitHub HTTP method/path/status/duration with correlation fields.
 - LOG_GITHUB_HTTP_BODIES (default: false) — includes full GitHub response bodies/headers in provider logs.
+- LOG_RENDER_HTTP (default: false) — logs outbound Render HTTP method/path/status/duration with correlation fields.
+- LOG_RENDER_HTTP_BODIES (default: false) — includes full Render response bodies/headers in provider logs.
 - LOG_HTTP_REQUESTS (default: true) — logs inbound HTTP requests to the ASGI server (method/path/status/duration) with request_id.
 - LOG_HTTP_BODIES (default: false) — when enabled, logs the POST /messages body (no truncation). Use with care.
 
