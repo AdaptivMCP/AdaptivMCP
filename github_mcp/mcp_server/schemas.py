@@ -343,6 +343,123 @@ def _normalize_tool_description(
     return base
 
 
+def _build_tool_docstring(
+    *,
+    tool_name: str,
+    description: str,
+    input_schema: Optional[Mapping[str, Any]],
+    write_action: bool,
+    visibility: str,
+) -> str:
+    """Build a developer-oriented tool docstring.
+
+    The MCP tool surface is consumed by humans and LLM agents. This helper
+    builds a consistent docstring that:
+    - Keeps the first line compact (for UIs that show only a summary).
+    - Provides a complete reference for parameters, return payloads, and
+      write-action semantics.
+    """
+
+    def _schema_type(prop: Mapping[str, Any]) -> str:
+        if not isinstance(prop, Mapping):
+            return "unknown"
+        t = prop.get("type")
+        if isinstance(t, str) and t:
+            return t
+        any_of = prop.get("anyOf")
+        if isinstance(any_of, list) and any_of:
+            parts: list[str] = []
+            for item in any_of:
+                if isinstance(item, Mapping):
+                    it = item.get("type")
+                    if isinstance(it, str) and it:
+                        parts.append(it)
+                    elif isinstance(item.get("enum"), list):
+                        parts.append("enum")
+            return " | ".join(dict.fromkeys(parts)) or "unknown"
+        if isinstance(prop.get("enum"), list):
+            return "enum"
+        return "unknown"
+
+    clean_desc = (description or "").strip()
+    summary = clean_desc.splitlines()[0].strip() if clean_desc else ""
+    if not summary:
+        summary = f"{_title_from_tool_name(tool_name)}."
+
+    lines: list[str] = [summary]
+
+    # Provide the long description if it adds more than the first line.
+    if clean_desc:
+        rest = "\n".join([ln.rstrip() for ln in clean_desc.splitlines()[1:]]).strip()
+        if rest:
+            lines += ["", rest]
+
+    lines += [
+        "",
+        f"Write action: {'yes' if write_action else 'no'}.",
+        (
+            "Write actions may be gated by server policy. If the server requires approval, "
+            "the tool will return a structured error indicating approval is required."
+            if write_action
+            else "This tool is read-only and is not subject to write-approval gating."
+        ),
+        "",
+        f"Visibility: {visibility}.",
+    ]
+
+    schema = input_schema if isinstance(input_schema, Mapping) else None
+    props = schema.get("properties") if schema is not None else None
+    required = schema.get("required") if schema is not None else None
+    required_set = (
+        {n for n in required if isinstance(n, str)} if isinstance(required, list) else set()
+    )
+
+    if isinstance(props, Mapping) and props:
+        lines += ["", "Parameters:"]
+        for name in sorted([k for k in props.keys() if isinstance(k, str)]):
+            prop = props.get(name)
+            if not isinstance(prop, Mapping):
+                lines.append(f"- {name}: (unknown)")
+                continue
+
+            type_str = _schema_type(prop)
+            req = "required" if name in required_set else "optional"
+            default = prop.get("default")
+            suffix_parts = [req]
+            if default is not None:
+                suffix_parts.append(f"default={default!r}")
+            suffix = ", ".join(suffix_parts)
+            lines.append(f"- {name} ({type_str}; {suffix})")
+
+            pdesc = prop.get("description")
+            if isinstance(pdesc, str) and pdesc.strip():
+                lines.append(f"  {pdesc.strip()}")
+
+            examples = prop.get("examples")
+            if isinstance(examples, list) and examples:
+                # Keep examples short and JSON-ish.
+                rendered = ", ".join(repr(e) for e in examples[:3])
+                lines.append(f"  Examples: {rendered}")
+
+    lines += [
+        "",
+        "Returns:",
+        "  A JSON-serializable object defined by the tool. Most tools return a mapping (dict-like) payload.",
+        "",
+        "Errors:",
+        "  On failure, tools return a structured error payload (JSON object) describing the failure, context, and any relevant metadata.",
+    ]
+
+    if schema is not None:
+        lines += [
+            "",
+            "Example:",
+            f"  {{'tool': {tool_name!r}, 'args': {{...}}}}",
+        ]
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
     """
     Best-effort extraction of an input schema from an MCP tool object.

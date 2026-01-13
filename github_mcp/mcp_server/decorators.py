@@ -49,6 +49,7 @@ from github_mcp.mcp_server.schemas import (
     _schema_from_signature,
     _normalize_input_schema,
     _normalize_tool_description,
+    _build_tool_docstring,
 )
 
 
@@ -793,14 +794,6 @@ def mcp_tool(
                 description=normalized_description,
             )
 
-            # Ensure every registered tool has a stable docstring surface.
-            # Many tool wrappers intentionally omit explicit docstrings; without
-            # this, some clients display empty descriptions.
-            try:
-                wrapper.__doc__ = normalized_description
-            except Exception:
-                pass
-
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
                 schema = _schema_from_signature(signature, tool_name=tool_name)
@@ -817,6 +810,31 @@ def mcp_tool(
                 write_action=bool(write_action),
                 write_allowed=_tool_write_allowed(write_action),
             )
+
+            # Ensure every registered tool has a stable, detailed docstring surface.
+            # Some clients show only func.__doc__.
+            try:
+                wrapper.__doc__ = _build_tool_docstring(
+                    tool_name=tool_name,
+                    description=normalized_description,
+                    input_schema=schema,
+                    write_action=bool(write_action),
+                    visibility=str(visibility),
+                )
+            except Exception:
+                # Best-effort; do not break tool registration.
+                try:
+                    wrapper.__doc__ = normalized_description
+                except Exception:
+                    pass
+
+            # Keep the tool registry description aligned with the docstring.
+            try:
+                setattr(
+                    wrapper.__mcp_tool__, "description", wrapper.__doc__ or normalized_description
+                )
+            except Exception:
+                pass
 
             return wrapper
 
@@ -924,12 +942,6 @@ def mcp_tool(
             description=normalized_description,
         )
 
-        # Ensure every registered tool has a stable docstring surface.
-        try:
-            wrapper.__doc__ = normalized_description
-        except Exception:
-            pass
-
         schema = _normalize_input_schema(wrapper.__mcp_tool__)
         if not isinstance(schema, Mapping):
             schema = _schema_from_signature(signature, tool_name=tool_name)
@@ -946,6 +958,28 @@ def mcp_tool(
             write_action=bool(write_action),
             write_allowed=_tool_write_allowed(write_action),
         )
+
+        # Ensure every registered tool has a stable, detailed docstring surface.
+        # Some clients show only func.__doc__.
+        try:
+            wrapper.__doc__ = _build_tool_docstring(
+                tool_name=tool_name,
+                description=normalized_description,
+                input_schema=schema,
+                write_action=bool(write_action),
+                visibility=str(visibility),
+            )
+        except Exception:
+            try:
+                wrapper.__doc__ = normalized_description
+            except Exception:
+                pass
+
+        # Keep the tool registry description aligned with the docstring.
+        try:
+            setattr(wrapper.__mcp_tool__, "description", wrapper.__doc__ or normalized_description)
+        except Exception:
+            pass
 
         return wrapper
 
