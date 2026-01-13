@@ -23,7 +23,7 @@ class DummyWorkspaceTools:
         return ref
 
 
-def test_list_workspace_files_allows_path_escape(tmp_path, monkeypatch):
+def test_list_workspace_files_denies_path_escape(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     sibling = tmp_path / "repo-sibling"
@@ -35,8 +35,7 @@ def test_list_workspace_files_allows_path_escape(tmp_path, monkeypatch):
 
     result = asyncio.run(workspace_listing.list_workspace_files(path="../repo-sibling"))
 
-    assert "error" not in result
-    assert "../repo-sibling/secret.txt" in result["files"]
+    assert "error" in result
 
 
 def test_list_workspace_files_allows_absolute_path_inside_repo(tmp_path, monkeypatch):
@@ -56,7 +55,7 @@ def test_list_workspace_files_allows_absolute_path_inside_repo(tmp_path, monkeyp
     assert result["path"] == "docs/readme.md"
 
 
-def test_list_workspace_files_allows_absolute_path_outside_repo(tmp_path, monkeypatch):
+def test_list_workspace_files_denies_absolute_path_outside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     outside = tmp_path / "outside"
@@ -69,11 +68,10 @@ def test_list_workspace_files_allows_absolute_path_outside_repo(tmp_path, monkey
 
     result = asyncio.run(workspace_listing.list_workspace_files(path=str(target)))
 
-    assert "error" not in result
-    assert "../outside/secret.txt" in result["files"]
+    assert "error" in result
 
 
-def test_search_workspace_allows_path_escape(tmp_path, monkeypatch):
+def test_search_workspace_denies_path_escape(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     sibling = tmp_path / "repo-sibling"
@@ -90,12 +88,10 @@ def test_search_workspace_allows_path_escape(tmp_path, monkeypatch):
         )
     )
 
-    assert "error" not in result
-    assert result["results"]
-    assert result["results"][0]["file"] == "../repo-sibling/secret.txt"
+    assert "error" in result
 
 
-def test_search_workspace_allows_absolute_path_outside_repo(tmp_path, monkeypatch):
+def test_search_workspace_denies_absolute_path_outside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     outside = tmp_path / "outside"
@@ -113,6 +109,4 @@ def test_search_workspace_allows_absolute_path_outside_repo(tmp_path, monkeypatc
         )
     )
 
-    assert "error" not in result
-    assert result["results"]
-    assert result["results"][0]["file"] == "../outside/secret.txt"
+    assert "error" in result

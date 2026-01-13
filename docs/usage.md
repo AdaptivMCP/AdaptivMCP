@@ -85,6 +85,10 @@ Typical flow:
    - `ensure_workspace_clone` creates or reuses the persistent clone.
    - `workspace_sync_status` reports whether the clone is ahead/behind or has uncommitted changes.
 
+   Recommended: do active work on a feature branch.
+   - `workspace_create_branch` creates a new branch from a base ref (and can push it).
+   - Avoid committing directly on the default branch unless you explicitly intend to.
+
 2. Make changes in the clone
    - Edit files using workspace file tools or shell editors.
    - Validate changes using your normal commands (tests, linters, etc.).
@@ -94,6 +98,10 @@ Typical flow:
      - git add
      - git commit
      - git push
+
+   Convenience: `commit_and_open_pr_from_workspace` performs the common "commit + push + open PR" workflow.
+   - Optional: set `run_quality=true` to run lint/tests before creating the commit.
+   - This tool pushes only to the current `ref` (the feature branch) and then opens a PR into `base`.
 
 4. Refresh when you need a clean snapshot
    - The local clone does not automatically reflect the live GitHub state unless you fetch/pull or recreate the clone.
@@ -115,6 +123,8 @@ Because the clone is not the live GitHub state, GitHub API tools are typically u
 - ChatGPT metadata: the server captures safe ChatGPT headers (conversation, assistant, project, org, session, user IDs) for correlation and includes them in request context/logging.
 - Cache control: dynamic endpoints are served with `Cache-Control: no-store`; static assets under `/static` are cacheable.
 - File caching: GitHub file contents may be cached in-memory to reduce repeated fetches.
+
+Workspace path handling: workspace file tools enforce that requested paths resolve inside the repository root. Relative traversal and absolute paths that point outside the repo are treated as invalid input.
 
 ## Deployment (Render.com)
 
