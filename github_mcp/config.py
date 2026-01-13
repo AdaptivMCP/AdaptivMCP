@@ -7,6 +7,7 @@ import logging
 import os
 import tempfile
 import time
+import traceback
 
 from github_mcp.mcp_server.schemas import _jsonable
 
@@ -85,6 +86,17 @@ HUMAN_LOGS = os.environ.get("HUMAN_LOGS", "true").strip().lower() in (
     "on",
 )
 
+# Log tool call start/completion lines to provider logs.
+# When disabled, only warnings/errors (tool_call_failed) are emitted.
+LOG_TOOL_CALLS = os.environ.get("LOG_TOOL_CALLS", "false").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
 # When enabled, include full tool args and full tool results in logs.
 # WARNING: This can create very large log lines and may stress hosted log ingestion.
 LOG_TOOL_PAYLOADS = os.environ.get("LOG_TOOL_PAYLOADS", "false").strip().lower() in (
@@ -117,8 +129,9 @@ LOG_GITHUB_HTTP_BODIES = os.environ.get("LOG_GITHUB_HTTP_BODIES", "false").strip
     "on",
 )
 
-# Log inbound HTTP requests handled by the ASGI app (Render logs).
-LOG_HTTP_REQUESTS = os.environ.get("LOG_HTTP_REQUESTS", "true").strip().lower() in (
+# Log inbound HTTP requests handled by the ASGI app (provider logs).
+# Default is disabled so hosted logs show platform access lines ([GET]/[POST]) and errors only.
+LOG_HTTP_REQUESTS = os.environ.get("LOG_HTTP_REQUESTS", "false").strip().lower() in (
     "1",
     "true",
     "t",
@@ -364,6 +377,33 @@ class _StructuredFormatter(logging.Formatter):
         return base
 
 
+class _ErrorsOnlyJSONFormatter(logging.Formatter):
+    """Formatter that emits a single JSON object per log line.
+
+    This is intended for the dedicated errors-only logger so operators can
+    filter exclusively for actionable failures.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:  # pragma: no cover
+        payload: dict[str, object] = {
+            "ts": getattr(record, "created", None),
+            "level": getattr(record, "levelname", None),
+            "logger": getattr(record, "name", None),
+            "message": record.getMessage(),
+        }
+
+        extra_payload = _extract_log_extras(record)
+        if extra_payload:
+            payload.update(extra_payload)
+
+        if record.exc_info:
+            payload["exception"] = "".join(traceback.format_exception(*record.exc_info)).strip()
+        elif getattr(record, "exc_text", None):
+            payload["exception"] = str(getattr(record, "exc_text"))
+
+        return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
 _STANDARD_LOG_FIELDS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys())
 
 
@@ -402,6 +442,17 @@ def _configure_logging() -> None:
         force=True,
     )
 
+    # Dedicated errors-only sink. This logger does not propagate to the root
+    # handler to avoid duplicate lines.
+    errors_handler = logging.StreamHandler()
+    errors_handler.setLevel(logging.ERROR)
+    errors_handler.setFormatter(_ErrorsOnlyJSONFormatter())
+
+    errors_logger = logging.getLogger("github_mcp.errors")
+    errors_logger.setLevel(logging.ERROR)
+    errors_logger.propagate = False
+    errors_logger.addHandler(errors_handler)
+
     # Reduce noisy framework logs in provider log streams.
     for noisy in (
         "uvicorn.access",
@@ -419,6 +470,7 @@ def _configure_logging() -> None:
 _configure_logging()
 
 BASE_LOGGER = logging.getLogger("github_mcp")
+ERRORS_LOGGER = logging.getLogger("github_mcp.errors")
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 
 SERVER_START_TIME = time.time()
@@ -454,6 +506,7 @@ RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS = float(
 
 __all__ = [
     "BASE_LOGGER",
+    "ERRORS_LOGGER",
     "FETCH_FILES_CONCURRENCY",
     "FILE_CACHE_MAX_BYTES",
     "FILE_CACHE_MAX_ENTRIES",
@@ -473,6 +526,8 @@ __all__ = [
     "HTTPX_TIMEOUT",
     "LOG_RENDER_HTTP",
     "LOG_RENDER_HTTP_BODIES",
+    "LOG_TOOL_CALLS",
+    "LOG_HTTP_REQUESTS",
     "MAX_CONCURRENCY",
     "RENDER_API_BASE",
     "RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS",
