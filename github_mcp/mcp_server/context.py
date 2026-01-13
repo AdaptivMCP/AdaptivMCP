@@ -11,7 +11,6 @@ from mcp.server.transport_security import TransportSecuritySettings
 from github_mcp.utils import _extract_hostname, _render_external_hosts
 
 
-
 # ------------------------------------------------------------------------------
 # Request-scoped context (used for correlation/logging/dedupe)
 # ------------------------------------------------------------------------------
@@ -167,6 +166,8 @@ COMPACT_METADATA_DEFAULT = _parse_bool(
     os.environ.get("GITHUB_MCP_COMPACT_METADATA_DEFAULT", "true")
 )
 _TOOL_EXAMPLES: dict[str, Any] = {}
+
+
 def _split_host_list(value: str | None) -> list[str]:
     if not value:
         return []
@@ -204,6 +205,7 @@ def _resolve_transport_security() -> TransportSecuritySettings | None:
 
 try:
     from mcp.server.fastmcp import FastMCP  # type: ignore
+
     FASTMCP_AVAILABLE = True
 
     mcp = FastMCP(

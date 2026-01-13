@@ -480,7 +480,9 @@ def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
     return {}
 
 
-def _schema_from_signature(signature: Optional[inspect.Signature], *, tool_name: str = 'tool') -> Dict[str, Any]:
+def _schema_from_signature(
+    signature: Optional[inspect.Signature], *, tool_name: str = "tool"
+) -> Dict[str, Any]:
     properties: Dict[str, Any] = {}
     required: list[str] = []
 

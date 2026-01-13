@@ -502,7 +502,6 @@ def _emit_tool_error(
     exc: BaseException,
     phase: str,
 ) -> dict[str, Any]:
-    duration_ms = (time.perf_counter() - start) * 1000
     structured_error = _structured_tool_error(
         exc,
         context=tool_name,
