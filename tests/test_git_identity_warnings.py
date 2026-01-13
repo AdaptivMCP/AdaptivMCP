@@ -32,7 +32,9 @@ def test_git_identity_warnings_when_placeholders_active(monkeypatch):
     )
 
     warnings = config.git_identity_warnings()
-    assert warnings, "Expected a placeholder warning when no git identity is configured"
+    # The repo defaults to a stable, non-placeholder identity so deployments can run
+    # without requiring explicit git identity env vars.
+    assert warnings == []
 
 
 def test_git_identity_warnings_disabled_when_explicit_configured(monkeypatch):

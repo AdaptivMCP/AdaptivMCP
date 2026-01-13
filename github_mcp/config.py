@@ -178,6 +178,14 @@ DEFAULT_GIT_IDENTITY = {
     "committer_email": "adaptiv-mcp@local",
 }
 
+# Back-compat placeholder values from earlier versions.
+PLACEHOLDER_GIT_IDENTITY = {
+    "author_name": "Ally",
+    "author_email": "ally@example.com",
+    "committer_name": "Ally",
+    "committer_email": "ally@example.com",
+}
+
 
 def _slugify_app_name(value: str | None) -> str | None:
     if not value:
@@ -283,7 +291,22 @@ def _resolve_git_identity() -> dict[str, object]:
         "committer_email": committer_email_source,
     }
 
-    placeholder_active = any(source == "default_placeholder" for source in sources.values())
+    # Mark placeholder active only when the fallback values are clearly placeholders.
+    # Using DEFAULT_GIT_IDENTITY as the fallback identity is valid for deployments that do
+    # not set explicit git identity env vars.
+    placeholder_active = False
+    for key, source in sources.items():
+        if source != "default_placeholder":
+            continue
+        value = {
+            "author_name": author_name,
+            "author_email": author_email,
+            "committer_name": committer_name,
+            "committer_email": committer_email,
+        }[key]
+        if value == PLACEHOLDER_GIT_IDENTITY[key]:
+            placeholder_active = True
+            break
 
     return {
         "author_name": author_name,
