@@ -7,9 +7,9 @@ import types
 def _reload_context(monkeypatch, value: str | None):
     """Reload github_mcp.mcp_server.context after setting env var.
 
- This ensures import-time defaults and WRITE_ALLOWED behaviors stay consistent
- even if future refactors introduce caching.
- """
+    This ensures import-time defaults and WRITE_ALLOWED behaviors stay consistent
+    even if future refactors introduce caching.
+    """
 
     if value is None:
         monkeypatch.delenv("GITHUB_MCP_WRITE_ALLOWED", raising=False)

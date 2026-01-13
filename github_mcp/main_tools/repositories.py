@@ -91,15 +91,15 @@ async def create_repository(
 ) -> Dict[str, Any]:
     """Create a new GitHub repository for the authenticated user or an organization.
 
- Designed to match GitHub's "New repository" UI with a safe escape hatch:
+    Designed to match GitHub's "New repository" UI with a safe escape hatch:
 
- - Use first-class params for common fields.
- - Use create_payload_overrides and update_payload_overrides to pass any
- additional GitHub REST fields without waiting for server updates.
+    - Use first-class params for common fields.
+    - Use create_payload_overrides and update_payload_overrides to pass any
+    additional GitHub REST fields without waiting for server updates.
 
- Template-based creation is supported via template_full_name using:
- POST /repos/{template_owner}/{template_repo}/generate
- """
+    Template-based creation is supported via template_full_name using:
+    POST /repos/{template_owner}/{template_repo}/generate
+    """
 
     m = _main()
 

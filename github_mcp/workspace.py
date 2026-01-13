@@ -181,9 +181,9 @@ async def _run_shell(
 
 def _append_git_config_env(env: Dict[str, str], key: str, value: str) -> None:
     """
- Append a git config entry via environment variables (GIT_CONFIG_COUNT, etc.).
- This avoids putting secrets on the command line.
- """
+    Append a git config entry via environment variables (GIT_CONFIG_COUNT, etc.).
+    This avoids putting secrets on the command line.
+    """
     # Git reads these: GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>
     try:
         existing = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
@@ -276,9 +276,9 @@ def _workspace_path(full_name: str, ref: str) -> str:
 def _sanitize_workspace_ref(ref: str) -> str:
     """Convert an arbitrary ref string into a safe workspace directory name.
 
- The returned value is guaranteed to be a single path segment (no path
- separators) and stable for the same input.
- """
+    The returned value is guaranteed to be a single path segment (no path
+    separators) and stable for the same input.
+    """
 
     if not isinstance(ref, str) or not ref.strip():
         return "main"
@@ -535,11 +535,11 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
 def _maybe_unescape_unified_diff(patch: str) -> str:
     """Coerce a unified diff into newline-delimited text.
 
- Some upstream callers accidentally double-escape diffs (e.g. a single-line
- string containing literal \\n sequences). This breaks header parsing and
- `git apply`. We only unescape when the input looks like an escaped diff and
- contains no real newlines.
- """
+    Some upstream callers accidentally double-escape diffs (e.g. a single-line
+    string containing literal \\n sequences). This breaks header parsing and
+    `git apply`. We only unescape when the input looks like an escaped diff and
+    contains no real newlines.
+    """
     if not isinstance(patch, str):
         return patch
 
@@ -610,10 +610,10 @@ def _patch_has_hunk_header_with_ranges(patch: str) -> bool:
 def _looks_like_rangeless_git_patch(patch: str) -> bool:
     """Return True when a patch looks like a git diff but hunks omit ranges.
 
- Some assistants emit `@@` lines without `-a,b +c,d` ranges. `git apply`
- rejects these with "patch with only garbage". We detect that shape and
- fall back to the internal hunk-applier (which matches by content).
- """
+    Some assistants emit `@@` lines without `-a,b +c,d` ranges. `git apply`
+    rejects these with "patch with only garbage". We detect that shape and
+    fall back to the internal hunk-applier (which matches by content).
+    """
 
     if not isinstance(patch, str):
         return False
@@ -637,8 +637,8 @@ def _looks_like_rangeless_git_patch(patch: str) -> bool:
 def _parse_rangeless_git_patch(patch: str) -> List[Dict[str, Any]]:
     """Parse a minimal git-style diff that uses bare `@@` hunk separators.
 
- Supports update diffs (including simple rename via a/b paths).
- """
+    Supports update diffs (including simple rename via a/b paths).
+    """
 
     lines = patch.splitlines()
     blocks: List[Dict[str, Any]] = []
@@ -946,12 +946,12 @@ def _apply_tool_patch(repo_dir: str, patch: str) -> None:
 async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     """Write a unified diff to disk and apply it with ``git apply``.
 
- This helper supports three patch formats:
- 1) The MCP "tool patch" format (*** Begin Patch ...), applied in-process.
- 2) Standard git unified diffs (diff --git / --- / +++ / @@ -a,b +c,d @@).
- 3) A minimal git-style diff that uses bare `@@` hunk separators (no ranges),
- which some assistants emit. These are applied in-process.
- """
+    This helper supports three patch formats:
+    1) The MCP "tool patch" format (*** Begin Patch ...), applied in-process.
+    2) Standard git unified diffs (diff --git / --- / +++ / @@ -a,b +c,d @@).
+    3) A minimal git-style diff that uses bare `@@` hunk separators (no ranges),
+    which some assistants emit. These are applied in-process.
+    """
 
     if not patch or not patch.strip():
         raise GitHubAPIError("Received empty patch to apply in workspace")

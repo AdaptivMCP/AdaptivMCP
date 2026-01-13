@@ -107,15 +107,15 @@ async def delete_workspace_paths(
 ) -> Dict[str, Any]:
     """Delete one or more paths from the workspace clone.
 
- This tool exists because some environments can block patch-based file deletions.
- typical this over embedding file deletions into patches.
+    This tool exists because some environments can block patch-based file deletions.
+    typical this over embedding file deletions into patches.
 
- Safety constraints:
- - Paths are resolved relative to the repo root and cannot escape it.
- - Deleting the repository root is forbidden.
- - Directories require allow_recursive=True. Otherwise only empty directories
- may be removed.
- """
+    Safety constraints:
+    - Paths are resolved relative to the repo root and cannot escape it.
+    - Deleting the repository root is forbidden.
+    - Directories require allow_recursive=True. Otherwise only empty directories
+    may be removed.
+    """
 
     if paths is None:
         paths = []
@@ -213,9 +213,9 @@ async def set_workspace_file_contents(
 ) -> Dict[str, Any]:
     """Replace a workspace file's contents by writing the full file text.
 
- This is the preferred write primitive for workspace edits. It avoids
- patch/unified-diff application.
- """
+    This is the preferred write primitive for workspace edits. It avoids
+    patch/unified-diff application.
+    """
 
     if not isinstance(path, str) or not path.strip():
         raise ValueError("path must be a non-empty string")

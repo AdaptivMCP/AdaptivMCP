@@ -10,12 +10,12 @@ from ._main import _main
 async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Dict[str, Any]:
     """Return a compact, multi-signal dashboard for a repository.
 
- Implementation moved out of `main.py` to keep the main registration surface
- small and navigable.
+    Implementation moved out of `main.py` to keep the main registration surface
+    small and navigable.
 
- This is intentionally read-only: it aggregates several lower-level calls and
- degrades gracefully (each section has a corresponding *_error field).
- """
+    This is intentionally read-only: it aggregates several lower-level calls and
+    degrades gracefully (each section has a corresponding *_error field).
+    """
 
     m = _main()
 

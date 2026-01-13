@@ -34,8 +34,8 @@ def _find_repo_root(start: Path) -> Path | None:
 def _get_controller_revision_info() -> Dict[str, Any]:
     """Return best-effort controller revision metadata.
 
- In some deploy environments, the `.git` directory may not exist.
- """
+    In some deploy environments, the `.git` directory may not exist.
+    """
 
     info: Dict[str, Any] = {}
 

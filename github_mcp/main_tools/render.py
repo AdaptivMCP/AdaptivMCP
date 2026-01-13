@@ -8,8 +8,8 @@ from github_mcp.render_api import render_request
 async def list_render_owners(cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
     """List Render owners (workspaces + personal owners).
 
- Render's API exposes workspaces via the "owners" collection.
- """
+    Render's API exposes workspaces via the "owners" collection.
+    """
 
     params: Dict[str, Any] = {"limit": limit}
     if cursor:
@@ -24,8 +24,8 @@ async def list_render_services(
 ) -> Dict[str, Any]:
     """List Render services.
 
- Supports optional filtering by ownerId when provided.
- """
+    Supports optional filtering by ownerId when provided.
+    """
 
     params: Dict[str, Any] = {"limit": limit}
     if cursor:
@@ -114,10 +114,10 @@ async def get_render_logs(
 ) -> Dict[str, Any]:
     """Fetch logs for a Render resource.
 
- Render's logs endpoint supports resourceType/resourceId plus time bounds.
- - resource_type examples: service, job
- - start_time/end_time: ISO8601 timestamps
- """
+    Render's logs endpoint supports resourceType/resourceId plus time bounds.
+    - resource_type examples: service, job
+    - start_time/end_time: ISO8601 timestamps
+    """
 
     params: Dict[str, Any] = {
         "resourceType": resource_type,

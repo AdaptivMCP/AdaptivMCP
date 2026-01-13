@@ -18,9 +18,9 @@ from github_mcp.workspace import (
 def _cmd_invokes_git(cmd: object) -> bool:
     """Return True if a shell command string invokes git anywhere as a command segment.
 
- This handles composite commands like: "rm -rf x && git clone ...".
- Used only to decide whether to inject git auth env.
- """
+    This handles composite commands like: "rm -rf x && git clone ...".
+    Used only to decide whether to inject git auth env.
+    """
     if not isinstance(cmd, str):
         return False
     s = cmd.strip()
@@ -169,12 +169,12 @@ async def _delete_branch_via_workspace(
 
 def _workspace_deps() -> Dict[str, Any]:
     """
- Return workspace dependencies.
+    Return workspace dependencies.
 
- Important change: wrap run_shell so that any git command automatically
- receives the GitHub auth header env (GIT_HTTP_EXTRAHEADER + config-env),
- enabling `git push`/`git fetch` in non-interactive environments.
- """
+    Important change: wrap run_shell so that any git command automatically
+    receives the GitHub auth header env (GIT_HTTP_EXTRAHEADER + config-env),
+    enabling `git push`/`git fetch` in non-interactive environments.
+    """
     main_module = _get_main_module()
     clone_repo_fn = getattr(main_module, "_clone_repo", _clone_repo)
     base_run_shell = getattr(main_module, "_run_shell", _run_shell)

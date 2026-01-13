@@ -11,9 +11,9 @@ async def test_run_quality_suite_merges_controller_log_on_lint_failure(
 ) -> None:
     """Regression: fail-fast lint path needs to not drop suite controller_log.
 
- Prior behavior used dict.setdefault('controller_log', ...), which does not
- overwrite when terminal_command already includes controller_log.
- """
+    Prior behavior used dict.setdefault('controller_log', ...), which does not
+    overwrite when terminal_command already includes controller_log.
+    """
 
     from github_mcp.workspace_tools import suites
 

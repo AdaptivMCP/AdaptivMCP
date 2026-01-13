@@ -30,15 +30,15 @@ def _strip(s: Optional[str]) -> str:
 def _extract_trailing_int(text: str) -> Optional[int]:
     """Extract a trailing integer from the string without regex.
 
- Examples:
- - "#123" -> 123
- - ".../issues/123" -> 123
- - "123" -> 123
- - "abc" -> None
+    Examples:
+    - "#123" -> 123
+    - ".../issues/123" -> 123
+    - "123" -> 123
+    - "abc" -> None
 
- This is intentionally permissive: it scans from the end and consumes digits
- until the first non-digit.
- """
+    This is intentionally permissive: it scans from the end and consumes digits
+    until the first non-digit.
+    """
 
     if not text:
         return None
@@ -61,17 +61,17 @@ def _extract_trailing_int(text: str) -> Optional[int]:
 def parse_handle(handle: Optional[str]) -> ParsedHandle:
     """Parse a user-provided handle into a best-effort numeric ID.
 
- Accepted examples (best-effort):
- - "#123" / "123"
- - "issue #123"
- - "https://github.com/org/repo/issues/123"
- - "https://github.com/org/repo/pull/123"
+    Accepted examples (best-effort):
+    - "#123" / "123"
+    - "issue #123"
+    - "https://github.com/org/repo/issues/123"
+    - "https://github.com/org/repo/pull/123"
 
- Notes:
- - If a number cannot be derived, number=None.
- - canonical is returned as "#<number>" when number is known, otherwise
- the stripped raw input.
- """
+    Notes:
+    - If a number cannot be derived, number=None.
+    - canonical is returned as "#<number>" when number is known, otherwise
+    the stripped raw input.
+    """
 
     raw = _strip(handle)
     if not raw:

@@ -13,10 +13,10 @@ from github_mcp.main_tools.introspection import list_all_actions
 def _tool_name(tool: Any, func: Any) -> str:
     """Best-effort tool name extraction.
 
- In most environments `tool` is a framework tool object (e.g., FastMCP Tool)
- with a `.name`. In minimal/test environments it may be the underlying Python
- function.
- """
+    In most environments `tool` is a framework tool object (e.g., FastMCP Tool)
+    with a `.name`. In minimal/test environments it may be the underlying Python
+    function.
+    """
 
     name = (
         getattr(tool, "name", None)

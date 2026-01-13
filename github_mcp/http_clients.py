@@ -166,11 +166,11 @@ class _GitHubClientProtocol:
 def _get_github_token() -> str:
     """Return a trimmed GitHub token or raise when missing/empty.
 
- The helper reads from the current environment each time it is invoked
- instead of relying on module-level constants. This keeps tests that reload
- ``main`` with different token values deterministic and avoids stale cached
- values during long-running processes.
- """
+    The helper reads from the current environment each time it is invoked
+    instead of relying on module-level constants. This keeps tests that reload
+    ``main`` with different token values deterministic and avoids stale cached
+    values during long-running processes.
+    """
 
     token = None
     token_source = None
@@ -211,13 +211,13 @@ def _get_optional_github_token() -> Optional[str]:
 def _get_concurrency_semaphore() -> asyncio.Semaphore:
     """Return a per-event-loop semaphore to cap concurrent outbound requests.
 
- Asyncio synchronization primitives are bound to the event loop that created
- them. In connector environments the loop can be restarted or swapped after
- an idle period, so we lazily create (and cache) a semaphore for whichever
- loop is active when the helper is called instead of keeping a single global
- instance. Weak references allow semaphores for old loops to be garbage
- collected automatically.
- """
+    Asyncio synchronization primitives are bound to the event loop that created
+    them. In connector environments the loop can be restarted or swapped after
+    an idle period, so we lazily create (and cache) a semaphore for whichever
+    loop is active when the helper is called instead of keeping a single global
+    instance. Weak references allow semaphores for old loops to be garbage
+    collected automatically.
+    """
 
     try:
         loop = asyncio.get_running_loop()
@@ -254,11 +254,11 @@ def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> Optional[float]:
 def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool) -> float:
     """Apply randomized jitter to sleep durations.
 
- Jitter reduces synchronized retry storms across concurrent assistants.
+    Jitter reduces synchronized retry storms across concurrent assistants.
 
- When ``respect_min`` is True (e.g. Retry-After/X-RateLimit-Reset driven delays),
- jitter is added *after* the minimum delay so the retry is not supported happens early.
- """
+    When ``respect_min`` is True (e.g. Retry-After/X-RateLimit-Reset driven delays),
+    jitter is added *after* the minimum delay so the retry is not supported happens early.
+    """
 
     try:
         delay = float(delay_seconds)
@@ -342,10 +342,10 @@ def _refresh_async_client(
 ) -> Tuple[httpx.AsyncClient, asyncio.AbstractEventLoop]:
     """Return a loop-safe AsyncClient, rebuilding if necessary.
 
- The underlying event loop may change after idle periods in connector
- environments. Recreate the client when the loop differs or the client is
- already closed so outbound requests stay bound to the active loop.
- """
+    The underlying event loop may change after idle periods in connector
+    environments. Recreate the client when the loop differs or the client is
+    already closed so outbound requests stay bound to the active loop.
+    """
 
     loop = _active_event_loop()
 

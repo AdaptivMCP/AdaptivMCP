@@ -85,8 +85,8 @@ def _extract_command_not_found(stdout: str, stderr: str) -> str:
 def _required_packages_for_command(command: str) -> List[str]:
     """Best-effort mapping from a shell command to pip-installable packages.
 
- This is intentionally conservative: we only map widely used dev tools.
- """
+    This is intentionally conservative: we only map widely used dev tools.
+    """
 
     if not command:
         return []
@@ -154,9 +154,9 @@ async def _pip_install_tools(
 def _slim_terminal_command_payload(payload: Any) -> Dict[str, Any]:
     """Return a stable, bounded view of `terminal_command` output.
 
- This is used for step summaries; the full `terminal_command` payload may still
- be returned separately for callers that need complete logs.
- """
+    This is used for step summaries; the full `terminal_command` payload may still
+    be returned separately for callers that need complete logs.
+    """
 
     if not isinstance(payload, dict):
         return {"raw": str(payload)}
@@ -372,13 +372,13 @@ async def run_quality_suite(
 ) -> Dict[str, Any]:
     """Run lint and tests for a repo/ref.
 
- Steps:
- 1) Lint/static analysis via `run_lint_suite`
- 2) Tests via `run_tests`
+    Steps:
+    1) Lint/static analysis via `run_lint_suite`
+    2) Tests via `run_tests`
 
- This suite intentionally does not run token-like string scanning. Token
- logging happens at log/serialization boundaries.
- """
+    This suite intentionally does not run token-like string scanning. Token
+    logging happens at log/serialization boundaries.
+    """
 
     timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
 

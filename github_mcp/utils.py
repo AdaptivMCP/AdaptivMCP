@@ -17,10 +17,10 @@ from .exceptions import GitHubAPIError, ToolPreflightValidationError
 def _get_main_module():
     """Return the active main module when running under different entrypoints.
 
- In some environments the entrypoint is loaded as `__main__` instead of `main`.
- Helpers use this for optional monkeypatch overrides without importing the
- top-level entry module directly.
- """
+    In some environments the entrypoint is loaded as `__main__` instead of `main`.
+    Helpers use this for optional monkeypatch overrides without importing the
+    top-level entry module directly.
+    """
 
     return sys.modules.get("main") or sys.modules.get("__main__") or SimpleNamespace()
 
@@ -37,11 +37,11 @@ def _env_flag(name: str, default: bool = False) -> bool:
 def _extract_hostname(value: str | None) -> str | None:
     """Extract a hostname from an env-var style value.
 
- Supports values that may be:
- - raw hostnames ("example.com")
- - full URLs ("https://example.com/sse")
- - whitespace-padded strings
- """
+    Supports values that may be:
+    - raw hostnames ("example.com")
+    - full URLs ("https://example.com/sse")
+    - whitespace-padded strings
+    """
 
     if not value:
         return None

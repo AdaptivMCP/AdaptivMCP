@@ -164,9 +164,9 @@ async def get_workflow_run_overview(
 ) -> Dict[str, Any]:
     """Summarize a GitHub Actions workflow run for CI triage.
 
- Aggregates run metadata, jobs (with pagination up to ``max_jobs``), failed
- jobs, and the longest jobs by duration.
- """
+    Aggregates run metadata, jobs (with pagination up to ``max_jobs``), failed
+    jobs, and the longest jobs by duration.
+    """
 
     if max_jobs <= 0:
         raise ValueError("max_jobs must be > 0")

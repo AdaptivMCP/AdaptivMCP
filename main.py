@@ -104,12 +104,12 @@ from starlette.applications import Starlette
 class _CacheControlMiddleware:
     """ASGI middleware to control Cache-Control headers safely for streaming.
 
- Avoid BaseHTTPMiddleware here because it can interfere with streaming
- responses (SSE).
+    Avoid BaseHTTPMiddleware here because it can interfere with streaming
+    responses (SSE).
 
- - is not supported cache dynamic streaming endpoints: /sse and /messages
- - Optionally cache static assets: /static/*
- """
+    - is not supported cache dynamic streaming endpoints: /sse and /messages
+    - Optionally cache static assets: /static/*
+    """
 
     def __init__(self, app):
         self.app = app
@@ -156,15 +156,15 @@ class _CacheControlMiddleware:
 class _RequestContextMiddleware:
     """ASGI middleware that extracts stable identifiers for dedupe and logging.
 
- For POST /messages, we capture:
- - `session_id` from the query string
- - MCP JSON-RPC `id` from the request body
+    For POST /messages, we capture:
+    - `session_id` from the query string
+    - MCP JSON-RPC `id` from the request body
 
- These values are stored in contextvars and consumed by the tool decorator
- to suppress duplicate tool invocations caused by upstream retries.
+    These values are stored in contextvars and consumed by the tool decorator
+    to suppress duplicate tool invocations caused by upstream retries.
 
- We avoid BaseHTTPMiddleware to preserve streaming semantics.
- """
+    We avoid BaseHTTPMiddleware to preserve streaming semantics.
+    """
 
     def __init__(self, app):
         self.app = app
@@ -605,8 +605,8 @@ async def terminal_command(
 ) -> Dict[str, Any]:
     """Run a shell command in the persistent repo workspace (terminal gateway).
 
- This is a thin wrapper around github_mcp.tools_workspace.terminal_command.
- """
+    This is a thin wrapper around github_mcp.tools_workspace.terminal_command.
+    """
     return await tools_workspace.terminal_command(
         full_name=full_name,
         ref=ref,
@@ -629,12 +629,12 @@ async def run_command(
 ) -> Dict[str, Any]:
     """Legacy shim retained for tests/backwards-compat.
 
- The MCP tool name `run_command` has been removed from the server tool
- surface. This function remains as a Python-level helper for tests or
- callers importing `main.run_command` directly.
+    The MCP tool name `run_command` has been removed from the server tool
+    surface. This function remains as a Python-level helper for tests or
+    callers importing `main.run_command` directly.
 
- It forwards to terminal_command.
- """
+    It forwards to terminal_command.
+    """
     return await tools_workspace.terminal_command(
         full_name=full_name,
         ref=ref,
@@ -677,9 +677,9 @@ async def commit_workspace_files(
 ) -> Dict[str, Any]:
     """Forward commit_workspace_files calls to the workspace tool.
 
- Keeping this shim in main preserves the test-oriented API surface
- without duplicating implementation details.
- """
+    Keeping this shim in main preserves the test-oriented API surface
+    without duplicating implementation details.
+    """
     return await tools_workspace.commit_workspace_files(
         full_name=full_name,
         files=files,
@@ -1186,9 +1186,9 @@ async def get_pr_review_comment_reactions(
 def list_write_tools() -> Dict[str, Any]:
     """Describe write-capable tools exposed by this server.
 
- This is intended for assistants to discover what they can do safely without
- reading the entire main.py.
- """
+    This is intended for assistants to discover what they can do safely without
+    reading the entire main.py.
+    """
     from github_mcp.main_tools.introspection import list_write_tools as _impl
 
     return _impl()
@@ -1478,11 +1478,11 @@ async def list_recent_failures(
 ) -> Dict[str, Any]:
     """List recent failed or cancelled GitHub Actions workflow runs.
 
- This helper composes ``list_workflow_runs`` and filters to runs whose
- conclusion indicates a non-successful outcome (for example failure,
- cancelled, or timed out). It is intended as a navigation helper for CI
- debugging flows.
- """
+    This helper composes ``list_workflow_runs`` and filters to runs whose
+    conclusion indicates a non-successful outcome (for example failure,
+    cancelled, or timed out). It is intended as a navigation helper for CI
+    debugging flows.
+    """
     from github_mcp.main_tools.workflows import list_recent_failures as _impl
 
     return await _impl(full_name=full_name, branch=branch, limit=limit)
@@ -1526,17 +1526,17 @@ def list_all_actions(
 ) -> Dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
- This helper exposes a structured catalog of all tools so assistants can see
- the full command surface without reading this file. It is intentionally
- read-only and can therefore be called before writes are enabled.
+    This helper exposes a structured catalog of all tools so assistants can see
+    the full command surface without reading this file. It is intentionally
+    read-only and can therefore be called before writes are enabled.
 
- Args:
- include_parameters: When ``True``, include the serialized input schema
- for each tool to clarify argument names and types.
- compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA_DEFAULT=1`` is
- set), shorten descriptions and omit tag metadata to keep responses
- compact.
- """
+    Args:
+    include_parameters: When ``True``, include the serialized input schema
+    for each tool to clarify argument names and types.
+    compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA_DEFAULT=1`` is
+    set), shorten descriptions and omit tag metadata to keep responses
+    compact.
+    """
     from github_mcp.main_tools.introspection import list_all_actions as _impl
 
     return _impl(include_parameters=include_parameters, compact=compact)
@@ -1557,19 +1557,19 @@ async def describe_tool(
 ) -> Dict[str, Any]:
     """Inspect one or more registered MCP tools by name.
 
- This is a convenience wrapper around list_all_actions: it lets callers
- inspect specific tools by name without scanning the entire tool catalog.
+    This is a convenience wrapper around list_all_actions: it lets callers
+    inspect specific tools by name without scanning the entire tool catalog.
 
- Args:
- name: The MCP tool name (for example, "update_files_and_open_pr").
- For backwards compatibility, this behaves like the legacy
- single-tool describe_tool API.
- names: Optional list of tool names to inspect. When provided, up to
- 10 tools are returned in a single call. Duplicates are ignored
- while preserving order.
- include_parameters: When True, include the serialized input schema for
- each tool (equivalent to list_all_actions(include_parameters=True)).
- """
+    Args:
+    name: The MCP tool name (for example, "update_files_and_open_pr").
+    For backwards compatibility, this behaves like the legacy
+    single-tool describe_tool API.
+    names: Optional list of tool names to inspect. When provided, up to
+    10 tools are returned in a single call. Duplicates are ignored
+    while preserving order.
+    include_parameters: When True, include the serialized input schema for
+    each tool (equivalent to list_all_actions(include_parameters=True)).
+    """
 
     # Back-compat: some callers send tool_name instead of name.
     if tool_name:
@@ -1614,11 +1614,11 @@ async def get_workflow_run_overview(
 ) -> Dict[str, Any]:
     """Summarize a GitHub Actions workflow run for CI triage.
 
- This helper is read-only and safe to call before any write actions. It
- aggregates run metadata, jobs (with optional pagination up to max_jobs),
- failed jobs, and the longest jobs by duration so assistants can answer
- "what happened in this run?" with a single tool call.
- """
+    This helper is read-only and safe to call before any write actions. It
+    aggregates run metadata, jobs (with optional pagination up to max_jobs),
+    failed jobs, and the longest jobs by duration so assistants can answer
+    "what happened in this run?" with a single tool call.
+    """
     from github_mcp.main_tools.workflows import get_workflow_run_overview as _impl
 
     return await _impl(full_name=full_name, run_id=run_id, max_jobs=max_jobs)
@@ -1657,10 +1657,10 @@ async def wait_for_workflow_run(
 async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Summarize a GitHub issue for navigation and planning.
 
- This helper is intentionally read-only.
- It is designed for assistants to call before doing any write work so
- they understand the current state of an issue.
- """
+    This helper is intentionally read-only.
+    It is designed for assistants to call before doing any write work so
+    they understand the current state of an issue.
+    """
     from github_mcp.main_tools.issues import get_issue_overview as _impl
 
     return await _impl(full_name=full_name, issue_number=issue_number)
@@ -1675,12 +1675,12 @@ async def trigger_workflow_dispatch(
 ) -> Dict[str, Any]:
     """Trigger a workflow dispatch event on the given ref.
 
- Args:
- full_name: "owner/repo" string.
- workflow: Workflow file name or ID (e.g. "ci.yml" or a numeric ID).
- ref: Git ref (branch, tag, or SHA) to run the workflow on.
- inputs: Optional input payload for workflows that declare inputs.
- """
+    Args:
+    full_name: "owner/repo" string.
+    workflow: Workflow file name or ID (e.g. "ci.yml" or a numeric ID).
+    ref: Git ref (branch, tag, or SHA) to run the workflow on.
+    inputs: Optional input payload for workflows that declare inputs.
+    """
     from github_mcp.main_tools.workflows import trigger_workflow_dispatch as _impl
 
     return await _impl(full_name=full_name, workflow=workflow, ref=ref, inputs=inputs)
@@ -1903,36 +1903,36 @@ async def get_latest_branch_status(
 async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Dict[str, Any]:
     """Return a compact, multi-signal dashboard for a repository.
 
- This helper aggregates several lower-level tools into a single call so
- assistants can quickly understand the current state of a repo and then
- decide which focused tools to call next. It is intentionally read-only.
+    This helper aggregates several lower-level tools into a single call so
+    assistants can quickly understand the current state of a repo and then
+    decide which focused tools to call next. It is intentionally read-only.
 
- Args:
- full_name:
- "owner/repo" string.
- branch:
- Optional branch name. When omitted, the repository's default
- branch is used via the same normalization logic as other tools.
+    Args:
+    full_name:
+    "owner/repo" string.
+    branch:
+    Optional branch name. When omitted, the repository's default
+    branch is used via the same normalization logic as other tools.
 
- Raises:
- ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
+    Raises:
+    ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
 
- Returns:
- A dict with high-level fields such as:
+    Returns:
+    A dict with high-level fields such as:
 
- - repo: core metadata about the repository (description, visibility,
- default branch, topics, open issue count when available).
- - branch: the effective branch used for lookups.
- - pull_requests: a small window of open pull requests (up to 10).
- - issues: a small window of open issues (up to 10, excluding PRs).
- - workflows: recent GitHub Actions workflow runs on the branch
- (up to 5).
- - top_level_tree: compact listing of top-level files/directories
- on the branch so assistants can see the project layout.
+    - repo: core metadata about the repository (description, visibility,
+    default branch, topics, open issue count when available).
+    - branch: the effective branch used for lookups.
+    - pull_requests: a small window of open pull requests (up to 10).
+    - issues: a small window of open issues (up to 10, excluding PRs).
+    - workflows: recent GitHub Actions workflow runs on the branch
+    (up to 5).
+    - top_level_tree: compact listing of top-level files/directories
+    on the branch so assistants can see the project layout.
 
- Individual sections degrade gracefully: if one underlying call fails,
- its corresponding "*_error" field is populated instead of raising.
- """
+    Individual sections degrade gracefully: if one underlying call fails,
+    its corresponding "*_error" field is populated instead of raising.
+    """
     from github_mcp.main_tools.dashboard import get_repo_dashboard as _impl
 
     return await _impl(full_name=full_name, branch=branch)
@@ -1960,10 +1960,10 @@ async def _build_default_pr_body(
 ) -> str:
     """Compose a rich default PR body when the caller omits one.
 
- This helper intentionally favors robustness over strictness: if any of the
- underlying GitHub lookups fail, it falls back to partial information instead
- of raising and breaking the overall tool call.
- """
+    This helper intentionally favors robustness over strictness: if any of the
+    underlying GitHub lookups fail, it falls back to partial information instead
+    of raising and breaking the overall tool call.
+    """
     from github_mcp.main_tools.pull_requests import _build_default_pr_body as _impl
 
     return await _impl(
@@ -1986,10 +1986,10 @@ async def create_pull_request(
 ) -> Dict[str, Any]:
     """Open a pull request from ``head`` into ``base``.
 
- The base branch is normalized via ``_effective_ref_for_repo`` so that
- controller repos honor the configured default branch even when callers
- supply a simple base name like "main".
- """
+    The base branch is normalized via ``_effective_ref_for_repo`` so that
+    controller repos honor the configured default branch even when callers
+    supply a simple base name like "main".
+    """
     from github_mcp.main_tools.pull_requests import create_pull_request as _impl
 
     return await _impl(
@@ -2008,12 +2008,12 @@ async def open_pr_for_existing_branch(
 ) -> Dict[str, Any]:
     """Open a pull request for an existing branch into a base branch.
 
- This helper is intentionally idempotent: if there is already an open PR for
- the same head/base pair, it will return that existing PR instead of failing
- or creating a duplicate.
+    This helper is intentionally idempotent: if there is already an open PR for
+    the same head/base pair, it will return that existing PR instead of failing
+    or creating a duplicate.
 
- If this tool call fails in the hosted environment, use the workspace flow: `terminal_command` to create or reuse the PR.
- """
+    If this tool call fails in the hosted environment, use the workspace flow: `terminal_command` to create or reuse the PR.
+    """
     from github_mcp.main_tools.pull_requests import open_pr_for_existing_branch as _impl
 
     return await _impl(

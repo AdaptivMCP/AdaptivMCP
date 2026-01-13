@@ -19,12 +19,12 @@ def _strip_heads_prefix(ref: str) -> str:
 def _parse_head_ref(head: str) -> tuple[Optional[str], str]:
     """Parse a PR head ref.
 
- Returns (owner, branch). Owner is None when the head is unqualified.
+    Returns (owner, branch). Owner is None when the head is unqualified.
 
- GitHub accepts:
- - "branch" for same-repo PRs
- - "owner:branch" for fork PRs
- """
+    GitHub accepts:
+    - "branch" for same-repo PRs
+    - "owner:branch" for fork PRs
+    """
 
     cleaned = _strip_heads_prefix(head)
     if ":" in cleaned:
@@ -188,10 +188,10 @@ async def _build_default_pr_body(
 ) -> str:
     """Compose a rich default PR body when the caller omits one.
 
- This helper intentionally favors robustness over strictness: if any of the
- underlying GitHub lookups fail, it falls back to partial information instead
- of raising and breaking the overall tool call.
- """
+    This helper intentionally favors robustness over strictness: if any of the
+    underlying GitHub lookups fail, it falls back to partial information instead
+    of raising and breaking the overall tool call.
+    """
 
     lines: List[str] = []
     head_branch = _head_branch_only(head)
@@ -255,10 +255,10 @@ async def create_pull_request(
 ) -> Dict[str, Any]:
     """Open a pull request from ``head`` into ``base``.
 
- The base branch is normalized via ``_effective_ref_for_repo`` so that
- controller repos honor the configured default branch even when callers
- supply a simple base name like "main".
- """
+    The base branch is normalized via ``_effective_ref_for_repo`` so that
+    controller repos honor the configured default branch even when callers
+    supply a simple base name like "main".
+    """
 
     m = _main()
 
@@ -317,12 +317,12 @@ async def open_pr_for_existing_branch(
 ) -> Dict[str, Any]:
     """Open a pull request for an existing branch into a base branch.
 
- This helper is intentionally idempotent: if there is already an open PR for
- the same head/base pair, it will return that existing PR instead of failing
- or creating a duplicate.
+    This helper is intentionally idempotent: if there is already an open PR for
+    the same head/base pair, it will return that existing PR instead of failing
+    or creating a duplicate.
 
- If this tool call fails in the hosted environment, use the workspace flow: `terminal_command` to create or reuse the PR.
- """
+    If this tool call fails in the hosted environment, use the workspace flow: `terminal_command` to create or reuse the PR.
+    """
 
     m = _main()
 

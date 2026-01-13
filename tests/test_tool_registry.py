@@ -7,11 +7,11 @@ import pytest
 def _install_starlette_stubs() -> None:
     """Install minimal Starlette stubs for import-time evaluation.
 
- These tests validate payload normalization and tool-registry glue code.
- The project supports running without Starlette installed, so we provide
- a minimal stub implementation. The stub set needs to be complete enough to
- avoid breaking other tests that may import Starlette middleware helpers.
- """
+    These tests validate payload normalization and tool-registry glue code.
+    The project supports running without Starlette installed, so we provide
+    a minimal stub implementation. The stub set needs to be complete enough to
+    avoid breaking other tests that may import Starlette middleware helpers.
+    """
 
     starlette_module = types.ModuleType("starlette")
 

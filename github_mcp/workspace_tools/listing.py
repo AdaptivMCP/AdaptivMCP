@@ -166,10 +166,10 @@ async def search_workspace(
 ) -> Dict[str, Any]:
     """Search text files in the workspace clone (bounded, no shell).
 
- Behavior for `query`:
- - Always treated as a literal substring match.
- - `regex` is accepted for compatibility but is not enforced.
- """
+    Behavior for `query`:
+    - Always treated as a literal substring match.
+    - `regex` is accepted for compatibility but is not enforced.
+    """
 
     if not isinstance(query, str) or not query:
         raise ValueError("query must be a non-empty string")

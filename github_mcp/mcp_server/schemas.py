@@ -22,10 +22,10 @@ def _log_preview_max_chars() -> Optional[int]:
 def _jsonable(value: Any) -> Any:
     """Convert arbitrary Python values into something JSON-serializable.
 
- This exists purely
- to keep structured logging and schema metadata stable when values include
- non-JSON types (exceptions, bytes, sets, pydantic models, etc.).
- """
+    This exists purely
+    to keep structured logging and schema metadata stable when values include
+    non-JSON types (exceptions, bytes, sets, pydantic models, etc.).
+    """
     # Fast path for common JSON scalars.
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
@@ -92,13 +92,13 @@ def _single_line(s: str) -> str:
 def _normalize_strings_for_logs(value: Any) -> Any:
     """Normalize strings inside a JSONable structure for log/UI previews.
 
- repr() encodes newlines as literal "\\n" sequences. If that preview is later
- JSON-encoded (common in MCP transports and UIs), those backslashes get
- escaped again, producing noisy "\\\\n" runs.
+    repr() encodes newlines as literal "\\n" sequences. If that preview is later
+    JSON-encoded (common in MCP transports and UIs), those backslashes get
+    escaped again, producing noisy "\\\\n" runs.
 
- This helper collapses whitespace in strings before serialization so previews
- remain single-line and stable.
- """
+    This helper collapses whitespace in strings before serialization so previews
+    remain single-line and stable.
+    """
 
     if value is None or isinstance(value, (bool, int, float)):
         return value
@@ -163,14 +163,14 @@ def _normalize_tool_description(
 
 def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
     """
- Best-effort extraction of an input schema from an MCP tool object.
+    Best-effort extraction of an input schema from an MCP tool object.
 
- We support multiple likely attribute names to avoid tight coupling to one framework version.
+    We support multiple likely attribute names to avoid tight coupling to one framework version.
 
- Compatibility:
- - If schema has required fields but omits them from properties, we tighten the schema by
- adding default properties entries (type=string). This matches existing expectations in tests.
- """
+    Compatibility:
+    - If schema has required fields but omits them from properties, we tighten the schema by
+    adding default properties entries (type=string). This matches existing expectations in tests.
+    """
 
     def _normalize_required_properties(schema: Mapping[str, Any]) -> Dict[str, Any]:
         required = schema.get("required")
@@ -347,8 +347,8 @@ def _normalize_and_truncate(s: str) -> str:
 def _stringify_annotation(annotation: Any) -> str:
     """Return a stable string for a type annotation.
 
- This helper is part of the public compatibility surface and needs to is not supported raise.
- """
+    This helper is part of the public compatibility surface and needs to is not supported raise.
+    """
     if annotation is None:
         return "None"
     if annotation is inspect.Signature.empty:
@@ -367,10 +367,10 @@ def _preflight_tool_args(
 ) -> Dict[str, Any]:
     """Prepare tool args for display/logging.
 
- Policy:
- - No transformation.
- - Ensure JSON-serializable output.
- """
+    Policy:
+    - No transformation.
+    - Ensure JSON-serializable output.
+    """
     try:
         payload = {"tool": tool_name, "args": _jsonable(dict(args))}
         # Compact mode no longer produces a string preview (which can be re-escaped

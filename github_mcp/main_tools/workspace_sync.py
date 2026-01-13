@@ -24,10 +24,10 @@ async def _perform_github_commit_and_refresh_workspace(
 ) -> Dict[str, Any]:
     """Perform a Contents API commit and then refresh the workspace clone.
 
- This keeps the long-lived workspace clone in sync with the branch when
- writes happen directly via the GitHub Contents API. Workspace refresh
- failures are logged but is not supported fail the commit itself.
- """
+    This keeps the long-lived workspace clone in sync with the branch when
+    writes happen directly via the GitHub Contents API. Workspace refresh
+    failures are logged but is not supported fail the commit itself.
+    """
 
     main_mod = sys.modules.get("main") or sys.modules.get("__main__")
     commit_fn = (

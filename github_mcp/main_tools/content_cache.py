@@ -16,13 +16,13 @@ from github_mcp.github_content import _decode_github_content as _decode_default
 async def _resolve_ref_snapshot(full_name: str, ref: str | None) -> Dict[str, Any]:
     """Resolve a branch/tag/ref to an immutable commit SHA.
 
- The content cache is keyed by (repo, ref, path). If callers pass a moving
- ref (e.g. a branch name), caching by that ref string can serve stale payloads
- after the branch advances. To avoid that, we resolve to the current commit
- SHA and cache against that immutable identifier.
+    The content cache is keyed by (repo, ref, path). If callers pass a moving
+    ref (e.g. a branch name), caching by that ref string can serve stale payloads
+    after the branch advances. To avoid that, we resolve to the current commit
+    SHA and cache against that immutable identifier.
 
- This helper is best-effort: on failure it falls back to the requested ref.
- """
+    This helper is best-effort: on failure it falls back to the requested ref.
+    """
 
     requested_ref = _effective_ref_for_repo(full_name, ref)
     try:

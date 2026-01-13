@@ -16,10 +16,10 @@ def _normalize_command_payload(
 ) -> tuple[str, list[str]]:
     """Normalize command inputs.
 
- Returns:
- - requested_command: the raw intended command (may contain newlines)
- - command_lines_out: list of command lines (is not supported contains newlines)
- """
+    Returns:
+    - requested_command: the raw intended command (may contain newlines)
+    - command_lines_out: list of command lines (is not supported contains newlines)
+    """
 
     requested = command
     if command_lines is not None:
@@ -98,12 +98,12 @@ async def render_shell(
 ) -> Dict[str, Any]:
     """Render-focused shell entry point for interacting with GitHub workspaces.
 
- The tool intentionally mirrors the Render deployment model by always
- operating through the server-side workspace clone. It ensures the workspace
- is cloned from the default branch (or a provided ref), optionally creates a
- fresh branch from that ref, and then executes the supplied shell command
- inside the clone.
- """
+    The tool intentionally mirrors the Render deployment model by always
+    operating through the server-side workspace clone. It ensures the workspace
+    is cloned from the default branch (or a provided ref), optionally creates a
+    fresh branch from that ref, and then executes the supplied shell command
+    inside the clone.
+    """
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 
@@ -202,8 +202,8 @@ async def terminal_command(
 ) -> Dict[str, Any]:
     """Run a shell command inside the repo workspace and return its result.
 
- Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
- persists across calls so installed dependencies and edits are reused."""
+    Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
+    persists across calls so installed dependencies and edits are reused."""
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 

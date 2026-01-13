@@ -122,12 +122,12 @@ def _strip_large_fields_from_commit_response(
 ) -> Dict[str, Any]:
     """Remove large fields from GitHub Contents API responses.
 
- The GitHub Contents write endpoints often return base64-encoded file bodies in
- `response_json['content']['content']`. Returning that blob to ChatGPT can
- explode tool payload sizes and cause client disconnects/network errors.
+    The GitHub Contents write endpoints often return base64-encoded file bodies in
+    `response_json['content']['content']`. Returning that blob to ChatGPT can
+    explode tool payload sizes and cause client disconnects/network errors.
 
- We keep the rest of the response (sha, html_url, commit sha, etc.).
- """
+    We keep the rest of the response (sha, html_url, commit sha, etc.).
+    """
 
     if not isinstance(response_json, dict):
         return response_json

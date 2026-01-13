@@ -93,8 +93,8 @@ async def workspace_create_branch(
 ) -> Dict[str, Any]:
     """Create a branch using the workspace (git), optionally pushing to origin.
 
- This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
- """
+    This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
+    """
 
     try:
         deps = _tw()._workspace_deps()
@@ -147,9 +147,9 @@ async def workspace_delete_branch(
 ) -> Dict[str, Any]:
     """Delete a non-default branch using the workspace clone.
 
- This is the workspace counterpart to branch-creation helpers and is intended
- for closing out ephemeral feature branches once their work has been merged.
- """
+    This is the workspace counterpart to branch-creation helpers and is intended
+    for closing out ephemeral feature branches once their work has been merged.
+    """
 
     try:
         deps = _tw()._workspace_deps()
@@ -224,19 +224,19 @@ async def workspace_self_heal_branch(
 ) -> Dict[str, Any]:
     """Detect a mangled workspace branch and recover to a fresh branch.
 
- This tool is intended to be used by assistants mid-flow when a workspace
- clone becomes inconsistent (wrong branch checked out, merge/rebase state,
- conflicts, etc.). When healing, it:
+    This tool is intended to be used by assistants mid-flow when a workspace
+    clone becomes inconsistent (wrong branch checked out, merge/rebase state,
+    conflicts, etc.). When healing, it:
 
- 1) Diagnoses the workspace clone for ``branch``.
- 2) Optionally deletes the mangled branch (remote + best-effort local).
- 3) Resets the base branch workspace (default: ``main``).
- 4) Creates + pushes a new fresh branch.
- 5) Ensures a clean clone for the new branch.
- 6) Optionally returns a small repo snapshot to rebuild "mental state".
+    1) Diagnoses the workspace clone for ``branch``.
+    2) Optionally deletes the mangled branch (remote + best-effort local).
+    3) Resets the base branch workspace (default: ``main``).
+    4) Creates + pushes a new fresh branch.
+    5) Ensures a clean clone for the new branch.
+    6) Optionally returns a small repo snapshot to rebuild "mental state".
 
- Returns plain-language step logs for UI rendering.
- """
+    Returns plain-language step logs for UI rendering.
+    """
 
     try:
         deps = _tw()._workspace_deps()

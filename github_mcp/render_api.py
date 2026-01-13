@@ -54,16 +54,16 @@ _render_api_version_prefix: str = "/v1"
 def _normalize_render_api_base(raw_base: str) -> tuple[str, str]:
     """Normalize Render API base URL and versioning.
 
- Operators may set RENDER_API_BASE as either:
- - https://api.render.com
- - https://api.render.com/v1
+    Operators may set RENDER_API_BASE as either:
+    - https://api.render.com
+    - https://api.render.com/v1
 
- If the base ends with /v1 and callers also pass /v1-prefixed paths, requests
- become /v1/v1/... and Render returns 404.
+    If the base ends with /v1 and callers also pass /v1-prefixed paths, requests
+    become /v1/v1/... and Render returns 404.
 
- This helper strips a trailing /v1 from the base URL and returns the version
- prefix that may be applied to request paths.
- """
+    This helper strips a trailing /v1 from the base URL and returns the version
+    prefix that may be applied to request paths.
+    """
 
     base = (raw_base or "").strip()
     if not base:

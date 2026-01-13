@@ -27,9 +27,9 @@ def _ui_prompt_write_action(tool_name: str, write_action: bool, *, write_allowed
 def list_write_tools() -> Dict[str, Any]:
     """Describe write-capable tools exposed by this server.
 
- This is intended for assistants to discover what they can do safely without
- reading the entire main.py.
- """
+    This is intended for assistants to discover what they can do safely without
+    reading the entire main.py.
+    """
 
     tools = [
         {
@@ -141,14 +141,11 @@ def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
 def _tool_tags(tool: Any, func: Any) -> list[str]:
     """Return tags for a tool.
 
- Tags are intentionally suppressed. Some clients interpret tags as
- policy/execution hints and may misclassify tools when tags are present.
- """
+    Tags are intentionally suppressed. Some clients interpret tags as
+    policy/execution hints and may misclassify tools when tags are present.
+    """
 
     return []
-
-
-
 
 
 def _clean_description(text: str) -> str:
@@ -161,15 +158,17 @@ def _clean_description(text: str) -> str:
     s = re.sub(r"prefer", "typical", s, flags=re.I)
     s = re.sub(r"[ 	]{2,}", " ", s)
     return s.strip()
+
+
 def list_all_actions(
     include_parameters: bool = False, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
- Canonical “schema registry” used by assistants/clients.
- - Inherent tool classification is always reported as write_action (True/False).
- - Dynamic gating is reported separately as write_enabled per tool.
- """
+    Canonical “schema registry” used by assistants/clients.
+    - Inherent tool classification is always reported as write_action (True/False).
+    - Dynamic gating is reported separately as write_enabled per tool.
+    """
 
     m = _main()
     compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
