@@ -76,6 +76,16 @@ GITHUB_SEARCH_MIN_INTERVAL_SECONDS = float(
 # These settings only affect provider logs (Render / stdout). They do not change
 # tool outputs returned to the client.
 
+QUIET_LOGS = os.environ.get("QUIET_LOGS", "true").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
+
 # Emit richer tool call logs (args/result metadata) suitable for humans reading Render logs.
 HUMAN_LOGS = os.environ.get("HUMAN_LOGS", "true").strip().lower() in (
     "1",
@@ -352,7 +362,7 @@ def git_identity_warnings() -> list[str]:
     ]
 
 
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").strip().upper()
 # Default to a compact, scannable format.
 LOG_FORMAT = os.environ.get(
     "LOG_FORMAT",
@@ -435,9 +445,10 @@ def _configure_logging() -> None:
 
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(_StructuredFormatter(LOG_FORMAT))
+    console_handler.setLevel(logging.CRITICAL if QUIET_LOGS else _resolve_log_level(LOG_LEVEL))
 
     logging.basicConfig(
-        level=_resolve_log_level(LOG_LEVEL),
+        level=logging.CRITICAL if QUIET_LOGS else _resolve_log_level(LOG_LEVEL),
         handlers=[console_handler],
         force=True,
     )
@@ -462,7 +473,7 @@ def _configure_logging() -> None:
         "httpx",
         "httpcore",
     ):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
+        logging.getLogger(noisy).setLevel(logging.ERROR if QUIET_LOGS else logging.WARNING)
 
     setattr(root, "_github_mcp_configured", True)
 
