@@ -29,7 +29,7 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import BASE_LOGGER, HUMAN_LOGS, LOG_TOOL_PAYLOADS
+from github_mcp.config import BASE_LOGGER, HUMAN_LOGS, LOG_TOOL_CALLS, LOG_TOOL_PAYLOADS
 from github_mcp.exceptions import UsageError
 from github_mcp.mcp_server.context import (
     WRITE_ALLOWED,
@@ -319,6 +319,8 @@ def _log_tool_start(
     schema_present: bool,
     all_args: Mapping[str, Any],
 ) -> None:
+    if not LOG_TOOL_CALLS:
+        return
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
@@ -359,6 +361,8 @@ def _log_tool_success(
     duration_ms: float,
     result: Any,
 ) -> None:
+    if not LOG_TOOL_CALLS:
+        return
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
@@ -654,7 +658,7 @@ def mcp_tool(
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 call_id = str(uuid.uuid4())
                 clean_kwargs = _strip_tool_meta(kwargs)
-                all_args = _bind_call_args(signature, args, clean_kwargs)
+                all_args = _bind_call_args(signature, args, clean_kwargs) if LOG_TOOL_CALLS else {}
                 req = get_request_context()
                 start = time.perf_counter()
 
@@ -789,7 +793,7 @@ def mcp_tool(
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             call_id = str(uuid.uuid4())
             clean_kwargs = _strip_tool_meta(kwargs)
-            all_args = _bind_call_args(signature, args, clean_kwargs)
+            all_args = _bind_call_args(signature, args, clean_kwargs) if LOG_TOOL_CALLS else {}
             req = get_request_context()
             start = time.perf_counter()
 

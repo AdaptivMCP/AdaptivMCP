@@ -85,6 +85,17 @@ HUMAN_LOGS = os.environ.get("HUMAN_LOGS", "true").strip().lower() in (
     "on",
 )
 
+# Log tool call start/completion lines to provider logs.
+# When disabled, only warnings/errors (tool_call_failed) are emitted.
+LOG_TOOL_CALLS = os.environ.get("LOG_TOOL_CALLS", "false").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
 # When enabled, include full tool args and full tool results in logs.
 # WARNING: This can create very large log lines and may stress hosted log ingestion.
 LOG_TOOL_PAYLOADS = os.environ.get("LOG_TOOL_PAYLOADS", "false").strip().lower() in (
@@ -117,8 +128,9 @@ LOG_GITHUB_HTTP_BODIES = os.environ.get("LOG_GITHUB_HTTP_BODIES", "false").strip
     "on",
 )
 
-# Log inbound HTTP requests handled by the ASGI app (Render logs).
-LOG_HTTP_REQUESTS = os.environ.get("LOG_HTTP_REQUESTS", "true").strip().lower() in (
+# Log inbound HTTP requests handled by the ASGI app (provider logs).
+# Default is disabled so hosted logs show platform access lines ([GET]/[POST]) and errors only.
+LOG_HTTP_REQUESTS = os.environ.get("LOG_HTTP_REQUESTS", "false").strip().lower() in (
     "1",
     "true",
     "t",
@@ -473,6 +485,8 @@ __all__ = [
     "HTTPX_TIMEOUT",
     "LOG_RENDER_HTTP",
     "LOG_RENDER_HTTP_BODIES",
+    "LOG_TOOL_CALLS",
+    "LOG_HTTP_REQUESTS",
     "MAX_CONCURRENCY",
     "RENDER_API_BASE",
     "RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS",
