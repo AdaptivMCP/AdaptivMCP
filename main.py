@@ -840,6 +840,96 @@ async def get_render_logs(
     )
 
 
+# ------------------------------------------------------------------------------
+# Render tool aliases
+#
+# Some MCP clients (and some assistant prompt templates) expect tool names to
+# begin with a provider prefix (for example: render_list_services). We keep the
+# canonical tool names (list_render_services, etc.) but also register a stable
+# set of render_* aliases so discovery and invocation remain reliable.
+# ------------------------------------------------------------------------------
+
+
+@mcp_tool(write_action=False, name="render_list_owners")
+async def render_list_owners(cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
+    return await list_render_owners(cursor=cursor, limit=limit)
+
+
+@mcp_tool(write_action=False, name="render_list_services")
+async def render_list_services(
+    owner_id: Optional[str] = None,
+    cursor: Optional[str] = None,
+    limit: int = 20,
+) -> Dict[str, Any]:
+    return await list_render_services(owner_id=owner_id, cursor=cursor, limit=limit)
+
+
+@mcp_tool(write_action=False, name="render_get_service")
+async def render_get_service(service_id: str) -> Dict[str, Any]:
+    return await get_render_service(service_id=service_id)
+
+
+@mcp_tool(write_action=False, name="render_list_deploys")
+async def render_list_deploys(
+    service_id: str,
+    cursor: Optional[str] = None,
+    limit: int = 20,
+) -> Dict[str, Any]:
+    return await list_render_deploys(service_id=service_id, cursor=cursor, limit=limit)
+
+
+@mcp_tool(write_action=False, name="render_get_deploy")
+async def render_get_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+    return await get_render_deploy(service_id=service_id, deploy_id=deploy_id)
+
+
+@mcp_tool(write_action=True, name="render_create_deploy")
+async def render_create_deploy(
+    service_id: str,
+    clear_cache: bool = False,
+    commit_id: Optional[str] = None,
+    image_url: Optional[str] = None,
+) -> Dict[str, Any]:
+    return await create_render_deploy(
+        service_id=service_id,
+        clear_cache=clear_cache,
+        commit_id=commit_id,
+        image_url=image_url,
+    )
+
+
+@mcp_tool(write_action=True, name="render_cancel_deploy")
+async def render_cancel_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+    return await cancel_render_deploy(service_id=service_id, deploy_id=deploy_id)
+
+
+@mcp_tool(write_action=True, name="render_rollback_deploy")
+async def render_rollback_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+    return await rollback_render_deploy(service_id=service_id, deploy_id=deploy_id)
+
+
+@mcp_tool(write_action=True, name="render_restart_service")
+async def render_restart_service(service_id: str) -> Dict[str, Any]:
+    return await restart_render_service(service_id=service_id)
+
+
+@mcp_tool(write_action=False, name="render_get_logs")
+async def render_get_logs(
+    resource_type: str,
+    resource_id: str,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    limit: int = 200,
+) -> Dict[str, Any]:
+    return await get_render_logs(
+        resource_type=resource_type,
+        resource_id=resource_id,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit,
+    )
+
+
 @mcp_tool(write_action=True)
 async def pr_smoke_test(
     full_name: Optional[str] = None,
