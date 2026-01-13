@@ -771,15 +771,12 @@ def _apply_rangeless_git_patch(repo_dir: str, patch: str) -> None:
 def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
         raise GitHubAPIError("path must be a non-empty string")
-    root = os.path.realpath(repo_dir)
     raw_path = rel_path.strip()
     if os.path.isabs(raw_path):
         candidate = os.path.realpath(raw_path)
     else:
         rel_path = raw_path.lstrip("/\\")
         candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
-    if candidate == root or not candidate.startswith(root + os.sep):
-        raise GitHubAPIError("path escapes repository root")
     return candidate
 
 

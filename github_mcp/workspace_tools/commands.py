@@ -71,9 +71,6 @@ def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
         candidate = os.path.realpath(normalized)
     else:
         candidate = os.path.realpath(os.path.join(repo_dir, normalized))
-    root = os.path.realpath(repo_dir)
-    if candidate != root and not candidate.startswith(root + os.sep):
-        raise ValueError("workdir must stay within repo")
     if not os.path.isdir(candidate):
         raise ValueError("workdir must point to a directory")
     return candidate

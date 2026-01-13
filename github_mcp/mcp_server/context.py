@@ -5,7 +5,6 @@ import os
 from contextvars import ContextVar
 from typing import Any, Optional
 
-from github_mcp.utils import _extract_hostname, _render_external_hosts
 
 
 # ------------------------------------------------------------------------------
@@ -165,67 +164,9 @@ COMPACT_METADATA_DEFAULT = _parse_bool(
 _TOOL_EXAMPLES: dict[str, Any] = {}
 try:
     from mcp.server.fastmcp import FastMCP  # type: ignore
-    from mcp.server.transport_security import TransportSecuritySettings  # type: ignore
-
     FASTMCP_AVAILABLE = True
 
-    def _normalize_allowed_hosts(hosts: list[str]) -> list[str]:
-        normalized: list[str] = []
-        for host in hosts:
-            cleaned = _extract_hostname(host) or host.strip()
-            if cleaned and cleaned not in normalized:
-                normalized.append(cleaned)
-        return normalized
-
-    def _expand_allowed_hosts(hosts: list[str]) -> list[str]:
-        expanded: list[str] = []
-        for host in hosts:
-            if host not in expanded:
-                expanded.append(host)
-            if ":" not in host and not host.endswith(":*"):
-                wildcard = f"{host}:*"
-                if wildcard not in expanded:
-                    expanded.append(wildcard)
-        return expanded
-
-    def _build_allowed_origins(hosts: list[str]) -> list[str]:
-        origins: list[str] = []
-        for host in hosts:
-            if host.endswith(":*"):
-                base_host = host[:-2]
-                candidates = [f"http://{base_host}:*", f"https://{base_host}:*"]
-            else:
-                candidates = [f"http://{host}", f"https://{host}"]
-            for origin in candidates:
-                if origin not in origins:
-                    origins.append(origin)
-        return origins
-
-    def _build_transport_security_settings() -> TransportSecuritySettings | None:
-        allowed_hosts_env = os.getenv("ALLOWED_HOSTS")
-        allowed_hosts = [
-            host.strip() for host in (allowed_hosts_env or "").split(",") if host.strip()
-        ]
-        if "*" in allowed_hosts:
-            return TransportSecuritySettings(enable_dns_rebinding_protection=False)
-
-        for render_host in _render_external_hosts():
-            if render_host not in allowed_hosts:
-                allowed_hosts.append(render_host)
-
-        normalized_hosts = _normalize_allowed_hosts(allowed_hosts)
-        if not normalized_hosts:
-            return None
-
-        expanded_hosts = _expand_allowed_hosts(normalized_hosts)
-        allowed_origins = _build_allowed_origins(expanded_hosts)
-        return TransportSecuritySettings(
-            enable_dns_rebinding_protection=True,
-            allowed_hosts=expanded_hosts,
-            allowed_origins=allowed_origins,
-        )
-
-    mcp = FastMCP("github-mcp", transport_security=_build_transport_security_settings())
+    mcp = FastMCP("github-mcp")
 except Exception as exc:  # pragma: no cover - used when dependency missing
     FASTMCP_AVAILABLE = False
     missing_exc = exc

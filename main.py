@@ -81,8 +81,6 @@ from github_mcp.server import (
 )
 from github_mcp.utils import (
     _effective_ref_for_repo,  # noqa: F401
-    _extract_hostname,
-    _render_external_hosts,
     _with_numbered_lines,
 )
 from github_mcp.workspace import (
@@ -97,7 +95,6 @@ from github_mcp.http_routes.tool_registry import register_tool_registry_routes
 from github_mcp.http_routes.ui import register_ui_routes
 from starlette.staticfiles import StaticFiles
 from starlette.responses import PlainTextResponse
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.applications import Starlette
 
 
@@ -537,28 +534,8 @@ else:
 
 
 def _configure_trusted_hosts(app_instance) -> None:
-    allowed_hosts_env = os.getenv("ALLOWED_HOSTS")
-    if allowed_hosts_env:
-        allowed_hosts = []
-        for host in allowed_hosts_env.split(","):
-            cleaned = _extract_hostname(host) or host.strip()
-            if cleaned:
-                allowed_hosts.append(cleaned)
-    else:
-        allowed_hosts = ["*"]
-
-    if "*" not in allowed_hosts:
-        for render_host in _render_external_hosts():
-            if render_host not in allowed_hosts:
-                allowed_hosts.append(render_host)
-
-    app_instance.user_middleware = [
-        middleware
-        for middleware in app_instance.user_middleware
-        if middleware.cls is not TrustedHostMiddleware
-    ]
-    app_instance.middleware_stack = None
-    app_instance.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+    del app_instance
+    return
 
 
 if app is not None:
