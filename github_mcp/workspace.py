@@ -610,7 +610,7 @@ def _patch_has_hunk_header_with_ranges(patch: str) -> bool:
 def _looks_like_rangeless_git_patch(patch: str) -> bool:
     """Return True when a patch looks like a git diff but hunks omit ranges.
 
-    Some assistants emit `@@` lines without `-a,b +c,d` ranges. `git apply`
+    Some generators emit `@@` lines without `-a,b +c,d` ranges. `git apply`
     rejects these with "patch with only garbage". We detect that shape and
     fall back to the internal hunk-applier (which matches by content).
     """
@@ -947,7 +947,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     1) The MCP "tool patch" format (*** Begin Patch ...), applied in-process.
     2) Standard git unified diffs (diff --git / --- / +++ / @@ -a,b +c,d @@).
     3) A minimal git-style diff that uses bare `@@` hunk separators (no ranges),
-    which some assistants emit. These are applied in-process.
+    which some generators emit. These are applied in-process.
     """
 
     if not patch or not patch.strip():
@@ -959,7 +959,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
 
     patch = _maybe_unescape_unified_diff(patch)
 
-    # Fallback for assistant-generated diffs that omit hunk ranges.
+    # Fallback for generated diffs that omit hunk ranges.
     if _looks_like_rangeless_git_patch(patch):
         _apply_rangeless_git_patch(repo_dir, patch)
         return
@@ -967,7 +967,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     if patch and not patch.endswith("\n"):
         patch = patch + "\n"
 
-    # Use a unique temporary file to avoid cross-call interference.
+    # A unique temporary file avoids cross-call interference.
     patch_fd, patch_path = tempfile.mkstemp(prefix="mcp_patch_", suffix=".diff", dir=repo_dir)
     try:
         with os.fdopen(patch_fd, "w", encoding="utf-8") as f:
@@ -989,7 +989,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
             ):
                 hint = (
                     " Patch hunks appear to use bare '@@' separators without line ranges. "
-                    "Use a standard unified diff hunk header like '@@ -1,3 +1,3 @@', "
+                    "Standard unified diff hunk headers look like '@@ -1,3 +1,3 @@', "
                     "or use the MCP tool patch format ('*** Begin Patch')."
                 )
             raise GitHubAPIError(f"git apply failed while preparing workspace: {stderr}{hint}")

@@ -259,7 +259,7 @@ Example invocation:
 
 ## cache_files
 
-Fetch one or more files and persist them in the server-side cache so assistants can recall them without repeating GitHub reads. Use refresh=true to bypass existing cache entries.
+Fetch one or more files and persist them in the server-side cache for reuse without repeating GitHub reads. refresh=true bypasses existing cache entries.
 
 Metadata:
 - visibility: public
@@ -1258,7 +1258,7 @@ Example invocation:
 
 ## delete_file
 
-Delete a file from a GitHub repository using the Contents API. Use ensure_branch if you want to delete on a dedicated branch.
+Delete a file from a GitHub repository using the Contents API. ensure_branch can prepare a dedicated branch for the deletion.
 
 Metadata:
 - visibility: public
@@ -1308,13 +1308,13 @@ Example invocation:
 Delete one or more paths from the workspace clone.
 
 This tool exists because some environments can block patch-based file deletions.
-typical this over embedding file deletions into patches.
+It supports deleting paths without embedding removals into patches.
 
 Safety constraints:
 - Paths are resolved relative to the repo root and cannot escape it.
 - Deleting the repository root is forbidden.
-- Directories require allow_recursive=True. Otherwise only empty directories
-may be removed.
+- Directories are handled when allow_recursive=True. Without it, removal is
+limited to empty directories.
 
 Metadata:
 - visibility: public
@@ -2137,7 +2137,7 @@ Example invocation:
 
 ## get_issue_overview
 
-Return a high-level overview of an issue, including related branches, pull requests, and checklist items, so assistants can decide what to do next.
+Return a high-level overview of an issue, including related branches, pull requests, and checklist items.
 
 Metadata:
 - visibility: public
@@ -2633,8 +2633,8 @@ Example invocation:
 Return a compact, multi-signal dashboard for a repository.
 
 This helper aggregates several lower-level tools into a single call so
-assistants can quickly understand the current state of a repo and then
-decide which focused tools to call next. It is intentionally read-only.
+callers can quickly understand the current state of a repo. It is
+intentionally read-only.
 
 Args:
 full_name:
@@ -2657,7 +2657,7 @@ default branch, topics, open issue count when available).
 - workflows: recent GitHub Actions workflow runs on the branch
 (up to 5).
 - top_level_tree: compact listing of top-level files/directories
-on the branch so assistants can see the project layout.
+on the branch to show the project layout.
 
 Individual sections degrade gracefully: if one underlying call fails,
 its corresponding "*_error" field is populated instead of raising.
@@ -2947,8 +2947,8 @@ Summarize a GitHub Actions workflow run for CI triage.
 
 This helper is read-only and safe to call before any write actions. It
 aggregates run metadata, jobs (with optional pagination up to max_jobs),
-failed jobs, and the longest jobs by duration so assistants can answer
-"what happened in this run?" with a single tool call.
+failed jobs, and the longest jobs by duration to provide a single-call
+summary of run status.
 
 Metadata:
 - visibility: public
@@ -3187,9 +3187,9 @@ Example invocation:
 
 Enumerate every available MCP tool with optional schemas.
 
-This helper exposes a structured catalog of all tools so assistants can see
-the full command surface without reading this file. It is intentionally
-read-only and can therefore be called before writes are enabled.
+This helper exposes a structured catalog of all tools so clients can see
+the full command surface without reading this file. It is read-only and
+remains available even when write actions are disabled.
 
 Args:
 include_parameters: When ``True``, include the serialized input schema
@@ -4047,7 +4047,7 @@ Example invocation:
 
 ## list_tools
 
-List available MCP tools with a compact description. Use describe_tool (or list_all_actions with include_parameters=true) when you need full schemas.
+List available MCP tools with a compact description. describe_tool (or list_all_actions with include_parameters=true) provides full schemas.
 
 Metadata:
 - visibility: public
@@ -4465,8 +4465,7 @@ Example invocation:
 
 Describe write-capable tools exposed by this server.
 
-This is intended for assistants to discover what they can do safely without
-reading the entire main.py.
+This provides a concise summary without requiring the full module.
 
 Metadata:
 - visibility: public
@@ -6186,7 +6185,7 @@ Example invocation:
 
 Run a shell command inside the repo workspace and return its result.
 
-Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
+This supports tests, linters, or project scripts that need the real tree and virtualenv. The workspace
 persists across calls so installed dependencies and edits are reused.
 
 Metadata:
@@ -6438,7 +6437,7 @@ Example invocation:
 
 ## update_file_from_workspace
 
-Update a single file in a GitHub repository from the persistent workspace checkout. Use terminal_command to edit the workspace file first, then call this tool to sync it back to the branch.
+Update a single file in a GitHub repository from the persistent workspace checkout. terminal_command edits the workspace file, and this tool syncs it back to the branch.
 
 Metadata:
 - visibility: public
@@ -6914,16 +6913,15 @@ Example invocation:
 
 Detect a mangled workspace branch and recover to a fresh branch.
 
-This tool is intended to be used by assistants mid-flow when a workspace
-clone becomes inconsistent (wrong branch checked out, merge/rebase state,
-conflicts, etc.). When healing, it:
+This tool targets cases where a workspace clone becomes inconsistent (wrong
+branch checked out, merge/rebase state, conflicts, etc.). When healing, it:
 
 1) Diagnoses the workspace clone for ``branch``.
 2) Optionally deletes the mangled branch (remote + best-effort local).
 3) Resets the base branch workspace (default: ``main``).
 4) Creates + pushes a new fresh branch.
 5) Ensures a clean clone for the new branch.
-6) Optionally returns a small repo snapshot to rebuild "mental state".
+6) Optionally returns a small repo snapshot to rebuild context.
 
 Returns plain-language step logs for UI rendering.
 

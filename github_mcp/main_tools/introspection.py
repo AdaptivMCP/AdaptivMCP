@@ -10,8 +10,7 @@ from ._main import _main
 def list_write_tools() -> Dict[str, Any]:
     """Describe write-capable tools exposed by this server.
 
-    This is intended for assistants to discover what they can do safely without
-    reading the entire main.py.
+    This is a lightweight summary that avoids scanning the full module.
     """
 
     tools = [
@@ -155,7 +154,7 @@ def list_all_actions(
 ) -> Dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
-    Canonical “schema registry” used by assistants/clients.
+    Canonical “schema registry” used by clients.
     - Inherent tool classification is always reported as write_action (True/False).
     """
 

@@ -224,16 +224,15 @@ async def workspace_self_heal_branch(
 ) -> Dict[str, Any]:
     """Detect a mangled workspace branch and recover to a fresh branch.
 
-    This tool is intended to be used by assistants mid-flow when a workspace
-    clone becomes inconsistent (wrong branch checked out, merge/rebase state,
-    conflicts, etc.). When healing, it:
+    This tool targets cases where a workspace clone becomes inconsistent (wrong
+    branch checked out, merge/rebase state, conflicts, etc.). When healing, it:
 
     1) Diagnoses the workspace clone for ``branch``.
     2) Optionally deletes the mangled branch (remote + best-effort local).
     3) Resets the base branch workspace (default: ``main``).
     4) Creates + pushes a new fresh branch.
     5) Ensures a clean clone for the new branch.
-    6) Optionally returns a small repo snapshot to rebuild "mental state".
+    6) Optionally returns a small repo snapshot to rebuild context.
 
     Returns plain-language step logs for UI rendering.
     """
@@ -401,7 +400,7 @@ async def workspace_self_heal_branch(
             timeout_seconds=300,
         )
 
-        # Use the freshly checked out local workspace for the new branch.
+        # The freshly checked out local workspace is used for the new branch.
         new_repo_dir = base_repo_dir
         step(
             "Fresh workspace ready",

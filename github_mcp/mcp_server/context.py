@@ -46,7 +46,7 @@ def get_request_id() -> Optional[str]:
     return REQUEST_ID.get()
 
 
-# Explicit export list for stable imports in assistants and downstream tooling.
+# Explicit export list for stable imports in clients and downstream tooling.
 __all__ = [
     "REQUEST_ID",
     "REQUEST_MESSAGE_ID",

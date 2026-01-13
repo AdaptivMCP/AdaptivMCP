@@ -5,7 +5,7 @@ This file is part of the public "workspace" tool surface.
 Developer experience goals:
 - Keep the original contract of `run_quality_suite` intact by default.
 - Provide richer structured output (steps, diagnostics, suggestions) when requested.
-- Provide safe, bounded previews of stdout/stderr that help an AI assistant guide a developer.
+- Provide safe, bounded previews of stdout/stderr for troubleshooting.
 """
 
 from __future__ import annotations

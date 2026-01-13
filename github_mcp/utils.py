@@ -131,7 +131,7 @@ def _normalize_repo_path(path: str) -> str:
 
 
 def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
-    """Normalize a repo-relative path while forgiving common assistant prefixes."""
+    """Normalize a repo-relative path while forgiving common URL prefixes."""
 
     if not isinstance(path, str):
         raise ToolPreflightValidationError("<server>", "path must be a string")
@@ -288,7 +288,7 @@ def _with_numbered_lines(text: str) -> list[Dict[str, Any]]:
 
 
 def _render_visible_whitespace(text: str) -> str:
-    """Surface whitespace characters for assistants that hide them by default."""
+    """Surface whitespace characters when clients hide them by default."""
 
     rendered_lines: list[str] = []
     for line in text.splitlines(keepends=True):

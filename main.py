@@ -2,8 +2,7 @@
 
 This module is the entry point for the GitHub Model Context Protocol server
 used by ChatGPT connectors. It lists the tools, arguments, and behaviors in a
-single place so an assistant can decide how to interact with the server without
-being pushed toward a particular working style.
+single place so clients can see how to interact with the server.
 """
 
 import base64
@@ -559,7 +558,7 @@ if app is not None:
 
 
 try:
-    # Use an absolute path so static mounting works regardless of CWD
+    # An absolute path keeps static mounting consistent regardless of CWD.
     # (e.g., running via uvicorn, pytest, or hosted platforms like Render).
     _assets_dir = Path(__file__).resolve().parent / "assets"
     app.mount("/static", StaticFiles(directory=str(_assets_dir)), name="static")
@@ -826,7 +825,7 @@ async def get_render_logs(
 # ------------------------------------------------------------------------------
 # Render tool aliases
 #
-# Some MCP clients (and some assistant prompt templates) expect tool names to
+# Some MCP clients (and some prompt templates) expect tool names to
 # begin with a provider prefix (for example: render_list_services). We keep the
 # canonical tool names (list_render_services, etc.) but also register a stable
 # set of render_* aliases so discovery and invocation remain reliable.
@@ -1169,8 +1168,7 @@ async def get_pr_review_comment_reactions(
 def list_write_tools() -> Dict[str, Any]:
     """Describe write-capable tools exposed by this server.
 
-    This is intended for assistants to discover what they can do safely without
-    reading the entire main.py.
+    This provides a concise summary without requiring a scan of the full module.
     """
     from github_mcp.main_tools.introspection import list_write_tools as _impl
 
@@ -1303,8 +1301,8 @@ async def get_cached_files(
     write_action=False,
     description=(
         "Fetch one or more files and persist them in the server-side cache so "
-        "assistants can recall them without repeating GitHub reads. Use "
-        "refresh=true to bypass existing cache entries."
+        "callers can reuse them without repeating GitHub reads. "
+        "refresh=true bypasses existing cache entries."
     ),
     tags=["github", "cache", "files"],
 )
@@ -1489,7 +1487,7 @@ async def list_recent_failures_graphql(
     write_action=False,
     description=(
         "List available MCP tools with a compact description. "
-        "Use describe_tool (or list_all_actions with include_parameters=true) when you need full schemas."
+        "Full schemas are available via describe_tool (or list_all_actions with include_parameters=true)."
     ),
 )
 async def list_tools(
@@ -1509,9 +1507,9 @@ def list_all_actions(
 ) -> Dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
-    This helper exposes a structured catalog of all tools so assistants can see
-    the full command surface without reading this file. It is intentionally
-    read-only and can therefore be called before writes are enabled.
+    This helper exposes a structured catalog of all tools so clients can see
+    the full command surface without reading this file. It is read-only and
+    remains available even when write actions are disabled.
 
     Args:
     include_parameters: When ``True``, include the serialized input schema
@@ -1599,8 +1597,8 @@ async def get_workflow_run_overview(
 
     This helper is read-only and safe to call before any write actions. It
     aggregates run metadata, jobs (with optional pagination up to max_jobs),
-    failed jobs, and the longest jobs by duration so assistants can answer
-    "what happened in this run?" with a single tool call.
+    failed jobs, and the longest jobs by duration to provide a single-call
+    summary of run status.
     """
     from github_mcp.main_tools.workflows import get_workflow_run_overview as _impl
 
@@ -1635,14 +1633,16 @@ async def wait_for_workflow_run(
 
 @mcp_tool(
     write_action=False,
-    description="Return a high-level overview of an issue, including related branches, pull requests, and checklist items, so assistants can decide what to do next.",
+    description=(
+        "Return a high-level overview of an issue, including related branches, "
+        "pull requests, and checklist items."
+    ),
 )
 async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Summarize a GitHub issue for navigation and planning.
 
     This helper is intentionally read-only.
-    It is designed for assistants to call before doing any write work so
-    they understand the current state of an issue.
+    It provides context about the issue's current state before changes are made.
     """
     from github_mcp.main_tools.issues import get_issue_overview as _impl
 
@@ -1887,8 +1887,8 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
     """Return a compact, multi-signal dashboard for a repository.
 
     This helper aggregates several lower-level tools into a single call so
-    assistants can quickly understand the current state of a repo and then
-    decide which focused tools to call next. It is intentionally read-only.
+    callers can quickly understand the current state of a repo. It is
+    intentionally read-only.
 
     Args:
     full_name:
@@ -1911,7 +1911,7 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
     - workflows: recent GitHub Actions workflow runs on the branch
     (up to 5).
     - top_level_tree: compact listing of top-level files/directories
-    on the branch so assistants can see the project layout.
+    on the branch to show the project layout.
 
     Individual sections degrade gracefully: if one underlying call fails,
     its corresponding "*_error" field is populated instead of raising.
@@ -2076,7 +2076,7 @@ async def apply_text_update_and_commit(
     description=("Return a compact overview of a pull request, including files and CI status."),
 )
 async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
-    # Summarize a pull request so I can decide what to do next.
+    # Summarize a pull request for quick review.
     #
     # This helper is read-only and safe to call before any write actions.
 
@@ -2100,8 +2100,8 @@ async def recent_prs_for_branch(
     # Return recent pull requests whose head matches the given branch.
     #
     # This is a composite navigation helper built on top of list_pull_requests.
-    # It groups results into open and (optionally) closed sets so assistants can
-    # find the PR(s) tied to a feature branch without guessing numbers.
+    # It groups results into open and (optionally) closed sets for quick
+    # discovery of PRs tied to a feature branch.
     from github_mcp.main_tools.pull_requests import recent_prs_for_branch as _impl
 
     return await _impl(
