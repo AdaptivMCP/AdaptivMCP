@@ -71,12 +71,18 @@ Vendored ripgrep (rg):
 
 See `CONTRIBUTING.md` for additional details.
 
-## Health
+## HTTP endpoints
 
 The server exposes:
 
 - `/healthz` – small JSON health payload (uptime, controller defaults, token-present signal).
-- `/sse` – MCP transport endpoint.
+- `/sse` – MCP transport endpoint (SSE).
+- `/messages` – MCP message submit endpoint used by the SSE transport.
+- `/tools` – tool registry for discovery (supports `?include_parameters=` and `?compact=`).
+- `/resources` – compatibility resource listing for MCP clients.
+- `/tools/<name>` – tool detail (GET) and invoke (POST).
+- `/ui` and `/ui.json` – lightweight UI diagnostics (serves `assets/index.html` when present).
+- `/static/*` – static assets when the `assets/` directory is present.
 
 ## Documentation
 
