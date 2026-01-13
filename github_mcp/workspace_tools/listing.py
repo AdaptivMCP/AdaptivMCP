@@ -72,6 +72,7 @@ async def list_workspace_files(
     try:
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
+        # Normalize branch/ref the same way as other workspace-backed tools.
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -268,10 +269,11 @@ async def search_workspace(
                 # max_results is accepted for compatibility/observability but is not
                 # enforced as an output limit.
 
-            return {
-                "full_name": full_name,
-                "ref": effective_ref,
-                "path": normalized_path if path else "",
+        # Return after scanning the full walk.
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": normalized_path if path else "",
             "query": query,
             "case_sensitive": case_sensitive,
             "used_regex": used_regex,
