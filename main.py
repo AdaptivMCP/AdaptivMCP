@@ -7,7 +7,6 @@ single place so clients can see how to interact with the server.
 
 import base64
 import json
-import os
 import time
 import uuid
 from urllib.parse import parse_qs
