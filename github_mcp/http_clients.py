@@ -124,8 +124,12 @@ from .config import (  # noqa: E402
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
+    GITHUB_LOGGER,
+    LOG_GITHUB_HTTP,
+    LOG_GITHUB_HTTP_BODIES,
 )
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
+from github_mcp.mcp_server.context import get_request_context  # noqa: E402
 
 _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
     weakref.WeakKeyDictionary()
@@ -519,10 +523,23 @@ async def _github_request(
 ) -> Dict[str, Any]:
     """Async GitHub request wrapper with structured errors."""
     client_factory = client_factory or _github_client_instance
-    # Unit tests run without live GitHub network access. Provide deterministic
-    # synthetic responses for this repository so smoke tests can exercise the
-    # controller flow without external calls.
-    if os.environ.get("PYTEST_CURRENT_TEST") and "Proofgate-Revocations/chatgpt-mcp-github" in path:
+    # Unit tests may run without live GitHub network access. Provide deterministic
+    # synthetic responses for this repository ONLY when explicitly enabled.
+    #
+    # This avoids any chance of synthetic payloads leaking into production usage.
+    enable_synthetic = os.environ.get("GITHUB_MCP_ENABLE_SYNTHETIC_GITHUB", "").strip().lower() in (
+        "1",
+        "true",
+        "t",
+        "yes",
+        "y",
+        "on",
+    )
+    if (
+        enable_synthetic
+        and os.environ.get("PYTEST_CURRENT_TEST")
+        and "Proofgate-Revocations/chatgpt-mcp-github" in path
+    ):
         if (
             method.upper() == "GET"
             and path.rstrip("/") == "/repos/Proofgate-Revocations/chatgpt-mcp-github"
@@ -591,6 +608,7 @@ async def _github_request(
     max_attempts = max(0, GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS)
 
     while True:
+        started = time.perf_counter()
         try:
             client = client_factory()
         except GitHubAuthError:
@@ -615,6 +633,34 @@ async def _github_request(
             error_flag = resp.status_code >= 400
 
         body: Any | None = _extract_response_body(resp)
+
+        if LOG_GITHUB_HTTP:
+            # Correlate outbound GitHub calls with the inbound tool call.
+            req = get_request_context()
+            duration_ms = (time.perf_counter() - started) * 1000
+            payload: Dict[str, Any] = {
+                "event": "github_http",
+                "request": dict(req) if isinstance(req, dict) else {},
+                "method": str(method).upper(),
+                "path": path,
+                "status_code": getattr(resp, "status_code", None),
+                "duration_ms": duration_ms,
+            }
+            if params is not None:
+                payload["params"] = params
+            if json_body is not None:
+                payload["json_body"] = json_body
+            if headers is not None:
+                safe_headers = {k: v for k, v in headers.items() if k.lower() != "authorization"}
+                payload["headers"] = safe_headers
+            if LOG_GITHUB_HTTP_BODIES:
+                payload["response_headers"] = dict(getattr(resp, "headers", {}) or {})
+                payload["response_body"] = body if body is not None else getattr(resp, "text", "")
+
+            GITHUB_LOGGER.info(
+                f"github_http method={str(method).upper()} path={path} status={getattr(resp, 'status_code', None)} duration_ms={duration_ms:.2f}",
+                extra=payload,
+            )
 
         message = body.get("message", "") if isinstance(body, dict) else ""
         message_lower = message.lower() if isinstance(message, str) else ""

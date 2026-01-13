@@ -70,6 +70,74 @@ GITHUB_SEARCH_MIN_INTERVAL_SECONDS = float(
     os.environ.get("GITHUB_SEARCH_MIN_INTERVAL_SECONDS", "2")
 )
 
+# Logging controls
+# ------------------------------------------------------------------------------
+# These settings only affect provider logs (Render / stdout). They do not change
+# tool outputs returned to the client.
+
+# Emit richer tool call logs (args/result metadata) suitable for humans reading Render logs.
+HUMAN_LOGS = os.environ.get("HUMAN_LOGS", "true").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
+# When enabled, include full tool args and full tool results in logs.
+# WARNING: This can create very large log lines and may stress hosted log ingestion.
+LOG_TOOL_PAYLOADS = os.environ.get("LOG_TOOL_PAYLOADS", "false").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
+# When enabled, include outbound GitHub HTTP request/response details in logs.
+LOG_GITHUB_HTTP = os.environ.get("LOG_GITHUB_HTTP", "false").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
+# When enabled, include response bodies for GitHub HTTP logs.
+# WARNING: This can be very large for search/list endpoints.
+LOG_GITHUB_HTTP_BODIES = os.environ.get("LOG_GITHUB_HTTP_BODIES", "false").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
+# Log inbound HTTP requests handled by the ASGI app (Render logs).
+LOG_HTTP_REQUESTS = os.environ.get("LOG_HTTP_REQUESTS", "true").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
+# When enabled, include HTTP request bodies for POST /messages in logs.
+# WARNING: Can be large. This does not modify tool outputs.
+LOG_HTTP_BODIES = os.environ.get("LOG_HTTP_BODIES", "false").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
 # Workspace diff application can be slow for large diffs. Keep this configurable.
 WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS = int(
     os.environ.get("MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", "300")

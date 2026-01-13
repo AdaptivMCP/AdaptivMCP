@@ -147,6 +147,28 @@ At minimum, set one GitHub authentication token so the server can access the API
 
 - GITHUB_MCP_CONTROLLER_REPO — controller repo full_name (owner/repo)
 - GITHUB_MCP_CONTROLLER_BRANCH — controller default branch
+
+### Logging (provider logs)
+
+These flags control provider-side logs (for example, Render logs). They do not modify tool outputs.
+
+- HUMAN_LOGS (default: true) — emits scan-friendly tool call log lines with correlation fields.
+- LOG_TOOL_PAYLOADS (default: false) — logs full tool input arguments and full tool results (no truncation).
+- LOG_GITHUB_HTTP (default: false) — logs outbound GitHub HTTP method/path/status/duration with correlation fields.
+- LOG_GITHUB_HTTP_BODIES (default: false) — includes full GitHub response bodies/headers in provider logs.
+- LOG_HTTP_REQUESTS (default: true) — logs inbound HTTP requests to the ASGI server (method/path/status/duration) with request_id.
+- LOG_HTTP_BODIES (default: false) — when enabled, logs the POST /messages body (no truncation). Use with care.
+
+HTTP exception logging
+~~~~~~~~~~~~~~~~~~~~~~
+
+When LOG_HTTP_REQUESTS is enabled, unhandled exceptions inside the ASGI request path are logged as `http_exception`
+with request_id/session_id/message_id and a full stack trace.
+
+### Tests
+
+- GITHUB_MCP_ENABLE_SYNTHETIC_GITHUB (default: false) — when running unit tests (PYTEST_CURRENT_TEST is set),
+  enables deterministic synthetic GitHub responses for this repository. Never enabled implicitly outside tests.
 - GITHUB_REPO_DEFAULTS — optional JSON object of repo defaults (to reduce API calls). Supported shapes:
   - {"owner/repo": {"default_branch": "main"}}
   - {"owner/repo": "main"} (shorthand)
