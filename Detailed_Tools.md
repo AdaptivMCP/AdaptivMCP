@@ -1308,13 +1308,13 @@ Example invocation:
 Delete one or more paths from the workspace clone.
 
 This tool exists because some environments can block patch-based file deletions.
-Prefer this over embedding file deletions into patches.
+typical this over embedding file deletions into patches.
 
 Safety constraints:
 - Paths are resolved relative to the repo root and cannot escape it.
 - Deleting the repository root is forbidden.
 - Directories require allow_recursive=True. Otherwise only empty directories
-  may be removed.
+may be removed.
 
 Metadata:
 - visibility: public
@@ -2637,30 +2637,30 @@ assistants can quickly understand the current state of a repo and then
 decide which focused tools to call next. It is intentionally read-only.
 
 Args:
-    full_name:
-        "owner/repo" string.
-    branch:
-        Optional branch name. When omitted, the repository's default
-        branch is used via the same normalization logic as other tools.
+full_name:
+"owner/repo" string.
+branch:
+Optional branch name. When omitted, the repository's default
+branch is used via the same normalization logic as other tools.
 
 Raises:
-    ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
+ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
 
 Returns:
-    A dict with high-level fields such as:
+A dict with high-level fields such as:
 
-      - repo: core metadata about the repository (description, visibility,
-        default branch, topics, open issue count when available).
-      - branch: the effective branch used for lookups.
-      - pull_requests: a small window of open pull requests (up to 10).
-      - issues: a small window of open issues (up to 10, excluding PRs).
-      - workflows: recent GitHub Actions workflow runs on the branch
-        (up to 5).
-      - top_level_tree: compact listing of top-level files/directories
-        on the branch so assistants can see the project layout.
+- repo: core metadata about the repository (description, visibility,
+default branch, topics, open issue count when available).
+- branch: the effective branch used for lookups.
+- pull_requests: a small window of open pull requests (up to 10).
+- issues: a small window of open issues (up to 10, excluding PRs).
+- workflows: recent GitHub Actions workflow runs on the branch
+(up to 5).
+- top_level_tree: compact listing of top-level files/directories
+on the branch so assistants can see the project layout.
 
-    Individual sections degrade gracefully: if one underlying call fails,
-    its corresponding "*_error" field is populated instead of raising.
+Individual sections degrade gracefully: if one underlying call fails,
+its corresponding "*_error" field is populated instead of raising.
 
 Metadata:
 - visibility: public
@@ -3192,11 +3192,11 @@ the full command surface without reading this file. It is intentionally
 read-only and can therefore be called before writes are enabled.
 
 Args:
-    include_parameters: When ``True``, include the serialized input schema
-        for each tool to clarify argument names and types.
-    compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA_DEFAULT=1`` is
-        set), shorten descriptions and omit tag metadata to keep responses
-        compact.
+include_parameters: When ``True``, include the serialized input schema
+for each tool to clarify argument names and types.
+compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA_DEFAULT=1`` is
+set), shorten descriptions and omit tag metadata to keep responses
+compact.
 
 Metadata:
 - visibility: public
@@ -4675,9 +4675,9 @@ Example invocation:
 
 Open a pull request for an existing branch into a base branch.
 
-    This helper is intentionally idempotent: if there is already an open PR for
-    the same head/base pair, it will return that existing PR instead of failing
-    or creating a duplicate.
+This helper is intentionally idempotent: if there is already an open PR for
+the same head/base pair, it will return that existing PR instead of failing
+or creating a duplicate.
 
 If this tool call fails in the hosted environment, use the workspace flow: `terminal_command` to create or reuse the PR.
 
@@ -5716,8 +5716,8 @@ Example invocation:
 Run lint and tests for a repo/ref.
 
 Steps:
-  1) Lint/static analysis via `run_lint_suite`
-  2) Tests via `run_tests`
+1) Lint/static analysis via `run_lint_suite`
+2) Tests via `run_tests`
 
 This suite intentionally does not run token-like string scanning. Token
 logging happens at log/serialization boundaries.
@@ -5959,8 +5959,8 @@ Example invocation:
 Search text files in the workspace clone (bounded, no shell).
 
 Behavior for `query`:
-  - Always treated as a literal substring match.
-  - `regex` is accepted for compatibility but is not enforced.
+- Always treated as a literal substring match.
+- `regex` is accepted for compatibility but is not enforced.
 
 Metadata:
 - visibility: public
@@ -6377,10 +6377,10 @@ Example invocation:
 Trigger a workflow dispatch event on the given ref.
 
 Args:
-    full_name: "owner/repo" string.
-    workflow: Workflow file name or ID (e.g. "ci.yml" or a numeric ID).
-    ref: Git ref (branch, tag, or SHA) to run the workflow on.
-    inputs: Optional input payload for workflows that declare inputs.
+full_name: "owner/repo" string.
+workflow: Workflow file name or ID (e.g. "ci.yml" or a numeric ID).
+ref: Git ref (branch, tag, or SHA) to run the workflow on.
+inputs: Optional input payload for workflows that declare inputs.
 
 Metadata:
 - visibility: public
@@ -6918,12 +6918,12 @@ This tool is intended to be used by assistants mid-flow when a workspace
 clone becomes inconsistent (wrong branch checked out, merge/rebase state,
 conflicts, etc.). When healing, it:
 
-  1) Diagnoses the workspace clone for ``branch``.
-  2) Optionally deletes the mangled branch (remote + best-effort local).
-  3) Resets the base branch workspace (default: ``main``).
-  4) Creates + pushes a new fresh branch.
-  5) Ensures a clean clone for the new branch.
-  6) Optionally returns a small repo snapshot to rebuild "mental state".
+1) Diagnoses the workspace clone for ``branch``.
+2) Optionally deletes the mangled branch (remote + best-effort local).
+3) Resets the base branch workspace (default: ``main``).
+4) Creates + pushes a new fresh branch.
+5) Ensures a clean clone for the new branch.
+6) Optionally returns a small repo snapshot to rebuild "mental state".
 
 Returns plain-language step logs for UI rendering.
 

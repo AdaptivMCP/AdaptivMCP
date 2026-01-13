@@ -56,9 +56,9 @@ class WriteApprovalRequiredError(WriteNotAuthorizedError):
 class ToolPreflightValidationError(Exception):
     """Raised when server-side tool argument preflight fails.
 
-    This error is intentionally lightweight so callers see a clear, single-line
-    message that points at the offending tool and field.
-    """
+ This error is intentionally lightweight so callers see a clear, single-line
+ message that points at the offending tool and field.
+ """
 
     def __init__(self, tool: str, message: str) -> None:
         super().__init__(f"Preflight validation failed for tool {tool!r}: {message}")
@@ -68,8 +68,8 @@ class ToolPreflightValidationError(Exception):
 class UsageError(Exception):
     """Raised when a tool cannot proceed due to user misconfiguration or bad inputs.
 
-    This is intended to surface a clear, single-line message to the caller.
-    """
+ This is intended to surface a clear, single-line message to the caller.
+ """
 
     pass
 

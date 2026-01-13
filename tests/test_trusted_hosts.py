@@ -4,9 +4,9 @@ import pytest
 def _load_dependencies():
     """Load optional Starlette dependencies.
 
-    We keep Starlette imports inside this helper so that the test module can be
-    imported even when Starlette is not installed.
-    """
+ We keep Starlette imports inside this helper so that the test module can be
+ imported even when Starlette is not installed.
+ """
 
     pytest.importorskip("starlette")
 

@@ -16,10 +16,10 @@ from github_mcp.server import (
 def _resolve_main_helper(name: str, default):
     """Resolve an optional helper override from the entry module.
 
-    The server may be executed as `main` or as `__main__` depending on the
-    hosting environment. This helper keeps the compatibility surface stable
-    without requiring hard imports.
-    """
+ The server may be executed as `main` or as `__main__` depending on the
+ hosting environment. This helper keeps the compatibility surface stable
+ without requiring hard imports.
+ """
     for mod_name in ("main", "__main__"):
         mod = sys.modules.get(mod_name)
         if mod is None:

@@ -12,8 +12,8 @@ async def pr_smoke_test(
 ) -> Dict[str, Any]:
     """Create a trivial branch with a one-line change and open a draft PR.
 
-    This is intended for diagnostics of PR tooling in the live environment.
-    """
+ This is intended for diagnostics of PR tooling in the live environment.
+ """
 
     m = _main()
 

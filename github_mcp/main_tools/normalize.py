@@ -54,9 +54,9 @@ def normalize_pr_payload(raw_pr: Any) -> Optional[Dict[str, Any]]:
 def normalize_branch_summary(summary: Any) -> Optional[Dict[str, Any]]:
     """Normalize get_branch_summary output into a compact shape.
 
-    Diff/compare data has been removed from the server; this helper focuses on PRs
-    and CI signals.
-    """
+ Diff/compare data has been removed from the server; this helper focuses on PRs
+ and CI signals.
+ """
 
     if not isinstance(summary, dict):
         return None

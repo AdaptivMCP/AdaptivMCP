@@ -41,11 +41,11 @@ def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool = True) -> 
 def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[str, Any]:
     """Build a stable tool/resources catalog for HTTP clients.
 
-    This endpoint is intentionally best-effort: callers use it for discovery.
-    If introspection fails (for example during partial startup), return a
-    structured error rather than a raw 500 so clients can render a useful
-    diagnostic.
-    """
+ This endpoint is intentionally best-effort: callers use it for discovery.
+ If introspection fails (for example during partial startup), return a
+ structured error rather than a raw 500 so clients can render a useful
+ diagnostic.
+ """
 
     try:
         from github_mcp.main_tools.introspection import list_all_actions
@@ -215,9 +215,9 @@ def build_tool_registry_endpoint() -> Callable[[Request], Response]:
 def build_resources_endpoint() -> Callable[[Request], Response]:
     """Return only the resources list.
 
-    Some clients assume that GET /resources returns a resource list without the
-    parallel "tools" field used by GET /tools.
-    """
+ Some clients assume that GET /resources returns a resource list without the
+ parallel "tools" field used by GET /tools.
+ """
 
     async def _endpoint(request: Request) -> Response:
         include_parameters = _parse_bool(request.query_params.get("include_parameters")) or False

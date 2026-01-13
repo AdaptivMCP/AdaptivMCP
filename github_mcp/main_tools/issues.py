@@ -239,10 +239,10 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
 async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any]:
     """Summarize a GitHub issue for navigation and planning.
 
-    This helper is intentionally read-only.
-    It is designed for assistants to call before doing any write work so
-    they understand the current state of an issue.
-    """
+ This helper is intentionally read-only.
+ It is designed for assistants to call before doing any write work so
+ they understand the current state of an issue.
+ """
 
     m = _main()
 

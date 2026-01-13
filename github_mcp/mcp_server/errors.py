@@ -116,12 +116,12 @@ def _structured_exception_overrides(
 ) -> Optional[Dict[str, Any]]:
     """Best-effort support for exceptions that carry structured fields.
 
-    This avoids a bespoke exception type while still allowing callers to provide
-    stable error metadata. Any exception can opt-in by setting attributes:
-      - code (required)
-      - message (optional; falls back to str(exc))
-      - category, origin, retryable, details (dict), hint
-    """
+ This avoids a bespoke exception type while still allowing callers to provide
+ stable error metadata. Any exception can opt-in by setting attributes:
+ - code (required)
+ - message (optional; falls back to str(exc))
+ - category, origin, retryable, details (dict), hint
+ """
 
     code = getattr(exc, "code", None)
     if not code:
@@ -175,11 +175,11 @@ def _structured_tool_error(
     request: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
-    Convert any exception into a structured payload.
+ Convert any exception into a structured payload.
 
-    Contract:
-      - returns {"error": {...}} so callers can safely do payload.get("error", {}).
-    """
+ Contract:
+ - returns {"error": {...}} so callers can safely do payload.get("error", {}).
+ """
     incident_id = str(uuid.uuid4())
     request_id = get_request_id()
 
@@ -353,9 +353,9 @@ def _structured_tool_error(
 
 def _exception_trace(exc: BaseException) -> str:
     """
-    Optional helper: stringify a traceback when you explicitly want it.
-    Do NOT auto-attach this to user-facing payloads by default.
-    """
+ Optional helper: stringify a traceback when you explicitly want it.
+ is not supported auto-attach this to user-facing payloads by default.
+ """
     try:
         return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     except Exception:

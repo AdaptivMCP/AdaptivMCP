@@ -102,12 +102,12 @@ def _env_default_write_allowed() -> bool:
 
 class _WriteAllowedFlag:
     """
-    Drop-in compatible:
-      - bool(WRITE_ALLOWED)
-      - WRITE_ALLOWED.value
-      - WRITE_ALLOWED.value = True/False
-    Uses the GITHUB_MCP_WRITE_ALLOWED environment variable as the sole source of truth.
-    """
+ Drop-in compatible:
+ - bool(WRITE_ALLOWED)
+ - WRITE_ALLOWED.value
+ - WRITE_ALLOWED.value = True/False
+ Uses the GITHUB_MCP_WRITE_ALLOWED environment variable as the sole source of truth.
+ """
 
     def __init__(self) -> None:
         self._cache_value = _env_default_write_allowed()
@@ -129,9 +129,9 @@ WRITE_ALLOWED = _WriteAllowedFlag()
 
 def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     """
-    Returns effective write gate based solely on GITHUB_MCP_WRITE_ALLOWED.
-    refresh_after_seconds is ignored but kept for backwards compatibility.
-    """
+ Returns effective write gate based solely on GITHUB_MCP_WRITE_ALLOWED.
+ refresh_after_seconds is ignored but kept for backwards compatibility.
+ """
     del refresh_after_seconds
     val = _env_default_write_allowed()
     WRITE_ALLOWED._cache_value = val
@@ -140,8 +140,8 @@ def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
 
 def set_write_allowed(approved: bool) -> bool:
     """
-    Updates the process environment variable used for write gating.
-    """
+ Updates the process environment variable used for write gating.
+ """
     value = bool(approved)
     os.environ["GITHUB_MCP_WRITE_ALLOWED"] = "true" if value else "false"
     WRITE_ALLOWED._cache_value = value

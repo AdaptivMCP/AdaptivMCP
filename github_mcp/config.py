@@ -172,10 +172,10 @@ GITHUB_MCP_GIT_IDENTITY_ENV_VARS = (
 )
 
 DEFAULT_GIT_IDENTITY = {
-    "author_name": "Ally",
-    "author_email": "ally@example.com",
-    "committer_name": "Ally",
-    "committer_email": "ally@example.com",
+    "author_name": "Adaptiv MCP",
+    "author_email": "adaptiv-mcp@local",
+    "committer_name": "Adaptiv MCP",
+    "committer_email": "adaptiv-mcp@local",
 }
 
 

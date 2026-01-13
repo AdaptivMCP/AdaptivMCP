@@ -28,10 +28,10 @@ class DiffStats:
 def sha1_8(text: str) -> str:
     """Return a stable 8-hex digest for text.
 
-    Historically this function used SHA-1. We keep the public name for
-    backwards compatibility but use BLAKE2s to avoid insecure hashing
-    primitives while preserving the short, deterministic output.
-    """
+ Historically this function used SHA-1. We keep the public name for
+ backwards compatibility but use BLAKE2s to avoid insecure hashing
+ primitives while preserving the short, deterministic output.
+ """
 
     # 4 bytes -> 8 hex characters.
     return hashlib.blake2s(text.encode("utf-8", errors="replace"), digest_size=4).hexdigest()
@@ -81,11 +81,11 @@ def diff_stats(diff_text: str) -> DiffStats:
 def colorize_unified_diff(diff_text: str) -> str:
     """Colorize a unified diff using ANSI.
 
-    - additions: green
-    - deletions: red
-    - hunk headers: cyan
-    - file headers: dim
-    """
+ - additions: green
+ - deletions: red
+ - hunk headers: cyan
+ - file headers: dim
+ """
 
     if not diff_text:
         return diff_text

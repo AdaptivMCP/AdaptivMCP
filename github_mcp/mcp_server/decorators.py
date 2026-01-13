@@ -4,16 +4,16 @@ Decorators and helpers for registering MCP tools.
 
 Behavioral contract:
 - WRITE_ALLOWED controls whether write tools are auto-approved by the client.
-  When WRITE_ALLOWED is false, write tools remain available but clients should
-  prompt for confirmation before execution.
+ When WRITE_ALLOWED is false, write tools remain available but clients may
+ prompt for confirmation before execution.
 - Tools publish input schemas for introspection, but the server does NOT
-  enforce JSONSchema validation at runtime.
+ enforce JSONSchema validation at runtime.
 - Tags are accepted for backwards compatibility but are not emitted to clients.
 - Dedupe helpers remain for compatibility and test coverage.
 
 Dedupe contract:
 - Async dedupe caches completed results for a short TTL within the SAME event loop.
-- Async dedupe is scoped per event loop (never shares futures across loops).
+- Async dedupe is scoped per event loop (is not supported shares futures across loops).
 - Sync dedupe memoizes results for TTL.
 """
 
@@ -87,11 +87,11 @@ def _apply_tool_metadata(
 ) -> None:
     """Attach only safe metadata onto the registered tool object.
 
-    Some MCP clients interpret tool-object metadata as execution directives.
-    To avoid misclassification, we keep policy and classification on the Python
-    wrapper ("__mcp_*" attributes) and attach only the input schema onto the
-    tool object when needed for FastMCP.
-    """
+ Some MCP clients interpret tool-object metadata as execution directives.
+ To avoid misclassification, we keep policy and classification on the Python
+ wrapper ("__mcp_*" attributes) and attach only the input schema onto the
+ tool object when needed for FastMCP.
+ """
 
     if tool_obj is None:
         return
@@ -129,16 +129,16 @@ def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
 
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
-    Legacy enforcement hook.
+ Legacy enforcement hook.
 
-    Historically, write tools were hard-blocked when WRITE_ALLOWED was false.
-    The current policy is approval-gated writes:
-      - When WRITE_ALLOWED is true, writes should execute without extra prompts.
-      - When WRITE_ALLOWED is false, writes remain executable but clients (e.g.
-        ChatGPT) should ask the user to confirm/deny.
+ Historically, write tools were hard-blocked when WRITE_ALLOWED was false.
+ The current policy is approval-gated writes:
+ - When WRITE_ALLOWED is true, writes may execute without extra prompts.
+ - When WRITE_ALLOWED is false, writes remain executable but clients (e.g.
+ ChatGPT) may ask the user to confirm/deny.
 
-    This function is intentionally a no-op for compatibility.
-    """
+ This function is intentionally a no-op for compatibility.
+ """
     del tool_name, write_action
     return
 
@@ -173,10 +173,10 @@ def _get_async_lock(loop: asyncio.AbstractEventLoop) -> asyncio.Lock:
 async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> Any:
     """Coalesce identical work within an event loop for ttl_s seconds.
 
-    - First call creates a Future and runs work.
-    - Subsequent calls within TTL await the cached Future (even if already done).
-    - Failures are not cached; cache entry is removed immediately on exception.
-    """
+ - First call creates a Future and runs work.
+ - Subsequent calls within TTL await the cached Future (even if already done).
+ - Failures are not cached; cache entry is removed immediately on exception.
+ """
     ttl_s = max(0.0, float(ttl_s))
     now = time.time()
 
@@ -516,11 +516,11 @@ def _filter_kwargs_for_signature(
 
 def _fastmcp_call_style(params: Optional[tuple[inspect.Parameter, ...]]) -> str:
     """
-    Determine safest call style:
-    - If first param is name: must use decorator factory style (tool(name=...)(fn)).
-    - If first param is fn/func/etc: can use direct call tool(fn, ...).
-    - Unknown: try factory first, then direct.
-    """
+ Determine safest call style:
+ - If first param is name: needs to use decorator factory style (tool(name=...)(fn)).
+ - If first param is fn/func/etc: can use direct call tool(fn, ...).
+ - Unknown: try factory first, then direct.
+ """
     if params is None or not params:
         return "unknown"
     first = params[0].name
@@ -549,13 +549,13 @@ def _register_with_fastmcp(
         return None
 
     """
-    Robust FastMCP registration across signature variants.
+ Robust FastMCP registration across signature variants.
 
-    Prevents the crash:
-      TypeError: FastMCP.tool() got multiple values for argument 'name'
-    by never passing `fn` positionally when the tool() signature expects `name`
-    positionally.
-    """
+ Prevents the crash:
+ TypeError: FastMCP.tool() got multiple values for argument 'name'
+ by is not supported passing `fn` positionally when the tool() signature expects `name`
+ positionally.
+ """
     params = _fastmcp_tool_params()
     style = _fastmcp_call_style(params)
 
@@ -920,11 +920,11 @@ def mcp_tool(
 def register_extra_tools_if_available() -> None:
     """Register optional tools from ``extra_tools`` if the module is present.
 
-    Historically this function swallowed all exceptions, which makes failures
-    (e.g., import cycles or syntax errors) appear as "tool not listed" at
-    runtime. We keep the best-effort behavior, but emit a warning so operator
-    logs show *why* optional tools were skipped.
-    """
+ Historically this function swallowed all exceptions, which makes failures
+ (e.g., import cycles or syntax errors) appear as "tool not listed" at
+ runtime. We keep the best-effort behavior, but emit a warning so operator
+ logs show *why* optional tools were skipped.
+ """
 
     try:
         mod = importlib.import_module("extra_tools")
