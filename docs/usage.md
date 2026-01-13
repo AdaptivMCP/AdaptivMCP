@@ -165,13 +165,11 @@ These flags control provider-side logs (for example, Render logs). They do not m
 - LOG_HTTP_REQUESTS (default: false) — logs inbound HTTP requests to the ASGI server (method/path/status/duration) with request_id.
 - LOG_HTTP_BODIES (default: false) — when enabled, logs the POST /messages body (no truncation). Use with care.
 
-HTTP exception logging
-~~~~~~~~~~~~~~~~~~~~~~
+#### HTTP exception logging
 
-When LOG_HTTP_REQUESTS is enabled, unhandled exceptions inside the ASGI request path are logged as `http_exception`
+When `LOG_HTTP_REQUESTS` is enabled, unhandled exceptions inside the ASGI request path are logged as `http_exception` with `request_id`, `session_id`, and `message_id`, plus a full stack trace.
 
 - LOG_TOOL_CALLS (default: false) — logs tool_call_started/tool_call_completed lines to provider logs. Failures are still logged as warnings.
-with request_id/session_id/message_id and a full stack trace.
 
 ### Tests
 
