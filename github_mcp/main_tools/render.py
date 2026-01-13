@@ -14,7 +14,7 @@ async def list_render_owners(cursor: Optional[str] = None, limit: int = 20) -> D
     params: Dict[str, Any] = {"limit": limit}
     if cursor:
         params["cursor"] = cursor
-    return await render_request("GET", "/v1/owners", params=params)
+    return await render_request("GET", "/owners", params=params)
 
 
 async def list_render_services(
@@ -32,13 +32,13 @@ async def list_render_services(
         params["cursor"] = cursor
     if owner_id:
         params["ownerId"] = owner_id
-    return await render_request("GET", "/v1/services", params=params)
+    return await render_request("GET", "/services", params=params)
 
 
 async def get_render_service(service_id: str) -> Dict[str, Any]:
     """Fetch a single Render service."""
 
-    return await render_request("GET", f"/v1/services/{service_id}")
+    return await render_request("GET", f"/services/{service_id}")
 
 
 async def list_render_deploys(
@@ -51,13 +51,13 @@ async def list_render_deploys(
     params: Dict[str, Any] = {"limit": limit}
     if cursor:
         params["cursor"] = cursor
-    return await render_request("GET", f"/v1/services/{service_id}/deploys", params=params)
+    return await render_request("GET", f"/services/{service_id}/deploys", params=params)
 
 
 async def get_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
     """Fetch a specific deploy."""
 
-    return await render_request("GET", f"/v1/services/{service_id}/deploys/{deploy_id}")
+    return await render_request("GET", f"/services/{service_id}/deploys/{deploy_id}")
 
 
 async def create_render_deploy(
@@ -75,7 +75,7 @@ async def create_render_deploy(
         body["imageUrl"] = image_url
     return await render_request(
         "POST",
-        f"/v1/services/{service_id}/deploys",
+        f"/services/{service_id}/deploys",
         json_body=body,
     )
 
@@ -85,7 +85,7 @@ async def cancel_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any
 
     return await render_request(
         "POST",
-        f"/v1/services/{service_id}/deploys/{deploy_id}/cancel",
+        f"/services/{service_id}/deploys/{deploy_id}/cancel",
     )
 
 
@@ -94,14 +94,14 @@ async def rollback_render_deploy(service_id: str, deploy_id: str) -> Dict[str, A
 
     return await render_request(
         "POST",
-        f"/v1/services/{service_id}/deploys/{deploy_id}/rollback",
+        f"/services/{service_id}/deploys/{deploy_id}/rollback",
     )
 
 
 async def restart_render_service(service_id: str) -> Dict[str, Any]:
     """Restart a running service."""
 
-    return await render_request("POST", f"/v1/services/{service_id}/restart")
+    return await render_request("POST", f"/services/{service_id}/restart")
 
 
 async def get_render_logs(
@@ -128,7 +128,7 @@ async def get_render_logs(
         params["startTime"] = start_time
     if end_time:
         params["endTime"] = end_time
-    return await render_request("GET", "/v1/logs", params=params)
+    return await render_request("GET", "/logs", params=params)
 
 
 __all__ = [
