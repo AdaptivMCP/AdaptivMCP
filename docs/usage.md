@@ -156,6 +156,14 @@ These flags control provider-side logs (for example, Render logs). They do not m
 - LOG_TOOL_PAYLOADS (default: false) — logs full tool input arguments and full tool results (no truncation).
 - LOG_GITHUB_HTTP (default: false) — logs outbound GitHub HTTP method/path/status/duration with correlation fields.
 - LOG_GITHUB_HTTP_BODIES (default: false) — includes full GitHub response bodies/headers in provider logs.
+- LOG_HTTP_REQUESTS (default: true) — logs inbound HTTP requests to the ASGI server (method/path/status/duration) with request_id.
+- LOG_HTTP_BODIES (default: false) — when enabled, logs the POST /messages body (no truncation). Use with care.
+
+HTTP exception logging
+~~~~~~~~~~~~~~~~~~~~~~
+
+When LOG_HTTP_REQUESTS is enabled, unhandled exceptions inside the ASGI request path are logged as `http_exception`
+with request_id/session_id/message_id and a full stack trace.
 
 ### Tests
 

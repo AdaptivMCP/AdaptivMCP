@@ -117,6 +117,27 @@ LOG_GITHUB_HTTP_BODIES = os.environ.get("LOG_GITHUB_HTTP_BODIES", "false").strip
     "on",
 )
 
+# Log inbound HTTP requests handled by the ASGI app (Render logs).
+LOG_HTTP_REQUESTS = os.environ.get("LOG_HTTP_REQUESTS", "true").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
+# When enabled, include HTTP request bodies for POST /messages in logs.
+# WARNING: Can be large. This does not modify tool outputs.
+LOG_HTTP_BODIES = os.environ.get("LOG_HTTP_BODIES", "false").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
+
 # Workspace diff application can be slow for large diffs. Keep this configurable.
 WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS = int(
     os.environ.get("MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", "300")

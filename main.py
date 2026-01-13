@@ -31,6 +31,9 @@ from github_mcp.config import (
     FILE_CACHE_MAX_BYTES,  # noqa: F401
     FILE_CACHE_MAX_ENTRIES,  # noqa: F401
     WORKSPACE_BASE_DIR,  # noqa: F401
+    HUMAN_LOGS,
+    LOG_HTTP_REQUESTS,
+    LOG_HTTP_BODIES,
 )
 from github_mcp.exceptions import (
     GitHubAPIError,  # noqa: F401
@@ -225,6 +228,56 @@ class _RequestContextMiddleware:
         except Exception:
             pass
 
+        # HTTP access logging (provider logs). We log at response.start and capture
+        # status + correlation fields. Bodies are opt-in and only captured for
+        # POST /messages.
+        access_started_at = time.perf_counter()
+        access_logged = False
+        captured_body: Optional[bytes] = None
+
+        async def send_access_wrapper(message):
+            nonlocal access_logged
+            if not LOG_HTTP_REQUESTS:
+                return await send_wrapper(message)
+            if message.get("type") == "http.response.start" and not access_logged:
+                access_logged = True
+                status_code = message.get("status")
+                duration_ms = (time.perf_counter() - access_started_at) * 1000
+                # Human-readable line + machine-friendly structured payload.
+                payload = {
+                    "event": "http_request",
+                    "request_id": request_id,
+                    "session_id": REQUEST_SESSION_ID.get(),
+                    "message_id": REQUEST_MESSAGE_ID.get(),
+                    "method": scope.get("method"),
+                    "path": path,
+                    "status_code": status_code,
+                    "duration_ms": duration_ms,
+                }
+                if LOG_HTTP_BODIES and captured_body is not None and path.endswith("/messages"):
+                    try:
+                        payload["request_body"] = captured_body.decode(
+                            "utf-8", errors="replace"
+                        )
+                    except Exception:
+                        payload["request_body"] = repr(captured_body)
+
+                if HUMAN_LOGS:
+                    LOGGER.info(
+                        (
+                            "http_request "
+                            f"method={scope.get('method')} path={path} status={status_code} "
+                            f"duration_ms={duration_ms:.2f} request_id={request_id}"
+                        ),
+                        extra=payload,
+                    )
+                else:
+                    LOGGER.info(
+                        f"http_request method={scope.get('method')} path={path} status={status_code}",
+                        extra=payload,
+                    )
+            return await send_wrapper(message)
+
         # Only parse JSON body for POST /messages.
         if path.endswith("/messages") and scope.get("method") == "POST":
             body_chunks: list[bytes] = []
@@ -250,6 +303,7 @@ class _RequestContextMiddleware:
             # Drain once, then replay to downstream app.
             await _drain_body()
             body = b"".join(body_chunks)
+            captured_body = body if LOG_HTTP_BODIES else None
             try:
                 if body:
                     payload = json.loads(body.decode("utf-8", errors="replace"))
@@ -269,9 +323,55 @@ class _RequestContextMiddleware:
                 replayed = True
                 return {"type": "http.request", "body": body, "more_body": False}
 
-            return await self.app(scope, receive_replay, send_wrapper)
+            try:
+                return await self.app(scope, receive_replay, send_access_wrapper)
+            except Exception as exc:
+                if LOG_HTTP_REQUESTS:
+                    duration_ms = (time.perf_counter() - access_started_at) * 1000
+                    payload = {
+                        "event": "http_exception",
+                        "request_id": request_id,
+                        "session_id": REQUEST_SESSION_ID.get(),
+                        "message_id": REQUEST_MESSAGE_ID.get(),
+                        "method": scope.get("method"),
+                        "path": path,
+                        "duration_ms": duration_ms,
+                        "exception_type": type(exc).__name__,
+                    }
+                    LOGGER.exception(
+                        (
+                            "http_exception "
+                            f"method={scope.get('method')} path={path} request_id={request_id} "
+                            f"duration_ms={duration_ms:.2f}"
+                        ),
+                        extra=payload,
+                    )
+                raise
 
-        return await self.app(scope, receive, send_wrapper)
+        try:
+            return await self.app(scope, receive, send_access_wrapper)
+        except Exception as exc:
+            if LOG_HTTP_REQUESTS:
+                duration_ms = (time.perf_counter() - access_started_at) * 1000
+                payload = {
+                    "event": "http_exception",
+                    "request_id": request_id,
+                    "session_id": REQUEST_SESSION_ID.get(),
+                    "message_id": REQUEST_MESSAGE_ID.get(),
+                    "method": scope.get("method"),
+                    "path": path,
+                    "duration_ms": duration_ms,
+                    "exception_type": type(exc).__name__,
+                }
+                LOGGER.exception(
+                    (
+                        "http_exception "
+                        f"method={scope.get('method')} path={path} request_id={request_id} "
+                        f"duration_ms={duration_ms:.2f}"
+                    ),
+                    extra=payload,
+                )
+            raise
 
 
 class _SuppressClientDisconnectMiddleware:
