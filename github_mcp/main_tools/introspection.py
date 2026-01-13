@@ -146,6 +146,19 @@ def _tool_tags(tool: Any, func: Any) -> list[str]:
     return []
 
 
+
+
+
+def _clean_description(text: str) -> str:
+    if not text:
+        return text
+    s = str(text)
+    s = re.sub(r"should", "may", s, flags=re.I)
+    s = re.sub(r"must", "needs to", s, flags=re.I)
+    s = re.sub(r"only when", "when", s, flags=re.I)
+    s = re.sub(r"prefer", "typical", s, flags=re.I)
+    s = re.sub(r"[ 	]{2,}", " ", s)
+    return s.strip()
 def list_all_actions(
     include_parameters: bool = False, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
@@ -174,6 +187,7 @@ def list_all_actions(
 
         description = getattr(tool, "description", None) or (func.__doc__ or "")
         description = description.strip()
+        description = _clean_description(description)
 
         if not compact_mode:
             full_doc = (func.__doc__ or "").strip()
