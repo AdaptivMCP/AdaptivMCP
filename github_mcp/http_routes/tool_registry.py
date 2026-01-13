@@ -157,6 +157,19 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
     return bool(value)
 
 
+def _looks_like_structured_error(payload: Any) -> Optional[Dict[str, Any]]:
+    """Return the structured error object when payload matches our error shape."""
+
+    if not isinstance(payload, dict):
+        return None
+    err = payload.get("error")
+    if not isinstance(err, dict):
+        return None
+    if not (err.get("category") or err.get("code") or err.get("message")):
+        return None
+    return err
+
+
 async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: int = 3) -> Response:
     resolved = _find_registered_tool(tool_name)
     if not resolved:
@@ -175,6 +188,29 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
             result = func(**args)
             if inspect.isawaitable(result):
                 result = await result
+
+            # Some tool wrappers return a structured error payload rather than
+            # raising. Translate those into appropriate HTTP status codes so
+            # callers can reliably detect failures.
+            if isinstance(result, dict):
+                err = _looks_like_structured_error(result)
+                if err is not None:
+                    retryable = bool(err.get("retryable", False))
+                    status_code = _status_code_for_error(err)
+                    headers = _response_headers_for_error(err)
+
+                    if (not write_action) and retryable and attempt < max_attempts:
+                        delay = min(base_backoff_s * (2 ** (attempt - 1)), 2.0)
+                        details = err.get("details")
+                        if isinstance(details, dict):
+                            retry_after = details.get("retry_after_seconds")
+                            if isinstance(retry_after, (int, float)) and retry_after > 0:
+                                delay = min(float(retry_after), 2.0)
+                        await asyncio.sleep(_jitter_sleep_seconds(delay, respect_min=True))
+                        continue
+
+                    return JSONResponse(result, status_code=status_code, headers=headers)
+
             payload = result if isinstance(result, dict) else {"result": result}
             return JSONResponse(payload)
         except Exception as exc:
