@@ -29,7 +29,13 @@ import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
-from github_mcp.config import BASE_LOGGER, HUMAN_LOGS, LOG_TOOL_CALLS, LOG_TOOL_PAYLOADS
+from github_mcp.config import (
+    BASE_LOGGER,
+    ERRORS_LOGGER,
+    HUMAN_LOGS,
+    LOG_TOOL_CALLS,
+    LOG_TOOL_PAYLOADS,
+)
 from github_mcp.exceptions import UsageError
 from github_mcp.mcp_server.context import (
     WRITE_ALLOWED,
@@ -450,6 +456,13 @@ def _log_tool_failure(
     LOGGER.warning(
         f"tool_call_failed tool={tool_name} call_id={call_id} phase={phase} duration_ms={duration_ms:.2f}",
         extra={"event": "tool_call_failed", **payload},
+        exc_info=exc,
+    )
+
+    # Errors-only sink for dashboards/filters.
+    ERRORS_LOGGER.error(
+        "tool_error",
+        extra={"event": "tool_error", **payload},
         exc_info=exc,
     )
 
