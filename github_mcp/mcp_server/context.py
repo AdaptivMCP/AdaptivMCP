@@ -2,8 +2,13 @@
 from __future__ import annotations
 
 import os
+import re
 from contextvars import ContextVar
 from typing import Any, Optional
+
+from mcp.server.transport_security import TransportSecuritySettings
+
+from github_mcp.utils import _extract_hostname, _render_external_hosts
 
 
 
@@ -162,11 +167,50 @@ COMPACT_METADATA_DEFAULT = _parse_bool(
     os.environ.get("GITHUB_MCP_COMPACT_METADATA_DEFAULT", "true")
 )
 _TOOL_EXAMPLES: dict[str, Any] = {}
+def _split_host_list(value: str | None) -> list[str]:
+    if not value:
+        return []
+    parts = re.split(r"[,\s]+", value)
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _resolve_transport_security() -> TransportSecuritySettings | None:
+    host_inputs = _split_host_list(os.environ.get("ALLOWED_HOSTS"))
+    host_inputs.extend(_render_external_hosts())
+
+    base_hosts: list[str] = []
+    for host in host_inputs:
+        hostname = _extract_hostname(host) or host
+        hostname = hostname.strip().lower()
+        if hostname and hostname not in base_hosts:
+            base_hosts.append(hostname)
+
+    if not base_hosts:
+        return None
+
+    allowed_hosts: list[str] = []
+    allowed_origins: list[str] = []
+    for hostname in base_hosts:
+        allowed_hosts.extend([hostname, f"{hostname}:*"])
+        for scheme in ("http", "https"):
+            allowed_origins.extend([f"{scheme}://{hostname}", f"{scheme}://{hostname}:*"])
+
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )
+
+
 try:
     from mcp.server.fastmcp import FastMCP  # type: ignore
     FASTMCP_AVAILABLE = True
 
-    mcp = FastMCP("github-mcp")
+    mcp = FastMCP(
+        "github-mcp",
+        host=os.environ.get("FASTMCP_HOST", "0.0.0.0"),
+        transport_security=_resolve_transport_security(),
+    )
 except Exception as exc:  # pragma: no cover - used when dependency missing
     FASTMCP_AVAILABLE = False
     missing_exc = exc
