@@ -3,8 +3,6 @@
 This document describes the current functionality, behavior, and recommended usage
 patterns for the GitHub MCP (Model Context Protocol) server.
 
-Deployment note: Adaptiv MCP is deployed **only via Render.com** in production. Local execution (for development) is supported.
-
 ## Key concepts
 
 1) Repository clone (persistent)
@@ -155,7 +153,7 @@ At minimum, set one GitHub authentication token so the server can access the API
 
 ### Write gate (auto-approval)
 
-- GITHUB_MCP_WRITE_ALLOWED — when true, write tools are auto-approved; when false, clients should prompt
+- GITHUB_MCP_WRITE_ALLOWED — when true, write tools are auto-approved; when false, clients should prompt (see Write gate section in this document)
 
 ### Tool metadata verbosity
 
