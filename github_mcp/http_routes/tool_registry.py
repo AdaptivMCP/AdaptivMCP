@@ -52,13 +52,10 @@ def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[
 
         catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
         tools = list(catalog.get("tools") or [])
-        catalog_error: Optional[Dict[str, Any]] = None
+        catalog_error: Optional[str] = None
     except Exception as exc:
         tools = []
-        catalog_error = {
-            "message": "Failed to build tool catalog.",
-            "type": type(exc).__name__,
-        }
+        catalog_error = str(exc) or "Failed to build tool catalog."
 
     resources = []
     for entry in tools:
@@ -158,11 +155,13 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
 
 
 def _looks_like_structured_error(payload: Any) -> Optional[Dict[str, Any]]:
-    """Return the structured error object when payload matches our error shape."""
+    """Return the error object when payload matches our error shape."""
 
     if not isinstance(payload, dict):
         return None
     err = payload.get("error")
+    if isinstance(err, str):
+        return {"message": err}
     if not isinstance(err, dict):
         return None
     if not (err.get("category") or err.get("code") or err.get("message")):
@@ -211,13 +210,15 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
 
                     return JSONResponse(result, status_code=status_code, headers=headers)
 
-            payload = result if isinstance(result, dict) else {"result": result}
+            payload = result if isinstance(result, dict) else result
             return JSONResponse(payload)
         except Exception as exc:
             from github_mcp.mcp_server.errors import _structured_tool_error
 
             structured = _structured_tool_error(exc, context=f"tool_http:{tool_name}")
             err = structured.get("error")
+            if isinstance(err, str):
+                err = {"message": err}
             if not isinstance(err, dict):
                 err = {}
 

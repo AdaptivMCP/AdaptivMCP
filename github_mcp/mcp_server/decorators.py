@@ -470,19 +470,12 @@ def _log_tool_failure(
         }
     )
 
-    # Attach a compact error summary for machine parsing without dumping large/raw payloads.
-    if structured_error and isinstance(structured_error.get("error"), Mapping):
+    if structured_error:
         err = structured_error.get("error")
-        payload.update(
-            {
-                "incident_id": err.get("incident_id"),
-                "error_code": err.get("code"),
-                "error_category": err.get("category"),
-                "error_origin": err.get("origin"),
-                "error_retryable": err.get("retryable"),
-                "error_critical": err.get("critical"),
-            }
-        )
+        if isinstance(err, Mapping):
+            payload["error_message"] = err.get("message")
+        elif isinstance(err, str):
+            payload["error_message"] = err
 
     LOGGER.warning(
         f"tool_call_failed tool={tool_name} call_id={call_id} phase={phase} duration_ms={duration_ms:.2f}",
@@ -515,20 +508,6 @@ def _emit_tool_error(
         context=tool_name,
         path=None,
         request=dict(req) if isinstance(req, Mapping) else None,
-    )
-
-    # Add correlation fields (non-breaking additions) so callers/logs can connect
-    # a user-visible error to provider logs.
-    structured_error.setdefault(
-        "tool_call",
-        {
-            "tool": tool_name,
-            "call_id": call_id,
-            "phase": phase,
-            "write_action": bool(write_action),
-            "duration_ms": duration_ms,
-            "schema_hash": schema_hash if schema_present else None,
-        },
     )
 
     return structured_error

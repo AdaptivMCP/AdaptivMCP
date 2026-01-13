@@ -27,14 +27,14 @@ Because the workspace holds the clone, the two terms are closely related, but th
 This server supports approval-gated write actions. The environment variable `GITHUB_MCP_WRITE_ALLOWED` controls whether write actions are auto-approved.
 
 - `GITHUB_MCP_WRITE_ALLOWED=true`: write tools are auto-approved.
-- `GITHUB_MCP_WRITE_ALLOWED=false`: write tools remain executable, but clients should prompt/confirm before invoking write tools.
+- `GITHUB_MCP_WRITE_ALLOWED=false`: write tools remain executable, but some clients may prompt or gate before invoking write tools.
 
 Introspection and actions-compat listings expose:
 
 - `write_action`: tool is classified as a write.
 - `write_allowed`: tool is executable (approval-gated writes still execute).
 - `write_actions_enabled` / `write_auto_approved`: writes are auto-approved.
-- `approval_required`: client should prompt before invoking the tool.
+- `approval_required`: clients may prompt or gate before invoking the tool.
 
 ## What this server provides
 
