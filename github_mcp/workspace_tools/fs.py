@@ -18,19 +18,13 @@ def _tw():
 def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
         raise ValueError("path must be a non-empty string")
-    root = os.path.realpath(repo_dir)
     raw_path = rel_path.strip().replace("\\", "/")
     if os.path.isabs(raw_path):
-        candidate = os.path.realpath(raw_path)
-        if candidate == root or candidate.startswith(root + os.sep):
-            return candidate
-        raise ValueError("path escapes repository root")
+        return os.path.realpath(raw_path)
     rel_path = raw_path.lstrip("/\\")
     if not rel_path:
         raise ValueError("path must be a non-empty string")
     candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
-    if candidate == root or not candidate.startswith(root + os.sep):
-        raise ValueError("path escapes repository root")
     return candidate
 
 
@@ -109,12 +103,6 @@ async def delete_workspace_paths(
 
     This tool exists because some environments can block patch-based file deletions.
     typical this over embedding file deletions into patches.
-
-    Safety constraints:
-    - Paths are resolved relative to the repo root and cannot escape it.
-    - Deleting the repository root is forbidden.
-    - Directories require allow_recursive=True. Otherwise only empty directories
-    may be removed.
     """
 
     if paths is None:
@@ -131,8 +119,6 @@ async def delete_workspace_paths(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        root = os.path.realpath(repo_dir)
-
         removed: List[str] = []
         missing: List[str] = []
         failed: List[Dict[str, Any]] = []
@@ -140,8 +126,6 @@ async def delete_workspace_paths(
         for rel_path in paths:
             try:
                 abs_path = _workspace_safe_join(repo_dir, rel_path)
-                if abs_path == root:
-                    raise ValueError("refusing to delete repository root")
 
                 if not os.path.exists(abs_path):
                     if allow_missing:

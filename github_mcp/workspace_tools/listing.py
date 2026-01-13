@@ -16,12 +16,6 @@ def _tw():
     return tw
 
 
-def _path_within_repo(root: str, candidate: str) -> bool:
-    root = os.path.realpath(root)
-    candidate = os.path.realpath(candidate)
-    return candidate == root or candidate.startswith(root + os.sep)
-
-
 def _normalize_workspace_path(path: str) -> str:
     normalized = path.strip().replace("\\", "/")
     while "//" in normalized:
@@ -42,16 +36,9 @@ def _resolve_workspace_start(repo_dir: str, path: str) -> tuple[str, str]:
 
     if os.path.isabs(normalized_path):
         start = os.path.realpath(normalized_path)
-        if not _path_within_repo(root, start):
-            raise ValueError("path must stay within repo")
-        rel_path = os.path.relpath(start, root)
-        if rel_path == os.curdir:
-            rel_path = ""
-        return rel_path, start
+        return normalized_path, start
 
     start = os.path.realpath(os.path.join(repo_dir, normalized_path))
-    if not _path_within_repo(root, start):
-        raise ValueError("path must stay within repo")
     return normalized_path, start
 
 

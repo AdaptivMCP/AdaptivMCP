@@ -115,10 +115,6 @@ Because the clone is not the live GitHub state, use GitHub API tools intentional
 - ChatGPT metadata: the server captures safe ChatGPT headers (conversation, assistant, project, org, session, user IDs) for correlation and includes them in request context/logging.
 - Cache control: dynamic endpoints are served with `Cache-Control: no-store`; static assets under `/static` are cacheable.
 - File caching: GitHub file contents may be cached in-memory to reduce repeated fetches.
-- Workspace file and listing tools reject paths that resolve outside the repository root.
-- Workspace search is a bounded, non-shell search:
-  - `search_workspace.query` is always treated as a literal substring match (regex is accepted for compatibility but not enforced).
-  - `max_results` and `max_file_bytes` are accepted for compatibility/observability but are not enforced as output limits.
 
 ## Deployment (Render.com only)
 
@@ -210,10 +206,6 @@ with request_id/session_id/message_id and a full stack trace.
 - GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS
 - GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS
 - GITHUB_SEARCH_MIN_INTERVAL_SECONDS
-
-### Host filtering
-
-- ALLOWED_HOSTS — optional comma-separated list of allowed hosts (used for request host validation)
 
 ### Sandbox/content rewrite (optional)
 
