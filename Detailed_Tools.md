@@ -37,51 +37,32 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "patch": {
       "type": "string",
-      "default": ""
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": "",
+      "title": "Patch"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Apply Patch"
 }
 ```
 
@@ -105,7 +86,6 @@ Metadata:
 - write_enabled: True
 - write_auto_approved: True
 - approval_required: False
-- ui_prompt: True
 
 Input schema:
 
@@ -114,17 +94,35 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "path": {
-      "type": "string"
+      "type": "string",
+      "title": "Path",
+      "description": "Repository-relative path (POSIX-style).",
+      "examples": [
+        "README.md",
+        "src/app.py"
+      ]
     },
     "updated_content": {
-      "type": "string"
+      "type": "string",
+      "title": "Updated Content"
     },
     "branch": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "message": {
       "anyOf": [
@@ -135,11 +133,17 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Message",
+      "description": "Commit message.",
+      "examples": [
+        "Refactor tool schemas"
+      ]
     },
     "return_diff": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Return Diff"
     }
   },
   "additionalProperties": false,
@@ -147,7 +151,8 @@ Input schema:
     "full_name",
     "path",
     "updated_content"
-  ]
+  ],
+  "title": "Apply Text Update And Commit"
 }
 ```
 
@@ -179,16 +184,30 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
-      "type": "string"
+      "type": "string",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "title": {
-      "type": "string"
+      "type": "string",
+      "title": "Title"
     },
     "body": {
-      "type": "string"
+      "type": "string",
+      "title": "Body"
     },
     "changed_files": {
       "anyOf": [
@@ -202,7 +221,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Changed Files"
     },
     "tests_status": {
       "anyOf": [
@@ -213,7 +233,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Tests Status"
     },
     "lint_status": {
       "anyOf": [
@@ -224,7 +245,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Lint Status"
     },
     "breaking_changes": {
       "anyOf": [
@@ -235,7 +257,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Breaking Changes"
     }
   },
   "additionalProperties": false,
@@ -244,7 +267,8 @@ Input schema:
     "ref",
     "title",
     "body"
-  ]
+  ],
+  "title": "Build Pr Summary"
 }
 ```
 
@@ -259,7 +283,7 @@ Example invocation:
 
 ## cache_files
 
-Fetch one or more files and persist them in the server-side cache for reuse without repeating GitHub reads. refresh=true bypasses existing cache entries.
+Fetch one or more files and persist them in the server-side cache so callers can reuse them without repeating GitHub reads. refresh=true bypasses existing cache entries.
 
 Metadata:
 - visibility: public
@@ -276,28 +300,50 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "paths": {
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "title": "Paths",
+      "description": "List of repository-relative paths.",
+      "examples": [
+        [
+          "README.md",
+          "src/app.py"
+        ]
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "refresh": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Refresh"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "paths"
-  ]
+  ],
+  "title": "Cache Files"
 }
 ```
 
@@ -329,17 +375,20 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "deploy_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Deploy Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id",
     "deploy_id"
-  ]
+  ],
+  "title": "Cancel Render Deploy"
 }
 ```
 
@@ -371,17 +420,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Number"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "number"
-  ]
+  ],
+  "title": "Close Pull Request"
 }
 ```
 
@@ -413,13 +469,20 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "issue_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Issue Number"
     },
     "body": {
-      "type": "string"
+      "type": "string",
+      "title": "Body"
     }
   },
   "additionalProperties": false,
@@ -427,7 +490,8 @@ Input schema:
     "full_name",
     "issue_number",
     "body"
-  ]
+  ],
+  "title": "Comment On Issue"
 }
 ```
 
@@ -459,13 +523,20 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Number"
     },
     "body": {
-      "type": "string"
+      "type": "string",
+      "title": "Body"
     }
   },
   "additionalProperties": false,
@@ -473,7 +544,8 @@ Input schema:
     "full_name",
     "number",
     "body"
-  ]
+  ],
+  "title": "Comment On Pull Request"
 }
 ```
 
@@ -497,7 +569,6 @@ Metadata:
 - write_enabled: True
 - write_auto_approved: True
 - approval_required: False
-- ui_prompt: True
 
 Input schema:
 
@@ -514,59 +585,46 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "message": {
       "type": "string",
-      "default": "Commit workspace changes"
+      "default": "Commit workspace changes",
+      "title": "Message",
+      "description": "Commit message.",
+      "examples": [
+        "Refactor tool schemas"
+      ]
     },
     "add_all": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Add All"
     },
     "push": {
       "type": "boolean",
-      "default": true
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": true,
+      "title": "Push"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Commit Workspace"
 }
 ```
 
@@ -590,7 +648,6 @@ Metadata:
 - write_enabled: True
 - write_auto_approved: True
 - approval_required: False
-- ui_prompt: True
 
 Input schema:
 
@@ -606,65 +663,52 @@ Input schema:
         {
           "type": "null"
         }
+      ],
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
       ]
     },
     "files": {
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "title": "Files"
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "message": {
       "type": "string",
-      "default": "Commit selected workspace changes"
+      "default": "Commit selected workspace changes",
+      "title": "Message",
+      "description": "Commit message.",
+      "examples": [
+        "Refactor tool schemas"
+      ]
     },
     "push": {
       "type": "boolean",
-      "default": true
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": true,
+      "title": "Push"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "files"
-  ]
+  ],
+  "title": "Commit Workspace Files"
 }
 ```
 
@@ -696,21 +740,38 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
-      "type": "string"
+      "type": "string",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "from_ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "From Ref",
+      "description": "Ref to create the new branch from (branch/tag/SHA).",
+      "examples": [
+        "main"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "branch"
-  ]
+  ],
+  "title": "Create Branch"
 }
 ```
 
@@ -742,17 +803,35 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "path": {
-      "type": "string"
+      "type": "string",
+      "title": "Path",
+      "description": "Repository-relative path (POSIX-style).",
+      "examples": [
+        "README.md",
+        "src/app.py"
+      ]
     },
     "content": {
-      "type": "string"
+      "type": "string",
+      "title": "Content"
     },
     "branch": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "message": {
       "anyOf": [
@@ -763,7 +842,12 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Message",
+      "description": "Commit message.",
+      "examples": [
+        "Refactor tool schemas"
+      ]
     }
   },
   "additionalProperties": false,
@@ -771,7 +855,8 @@ Input schema:
     "full_name",
     "path",
     "content"
-  ]
+  ],
+  "title": "Create File"
 }
 ```
 
@@ -803,10 +888,16 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "title": {
-      "type": "string"
+      "type": "string",
+      "title": "Title"
     },
     "body": {
       "anyOf": [
@@ -817,7 +908,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Body"
     },
     "labels": {
       "anyOf": [
@@ -831,7 +923,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Labels"
     },
     "assignees": {
       "anyOf": [
@@ -845,14 +938,16 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Assignees"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "title"
-  ]
+  ],
+  "title": "Create Issue"
 }
 ```
 
@@ -888,17 +983,25 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "title": {
-      "type": "string"
+      "type": "string",
+      "title": "Title"
     },
     "head": {
-      "type": "string"
+      "type": "string",
+      "title": "Head"
     },
     "base": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Base"
     },
     "body": {
       "anyOf": [
@@ -909,11 +1012,13 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Body"
     },
     "draft": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Draft"
     }
   },
   "additionalProperties": false,
@@ -921,7 +1026,8 @@ Input schema:
     "full_name",
     "title",
     "head"
-  ]
+  ],
+  "title": "Create Pull Request"
 }
 ```
 
@@ -953,11 +1059,13 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "clear_cache": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Clear Cache"
     },
     "commit_id": {
       "anyOf": [
@@ -968,7 +1076,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Commit Id"
     },
     "image_url": {
       "anyOf": [
@@ -979,13 +1088,15 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Image Url"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id"
-  ]
+  ],
+  "title": "Create Render Deploy"
 }
 ```
 
@@ -1017,7 +1128,8 @@ Input schema:
   "type": "object",
   "properties": {
     "name": {
-      "type": "string"
+      "type": "string",
+      "title": "Name"
     },
     "owner": {
       "anyOf": [
@@ -1028,7 +1140,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Owner"
     },
     "owner_type": {
       "enum": [
@@ -1037,7 +1150,8 @@ Input schema:
         "org"
       ],
       "type": "string",
-      "default": "auto"
+      "default": "auto",
+      "title": "Owner Type"
     },
     "description": {
       "anyOf": [
@@ -1048,7 +1162,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Description"
     },
     "homepage": {
       "anyOf": [
@@ -1059,7 +1174,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Homepage"
     },
     "visibility": {
       "anyOf": [
@@ -1075,7 +1191,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Visibility"
     },
     "private": {
       "anyOf": [
@@ -1086,11 +1203,13 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Private"
     },
     "auto_init": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Auto Init"
     },
     "gitignore_template": {
       "anyOf": [
@@ -1101,7 +1220,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Gitignore Template"
     },
     "license_template": {
       "anyOf": [
@@ -1112,15 +1232,18 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "License Template"
     },
     "is_template": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Is Template"
     },
     "has_issues": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Has Issues"
     },
     "has_projects": {
       "anyOf": [
@@ -1131,11 +1254,13 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Has Projects"
     },
     "has_wiki": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Has Wiki"
     },
     "has_discussions": {
       "anyOf": [
@@ -1146,7 +1271,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Has Discussions"
     },
     "team_id": {
       "anyOf": [
@@ -1157,7 +1283,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Team Id"
     },
     "security_and_analysis": {
       "anyOf": [
@@ -1169,7 +1296,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Security And Analysis"
     },
     "template_full_name": {
       "anyOf": [
@@ -1180,11 +1308,13 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Template Full Name"
     },
     "include_all_branches": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Include All Branches"
     },
     "topics": {
       "anyOf": [
@@ -1198,7 +1328,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Topics"
     },
     "create_payload_overrides": {
       "anyOf": [
@@ -1210,7 +1341,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Create Payload Overrides"
     },
     "update_payload_overrides": {
       "anyOf": [
@@ -1222,11 +1354,13 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Update Payload Overrides"
     },
     "clone_to_workspace": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Clone To Workspace"
     },
     "clone_ref": {
       "anyOf": [
@@ -1237,13 +1371,15 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Clone Ref"
     }
   },
   "additionalProperties": false,
   "required": [
     "name"
-  ]
+  ],
+  "title": "Create Repository"
 }
 ```
 
@@ -1258,7 +1394,7 @@ Example invocation:
 
 ## delete_file
 
-Delete a file from a GitHub repository using the Contents API. ensure_branch can prepare a dedicated branch for the deletion.
+Delete a file from a GitHub repository using the Contents API. Use ensure_branch if you want to delete on a dedicated branch.
 
 Metadata:
 - visibility: public
@@ -1274,23 +1410,49 @@ Input schema:
 {
   "type": "object",
   "properties": {
-    "full_name": {},
-    "path": {},
+    "full_name": {
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "path": {
+      "title": "Path",
+      "description": "Repository-relative path (POSIX-style).",
+      "examples": [
+        "README.md",
+        "src/app.py"
+      ]
+    },
     "message": {
-      "default": "Delete file via MCP GitHub connector"
+      "default": "Delete file via MCP GitHub connector",
+      "title": "Message",
+      "description": "Commit message.",
+      "examples": [
+        "Refactor tool schemas"
+      ]
     },
     "branch": {
-      "default": "main"
+      "default": "main",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "if_missing": {
-      "default": "error"
+      "default": "error",
+      "title": "If Missing"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "path"
-  ]
+  ],
+  "title": "Delete File"
 }
 ```
 
@@ -1308,13 +1470,7 @@ Example invocation:
 Delete one or more paths from the workspace clone.
 
 This tool exists because some environments can block patch-based file deletions.
-It supports deleting paths without embedding removals into patches.
-
-Safety constraints:
-- Paths are resolved relative to the repo root and cannot escape it.
-- Deleting the repository root is forbidden.
-- Directories are handled when allow_recursive=True. Without it, removal is
-limited to empty directories.
+typical this over embedding file deletions into patches.
 
 Metadata:
 - visibility: public
@@ -1339,11 +1495,23 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "paths": {
       "anyOf": [
@@ -1357,51 +1525,29 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Paths",
+      "description": "List of repository-relative paths.",
+      "examples": [
+        [
+          "README.md",
+          "src/app.py"
+        ]
+      ]
     },
     "allow_missing": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Allow Missing"
     },
     "allow_recursive": {
       "type": "boolean",
-      "default": false
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": false,
+      "title": "Allow Recursive"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Delete Workspace Paths"
 }
 ```
 
@@ -1441,7 +1587,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Name"
     },
     "names": {
       "anyOf": [
@@ -1455,11 +1602,13 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Names"
     },
     "include_parameters": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Include Parameters"
     },
     "tool_name": {
       "anyOf": [
@@ -1470,10 +1619,12 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Tool Name"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Describe Tool"
 }
 ```
 
@@ -1505,13 +1656,15 @@ Input schema:
   "type": "object",
   "properties": {
     "content_url": {
-      "type": "string"
+      "type": "string",
+      "title": "Content Url"
     }
   },
   "additionalProperties": false,
   "required": [
     "content_url"
-  ]
+  ],
+  "title": "Download User Content"
 }
 ```
 
@@ -1543,21 +1696,38 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
-      "type": "string"
+      "type": "string",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "from_ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "From Ref",
+      "description": "Ref to create the new branch from (branch/tag/SHA).",
+      "examples": [
+        "main"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "branch"
-  ]
+  ],
+  "title": "Ensure Branch"
 }
 ```
 
@@ -1589,25 +1759,30 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "reset": {
-      "default": false
-    },
-    "owner": {
-      "default": null
-    },
-    "repo": {
-      "default": null
-    },
-    "branch": {
-      "default": null
+      "default": false,
+      "title": "Reset"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Ensure Workspace Clone"
 }
 ```
 
@@ -1639,24 +1814,45 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "paths": {
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "title": "Paths",
+      "description": "List of repository-relative paths.",
+      "examples": [
+        [
+          "README.md",
+          "src/app.py"
+        ]
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "paths"
-  ]
+  ],
+  "title": "Fetch Files"
 }
 ```
 
@@ -1688,17 +1884,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "issue_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Issue Number"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "issue_number"
-  ]
+  ],
+  "title": "Fetch Issue"
 }
 ```
 
@@ -1730,25 +1933,44 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "issue_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Issue Number"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "issue_number"
-  ]
+  ],
+  "title": "Fetch Issue Comments"
 }
 ```
 
@@ -1780,17 +2002,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "pull_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Pull Number"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "pull_number"
-  ]
+  ],
+  "title": "Fetch Pr"
 }
 ```
 
@@ -1822,25 +2051,44 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "pull_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Pull Number"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "pull_number"
-  ]
+  ],
+  "title": "Fetch Pr Comments"
 }
 ```
 
@@ -1872,13 +2120,15 @@ Input schema:
   "type": "object",
   "properties": {
     "url": {
-      "type": "string"
+      "type": "string",
+      "title": "Url"
     }
   },
   "additionalProperties": false,
   "required": [
     "url"
-  ]
+  ],
+  "title": "Fetch Url"
 }
 ```
 
@@ -1910,21 +2160,34 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
-      "type": "string"
+      "type": "string",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "base": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Base"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "branch"
-  ]
+  ],
+  "title": "Get Branch Summary"
 }
 ```
 
@@ -1956,24 +2219,45 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "paths": {
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "title": "Paths",
+      "description": "List of repository-relative paths.",
+      "examples": [
+        [
+          "README.md",
+          "src/app.py"
+        ]
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "paths"
-  ]
+  ],
+  "title": "Get Cached Files"
 }
 ```
 
@@ -2005,17 +2289,30 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
-      "type": "string"
+      "type": "string",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "ref"
-  ]
+  ],
+  "title": "Get Commit Combined Status"
 }
 ```
 
@@ -2047,32 +2344,40 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "path": {
-      "type": "string"
+      "type": "string",
+      "title": "Path",
+      "description": "Repository-relative path (POSIX-style).",
+      "examples": [
+        "README.md",
+        "src/app.py"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "path"
-  ]
+  ],
+  "title": "Get File Contents"
 }
 ```
 
@@ -2104,25 +2409,44 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "comment_id": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Comment Id"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "comment_id"
-  ]
+  ],
+  "title": "Get Issue Comment Reactions"
 }
 ```
 
@@ -2154,17 +2478,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "issue_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Issue Number"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "issue_number"
-  ]
+  ],
+  "title": "Get Issue Overview"
 }
 ```
 
@@ -2196,17 +2527,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "job_id": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Job Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "job_id"
-  ]
+  ],
+  "title": "Get Job Logs"
 }
 ```
 
@@ -2238,21 +2576,34 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
-      "type": "string"
+      "type": "string",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "base": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Base"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "branch"
-  ]
+  ],
+  "title": "Get Latest Branch Status"
 }
 ```
 
@@ -2284,17 +2635,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "pull_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Pull Number"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "pull_number"
-  ]
+  ],
+  "title": "Get Pr Info"
 }
 ```
 
@@ -2326,17 +2684,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "pull_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Pull Number"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "pull_number"
-  ]
+  ],
+  "title": "Get Pr Overview"
 }
 ```
 
@@ -2368,25 +2733,44 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "pull_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Pull Number"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "pull_number"
-  ]
+  ],
+  "title": "Get Pr Reactions"
 }
 ```
 
@@ -2418,25 +2802,44 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "comment_id": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Comment Id"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "comment_id"
-  ]
+  ],
+  "title": "Get Pr Review Comment Reactions"
 }
 ```
 
@@ -2467,7 +2870,8 @@ Input schema:
 {
   "type": "object",
   "properties": {},
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Get Rate Limit"
 }
 ```
 
@@ -2499,17 +2903,20 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "deploy_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Deploy Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id",
     "deploy_id"
-  ]
+  ],
+  "title": "Get Render Deploy"
 }
 ```
 
@@ -2541,10 +2948,12 @@ Input schema:
   "type": "object",
   "properties": {
     "resource_type": {
-      "type": "string"
+      "type": "string",
+      "title": "Resource Type"
     },
     "resource_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Resource Id"
     },
     "start_time": {
       "anyOf": [
@@ -2555,7 +2964,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Start Time"
     },
     "end_time": {
       "anyOf": [
@@ -2566,18 +2976,27 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "End Time"
     },
     "limit": {
       "type": "integer",
-      "default": 200
+      "default": 200,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "resource_type",
     "resource_id"
-  ]
+  ],
+  "title": "Get Render Logs"
 }
 ```
 
@@ -2609,13 +3028,15 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id"
-  ]
+  ],
+  "title": "Get Render Service"
 }
 ```
 
@@ -2677,7 +3098,12 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
       "anyOf": [
@@ -2688,13 +3114,20 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "Get Repo Dashboard"
 }
 ```
 
@@ -2726,7 +3159,12 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
       "anyOf": [
@@ -2737,13 +3175,20 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "Get Repo Dashboard Graphql"
 }
 ```
 
@@ -2783,10 +3228,16 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Get Repo Defaults"
 }
 ```
 
@@ -2818,13 +3269,19 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "Get Repository"
 }
 ```
 
@@ -2855,7 +3312,8 @@ Input schema:
 {
   "type": "object",
   "properties": {},
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Get Server Config"
 }
 ```
 
@@ -2886,7 +3344,8 @@ Input schema:
 {
   "type": "object",
   "properties": {},
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Get User Login"
 }
 ```
 
@@ -2918,17 +3377,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "run_id": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Run Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "run_id"
-  ]
+  ],
+  "title": "Get Workflow Run"
 }
 ```
 
@@ -2965,21 +3431,29 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "run_id": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Run Id"
     },
     "max_jobs": {
       "type": "integer",
-      "default": 500
+      "default": 500,
+      "title": "Max Jobs"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "run_id"
-  ]
+  ],
+  "title": "Get Workflow Run Overview"
 }
 ```
 
@@ -3011,11 +3485,23 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "path_prefix": {
       "anyOf": [
@@ -3026,17 +3512,20 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Path Prefix"
     },
     "max_files": {
       "type": "integer",
-      "default": 200
+      "default": 200,
+      "title": "Max Files"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "Get Workspace Changes Summary"
 }
 ```
 
@@ -3076,51 +3565,37 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "path": {
       "type": "string",
-      "default": ""
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": "",
+      "title": "Path",
+      "description": "Repository-relative path (POSIX-style).",
+      "examples": [
+        "README.md",
+        "src/app.py"
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Get Workspace File Contents"
 }
 ```
 
@@ -3152,7 +3627,13 @@ Input schema:
   "type": "object",
   "properties": {
     "query": {
-      "type": "string"
+      "type": "string",
+      "title": "Query",
+      "description": "Search query string.",
+      "examples": [
+        "TODO",
+        "def main"
+      ]
     },
     "variables": {
       "anyOf": [
@@ -3164,13 +3645,15 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Variables"
     }
   },
   "additionalProperties": false,
   "required": [
     "query"
-  ]
+  ],
+  "title": "Graphql Query"
 }
 ```
 
@@ -3214,7 +3697,8 @@ Input schema:
   "properties": {
     "include_parameters": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Include Parameters"
     },
     "compact": {
       "anyOf": [
@@ -3225,10 +3709,12 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Compact"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "List All Actions"
 }
 ```
 
@@ -3260,21 +3746,39 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "per_page": {
       "type": "integer",
-      "default": 100
+      "default": 100,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "List Branches"
 }
 ```
 
@@ -3306,7 +3810,12 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "state": {
       "enum": [
@@ -3315,11 +3824,18 @@ Input schema:
         "all"
       ],
       "type": "string",
-      "default": "open"
+      "default": "open",
+      "title": "State"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "cursor": {
       "anyOf": [
@@ -3330,13 +3846,16 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Cursor",
+      "description": "Pagination cursor returned by the previous call."
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "List Open Issues Graphql"
 }
 ```
 
@@ -3368,25 +3887,44 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "pull_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Pull Number"
     },
     "per_page": {
       "type": "integer",
-      "default": 100
+      "default": 100,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "pull_number"
-  ]
+  ],
+  "title": "List Pr Changed Filenames"
 }
 ```
 
@@ -3418,7 +3956,12 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "state": {
       "enum": [
@@ -3427,7 +3970,8 @@ Input schema:
         "all"
       ],
       "type": "string",
-      "default": "open"
+      "default": "open",
+      "title": "State"
     },
     "head": {
       "anyOf": [
@@ -3438,7 +3982,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Head"
     },
     "base": {
       "anyOf": [
@@ -3449,21 +3994,35 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Base"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "List Pull Requests"
 }
 ```
 
@@ -3500,7 +4059,12 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
       "anyOf": [
@@ -3511,17 +4075,31 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "limit": {
       "type": "integer",
-      "default": 10
+      "default": 10,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "List Recent Failures"
 }
 ```
 
@@ -3553,7 +4131,12 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
       "anyOf": [
@@ -3564,17 +4147,31 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "limit": {
       "type": "integer",
-      "default": 10
+      "default": 10,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "List Recent Failures Graphql"
 }
 ```
 
@@ -3607,22 +4204,37 @@ Input schema:
   "properties": {
     "filter": {
       "type": "string",
-      "default": "assigned"
+      "default": "assigned",
+      "title": "Filter"
     },
     "state": {
       "type": "string",
-      "default": "open"
+      "default": "open",
+      "title": "State"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "List Recent Issues"
 }
 ```
 
@@ -3654,7 +4266,8 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "cursor": {
       "anyOf": [
@@ -3665,17 +4278,27 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Cursor",
+      "description": "Pagination cursor returned by the previous call."
     },
     "limit": {
       "type": "integer",
-      "default": 20
+      "default": 20,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id"
-  ]
+  ],
+  "title": "List Render Deploys"
 }
 ```
 
@@ -3715,14 +4338,24 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Cursor",
+      "description": "Pagination cursor returned by the previous call."
     },
     "limit": {
       "type": "integer",
-      "default": 20
+      "default": 20,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "List Render Owners"
 }
 ```
 
@@ -3762,7 +4395,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Owner Id"
     },
     "cursor": {
       "anyOf": [
@@ -3773,14 +4407,24 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Cursor",
+      "description": "Pagination cursor returned by the previous call."
     },
     "limit": {
       "type": "integer",
-      "default": 20
+      "default": 20,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "List Render Services"
 }
 ```
 
@@ -3820,7 +4464,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Affiliation"
     },
     "visibility": {
       "anyOf": [
@@ -3831,18 +4476,32 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Visibility"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "List Repositories"
 }
 ```
 
@@ -3874,21 +4533,35 @@ Input schema:
   "type": "object",
   "properties": {
     "installation_id": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Installation Id"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "installation_id"
-  ]
+  ],
+  "title": "List Repositories By Installation"
 }
 ```
 
@@ -3920,11 +4593,17 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "state": {
       "type": "string",
-      "default": "open"
+      "default": "open",
+      "title": "State"
     },
     "labels": {
       "anyOf": [
@@ -3938,7 +4617,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Labels"
     },
     "assignee": {
       "anyOf": [
@@ -3949,21 +4629,35 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Assignee"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "List Repository Issues"
 }
 ```
 
@@ -3995,11 +4689,23 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "path_prefix": {
       "anyOf": [
@@ -4010,29 +4716,35 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Path Prefix"
     },
     "recursive": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Recursive"
     },
     "max_entries": {
       "type": "integer",
-      "default": 1000
+      "default": 1000,
+      "title": "Max Entries"
     },
     "include_blobs": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Include Blobs"
     },
     "include_trees": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Include Trees"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "List Repository Tree"
 }
 ```
 
@@ -4047,7 +4759,7 @@ Example invocation:
 
 ## list_tools
 
-List available MCP tools with a compact description. describe_tool (or list_all_actions with include_parameters=true) provides full schemas.
+List available MCP tools with a compact description. Full schemas are available via describe_tool (or list_all_actions with include_parameters=true).
 
 Metadata:
 - visibility: public
@@ -4065,11 +4777,13 @@ Input schema:
   "properties": {
     "only_write": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Only Write"
     },
     "only_read": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Only Read"
     },
     "name_prefix": {
       "anyOf": [
@@ -4080,10 +4794,12 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Name Prefix"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "List Tools"
 }
 ```
 
@@ -4115,25 +4831,44 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "run_id": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Run Id"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "run_id"
-  ]
+  ],
+  "title": "List Workflow Run Jobs"
 }
 ```
 
@@ -4165,7 +4900,12 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
       "anyOf": [
@@ -4176,7 +4916,13 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "status": {
       "anyOf": [
@@ -4187,7 +4933,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Status"
     },
     "event": {
       "anyOf": [
@@ -4198,21 +4945,35 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Event"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "List Workflow Runs"
 }
 ```
 
@@ -4244,11 +5005,22 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "cursor": {
       "anyOf": [
@@ -4259,7 +5031,9 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Cursor",
+      "description": "Pagination cursor returned by the previous call."
     },
     "branch": {
       "anyOf": [
@@ -4270,13 +5044,20 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "List Workflow Runs Graphql"
 }
 ```
 
@@ -4316,15 +5097,33 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "path": {
       "type": "string",
-      "default": ""
+      "default": "",
+      "title": "Path",
+      "description": "Repository-relative path (POSIX-style).",
+      "examples": [
+        "README.md",
+        "src/app.py"
+      ]
     },
     "max_files": {
       "anyOf": [
@@ -4335,7 +5134,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Max Files"
     },
     "max_results": {
       "anyOf": [
@@ -4346,7 +5146,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Max Results"
     },
     "max_depth": {
       "anyOf": [
@@ -4357,51 +5158,22 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Max Depth"
     },
     "include_hidden": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Include Hidden"
     },
     "include_dirs": {
       "type": "boolean",
-      "default": false
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": false,
+      "title": "Include Dirs"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "List Workspace Files"
 }
 ```
 
@@ -4434,7 +5206,8 @@ Input schema:
   "properties": {
     "include_parameters": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Include Parameters"
     },
     "compact": {
       "anyOf": [
@@ -4445,10 +5218,12 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Compact"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "List Write Actions"
 }
 ```
 
@@ -4465,7 +5240,7 @@ Example invocation:
 
 Describe write-capable tools exposed by this server.
 
-This provides a concise summary without requiring the full module.
+This provides a concise summary without requiring a scan of the full module.
 
 Metadata:
 - visibility: public
@@ -4481,7 +5256,8 @@ Input schema:
 {
   "type": "object",
   "properties": {},
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "List Write Tools"
 }
 ```
 
@@ -4513,10 +5289,16 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Number"
     },
     "merge_method": {
       "enum": [
@@ -4525,7 +5307,8 @@ Input schema:
         "rebase"
       ],
       "type": "string",
-      "default": "squash"
+      "default": "squash",
+      "title": "Merge Method"
     },
     "commit_title": {
       "anyOf": [
@@ -4536,7 +5319,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Commit Title"
     },
     "commit_message": {
       "anyOf": [
@@ -4547,14 +5331,16 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Commit Message"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "number"
-  ]
+  ],
+  "title": "Merge Pull Request"
 }
 ```
 
@@ -4586,17 +5372,30 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "from_path": {
-      "type": "string"
+      "type": "string",
+      "title": "From Path"
     },
     "to_path": {
-      "type": "string"
+      "type": "string",
+      "title": "To Path"
     },
     "branch": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "message": {
       "anyOf": [
@@ -4607,7 +5406,12 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Message",
+      "description": "Commit message.",
+      "examples": [
+        "Refactor tool schemas"
+      ]
     }
   },
   "additionalProperties": false,
@@ -4615,7 +5419,8 @@ Input schema:
     "full_name",
     "from_path",
     "to_path"
-  ]
+  ],
+  "title": "Move File"
 }
 ```
 
@@ -4647,17 +5452,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "issue_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Issue Number"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "issue_number"
-  ]
+  ],
+  "title": "Open Issue Context"
 }
 ```
 
@@ -4695,14 +5507,26 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
-      "type": "string"
+      "type": "string",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "base": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Base"
     },
     "title": {
       "anyOf": [
@@ -4713,7 +5537,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Title"
     },
     "body": {
       "anyOf": [
@@ -4724,18 +5549,21 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Body"
     },
     "draft": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Draft"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "branch"
-  ]
+  ],
+  "title": "Open Pr For Existing Branch"
 }
 ```
 
@@ -4766,7 +5594,8 @@ Input schema:
 {
   "type": "object",
   "properties": {},
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Ping Extensions"
 }
 ```
 
@@ -4806,7 +5635,12 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "base_branch": {
       "anyOf": [
@@ -4817,14 +5651,17 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Base Branch"
     },
     "draft": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Draft"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Pr Smoke Test"
 }
 ```
 
@@ -4856,29 +5693,44 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
-      "type": "string"
+      "type": "string",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "include_closed": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Include Closed"
     },
     "per_page_open": {
       "type": "integer",
-      "default": 20
+      "default": 20,
+      "title": "Per Page Open"
     },
     "per_page_closed": {
       "type": "integer",
-      "default": 5
+      "default": 5,
+      "title": "Per Page Closed"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "branch"
-  ]
+  ],
+  "title": "Recent Prs For Branch"
 }
 ```
 
@@ -4910,17 +5762,20 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "deploy_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Deploy Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id",
     "deploy_id"
-  ]
+  ],
+  "title": "Render Cancel Deploy"
 }
 ```
 
@@ -4952,11 +5807,13 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "clear_cache": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Clear Cache"
     },
     "commit_id": {
       "anyOf": [
@@ -4967,7 +5824,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Commit Id"
     },
     "image_url": {
       "anyOf": [
@@ -4978,13 +5836,15 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Image Url"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id"
-  ]
+  ],
+  "title": "Render Create Deploy"
 }
 ```
 
@@ -5016,17 +5876,20 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "deploy_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Deploy Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id",
     "deploy_id"
-  ]
+  ],
+  "title": "Render Get Deploy"
 }
 ```
 
@@ -5058,10 +5921,12 @@ Input schema:
   "type": "object",
   "properties": {
     "resource_type": {
-      "type": "string"
+      "type": "string",
+      "title": "Resource Type"
     },
     "resource_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Resource Id"
     },
     "start_time": {
       "anyOf": [
@@ -5072,7 +5937,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Start Time"
     },
     "end_time": {
       "anyOf": [
@@ -5083,18 +5949,27 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "End Time"
     },
     "limit": {
       "type": "integer",
-      "default": 200
+      "default": 200,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "resource_type",
     "resource_id"
-  ]
+  ],
+  "title": "Render Get Logs"
 }
 ```
 
@@ -5126,13 +6001,15 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id"
-  ]
+  ],
+  "title": "Render Get Service"
 }
 ```
 
@@ -5164,7 +6041,8 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "cursor": {
       "anyOf": [
@@ -5175,17 +6053,27 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Cursor",
+      "description": "Pagination cursor returned by the previous call."
     },
     "limit": {
       "type": "integer",
-      "default": 20
+      "default": 20,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id"
-  ]
+  ],
+  "title": "Render List Deploys"
 }
 ```
 
@@ -5225,14 +6113,24 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Cursor",
+      "description": "Pagination cursor returned by the previous call."
     },
     "limit": {
       "type": "integer",
-      "default": 20
+      "default": 20,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Render List Owners"
 }
 ```
 
@@ -5272,7 +6170,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Owner Id"
     },
     "cursor": {
       "anyOf": [
@@ -5283,14 +6182,24 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Cursor",
+      "description": "Pagination cursor returned by the previous call."
     },
     "limit": {
       "type": "integer",
-      "default": 20
+      "default": 20,
+      "title": "Limit",
+      "description": "Maximum number of results to return.",
+      "examples": [
+        20,
+        50,
+        200
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Render List Services"
 }
 ```
 
@@ -5322,13 +6231,15 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id"
-  ]
+  ],
+  "title": "Render Restart Service"
 }
 ```
 
@@ -5360,17 +6271,20 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "deploy_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Deploy Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id",
     "deploy_id"
-  ]
+  ],
+  "title": "Render Rollback Deploy"
 }
 ```
 
@@ -5416,11 +6330,22 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "command": {
       "type": "string",
-      "default": "echo hello Render"
+      "default": "echo hello Render",
+      "title": "Command",
+      "description": "Shell command to execute in the workspace clone.",
+      "examples": [
+        "pytest",
+        "python -m ruff check ."
+      ]
     },
     "command_lines": {
       "anyOf": [
@@ -5434,7 +6359,9 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Command Lines",
+      "description": "Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload."
     },
     "create_branch": {
       "anyOf": [
@@ -5445,30 +6372,35 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Create Branch"
     },
     "push_new_branch": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Push New Branch"
     },
     "ref": {
       "type": "string",
-      "default": "main"
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "timeout_seconds": {
       "type": "number",
-      "default": 300
+      "default": 300,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
     },
     "workdir": {
       "anyOf": [
@@ -5479,40 +6411,27 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Workdir",
+      "description": "Working directory to run the command from. If relative, it is resolved within the workspace clone.",
+      "examples": [
+        "",
+        "src"
+      ]
     },
     "use_temp_venv": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Use Temp Venv"
     },
     "installing_dependencies": {
       "type": "boolean",
-      "default": false
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": false,
+      "title": "Installing Dependencies"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Render Shell"
 }
 ```
 
@@ -5544,17 +6463,24 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "handle": {
-      "type": "string"
+      "type": "string",
+      "title": "Handle"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "handle"
-  ]
+  ],
+  "title": "Resolve Handle"
 }
 ```
 
@@ -5586,13 +6512,15 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id"
-  ]
+  ],
+  "title": "Restart Render Service"
 }
 ```
 
@@ -5624,17 +6552,20 @@ Input schema:
   "type": "object",
   "properties": {
     "service_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Service Id"
     },
     "deploy_id": {
-      "type": "string"
+      "type": "string",
+      "title": "Deploy Id"
     }
   },
   "additionalProperties": false,
   "required": [
     "service_id",
     "deploy_id"
-  ]
+  ],
+  "title": "Rollback Render Deploy"
 }
 ```
 
@@ -5665,39 +6596,60 @@ Input schema:
 {
   "type": "object",
   "properties": {
-    "full_name": {},
+    "full_name": {
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
     "ref": {
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "lint_command": {
-      "default": "ruff check ."
+      "default": "ruff check .",
+      "title": "Lint Command"
     },
     "timeout_seconds": {
-      "default": 600
+      "default": 600,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
     },
     "workdir": {
-      "default": null
+      "default": null,
+      "title": "Workdir",
+      "description": "Working directory to run the command from. If relative, it is resolved within the workspace clone.",
+      "examples": [
+        "",
+        "src"
+      ]
     },
     "use_temp_venv": {
-      "default": true
+      "default": true,
+      "title": "Use Temp Venv"
     },
     "installing_dependencies": {
-      "default": false
-    },
-    "owner": {
-      "default": null
-    },
-    "repo": {
-      "default": null
-    },
-    "branch": {
-      "default": null
+      "default": false,
+      "title": "Installing Dependencies"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "Run Lint Suite"
 }
 ```
 
@@ -5735,66 +6687,96 @@ Input schema:
 {
   "type": "object",
   "properties": {
-    "full_name": {},
+    "full_name": {
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
     "ref": {
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "test_command": {
-      "default": "pytest"
+      "default": "pytest",
+      "title": "Test Command"
     },
     "timeout_seconds": {
-      "default": 600
+      "default": 600,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
     },
     "workdir": {
-      "default": null
+      "default": null,
+      "title": "Workdir",
+      "description": "Working directory to run the command from. If relative, it is resolved within the workspace clone.",
+      "examples": [
+        "",
+        "src"
+      ]
     },
     "use_temp_venv": {
-      "default": true
+      "default": true,
+      "title": "Use Temp Venv"
     },
     "installing_dependencies": {
-      "default": false
+      "default": false,
+      "title": "Installing Dependencies"
     },
     "lint_command": {
-      "default": "ruff check ."
+      "default": "ruff check .",
+      "title": "Lint Command"
     },
     "format_command": {
-      "default": null
+      "default": null,
+      "title": "Format Command"
     },
     "typecheck_command": {
-      "default": null
+      "default": null,
+      "title": "Typecheck Command"
     },
     "security_command": {
-      "default": null
+      "default": null,
+      "title": "Security Command"
     },
     "preflight": {
-      "default": false
+      "default": false,
+      "title": "Preflight"
     },
     "fail_fast": {
-      "default": true
+      "default": true,
+      "title": "Fail Fast"
     },
     "include_raw_step_outputs": {
-      "default": false
+      "default": false,
+      "title": "Include Raw Step Outputs"
     },
     "developer_defaults": {
-      "default": true
+      "default": true,
+      "title": "Developer Defaults"
     },
     "auto_setup_repo": {
-      "default": true
-    },
-    "owner": {
-      "default": null
-    },
-    "repo": {
-      "default": null
-    },
-    "branch": {
-      "default": null
+      "default": true,
+      "title": "Auto Setup Repo"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "Run Quality Suite"
 }
 ```
 
@@ -5825,39 +6807,60 @@ Input schema:
 {
   "type": "object",
   "properties": {
-    "full_name": {},
+    "full_name": {
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
     "ref": {
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "test_command": {
-      "default": "pytest"
+      "default": "pytest",
+      "title": "Test Command"
     },
     "timeout_seconds": {
-      "default": 600
+      "default": 600,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
     },
     "workdir": {
-      "default": null
+      "default": null,
+      "title": "Workdir",
+      "description": "Working directory to run the command from. If relative, it is resolved within the workspace clone.",
+      "examples": [
+        "",
+        "src"
+      ]
     },
     "use_temp_venv": {
-      "default": true
+      "default": true,
+      "title": "Use Temp Venv"
     },
     "installing_dependencies": {
-      "default": false
-    },
-    "owner": {
-      "default": null
-    },
-    "repo": {
-      "default": null
-    },
-    "branch": {
-      "default": null
+      "default": false,
+      "title": "Installing Dependencies"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name"
-  ]
+  ],
+  "title": "Run Tests"
 }
 ```
 
@@ -5889,7 +6892,13 @@ Input schema:
   "type": "object",
   "properties": {
     "query": {
-      "type": "string"
+      "type": "string",
+      "title": "Query",
+      "description": "Search query string.",
+      "examples": [
+        "TODO",
+        "def main"
+      ]
     },
     "search_type": {
       "enum": [
@@ -5900,15 +6909,28 @@ Input schema:
         "users"
       ],
       "type": "string",
-      "default": "code"
+      "default": "code",
+      "title": "Search Type"
     },
     "per_page": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "title": "Per Page",
+      "description": "Number of results per page for GitHub REST pagination.",
+      "examples": [
+        30,
+        100
+      ]
     },
     "page": {
       "type": "integer",
-      "default": 1
+      "default": 1,
+      "title": "Page",
+      "description": "1-indexed page number for GitHub REST pagination.",
+      "examples": [
+        1,
+        2
+      ]
     },
     "sort": {
       "anyOf": [
@@ -5919,7 +6941,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Sort"
     },
     "order": {
       "anyOf": [
@@ -5934,13 +6957,15 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Order"
     }
   },
   "additionalProperties": false,
   "required": [
     "query"
-  ]
+  ],
+  "title": "Search"
 }
 ```
 
@@ -5984,23 +7009,48 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "query": {
       "type": "string",
-      "default": ""
+      "default": "",
+      "title": "Query",
+      "description": "Search query string.",
+      "examples": [
+        "TODO",
+        "def main"
+      ]
     },
     "path": {
       "type": "string",
-      "default": ""
+      "default": "",
+      "title": "Path",
+      "description": "Repository-relative path (POSIX-style).",
+      "examples": [
+        "README.md",
+        "src/app.py"
+      ]
     },
     "case_sensitive": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Case Sensitive"
     },
     "max_results": {
       "anyOf": [
@@ -6011,7 +7061,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Max Results"
     },
     "regex": {
       "anyOf": [
@@ -6022,7 +7073,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Regex"
     },
     "max_file_bytes": {
       "anyOf": [
@@ -6033,47 +7085,17 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Max File Bytes"
     },
     "include_hidden": {
       "type": "boolean",
-      "default": false
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": false,
+      "title": "Include Hidden"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Search Workspace"
 }
 ```
 
@@ -6116,59 +7138,47 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "path": {
       "type": "string",
-      "default": ""
+      "default": "",
+      "title": "Path",
+      "description": "Repository-relative path (POSIX-style).",
+      "examples": [
+        "README.md",
+        "src/app.py"
+      ]
     },
     "content": {
       "type": "string",
-      "default": ""
+      "default": "",
+      "title": "Content"
     },
     "create_parents": {
       "type": "boolean",
-      "default": true
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": true,
+      "title": "Create Parents"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Set Workspace File Contents"
 }
 ```
 
@@ -6211,15 +7221,33 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "command": {
       "type": "string",
-      "default": "pytest"
+      "default": "pytest",
+      "title": "Command",
+      "description": "Shell command to execute in the workspace clone.",
+      "examples": [
+        "pytest",
+        "python -m ruff check ."
+      ]
     },
     "command_lines": {
       "anyOf": [
@@ -6233,11 +7261,20 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Command Lines",
+      "description": "Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload."
     },
     "timeout_seconds": {
       "type": "number",
-      "default": 300
+      "default": 300,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
     },
     "workdir": {
       "anyOf": [
@@ -6248,51 +7285,27 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Workdir",
+      "description": "Working directory to run the command from. If relative, it is resolved within the workspace clone.",
+      "examples": [
+        "",
+        "src"
+      ]
     },
     "use_temp_venv": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Use Temp Venv"
     },
     "installing_dependencies": {
       "type": "boolean",
-      "default": false
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": false,
+      "title": "Installing Dependencies"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Terminal Command"
 }
 ```
 
@@ -6324,13 +7337,26 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "workflow": {
-      "type": "string"
+      "type": "string",
+      "title": "Workflow"
     },
     "ref": {
-      "type": "string"
+      "type": "string",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "inputs": {
       "anyOf": [
@@ -6342,15 +7368,24 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Inputs"
     },
     "timeout_seconds": {
       "type": "integer",
-      "default": 900
+      "default": 900,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
     },
     "poll_interval_seconds": {
       "type": "integer",
-      "default": 10
+      "default": 10,
+      "title": "Poll Interval Seconds"
     }
   },
   "additionalProperties": false,
@@ -6358,7 +7393,8 @@ Input schema:
     "full_name",
     "workflow",
     "ref"
-  ]
+  ],
+  "title": "Trigger And Wait For Workflow"
 }
 ```
 
@@ -6396,13 +7432,26 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "workflow": {
-      "type": "string"
+      "type": "string",
+      "title": "Workflow"
     },
     "ref": {
-      "type": "string"
+      "type": "string",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "inputs": {
       "anyOf": [
@@ -6414,7 +7463,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Inputs"
     }
   },
   "additionalProperties": false,
@@ -6422,7 +7472,8 @@ Input schema:
     "full_name",
     "workflow",
     "ref"
-  ]
+  ],
+  "title": "Trigger Workflow Dispatch"
 }
 ```
 
@@ -6437,7 +7488,7 @@ Example invocation:
 
 ## update_file_from_workspace
 
-Update a single file in a GitHub repository from the persistent workspace checkout. terminal_command edits the workspace file, and this tool syncs it back to the branch.
+Update a single file in a GitHub repository from the persistent workspace checkout. Use terminal_command to edit the workspace file first, then call this tool to sync it back to the branch.
 
 Metadata:
 - visibility: public
@@ -6453,11 +7504,34 @@ Input schema:
 {
   "type": "object",
   "properties": {
-    "full_name": {},
-    "workspace_path": {},
-    "target_path": {},
-    "branch": {},
-    "message": {}
+    "full_name": {
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "workspace_path": {
+      "title": "Workspace Path"
+    },
+    "target_path": {
+      "title": "Target Path"
+    },
+    "branch": {
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
+    },
+    "message": {
+      "title": "Message",
+      "description": "Commit message.",
+      "examples": [
+        "Refactor tool schemas"
+      ]
+    }
   },
   "additionalProperties": false,
   "required": [
@@ -6466,7 +7540,8 @@ Input schema:
     "target_path",
     "branch",
     "message"
-  ]
+  ],
+  "title": "Update File From Workspace"
 }
 ```
 
@@ -6498,21 +7573,29 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "title": {
-      "type": "string"
+      "type": "string",
+      "title": "Title"
     },
     "files": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": {}
-      }
+      },
+      "title": "Files"
     },
     "base_branch": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Base Branch"
     },
     "new_branch": {
       "anyOf": [
@@ -6523,7 +7606,12 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "New Branch",
+      "description": "Name of the branch to create.",
+      "examples": [
+        "simplify-tool-schemas"
+      ]
     },
     "body": {
       "anyOf": [
@@ -6534,11 +7622,13 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Body"
     },
     "draft": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "title": "Draft"
     }
   },
   "additionalProperties": false,
@@ -6546,7 +7636,8 @@ Input schema:
     "full_name",
     "title",
     "files"
-  ]
+  ],
+  "title": "Update Files And Open Pr"
 }
 ```
 
@@ -6578,10 +7669,16 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "issue_number": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Issue Number"
     },
     "title": {
       "anyOf": [
@@ -6592,7 +7689,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Title"
     },
     "body": {
       "anyOf": [
@@ -6603,7 +7701,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Body"
     },
     "state": {
       "anyOf": [
@@ -6618,7 +7717,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "State"
     },
     "labels": {
       "anyOf": [
@@ -6632,7 +7732,8 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Labels"
     },
     "assignees": {
       "anyOf": [
@@ -6646,14 +7747,16 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Assignees"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "issue_number"
-  ]
+  ],
+  "title": "Update Issue"
 }
 ```
 
@@ -6684,7 +7787,8 @@ Input schema:
 {
   "type": "object",
   "properties": {},
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Validate Environment"
 }
 ```
 
@@ -6716,25 +7820,40 @@ Input schema:
   "type": "object",
   "properties": {
     "full_name": {
-      "type": "string"
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "run_id": {
-      "type": "integer"
+      "type": "integer",
+      "title": "Run Id"
     },
     "timeout_seconds": {
       "type": "integer",
-      "default": 900
+      "default": 900,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
     },
     "poll_interval_seconds": {
       "type": "integer",
-      "default": 10
+      "default": 10,
+      "title": "Poll Interval Seconds"
     }
   },
   "additionalProperties": false,
   "required": [
     "full_name",
     "run_id"
-  ]
+  ],
+  "title": "Wait For Workflow Run"
 }
 ```
 
@@ -6776,41 +7895,35 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "base_ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Base Ref",
+      "description": "Base ref used as the starting point (branch/tag/SHA).",
+      "examples": [
+        "main"
+      ]
     },
     "new_branch": {
       "type": "string",
-      "default": ""
+      "default": "",
+      "title": "New Branch",
+      "description": "Name of the branch to create.",
+      "examples": [
+        "simplify-tool-schemas"
+      ]
     },
     "push": {
       "type": "boolean",
-      "default": true
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": true,
+      "title": "Push"
     },
     "branch": {
       "anyOf": [
@@ -6821,10 +7934,17 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Workspace Create Branch"
 }
 ```
 
@@ -6867,36 +7987,26 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
       "type": "string",
-      "default": ""
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": "",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Workspace Delete Branch"
 }
 ```
 
@@ -6948,15 +8058,31 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "branch": {
       "type": "string",
-      "default": ""
+      "default": "",
+      "title": "Branch",
+      "description": "Branch name.",
+      "examples": [
+        "main",
+        "feature/my-branch"
+      ]
     },
     "base_ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Base Ref",
+      "description": "Base ref used as the starting point (branch/tag/SHA).",
+      "examples": [
+        "main"
+      ]
     },
     "new_branch": {
       "anyOf": [
@@ -6967,52 +8093,41 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "New Branch",
+      "description": "Name of the branch to create.",
+      "examples": [
+        "simplify-tool-schemas"
+      ]
     },
     "discard_uncommitted_changes": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Discard Uncommitted Changes"
     },
     "delete_mangled_branch": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Delete Mangled Branch"
     },
     "reset_base": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Reset Base"
     },
     "enumerate_repo": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Enumerate Repo"
     },
     "dry_run": {
       "type": "boolean",
-      "default": false
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": false,
+      "title": "Dry Run"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Workspace Self Heal Branch"
 }
 ```
 
@@ -7052,63 +8167,47 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "commit_message": {
       "type": "string",
-      "default": "Sync workspace changes"
+      "default": "Sync workspace changes",
+      "title": "Commit Message"
     },
     "add_all": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Add All"
     },
     "push": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "title": "Push"
     },
     "discard_local_changes": {
       "type": "boolean",
-      "default": false
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": false,
+      "title": "Discard Local Changes"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Workspace Sync Bidirectional"
 }
 ```
 
@@ -7148,47 +8247,27 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Workspace Sync Status"
 }
 ```
 
@@ -7228,51 +8307,32 @@ Input schema:
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
     },
     "ref": {
       "type": "string",
-      "default": "main"
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
     },
     "discard_local_changes": {
       "type": "boolean",
-      "default": false
-    },
-    "owner": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "repo": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "branch": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+      "default": false,
+      "title": "Discard Local Changes"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "title": "Workspace Sync To Remote"
 }
 ```
 

@@ -10,6 +10,188 @@ from typing import Any, Dict, Mapping, Optional, get_args, get_origin
 
 
 # ---------------------------------------------------------------------------
+# Schema ergonomics
+#
+# The MCP tool surface is consumed by both developers and LLMs. We intentionally
+# keep implementation signatures permissive for backwards-compat (e.g. legacy
+# alias args), while exposing a cleaner, more consistent input schema.
+#
+# This module therefore:
+# - Derives a baseline JSON schema from function signatures.
+# - Applies schema-only simplifications (hide alias params, standardize titles).
+# - Adds concise, high-signal parameter descriptions and examples.
+# ---------------------------------------------------------------------------
+
+
+_PARAM_DOCS: Dict[str, Dict[str, Any]] = {
+    "full_name": {
+        "description": (
+            "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's "
+            "controller repository."
+        ),
+        "examples": ["octocat/Hello-World"],
+    },
+    "ref": {
+        "description": (
+            "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. "
+            "Defaults to 'main' when available."
+        ),
+        "examples": ["main", "develop", "feature/my-branch"],
+    },
+    "base_ref": {
+        "description": "Base ref used as the starting point (branch/tag/SHA).",
+        "examples": ["main"],
+    },
+    "branch": {
+        "description": "Branch name.",
+        "examples": ["main", "feature/my-branch"],
+    },
+    "new_branch": {
+        "description": "Name of the branch to create.",
+        "examples": ["simplify-tool-schemas"],
+    },
+    "from_ref": {
+        "description": "Ref to create the new branch from (branch/tag/SHA).",
+        "examples": ["main"],
+    },
+    "path": {
+        "description": "Repository-relative path (POSIX-style).",
+        "examples": ["README.md", "src/app.py"],
+    },
+    "paths": {
+        "description": "List of repository-relative paths.",
+        "examples": [["README.md", "src/app.py"]],
+    },
+    "query": {
+        "description": "Search query string.",
+        "examples": ["TODO", "def main"],
+    },
+    "command": {
+        "description": "Shell command to execute in the workspace clone.",
+        "examples": ["pytest", "python -m ruff check ."],
+    },
+    "command_lines": {
+        "description": (
+            "Optional list of shell command lines. When provided, lines are joined with newlines and "
+            "executed as a single command payload."
+        ),
+    },
+    "timeout_seconds": {
+        "description": "Timeout for the operation in seconds.",
+        "examples": [60, 300, 600],
+    },
+    "workdir": {
+        "description": (
+            "Working directory to run the command from. If relative, it is resolved within the workspace clone."
+        ),
+        "examples": ["", "src"],
+    },
+    "per_page": {
+        "description": "Number of results per page for GitHub REST pagination.",
+        "examples": [30, 100],
+    },
+    "page": {
+        "description": "1-indexed page number for GitHub REST pagination.",
+        "examples": [1, 2],
+    },
+    "cursor": {
+        "description": "Pagination cursor returned by the previous call.",
+    },
+    "limit": {
+        "description": "Maximum number of results to return.",
+        "examples": [20, 50, 200],
+    },
+    "message": {
+        "description": "Commit message.",
+        "examples": ["Refactor tool schemas"],
+    },
+}
+
+
+def _apply_param_docs(schema: Dict[str, Any]) -> Dict[str, Any]:
+    props = schema.get("properties")
+    if not isinstance(props, dict):
+        return schema
+    out_props: Dict[str, Any] = {}
+    for name, prop in props.items():
+        if not isinstance(prop, dict):
+            out_props[name] = prop
+            continue
+
+        updated = dict(prop)
+
+        # Add stable titles (helps UIs render fields consistently).
+        updated.setdefault("title", name.replace("_", " ").strip().title() or name)
+
+        # Enrich with docs where available.
+        docs = _PARAM_DOCS.get(name)
+        if docs:
+            desc = docs.get("description")
+            if isinstance(desc, str) and desc:
+                updated.setdefault("description", desc)
+            if "examples" in docs and "examples" not in updated:
+                updated["examples"] = docs["examples"]
+
+        out_props[name] = updated
+
+    schema["properties"] = out_props
+    return schema
+
+
+def _simplify_schema_aliases(schema: Dict[str, Any]) -> Dict[str, Any]:
+    """Hide legacy alias arguments from the *schema* while keeping runtime permissive.
+
+    Many tools accept legacy aliases like (owner, repo) in addition to full_name,
+    or (branch) in addition to ref. Those aliases remain supported at runtime
+    (for backwards compatibility), but are intentionally hidden from the tool
+    input schema so developer/LLM callers see a single canonical surface.
+    """
+
+    props = schema.get("properties")
+    if not isinstance(props, dict):
+        return schema
+    required = schema.get("required")
+    req_list = [r for r in required if isinstance(r, str)] if isinstance(required, list) else []
+
+    def drop(name: str) -> None:
+        props.pop(name, None)
+        if name in req_list:
+            req_list.remove(name)
+
+    # Canonical repo identifier: full_name.
+    if "full_name" in props:
+        drop("owner")
+        drop("repo")
+
+    # Canonical ref: ref.
+    if "ref" in props:
+        drop("branch")
+
+    schema["properties"] = props
+    if req_list:
+        schema["required"] = req_list
+    else:
+        schema.pop("required", None)
+    return schema
+
+
+def _simplify_input_schema_for_tool(schema: Mapping[str, Any], *, tool_name: str) -> Dict[str, Any]:
+    """Return a cleaned-up schema intended for external tool consumption."""
+    if not isinstance(schema, Mapping):
+        return {}
+    normalized: Dict[str, Any] = dict(schema)
+
+    # Only object input schemas are supported.
+    if normalized.get("type") != "object":
+        return normalized
+
+    normalized = _simplify_schema_aliases(normalized)
+    normalized = _apply_param_docs(normalized)
+    normalized.setdefault("title", _title_from_tool_name(tool_name))
+    return normalized
+
+
+# ---------------------------------------------------------------------------
 # Log-safety helpers
 # ---------------------------------------------------------------------------
 
@@ -298,7 +480,7 @@ def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
     return {}
 
 
-def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, Any]:
+def _schema_from_signature(signature: Optional[inspect.Signature], *, tool_name: str = 'tool') -> Dict[str, Any]:
     properties: Dict[str, Any] = {}
     required: list[str] = []
 
@@ -328,7 +510,7 @@ def _schema_from_signature(signature: Optional[inspect.Signature]) -> Dict[str, 
     }
     if required:
         schema["required"] = required
-    return schema
+    return _simplify_input_schema_for_tool(schema, tool_name=tool_name)
 
 
 def _truncate_str(s: str) -> str:

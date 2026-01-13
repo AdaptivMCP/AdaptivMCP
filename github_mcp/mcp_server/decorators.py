@@ -804,7 +804,7 @@ def mcp_tool(
 
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
-                schema = _schema_from_signature(signature)
+                schema = _schema_from_signature(signature, tool_name=tool_name)
             if not isinstance(schema, Mapping):
                 raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
             wrapper.__mcp_input_schema__ = schema
@@ -933,7 +933,7 @@ def mcp_tool(
 
         schema = _normalize_input_schema(wrapper.__mcp_tool__)
         if not isinstance(schema, Mapping):
-            schema = _schema_from_signature(signature)
+            schema = _schema_from_signature(signature, tool_name=tool_name)
         if not isinstance(schema, Mapping):
             raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
         wrapper.__mcp_input_schema__ = schema
