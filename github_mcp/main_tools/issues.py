@@ -240,8 +240,7 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
     """Summarize a GitHub issue for navigation and planning.
 
     This helper is intentionally read-only.
-    It is designed for assistants to call before doing any write work so
-    they understand the current state of an issue.
+    It provides context about the issue's current state before changes are made.
     """
 
     m = _main()

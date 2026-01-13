@@ -49,8 +49,8 @@ def build_ui_json_endpoint() -> Any:
                     "stream": "/sse",
                 },
                 "notes": [
-                    "Use /healthz after deploy to validate baseline health.",
-                    "Use /tools for discovery. POST /tools/<name> to invoke.",
+                    "/healthz reports baseline health after deploy.",
+                    "/tools supports discovery; POST /tools/<name> invokes a tool.",
                 ],
             }
         )

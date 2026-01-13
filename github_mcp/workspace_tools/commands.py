@@ -199,7 +199,7 @@ async def terminal_command(
 ) -> Dict[str, Any]:
     """Run a shell command inside the repo workspace and return its result.
 
-    Use this for tests, linters, or project scripts that need the real tree and virtualenv. The workspace
+    This supports tests, linters, or project scripts that need the real tree and virtualenv. The workspace
     persists across calls so installed dependencies and edits are reused."""
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
@@ -268,4 +268,4 @@ async def terminal_command(
 
 
 # NOTE: The legacy tool name `run_command` has been removed.
-# Use `terminal_command` instead.
+# `terminal_command` replaces it.

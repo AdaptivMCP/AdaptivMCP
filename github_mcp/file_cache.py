@@ -1,7 +1,7 @@
 """In-process cache for fetched GitHub file contents.
 
 The cache is intentionally lightweight: it keeps decoded file payloads in
-memory for the lifetime of the process so assistants can rehydrate context
+memory for the lifetime of the process so callers can rehydrate context
 without re-fetching from GitHub on every tool call. Entries are evicted using
 an LRU policy when the cache exceeds configured entry or byte caps.
 """

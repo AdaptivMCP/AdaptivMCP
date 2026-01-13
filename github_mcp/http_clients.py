@@ -254,7 +254,7 @@ def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> Optional[float]:
 def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool) -> float:
     """Apply randomized jitter to sleep durations.
 
-    Jitter reduces synchronized retry storms across concurrent assistants.
+    Jitter reduces synchronized retry storms across concurrent clients.
 
     When ``respect_min`` is True (e.g. Retry-After/X-RateLimit-Reset driven delays),
     jitter is added *after* the minimum delay so the retry is not supported happens early.
