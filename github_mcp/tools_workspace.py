@@ -20,6 +20,7 @@ from github_mcp.workspace_tools import commands as _commands
 from github_mcp.workspace_tools import git_ops as _git_ops
 from github_mcp.workspace_tools import commit as _commit
 from github_mcp.workspace_tools import suites as _suites
+from github_mcp.workspace_tools import pr as _pr
 
 # helpers
 _safe_branch_slug = _shared._safe_branch_slug
@@ -66,6 +67,8 @@ run_tests = _suites.run_tests
 run_quality_suite = _suites.run_quality_suite
 run_lint_suite = _suites.run_lint_suite
 
+commit_and_open_pr_from_workspace = _pr.commit_and_open_pr_from_workspace
+
 __all__ = [
     "uuid",
     "CONTROLLER_REPO",
@@ -104,4 +107,5 @@ __all__ = [
     "run_quality_suite",
     "run_lint_suite",
     "build_pr_summary",
+    "commit_and_open_pr_from_workspace",
 ]

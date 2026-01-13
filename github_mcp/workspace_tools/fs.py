@@ -19,12 +19,27 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
         raise ValueError("path must be a non-empty string")
     raw_path = rel_path.strip().replace("\\", "/")
+    root = os.path.realpath(repo_dir)
     if os.path.isabs(raw_path):
-        return os.path.realpath(raw_path)
+        candidate = os.path.realpath(raw_path)
+        # Allow absolute paths only when they resolve inside the workspace.
+        try:
+            common = os.path.commonpath([root, candidate])
+        except Exception:
+            common = ""
+        if common != root:
+            raise ValueError("path must resolve inside the workspace repository")
+        return candidate
     rel_path = raw_path.lstrip("/\\")
     if not rel_path:
         raise ValueError("path must be a non-empty string")
     candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
+    try:
+        common = os.path.commonpath([root, candidate])
+    except Exception:
+        common = ""
+    if common != root:
+        raise ValueError("path must resolve inside the workspace repository")
     return candidate
 
 
