@@ -4,16 +4,16 @@ Decorators and helpers for registering MCP tools.
 
 Behavioral contract:
 - WRITE_ALLOWED controls whether write tools are auto-approved by the client.
-  When WRITE_ALLOWED is false, write tools remain available but clients should
-  prompt for confirmation before execution.
+ When WRITE_ALLOWED is false, write tools remain available but clients may
+ prompt for confirmation before execution.
 - Tools publish input schemas for introspection, but the server does NOT
-  enforce JSONSchema validation at runtime.
+ enforce JSONSchema validation at runtime.
 - Tags are accepted for backwards compatibility but are not emitted to clients.
 - Dedupe helpers remain for compatibility and test coverage.
 
 Dedupe contract:
 - Async dedupe caches completed results for a short TTL within the SAME event loop.
-- Async dedupe is scoped per event loop (never shares futures across loops).
+- Async dedupe is scoped per event loop (is not supported shares futures across loops).
 - Sync dedupe memoizes results for TTL.
 """
 
@@ -133,9 +133,9 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
 
     Historically, write tools were hard-blocked when WRITE_ALLOWED was false.
     The current policy is approval-gated writes:
-      - When WRITE_ALLOWED is true, writes should execute without extra prompts.
-      - When WRITE_ALLOWED is false, writes remain executable but clients (e.g.
-        ChatGPT) should ask the user to confirm/deny.
+    - When WRITE_ALLOWED is true, writes may execute without extra prompts.
+    - When WRITE_ALLOWED is false, writes remain executable but clients (e.g.
+    ChatGPT) may ask the user to confirm/deny.
 
     This function is intentionally a no-op for compatibility.
     """
@@ -517,7 +517,7 @@ def _filter_kwargs_for_signature(
 def _fastmcp_call_style(params: Optional[tuple[inspect.Parameter, ...]]) -> str:
     """
     Determine safest call style:
-    - If first param is name: must use decorator factory style (tool(name=...)(fn)).
+    - If first param is name: needs to use decorator factory style (tool(name=...)(fn)).
     - If first param is fn/func/etc: can use direct call tool(fn, ...).
     - Unknown: try factory first, then direct.
     """
@@ -549,13 +549,13 @@ def _register_with_fastmcp(
         return None
 
     """
-    Robust FastMCP registration across signature variants.
+ Robust FastMCP registration across signature variants.
 
-    Prevents the crash:
-      TypeError: FastMCP.tool() got multiple values for argument 'name'
-    by never passing `fn` positionally when the tool() signature expects `name`
-    positionally.
-    """
+ Prevents the crash:
+ TypeError: FastMCP.tool() got multiple values for argument 'name'
+ by is not supported passing `fn` positionally when the tool() signature expects `name`
+ positionally.
+ """
     params = _fastmcp_tool_params()
     style = _fastmcp_call_style(params)
 

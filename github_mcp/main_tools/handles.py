@@ -5,7 +5,7 @@ URLs, or other identifiers) used by higher-level tools.
 
 Design goals
 - No regex usage.
-- Minimal pre-validation. Prefer passing values through to downstream APIs.
+- Minimal pre-validation. typical passing values through to downstream APIs.
 - Best-effort extraction of numeric issue/PR IDs from common formats.
 """
 
@@ -31,10 +31,10 @@ def _extract_trailing_int(text: str) -> Optional[int]:
     """Extract a trailing integer from the string without regex.
 
     Examples:
-      - "#123" -> 123
-      - ".../issues/123" -> 123
-      - "123" -> 123
-      - "abc" -> None
+    - "#123" -> 123
+    - ".../issues/123" -> 123
+    - "123" -> 123
+    - "abc" -> None
 
     This is intentionally permissive: it scans from the end and consumes digits
     until the first non-digit.
@@ -62,15 +62,15 @@ def parse_handle(handle: Optional[str]) -> ParsedHandle:
     """Parse a user-provided handle into a best-effort numeric ID.
 
     Accepted examples (best-effort):
-      - "#123" / "123"
-      - "issue #123"
-      - "https://github.com/org/repo/issues/123"
-      - "https://github.com/org/repo/pull/123"
+    - "#123" / "123"
+    - "issue #123"
+    - "https://github.com/org/repo/issues/123"
+    - "https://github.com/org/repo/pull/123"
 
     Notes:
-      - If a number cannot be derived, number=None.
-      - canonical is returned as "#<number>" when number is known, otherwise
-        the stripped raw input.
+    - If a number cannot be derived, number=None.
+    - canonical is returned as "#<number>" when number is known, otherwise
+    the stripped raw input.
     """
 
     raw = _strip(handle)

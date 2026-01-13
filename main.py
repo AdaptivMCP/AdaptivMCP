@@ -107,7 +107,7 @@ class _CacheControlMiddleware:
     Avoid BaseHTTPMiddleware here because it can interfere with streaming
     responses (SSE).
 
-    - Never cache dynamic streaming endpoints: /sse and /messages
+    - is not supported cache dynamic streaming endpoints: /sse and /messages
     - Optionally cache static assets: /static/*
     """
 
@@ -157,8 +157,8 @@ class _RequestContextMiddleware:
     """ASGI middleware that extracts stable identifiers for dedupe and logging.
 
     For POST /messages, we capture:
-      - `session_id` from the query string
-      - MCP JSON-RPC `id` from the request body
+    - `session_id` from the query string
+    - MCP JSON-RPC `id` from the request body
 
     These values are stored in contextvars and consumed by the tool decorator
     to suppress duplicate tool invocations caused by upstream retries.
@@ -1531,11 +1531,11 @@ def list_all_actions(
     read-only and can therefore be called before writes are enabled.
 
     Args:
-        include_parameters: When ``True``, include the serialized input schema
-            for each tool to clarify argument names and types.
-        compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA_DEFAULT=1`` is
-            set), shorten descriptions and omit tag metadata to keep responses
-            compact.
+    include_parameters: When ``True``, include the serialized input schema
+    for each tool to clarify argument names and types.
+    compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA_DEFAULT=1`` is
+    set), shorten descriptions and omit tag metadata to keep responses
+    compact.
     """
     from github_mcp.main_tools.introspection import list_all_actions as _impl
 
@@ -1561,14 +1561,14 @@ async def describe_tool(
     inspect specific tools by name without scanning the entire tool catalog.
 
     Args:
-        name: The MCP tool name (for example, "update_files_and_open_pr").
-            For backwards compatibility, this behaves like the legacy
-            single-tool describe_tool API.
-        names: Optional list of tool names to inspect. When provided, up to
-            10 tools are returned in a single call. Duplicates are ignored
-            while preserving order.
-        include_parameters: When True, include the serialized input schema for
-            each tool (equivalent to list_all_actions(include_parameters=True)).
+    name: The MCP tool name (for example, "update_files_and_open_pr").
+    For backwards compatibility, this behaves like the legacy
+    single-tool describe_tool API.
+    names: Optional list of tool names to inspect. When provided, up to
+    10 tools are returned in a single call. Duplicates are ignored
+    while preserving order.
+    include_parameters: When True, include the serialized input schema for
+    each tool (equivalent to list_all_actions(include_parameters=True)).
     """
 
     # Back-compat: some callers send tool_name instead of name.
@@ -1676,10 +1676,10 @@ async def trigger_workflow_dispatch(
     """Trigger a workflow dispatch event on the given ref.
 
     Args:
-        full_name: "owner/repo" string.
-        workflow: Workflow file name or ID (e.g. "ci.yml" or a numeric ID).
-        ref: Git ref (branch, tag, or SHA) to run the workflow on.
-        inputs: Optional input payload for workflows that declare inputs.
+    full_name: "owner/repo" string.
+    workflow: Workflow file name or ID (e.g. "ci.yml" or a numeric ID).
+    ref: Git ref (branch, tag, or SHA) to run the workflow on.
+    inputs: Optional input payload for workflows that declare inputs.
     """
     from github_mcp.main_tools.workflows import trigger_workflow_dispatch as _impl
 
@@ -1908,30 +1908,30 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
     decide which focused tools to call next. It is intentionally read-only.
 
     Args:
-        full_name:
-            "owner/repo" string.
-        branch:
-            Optional branch name. When omitted, the repository's default
-            branch is used via the same normalization logic as other tools.
+    full_name:
+    "owner/repo" string.
+    branch:
+    Optional branch name. When omitted, the repository's default
+    branch is used via the same normalization logic as other tools.
 
     Raises:
-        ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
+    ToolPreflightValidationError: If the branch/path combination fails server-side normalization.
 
     Returns:
-        A dict with high-level fields such as:
+    A dict with high-level fields such as:
 
-          - repo: core metadata about the repository (description, visibility,
-            default branch, topics, open issue count when available).
-          - branch: the effective branch used for lookups.
-          - pull_requests: a small window of open pull requests (up to 10).
-          - issues: a small window of open issues (up to 10, excluding PRs).
-          - workflows: recent GitHub Actions workflow runs on the branch
-            (up to 5).
-          - top_level_tree: compact listing of top-level files/directories
-            on the branch so assistants can see the project layout.
+    - repo: core metadata about the repository (description, visibility,
+    default branch, topics, open issue count when available).
+    - branch: the effective branch used for lookups.
+    - pull_requests: a small window of open pull requests (up to 10).
+    - issues: a small window of open issues (up to 10, excluding PRs).
+    - workflows: recent GitHub Actions workflow runs on the branch
+    (up to 5).
+    - top_level_tree: compact listing of top-level files/directories
+    on the branch so assistants can see the project layout.
 
-        Individual sections degrade gracefully: if one underlying call fails,
-        its corresponding "*_error" field is populated instead of raising.
+    Individual sections degrade gracefully: if one underlying call fails,
+    its corresponding "*_error" field is populated instead of raising.
     """
     from github_mcp.main_tools.dashboard import get_repo_dashboard as _impl
 
@@ -2008,9 +2008,9 @@ async def open_pr_for_existing_branch(
 ) -> Dict[str, Any]:
     """Open a pull request for an existing branch into a base branch.
 
-        This helper is intentionally idempotent: if there is already an open PR for
-        the same head/base pair, it will return that existing PR instead of failing
-        or creating a duplicate.
+    This helper is intentionally idempotent: if there is already an open PR for
+    the same head/base pair, it will return that existing PR instead of failing
+    or creating a duplicate.
 
     If this tool call fails in the hosted environment, use the workspace flow: `terminal_command` to create or reuse the PR.
     """

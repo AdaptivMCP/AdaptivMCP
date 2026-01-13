@@ -1,10 +1,10 @@
 """Generate Detailed_Tools.md from the live tool registry.
 
 This repo treats the Python code as the source of truth.
-Tool docs should be regenerated when the tool surface or schemas change.
+Tool docs may be regenerated when the tool surface or schemas change.
 
 Usage:
-  python scripts/generate_detailed_tools.py > Detailed_Tools.md
+ python scripts/generate_detailed_tools.py > Detailed_Tools.md
 """
 
 from __future__ import annotations

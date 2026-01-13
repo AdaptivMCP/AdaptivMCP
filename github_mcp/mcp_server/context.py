@@ -103,9 +103,9 @@ def _env_default_write_allowed() -> bool:
 class _WriteAllowedFlag:
     """
     Drop-in compatible:
-      - bool(WRITE_ALLOWED)
-      - WRITE_ALLOWED.value
-      - WRITE_ALLOWED.value = True/False
+    - bool(WRITE_ALLOWED)
+    - WRITE_ALLOWED.value
+    - WRITE_ALLOWED.value = True/False
     Uses the GITHUB_MCP_WRITE_ALLOWED environment variable as the sole source of truth.
     """
 

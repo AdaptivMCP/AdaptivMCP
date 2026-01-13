@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from typing import Any, Dict, List, Mapping, Optional
 
 from github_mcp.mcp_server.context import get_write_allowed
@@ -146,9 +148,6 @@ def _tool_tags(tool: Any, func: Any) -> list[str]:
     return []
 
 
-
-
-
 def _clean_description(text: str) -> str:
     if not text:
         return text
@@ -159,6 +158,8 @@ def _clean_description(text: str) -> str:
     s = re.sub(r"prefer", "typical", s, flags=re.I)
     s = re.sub(r"[ 	]{2,}", " ", s)
     return s.strip()
+
+
 def list_all_actions(
     include_parameters: bool = False, compact: Optional[bool] = None
 ) -> Dict[str, Any]:

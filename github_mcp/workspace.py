@@ -950,7 +950,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     1) The MCP "tool patch" format (*** Begin Patch ...), applied in-process.
     2) Standard git unified diffs (diff --git / --- / +++ / @@ -a,b +c,d @@).
     3) A minimal git-style diff that uses bare `@@` hunk separators (no ranges),
-       which some assistants emit. These are applied in-process.
+    which some assistants emit. These are applied in-process.
     """
 
     if not patch or not patch.strip():

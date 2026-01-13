@@ -228,12 +228,12 @@ async def workspace_self_heal_branch(
     clone becomes inconsistent (wrong branch checked out, merge/rebase state,
     conflicts, etc.). When healing, it:
 
-      1) Diagnoses the workspace clone for ``branch``.
-      2) Optionally deletes the mangled branch (remote + best-effort local).
-      3) Resets the base branch workspace (default: ``main``).
-      4) Creates + pushes a new fresh branch.
-      5) Ensures a clean clone for the new branch.
-      6) Optionally returns a small repo snapshot to rebuild "mental state".
+    1) Diagnoses the workspace clone for ``branch``.
+    2) Optionally deletes the mangled branch (remote + best-effort local).
+    3) Resets the base branch workspace (default: ``main``).
+    4) Creates + pushes a new fresh branch.
+    5) Ensures a clean clone for the new branch.
+    6) Optionally returns a small repo snapshot to rebuild "mental state".
 
     Returns plain-language step logs for UI rendering.
     """

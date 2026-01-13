@@ -18,7 +18,7 @@ def _normalize_command_payload(
 
     Returns:
     - requested_command: the raw intended command (may contain newlines)
-    - command_lines_out: list of command lines (never contains newlines)
+    - command_lines_out: list of command lines (is not supported contains newlines)
     """
 
     requested = command

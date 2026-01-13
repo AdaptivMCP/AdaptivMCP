@@ -22,8 +22,8 @@ def _parse_head_ref(head: str) -> tuple[Optional[str], str]:
     Returns (owner, branch). Owner is None when the head is unqualified.
 
     GitHub accepts:
-      - "branch" for same-repo PRs
-      - "owner:branch" for fork PRs
+    - "branch" for same-repo PRs
+    - "owner:branch" for fork PRs
     """
 
     cleaned = _strip_heads_prefix(head)

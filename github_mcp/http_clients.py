@@ -257,7 +257,7 @@ def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool) -> float:
     Jitter reduces synchronized retry storms across concurrent assistants.
 
     When ``respect_min`` is True (e.g. Retry-After/X-RateLimit-Reset driven delays),
-    jitter is added *after* the minimum delay so the retry never happens early.
+    jitter is added *after* the minimum delay so the retry is not supported happens early.
     """
 
     try:

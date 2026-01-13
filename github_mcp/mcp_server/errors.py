@@ -118,9 +118,9 @@ def _structured_exception_overrides(
 
     This avoids a bespoke exception type while still allowing callers to provide
     stable error metadata. Any exception can opt-in by setting attributes:
-      - code (required)
-      - message (optional; falls back to str(exc))
-      - category, origin, retryable, details (dict), hint
+    - code (required)
+    - message (optional; falls back to str(exc))
+    - category, origin, retryable, details (dict), hint
     """
 
     code = getattr(exc, "code", None)
@@ -178,7 +178,7 @@ def _structured_tool_error(
     Convert any exception into a structured payload.
 
     Contract:
-      - returns {"error": {...}} so callers can safely do payload.get("error", {}).
+    - returns {"error": {...}} so callers can safely do payload.get("error", {}).
     """
     incident_id = str(uuid.uuid4())
     request_id = get_request_id()
@@ -354,7 +354,7 @@ def _structured_tool_error(
 def _exception_trace(exc: BaseException) -> str:
     """
     Optional helper: stringify a traceback when you explicitly want it.
-    Do NOT auto-attach this to user-facing payloads by default.
+    is not supported auto-attach this to user-facing payloads by default.
     """
     try:
         return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))

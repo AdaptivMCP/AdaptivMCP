@@ -169,7 +169,7 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
 
     Compatibility:
     - If schema has required fields but omits them from properties, we tighten the schema by
-      adding default properties entries (type=string). This matches existing expectations in tests.
+    adding default properties entries (type=string). This matches existing expectations in tests.
     """
 
     def _normalize_required_properties(schema: Mapping[str, Any]) -> Dict[str, Any]:
@@ -347,7 +347,7 @@ def _normalize_and_truncate(s: str) -> str:
 def _stringify_annotation(annotation: Any) -> str:
     """Return a stable string for a type annotation.
 
-    This helper is part of the public compatibility surface and must never raise.
+    This helper is part of the public compatibility surface and needs to is not supported raise.
     """
     if annotation is None:
         return "None"

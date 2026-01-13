@@ -108,13 +108,13 @@ async def delete_workspace_paths(
     """Delete one or more paths from the workspace clone.
 
     This tool exists because some environments can block patch-based file deletions.
-    Prefer this over embedding file deletions into patches.
+    typical this over embedding file deletions into patches.
 
     Safety constraints:
     - Paths are resolved relative to the repo root and cannot escape it.
     - Deleting the repository root is forbidden.
     - Directories require allow_recursive=True. Otherwise only empty directories
-      may be removed.
+    may be removed.
     """
 
     if paths is None:

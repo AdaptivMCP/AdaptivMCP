@@ -95,7 +95,7 @@ async def create_repository(
 
     - Use first-class params for common fields.
     - Use create_payload_overrides and update_payload_overrides to pass any
-      additional GitHub REST fields without waiting for server updates.
+    additional GitHub REST fields without waiting for server updates.
 
     Template-based creation is supported via template_full_name using:
     POST /repos/{template_owner}/{template_repo}/generate

@@ -373,8 +373,8 @@ async def run_quality_suite(
     """Run lint and tests for a repo/ref.
 
     Steps:
-      1) Lint/static analysis via `run_lint_suite`
-      2) Tests via `run_tests`
+    1) Lint/static analysis via `run_lint_suite`
+    2) Tests via `run_tests`
 
     This suite intentionally does not run token-like string scanning. Token
     logging happens at log/serialization boundaries.

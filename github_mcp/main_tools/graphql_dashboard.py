@@ -8,209 +8,209 @@ from ._main import _main
 
 ISSUES_QUERY = """
 query($owner: String!, $name: String!, $first: Int!, $after: String, $states: [IssueState!]) {
-  repository(owner: $owner, name: $name) {
-    issues(first: $first, after: $after, states: $states, orderBy: {field: UPDATED_AT, direction: DESC}) {
-      totalCount
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      nodes {
-        id
-        databaseId
-        number
-        title
-        state
-        url
-        createdAt
-        updatedAt
-        closedAt
-        body
-        author {
-          login
-          url
-          avatarUrl
-        }
-        labels(first: 20) {
-          nodes {
-            name
-            color
-            description
-          }
-        }
-        assignees(first: 20) {
-          nodes {
-            login
-            url
-            avatarUrl
-          }
-        }
-        comments {
-          totalCount
-        }
-        milestone {
-          title
-          state
-          url
-          description
-          dueOn
-          createdAt
-        }
-      }
-    }
-  }
+ repository(owner: $owner, name: $name) {
+ issues(first: $first, after: $after, states: $states, orderBy: {field: UPDATED_AT, direction: DESC}) {
+ totalCount
+ pageInfo {
+ hasNextPage
+ endCursor
+ }
+ nodes {
+ id
+ databaseId
+ number
+ title
+ state
+ url
+ createdAt
+ updatedAt
+ closedAt
+ body
+ author {
+ login
+ url
+ avatarUrl
+ }
+ labels(first: 20) {
+ nodes {
+ name
+ color
+ description
+ }
+ }
+ assignees(first: 20) {
+ nodes {
+ login
+ url
+ avatarUrl
+ }
+ }
+ comments {
+ totalCount
+ }
+ milestone {
+ title
+ state
+ url
+ description
+ dueOn
+ createdAt
+ }
+ }
+ }
+ }
 }
 """
 
 WORKFLOW_RUNS_QUERY = """
 query($owner: String!, $name: String!, $first: Int!, $after: String) {
-  repository(owner: $owner, name: $name) {
-    workflowRuns(first: $first, after: $after, orderBy: {field: CREATED_AT, direction: DESC}) {
-      totalCount
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      nodes {
-        id
-        databaseId
-        url
-        name
-        event
-        status
-        conclusion
-        createdAt
-        updatedAt
-        headBranch
-        headSha
-        workflow {
-          name
-        }
-      }
-    }
-  }
+ repository(owner: $owner, name: $name) {
+ workflowRuns(first: $first, after: $after, orderBy: {field: CREATED_AT, direction: DESC}) {
+ totalCount
+ pageInfo {
+ hasNextPage
+ endCursor
+ }
+ nodes {
+ id
+ databaseId
+ url
+ name
+ event
+ status
+ conclusion
+ createdAt
+ updatedAt
+ headBranch
+ headSha
+ workflow {
+ name
+ }
+ }
+ }
+ }
 }
 """
 
 DASHBOARD_QUERY = """
 query(
-  $owner: String!,
-  $name: String!,
-  $issuesFirst: Int!,
-  $pullsFirst: Int!,
-  $runsFirst: Int!,
-  $treeExpression: String!
+ $owner: String!,
+ $name: String!,
+ $issuesFirst: Int!,
+ $pullsFirst: Int!,
+ $runsFirst: Int!,
+ $treeExpression: String!
 ) {
-  repository(owner: $owner, name: $name) {
-    nameWithOwner
-    description
-    url
-    isPrivate
-    isArchived
-    stargazerCount
-    forkCount
-    createdAt
-    updatedAt
-    owner {
-      login
-      url
-    }
-    defaultBranchRef {
-      name
-    }
-    pullRequests(first: $pullsFirst, states: OPEN, orderBy: {field: UPDATED_AT, direction: DESC}) {
-      nodes {
-        id
-        databaseId
-        number
-        title
-        state
-        url
-        createdAt
-        updatedAt
-        isDraft
-        author {
-          login
-          url
-          avatarUrl
-        }
-        headRefName
-        baseRefName
-        headRepository {
-          nameWithOwner
-        }
-        baseRepository {
-          nameWithOwner
-        }
-      }
-    }
-    issues(first: $issuesFirst, states: OPEN, orderBy: {field: UPDATED_AT, direction: DESC}) {
-      nodes {
-        id
-        databaseId
-        number
-        title
-        state
-        url
-        createdAt
-        updatedAt
-        closedAt
-        author {
-          login
-          url
-          avatarUrl
-        }
-        labels(first: 20) {
-          nodes {
-            name
-            color
-            description
-          }
-        }
-        assignees(first: 20) {
-          nodes {
-            login
-            url
-            avatarUrl
-          }
-        }
-        comments {
-          totalCount
-        }
-      }
-    }
-    workflowRuns(first: $runsFirst, orderBy: {field: CREATED_AT, direction: DESC}) {
-      nodes {
-        id
-        databaseId
-        url
-        name
-        event
-        status
-        conclusion
-        createdAt
-        updatedAt
-        headBranch
-        headSha
-        workflow {
-          name
-        }
-      }
-    }
-    object(expression: $treeExpression) {
-      ... on Tree {
-        entries {
-          name
-          type
-          object {
-            ... on Blob {
-              byteSize
-            }
-          }
-        }
-      }
-    }
-  }
+ repository(owner: $owner, name: $name) {
+ nameWithOwner
+ description
+ url
+ isPrivate
+ isArchived
+ stargazerCount
+ forkCount
+ createdAt
+ updatedAt
+ owner {
+ login
+ url
+ }
+ defaultBranchRef {
+ name
+ }
+ pullRequests(first: $pullsFirst, states: OPEN, orderBy: {field: UPDATED_AT, direction: DESC}) {
+ nodes {
+ id
+ databaseId
+ number
+ title
+ state
+ url
+ createdAt
+ updatedAt
+ isDraft
+ author {
+ login
+ url
+ avatarUrl
+ }
+ headRefName
+ baseRefName
+ headRepository {
+ nameWithOwner
+ }
+ baseRepository {
+ nameWithOwner
+ }
+ }
+ }
+ issues(first: $issuesFirst, states: OPEN, orderBy: {field: UPDATED_AT, direction: DESC}) {
+ nodes {
+ id
+ databaseId
+ number
+ title
+ state
+ url
+ createdAt
+ updatedAt
+ closedAt
+ author {
+ login
+ url
+ avatarUrl
+ }
+ labels(first: 20) {
+ nodes {
+ name
+ color
+ description
+ }
+ }
+ assignees(first: 20) {
+ nodes {
+ login
+ url
+ avatarUrl
+ }
+ }
+ comments {
+ totalCount
+ }
+ }
+ }
+ workflowRuns(first: $runsFirst, orderBy: {field: CREATED_AT, direction: DESC}) {
+ nodes {
+ id
+ databaseId
+ url
+ name
+ event
+ status
+ conclusion
+ createdAt
+ updatedAt
+ headBranch
+ headSha
+ workflow {
+ name
+ }
+ }
+ }
+ object(expression: $treeExpression) {
+ ... on Tree {
+ entries {
+ name
+ type
+ object {
+ ... on Blob {
+ byteSize
+ }
+ }
+ }
+ }
+ }
+ }
 }
 """
 

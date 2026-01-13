@@ -62,7 +62,7 @@ def _normalize_render_api_base(raw_base: str) -> tuple[str, str]:
     become /v1/v1/... and Render returns 404.
 
     This helper strips a trailing /v1 from the base URL and returns the version
-    prefix that should be applied to request paths.
+    prefix that may be applied to request paths.
     """
 
     base = (raw_base or "").strip()
