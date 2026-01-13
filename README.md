@@ -14,6 +14,11 @@ connected Adaptiv connector with multiple tasks and queries. Today it ships with
 GitHub and Render integrations, with plans for additional service integrations in
 future updates.
 
+Render integration includes a minimal set of user-facing tools for service
+inspection and operations (list owners/workspaces, list services, view deploys,
+trigger deploys, rollbacks, restarts, and fetch logs). These tools use Render's
+public API and require a Render API token to be configured.
+
 ## Quickstart
 
 Production deployment for Adaptiv MCP is **Render.com only**. The steps below are for local development.

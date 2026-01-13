@@ -20,6 +20,7 @@ from github_mcp.config import (
     SANDBOX_CONTENT_BASE_URL,
     git_identity_warnings,
 )
+from github_mcp.render_api import _get_optional_render_token
 import github_mcp.server as server
 from github_mcp.exceptions import GitHubAPIError, GitHubAuthError
 from github_mcp.server import (
@@ -67,6 +68,7 @@ async def get_server_config() -> Dict[str, Any]:
         },
         "environment": {
             "github_token_present": any(os.environ.get(name) for name in GITHUB_TOKEN_ENV_VARS),
+            "render_token_present": bool(_get_optional_render_token()),
         },
     }
     warnings: list[str] = []
