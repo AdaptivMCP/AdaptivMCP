@@ -28,6 +28,7 @@ from github_mcp.config import (
     RENDER_RATE_LIMIT_RETRY_MAX_ATTEMPTS,
     RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS,
     RENDER_TOKEN_ENV_VARS,
+    summarize_request_context,
 )
 from github_mcp.exceptions import RenderAPIError, RenderAuthError
 from github_mcp.http_clients import _get_concurrency_semaphore
@@ -295,7 +296,7 @@ async def render_request(
             duration_ms = (time.perf_counter() - started) * 1000
             payload: Dict[str, Any] = {
                 "event": "render_http",
-                "request": dict(req) if isinstance(req, dict) else {},
+                "request": summarize_request_context(req) if isinstance(req, dict) else {},
                 "method": str(method).upper(),
                 "path": effective_path,
                 "status_code": getattr(resp, "status_code", None),

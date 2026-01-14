@@ -126,6 +126,7 @@ from .config import (  # noqa: E402
     GITHUB_LOGGER,
     LOG_GITHUB_HTTP,
     LOG_GITHUB_HTTP_BODIES,
+    summarize_request_context,
 )
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
 from github_mcp.mcp_server.context import get_request_context  # noqa: E402
@@ -572,7 +573,7 @@ async def _github_request(
             duration_ms = (time.perf_counter() - started) * 1000
             payload: Dict[str, Any] = {
                 "event": "github_http",
-                "request": dict(req) if isinstance(req, dict) else {},
+                "request": summarize_request_context(req) if isinstance(req, dict) else {},
                 "method": str(method).upper(),
                 "path": path,
                 "status_code": getattr(resp, "status_code", None),

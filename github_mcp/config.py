@@ -8,8 +8,135 @@ import os
 import tempfile
 import time
 import traceback
+import datetime
+import re
+from typing import Any, Mapping
 
 from github_mcp.mcp_server.schemas import _jsonable
+
+
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def shorten_token(value: object, *, head: int = 8, tail: int = 4) -> object:
+    """Shorten opaque identifiers for human-facing logs.
+
+    Render logs are read by humans. Long opaque identifiers (UUIDs, hashes,
+    idempotency keys) degrade readability. This helper preserves the original
+    value type where possible and shortens only strings that look like tokens.
+    """
+
+    if not isinstance(value, str):
+        return value
+
+    raw = value.strip()
+    if not raw:
+        return value
+
+    # If it looks like a UUID, keep the prefix.
+    if _UUID_RE.match(raw):
+        return raw.split("-")[0]
+
+    # Long hex strings (hashes, digests).
+    if len(raw) >= 32 and all(ch in "0123456789abcdefABCDEF" for ch in raw):
+        if len(raw) <= head + tail + 1:
+            return raw
+        return f"{raw[:head]}…{raw[-tail:]}"
+
+    # Base64-ish / URL-safe random strings.
+    if len(raw) >= 40 and all(
+        ("a" <= ch <= "z")
+        or ("A" <= ch <= "Z")
+        or ("0" <= ch <= "9")
+        or ch in "-_=+/"
+        for ch in raw
+    ):
+        if len(raw) <= head + tail + 1:
+            return raw
+        return f"{raw[:head]}…{raw[-tail:]}"
+
+    return value
+
+
+_HUMANIZE_ID_KEYS = {
+    "call_id",
+    "request_id",
+    "session_id",
+    "message_id",
+    "schema_hash",
+    "dedupe_key",
+    "idempotency_key",
+    "routing_hint",
+}
+
+
+def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> object:
+    """Recursively sanitize extra payloads for readability in hosted logs."""
+
+    if depth > max_depth:
+        return "…"
+
+    if isinstance(value, dict):
+        out: dict[str, object] = {}
+        for k, v in value.items():
+            key = str(k)
+            if HUMAN_LOGS and key in _HUMANIZE_ID_KEYS:
+                out[key] = shorten_token(v)
+            else:
+                out[key] = _sanitize_for_logs(v, depth=depth + 1, max_depth=max_depth)
+        return out
+
+    if isinstance(value, (list, tuple)):
+        items = list(value)
+        cap = 20 if HUMAN_LOGS else 100
+        trimmed = items[:cap]
+        out = [_sanitize_for_logs(v, depth=depth + 1, max_depth=max_depth) for v in trimmed]
+        if len(items) > cap:
+            out.append(f"…(+{len(items) - cap} more)")
+        return out
+
+    if isinstance(value, str):
+        # Prefer shortening opaque tokens; keep human strings as-is.
+        shortened = shorten_token(value)
+        if shortened is not value:
+            return shortened
+        if HUMAN_LOGS and len(value) > 400:
+            return value[:380] + "…"
+        return value
+
+    return _jsonable(value)
+
+
+def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return a compact request context suitable for provider logs.
+
+    The raw request context may include verbose ChatGPT metadata fields (long
+    opaque IDs). For hosted logs (Render) we keep only correlation fields that
+    are actually useful to operators.
+    """
+
+    if not isinstance(req, Mapping):
+        return {}
+
+    out: dict[str, Any] = {
+        "request_id": shorten_token(req.get("request_id")),
+        "path": req.get("path"),
+        "session_id": shorten_token(req.get("session_id")),
+        "message_id": shorten_token(req.get("message_id")),
+    }
+
+    chatgpt = req.get("chatgpt")
+    if isinstance(chatgpt, Mapping):
+        # Keep only the two most useful identifiers for debugging.
+        out["chatgpt"] = {
+            "conversation_id": shorten_token(chatgpt.get("conversation_id")),
+            "assistant_id": shorten_token(chatgpt.get("assistant_id")),
+        }
+
+    # Drop nulls to keep the payload small.
+    return {k: v for k, v in out.items() if v not in (None, "")}
 
 
 def _resolve_log_level(level_name: str | None) -> int:
@@ -389,6 +516,7 @@ class _StructuredFormatter(logging.Formatter):
         base = super().format(record)
         extra_payload = _extract_log_extras(record)
         if extra_payload:
+            extra_payload = _sanitize_for_logs(extra_payload)
             extra_json = json.dumps(
                 extra_payload,
                 ensure_ascii=False,
@@ -407,8 +535,12 @@ class _ErrorsOnlyJSONFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:  # pragma: no cover
+        ts = getattr(record, "created", None)
+        ts_iso = None
+        if isinstance(ts, (int, float)):
+            ts_iso = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).isoformat()
         payload: dict[str, object] = {
-            "ts": getattr(record, "created", None),
+            "ts": ts_iso or ts,
             "level": getattr(record, "levelname", None),
             "logger": getattr(record, "name", None),
             "message": record.getMessage(),
@@ -416,7 +548,7 @@ class _ErrorsOnlyJSONFormatter(logging.Formatter):
 
         extra_payload = _extract_log_extras(record)
         if extra_payload:
-            payload.update(extra_payload)
+            payload.update(_sanitize_for_logs(extra_payload))
 
         if record.exc_info:
             payload["exception"] = "".join(traceback.format_exception(*record.exc_info)).strip()
@@ -562,4 +694,6 @@ __all__ = [
     "WORKSPACE_BASE_DIR",
     "SANDBOX_CONTENT_BASE_URL",
     "git_identity_warnings",
+    "shorten_token",
+    "summarize_request_context",
 ]
