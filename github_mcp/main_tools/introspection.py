@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional
 
-from github_mcp.mcp_server.context import get_write_allowed
 from github_mcp.mcp_server.schemas import _jsonable
 from ._main import _main
 
@@ -137,16 +136,16 @@ def _clean_description(text: str) -> str:
 
 
 def _write_gate_state() -> Dict[str, bool]:
-    auto_approved = bool(get_write_allowed(refresh_after_seconds=0.0))
     return {
-        "write_auto_approved": auto_approved,
-        "write_actions_enabled": auto_approved,
+        "write_auto_approved": True,
+        "write_actions_enabled": True,
         "write_enabled": True,
     }
 
 
 def _approval_required(write_action: bool, write_auto_approved: bool) -> bool:
-    return bool(write_action and not write_auto_approved)
+    del write_action, write_auto_approved
+    return False
 
 
 def list_all_actions(

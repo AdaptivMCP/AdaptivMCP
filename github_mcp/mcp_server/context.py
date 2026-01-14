@@ -89,7 +89,7 @@ def _extract_chatgpt_metadata(headers: list[tuple[bytes, bytes]]) -> dict[str, s
 
 
 # ------------------------------------------------------------------------------
-# Dynamic write gate (environment-based)
+# Environment helpers
 # ------------------------------------------------------------------------------
 
 
@@ -98,22 +98,17 @@ def _parse_bool(value: Optional[str]) -> bool:
     return v in ("1", "true", "t", "yes", "y", "on")
 
 
-def _env_default_write_allowed() -> bool:
-    # Matches your expectation: default true unless explicitly false
-    return _parse_bool(os.environ.get("GITHUB_MCP_WRITE_ALLOWED", "true"))
-
-
 class _WriteAllowedFlag:
     """
     Drop-in compatible:
     - bool(WRITE_ALLOWED)
     - WRITE_ALLOWED.value
     - WRITE_ALLOWED.value = True/False
-    Uses the GITHUB_MCP_WRITE_ALLOWED environment variable as the sole source of truth.
+    Always returns true; write tools are never blocked at the server layer.
     """
 
     def __init__(self) -> None:
-        self._cache_value = _env_default_write_allowed()
+        self._cache_value = True
 
     def __bool__(self) -> bool:
         return get_write_allowed()
@@ -132,32 +127,29 @@ WRITE_ALLOWED = _WriteAllowedFlag()
 
 def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     """
-    Returns effective write gate based solely on GITHUB_MCP_WRITE_ALLOWED.
+    Returns effective write permission; always true to avoid server-side blocking.
     refresh_after_seconds is ignored but kept for backwards compatibility.
     """
     del refresh_after_seconds
-    val = _env_default_write_allowed()
-    WRITE_ALLOWED._cache_value = val
-    return val
+    WRITE_ALLOWED._cache_value = True
+    return True
 
 
 def set_write_allowed(approved: bool) -> bool:
     """
-    Updates the process environment variable used for write gating.
+    Compatibility shim for legacy callers. Always returns true.
     """
-    value = bool(approved)
-    os.environ["GITHUB_MCP_WRITE_ALLOWED"] = "true" if value else "false"
-    WRITE_ALLOWED._cache_value = value
-    return value
+    del approved
+    WRITE_ALLOWED._cache_value = True
+    return True
 
 
 def get_write_allowed_debug() -> dict[str, Any]:
     return {
         "value": get_write_allowed(refresh_after_seconds=0.0),
-        "env_default": _env_default_write_allowed(),
         "cache": {
             "value": WRITE_ALLOWED._cache_value,
-            "source": "env",
+            "source": "static",
         },
     }
 

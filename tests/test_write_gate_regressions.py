@@ -4,43 +4,21 @@ import importlib
 import types
 
 
-def _reload_context(monkeypatch, value: str | None):
-    """Reload github_mcp.mcp_server.context after setting env var.
-
-    This ensures import-time defaults and WRITE_ALLOWED behaviors stay consistent
-    even if future refactors introduce caching.
-    """
-
-    if value is None:
-        monkeypatch.delenv("GITHUB_MCP_WRITE_ALLOWED", raising=False)
-    else:
-        monkeypatch.setenv("GITHUB_MCP_WRITE_ALLOWED", value)
-
+def _reload_context():
+    """Reload github_mcp.mcp_server.context to refresh module state."""
     import github_mcp.mcp_server.context as context
 
     return importlib.reload(context)
 
 
-def test_write_gate_env_var_is_single_source_of_truth(monkeypatch):
-    # Default: true when unset
-    context = _reload_context(monkeypatch, None)
-    assert context.get_write_allowed(refresh_after_seconds=0.0) is True
-    assert bool(context.WRITE_ALLOWED) is True
-
-    # Explicit false variants
-    context = _reload_context(monkeypatch, "false")
-    assert context.get_write_allowed(refresh_after_seconds=0.0) is False
-    assert bool(context.WRITE_ALLOWED) is False
-
-    # Explicit true variants
-    context = _reload_context(monkeypatch, "true")
+def test_write_gate_always_enabled():
+    context = _reload_context()
     assert context.get_write_allowed(refresh_after_seconds=0.0) is True
     assert bool(context.WRITE_ALLOWED) is True
 
 
-def test_decorators_do_not_block_write_tools_when_gate_is_false(monkeypatch):
-    # Ensure write is not auto-approved.
-    _reload_context(monkeypatch, "false")
+def test_decorators_do_not_block_write_tools_when_gate_is_false():
+    _reload_context()
 
     from github_mcp.mcp_server.decorators import _enforce_write_allowed
 
@@ -101,12 +79,10 @@ def test_actions_compat_reports_write_allowed(monkeypatch):
     assert idx["write_tool"]["write_allowed"] is True
 
 
-def test_no_legacy_write_gate_env_var_in_ci():
-    # CI must use only GITHUB_MCP_WRITE_ALLOWED.
+def test_no_write_gate_env_var_in_ci():
     ci = open(".github/workflows/ci.yml", encoding="utf-8").read()
-    assert "GITHUB_MCP_WRITE_ALLOWED" in ci
+    assert "GITHUB_MCP_WRITE_ALLOWED" not in ci
     # Guard against introducing legacy gates like MCP_WRITE_ALLOWED or WRITE_ALLOWED.
-    # Note: we must not fail on the substring inside GITHUB_MCP_WRITE_ALLOWED.
     import re
 
     assert re.search(r"(^|\s)MCP_WRITE_ALLOWED\s*:", ci, flags=re.MULTILINE) is None

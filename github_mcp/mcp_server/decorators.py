@@ -3,9 +3,7 @@
 Decorators and helpers for registering MCP tools.
 
 Behavioral contract:
-- WRITE_ALLOWED controls whether write tools are auto-approved by the client.
- When WRITE_ALLOWED is false, write tools remain available but clients may
- prompt for confirmation before execution.
+- The server does not hard-block write tools; clients decide whether to prompt.
 - Tools publish input schemas for introspection, but the server does NOT
  enforce JSONSchema validation at runtime.
 - Tags are accepted for backwards compatibility but are not emitted to clients.
@@ -146,11 +144,8 @@ def _apply_tool_metadata(
 
 def _tool_write_allowed(write_action: bool) -> bool:
     # This value is used for metadata/introspection and by some clients as a hint
-    # for whether a confirmation prompt is required.
-    #
-    # Semantics:
-    # - read tools: always allowed
-    # - write tools: allowed, but may require confirmation when WRITE_ALLOWED is false
+    # for whether a confirmation prompt is required. The server itself does not
+    # block write tools.
     return True
 
 
@@ -168,12 +163,6 @@ def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
     Legacy enforcement hook.
-
-    Historically, write tools were hard-blocked when WRITE_ALLOWED was false.
-    The current policy is approval-gated writes:
-    - When WRITE_ALLOWED is true, writes may execute without extra prompts.
-    - When WRITE_ALLOWED is false, writes remain executable but clients (e.g.
-    ChatGPT) may ask the user to confirm/deny.
 
     This function is intentionally a no-op for compatibility.
     """
