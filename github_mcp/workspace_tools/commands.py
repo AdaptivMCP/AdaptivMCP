@@ -86,7 +86,7 @@ def _extract_missing_module(stdout: str, stderr: str) -> str:
     tail = combined[pos + len(marker) :].strip()
     if not tail:
         return ""
-    if tail[:1] in ('"', "'"):
+    if tail[:1] in ('\"', "'"):
         q = tail[0]
         rest = tail[1:]
         endq = rest.find(q)
@@ -278,58 +278,74 @@ async def terminal_command(
         cwd = _resolve_workdir(repo_dir, workdir)
 
         install_result = None
+        install_steps: list[Dict[str, Any]] = []
         retry_info: Dict[str, Any] = {"attempted": False, "packages": []}
 
         # Execute the raw intended command (may contain newlines if provided via command_lines).
         command = requested_command
-        result = await deps["run_shell"](
-            command,
-            cwd=cwd,
-            timeout_seconds=timeout_seconds,
-            env=env,
-        )
 
-        # Optional: install only *missing* dependencies (best-effort), then retry once.
-        # This intentionally avoids running `pip install -r ...` proactively.
-        if installing_dependencies and use_temp_venv:
+        # Optional: install only *missing* dependencies (best-effort) when running
+        # in a temp venv, then retry. This avoids proactively running
+        # `pip install -r ...` but supports sequential missing-module installs.
+        max_install_rounds = 3
+        rounds = 0
+        while True:
+            result = await deps["run_shell"](
+                command,
+                cwd=cwd,
+                timeout_seconds=timeout_seconds,
+                env=env,
+            )
+
+            if not (installing_dependencies and use_temp_venv):
+                break
+
             cmd_lower = command.lower()
             already_installing = ("pip install" in cmd_lower) or ("pip3 install" in cmd_lower)
             exit_code = result.get("exit_code", 0) if isinstance(result, dict) else 0
-            if (not already_installing) and exit_code != 0:
-                stdout = (result.get("stdout") or "") if isinstance(result, dict) else ""
-                stderr = (result.get("stderr") or "") if isinstance(result, dict) else ""
-                missing_module = _extract_missing_module(stdout, stderr)
+            if already_installing or exit_code == 0:
+                break
 
-                packages: list[str] = []
-                if missing_module:
-                    packages = [missing_module]
-                else:
-                    packages = _required_packages_for_command(command)
+            if rounds >= max_install_rounds:
+                break
+            rounds += 1
 
-                if packages:
-                    retry_info = {"attempted": True, "packages": packages}
-                    install_cmd = "python -m pip install " + " ".join(packages)
-                    install_result = await deps["run_shell"](
-                        install_cmd,
-                        cwd=cwd,
-                        timeout_seconds=max(600, timeout_seconds),
-                        env=env,
-                    )
-                    if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
-                        i_stderr = install_result.get("stderr") or ""
-                        i_stdout = install_result.get("stdout") or ""
-                        raise GitHubAPIError(
-                            "Dependency installation failed: "
-                            + ((i_stderr.strip() or i_stdout.strip())[:2000])
-                        )
+            stdout = (result.get("stdout") or "") if isinstance(result, dict) else ""
+            stderr = (result.get("stderr") or "") if isinstance(result, dict) else ""
+            missing_module = _extract_missing_module(stdout, stderr)
 
-                    # Retry once after installing missing deps.
-                    result = await deps["run_shell"](
-                        command,
-                        cwd=cwd,
-                        timeout_seconds=timeout_seconds,
-                        env=env,
-                    )
+            packages: list[str] = []
+            if missing_module:
+                packages = [missing_module]
+            else:
+                packages = _required_packages_for_command(command)
+
+            if not packages:
+                break
+
+            retry_info = {"attempted": True, "packages": packages}
+            install_cmd = "python -m pip install " + " ".join(packages)
+            install_result = await deps["run_shell"](
+                install_cmd,
+                cwd=cwd,
+                timeout_seconds=max(600, timeout_seconds),
+                env=env,
+            )
+            install_steps.append(
+                {
+                    "packages": packages,
+                    "command": install_cmd,
+                    "result": install_result,
+                }
+            )
+            if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
+                i_stderr = install_result.get("stderr") or ""
+                i_stdout = install_result.get("stdout") or ""
+                raise GitHubAPIError(
+                    "Dependency installation failed: "
+                    + ((i_stderr.strip() or i_stdout.strip())[:2000])
+                )
+
         out: Dict[str, Any] = {
             "workdir": cwd,
             # Keep payload fields newline-free to avoid downstream double-escaping.
@@ -337,6 +353,7 @@ async def terminal_command(
             "command_lines": command_lines_out,
             "command": command,
             "install": install_result,
+            "install_steps": install_steps,
             "retry": retry_info,
             "result": result,
         }
