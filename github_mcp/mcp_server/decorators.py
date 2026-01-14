@@ -11,7 +11,7 @@ Behavioral contract:
 
 Dedupe contract:
 - Async dedupe caches completed results for a short TTL within the SAME event loop.
-- Async dedupe is scoped per event loop (is not supported shares futures across loops).
+- Async dedupe is scoped per event loop (does not share futures across loops).
 - Sync dedupe memoizes results for TTL.
 """
 
@@ -802,6 +802,8 @@ def mcp_tool(
                 try:
                     if _should_enforce_write_gate(req):
                         _enforce_write_allowed(tool_name, write_action=write_action)
+                except asyncio.CancelledError:
+                    raise
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
                     structured_error = _emit_tool_error(
@@ -980,6 +982,8 @@ def mcp_tool(
             try:
                 if _should_enforce_write_gate(req):
                     _enforce_write_allowed(tool_name, write_action=write_action)
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
                 structured_error = _emit_tool_error(
