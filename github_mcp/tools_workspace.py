@@ -10,6 +10,7 @@ import importlib
 import pkgutil
 import uuid
 
+from github_mcp.config import BASE_LOGGER
 from github_mcp.server import CONTROLLER_REPO, _structured_tool_error, mcp_tool
 from github_mcp.utils import _default_branch_for_repo, _effective_ref_for_repo
 from github_mcp.workspace import _workspace_path
@@ -25,6 +26,9 @@ from github_mcp.workspace_tools import suites as _suites
 from github_mcp.workspace_tools import pr as _pr
 
 
+LOGGER = BASE_LOGGER.getChild("tools_workspace")
+
+
 def _import_all_workspace_tool_modules() -> None:
     """Eagerly import every module under ``github_mcp.workspace_tools``.
 
@@ -36,18 +40,15 @@ def _import_all_workspace_tool_modules() -> None:
     registered and therefore exposed via the MCP server tool registry.
     """
 
-    try:
-        import github_mcp.workspace_tools as _pkg
+    import github_mcp.workspace_tools as _pkg
 
-        for mod in pkgutil.iter_modules(getattr(_pkg, "__path__", []) or []):
-            name = getattr(mod, "name", "")
-            if not name or name.startswith("_"):
-                continue
-            importlib.import_module(f"{_pkg.__name__}.{name}")
-    except Exception:
-        # Best-effort: failure to import optional/experimental modules should
-        # not prevent server startup.
-        return
+    for mod in pkgutil.iter_modules(getattr(_pkg, "__path__", []) or []):
+        name = getattr(mod, "name", "")
+        if not name or name.startswith("_"):
+            continue
+        module_name = f"{_pkg.__name__}.{name}"
+        LOGGER.info("Registering workspace tool module %s", module_name)
+        importlib.import_module(module_name)
 
 
 # Ensure all workspace tools are registered (including newly-added modules).
