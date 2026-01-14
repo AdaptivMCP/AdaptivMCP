@@ -32,9 +32,9 @@ This server supports approval-gated write actions. The environment variable `GIT
 Introspection and actions-compat listings expose:
 
 - `write_action`: tool is classified as a write.
-- `write_allowed`: tool is executable (approval-gated writes still execute).
-- `write_actions_enabled` / `write_auto_approved`: writes are auto-approved.
-- `approval_required`: clients may prompt or gate before invoking the tool.
+- `write_allowed`: always true (the server does not hard-block write tools).
+- `write_actions_enabled` / `write_auto_approved`: reflects whether writes are auto-approved (`GITHUB_MCP_WRITE_ALLOWED`).
+- `approval_required`: true when `write_action` is true and writes are not auto-approved; clients may prompt or gate before invoking the tool.
 
 ## What this server provides
 
@@ -148,6 +148,12 @@ For Render integration, set one Render API token so the server can access the Re
 
 - RENDER_API_KEY or RENDER_API_TOKEN (first configured token wins; see RENDER_TOKEN_ENV_VARS)
 
+Transport security (trusted hosts)
+
+- ALLOWED_HOSTS (optional) — comma/space-separated list of hostnames that are allowed to use the MCP transport.
+  The server always adds hostnames derived from Render-provided env vars (`RENDER_EXTERNAL_HOSTNAME` / `RENDER_EXTERNAL_URL`).
+  If neither ALLOWED_HOSTS nor those Render vars are present, host checks are disabled.
+
 ### GitHub authentication
 
 - GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, GITHUB_OAUTH_TOKEN — GitHub API token (first configured is used)
@@ -162,22 +168,21 @@ For Render integration, set one Render API token so the server can access the Re
 
 These flags control provider-side logs (for example, Render logs). They leave tool outputs unchanged.
 
+- QUIET_LOGS (default: false) — suppresses most non-error logs.
 - HUMAN_LOGS (default: true) — emits scan-friendly tool call log lines with correlation fields.
 - LOG_TOOL_PAYLOADS (default: false) — logs full tool input arguments and full tool results (no truncation).
 - LOG_GITHUB_HTTP (default: false) — logs outbound GitHub HTTP method/path/status/duration with correlation fields.
 - LOG_GITHUB_HTTP_BODIES (default: false) — includes full GitHub response bodies/headers in provider logs.
 - LOG_RENDER_HTTP (default: false) — logs outbound Render HTTP method/path/status/duration with correlation fields.
 - LOG_RENDER_HTTP_BODIES (default: false) — includes full Render response bodies/headers in provider logs.
-- LOG_HTTP_REQUESTS (default: false) — logs inbound HTTP requests to the ASGI server (method/path/status/duration) with request_id.
+- LOG_HTTP_REQUESTS (default: true) — logs inbound HTTP requests to the ASGI server (method/path/status/duration) with request_id.
 - LOG_HTTP_BODIES (default: false) — when enabled, logs the POST /messages body (no truncation). This may include sensitive payloads.
+- LOG_TOOL_CALLS (default: true) — logs tool_call_started/tool_call_completed lines to provider logs. Failures are still logged as warnings.
 
 HTTP exception logging
 ~~~~~~~~~~~~~~~~~~~~~~
 
-When LOG_HTTP_REQUESTS is enabled, unhandled exceptions inside the ASGI request path are logged as `http_exception`
-
-- LOG_TOOL_CALLS (default: false) — logs tool_call_started/tool_call_completed lines to provider logs. Failures are still logged as warnings.
-with request_id/session_id/message_id and a full stack trace.
+When `LOG_HTTP_REQUESTS` is enabled, unhandled exceptions inside the ASGI request path are logged as `http_exception` with request_id/session_id/message_id and a full stack trace.
 
 ### Tests
 
@@ -198,12 +203,12 @@ with request_id/session_id/message_id and a full stack trace.
 ### Workspace settings
 
 - MCP_WORKSPACE_BASE_DIR — base directory for persistent workspace clones
-- MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS — timeout for applying diffs to the workspace clone
+- MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS (default: 300) — timeout (seconds) for applying diffs to the workspace clone
 
 ### File cache (GitHub content fetches)
 
-- FILE_CACHE_MAX_ENTRIES — max number of cached file entries
-- FILE_CACHE_MAX_BYTES — max total bytes for cached file contents
+- FILE_CACHE_MAX_ENTRIES (default: 0) — max number of cached file entries (0 disables entry-based eviction)
+- FILE_CACHE_MAX_BYTES (default: 0) — max total bytes for cached file contents (0 disables byte-based eviction)
 
 ### Concurrency and timeouts
 
@@ -212,10 +217,10 @@ with request_id/session_id/message_id and a full stack trace.
 
 ### GitHub rate limiting and search pacing
 
-- GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS
-- GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS
-- GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS
-- GITHUB_SEARCH_MIN_INTERVAL_SECONDS
+- GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS (default: 1)
+- GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS (default: 2)
+- GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS (default: 30)
+- GITHUB_SEARCH_MIN_INTERVAL_SECONDS (default: 2)
 
 ### Sandbox/content rewrite (optional)
 
