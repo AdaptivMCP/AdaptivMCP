@@ -136,6 +136,32 @@ def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
     return {k: v for k, v in out.items() if v not in (None, "")}
 
 
+def _is_render_runtime() -> bool:
+    """Best-effort detection for Render deployments.
+
+    Render sets a number of standard environment variables for running services.
+    We use these to adjust provider-facing defaults (e.g., avoid duplicating
+    access logs that Render already emits).
+    """
+
+    return any(
+        os.environ.get(name)
+        for name in (
+            "RENDER",
+            "RENDER_SERVICE_ID",
+            "RENDER_SERVICE_NAME",
+            "RENDER_EXTERNAL_URL",
+            "RENDER_INSTANCE_ID",
+            "RENDER_GIT_COMMIT",
+        )
+    )
+
+
+def _env_flag(name: str, default: str) -> bool:
+    raw = os.environ.get(name, default)
+    return str(raw).strip().lower() in ("1", "true", "t", "yes", "y", "on")
+
+
 def _resolve_log_level(level_name: str | None) -> int:
     if not level_name:
         return logging.INFO
@@ -209,113 +235,62 @@ GITHUB_SEARCH_MIN_INTERVAL_SECONDS = float(
 # Default to verbose (QUIET_LOGS=false) so Render application logs include
 # startup diagnostics, tool traces, and structured errors. Set QUIET_LOGS=true
 # explicitly if you want a near-silent log stream.
-QUIET_LOGS = os.environ.get("QUIET_LOGS", "false").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
-)
+QUIET_LOGS = _env_flag("QUIET_LOGS", "false")
 
 
 # Emit richer tool call logs (args/result metadata) suitable for humans reading Render logs.
-HUMAN_LOGS = os.environ.get("HUMAN_LOGS", "true").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
-)
+HUMAN_LOGS = _env_flag("HUMAN_LOGS", "true")
 
 # Log tool call start/completion lines to provider logs.
 # When disabled, only warnings/errors (tool_call_failed) are emitted.
 #
 # Default to enabled so operators can correlate behavior in Render logs without
 # turning on additional flags.
-LOG_TOOL_CALLS = os.environ.get("LOG_TOOL_CALLS", "true").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
-)
+LOG_TOOL_CALLS = _env_flag("LOG_TOOL_CALLS", "true")
 
 # When enabled, include full tool args and full tool results in logs.
 # WARNING: This can create very large log lines and may stress hosted log ingestion.
-LOG_TOOL_PAYLOADS = os.environ.get("LOG_TOOL_PAYLOADS", "false").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
-)
+LOG_TOOL_PAYLOADS = _env_flag("LOG_TOOL_PAYLOADS", "false")
 
 # When enabled, include outbound GitHub HTTP request/response details in logs.
-LOG_GITHUB_HTTP = os.environ.get("LOG_GITHUB_HTTP", "false").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
-)
+LOG_GITHUB_HTTP = _env_flag("LOG_GITHUB_HTTP", "false")
 
 # When enabled, include response bodies for GitHub HTTP logs.
 # WARNING: This can be very large for search/list endpoints.
-LOG_GITHUB_HTTP_BODIES = os.environ.get("LOG_GITHUB_HTTP_BODIES", "false").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
-)
+LOG_GITHUB_HTTP_BODIES = _env_flag("LOG_GITHUB_HTTP_BODIES", "false")
 
 # Log inbound HTTP requests handled by the ASGI app (provider logs).
 # Default to enabled so hosted logs capture request latency/correlation IDs.
-LOG_HTTP_REQUESTS = os.environ.get("LOG_HTTP_REQUESTS", "true").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
+# Render already emits request access logs at the platform layer.
+# Default to disabling the app-layer access logs on Render to avoid duplicates.
+_log_http_default = (
+    "false" if _is_render_runtime() and os.environ.get("LOG_HTTP_REQUESTS") is None else "true"
 )
+LOG_HTTP_REQUESTS = _env_flag("LOG_HTTP_REQUESTS", _log_http_default)
 
 # When enabled, include HTTP request bodies for POST /messages in logs.
 # WARNING: Can be large. This does not modify tool outputs.
-LOG_HTTP_BODIES = os.environ.get("LOG_HTTP_BODIES", "false").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
-)
+LOG_HTTP_BODIES = _env_flag("LOG_HTTP_BODIES", "false")
 
 # When enabled, include outbound Render HTTP request/response details in logs.
-LOG_RENDER_HTTP = os.environ.get("LOG_RENDER_HTTP", "false").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
-)
+LOG_RENDER_HTTP = _env_flag("LOG_RENDER_HTTP", "false")
 
 # When enabled, include response bodies for Render HTTP logs.
 # WARNING: This can be very large for log endpoints.
-LOG_RENDER_HTTP_BODIES = os.environ.get("LOG_RENDER_HTTP_BODIES", "false").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-    "on",
+LOG_RENDER_HTTP_BODIES = _env_flag("LOG_RENDER_HTTP_BODIES", "false")
+
+# Append structured extras ("data={...}") to provider log lines.
+#
+# When HUMAN_LOGS is enabled, our primary audience is humans tailing Render logs.
+# Extra JSON payloads can become noisy and redundant (especially alongside
+# platform-level access logs). Default to:
+# - INFO: no appended JSON
+# - WARNING/ERROR: appended JSON for debugging
+#
+# Set LOG_APPEND_EXTRAS_JSON=true to force extras on INFO as well.
+LOG_APPEND_EXTRAS_JSON = _env_flag(
+    "LOG_APPEND_EXTRAS_JSON",
+    "false" if HUMAN_LOGS else "true",
 )
 
 # Repo mirror diff application can be slow for large diffs. Keep this configurable.
@@ -513,14 +488,17 @@ class _StructuredFormatter(logging.Formatter):
         base = super().format(record)
         extra_payload = _extract_log_extras(record)
         if extra_payload:
-            extra_payload = _sanitize_for_logs(extra_payload)
-            extra_json = json.dumps(
-                extra_payload,
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-            return f"{base} | data={extra_json}"
+            # Keep INFO lines scan-friendly for humans.
+            # Always include extras for WARNING/ERROR (or when explicitly enabled).
+            if LOG_APPEND_EXTRAS_JSON or record.levelno >= logging.WARNING:
+                extra_payload = _sanitize_for_logs(extra_payload)
+                extra_json = json.dumps(
+                    extra_payload,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                return f"{base} | data={extra_json}"
         return base
 
 
