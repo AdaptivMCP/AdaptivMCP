@@ -39,9 +39,9 @@ def test_registered_tool_wrappers_always_carry_write_gate_metadata():
         assert isinstance(schema, dict), f"{name} input schema must be a dict"
         assert schema.get("type") == "object", f"{name} schema must be an object schema"
 
-        assert hasattr(
-            func, "__mcp_input_schema_hash__"
-        ), f"{name} missing __mcp_input_schema_hash__"
+        assert hasattr(func, "__mcp_input_schema_hash__"), (
+            f"{name} missing __mcp_input_schema_hash__"
+        )
         schema_hash = getattr(func, "__mcp_input_schema_hash__")
         assert isinstance(schema_hash, str) and schema_hash, f"{name} schema hash must be non-empty"
 
@@ -81,7 +81,9 @@ def test_introspection_catalog_always_reports_gate_and_approval_fields(monkeypat
         assert entry["write_actions_enabled"] is False
 
         # Approval is required exactly when: write_action and not auto-approved.
-        assert entry["approval_required"] == (entry["write_action"] and not entry["write_auto_approved"])
+        assert entry["approval_required"] == (
+            entry["write_action"] and not entry["write_auto_approved"]
+        )
 
         schema = entry["input_schema"]
         assert isinstance(schema, dict), f"{name} input_schema must be a dict"
@@ -89,17 +91,22 @@ def test_introspection_catalog_always_reports_gate_and_approval_fields(monkeypat
 
     # Spot-check: at least one known write tool must require approval when gated.
     # (If tools are renamed in the future, this assertion will force updating the regression list.)
-    write_candidates = ["create_branch", "ensure_branch", "ensure_workspace_clone", "commit_workspace"]
+    write_candidates = [
+        "create_branch",
+        "ensure_branch",
+        "ensure_workspace_clone",
+        "commit_workspace",
+    ]
     found_write = [n for n in write_candidates if n in idx]
-    assert found_write, f"Expected at least one known write tool in catalog; missing {write_candidates}"
+    assert found_write, (
+        f"Expected at least one known write tool in catalog; missing {write_candidates}"
+    )
     assert any(idx[n]["write_action"] is True for n in found_write)
     assert any(idx[n]["approval_required"] is True for n in found_write)
 
 
 def test_write_auto_approved_flips_with_env_var(monkeypatch):
     """Regression guard: auto-approval follows only GITHUB_MCP_WRITE_ALLOWED."""
-
-    idx = _catalog_index(include_parameters=False)
 
     # "true" => writes auto-approved => approval_required False for all tools.
     monkeypatch.setenv("GITHUB_MCP_WRITE_ALLOWED", "true")
@@ -114,4 +121,6 @@ def test_write_auto_approved_flips_with_env_var(monkeypatch):
     assert any(entry.get("approval_required") is True for entry in idx_false.values())
 
     # Keep test isolation stable in case other tests assume default.
-    monkeypatch.setenv("GITHUB_MCP_WRITE_ALLOWED", os.environ.get("GITHUB_MCP_WRITE_ALLOWED", "true"))
+    monkeypatch.setenv(
+        "GITHUB_MCP_WRITE_ALLOWED", os.environ.get("GITHUB_MCP_WRITE_ALLOWED", "true")
+    )
