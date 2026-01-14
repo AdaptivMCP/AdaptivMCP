@@ -837,6 +837,49 @@ async def get_render_logs(
     )
 
 
+@mcp_tool(write_action=False)
+async def list_render_logs(
+    owner_id: str,
+    resources: List[str],
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    direction: str = "backward",
+    limit: int = 200,
+    instance: Optional[str] = None,
+    host: Optional[str] = None,
+    level: Optional[str] = None,
+    method: Optional[str] = None,
+    status_code: Optional[int] = None,
+    path: Optional[str] = None,
+    text: Optional[str] = None,
+    log_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    """List logs for one or more Render resources.
+
+    This maps to Render's public /v1/logs API which requires an owner_id and one
+    or more resource ids.
+    """
+
+    from github_mcp.main_tools.render import list_render_logs as _impl
+
+    return await _impl(
+        owner_id=owner_id,
+        resources=resources,
+        start_time=start_time,
+        end_time=end_time,
+        direction=direction,
+        limit=limit,
+        instance=instance,
+        host=host,
+        level=level,
+        method=method,
+        status_code=status_code,
+        path=path,
+        text=text,
+        log_type=log_type,
+    )
+
+
 # ------------------------------------------------------------------------------
 # Render tool aliases
 #

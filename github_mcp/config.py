@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import datetime
 import json
 import logging
 import os
 import re
 import tempfile
 import time
-import traceback
 from typing import Any, Mapping
 
 from github_mcp.mcp_server.schemas import _jsonable
