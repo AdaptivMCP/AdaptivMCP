@@ -23,6 +23,7 @@ import functools
 import hashlib
 import inspect
 import json
+import os
 import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
@@ -290,6 +291,81 @@ def _strip_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
     if not kwargs:
         return {}
     return {k: v for k, v in kwargs.items() if k != "_meta"}
+
+
+def _extract_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
+    """Extract the optional _meta payload without mutating kwargs.
+
+    _meta is reserved for client-side execution hints. The server ignores
+    unknown keys, but may use a small subset for safe runtime behaviors like
+    idempotency.
+    """
+
+    if not kwargs:
+        return {}
+    meta = kwargs.get("_meta")
+    if isinstance(meta, Mapping):
+        return dict(meta)
+    return {}
+
+
+def _dedupe_ttl_seconds(*, write_action: bool, meta: Mapping[str, Any]) -> float:
+    """Determine the in-request idempotency TTL.
+
+    This is intentionally scoped to inbound MCP/HTTP requests (see
+    _should_enforce_write_gate). It prevents accidental duplicate execution
+    when the client/agent repeats an identical tool call.
+    """
+
+    # Allow callers to opt out per call.
+    if meta.get("dedupe") is False:
+        return 0.0
+
+    # Optional per-call override.
+    override = meta.get("dedupe_ttl_s")
+    if override is None:
+        override = meta.get("dedupe_ttl_seconds")
+    if isinstance(override, (int, float)):
+        return max(0.0, float(override))
+
+    # Environment defaults.
+    if write_action:
+        raw = os.environ.get("GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S", "60")
+    else:
+        raw = os.environ.get("GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S", "15")
+    try:
+        return max(0.0, float(raw))
+    except Exception:
+        return 0.0
+
+
+def _dedupe_key(*, tool_name: str, write_action: bool, req: Mapping[str, Any], args: Mapping[str, Any]) -> str:
+    """Build a stable idempotency key for a tool call."""
+
+    # Scope to the request identity where possible so independent sessions do
+    # not share cached results.
+    request_id = req.get("request_id")
+    session_id = req.get("session_id")
+    message_id = req.get("message_id")
+    path = req.get("path")
+
+    try:
+        args_json = json.dumps(args, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    except Exception:
+        args_json = str(dict(args))
+
+    digest = hashlib.sha256(args_json.encode("utf-8", errors="replace")).hexdigest()
+    return "|".join(
+        [
+            str(tool_name),
+            "write" if write_action else "read",
+            str(request_id or ""),
+            str(session_id or ""),
+            str(message_id or ""),
+            str(path or ""),
+            digest,
+        ]
+    )
 
 
 def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
@@ -678,6 +754,7 @@ def mcp_tool(
             @functools.wraps(func)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 call_id = str(uuid.uuid4())
+                meta = _extract_tool_meta(kwargs)
                 clean_kwargs = _strip_tool_meta(kwargs)
                 all_args = _bind_call_args(signature, args, clean_kwargs) if LOG_TOOL_CALLS else {}
                 req = get_request_context()
@@ -727,7 +804,32 @@ def mcp_tool(
                     return structured_error
 
                 try:
-                    result = await func(*args, **clean_kwargs)
+                    # Best-effort idempotency for inbound requests. This prevents
+                    # accidental duplicate execution when an agent repeats the same
+                    # tool call (common when model-side planning loops happen).
+                    result: Any
+                    if _should_enforce_write_gate(req):
+                        ttl_s = _dedupe_ttl_seconds(write_action=bool(write_action), meta=meta)
+                        if ttl_s > 0:
+                            # Include all bound args for the key (positional + kwargs).
+                            key_args = (
+                                _bind_call_args(signature, args, clean_kwargs)
+                                if signature is not None
+                                else dict(clean_kwargs)
+                            )
+                            dedupe_key = _dedupe_key(
+                                tool_name=tool_name,
+                                write_action=bool(write_action),
+                                req=req,
+                                args=key_args,
+                            )
+                            result = await _maybe_dedupe_call(
+                                dedupe_key, lambda: func(*args, **clean_kwargs), ttl_s=ttl_s
+                            )
+                        else:
+                            result = await func(*args, **clean_kwargs)
+                    else:
+                        result = await func(*args, **clean_kwargs)
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
                     structured_error = _emit_tool_error(
@@ -830,6 +932,7 @@ def mcp_tool(
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             call_id = str(uuid.uuid4())
+            meta = _extract_tool_meta(kwargs)
             clean_kwargs = _strip_tool_meta(kwargs)
             all_args = _bind_call_args(signature, args, clean_kwargs) if LOG_TOOL_CALLS else {}
             req = get_request_context()
@@ -879,7 +982,29 @@ def mcp_tool(
                 return structured_error
 
             try:
-                result = func(*args, **clean_kwargs)
+                # Best-effort idempotency for inbound requests.
+                result: Any
+                if _should_enforce_write_gate(req):
+                    ttl_s = _dedupe_ttl_seconds(write_action=bool(write_action), meta=meta)
+                    if ttl_s > 0:
+                        key_args = (
+                            _bind_call_args(signature, args, clean_kwargs)
+                            if signature is not None
+                            else dict(clean_kwargs)
+                        )
+                        dedupe_key = _dedupe_key(
+                            tool_name=tool_name,
+                            write_action=bool(write_action),
+                            req=req,
+                            args=key_args,
+                        )
+                        result = _maybe_dedupe_call_sync(
+                            dedupe_key, lambda: func(*args, **clean_kwargs), ttl_s=ttl_s
+                        )
+                    else:
+                        result = func(*args, **clean_kwargs)
+                else:
+                    result = func(*args, **clean_kwargs)
             except Exception as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
                 structured_error = _emit_tool_error(
