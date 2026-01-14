@@ -6,6 +6,21 @@ from typing import Any, Dict, List, Optional
 from github_mcp.render_api import render_request
 
 
+def _unwrap_json_payload(resp: Any) -> Any:
+    """Return the JSON payload when render_request wraps responses.
+
+    The Render API helpers often return a dict like:
+      {"status_code": 200, "headers": {...}, "json": {... or [...]}}
+
+    Tool callers generally want the JSON body. For backwards compatibility,
+    we only unwrap when the response shape matches the wrapper.
+    """
+
+    if isinstance(resp, dict) and "json" in resp and len(resp.keys()) <= 5:
+        return resp.get("json")
+    return resp
+
+
 def _normalize_direction(value: Optional[str]) -> str:
     if value is None:
         return "backward"
@@ -367,10 +382,13 @@ async def get_render_logs(
 
     # Services can be resolved to an ownerId via /services/{id}.
     if resource_type == "service":
-        svc = await get_render_service(service_id=resource_id)
-        owner_id = None
+        svc_resp = await get_render_service(service_id=resource_id)
+        svc = _unwrap_json_payload(svc_resp)
+        owner_id: Optional[str] = None
         if isinstance(svc, dict):
-            owner_id = svc.get("ownerId") or svc.get("owner_id")
+            owner_id = (
+                svc.get("ownerId") or svc.get("owner_id") or svc.get("owner") or svc.get("ownerID")
+            )
         if not owner_id:
             raise ValueError(
                 "Unable to resolve ownerId for service. Ensure the Render service id is correct."
