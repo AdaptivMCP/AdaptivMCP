@@ -34,6 +34,8 @@ from github_mcp.config import (
     HUMAN_LOGS,
     LOG_TOOL_CALLS,
     LOG_TOOL_PAYLOADS,
+    shorten_token,
+    summarize_request_context,
 )
 from github_mcp.exceptions import UsageError
 from github_mcp.mcp_server.context import (
@@ -437,11 +439,11 @@ def _tool_log_payload(
 ) -> dict[str, Any]:
     payload = {
         "tool": tool_name,
-        "call_id": call_id,
+        "call_id": shorten_token(call_id),
         "write_action": bool(write_action),
-        "schema_hash": schema_hash if schema_present else None,
+        "schema_hash": shorten_token(schema_hash) if schema_present else None,
         "schema_present": bool(schema_present),
-        "request": dict(req),
+        "request": summarize_request_context(req),
     }
     if all_args is not None:
         # _extract_context may inject full args if LOG_TOOL_PAYLOADS is enabled.
@@ -475,10 +477,11 @@ def _log_tool_start(
         req_id = payload.get("request", {}).get("request_id")
         msg_id = payload.get("request", {}).get("message_id")
         session_id = payload.get("request", {}).get("session_id")
+        call_id_short = payload.get("call_id")
         LOGGER.info(
             (
                 "tool_call_started "
-                f"tool={tool_name} call_id={call_id} write_action={bool(write_action)} "
+                f"tool={tool_name} call_id={call_id_short} write_action={bool(write_action)} "
                 f"request_id={req_id} session_id={session_id} message_id={msg_id}"
             ),
             extra={"event": "tool_call_started", **payload},
@@ -528,10 +531,11 @@ def _log_tool_success(
 
     if HUMAN_LOGS:
         req_id = payload.get("request", {}).get("request_id")
+        call_id_short = payload.get("call_id")
         LOGGER.info(
             (
                 "tool_call_completed "
-                f"tool={tool_name} call_id={call_id} duration_ms={duration_ms:.2f} request_id={req_id}"
+                f"tool={tool_name} call_id={call_id_short} duration_ms={duration_ms:.2f} request_id={req_id}"
             ),
             extra={"event": "tool_call_completed", **payload},
         )
@@ -580,8 +584,9 @@ def _log_tool_failure(
         elif isinstance(err, str):
             payload["error_message"] = err
 
+    call_id_short = payload.get("call_id")
     LOGGER.warning(
-        f"tool_call_failed tool={tool_name} call_id={call_id} phase={phase} duration_ms={duration_ms:.2f}",
+        f"tool_call_failed tool={tool_name} call_id={call_id_short} phase={phase} duration_ms={duration_ms:.2f}",
         extra={"event": "tool_call_failed", **payload},
         exc_info=exc,
     )

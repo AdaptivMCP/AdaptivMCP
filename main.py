@@ -34,6 +34,7 @@ from github_mcp.config import (
     LOG_HTTP_BODIES,
     LOG_RENDER_HTTP,  # noqa: F401
     LOG_RENDER_HTTP_BODIES,  # noqa: F401
+    shorten_token,
 )
 from github_mcp.exceptions import (
     GitHubAPIError,  # noqa: F401
@@ -258,11 +259,14 @@ class _RequestContextMiddleware:
                         payload["request_body"] = repr(captured_body)
 
                 if HUMAN_LOGS:
+                    rid = shorten_token(request_id)
+                    sid = shorten_token(REQUEST_SESSION_ID.get())
+                    mid = shorten_token(REQUEST_MESSAGE_ID.get())
                     LOGGER.info(
                         (
                             "http_request "
                             f"method={scope.get('method')} path={path} status={status_code} "
-                            f"duration_ms={duration_ms:.2f} request_id={request_id}"
+                            f"duration_ms={duration_ms:.2f} request_id={rid} session_id={sid} message_id={mid}"
                         ),
                         extra=payload,
                     )
@@ -336,7 +340,7 @@ class _RequestContextMiddleware:
                     LOGGER.exception(
                         (
                             "http_exception "
-                            f"method={scope.get('method')} path={path} request_id={request_id} "
+                            f"method={scope.get('method')} path={path} request_id={shorten_token(request_id)} "
                             f"duration_ms={duration_ms:.2f}"
                         ),
                         extra=payload,
@@ -361,7 +365,7 @@ class _RequestContextMiddleware:
                 LOGGER.exception(
                     (
                         "http_exception "
-                        f"method={scope.get('method')} path={path} request_id={request_id} "
+                        f"method={scope.get('method')} path={path} request_id={shorten_token(request_id)} "
                         f"duration_ms={duration_ms:.2f}"
                     ),
                     extra=payload,
