@@ -333,7 +333,16 @@ async def render_request(
                 retry_delay = RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
 
             if attempt < max_attempts and retry_delay <= RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS:
-                await asyncio.sleep(retry_delay)
+                # Apply jitter to reduce synchronized retry storms.
+                from .retry_utils import jitter_sleep_seconds
+
+                await asyncio.sleep(
+                    jitter_sleep_seconds(
+                        retry_delay,
+                        respect_min=header_delay is not None,
+                        cap_seconds=1.0,
+                    )
+                )
                 attempt += 1
                 continue
 
