@@ -191,9 +191,22 @@ SANDBOX_CONTENT_BASE_URL = os.environ.get("SANDBOX_CONTENT_BASE_URL")
 # Base directory for persistent repo mirrors used by terminal_command and related tools.
 # This keeps cloned repositories stable across tool invocations so installations
 # and edits survive until explicitly reset or deleted.
+def _default_workspace_base_dir() -> str:
+    cache_home = os.environ.get("XDG_CACHE_HOME")
+    if cache_home:
+        base_dir = cache_home
+    else:
+        home_dir = os.path.expanduser("~")
+        if home_dir and home_dir != "~":
+            base_dir = os.path.join(home_dir, ".cache")
+        else:
+            base_dir = tempfile.gettempdir()
+    return os.path.join(base_dir, "mcp-github-workspaces")
+
+
 WORKSPACE_BASE_DIR = os.environ.get(
     "MCP_WORKSPACE_BASE_DIR",
-    os.path.join(tempfile.gettempdir(), "mcp-github-workspaces"),
+    _default_workspace_base_dir(),
 )
 
 HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", 150))
