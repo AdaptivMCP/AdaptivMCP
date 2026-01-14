@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import os
+import re
 import tempfile
 import time
 import traceback
-import datetime
-import re
 from typing import Any, Mapping
 
 from github_mcp.mcp_server.schemas import _jsonable
@@ -47,10 +47,7 @@ def shorten_token(value: object, *, head: int = 8, tail: int = 4) -> object:
 
     # Base64-ish / URL-safe random strings.
     if len(raw) >= 40 and all(
-        ("a" <= ch <= "z")
-        or ("A" <= ch <= "Z")
-        or ("0" <= ch <= "9")
-        or ch in "-_=+/"
+        ("a" <= ch <= "z") or ("A" <= ch <= "Z") or ("0" <= ch <= "9") or ch in "-_=+/"
         for ch in raw
     ):
         if len(raw) <= head + tail + 1:
