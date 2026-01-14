@@ -226,7 +226,9 @@ When `LOG_HTTP_REQUESTS` is enabled, unhandled exceptions inside the ASGI reques
 
 ### Workspace settings
 
-- MCP_WORKSPACE_BASE_DIR — base directory for persistent workspace clones
+- MCP_WORKSPACE_BASE_DIR — base directory for persistent workspace clones (defaults to
+  `$XDG_CACHE_HOME/mcp-github-workspaces`, then `~/.cache/mcp-github-workspaces`, then the
+  system temp dir)
 - MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS (default: 300) — timeout (seconds) for applying diffs to the workspace clone
 
 ### File cache (GitHub content fetches)
