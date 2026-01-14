@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import random
 import logging
 import os
 import sys
@@ -252,31 +251,12 @@ def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> Optional[float]:
 
 
 def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool) -> float:
-    """Apply randomized jitter to sleep durations.
+    """Backward-compatible wrapper for shared retry jitter."""
 
-    Jitter reduces synchronized retry storms across concurrent clients.
+    # Import locally to avoid import-cycle surprises during startup.
+    from .retry_utils import jitter_sleep_seconds
 
-    When ``respect_min`` is True (e.g. Retry-After/X-RateLimit-Reset driven delays),
-    jitter is added *after* the minimum delay so the retry is not supported happens early.
-    """
-
-    try:
-        delay = float(delay_seconds)
-    except Exception:
-        return 0.0
-
-    if delay <= 0:
-        return 0.0
-
-    # Keep tests deterministic.
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return delay
-
-    if respect_min:
-        return delay + random.uniform(0.0, min(1.0, delay * 0.25))
-
-    # "Full jitter" for exponential backoff.
-    return random.uniform(0.0, delay)
+    return jitter_sleep_seconds(delay_seconds, respect_min=respect_min, cap_seconds=1.0)
 
 
 def _is_rate_limit_response(*, resp: httpx.Response, message_lower: str, error_flag: bool) -> bool:
