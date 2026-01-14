@@ -232,6 +232,16 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
     try:
         aw = work() if callable(work) else work
         result = await aw
+    except asyncio.CancelledError:
+        # Preserve cancellation semantics. Avoid turning cancellation into a
+        # cached exception and ensure future waiters are cancelled as well.
+        if not fut.done():
+            fut.cancel()
+        async with lock:
+            cur = _DEDUPE_ASYNC_CACHE.get(cache_key)
+            if cur and cur[1] is fut:
+                _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
+        raise
     except Exception as exc:
         if not fut.done():
             fut.set_exception(exc)
@@ -859,6 +869,8 @@ def mcp_tool(
                             result = await func(*args, **clean_kwargs)
                     else:
                         result = await func(*args, **clean_kwargs)
+                except asyncio.CancelledError:
+                    raise
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
                     structured_error = _emit_tool_error(
@@ -1036,6 +1048,8 @@ def mcp_tool(
                         result = func(*args, **clean_kwargs)
                 else:
                     result = func(*args, **clean_kwargs)
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
                 structured_error = _emit_tool_error(
