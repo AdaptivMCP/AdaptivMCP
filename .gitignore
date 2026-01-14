@@ -3,6 +3,7 @@ __pycache__/
 
 .venv/
 venv/
+.venv-mcp/
 
 *.egg-info/
 dist/
