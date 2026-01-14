@@ -40,7 +40,7 @@ GITHUB_API_BASE_URL = GITHUB_API_BASE
 
 SANDBOX_CONTENT_BASE_URL = os.environ.get("SANDBOX_CONTENT_BASE_URL")
 
-# Base directory for persistent workspaces used by terminal_command and related tools.
+# Base directory for persistent repo mirrors used by terminal_command and related tools.
 # This keeps cloned repositories stable across tool invocations so installations
 # and edits survive until explicitly reset or deleted.
 WORKSPACE_BASE_DIR = os.environ.get(
@@ -194,7 +194,7 @@ LOG_RENDER_HTTP_BODIES = os.environ.get("LOG_RENDER_HTTP_BODIES", "false").strip
     "on",
 )
 
-# Workspace diff application can be slow for large diffs. Keep this configurable.
+# Repo mirror diff application can be slow for large diffs. Keep this configurable.
 WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS = int(
     os.environ.get("MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", "300")
 )

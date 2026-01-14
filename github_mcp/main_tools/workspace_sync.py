@@ -22,10 +22,10 @@ async def _perform_github_commit_and_refresh_workspace(
     body_bytes: bytes,
     sha: Optional[str],
 ) -> Dict[str, Any]:
-    """Perform a Contents API commit and then refresh the workspace clone.
+    """Perform a Contents API commit and then refresh the repo mirror.
 
-    This keeps the long-lived workspace clone in sync with the branch when
-    writes happen directly via the GitHub Contents API. Workspace refresh
+    This keeps the long-lived repo mirror (workspace clone) in sync with the branch when
+    writes happen directly via the GitHub Contents API. Repo mirror refresh
     failures are logged but is not supported fail the commit itself.
     """
 
@@ -57,7 +57,7 @@ async def _perform_github_commit_and_refresh_workspace(
         )
         if isinstance(refresh, dict) and refresh.get("error"):
             LOGGER.debug(
-                "Workspace refresh returned an error after commit",
+                "Repo mirror refresh returned an error after commit",
                 extra={
                     "full_name": full_name,
                     "branch": branch,
@@ -66,7 +66,7 @@ async def _perform_github_commit_and_refresh_workspace(
             )
     except Exception as exc:  # pragma: no cover - defensive logging only
         LOGGER.debug(
-            "Failed to refresh workspace after commit",
+            "Failed to refresh repo mirror after commit",
             extra={
                 "full_name": full_name,
                 "branch": branch,

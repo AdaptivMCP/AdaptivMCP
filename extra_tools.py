@@ -87,7 +87,7 @@ async def update_file_from_workspace(
     branch: str,
     message: str,
 ) -> Dict[str, Any]:
-    """Commit a workspace file to a target path in the repository."""
+    """Commit a repo mirror (workspace clone) file to a target path in the repository."""
 
     effective_ref = _effective_ref_for_repo(full_name, branch)
 
@@ -103,7 +103,7 @@ async def update_file_from_workspace(
 
     if not workspace_file.is_file():
         raise FileNotFoundError(
-            f"Workspace file {workspace_path!r} not found in {workspace_root!r}"
+            f"Repo mirror file {workspace_path!r} not found in {workspace_root!r}"
         )
 
     normalized_target_path = _normalize_repo_path_for_repo(full_name, target_path)

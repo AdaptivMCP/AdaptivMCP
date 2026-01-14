@@ -1,4 +1,4 @@
-"""Workspace and shell helpers for GitHub MCP tools."""
+"""Repo mirror and shell helpers for GitHub MCP tools."""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ async def _run_shell(
     if env is not None:
         proc_env.update(env)
 
-    # Ensure bundled ripgrep (vendor/rg) is available as `rg` in workspace shells.
+    # Ensure bundled ripgrep (vendor/rg) is available as `rg` in repo mirror shells.
     # This avoids reliance on system packages in provider environments.
     if cwd and os.name != "nt" and sys.platform.startswith("linux"):
         try:
@@ -327,7 +327,7 @@ def _sanitize_workspace_ref(ref: str) -> str:
 async def _clone_repo(
     full_name: str, ref: Optional[str] = None, *, preserve_changes: bool = False
 ) -> str:
-    """Clone or return a persistent workspace for ``full_name``/``ref``."""
+    """Clone or return a persistent repo mirror (workspace clone) for ``full_name``/``ref``."""
     from .utils import _effective_ref_for_repo  # Local import to avoid cycles
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -342,11 +342,12 @@ async def _clone_repo(
 
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
         if preserve_changes:
-            # Workspace directories are keyed by ref, so callers expect the workspace
-            # checked out on ``effective_ref``. Some tools (e.g. shells that create
-            # branches) can mutate the checkout inside an existing workspace.
-            # When preserving changes we avoid destructive resets, but we still
-            # enforce the requested branch when the workspace is clean.
+            # Workspace directories are keyed by ref, so callers expect the repo mirror
+            # (workspace clone) to be checked out on ``effective_ref``. Some tools
+            # (e.g. shells that create branches) can mutate the checkout inside an
+            # existing repo mirror. When preserving changes we avoid destructive
+            # resets, but we still enforce the requested branch when the repo mirror
+            # is clean.
             fetch_result = await _run_git_with_retry(
                 run_shell,
                 "git fetch origin --prune",
@@ -368,9 +369,9 @@ async def _clone_repo(
                         git_env = no_auth_env
                         return workspace_dir
                     stderr = fetch_result.get("stderr", "") or fetch_result.get("stdout", "")
-                _raise_git_auth_error("Workspace fetch", stderr)
+                _raise_git_auth_error("Repo mirror fetch", stderr)
                 raise GitHubAPIError(
-                    f"Workspace fetch failed for {full_name}@{effective_ref}: {stderr}"
+                    f"Repo mirror fetch failed for {full_name}@{effective_ref}: {stderr}"
                 )
 
             # Ensure we are on the expected branch/ref.
@@ -389,7 +390,7 @@ async def _clone_repo(
                 dirty = bool((status.get("stdout", "") or "").strip())
                 if dirty:
                     raise GitHubAPIError(
-                        "Workspace is on the wrong branch and has local changes. "
+                        "Repo mirror is on the wrong branch and has local changes. "
                         f"Expected '{effective_ref}', found '{current_branch}'. "
                         "Commit/stash changes or use workspace_self_heal_branch to recover."
                     )
@@ -453,9 +454,9 @@ async def _clone_repo(
                         git_env = no_auth_env
                         continue
                     stderr = result.get("stderr", "") or result.get("stdout", "")
-                _raise_git_auth_error("Workspace refresh", stderr)
+                _raise_git_auth_error("Repo mirror refresh", stderr)
                 raise GitHubAPIError(
-                    f"Workspace refresh failed for {full_name}@{effective_ref}: {stderr}"
+                    f"Repo mirror refresh failed for {full_name}@{effective_ref}: {stderr}"
                 )
 
         return workspace_dir

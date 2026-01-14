@@ -151,10 +151,10 @@ async def render_shell(
     """Render-focused shell entry point for interacting with GitHub workspaces.
 
     The tool intentionally mirrors the Render deployment model by always
-    operating through the server-side workspace clone. It ensures the workspace
-    is cloned from the default branch (or a provided ref), optionally creates a
-    fresh branch from that ref, and then executes the supplied shell command
-    inside the clone.
+    operating through the server-side repo mirror (workspace clone). It ensures
+    the repo mirror is cloned from the default branch (or a provided ref),
+    optionally creates a fresh branch from that ref, and then executes the
+    supplied shell command inside the repo mirror.
     """
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
@@ -191,7 +191,7 @@ async def render_shell(
                 target_ref = create_branch
                 effective_branch_arg = create_branch
             else:
-                # IMPORTANT: branch exists only locally in the base workspace.
+                # IMPORTANT: branch exists only locally in the base workcell (repo mirror).
                 # Do NOT try to clone a non-existent remote branch.
                 target_ref = effective_ref
                 effective_branch_arg = effective_ref
@@ -252,10 +252,12 @@ async def terminal_command(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Run a shell command inside the repo workspace and return its result.
+    """Run a shell command inside the repo workcell and return its result.
 
-    This supports tests, linters, or project scripts that need the real tree and virtualenv. The workspace
-    persists across calls so installed dependencies and edits are reused."""
+    This supports tests, linters, or project scripts that need the real tree and
+    virtualenv. The repo mirror (workspace clone) persists across calls so
+    installed dependencies and edits are reused.
+    """
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 

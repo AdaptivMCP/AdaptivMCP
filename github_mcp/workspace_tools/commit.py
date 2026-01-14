@@ -41,7 +41,7 @@ async def commit_workspace(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Commit workspace changes and optionally push them."""
+    """Commit repo mirror changes and optionally push them."""
 
     try:
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
@@ -62,7 +62,7 @@ async def commit_workspace(
 
         status_lines = status_result.get("stdout", "").strip().splitlines()
         if not status_lines:
-            raise GitHubAPIError("No changes to commit in workspace")
+            raise GitHubAPIError("No changes to commit in repo mirror")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
         commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
@@ -109,7 +109,7 @@ async def commit_workspace_files(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Commit and optionally push specific files from the persistent workspace."""
+    """Commit and optionally push specific files from the persistent repo mirror."""
 
     if not files:
         raise ValueError("files must be a non-empty list of paths")
@@ -175,7 +175,7 @@ async def get_workspace_changes_summary(
     path_prefix: Optional[str] = None,
     max_files: int = 200,
 ) -> Dict[str, Any]:
-    """Summarize modified, added, deleted, renamed, and untracked files in the workspace."""
+    """Summarize modified, added, deleted, renamed, and untracked files in the repo mirror."""
 
     deps = _tw()._workspace_deps()
     effective_ref = _tw()._effective_ref_for_repo(full_name, ref)

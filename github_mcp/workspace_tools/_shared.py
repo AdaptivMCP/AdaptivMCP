@@ -95,7 +95,7 @@ def _git_state_markers(repo_dir: str) -> Dict[str, bool]:
 async def _diagnose_workspace_branch(
     deps: Dict[str, Any], *, repo_dir: str, expected_branch: str
 ) -> Dict[str, Any]:
-    """Return lightweight diagnostics used to detect a mangled workspace."""
+    """Return lightweight diagnostics used to detect a mangled repo mirror."""
     diag: Dict[str, Any] = {"expected_branch": expected_branch}
     show_branch = await deps["run_shell"](
         "git branch --show-current", cwd=repo_dir, timeout_seconds=60

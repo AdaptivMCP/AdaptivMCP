@@ -1,1 +1,1 @@
-"""Workspace-level tools and helpers."""
+"""Repo mirror tools and helpers (workspace surface)."""

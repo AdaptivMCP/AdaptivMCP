@@ -439,7 +439,7 @@ async def _perform_github_commit_and_refresh_workspace(
     body_bytes: bytes,
     sha: Optional[str],
 ) -> Dict[str, Any]:
-    """Perform a Contents API commit and then refresh the workspace clone."""
+    """Perform a Contents API commit and then refresh the repo mirror."""
     from github_mcp.main_tools.workspace_sync import (
         _perform_github_commit_and_refresh_workspace as _impl,
     )
@@ -592,7 +592,7 @@ async def terminal_command(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
 ) -> Dict[str, Any]:
-    """Run a shell command in the persistent repo workspace (terminal gateway).
+    """Run a shell command in the persistent repo mirror (terminal gateway).
 
     This is a thin wrapper around github_mcp.tools_workspace.terminal_command.
     """
@@ -644,7 +644,7 @@ async def run_tests(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
 ) -> Dict[str, Any]:
-    """Forward run_tests calls to the workspace helper for test surfaces."""
+    """Forward run_tests calls to the repo mirror helper for test surfaces."""
 
     return await tools_workspace.run_tests(
         full_name=full_name,
@@ -664,7 +664,7 @@ async def commit_workspace_files(
     message: str = "Commit selected workspace changes",
     push: bool = True,
 ) -> Dict[str, Any]:
-    """Forward commit_workspace_files calls to the workspace tool.
+    """Forward commit_workspace_files calls to the repo mirror tool.
 
     Keeping this shim in main preserves the test-oriented API surface
     without duplicating implementation details.

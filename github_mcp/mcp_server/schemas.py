@@ -67,7 +67,7 @@ _PARAM_DOCS: Dict[str, Dict[str, Any]] = {
         "examples": ["TODO", "def main"],
     },
     "command": {
-        "description": "Shell command to execute in the workspace clone.",
+        "description": "Shell command to execute in the repo mirror (workspace clone).",
         "examples": ["pytest", "python -m ruff check ."],
     },
     "command_lines": {
@@ -82,7 +82,7 @@ _PARAM_DOCS: Dict[str, Dict[str, Any]] = {
     },
     "workdir": {
         "description": (
-            "Working directory to run the command from. If relative, it is resolved within the workspace clone."
+            "Working directory to run the command from. If relative, it is resolved within the repo mirror."
         ),
         "examples": ["", "src"],
     },

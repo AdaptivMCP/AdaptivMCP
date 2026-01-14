@@ -1,4 +1,4 @@
-"""Generated workspace clone helpers."""
+"""Generated repo mirror helpers (workspace clone)."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ async def ensure_workspace_clone(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Ensure a persistent workspace clone exists for a repo/ref."""
+    """Ensure a persistent repo mirror (workspace clone) exists for a repo/ref."""
 
     try:
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
