@@ -15,8 +15,56 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUNBUFFERED: "1"
+
 jobs:
+  quality:
+    name: Quality (ruff + mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            dev-requirements.txt
+
+      - name: Setup ripgrep (vendored)
+        run: |
+          chmod 0755 vendor/rg/linux-x64/rg
+          echo "${GITHUB_WORKSPACE}/vendor/rg/linux-x64" >> "$GITHUB_PATH"
+          rg --version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r dev-requirements.txt
+
+      - name: Format (ruff)
+        run: ruff format --check .
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Typecheck (mypy)
+        run: mypy .
+
+      - name: Dependency sanity (pip check)
+        run: python -m pip check
+
+      - name: Compile
+        run: python -m compileall -q github_mcp main.py
+
   tests:
+    name: Tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -40,35 +88,13 @@ jobs:
       - name: Setup ripgrep (vendored)
         run: |
           chmod 0755 vendor/rg/linux-x64/rg
-          export PATH="${GITHUB_WORKSPACE}/vendor/rg/linux-x64:$PATH"
+          echo "${GITHUB_WORKSPACE}/vendor/rg/linux-x64" >> "$GITHUB_PATH"
           rg --version
-          echo "${GITHUB_WORKSPACE}/vendor/rg/linux-x64" >> $GITHUB_PATH
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r dev-requirements.txt
 
-      - name: Format (ruff)
-        run: |
-          ruff format --check .
-
-      - name: Lint (ruff)
-        run: |
-          ruff check .
-
-      - name: Typecheck (mypy)
-        run: |
-          mypy .
-
-      - name: Dependency sanity (pip check)
-        run: |
-          python -m pip check
-
-      - name: Compile
-        run: |
-          python -m compileall -q github_mcp main.py
-
       - name: Run tests
-        run: |
-          pytest -q
+        run: pytest -q
