@@ -12,12 +12,107 @@ from typing import Any, Callable, Optional, Tuple
 
 
 def active_event_loop() -> asyncio.AbstractEventLoop:
-    """Return the active asyncio event loop, tolerant of missing running loop."""
+    """Return a usable asyncio event loop.
+
+    In Python 3.11+, ``asyncio.get_event_loop()`` may raise when no loop has been
+    set for the current thread. This helper prefers the running loop (when in an
+    async context) and otherwise ensures a loop exists for sync contexts.
+    """
 
     try:
         return asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.get_event_loop()
+        pass
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("event loop is closed")
+        return loop
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
+
+
+def _schedule_close(
+    client: Any,
+    *,
+    client_loop: Optional[asyncio.AbstractEventLoop],
+    current_loop: asyncio.AbstractEventLoop,
+    log_debug: Optional[Callable[[str], None]] = None,
+    log_debug_exc: Optional[Callable[[str], None]] = None,
+) -> None:
+    if client is None:
+        return
+
+    try:
+        if getattr(client, "is_closed", False):
+            return
+    except Exception:
+        # If we cannot interrogate the client state, attempt to close anyway.
+        pass
+
+    running_loop: Optional[asyncio.AbstractEventLoop] = None
+    try:
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
+
+    def _log(msg: str) -> None:
+        if log_debug_exc is not None:
+            log_debug_exc(msg)
+        elif log_debug is not None:
+            log_debug(msg)
+
+    # Prefer closing on the loop the client was created on.
+    if client_loop is not None and not client_loop.is_closed():
+        if client_loop.is_running():
+            # If we're already on that loop, schedule directly; otherwise, hop threads.
+            if running_loop is client_loop:
+                try:
+                    asyncio.create_task(client.aclose())
+                    return
+                except Exception:
+                    _log("Failed to schedule client close on running client loop")
+                    return
+            try:
+                client_loop.call_soon_threadsafe(lambda: asyncio.create_task(client.aclose()))
+                return
+            except Exception:
+                _log("Failed to schedule client close via call_soon_threadsafe")
+                # Fall through to best-effort options.
+        else:
+            # Sync context: we can drive the loop to completion.
+            if running_loop is None:
+                try:
+                    client_loop.run_until_complete(client.aclose())
+                    return
+                except Exception:
+                    _log("Failed to close async client by running its loop")
+            else:
+                # Async context: we cannot run another loop; try current loop best-effort.
+                try:
+                    asyncio.create_task(client.aclose())
+                    return
+                except Exception:
+                    _log("Failed to schedule async client close from async context")
+                    return
+
+    # Fallback: close on the current loop if possible.
+    if running_loop is not None:
+        try:
+            asyncio.create_task(client.aclose())
+            return
+        except Exception:
+            _log("Failed to schedule async client close on current running loop")
+            return
+
+    # Final fallback: create a temporary loop to close the client.
+    try:
+        asyncio.run(client.aclose())
+    except Exception:
+        _log("Failed to close async client in fallback asyncio.run")
 
 
 def refresh_async_client(
@@ -60,24 +155,13 @@ def refresh_async_client(
             return client, client_loop or loop
 
     try:
-        if client is not None and not getattr(client, "is_closed", False):
-            if client_loop is not None and not client_loop.is_closed():
-                client_loop.create_task(client.aclose())
-            else:
-                # Best-effort shutdown without assuming an active running loop.
-                try:
-                    loop.create_task(client.aclose())
-                except Exception:
-                    try:
-                        if not loop.is_closed() and not loop.is_running():
-                            loop.run_until_complete(client.aclose())
-                        else:
-                            asyncio.run(client.aclose())
-                    except Exception:
-                        if log_debug_exc is not None:
-                            log_debug_exc("Failed to close async client during refresh")
-                        elif log_debug is not None:
-                            log_debug("Failed to close async client during refresh")
+        _schedule_close(
+            client,
+            client_loop=client_loop,
+            current_loop=loop,
+            log_debug=log_debug,
+            log_debug_exc=log_debug_exc,
+        )
     except Exception:
         if log_debug_exc is not None:
             log_debug_exc("Failed to refresh async client")
