@@ -50,7 +50,9 @@ def _redact_tokens(text: str) -> str:
     out = text
 
     # Redact common auth header patterns.
-    out = re.sub(r"\bBearer\s+[A-Za-z0-9\-_.=]{12,}\b", "Bearer [REDACTED]", out, flags=re.IGNORECASE)
+    out = re.sub(
+        r"\bBearer\s+[A-Za-z0-9\-_.=]{12,}\b", "Bearer [REDACTED]", out, flags=re.IGNORECASE
+    )
     out = re.sub(r"\bBasic\s+[A-Za-z0-9+/=]{12,}\b", "Basic [REDACTED]", out, flags=re.IGNORECASE)
 
     # Redact explicitly configured tokens (if present).
@@ -254,6 +256,8 @@ def _exception_trace(exc: BaseException) -> str:
     """Optional helper: stringify a traceback when you explicitly want it."""
 
     try:
-        return _redact_tokens("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+        return _redact_tokens(
+            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        )
     except Exception:
         return f"{exc.__class__.__name__}: {_single_line(str(exc))}"

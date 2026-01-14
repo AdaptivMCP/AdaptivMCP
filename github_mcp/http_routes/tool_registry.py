@@ -148,7 +148,9 @@ def _looks_like_structured_error(payload: Any) -> Optional[Dict[str, Any]]:
 
     # Newer tools return {"error": "...", "error_detail": {...}}.
     detail = payload.get("error_detail")
-    if isinstance(detail, dict) and (detail.get("category") or detail.get("code") or detail.get("message")):
+    if isinstance(detail, dict) and (
+        detail.get("category") or detail.get("code") or detail.get("message")
+    ):
         return detail
 
     err = payload.get("error")

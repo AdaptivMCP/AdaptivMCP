@@ -86,7 +86,7 @@ def _extract_missing_module(stdout: str, stderr: str) -> str:
     tail = combined[pos + len(marker) :].strip()
     if not tail:
         return ""
-    if tail[:1] in ('\"', "'"):
+    if tail[:1] in ('"', "'"):
         q = tail[0]
         rest = tail[1:]
         endq = rest.find(q)

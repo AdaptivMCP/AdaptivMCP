@@ -78,6 +78,6 @@ def test_registered_tools_have_write_action_flag() -> None:
         if flag is None:
             missing_flag.append(str(name))
 
-    assert not missing_flag, (
-        "Registered tools missing write_action classification: " + str(sorted(missing_flag))
+    assert not missing_flag, "Registered tools missing write_action classification: " + str(
+        sorted(missing_flag)
     )
