@@ -113,6 +113,13 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
         tool_description = catalog_entry.get("description") or _tool_description(tool, _func)
         write_action = bool(catalog_entry.get("write_action", _is_write_action(tool, _func)))
         tool_write_allowed = bool(catalog_entry.get("write_allowed", True))
+        # Keep write-gate/auto-approval metadata aligned with list_all_actions so
+        # clients that still rely on the legacy /v1/actions endpoint can make
+        # correct decisions about whether a tool call is permitted.
+        tool_write_enabled = bool(catalog_entry.get("write_enabled", True))
+        tool_write_actions_enabled = bool(catalog_entry.get("write_actions_enabled", False))
+        tool_write_auto_approved = bool(catalog_entry.get("write_auto_approved", False))
+        tool_approval_required = bool(catalog_entry.get("approval_required", False))
 
         schema = (
             catalog_entry.get("input_schema")
@@ -155,6 +162,10 @@ def serialize_actions_for_compatibility(server: Any) -> List[Dict[str, Any]]:
                 "annotations": annotations,
                 "write_action": bool(write_action),
                 "write_allowed": bool(tool_write_allowed),
+                "write_enabled": bool(tool_write_enabled),
+                "write_actions_enabled": bool(tool_write_actions_enabled),
+                "write_auto_approved": bool(tool_write_auto_approved),
+                "approval_required": bool(tool_approval_required),
                 "visibility": str(visibility),
             }
         )
