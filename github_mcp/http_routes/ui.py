@@ -47,10 +47,23 @@ def build_ui_json_endpoint() -> Any:
                     "tools": "/tools",
                     "resources": "/resources",
                     "stream": "/sse",
+                    "render": {
+                        "owners": "/render/owners",
+                        "services": "/render/services",
+                        "service": "/render/services/<service_id>",
+                        "deploys": "/render/services/<service_id>/deploys",
+                        "deploy": "/render/services/<service_id>/deploys/<deploy_id>",
+                        "deploy_create": "POST /render/services/<service_id>/deploys",
+                        "deploy_cancel": "POST /render/services/<service_id>/deploys/<deploy_id>/cancel",
+                        "deploy_rollback": "POST /render/services/<service_id>/deploys/<deploy_id>/rollback",
+                        "restart": "POST /render/services/<service_id>/restart",
+                        "logs": "/render/logs",
+                    },
                 },
                 "notes": [
                     "/healthz reports baseline health after deploy.",
                     "/tools supports discovery; POST /tools/<name> invokes a tool.",
+                    "Render endpoints require RENDER_API_KEY/RENDER_API_TOKEN configured.",
                 ],
             }
         )

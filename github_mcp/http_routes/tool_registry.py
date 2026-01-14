@@ -103,11 +103,15 @@ def _status_code_for_error(error: Dict[str, Any]) -> int:
     code = str(error.get("code") or "")
     category = str(error.get("category") or "")
 
-    if code == "github_rate_limited":
+    if code in {"github_rate_limited", "render_rate_limited"} or category == "rate_limited":
         return 429
+    if category == "auth":
+        return 401
     if category == "validation":
         return 400
     if category == "permission":
+        return 403
+    if category == "write_approval_required":
         return 403
     if category == "not_found":
         return 404
