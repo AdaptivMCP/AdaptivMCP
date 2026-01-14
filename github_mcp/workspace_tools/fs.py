@@ -117,7 +117,11 @@ async def delete_workspace_paths(
     """Delete one or more paths from the repo mirror (workspace clone).
 
     This tool exists because some environments can block patch-based file deletions.
-    typical this over embedding file deletions into patches.
+    Prefer this over embedding deletions into unified-diff patches.
+
+    Notes:
+      - `paths` must be repo-relative paths.
+      - Directories require `allow_recursive=true` (for non-empty directories).
     """
 
     if paths is None:
@@ -182,9 +186,19 @@ async def get_workspace_file_contents(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Read a file from the persistent repo mirror (workspace clone) (no shell)."""
+    """Read a file from the persistent repo mirror (workspace clone) (no shell).
+
+    Args:
+      path: Repo-relative path (POSIX-style). Must resolve inside the repo mirror.
+
+    Returns:
+      A dict with keys like: exists, path, text, encoding, size_bytes.
+    """
 
     try:
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("path must be a non-empty string")
+
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
@@ -195,7 +209,7 @@ async def get_workspace_file_contents(
         info.update({"full_name": full_name, "ref": effective_ref})
         return info
     except Exception as exc:
-        return _structured_tool_error(exc, context="get_workspace_file_contents")
+        return _structured_tool_error(exc, context="get_workspace_file_contents", path=path)
 
 
 @mcp_tool(write_action=True)
@@ -216,10 +230,14 @@ async def set_workspace_file_contents(
     patch/unified-diff application.
     """
 
-    if not isinstance(path, str) or not path.strip():
-        raise ValueError("path must be a non-empty string")
-
     try:
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("path must be a non-empty string")
+        if content is None:
+            content = ""
+        if not isinstance(content, str):
+            raise TypeError("content must be a string")
+
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
@@ -254,10 +272,10 @@ async def apply_patch(
 ) -> Dict[str, Any]:
     """Apply a unified diff patch to the persistent repo mirror (workspace clone)."""
 
-    if not isinstance(patch, str) or not patch.strip():
-        raise ValueError("patch must be a non-empty string")
-
     try:
+        if not isinstance(patch, str) or not patch.strip():
+            raise ValueError("patch must be a non-empty string")
+
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)

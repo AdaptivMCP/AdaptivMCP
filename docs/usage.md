@@ -110,7 +110,49 @@ Because the repo mirror is not the live GitHub state, GitHub API tools are typic
 - Cache control: dynamic endpoints are served with `Cache-Control: no-store`; static assets under `/static` are cacheable.
 - File caching: GitHub file contents may be cached in-memory to reduce repeated fetches.
 
-Workspace path handling: workspace file tools enforce that requested paths resolve inside the repository root. Relative traversal and absolute paths that point outside the repo are treated as invalid input.
+Workspace path handling: workspace file tools enforce that requested paths resolve inside the repository root. Relative traversal and absolute paths that point outside the repo are treated as invalid input. File tools also require non-empty paths; deletion helpers require a non-empty `paths` list. Directory deletion requires `allow_recursive=true` for non-empty directories.
+
+## Render tools (operations)
+
+This server includes a minimal Render integration that supports:
+
+- Listing owners/workspaces (`list_render_owners`)
+- Listing services (`list_render_services`, optionally by owner)
+- Service operations (`create_render_deploy`, `cancel_render_deploy`, `rollback_render_deploy`, `restart_render_service`)
+- Deploy inspection (`list_render_deploys`, `get_render_deploy`, `get_render_service`)
+- Log reads (`get_render_logs`)
+
+Operational notes:
+
+- Pagination: `limit` is clamped to a safe range (owners/services/deploys: 1..100; logs: 1..1000).
+- `create_render_deploy`: provide at most one of `commit_id` or `image_url`.
+- `get_render_logs`: `resource_type` must be `service` or `job`. If both `start_time` and `end_time` are provided, start must be <= end. Timestamps must be ISO8601 (for example `2026-01-14T12:34:56Z`).
+
+Example flow:
+
+1) Discover your owners/workspaces:
+
+```json
+{"tool":"list_render_owners","args":{"limit":20}}
+```
+
+2) List services for a specific owner:
+
+```json
+{"tool":"list_render_services","args":{"owner_id":"<owner-id>","limit":20}}
+```
+
+3) Trigger a deploy:
+
+```json
+{"tool":"create_render_deploy","args":{"service_id":"<service-id>","clear_cache":false,"commit_id":"<sha>"}}
+```
+
+4) Fetch logs for a service:
+
+```json
+{"tool":"get_render_logs","args":{"resource_type":"service","resource_id":"<service-id>","start_time":"2026-01-14T12:34:56Z","end_time":"2026-01-14T13:34:56Z","limit":200}}
+```
 
 ## Deployment (Render.com)
 
