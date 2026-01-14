@@ -60,6 +60,7 @@ Operational notes:
 
 - Render injects `PORT` automatically for web services; the server binds to `$PORT`.
 - Configure a GitHub authentication token in Render (for example `GITHUB_TOKEN`), along with any optional variables documented in `docs/usage.md` and `.env.example`.
+- (Optional) Set `ALLOWED_HOSTS` to restrict which hostnames may access the MCP transport. If unset and no Render external hostname variables are present, host checks are disabled.
 - `/healthz` reports service health and token detection/config defaults.
 
 ## Development
@@ -87,6 +88,7 @@ The server exposes:
 - `/tools` – tool registry for discovery (supports `?include_parameters=` and `?compact=`).
 - `/resources` – compatibility resource listing for MCP clients.
 - `/tools/<name>` – tool detail (GET) and invoke (POST).
+- `/v1/actions` and `/actions` – Actions-compatible tool listing (legacy compatibility surface).
 - `/ui` and `/ui.json` – lightweight UI diagnostics (serves `assets/index.html` when present).
 - `/static/*` – static assets when the `assets/` directory is present.
 
