@@ -22,20 +22,6 @@ Because the workcell holds the repo mirror, the two terms are closely related, b
 - Workspace tools: operate on the repo mirror (local filesystem + git).
 - GitHub API tools: inspect or mutate GitHub’s remote state (issues, PRs, Actions, contents API, etc.).
 
-## Write gate (auto-approval)
-
-This server supports approval-gated write actions. The environment variable `GITHUB_MCP_WRITE_ALLOWED` controls whether write actions are auto-approved.
-
-- `GITHUB_MCP_WRITE_ALLOWED=true`: write tools are auto-approved.
-- `GITHUB_MCP_WRITE_ALLOWED=false`: write tools remain executable, but some clients may prompt or gate before invoking write tools.
-
-Introspection and actions-compat listings expose:
-
-- `write_action`: tool is classified as a write.
-- `write_allowed`: always true (the server does not hard-block write tools).
-- `write_actions_enabled` / `write_auto_approved`: reflects whether writes are auto-approved (`GITHUB_MCP_WRITE_ALLOWED`).
-- `approval_required`: true when `write_action` is true and writes are not auto-approved; clients may prompt or gate before invoking the tool.
-
 ## What this server provides
 
 - MCP tool surface for GitHub operations: repositories, issues, PRs, actions, files
@@ -191,10 +177,6 @@ When `LOG_HTTP_REQUESTS` is enabled, unhandled exceptions inside the ASGI reques
 - GITHUB_REPO_DEFAULTS — optional JSON object of repo defaults (to reduce API calls). Supported shapes:
   - {"owner/repo": {"default_branch": "main"}}
   - {"owner/repo": "main"} (shorthand)
-
-### Write gate (auto-approval)
-
-- GITHUB_MCP_WRITE_ALLOWED — when true, write tools are auto-approved; when false, clients may prompt (see Write gate section in this document)
 
 ### Tool metadata verbosity
 

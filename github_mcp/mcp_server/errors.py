@@ -159,7 +159,7 @@ def _default_help(category: str) -> list[str]:
     if category == "write_approval_required":
         return [
             "This tool performs write operations and requires explicit approval.",
-            "Enable write actions (or approve the write gate) and retry.",
+            "Approve the write action in your client and retry.",
         ]
     return [
         "Retry once. If the error persists, check provider logs for the corresponding request.",
