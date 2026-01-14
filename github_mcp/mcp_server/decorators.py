@@ -339,18 +339,48 @@ def _dedupe_ttl_seconds(*, write_action: bool, meta: Mapping[str, Any]) -> float
         return 0.0
 
 
-def _dedupe_key(*, tool_name: str, write_action: bool, req: Mapping[str, Any], args: Mapping[str, Any]) -> str:
+def _dedupe_key(
+    *, tool_name: str, write_action: bool, req: Mapping[str, Any], args: Mapping[str, Any]
+) -> str:
     """Build a stable idempotency key for a tool call."""
 
-    # Scope to the request identity where possible so independent sessions do
-    # not share cached results.
+    # Scope to the *turn* identity where possible so independent sessions do
+    # not share cached results, while client retries of the same turn can be
+    # safely deduped.
     request_id = req.get("request_id")
     session_id = req.get("session_id")
     message_id = req.get("message_id")
     path = req.get("path")
 
+    # Prefer a stable idempotency key (if the client provides one), then the
+    # (session_id, message_id) pair.
+    #
+    # IMPORTANT: request_id is commonly regenerated on retries. Including it
+    # when a more stable scope exists prevents dedupe from working and can
+    # cause the same tool call to be executed multiple times.
+    explicit_idempotency_key = req.get("idempotency_key") or req.get("dedupe_key")
+    if explicit_idempotency_key:
+        scope = f"i:{explicit_idempotency_key}"
+    else:
+        scope_parts: list[str] = []
+        if session_id:
+            scope_parts.append(f"s:{session_id}")
+        if message_id:
+            scope_parts.append(f"m:{message_id}")
+        if not scope_parts:
+            # Fall back to request_id only when no better scope exists.
+            if request_id:
+                scope_parts.append(f"r:{request_id}")
+            elif path:
+                scope_parts.append(f"p:{path}")
+            else:
+                scope_parts.append("global")
+        scope = ",".join(scope_parts)
+
     try:
-        args_json = json.dumps(args, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+        args_json = json.dumps(
+            args, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
+        )
     except Exception:
         args_json = str(dict(args))
 
@@ -359,10 +389,7 @@ def _dedupe_key(*, tool_name: str, write_action: bool, req: Mapping[str, Any], a
         [
             str(tool_name),
             "write" if write_action else "read",
-            str(request_id or ""),
-            str(session_id or ""),
-            str(message_id or ""),
-            str(path or ""),
+            scope,
             digest,
         ]
     )
