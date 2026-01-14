@@ -927,6 +927,41 @@ async def render_get_logs(
     )
 
 
+@mcp_tool(write_action=False, name="render_list_logs")
+async def render_list_logs(
+    owner_id: str,
+    resources: List[str],
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    direction: str = "backward",
+    limit: int = 200,
+    instance: Optional[str] = None,
+    host: Optional[str] = None,
+    level: Optional[str] = None,
+    method: Optional[str] = None,
+    status_code: Optional[int] = None,
+    path: Optional[str] = None,
+    text: Optional[str] = None,
+    log_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    return await list_render_logs(
+        owner_id=owner_id,
+        resources=resources,
+        start_time=start_time,
+        end_time=end_time,
+        direction=direction,
+        limit=limit,
+        instance=instance,
+        host=host,
+        level=level,
+        method=method,
+        status_code=status_code,
+        path=path,
+        text=text,
+        log_type=log_type,
+    )
+
+
 @mcp_tool(write_action=True)
 async def pr_smoke_test(
     full_name: Optional[str] = None,
