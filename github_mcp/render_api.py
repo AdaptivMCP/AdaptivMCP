@@ -97,10 +97,11 @@ def _apply_render_version_prefix(path: str) -> str:
 
 
 def _active_event_loop() -> asyncio.AbstractEventLoop:
-    try:
-        return asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.get_event_loop()
+    """Backward-compatible wrapper for shared active-loop helper."""
+
+    from .async_utils import active_event_loop
+
+    return active_event_loop()
 
 
 def _get_render_token() -> str:
@@ -141,47 +142,23 @@ def _refresh_async_client(
     rebuild,
     force_refresh: bool = False,
 ):
-    loop = _active_event_loop()
+    from .async_utils import refresh_async_client
 
-    needs_refresh = force_refresh or client is None
-    if not needs_refresh:
-        try:
-            if client.is_closed:
-                needs_refresh = True
-        except Exception:
-            needs_refresh = True
+    def _log_debug(msg: str) -> None:
+        BASE_LOGGER.debug(msg)
 
-    if not needs_refresh and client_loop is not None and client_loop is not loop:
-        needs_refresh = True
+    def _log_debug_exc(msg: str) -> None:
+        BASE_LOGGER.debug(msg, exc_info=True)
 
-    if not needs_refresh:
-        if client is None:
-            needs_refresh = True
-        else:
-            return client, client_loop or loop
-
-    try:
-        if client is not None and not getattr(client, "is_closed", False):
-            if client_loop is not None and not client_loop.is_closed():
-                client_loop.create_task(client.aclose())
-            else:
-                try:
-                    loop.create_task(client.aclose())
-                except Exception:
-                    try:
-                        if not loop.is_closed() and not loop.is_running():
-                            loop.run_until_complete(client.aclose())
-                        else:
-                            asyncio.run(client.aclose())
-                    except Exception:
-                        BASE_LOGGER.debug(
-                            "Failed to close Render AsyncClient during refresh", exc_info=True
-                        )
-    except Exception:
-        BASE_LOGGER.debug("Failed to refresh Render AsyncClient", exc_info=True)
-
-    fresh_client = rebuild()
-    return fresh_client, loop
+    refreshed, loop = refresh_async_client(
+        client,
+        client_loop=client_loop,
+        rebuild=rebuild,
+        force_refresh=force_refresh,
+        log_debug=_log_debug,
+        log_debug_exc=_log_debug_exc,
+    )
+    return refreshed, loop
 
 
 def _render_client_instance() -> "httpx.AsyncClient":

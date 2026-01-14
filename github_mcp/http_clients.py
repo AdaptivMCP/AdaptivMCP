@@ -268,12 +268,11 @@ def _is_rate_limit_response(*, resp: httpx.Response, message_lower: str, error_f
 
 
 def _active_event_loop() -> asyncio.AbstractEventLoop:
-    """Return the active asyncio event loop, tolerant of missing running loop."""
+    """Backward-compatible wrapper for shared active-loop helper."""
 
-    try:
-        return asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.get_event_loop()
+    from .async_utils import active_event_loop
+
+    return active_event_loop()
 
 
 def _get_search_rate_limit_state() -> Dict[str, Any]:
@@ -311,57 +310,25 @@ def _refresh_async_client(
     rebuild: Callable[[], httpx.AsyncClient],
     force_refresh: bool = False,
 ) -> Tuple[httpx.AsyncClient, asyncio.AbstractEventLoop]:
-    """Return a loop-safe AsyncClient, rebuilding if necessary.
+    """Backward-compatible wrapper for shared AsyncClient refresher."""
 
-    The underlying event loop may change after idle periods in connector
-    environments. Recreate the client when the loop differs or the client is
-    already closed so outbound requests stay bound to the active loop.
-    """
+    from .async_utils import refresh_async_client
 
-    loop = _active_event_loop()
+    def _log_debug(msg: str) -> None:
+        logging.debug(msg)
 
-    needs_refresh = force_refresh or client is None
-    if not needs_refresh:
-        try:
-            if client.is_closed:
-                needs_refresh = True
-        except Exception:
-            needs_refresh = True
+    def _log_debug_exc(msg: str) -> None:
+        logging.debug(msg, exc_info=True)
 
-    if not needs_refresh and client_loop is not None and client_loop is not loop:
-        needs_refresh = True
-
-    if not needs_refresh:
-        # `client` should be non-None here because `needs_refresh` is false.
-        # Avoid `assert` in runtime code paths so optimized runs don't elide checks.
-        if client is None:
-            needs_refresh = True
-        else:
-            return client, client_loop or loop
-
-    try:
-        if client is not None and not getattr(client, "is_closed", False):
-            if client_loop is not None and not client_loop.is_closed():
-                client_loop.create_task(client.aclose())
-            else:
-                # httpx.AsyncClient does not implement `close()`; use `aclose()`.
-                # Best-effort shutdown without assuming an active running loop.
-                try:
-                    loop.create_task(client.aclose())
-                except Exception:
-                    try:
-                        if not loop.is_closed() and not loop.is_running():
-                            loop.run_until_complete(client.aclose())
-                        else:
-                            asyncio.run(client.aclose())
-                    except Exception:
-                        # Shutdown is best-effort; never raise during refresh.
-                        logging.debug("Failed to close AsyncClient during refresh", exc_info=True)
-    except Exception:
-        logging.debug("Failed to refresh AsyncClient", exc_info=True)
-
-    fresh_client = rebuild()
-    return fresh_client, loop
+    refreshed, loop = refresh_async_client(
+        client,
+        client_loop=client_loop,
+        rebuild=rebuild,
+        force_refresh=force_refresh,
+        log_debug=_log_debug,
+        log_debug_exc=_log_debug_exc,
+    )
+    return refreshed, loop
 
 
 # ---------------------------------------------------------------------------
