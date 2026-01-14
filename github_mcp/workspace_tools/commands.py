@@ -1,4 +1,5 @@
 # Split from github_mcp.tools_workspace (generated).
+import asyncio
 import os
 import shlex
 from typing import Any, Dict, Optional
@@ -18,7 +19,7 @@ def _normalize_command_payload(
 
     Returns:
     - requested_command: the raw intended command (may contain newlines)
-    - command_lines_out: list of command lines (is not supported contains newlines)
+    - command_lines_out: list of command lines (never contains newlines)
     """
 
     requested = command
@@ -79,8 +80,21 @@ def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
 def _extract_missing_module(stdout: str, stderr: str) -> str:
     """Best-effort extraction of a missing module name from Python tracebacks."""
     combined = f"{stderr}\n{stdout}" if (stdout or stderr) else ""
-    marker = "ModuleNotFoundError: No module named "
-    pos = combined.find(marker)
+    # Common patterns:
+    # - "ModuleNotFoundError: No module named 'ruff'"
+    # - "No module named ruff" (some runtimes omit the exception type)
+    markers = [
+        "ModuleNotFoundError: No module named ",
+        "No module named ",
+    ]
+    pos = -1
+    marker = ""
+    for m in markers:
+        p = combined.find(m)
+        if p != -1:
+            pos = p
+            marker = m
+            break
     if pos == -1:
         return ""
     tail = combined[pos + len(marker) :].strip()
@@ -107,13 +121,13 @@ def _required_packages_for_command(command: str) -> list[str]:
     lower = c.lower()
 
     # Common Python quality tools.
-    if lower.startswith("ruff ") or lower == "ruff":
+    if lower.startswith("ruff ") or lower == "ruff" or "python -m ruff" in lower:
         return ["ruff"]
     if lower.startswith("mypy ") or lower == "mypy" or "python -m mypy" in lower:
         return ["mypy"]
     if (
         lower.startswith("pytest")
-        or " python -m pytest" in lower
+        or "python -m pytest" in lower
         or lower.startswith("python -m pytest")
     ):
         return ["pytest"]
@@ -143,7 +157,7 @@ async def render_shell(
     branch: Optional[str] = None,
     timeout_seconds: float = 300,
     workdir: Optional[str] = None,
-    use_temp_venv: bool = False,
+    use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     owner: Optional[str] = None,
     repo: Optional[str] = None,
@@ -233,6 +247,8 @@ async def render_shell(
             "result": cleaned_command.get("result") if isinstance(cleaned_command, dict) else None,
         }
         return out
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
         return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
 
@@ -245,7 +261,7 @@ async def terminal_command(
     command_lines: Optional[list[str]] = None,
     timeout_seconds: float = 300,
     workdir: Optional[str] = None,
-    use_temp_venv: bool = False,
+    use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     *,
     owner: Optional[str] = None,
@@ -359,6 +375,8 @@ async def terminal_command(
         }
 
         return out
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
         return _structured_tool_error(
             exc, context="terminal_command", tool_surface="terminal_command"
