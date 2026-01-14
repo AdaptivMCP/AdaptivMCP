@@ -105,6 +105,43 @@ _PARAM_DOCS: Dict[str, Dict[str, Any]] = {
         "description": "Commit message.",
         "examples": ["Refactor tool schemas"],
     },
+    # Render tool parameters
+    "owner_id": {
+        "description": (
+            "Render owner id (workspace or personal owner). Use list_render_owners to discover values."
+        ),
+    },
+    "service_id": {
+        "description": "Render service id (example: srv-...).",
+    },
+    "deploy_id": {
+        "description": "Render deploy id (example: dpl-...).",
+    },
+    "resource_type": {
+        "description": "Render log resource type (service or job).",
+        "examples": ["service", "job"],
+    },
+    "resource_id": {
+        "description": "Render log resource id corresponding to resource_type.",
+    },
+    "clear_cache": {
+        "description": "When true, clears the build cache before deploying.",
+        "examples": [True, False],
+    },
+    "commit_id": {
+        "description": "Optional git commit SHA to deploy (repo-backed services).",
+    },
+    "image_url": {
+        "description": "Optional container image URL to deploy (image-backed services).",
+    },
+    "start_time": {
+        "description": "Optional ISO8601 timestamp for the start of a log query window.",
+        "examples": ["2026-01-14T12:34:56Z"],
+    },
+    "end_time": {
+        "description": "Optional ISO8601 timestamp for the end of a log query window.",
+        "examples": ["2026-01-14T13:34:56Z"],
+    },
 }
 
 
@@ -648,8 +685,9 @@ def _normalize_and_truncate(s: str) -> str:
 def _stringify_annotation(annotation: Any) -> str:
     """Return a stable string for a type annotation.
 
-    This helper is part of the public compatibility surface and needs to is not supported raise.
+    This helper is part of the public compatibility surface and needs to not raise.
     """
+
     if annotation is None:
         return "None"
     if annotation is inspect.Signature.empty:
@@ -672,6 +710,7 @@ def _preflight_tool_args(
     - No transformation.
     - Ensure JSON-serializable output.
     """
+
     try:
         payload = {"tool": tool_name, "args": _jsonable(dict(args))}
         # Compact mode no longer produces a string preview (which can be re-escaped

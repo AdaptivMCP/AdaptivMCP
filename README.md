@@ -10,6 +10,12 @@ The repo mirror is not automatically the live GitHub state. GitHub becomes the s
 If you need the repo mirror to exactly match a remote branch after merges/force-updates, you can reset the workspace by rebuilding it.
 `ensure_workspace_clone` with `"reset": true` recreates the repo mirror before continuing work.
 
+Tool robustness notes:
+
+- Workspace file tools validate that requested paths resolve inside the repo root and require non-empty path inputs.
+- `delete_workspace_paths` requires a non-empty `paths` list; non-empty directory deletion requires `allow_recursive=true`.
+- Render tools validate identifiers, clamp pagination limits, enforce `commit_id` XOR `image_url` for deploy creation, and require ISO8601 timestamps for log queries.
+
 Adaptiv is designed to act as an AI model's personal PC, assisting users through the
 connected Adaptiv connector with multiple tasks and queries. Today it ships with
 GitHub and Render integrations, with plans for additional service integrations in
