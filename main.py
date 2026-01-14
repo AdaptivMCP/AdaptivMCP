@@ -624,7 +624,9 @@ async def run_command(
 
     It forwards to terminal_command.
     """
-    return await tools_workspace.terminal_command(
+    # Intentionally delegate to terminal_command so any future behavior
+    # changes (logging, env handling, defaults) stay consistent.
+    return await terminal_command(
         full_name=full_name,
         ref=ref,
         command=command,
