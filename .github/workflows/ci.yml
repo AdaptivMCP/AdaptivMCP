@@ -40,8 +40,9 @@ jobs:
       - name: Setup ripgrep (vendored)
         run: |
           chmod 0755 vendor/rg/linux-x64/rg
-          echo "${GITHUB_WORKSPACE}/vendor/rg/linux-x64" >> "$GITHUB_PATH"
+          export PATH="${GITHUB_WORKSPACE}/vendor/rg/linux-x64:$PATH"
           rg --version
+          echo "${GITHUB_WORKSPACE}/vendor/rg/linux-x64" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: |
@@ -88,8 +89,9 @@ jobs:
       - name: Setup ripgrep (vendored)
         run: |
           chmod 0755 vendor/rg/linux-x64/rg
-          echo "${GITHUB_WORKSPACE}/vendor/rg/linux-x64" >> "$GITHUB_PATH"
+          export PATH="${GITHUB_WORKSPACE}/vendor/rg/linux-x64:$PATH"
           rg --version
+          echo "${GITHUB_WORKSPACE}/vendor/rg/linux-x64" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: |
