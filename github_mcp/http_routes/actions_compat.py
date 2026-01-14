@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from github_mcp.mcp_server.registry import _registered_tool_name
 from github_mcp.mcp_server.schemas import _jsonable
 from github_mcp.main_tools.introspection import list_all_actions
 
@@ -17,11 +18,7 @@ def _tool_name(tool: Any, func: Any) -> str:
     function.
     """
 
-    name = (
-        getattr(tool, "name", None)
-        or getattr(func, "__name__", None)
-        or getattr(tool, "__name__", None)
-    )
+    name = _registered_tool_name(tool, func)
     return str(name or "tool")
 
 

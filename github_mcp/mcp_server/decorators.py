@@ -45,7 +45,7 @@ from github_mcp.mcp_server.context import (
     FASTMCP_AVAILABLE,
 )
 from github_mcp.mcp_server.errors import _structured_tool_error
-from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
+from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.mcp_server.schemas import (
     _schema_from_signature,
     _normalize_input_schema,
@@ -681,9 +681,7 @@ def _register_with_fastmcp(
         # stub tool object so HTTP routes and introspection can function.
         tool_obj: Any = _ToolStub(name=name, description=description)
         _REGISTERED_MCP_TOOLS[:] = [
-            (t, f)
-            for (t, f) in _REGISTERED_MCP_TOOLS
-            if (getattr(t, "name", None) or getattr(f, "__name__", None)) != name
+            (t, f) for (t, f) in _REGISTERED_MCP_TOOLS if _registered_tool_name(t, f) != name
         ]
         _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
         return tool_obj
@@ -753,9 +751,7 @@ def _register_with_fastmcp(
         raise RuntimeError("Failed to register tool with FastMCP")
 
     _REGISTERED_MCP_TOOLS[:] = [
-        (t, f)
-        for (t, f) in _REGISTERED_MCP_TOOLS
-        if (getattr(t, "name", None) or getattr(f, "__name__", None)) != name
+        (t, f) for (t, f) in _REGISTERED_MCP_TOOLS if _registered_tool_name(t, f) != name
     ]
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
     return tool_obj
@@ -935,6 +931,7 @@ def mcp_tool(
                 raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
             wrapper.__mcp_input_schema__ = schema
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
+            wrapper.__mcp_tool_name__ = tool_name
             wrapper.__mcp_write_action__ = bool(write_action)
             wrapper.__mcp_visibility__ = visibility
             _apply_tool_metadata(
@@ -1110,6 +1107,7 @@ def mcp_tool(
             raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
         wrapper.__mcp_input_schema__ = schema
         wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
+        wrapper.__mcp_tool_name__ = tool_name
         wrapper.__mcp_write_action__ = bool(write_action)
         wrapper.__mcp_visibility__ = visibility
         _apply_tool_metadata(
