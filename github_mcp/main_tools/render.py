@@ -1,9 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from github_mcp.render_api import render_request
+
+
+def _normalize_direction(value: Optional[str]) -> str:
+    if value is None:
+        return "backward"
+    if not isinstance(value, str):
+        raise TypeError("direction must be a string")
+    cleaned = value.strip().lower()
+    if not cleaned:
+        return "backward"
+    if cleaned not in {"forward", "backward"}:
+        raise ValueError("direction must be one of: forward, backward")
+    return cleaned
 
 
 def _require_non_empty_str(name: str, value: Any) -> str:
@@ -234,6 +247,89 @@ async def restart_render_service(service_id: str) -> Dict[str, Any]:
     return await render_request("POST", f"/services/{service_id}/restart")
 
 
+async def list_render_logs(
+    owner_id: str,
+    resources: List[str],
+    *,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    direction: str = "backward",
+    limit: int = 200,
+    instance: Optional[str] = None,
+    host: Optional[str] = None,
+    level: Optional[str] = None,
+    method: Optional[str] = None,
+    status_code: Optional[int] = None,
+    path: Optional[str] = None,
+    text: Optional[str] = None,
+    log_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    """List logs for one or more Render resources.
+
+    This maps directly onto Render's public `/v1/logs` API, which requires an
+    `ownerId` and one or more `resource` ids.
+
+    Args:
+      owner_id: Render owner/workspace id.
+      resources: One or more Render resource ids (service/job/postgres/etc.).
+      start_time/end_time: ISO8601 timestamps (examples: 2026-01-14T12:34:56Z).
+      direction: "backward" (default) or "forward".
+      limit: Max log lines to return (clamped to [1, 1000]).
+
+    Optional filters are best-effort and passed through when present.
+    """
+
+    owner_id = _require_non_empty_str("owner_id", owner_id)
+    if not isinstance(resources, list) or not resources:
+        raise ValueError("resources must be a non-empty list of resource ids")
+    cleaned_resources: List[str] = []
+    for idx, rid in enumerate(resources):
+        cleaned_resources.append(_require_non_empty_str(f"resources[{idx}]", rid))
+
+    start_norm = _normalize_iso8601(start_time, name="start_time")
+    end_norm = _normalize_iso8601(end_time, name="end_time")
+
+    if start_norm and end_norm:
+        start_dt = _parse_iso8601(start_norm, name="start_time")
+        end_dt = _parse_iso8601(end_norm, name="end_time")
+        if start_dt > end_dt:
+            raise ValueError("start_time must be <= end_time")
+
+    params: Dict[str, Any] = {
+        "ownerId": owner_id,
+        # httpx will serialize list values as repeated query parameters.
+        "resource": cleaned_resources,
+        "direction": _normalize_direction(direction),
+        "limit": _normalize_limit(limit, default=200, min_value=1, max_value=1000),
+    }
+    if start_norm:
+        params["startTime"] = start_norm
+    if end_norm:
+        params["endTime"] = end_norm
+
+    # Best-effort optional filters (only pass known keys when non-empty).
+    for key, val in (
+        ("instance", _normalize_optional_str(instance)),
+        ("host", _normalize_optional_str(host)),
+        ("level", _normalize_optional_str(level)),
+        ("method", _normalize_optional_str(method)),
+        ("path", _normalize_optional_str(path)),
+        ("text", _normalize_optional_str(text)),
+        ("type", _normalize_optional_str(log_type)),
+    ):
+        if val:
+            params[key] = val
+
+    if status_code is not None:
+        if isinstance(status_code, bool):
+            raise TypeError("status_code must be an integer")
+        if not isinstance(status_code, int):
+            raise TypeError("status_code must be an integer")
+        params["statusCode"] = status_code
+
+    return await render_request("GET", "/logs", params=params)
+
+
 async def get_render_logs(
     resource_type: str,
     resource_id: str,
@@ -244,7 +340,9 @@ async def get_render_logs(
 ) -> Dict[str, Any]:
     """Fetch logs for a Render resource.
 
-    Render's logs endpoint supports resourceType/resourceId plus optional time bounds.
+    Backwards-compatible wrapper for older callers that provided
+    (resource_type, resource_id). Render's current public API requires
+    `ownerId` and one or more `resource` ids.
 
     Args:
       resource_type: "service" or "job".
@@ -267,17 +365,29 @@ async def get_render_logs(
         if start_dt > end_dt:
             raise ValueError("start_time must be <= end_time")
 
-    params: Dict[str, Any] = {
-        "resourceType": resource_type,
-        "resourceId": resource_id,
-        "limit": _normalize_limit(limit, default=200, min_value=1, max_value=1000),
-    }
-    if start_norm:
-        params["startTime"] = start_norm
-    if end_norm:
-        params["endTime"] = end_norm
+    # Services can be resolved to an ownerId via /services/{id}.
+    if resource_type == "service":
+        svc = await get_render_service(service_id=resource_id)
+        owner_id = None
+        if isinstance(svc, dict):
+            owner_id = svc.get("ownerId") or svc.get("owner_id")
+        if not owner_id:
+            raise ValueError(
+                "Unable to resolve ownerId for service. Ensure the Render service id is correct."
+            )
+        return await list_render_logs(
+            owner_id=str(owner_id),
+            resources=[resource_id],
+            start_time=start_norm,
+            end_time=end_norm,
+            limit=limit,
+        )
 
-    return await render_request("GET", "/logs", params=params)
+    # Jobs (and other resource types) require the caller to provide ownerId.
+    # Keep legacy behavior explicit and actionable.
+    raise ValueError(
+        "Render logs now require owner_id. Use list_render_logs(owner_id=..., resources=[...])."
+    )
 
 
 __all__ = [
@@ -286,6 +396,7 @@ __all__ = [
     "get_render_deploy",
     "get_render_logs",
     "get_render_service",
+    "list_render_logs",
     "list_render_deploys",
     "list_render_owners",
     "list_render_services",

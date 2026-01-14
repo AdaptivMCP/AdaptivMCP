@@ -248,6 +248,12 @@ HUMAN_LOGS = _env_flag("HUMAN_LOGS", "true")
 # turning on additional flags.
 LOG_TOOL_CALLS = _env_flag("LOG_TOOL_CALLS", "true")
 
+# Whether to emit tool_call_started lines.
+#
+# To keep provider logs concise, we default to logging only tool completion
+# (success/failure) which already includes correlation ids + duration.
+LOG_TOOL_CALL_STARTS = _env_flag("LOG_TOOL_CALL_STARTS", "false")
+
 # When enabled, include full tool args and full tool results in logs.
 # WARNING: This can create very large log lines and may stress hosted log ingestion.
 LOG_TOOL_PAYLOADS = _env_flag("LOG_TOOL_PAYLOADS", "false")
@@ -502,37 +508,6 @@ class _StructuredFormatter(logging.Formatter):
         return base
 
 
-class _ErrorsOnlyJSONFormatter(logging.Formatter):
-    """Formatter that emits a single JSON object per log line.
-
-    This is intended for the dedicated errors-only logger so operators can
-    filter exclusively for actionable failures.
-    """
-
-    def format(self, record: logging.LogRecord) -> str:  # pragma: no cover
-        ts = getattr(record, "created", None)
-        ts_iso = None
-        if isinstance(ts, (int, float)):
-            ts_iso = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).isoformat()
-        payload: dict[str, object] = {
-            "ts": ts_iso or ts,
-            "level": getattr(record, "levelname", None),
-            "logger": getattr(record, "name", None),
-            "message": record.getMessage(),
-        }
-
-        extra_payload = _extract_log_extras(record)
-        if extra_payload:
-            payload.update(_sanitize_for_logs(extra_payload))
-
-        if record.exc_info:
-            payload["exception"] = "".join(traceback.format_exception(*record.exc_info)).strip()
-        elif getattr(record, "exc_text", None):
-            payload["exception"] = str(getattr(record, "exc_text"))
-
-        return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-
-
 _STANDARD_LOG_FIELDS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys())
 
 
@@ -572,17 +547,6 @@ def _configure_logging() -> None:
         force=True,
     )
 
-    # Dedicated errors-only sink. This logger does not propagate to the root
-    # handler to avoid duplicate lines.
-    errors_handler = logging.StreamHandler()
-    errors_handler.setLevel(logging.ERROR)
-    errors_handler.setFormatter(_ErrorsOnlyJSONFormatter())
-
-    errors_logger = logging.getLogger("github_mcp.errors")
-    errors_logger.setLevel(logging.ERROR)
-    errors_logger.propagate = False
-    errors_logger.addHandler(errors_handler)
-
     # Reduce noisy framework logs in provider log streams.
     for noisy in (
         "uvicorn.access",
@@ -600,7 +564,8 @@ def _configure_logging() -> None:
 _configure_logging()
 
 BASE_LOGGER = logging.getLogger("github_mcp")
-ERRORS_LOGGER = logging.getLogger("github_mcp.errors")
+# Back-compat: a single provider logger is sufficient.
+ERRORS_LOGGER = BASE_LOGGER
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 
 SERVER_START_TIME = time.time()
@@ -657,6 +622,7 @@ __all__ = [
     "LOG_RENDER_HTTP",
     "LOG_RENDER_HTTP_BODIES",
     "LOG_TOOL_CALLS",
+    "LOG_TOOL_CALL_STARTS",
     "LOG_HTTP_REQUESTS",
     "MAX_CONCURRENCY",
     "RENDER_API_BASE",

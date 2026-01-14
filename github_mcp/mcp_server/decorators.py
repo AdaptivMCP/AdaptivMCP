@@ -30,8 +30,8 @@ from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
 from github_mcp.config import (
     BASE_LOGGER,
-    ERRORS_LOGGER,
     HUMAN_LOGS,
+    LOG_TOOL_CALL_STARTS,
     LOG_TOOL_CALLS,
     LOG_TOOL_PAYLOADS,
     shorten_token,
@@ -461,7 +461,9 @@ def _log_tool_start(
     schema_present: bool,
     all_args: Mapping[str, Any],
 ) -> None:
-    if not LOG_TOOL_CALLS:
+    # Default: avoid logging both start + completion for every tool call.
+    # Completion logs already include correlation ids + duration.
+    if not LOG_TOOL_CALLS or not LOG_TOOL_CALL_STARTS:
         return
     payload = _tool_log_payload(
         tool_name=tool_name,
@@ -591,12 +593,7 @@ def _log_tool_failure(
         exc_info=exc,
     )
 
-    # Errors-only sink for dashboards/filters.
-    ERRORS_LOGGER.error(
-        "tool_error",
-        extra={"event": "tool_error", **payload},
-        exc_info=exc,
-    )
+    # NOTE: we intentionally emit a single provider log line per failure.
 
 
 def _emit_tool_error(
