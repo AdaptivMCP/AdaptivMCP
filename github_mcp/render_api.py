@@ -97,10 +97,11 @@ def _apply_render_version_prefix(path: str) -> str:
 
 
 def _active_event_loop() -> asyncio.AbstractEventLoop:
-    try:
-        return asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.get_event_loop()
+    """Backward-compatible wrapper for shared active-loop helper."""
+
+    from .async_utils import active_event_loop
+
+    return active_event_loop()
 
 
 def _get_render_token() -> str:
@@ -141,47 +142,23 @@ def _refresh_async_client(
     rebuild,
     force_refresh: bool = False,
 ):
-    loop = _active_event_loop()
+    from .async_utils import refresh_async_client
 
-    needs_refresh = force_refresh or client is None
-    if not needs_refresh:
-        try:
-            if client.is_closed:
-                needs_refresh = True
-        except Exception:
-            needs_refresh = True
+    def _log_debug(msg: str) -> None:
+        BASE_LOGGER.debug(msg)
 
-    if not needs_refresh and client_loop is not None and client_loop is not loop:
-        needs_refresh = True
+    def _log_debug_exc(msg: str) -> None:
+        BASE_LOGGER.debug(msg, exc_info=True)
 
-    if not needs_refresh:
-        if client is None:
-            needs_refresh = True
-        else:
-            return client, client_loop or loop
-
-    try:
-        if client is not None and not getattr(client, "is_closed", False):
-            if client_loop is not None and not client_loop.is_closed():
-                client_loop.create_task(client.aclose())
-            else:
-                try:
-                    loop.create_task(client.aclose())
-                except Exception:
-                    try:
-                        if not loop.is_closed() and not loop.is_running():
-                            loop.run_until_complete(client.aclose())
-                        else:
-                            asyncio.run(client.aclose())
-                    except Exception:
-                        BASE_LOGGER.debug(
-                            "Failed to close Render AsyncClient during refresh", exc_info=True
-                        )
-    except Exception:
-        BASE_LOGGER.debug("Failed to refresh Render AsyncClient", exc_info=True)
-
-    fresh_client = rebuild()
-    return fresh_client, loop
+    refreshed, loop = refresh_async_client(
+        client,
+        client_loop=client_loop,
+        rebuild=rebuild,
+        force_refresh=force_refresh,
+        log_debug=_log_debug,
+        log_debug_exc=_log_debug_exc,
+    )
+    return refreshed, loop
 
 
 def _render_client_instance() -> "httpx.AsyncClient":
@@ -232,46 +209,27 @@ def _render_client_instance() -> "httpx.AsyncClient":
 
 
 def _parse_rate_limit_delay_seconds(resp: "httpx.Response") -> Optional[float]:
-    retry_after = resp.headers.get("Retry-After")
-    if retry_after:
-        try:
-            return max(0.0, float(retry_after))
-        except ValueError:
-            return None
+    from .http_utils import parse_rate_limit_delay_seconds
 
-    reset_header = resp.headers.get("Ratelimit-Reset") or resp.headers.get("X-RateLimit-Reset")
-    if reset_header:
-        try:
-            raw = float(reset_header)
-        except ValueError:
-            return None
-        # Some APIs send an epoch timestamp, others send seconds-until-reset.
-        if raw > 10_000_000_000:  # epoch milliseconds
-            return max(0.0, (raw / 1000.0) - time.time())
-        if raw > 1_000_000_000:  # epoch seconds
-            return max(0.0, raw - time.time())
-        return max(0.0, raw)
-
-    return None
+    return parse_rate_limit_delay_seconds(
+        resp,
+        reset_header_names=("Ratelimit-Reset", "X-RateLimit-Reset"),
+        allow_epoch_millis=True,
+        allow_duration_seconds=True,
+    )
 
 
 def _extract_response_body(resp: "httpx.Response") -> Any | None:
-    try:
-        return resp.json()
-    except Exception:
-        return None
+    from .http_utils import extract_response_json
+
+    return extract_response_json(resp)
 
 
 def _build_response_payload(resp: "httpx.Response", *, body: Any | None = None) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {
-        "status_code": getattr(resp, "status_code", None),
-        "headers": dict(getattr(resp, "headers", {}) or {}),
-    }
-    if body is not None:
-        payload["json"] = body
-    else:
-        payload["text"] = getattr(resp, "text", "")
-    return payload
+    # Backward-compatible wrapper for shared response payload builder.
+    from github_mcp.http_utils import build_response_payload
+
+    return build_response_payload(resp, body=body)
 
 
 async def _send_request(
@@ -375,7 +333,16 @@ async def render_request(
                 retry_delay = RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
 
             if attempt < max_attempts and retry_delay <= RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS:
-                await asyncio.sleep(retry_delay)
+                # Apply jitter to reduce synchronized retry storms.
+                from .retry_utils import jitter_sleep_seconds
+
+                await asyncio.sleep(
+                    jitter_sleep_seconds(
+                        retry_delay,
+                        respect_min=header_delay is not None,
+                        cap_seconds=1.0,
+                    )
+                )
                 attempt += 1
                 continue
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import random
 import logging
 import os
 import sys
@@ -219,10 +218,7 @@ def _get_concurrency_semaphore() -> asyncio.Semaphore:
     collected automatically.
     """
 
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.get_event_loop()
+    loop = _active_event_loop()
 
     semaphore = _loop_semaphores.get(loop)
     loop_hint = getattr(semaphore, "_loop", None) if semaphore is not None else None
@@ -234,49 +230,21 @@ def _get_concurrency_semaphore() -> asyncio.Semaphore:
 
 
 def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> Optional[float]:
-    retry_after = resp.headers.get("Retry-After")
-    if retry_after:
-        try:
-            return max(0.0, float(retry_after))
-        except ValueError:
-            return None
+    from .http_utils import parse_rate_limit_delay_seconds
 
-    reset_header = resp.headers.get("X-RateLimit-Reset")
-    if reset_header:
-        try:
-            reset_epoch = float(reset_header)
-        except ValueError:
-            return None
-        return max(0.0, reset_epoch - time.time())
-    return None
+    return parse_rate_limit_delay_seconds(
+        resp,
+        reset_header_names=("X-RateLimit-Reset",),
+    )
 
 
 def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool) -> float:
-    """Apply randomized jitter to sleep durations.
+    """Backward-compatible wrapper for shared retry jitter."""
 
-    Jitter reduces synchronized retry storms across concurrent clients.
+    # Import locally to avoid import-cycle surprises during startup.
+    from .retry_utils import jitter_sleep_seconds
 
-    When ``respect_min`` is True (e.g. Retry-After/X-RateLimit-Reset driven delays),
-    jitter is added *after* the minimum delay so the retry is not supported happens early.
-    """
-
-    try:
-        delay = float(delay_seconds)
-    except Exception:
-        return 0.0
-
-    if delay <= 0:
-        return 0.0
-
-    # Keep tests deterministic.
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return delay
-
-    if respect_min:
-        return delay + random.uniform(0.0, min(1.0, delay * 0.25))
-
-    # "Full jitter" for exponential backoff.
-    return random.uniform(0.0, delay)
+    return jitter_sleep_seconds(delay_seconds, respect_min=respect_min, cap_seconds=1.0)
 
 
 def _is_rate_limit_response(*, resp: httpx.Response, message_lower: str, error_flag: bool) -> bool:
@@ -287,22 +255,25 @@ def _is_rate_limit_response(*, resp: httpx.Response, message_lower: str, error_f
         return True
     if resp.headers.get("X-RateLimit-Remaining") == "0":
         return True
-    if "rate limit" in message_lower:
-        return True
-    if "secondary rate limit" in message_lower:
-        return True
-    if "abuse detection" in message_lower:
+    # Keep the substring checks stable but avoid duplicated / shadowed conditions.
+    if any(
+        marker in message_lower
+        for marker in (
+            "secondary rate limit",
+            "rate limit",
+            "abuse detection",
+        )
+    ):
         return True
     return False
 
 
 def _active_event_loop() -> asyncio.AbstractEventLoop:
-    """Return the active asyncio event loop, tolerant of missing running loop."""
+    """Backward-compatible wrapper for shared active-loop helper."""
 
-    try:
-        return asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.get_event_loop()
+    from .async_utils import active_event_loop
+
+    return active_event_loop()
 
 
 def _get_search_rate_limit_state() -> Dict[str, Any]:
@@ -340,57 +311,25 @@ def _refresh_async_client(
     rebuild: Callable[[], httpx.AsyncClient],
     force_refresh: bool = False,
 ) -> Tuple[httpx.AsyncClient, asyncio.AbstractEventLoop]:
-    """Return a loop-safe AsyncClient, rebuilding if necessary.
+    """Backward-compatible wrapper for shared AsyncClient refresher."""
 
-    The underlying event loop may change after idle periods in connector
-    environments. Recreate the client when the loop differs or the client is
-    already closed so outbound requests stay bound to the active loop.
-    """
+    from .async_utils import refresh_async_client
 
-    loop = _active_event_loop()
+    def _log_debug(msg: str) -> None:
+        logging.debug(msg)
 
-    needs_refresh = force_refresh or client is None
-    if not needs_refresh:
-        try:
-            if client.is_closed:
-                needs_refresh = True
-        except Exception:
-            needs_refresh = True
+    def _log_debug_exc(msg: str) -> None:
+        logging.debug(msg, exc_info=True)
 
-    if not needs_refresh and client_loop is not None and client_loop is not loop:
-        needs_refresh = True
-
-    if not needs_refresh:
-        # `client` should be non-None here because `needs_refresh` is false.
-        # Avoid `assert` in runtime code paths so optimized runs don't elide checks.
-        if client is None:
-            needs_refresh = True
-        else:
-            return client, client_loop or loop
-
-    try:
-        if client is not None and not getattr(client, "is_closed", False):
-            if client_loop is not None and not client_loop.is_closed():
-                client_loop.create_task(client.aclose())
-            else:
-                # httpx.AsyncClient does not implement `close()`; use `aclose()`.
-                # Best-effort shutdown without assuming an active running loop.
-                try:
-                    loop.create_task(client.aclose())
-                except Exception:
-                    try:
-                        if not loop.is_closed() and not loop.is_running():
-                            loop.run_until_complete(client.aclose())
-                        else:
-                            asyncio.run(client.aclose())
-                    except Exception:
-                        # Shutdown is best-effort; never raise during refresh.
-                        logging.debug("Failed to close AsyncClient during refresh", exc_info=True)
-    except Exception:
-        logging.debug("Failed to refresh AsyncClient", exc_info=True)
-
-    fresh_client = rebuild()
-    return fresh_client, loop
+    refreshed, loop = refresh_async_client(
+        client,
+        client_loop=client_loop,
+        rebuild=rebuild,
+        force_refresh=force_refresh,
+        log_debug=_log_debug,
+        log_debug_exc=_log_debug_exc,
+    )
+    return refreshed, loop
 
 
 # ---------------------------------------------------------------------------
@@ -470,24 +409,17 @@ def _external_client_instance() -> httpx.AsyncClient:
 
 
 def _extract_response_body(resp: httpx.Response) -> Any | None:
-    if hasattr(resp, "json"):
-        try:
-            return resp.json()
-        except Exception:
-            return None
-    return None
+    from .http_utils import extract_response_json
+
+    return extract_response_json(resp)
 
 
 def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {
-        "status_code": resp.status_code,
-        "headers": dict(resp.headers),
-    }
-    if body is not None:
-        payload["json"] = body
-    else:
-        payload["text"] = resp.text
-    return payload
+    """Backward-compatible wrapper for shared response payload builder."""
+
+    from .http_utils import build_response_payload
+
+    return build_response_payload(resp, body=body)
 
 
 async def _send_request(
