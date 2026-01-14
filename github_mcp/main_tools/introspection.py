@@ -42,27 +42,27 @@ def list_write_tools() -> Dict[str, Any]:
         {
             "name": "ensure_workspace_clone",
             "category": "workspace",
-            "description": "Ensure a persistent workspace exists for a repo/ref.",
+            "description": "Ensure a persistent repo mirror (workspace clone) exists for a repo/ref.",
         },
         {
             "name": "commit_workspace",
             "category": "workspace",
-            "description": "Commit and optionally push changes from the persistent workspace.",
+            "description": "Commit and optionally push changes from the persistent repo mirror.",
         },
         {
             "name": "apply_patch",
             "category": "workspace",
-            "description": "Apply a unified diff patch inside the persistent workspace clone.",
+            "description": "Apply a unified diff patch inside the persistent repo mirror (workspace clone).",
         },
         {
             "name": "commit_workspace_files",
             "category": "workspace",
-            "description": "Commit a specific list of files from the persistent workspace.",
+            "description": "Commit a specific list of files from the persistent repo mirror.",
         },
         {
             "name": "run_tests",
             "category": "workspace",
-            "description": "Run tests (default: pytest) inside the persistent workspace clone.",
+            "description": "Run tests (default: pytest) inside the persistent repo mirror (workspace clone).",
         },
         {
             "name": "trigger_workflow_dispatch",

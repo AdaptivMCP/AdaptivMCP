@@ -72,7 +72,7 @@ async def list_workspace_files(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """List files in the workspace clone."""
+    """List files in the repo mirror (workspace clone)."""
 
     # Alias: some clients use max_results instead of max_files.
     if max_results is not None:
@@ -167,7 +167,7 @@ async def search_workspace(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Search text files in the workspace clone (bounded, no shell).
+    """Search text files in the repo mirror (workspace clone) (bounded, no shell).
 
     Behavior for `query`:
     - Always treated as a literal substring match.

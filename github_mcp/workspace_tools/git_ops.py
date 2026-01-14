@@ -91,7 +91,7 @@ async def workspace_create_branch(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create a branch using the workspace (git), optionally pushing to origin.
+    """Create a branch using the repo mirror (workspace clone), optionally pushing to origin.
 
     This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
     """
@@ -145,7 +145,7 @@ async def workspace_delete_branch(
     owner: Optional[str] = None,
     repo: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Delete a non-default branch using the workspace clone.
+    """Delete a non-default branch using the repo mirror (workspace clone).
 
     This is the workspace counterpart to branch-creation helpers and is intended
     for closing out ephemeral feature branches once their work has been merged.
@@ -222,16 +222,16 @@ async def workspace_self_heal_branch(
     owner: Optional[str] = None,
     repo: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Detect a mangled workspace branch and recover to a fresh branch.
+    """Detect a mangled repo mirror branch and recover to a fresh branch.
 
-    This tool targets cases where a workspace clone becomes inconsistent (wrong
+    This tool targets cases where a repo mirror (workspace clone) becomes inconsistent (wrong
     branch checked out, merge/rebase state, conflicts, etc.). When healing, it:
 
-    1) Diagnoses the workspace clone for ``branch``.
+    1) Diagnoses the repo mirror for ``branch``.
     2) Optionally deletes the mangled branch (remote + best-effort local).
-    3) Resets the base branch workspace (default: ``main``).
+    3) Resets the base branch repo mirror (default: ``main``).
     4) Creates + pushes a new fresh branch.
-    5) Ensures a clean clone for the new branch.
+    5) Ensures a clean repo mirror for the new branch.
     6) Optionally returns a small repo snapshot to rebuild context.
 
     Returns plain-language step logs for UI rendering.
@@ -290,13 +290,13 @@ async def workspace_self_heal_branch(
 
         if not diag.get("status_is_clean") and not discard_uncommitted_changes:
             raise GitHubAPIError(
-                "Uncommitted changes detected in the workspace; set discard_uncommitted_changes=true to proceed."
+                "Uncommitted changes detected in the repo mirror; set discard_uncommitted_changes=true to proceed."
             )
 
         if dry_run:
             step(
                 "Dry run",
-                "Detected a mangled workspace; would delete/reset/recreate a branch, but dry_run=true.",
+                "Detected a mangled repo mirror; would delete/reset/recreate a branch, but dry_run=true.",
             )
             return {
                 "full_name": full_name,
@@ -309,15 +309,15 @@ async def workspace_self_heal_branch(
                 "diagnostics": diag,
             }
 
-        # Remove the local workspace dir for the mangled branch (forces a clean re-clone later).
+        # Remove the local repo mirror dir for the mangled branch (forces a clean re-clone later).
         mangled_workspace_dir = _tw()._workspace_path(
             full_name, _tw()._effective_ref_for_repo(full_name, branch)
         )
         if os.path.isdir(mangled_workspace_dir):
             shutil.rmtree(mangled_workspace_dir)
             step(
-                "Remove local workspace",
-                f"Deleted local workspace directory for '{branch}'.",
+                "Remove local repo mirror",
+                f"Deleted local repo mirror directory for '{branch}'.",
                 repo_dir=mangled_workspace_dir,
             )
 
@@ -341,14 +341,14 @@ async def workspace_self_heal_branch(
                 f"Keeping branch '{branch}' (delete_mangled_branch=false).",
             )
 
-        # Reset base branch workspace.
+        # Reset base branch repo mirror.
         if reset_base:
             base_repo_dir = await deps["clone_repo"](
                 full_name, ref=effective_base, preserve_changes=False
             )
             step(
                 "Reset base",
-                f"Reset local workspace for base ref '{effective_base}'.",
+                f"Reset local repo mirror for base ref '{effective_base}'.",
                 repo_dir=base_repo_dir,
             )
         else:
@@ -357,7 +357,7 @@ async def workspace_self_heal_branch(
             )
             step(
                 "Base ready",
-                f"Using existing base workspace for '{effective_base}' without resetting.",
+                f"Using existing base repo mirror for '{effective_base}' without resetting.",
                 repo_dir=base_repo_dir,
             )
 
@@ -400,11 +400,11 @@ async def workspace_self_heal_branch(
             timeout_seconds=300,
         )
 
-        # The freshly checked out local workspace is used for the new branch.
+        # The freshly checked out local repo mirror is used for the new branch.
         new_repo_dir = base_repo_dir
         step(
-            "Fresh workspace ready",
-            f"Created a clean workspace for '{candidate}'.",
+            "Fresh repo mirror ready",
+            f"Created a clean repo mirror for '{candidate}'.",
             repo_dir=new_repo_dir,
         )
 
@@ -468,7 +468,7 @@ async def workspace_sync_status(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Report how a workspace clone differs from its remote branch."""
+    """Report how a repo mirror (workspace clone) differs from its remote branch."""
     try:
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
@@ -498,7 +498,7 @@ async def workspace_sync_to_remote(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Reset a workspace clone to match the remote branch."""
+    """Reset a repo mirror (workspace clone) to match the remote branch."""
     try:
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
@@ -510,7 +510,7 @@ async def workspace_sync_to_remote(
 
         if (not discard_local_changes) and (not before["is_clean"] or before["ahead"] > 0):
             raise GitHubAPIError(
-                "Workspace has local changes or unpushed commits. "
+                "Repo mirror has local changes or unpushed commits. "
                 "Re-run with discard_local_changes=true to force sync."
             )
 
@@ -554,7 +554,7 @@ async def workspace_sync_bidirectional(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Sync workspace changes to the remote and refresh local state from GitHub."""
+    """Sync repo mirror changes to the remote and refresh local state from GitHub."""
     try:
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
@@ -570,14 +570,14 @@ async def workspace_sync_bidirectional(
             if snapshot["ahead"] > 0:
                 if not discard_local_changes:
                     raise GitHubAPIError(
-                        "Workspace and remote have diverged. "
+                        "Repo mirror and remote have diverged. "
                         "Re-run with discard_local_changes=true to reset to remote."
                     )
                 actions.append("reset_diverged_to_remote")
             elif not snapshot["is_clean"]:
                 if not discard_local_changes:
                     raise GitHubAPIError(
-                        "Workspace is behind remote and has local changes. "
+                        "Repo mirror is behind remote and has local changes. "
                         "Commit local changes or re-run with discard_local_changes=true."
                     )
                 actions.append("discard_local_changes")

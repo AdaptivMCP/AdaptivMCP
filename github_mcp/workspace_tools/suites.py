@@ -1,6 +1,6 @@
-"""Wrappers for running test/lint suites in the persistent workspace.
+"""Wrappers for running test/lint suites in the persistent repo mirror.
 
-This file is part of the public "workspace" tool surface.
+This file is part of the public "workspace" tool surface (repo mirror operations).
 
 Developer experience goals:
 - Keep the original contract of `run_quality_suite` intact by default.
@@ -245,7 +245,7 @@ async def run_tests(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Run the project's test command in the persistent workspace and summarize the result."""
+    """Run the project's test command in the persistent repo mirror and summarize the result."""
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
 
@@ -268,7 +268,7 @@ async def run_tests(
             "command": test_command,
             "error": result["error"],
             "controller_log": [
-                "Test run failed due to a workspace or command error.",
+                "Test run failed due to a repo mirror or command error.",
                 f"- Command: {test_command}",
                 f"- Error: {result['error'].get('error')}",
             ],
@@ -297,7 +297,7 @@ async def run_tests(
     status = "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
 
     summary_lines = [
-        "Completed test command in workspace:",
+        "Completed test command in repo mirror:",
         f"- Repo: {full_name}",
         f"- Ref: {ref}",
         f"- Command: {test_command}",
@@ -329,7 +329,7 @@ async def run_lint_suite(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Run the lint or static-analysis command in the workspace."""
+    """Run the lint or static-analysis command in the repo mirror."""
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 600)
 
@@ -744,7 +744,7 @@ async def run_quality_suite(
         "workdir": tests_raw.get("workdir") if isinstance(tests_raw, dict) else workdir,
         "result": cmd_result,
         "controller_log": [
-            "Completed test command in workspace:",
+            "Completed test command in repo mirror:",
             f"- Repo: {full_name}",
             f"- Ref: {ref}",
             f"- Command: {test_command}",

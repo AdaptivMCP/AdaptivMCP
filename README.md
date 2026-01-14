@@ -1,13 +1,14 @@
 # Adaptiv MCP (GitHub workspace MCP server)
 
-## Workflow: clone vs GitHub live state
+## Workflow: repo mirror vs GitHub live state
 
-This server maintains a persistent server-side git clone for workspace-backed tools.
-That clone is the place to edit, run commands, commit, and push.
+This server maintains a persistent server-side git copy for workspace-backed tools.
+In this documentation, we call that copy the **repo mirror** to avoid confusion with the tool name `ensure_workspace_clone`.
+The repo mirror is the place to edit, run commands, commit, and push.
 
-The clone is not automatically the live GitHub state. GitHub becomes the source of truth after you push.
-If you need the local clone to exactly match a remote branch after merges/force-updates, you can reset the workspace by re-cloning.
-`ensure_workspace_clone` with `"reset": true` recreates the workspace clone before continuing work.
+The repo mirror is not automatically the live GitHub state. GitHub becomes the source of truth after you push.
+If you need the repo mirror to exactly match a remote branch after merges/force-updates, you can reset the workspace by rebuilding it.
+`ensure_workspace_clone` with `"reset": true` recreates the repo mirror before continuing work.
 
 Adaptiv is designed to act as an AI model's personal PC, assisting users through the
 connected Adaptiv connector with multiple tasks and queries. Today it ships with

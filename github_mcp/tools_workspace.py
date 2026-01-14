@@ -1,4 +1,4 @@
-"""Public workspace tools.
+"""Public workspace tools (repo mirror operations).
 
 This module keeps a stable surface for callers and tests.
 Implementation is split across `github_mcp.workspace_tools.*`.

@@ -1,4 +1,4 @@
-# Workspace PR helpers.
+# Repo mirror PR helpers.
 
 from __future__ import annotations
 
@@ -31,9 +31,9 @@ async def commit_and_open_pr_from_workspace(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Commit workspace changes on `ref` and open a PR into `base`.
+    """Commit repo mirror changes on `ref` and open a PR into `base`.
 
-    This helper is intended for the common "edit in workspace -> commit/push -> open PR" flow.
+    This helper is intended for the common "edit in repo mirror -> commit/push -> open PR" flow.
 
     Notes:
     - This tool only pushes to the current `ref` (feature branch). It does not mutate the base branch.

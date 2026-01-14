@@ -114,7 +114,7 @@ async def delete_workspace_paths(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Delete one or more paths from the workspace clone.
+    """Delete one or more paths from the repo mirror (workspace clone).
 
     This tool exists because some environments can block patch-based file deletions.
     typical this over embedding file deletions into patches.
@@ -182,7 +182,7 @@ async def get_workspace_file_contents(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Read a file from the persistent workspace clone (no shell)."""
+    """Read a file from the persistent repo mirror (workspace clone) (no shell)."""
 
     try:
         deps = _tw()._workspace_deps()
@@ -212,7 +212,7 @@ async def set_workspace_file_contents(
 ) -> Dict[str, Any]:
     """Replace a workspace file's contents by writing the full file text.
 
-    This is the preferred write primitive for workspace edits. It avoids
+    This is the preferred write primitive for workspace edits in the repo mirror. It avoids
     patch/unified-diff application.
     """
 
@@ -252,7 +252,7 @@ async def apply_patch(
     repo: Optional[str] = None,
     branch: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Apply a unified diff patch to the persistent workspace clone."""
+    """Apply a unified diff patch to the persistent repo mirror (workspace clone)."""
 
     if not isinstance(patch, str) or not patch.strip():
         raise ValueError("patch must be a non-empty string")

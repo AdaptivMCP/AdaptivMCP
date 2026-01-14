@@ -5,21 +5,21 @@ patterns for the GitHub MCP (Model Context Protocol) server.
 
 ## Key concepts
 
-1) Repository clone (persistent)
+1) Persistent repo mirror (server-side git copy)
 
-When you use any workspace-backed tool, the server maintains a persistent git clone of the target repository on the server filesystem. This clone is what workspace tools operate on (editing files, running commands, committing, and pushing).
+When you use any workspace-backed tool, the server maintains a persistent git copy of the target repository on the server filesystem. In this documentation, we call that copy the **repo mirror** to avoid confusion with the tool name `ensure_workspace_clone`. The repo mirror is what workspace tools operate on (editing files, running commands, committing, and pushing).
 
-Important: the persistent clone is not the live GitHub state. It is a local copy that becomes “live” on GitHub after you push.
+Important: the repo mirror is not the live GitHub state. It is a local copy that becomes “live” on GitHub after you push.
 
-2) Server “workspace”
+2) Server “workcell” (execution environment)
 
-In this project’s terminology, “workspace” refers to the server-side environment where the persistent clone lives and where commands run. It can be thought of as a stable working directory plus the repo clone.
+In this document, we use **workcell** to describe the server-side environment where the repo mirror lives and where commands run. It can be thought of as a stable working directory plus the repo mirror.
 
-Because the workspace holds the clone, the two terms are closely related, but the clone is the source of truth for edits, while GitHub remains the source of truth for the remote state.
+Because the workcell holds the repo mirror, the two terms are closely related, but the repo mirror is the source of truth for edits, while GitHub remains the source of truth for the remote state.
 
 3) GitHub API tools vs workspace tools
 
-- Workspace tools: operate on the persistent clone (local filesystem + git).
+- Workspace tools: operate on the repo mirror (local filesystem + git).
 - GitHub API tools: inspect or mutate GitHub’s remote state (issues, PRs, Actions, contents API, etc.).
 
 ## Write gate (auto-approval)
@@ -39,7 +39,7 @@ Introspection and actions-compat listings expose:
 ## What this server provides
 
 - MCP tool surface for GitHub operations: repositories, issues, PRs, actions, files
-- Workspace-backed commands for local edits (via the persistent clone)
+- Workspace-backed commands for local edits (via the repo mirror)
 - Health diagnostics via /healthz
 
 For a complete tool catalog and schemas, see `Detailed_Tools.md`.
@@ -75,25 +75,25 @@ If REST helpers are blocked by client safety gating, the GraphQL fallbacks cover
 - list_workflow_runs_graphql, list_recent_failures_graphql
 - get_repo_dashboard_graphql
 
-### Edit workflows (clone-first)
+### Edit workflows (mirror-first)
 
-Edits are typically done in the persistent clone.
+Edits are typically done in the repo mirror.
 
 Typical flow:
 
-1. Prepare or reuse the clone
-   - `ensure_workspace_clone` creates or reuses the persistent clone.
-   - `workspace_sync_status` reports whether the clone is ahead/behind or has uncommitted changes.
+1. Prepare or reuse the repo mirror
+   - `ensure_workspace_clone` creates or reuses the repo mirror.
+   - `workspace_sync_status` reports whether the repo mirror is ahead/behind or has uncommitted changes.
 
    Recommended: do active work on a feature branch.
    - `workspace_create_branch` creates a new branch from a base ref (and can push it).
    - Avoid committing directly on the default branch unless you explicitly intend to.
 
-2. Make changes in the clone
+2. Make changes in the repo mirror
    - Edit files using workspace file tools or shell editors.
    - Validate changes using your normal commands (tests, linters, etc.).
 
-3. Commit and push from the clone
+3. Commit and push from the repo mirror
    - `terminal_command` (or the higher-level git helpers) runs:
      - git add
      - git commit
@@ -104,21 +104,21 @@ Typical flow:
    - This tool pushes only to the current `ref` (the feature branch) and then opens a PR into `base`.
 
 4. Refresh when you need a clean snapshot
-   - The local clone does not automatically reflect the live GitHub state unless you fetch/pull or recreate the clone.
-   - To align the clone with a branch’s remote state, `workspace_sync_to_remote` updates it.
-   - As a last resort, `ensure_workspace_clone(reset=true)` re-clones.
+   - The repo mirror does not automatically reflect the live GitHub state unless you fetch/pull or recreate it.
+   - To align the repo mirror with a branch’s remote state, `workspace_sync_to_remote` updates it.
+   - As a last resort, `ensure_workspace_clone(reset=true)` rebuilds the repo mirror.
 
 ### GitHub API usage guidance
 
-Because the clone is not the live GitHub state, GitHub API tools are typically used for:
+Because the repo mirror is not the live GitHub state, GitHub API tools are typically used for:
 
 - Workspace tools for changes, followed by push.
 - GitHub API tools to confirm live state (PR status, CI, branch contents, etc.).
-- Re-sync/re-clone when the clone needs to match GitHub exactly (for example, after a merge or force-update).
+- Re-sync/rebuild when the repo mirror needs to match GitHub exactly (for example, after a merge or force-update).
 
 ## Behavior notes
 
-- Workspace persistence: the persistent clone survives across tool calls until explicitly deleted or overwritten.
+- Workspace persistence: the repo mirror survives across tool calls until explicitly deleted or overwritten.
 - Request deduplication: the server uses request metadata (session + message) to avoid duplicate tool execution.
 - ChatGPT metadata: the server captures safe ChatGPT headers (conversation, assistant, project, org, session, user IDs) for correlation and includes them in request context/logging.
 - Cache control: dynamic endpoints are served with `Cache-Control: no-store`; static assets under `/static` are cacheable.
