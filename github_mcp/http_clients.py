@@ -459,15 +459,11 @@ def _extract_response_body(resp: httpx.Response) -> Any | None:
 
 
 def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {
-        "status_code": resp.status_code,
-        "headers": dict(resp.headers),
-    }
-    if body is not None:
-        payload["json"] = body
-    else:
-        payload["text"] = resp.text
-    return payload
+    """Backward-compatible wrapper for shared response payload builder."""
+
+    from .http_utils import build_response_payload
+
+    return build_response_payload(resp, body=body)
 
 
 async def _send_request(

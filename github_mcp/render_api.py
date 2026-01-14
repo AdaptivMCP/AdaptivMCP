@@ -263,15 +263,10 @@ def _extract_response_body(resp: "httpx.Response") -> Any | None:
 
 
 def _build_response_payload(resp: "httpx.Response", *, body: Any | None = None) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {
-        "status_code": getattr(resp, "status_code", None),
-        "headers": dict(getattr(resp, "headers", {}) or {}),
-    }
-    if body is not None:
-        payload["json"] = body
-    else:
-        payload["text"] = getattr(resp, "text", "")
-    return payload
+    # Backward-compatible wrapper for shared response payload builder.
+    from github_mcp.http_utils import build_response_payload
+
+    return build_response_payload(resp, body=body)
 
 
 async def _send_request(
