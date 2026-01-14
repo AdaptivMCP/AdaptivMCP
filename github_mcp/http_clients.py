@@ -233,21 +233,12 @@ def _get_concurrency_semaphore() -> asyncio.Semaphore:
 
 
 def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> Optional[float]:
-    retry_after = resp.headers.get("Retry-After")
-    if retry_after:
-        try:
-            return max(0.0, float(retry_after))
-        except ValueError:
-            return None
+    from .http_utils import parse_rate_limit_delay_seconds
 
-    reset_header = resp.headers.get("X-RateLimit-Reset")
-    if reset_header:
-        try:
-            reset_epoch = float(reset_header)
-        except ValueError:
-            return None
-        return max(0.0, reset_epoch - time.time())
-    return None
+    return parse_rate_limit_delay_seconds(
+        resp,
+        reset_header_names=("X-RateLimit-Reset",),
+    )
 
 
 def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool) -> float:
@@ -450,12 +441,9 @@ def _external_client_instance() -> httpx.AsyncClient:
 
 
 def _extract_response_body(resp: httpx.Response) -> Any | None:
-    if hasattr(resp, "json"):
-        try:
-            return resp.json()
-        except Exception:
-            return None
-    return None
+    from .http_utils import extract_response_json
+
+    return extract_response_json(resp)
 
 
 def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> Dict[str, Any]:

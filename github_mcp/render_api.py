@@ -232,34 +232,20 @@ def _render_client_instance() -> "httpx.AsyncClient":
 
 
 def _parse_rate_limit_delay_seconds(resp: "httpx.Response") -> Optional[float]:
-    retry_after = resp.headers.get("Retry-After")
-    if retry_after:
-        try:
-            return max(0.0, float(retry_after))
-        except ValueError:
-            return None
+    from .http_utils import parse_rate_limit_delay_seconds
 
-    reset_header = resp.headers.get("Ratelimit-Reset") or resp.headers.get("X-RateLimit-Reset")
-    if reset_header:
-        try:
-            raw = float(reset_header)
-        except ValueError:
-            return None
-        # Some APIs send an epoch timestamp, others send seconds-until-reset.
-        if raw > 10_000_000_000:  # epoch milliseconds
-            return max(0.0, (raw / 1000.0) - time.time())
-        if raw > 1_000_000_000:  # epoch seconds
-            return max(0.0, raw - time.time())
-        return max(0.0, raw)
-
-    return None
+    return parse_rate_limit_delay_seconds(
+        resp,
+        reset_header_names=("Ratelimit-Reset", "X-RateLimit-Reset"),
+        allow_epoch_millis=True,
+        allow_duration_seconds=True,
+    )
 
 
 def _extract_response_body(resp: "httpx.Response") -> Any | None:
-    try:
-        return resp.json()
-    except Exception:
-        return None
+    from .http_utils import extract_response_json
+
+    return extract_response_json(resp)
 
 
 def _build_response_payload(resp: "httpx.Response", *, body: Any | None = None) -> Dict[str, Any]:
