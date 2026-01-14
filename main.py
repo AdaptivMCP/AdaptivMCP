@@ -90,6 +90,7 @@ from github_mcp.workspace import (
 )
 from github_mcp.http_routes.actions_compat import register_actions_compat_routes
 from github_mcp.http_routes.healthz import register_healthz_route
+from github_mcp.http_routes.render import register_render_routes
 from github_mcp.http_routes.tool_registry import register_tool_registry_routes
 from github_mcp.http_routes.ui import register_ui_routes
 from starlette.staticfiles import StaticFiles
@@ -581,6 +582,7 @@ register_actions_compat_routes(app, server)
 register_healthz_route(app)
 register_tool_registry_routes(app)
 register_ui_routes(app)
+register_render_routes(app)
 
 
 def _reset_file_cache_for_tests() -> None:
