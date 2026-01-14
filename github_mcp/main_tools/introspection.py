@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional
 
+from github_mcp.mcp_server.registry import _registered_tool_name
 from github_mcp.mcp_server.schemas import _jsonable
 from ._main import _main
 
@@ -165,7 +166,7 @@ def list_all_actions(
     write_auto_approved = gate["write_auto_approved"]
     seen_names: set[str] = set()
     for tool, func in m._REGISTERED_MCP_TOOLS:
-        name = getattr(tool, "name", None) or getattr(func, "__name__", None)
+        name = _registered_tool_name(tool, func)
         if not name:
             continue
         name_str = str(name)
@@ -381,9 +382,9 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
     if found is None:
         available = sorted(
             set(
-                getattr(tool, "name", None) or getattr(func, "__name__", None)
+                _registered_tool_name(tool, func)
                 for tool, func in m._REGISTERED_MCP_TOOLS
-                if getattr(tool, "name", None) or getattr(func, "__name__", None)
+                if _registered_tool_name(tool, func)
             )
         )
         raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
