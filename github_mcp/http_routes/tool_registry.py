@@ -145,6 +145,12 @@ def _looks_like_structured_error(payload: Any) -> Optional[Dict[str, Any]]:
 
     if not isinstance(payload, dict):
         return None
+
+    # Newer tools return {"error": "...", "error_detail": {...}}.
+    detail = payload.get("error_detail")
+    if isinstance(detail, dict) and (detail.get("category") or detail.get("code") or detail.get("message")):
+        return detail
+
     err = payload.get("error")
     if isinstance(err, str):
         return {"message": err}
@@ -202,11 +208,12 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
             from github_mcp.mcp_server.errors import _structured_tool_error
 
             structured = _structured_tool_error(exc, context=f"tool_http:{tool_name}")
-            err = structured.get("error")
-            if isinstance(err, str):
-                err = {"message": err}
+
+            # Prefer structured error details when available.
+            err = structured.get("error_detail")
             if not isinstance(err, dict):
-                err = {}
+                raw = structured.get("error")
+                err = {"message": raw} if isinstance(raw, str) else {}
 
             retryable = bool(err.get("retryable", False))
             status_code = _status_code_for_error(err)
