@@ -218,10 +218,7 @@ def _get_concurrency_semaphore() -> asyncio.Semaphore:
     collected automatically.
     """
 
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.get_event_loop()
+    loop = _active_event_loop()
 
     semaphore = _loop_semaphores.get(loop)
     loop_hint = getattr(semaphore, "_loop", None) if semaphore is not None else None
@@ -258,11 +255,15 @@ def _is_rate_limit_response(*, resp: httpx.Response, message_lower: str, error_f
         return True
     if resp.headers.get("X-RateLimit-Remaining") == "0":
         return True
-    if "rate limit" in message_lower:
-        return True
-    if "secondary rate limit" in message_lower:
-        return True
-    if "abuse detection" in message_lower:
+    # Keep the substring checks stable but avoid duplicated / shadowed conditions.
+    if any(
+        marker in message_lower
+        for marker in (
+            "secondary rate limit",
+            "rate limit",
+            "abuse detection",
+        )
+    ):
         return True
     return False
 
