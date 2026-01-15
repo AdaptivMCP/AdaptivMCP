@@ -81,6 +81,7 @@ async def _run_named_step(
     use_temp_venv: bool,
     installing_dependencies: bool,
     include_raw: bool,
+    allow_missing_command: bool = False,
 ) -> Dict[str, Any]:
     raw = await _tw().terminal_command(
         full_name=full_name,
@@ -94,7 +95,13 @@ async def _run_named_step(
 
     slim = _slim_terminal_command_payload(raw)
     exit_code = slim.get("exit_code")
-    status = "passed" if exit_code == 0 else "failed"
+
+    # Some optional checks may not be installed in the execution environment.
+    # Treat "command not found" as a skip when allowed.
+    if allow_missing_command and exit_code == 127:
+        status = "skipped"
+    else:
+        status = "passed" if exit_code == 0 else "failed"
 
     step: Dict[str, Any] = {
         "name": name,
@@ -204,30 +211,46 @@ async def run_lint_suite(
 async def run_quality_suite(
     full_name: str,
     ref: str = "main",
-    test_command: str = "pytest",
+    test_command: str = "pytest -q",
     timeout_seconds: float = 600,
     workdir: Optional[str] = None,
     use_temp_venv: bool = False,
-    installing_dependencies: bool = False,
+    installing_dependencies: bool = True,
     lint_command: str = "ruff check .",
     format_command: Optional[str] = None,
     typecheck_command: Optional[str] = None,
     security_command: Optional[str] = None,
-    preflight: bool = False,
+    preflight: bool = True,
     fail_fast: bool = True,
     include_raw_step_outputs: bool = False,
     *,
-    developer_defaults: bool = False,
+    developer_defaults: bool = True,
+    auto_fix: bool = False,
+    gate_optional_steps: bool = False,
 ) -> Dict[str, Any]:
     timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
 
+    # Developer defaults are enabled by default for this self-hosted MCP server.
+    # The intent is to provide a useful suite out-of-the-box, even when invoked
+    # via automation.
     if developer_defaults:
         if format_command is None:
+            # Ruff is already the canonical formatter in this repo.
             format_command = "ruff format --check ."
         if typecheck_command is None:
-            typecheck_command = "mypy ."
+            # Prefer a universally-available type/compile sanity check.
+            # Projects can override this with mypy/pyright/pyre if desired.
+            typecheck_command = "python -m compileall -q ."
         if security_command is None:
+            # pip check is cheap and catches incompatible dependency constraints.
             security_command = "python -m pip check"
+
+    # If auto-fix is enabled, prefer fix-capable commands.
+    if auto_fix:
+        if format_command and "--check" in format_command:
+            format_command = format_command.replace("--check ", "")
+        if lint_command.startswith("ruff check") and "--fix" not in lint_command:
+            lint_command = lint_command.replace("ruff check", "ruff check --fix")
 
     suite: Dict[str, Any] = {
         "repo": full_name,
@@ -244,6 +267,7 @@ async def run_quality_suite(
         "options": {
             "preflight": bool(preflight),
             "fail_fast": bool(fail_fast),
+            "gate_optional_steps": bool(gate_optional_steps),
             "use_temp_venv": bool(use_temp_venv),
             "installing_dependencies": bool(installing_dependencies),
             "developer_defaults": bool(developer_defaults),
@@ -271,9 +295,11 @@ async def run_quality_suite(
             use_temp_venv=use_temp_venv,
             installing_dependencies=installing_dependencies,
             include_raw=include_raw_step_outputs,
+            allow_missing_command=True,
         )
         steps.append(step)
-        if fail_fast and step.get("status") == "failed":
+        # Optional steps are informative by default; do not gate the suite unless explicitly requested.
+        if gate_optional_steps and fail_fast and step.get("status") == "failed":
             controller_log.append(f"- Aborted: {name} failed")
             return step
         return step
@@ -315,7 +341,12 @@ async def run_quality_suite(
         ("security", security_command),
     ):
         step = await run_optional(name, cmd)
-        if step is not None and fail_fast and step.get("status") == "failed":
+        if (
+            gate_optional_steps
+            and step is not None
+            and fail_fast
+            and step.get("status") == "failed"
+        ):
             return {
                 "status": "failed",
                 "suite": suite,

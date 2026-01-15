@@ -157,12 +157,18 @@ def _preview_unified_diff(diff_text: str) -> str:
 
         stats = diff_stats(diff_text)
         header = f"diff (+{stats.added} -{stats.removed})"
-        body = colorize_unified_diff(diff_text) if LOG_TOOL_COLOR else _non_ansi_diff_markers(diff_text)
+        body = (
+            colorize_unified_diff(diff_text)
+            if LOG_TOOL_COLOR
+            else _non_ansi_diff_markers(diff_text)
+        )
     except Exception:
         header = "diff"
         body = _non_ansi_diff_markers(diff_text)
 
-    clipped = _clip_text(body, max_lines=LOG_TOOL_VISUAL_MAX_LINES, max_chars=LOG_TOOL_VISUAL_MAX_CHARS)
+    clipped = _clip_text(
+        body, max_lines=LOG_TOOL_VISUAL_MAX_LINES, max_chars=LOG_TOOL_VISUAL_MAX_CHARS
+    )
     return _ansi(header, ANSI_CYAN) + "\n" + clipped
 
 
@@ -171,7 +177,7 @@ def _preview_changed_files(status_lines: list[str]) -> str:
         return ""
 
     rendered: list[str] = []
-    for raw in status_lines[: LOG_TOOL_VISUAL_MAX_LINES]:
+    for raw in status_lines[:LOG_TOOL_VISUAL_MAX_LINES]:
         line = (raw or "").rstrip("\n")
         if not line:
             continue
@@ -192,7 +198,9 @@ def _preview_changed_files(status_lines: list[str]) -> str:
         rendered.append(f"{prefix} {_ansi(path, ANSI_CYAN) if path else tag}")
 
     if len(status_lines) > LOG_TOOL_VISUAL_MAX_LINES:
-        rendered.append(_ansi(f"… ({len(status_lines) - LOG_TOOL_VISUAL_MAX_LINES} more files)", ANSI_DIM))
+        rendered.append(
+            _ansi(f"… ({len(status_lines) - LOG_TOOL_VISUAL_MAX_LINES} more files)", ANSI_DIM)
+        )
 
     return _ansi("workspace_changes", ANSI_CYAN) + "\n" + "\n".join(rendered)
 
@@ -209,10 +217,14 @@ def _preview_file_snippet(path: str, text: str) -> str:
         rendered.append(_ansi(f"… ({len(lines) - max_lines} more lines)", ANSI_DIM))
 
     header = f"read {_ansi(path, ANSI_CYAN) if path else ''}".rstrip()
-    return _ansi(header, ANSI_CYAN) + "\n" + _clip_text(
-        "\n".join(rendered),
-        max_lines=LOG_TOOL_VISUAL_MAX_LINES,
-        max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
+    return (
+        _ansi(header, ANSI_CYAN)
+        + "\n"
+        + _clip_text(
+            "\n".join(rendered),
+            max_lines=LOG_TOOL_VISUAL_MAX_LINES,
+            max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
+        )
     )
 
 
@@ -242,7 +254,12 @@ def _log_tool_visual(
     )
     LOGGER.info(
         f"tool_visual {kv}\n{visual}",
-        extra={"event": "tool_visual", "tool": tool_name, "kind": kind, "call_id": shorten_token(call_id)},
+        extra={
+            "event": "tool_visual",
+            "tool": tool_name,
+            "kind": kind,
+            "call_id": shorten_token(call_id),
+        },
     )
 
 
@@ -916,7 +933,9 @@ def _log_tool_success(
                     # Only preview on read tools to avoid echoing writes unless explicitly enabled.
                     if not bool(write_action):
                         kind = "read"
-                        visual = _preview_file_snippet(str(result.get("path") or ""), str(result.get("text") or ""))
+                        visual = _preview_file_snippet(
+                            str(result.get("path") or ""), str(result.get("text") or "")
+                        )
 
                 if visual:
                     _log_tool_visual(
@@ -1216,6 +1235,7 @@ def mcp_tool(
       'error_detail'. HTTP clients additionally map common categories to status codes.
 
     """
+
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         try:
             signature: Optional[inspect.Signature] = inspect.signature(func)

@@ -249,7 +249,9 @@ async def validate_environment() -> Dict[str, Any]:
         }
 
         missing = sorted(name for name in expected if name not in tool_names)
-        registered_count = len(_REGISTERED_MCP_TOOLS) if isinstance(_REGISTERED_MCP_TOOLS, list) else None
+        registered_count = (
+            len(_REGISTERED_MCP_TOOLS) if isinstance(_REGISTERED_MCP_TOOLS, list) else None
+        )
         unique_count = len(tool_names)
 
         if missing:
