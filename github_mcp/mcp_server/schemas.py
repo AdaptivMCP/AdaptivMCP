@@ -486,7 +486,7 @@ def _build_tool_docstring(
         "Errors:",
         "  On failure, tools return a structured error payload (JSON object) describing the failure, context, and any relevant metadata.",
         "  Error shape (typical):",
-        "    {\"error\": \"<message>\", \"error_detail\": {..}}",
+        '    {"error": "<message>", "error_detail": {..}}',
         "  Categories include: validation, auth, rate_limited, not_found, conflict, timeout, upstream, internal.",
         "",
         "Execution hints (_meta):",
