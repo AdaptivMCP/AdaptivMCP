@@ -5,6 +5,7 @@ import subprocess
 import shutil
 import sys
 import platform
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,7 @@ from github_mcp.config import (
 )
 from github_mcp.render_api import _get_optional_render_token
 from github_mcp.render_api import render_request
+from github_mcp.exceptions import GitHubAPIError
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -341,6 +343,9 @@ async def validate_environment() -> Dict[str, Any]:
             "authorization_scheme": "Bearer",
         }
 
+        scope_list: List[str] = []
+        token_type_inferred: str = "unknown"
+
         try:
             user_resp = await m._github_request("GET", "/user")
         except Exception as exc:
@@ -365,7 +370,6 @@ async def validate_environment() -> Dict[str, Any]:
                     }
                 )
 
-            scope_list: List[str] = []
             if isinstance(scopes, str) and scopes.strip():
                 scope_list = [s.strip() for s in scopes.split(",") if s.strip()]
             token_details["oauth_scopes"] = scope_list
@@ -387,6 +391,7 @@ async def validate_environment() -> Dict[str, Any]:
                 else:
                     token_type = "github_app_token"
             token_details["token_type_inferred"] = token_type
+            token_type_inferred = token_type
 
             # Provide a lightweight "what can this token do" hint for classic PAT scopes.
             if scope_list:
@@ -467,6 +472,122 @@ async def validate_environment() -> Dict[str, Any]:
             permissions = {}
             if isinstance(repo_payload, dict):
                 permissions = repo_payload.get("permissions") or {}
+
+            # ------------------------------------------------------------------
+            # Capability probes (best-effort)
+            # ------------------------------------------------------------------
+            # These probes are designed to be safe: they avoid creating/modifying
+            # resources. Where a capability cannot be confirmed without side
+            # effects (e.g. workflow dispatch), we provide an inferred result.
+            probes: List[Dict[str, Any]] = []
+
+            async def _probe_get(name: str, path: str, *, params: Optional[Dict[str, Any]] = None):
+                try:
+                    await m._github_request("GET", path, params=params)
+                except Exception as exc:
+                    probes.append(
+                        {
+                            "probe": name,
+                            "mode": "actual",
+                            "result": "fail",
+                            "details": {"error_type": type(exc).__name__, "error": str(exc)},
+                        }
+                    )
+                else:
+                    probes.append({"probe": name, "mode": "actual", "result": "pass"})
+
+            # 1) Can list workflows?
+            await _probe_get(
+                "can_list_workflows",
+                f"/repos/{controller_repo}/actions/workflows",
+                params={"per_page": 1},
+            )
+
+            # 2) Can create PR? Use an invalid head ref to avoid side effects.
+            # If the endpoint is reachable and token has access, GitHub returns
+            # 422 Validation Failed. Auth/permission failures return 401/403/404.
+            bogus_head = f"mcp-capability-probe-{uuid.uuid4()}"
+            try:
+                await m._github_request(
+                    "POST",
+                    f"/repos/{controller_repo}/pulls",
+                    json_body={
+                        "title": "mcp capability probe",
+                        "head": bogus_head,
+                        "base": controller_branch,
+                        "body": "Capability probe (expected to fail validation)",
+                        "draft": True,
+                    },
+                )
+            except GitHubAPIError as exc:
+                status_code = getattr(exc, "status_code", None)
+                if status_code == 422:
+                    probes.append({"probe": "can_create_pr", "mode": "actual", "result": "pass"})
+                else:
+                    probes.append(
+                        {
+                            "probe": "can_create_pr",
+                            "mode": "actual",
+                            "result": "fail",
+                            "details": {"status_code": status_code, "error": str(exc)},
+                        }
+                    )
+            except Exception as exc:
+                probes.append(
+                    {
+                        "probe": "can_create_pr",
+                        "mode": "actual",
+                        "result": "fail",
+                        "details": {"error_type": type(exc).__name__, "error": str(exc)},
+                    }
+                )
+            else:
+                # Unexpected success; treat as pass but surface as noteworthy.
+                probes.append(
+                    {
+                        "probe": "can_create_pr",
+                        "mode": "actual",
+                        "result": "pass",
+                        "details": {"note": "Unexpected success creating PR probe payload"},
+                    }
+                )
+
+            # 3) Can dispatch workflow? Avoid side effects by inference.
+            # - Classic PATs/OAuth tokens: require the "workflow" scope.
+            # - Fine-grained PATs: scopes are not reported; cannot confirm without
+            #   an actual dispatch (side effect).
+            list_workflows_ok = any(
+                p.get("probe") == "can_list_workflows" and p.get("result") == "pass" for p in probes
+            )
+            workflow_scope = "workflow" in (scope_list or [])
+            inferred_dispatch = workflow_scope and list_workflows_ok
+            dispatch_result = "pass" if inferred_dispatch else "fail"
+            dispatch_details: Dict[str, Any] = {
+                "token_type_inferred": token_type_inferred,
+                "workflow_scope_present": workflow_scope,
+                "list_workflows_ok": list_workflows_ok,
+                "note": "Inferred without dispatching a workflow run (no side effects).",
+            }
+            if token_type_inferred == "fine_grained_pat_or_unknown" and not workflow_scope:
+                dispatch_details["caveat"] = (
+                    "Fine-grained PAT permissions are not surfaced via OAuth scope headers; dispatch may still work."
+                )
+            probes.append(
+                {
+                    "probe": "can_dispatch_workflow",
+                    "mode": "inferred",
+                    "result": dispatch_result,
+                    "details": dispatch_details,
+                }
+            )
+
+            probe_level = "ok" if all(p.get("result") == "pass" for p in probes) else "warning"
+            add_check(
+                "capability_probes",
+                probe_level,
+                "Capability probes (safe, best-effort)",
+                {"repo": controller_repo, "branch": controller_branch, "probes": probes},
+            )
 
             # Surface the repo permissions block prominently for clarity.
             add_check(
