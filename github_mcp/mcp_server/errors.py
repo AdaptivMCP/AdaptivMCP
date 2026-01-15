@@ -131,12 +131,25 @@ def _default_help(category: str) -> list[str]:
         ]
     if category == "write_approval_required":
         return [
-            "This tool performs write operations and requires explicit approval.",
-            "Approve the write action in your client and retry.",
+            "This tool can modify remote state and requires confirmation in your client.",
+            "Confirm/approve the write action in your client, then retry the same call.",
         ]
     return [
         "Retry once. If the error persists, check provider logs for the corresponding request.",
     ]
+
+
+def _disposition_from_category(category: str) -> tuple[str, bool]:
+    """Return (disposition, requires_confirmation).
+
+    This field exists to help LLM agents distinguish ordinary execution errors
+    (bad inputs, upstream failures) from flows that require an explicit user
+    confirmation in the client (e.g. write-capable tools).
+    """
+
+    if category == "write_approval_required":
+        return "requires_confirmation", True
+    return "error", False
 
 
 def _structured_tool_error(
@@ -161,6 +174,7 @@ def _structured_tool_error(
 
     message = _single_line(str(exc) or exc.__class__.__name__)
     category, code, retryable = _categorize_exception(exc)
+    disposition, requires_confirmation = _disposition_from_category(category)
 
     include_tb = os.environ.get("GITHUB_MCP_INCLUDE_TRACEBACK", "true").strip().lower() in (
         "1",
@@ -187,6 +201,8 @@ def _structured_tool_error(
         "category": category,
         "code": code,
         "retryable": bool(retryable),
+        "disposition": disposition,
+        "requires_confirmation": bool(requires_confirmation),
         "context": {
             "context": context,
             "path": path,
