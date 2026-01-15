@@ -167,6 +167,21 @@ def _looks_like_structured_error(payload: Any) -> Optional[Dict[str, Any]]:
     return err
 
 
+def _coerce_error_detail(structured: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a dict-like error detail from our structured error envelope."""
+
+    detail = structured.get("error_detail")
+    if isinstance(detail, dict):
+        return detail
+
+    raw = structured.get("error")
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        return {"message": raw}
+    return {}
+
+
 async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: int = 3) -> Response:
     resolved = _find_registered_tool(tool_name)
     if not resolved:
@@ -216,10 +231,7 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
             structured = _structured_tool_error(exc, context=f"tool_http:{tool_name}")
 
             # Prefer structured error details when available.
-            err = structured.get("error_detail")
-            if not isinstance(err, dict):
-                raw = structured.get("error")
-                err = {"message": raw} if isinstance(raw, str) else {}
+            err = _coerce_error_detail(structured)
 
             retryable = bool(err.get("retryable", False))
             status_code = _status_code_for_error(err)
