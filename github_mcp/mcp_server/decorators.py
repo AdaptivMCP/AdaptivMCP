@@ -24,6 +24,7 @@ import hashlib
 import inspect
 import json
 import os
+import re
 import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
@@ -62,6 +63,187 @@ def _env_flag(name: str, *, default: bool = False) -> bool:
     if raw is None:
         return bool(default)
     return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _env_int(name: str, *, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return int(default)
+    try:
+        return int(str(raw).strip())
+    except Exception:
+        return int(default)
+
+
+# Visual logging (developer-facing).
+#
+# Render and similar providers often display only the message string, so these
+# helpers emit compact, scan-friendly previews for:
+#   - diffs / patches
+#   - workspace changes (git status porcelain)
+#   - file reads (file + snippet with line numbers)
+#
+# ANSI color is opt-in because many log UIs do not interpret escape sequences.
+LOG_TOOL_VISUALS = _env_flag("GITHUB_MCP_LOG_VISUALS", default=True)
+LOG_TOOL_COLOR = _env_flag("GITHUB_MCP_LOG_COLOR", default=False)
+LOG_TOOL_READ_SNIPPETS = _env_flag("GITHUB_MCP_LOG_READ_SNIPPETS", default=True)
+LOG_TOOL_DIFF_SNIPPETS = _env_flag("GITHUB_MCP_LOG_DIFF_SNIPPETS", default=True)
+
+LOG_TOOL_VISUAL_MAX_LINES = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_LINES", default=80)
+LOG_TOOL_READ_MAX_LINES = _env_int("GITHUB_MCP_LOG_READ_MAX_LINES", default=40)
+LOG_TOOL_VISUAL_MAX_CHARS = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_CHARS", default=8000)
+
+
+ANSI_RESET = "\x1b[0m"
+ANSI_DIM = "\x1b[2m"
+ANSI_RED = "\x1b[31m"
+ANSI_GREEN = "\x1b[32m"
+ANSI_YELLOW = "\x1b[33m"
+ANSI_CYAN = "\x1b[36m"
+
+
+def _ansi(text: str, code: str) -> str:
+    if not LOG_TOOL_COLOR:
+        return text
+    return f"{code}{text}{ANSI_RESET}"
+
+
+def _clip_text(text: str, *, max_lines: int, max_chars: int) -> str:
+    if not text:
+        return ""
+    lines = text.splitlines()
+    clipped = lines[: max(0, max_lines)]
+    out = "\n".join(clipped)
+    if len(lines) > max_lines:
+        out += "\n" + _ansi(f"… ({len(lines) - max_lines} more lines)", ANSI_DIM)
+    if len(out) > max_chars:
+        out = out[: max(0, max_chars - 1)] + "…"
+    return out
+
+
+_DIFF_HEADER_RE = re.compile(r"^(diff --git|\+\+\+ |--- |@@ )")
+
+
+def _looks_like_unified_diff(text: str) -> bool:
+    if not isinstance(text, str) or not text.strip():
+        return False
+    sample = "\n".join(text.splitlines()[:25])
+    return bool(_DIFF_HEADER_RE.search(sample))
+
+
+def _non_ansi_diff_markers(diff_text: str) -> str:
+    """Fallback diff formatting when ANSI is disabled."""
+
+    out: list[str] = []
+    for line in diff_text.splitlines():
+        if line.startswith("+++") or line.startswith("---"):
+            out.append(f"[FILE] {line}")
+        elif line.startswith("@@"):
+            out.append(f"[HUNK] {line}")
+        elif line.startswith("+"):
+            out.append(f"[ADD]  {line}")
+        elif line.startswith("-"):
+            out.append(f"[DEL]  {line}")
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def _preview_unified_diff(diff_text: str) -> str:
+    if not diff_text:
+        return ""
+    try:
+        from github_mcp.diff_utils import colorize_unified_diff, diff_stats
+
+        stats = diff_stats(diff_text)
+        header = f"diff (+{stats.added} -{stats.removed})"
+        body = colorize_unified_diff(diff_text) if LOG_TOOL_COLOR else _non_ansi_diff_markers(diff_text)
+    except Exception:
+        header = "diff"
+        body = _non_ansi_diff_markers(diff_text)
+
+    clipped = _clip_text(body, max_lines=LOG_TOOL_VISUAL_MAX_LINES, max_chars=LOG_TOOL_VISUAL_MAX_CHARS)
+    return _ansi(header, ANSI_CYAN) + "\n" + clipped
+
+
+def _preview_changed_files(status_lines: list[str]) -> str:
+    if not status_lines:
+        return ""
+
+    rendered: list[str] = []
+    for raw in status_lines[: LOG_TOOL_VISUAL_MAX_LINES]:
+        line = (raw or "").rstrip("\n")
+        if not line:
+            continue
+        code = line[:2]
+        path = line[3:] if len(line) > 3 else ""
+        # Porcelain status heuristics
+        tag = code.strip() or "??"
+        if "?" in code:
+            prefix = _ansi("??", ANSI_DIM)
+        elif "A" in code:
+            prefix = _ansi("A ", ANSI_GREEN)
+        elif "D" in code:
+            prefix = _ansi("D ", ANSI_RED)
+        elif "R" in code:
+            prefix = _ansi("R ", ANSI_CYAN)
+        else:
+            prefix = _ansi("M ", ANSI_YELLOW)
+        rendered.append(f"{prefix} {_ansi(path, ANSI_CYAN) if path else tag}")
+
+    if len(status_lines) > LOG_TOOL_VISUAL_MAX_LINES:
+        rendered.append(_ansi(f"… ({len(status_lines) - LOG_TOOL_VISUAL_MAX_LINES} more files)", ANSI_DIM))
+
+    return _ansi("workspace_changes", ANSI_CYAN) + "\n" + "\n".join(rendered)
+
+
+def _preview_file_snippet(path: str, text: str) -> str:
+    lines = (text or "").splitlines()
+    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
+    preview = lines[:max_lines]
+    rendered: list[str] = []
+    for idx, line in enumerate(preview, start=1):
+        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
+        rendered.append(f"{ln} {line}")
+    if len(lines) > max_lines:
+        rendered.append(_ansi(f"… ({len(lines) - max_lines} more lines)", ANSI_DIM))
+
+    header = f"read {_ansi(path, ANSI_CYAN) if path else ''}".rstrip()
+    return _ansi(header, ANSI_CYAN) + "\n" + _clip_text(
+        "\n".join(rendered),
+        max_lines=LOG_TOOL_VISUAL_MAX_LINES,
+        max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
+    )
+
+
+def _log_tool_visual(
+    *,
+    tool_name: str,
+    call_id: str,
+    req: Mapping[str, Any],
+    kind: str,
+    visual: str,
+) -> None:
+    if not visual:
+        return
+    if not (LOG_TOOL_CALLS and HUMAN_LOGS and LOG_TOOL_VISUALS):
+        return
+
+    req_ctx = summarize_request_context(req)
+    kv = _format_log_kv(
+        {
+            "tool": tool_name,
+            "call_id": shorten_token(call_id),
+            "kind": kind,
+            "request_id": req_ctx.get("request_id"),
+            "session_id": req_ctx.get("session_id"),
+            "message_id": req_ctx.get("message_id"),
+        }
+    )
+    LOGGER.info(
+        f"tool_visual {kv}\n{visual}",
+        extra={"event": "tool_visual", "tool": tool_name, "kind": kind, "call_id": shorten_token(call_id)},
+    )
 
 
 def _truncate_text(value: Any, *, limit: int = 180) -> str:
@@ -689,6 +871,64 @@ def _log_tool_success(
             f"tool_call_completed {kv}",
             extra={"event": "tool_call_completed", **payload},
         )
+
+        # Optional developer-facing visuals for common workflows.
+        # These are emitted as a second log entry so dashboards can filter on
+        # `event=tool_call_completed` vs `event=tool_visual`.
+        try:
+            if LOG_TOOL_VISUALS and all_args is not None:
+                visual = ""
+                kind = ""
+
+                # 1) Diff / patch tools
+                diff_candidate = None
+                if isinstance(result, Mapping):
+                    diff_candidate = result.get("diff") or result.get("patch")
+                if diff_candidate is None and isinstance(all_args, Mapping):
+                    diff_candidate = all_args.get("diff") or all_args.get("patch")
+
+                if isinstance(diff_candidate, str) and _looks_like_unified_diff(diff_candidate):
+                    if LOG_TOOL_DIFF_SNIPPETS:
+                        kind = "diff"
+                        visual = _preview_unified_diff(diff_candidate)
+
+                # 2) Workspace change listings (git status porcelain)
+                if not visual and isinstance(result, Mapping):
+                    status_lines = (
+                        result.get("changed_files")
+                        or result.get("staged_files")
+                        or result.get("files")
+                    )
+                    if isinstance(status_lines, list) and all(
+                        isinstance(x, str) for x in status_lines
+                    ):
+                        kind = "changes"
+                        visual = _preview_changed_files(status_lines)
+
+                # 3) File reads (show which file + a snippet)
+                if (
+                    not visual
+                    and LOG_TOOL_READ_SNIPPETS
+                    and isinstance(result, Mapping)
+                    and isinstance(result.get("path"), str)
+                    and isinstance(result.get("text"), str)
+                ):
+                    # Only preview on read tools to avoid echoing writes unless explicitly enabled.
+                    if not bool(write_action):
+                        kind = "read"
+                        visual = _preview_file_snippet(str(result.get("path") or ""), str(result.get("text") or ""))
+
+                if visual:
+                    _log_tool_visual(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        req=req,
+                        kind=kind or "info",
+                        visual=visual,
+                    )
+        except Exception:
+            # Visual logging is best-effort.
+            pass
     else:
         LOGGER.info(
             f"tool_call_completed tool={tool_name} call_id={call_id} duration_ms={duration_ms:.2f}",
