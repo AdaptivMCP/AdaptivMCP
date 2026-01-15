@@ -233,10 +233,15 @@ def _resolve_full_name(
     return CONTROLLER_REPO
 
 
-def _resolve_ref(ref: str) -> str:
+def _resolve_ref(ref: str, *, branch: Optional[str] = None) -> str:
     """Return the git ref to operate on.
 
-    The only supported ref selector is `ref`.
+    Canonical selector is `ref`.
+
+    For backwards compatibility, some tool wrappers still pass a legacy `branch`
+    alias. If provided, it takes precedence over `ref`.
     """
 
+    if isinstance(branch, str) and branch.strip():
+        return branch.strip()
     return ref
