@@ -83,11 +83,17 @@ def _env_int(name: str, *, default: int) -> int:
 #   - workspace changes (git status porcelain)
 #   - file reads (file + snippet with line numbers)
 #
-# ANSI color is opt-in because many log UIs do not interpret escape sequences.
+# ANSI color is enabled by default for developer-facing usage.
+# If your log UI does not interpret escape sequences, disable via:
+#   GITHUB_MCP_LOG_COLOR=0
 LOG_TOOL_VISUALS = _env_flag("GITHUB_MCP_LOG_VISUALS", default=True)
-LOG_TOOL_COLOR = _env_flag("GITHUB_MCP_LOG_COLOR", default=False)
+LOG_TOOL_COLOR = _env_flag("GITHUB_MCP_LOG_COLOR", default=True)
 LOG_TOOL_READ_SNIPPETS = _env_flag("GITHUB_MCP_LOG_READ_SNIPPETS", default=True)
 LOG_TOOL_DIFF_SNIPPETS = _env_flag("GITHUB_MCP_LOG_DIFF_SNIPPETS", default=True)
+
+# Reduce log noise by omitting correlation IDs from INFO/WARN message strings.
+# Structured JSON extras still include the full request context.
+LOG_TOOL_LOG_IDS = _env_flag("GITHUB_MCP_LOG_IDS", default=False)
 
 LOG_TOOL_VISUAL_MAX_LINES = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_LINES", default=80)
 LOG_TOOL_READ_MAX_LINES = _env_int("GITHUB_MCP_LOG_READ_MAX_LINES", default=40)
@@ -100,6 +106,65 @@ ANSI_RED = "\x1b[31m"
 ANSI_GREEN = "\x1b[32m"
 ANSI_YELLOW = "\x1b[33m"
 ANSI_CYAN = "\x1b[36m"
+
+
+def _pygments_available() -> bool:
+    try:
+        import pygments  # noqa: F401
+
+        return True
+    except Exception:
+        return False
+
+
+def _highlight_code(text: str, *, kind: str = "text") -> str:
+    """Best-effort syntax highlighting for log visuals.
+
+    Uses Pygments if installed and ANSI color is enabled.
+    """
+
+    if not (LOG_TOOL_COLOR and _pygments_available() and isinstance(text, str) and text):
+        return text
+    try:
+        from pygments import highlight
+        from pygments.formatters import Terminal256Formatter
+        from pygments.lexers import (
+            DiffLexer,
+            PythonTracebackLexer,
+            PythonLexer,
+            TextLexer,
+        )
+
+        if kind == "diff":
+            lexer = DiffLexer()
+        elif kind == "traceback":
+            lexer = PythonTracebackLexer()
+        elif kind == "python":
+            lexer = PythonLexer()
+        else:
+            lexer = TextLexer()
+        return highlight(text, lexer, Terminal256Formatter(style="default")).rstrip("\n")
+    except Exception:
+        return text
+
+
+def _highlight_file_text(path: str, text: str) -> str:
+    """Highlight file text by filename when possible."""
+
+    if not (LOG_TOOL_COLOR and _pygments_available() and isinstance(text, str) and text):
+        return text
+    try:
+        from pygments import highlight
+        from pygments.formatters import Terminal256Formatter
+        from pygments.lexers import get_lexer_for_filename, TextLexer
+
+        try:
+            lexer = get_lexer_for_filename(path or "", text)
+        except Exception:
+            lexer = TextLexer()
+        return highlight(text, lexer, Terminal256Formatter(style="default")).rstrip("\n")
+    except Exception:
+        return text
 
 
 def _ansi(text: str, code: str) -> str:
@@ -152,24 +217,87 @@ def _non_ansi_diff_markers(diff_text: str) -> str:
 def _preview_unified_diff(diff_text: str) -> str:
     if not diff_text:
         return ""
+    header = "diff"
+    body = diff_text
     try:
-        from github_mcp.diff_utils import colorize_unified_diff, diff_stats
+        from github_mcp.diff_utils import diff_stats
 
         stats = diff_stats(diff_text)
         header = f"diff (+{stats.added} -{stats.removed})"
-        body = (
-            colorize_unified_diff(diff_text)
-            if LOG_TOOL_COLOR
-            else _non_ansi_diff_markers(diff_text)
-        )
     except Exception:
-        header = "diff"
+        pass
+
+    if LOG_TOOL_COLOR:
+        # Prefer Pygments (more Python-like) when available.
+        body = _highlight_code(diff_text, kind="diff")
+    else:
         body = _non_ansi_diff_markers(diff_text)
 
+    # Add line numbers for scannability.
+    numbered: list[str] = []
+    for idx, line in enumerate(body.splitlines(), start=1):
+        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
+        numbered.append(f"{ln} {line}")
     clipped = _clip_text(
-        body, max_lines=LOG_TOOL_VISUAL_MAX_LINES, max_chars=LOG_TOOL_VISUAL_MAX_CHARS
+        "\n".join(numbered),
+        max_lines=LOG_TOOL_VISUAL_MAX_LINES,
+        max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
     )
     return _ansi(header, ANSI_CYAN) + "\n" + clipped
+
+
+def _preview_terminal_result(payload: Mapping[str, Any]) -> str:
+    """Preview stdout/stderr from terminal_command results with line numbers."""
+
+    result = payload.get("result") if isinstance(payload, Mapping) else None
+    if not isinstance(result, Mapping):
+        return ""
+
+    stdout = result.get("stdout") or ""
+    stderr = result.get("stderr") or ""
+    exit_code = result.get("exit_code")
+
+    # Prefer stderr, but include stdout if stderr is empty.
+    combined = ""
+    if isinstance(stderr, str) and stderr.strip():
+        combined = stderr
+    elif isinstance(stdout, str) and stdout.strip():
+        combined = stdout
+    if not combined:
+        return ""
+
+    kind = "text"
+    if "Traceback (most recent call last):" in combined:
+        kind = "traceback"
+    elif _looks_like_unified_diff(combined):
+        kind = "diff"
+    elif 'File "' in combined and "line" in combined and "Error" in combined:
+        kind = "traceback"
+
+    highlighted = _highlight_code(combined, kind=kind)
+    lines = highlighted.splitlines()
+    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
+    preview = lines[:max_lines]
+    rendered: list[str] = []
+    for idx, line in enumerate(preview, start=1):
+        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
+        rendered.append(f"{ln} {line}")
+    if len(lines) > max_lines:
+        rendered.append(_ansi(f"… ({len(lines) - max_lines} more lines)", ANSI_DIM))
+
+    header_bits = ["terminal"]
+    if exit_code is not None:
+        header_bits.append(f"exit={exit_code}")
+    header = " ".join(header_bits)
+    return (
+        _ansi(header, ANSI_CYAN)
+        + "\n"
+        + _clip_text(
+            "\n".join(rendered),
+            max_lines=LOG_TOOL_VISUAL_MAX_LINES,
+            max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
+        )
+    )
 
 
 def _preview_changed_files(status_lines: list[str]) -> str:
@@ -206,7 +334,8 @@ def _preview_changed_files(status_lines: list[str]) -> str:
 
 
 def _preview_file_snippet(path: str, text: str) -> str:
-    lines = (text or "").splitlines()
+    highlighted = _highlight_file_text(path, text or "")
+    lines = highlighted.splitlines()
     max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
     preview = lines[:max_lines]
     rendered: list[str] = []
@@ -241,19 +370,25 @@ def _log_tool_visual(
     if not (LOG_TOOL_CALLS and HUMAN_LOGS and LOG_TOOL_VISUALS):
         return
 
-    req_ctx = summarize_request_context(req)
-    kv = _format_log_kv(
-        {
-            "tool": tool_name,
-            "call_id": shorten_token(call_id),
-            "kind": kind,
-            "request_id": req_ctx.get("request_id"),
-            "session_id": req_ctx.get("session_id"),
-            "message_id": req_ctx.get("message_id"),
-        }
-    )
+    kv_map: dict[str, Any] = {
+        "tool": tool_name,
+        "kind": kind,
+    }
+    if LOG_TOOL_LOG_IDS:
+        req_ctx = summarize_request_context(req)
+        kv_map.update(
+            {
+                "call_id": shorten_token(call_id),
+                "session_id": req_ctx.get("session_id"),
+                "message_id": req_ctx.get("message_id"),
+            }
+        )
+    kv = _format_log_kv(kv_map)
+    header = _ansi(kind or "visual", ANSI_CYAN) + " " + _ansi(tool_name, ANSI_CYAN)
+    if kv:
+        header = header + " " + kv
     LOGGER.info(
-        f"tool_visual {kv}\n{visual}",
+        f"{header}\n{visual}",
         extra={
             "event": "tool_visual",
             "tool": tool_name,
@@ -794,34 +929,43 @@ def _log_tool_start(
     # Human-readable message (scan-friendly) + machine-readable extras.
     if HUMAN_LOGS:
         req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
-        req_id = req_ctx.get("request_id")
         msg_id = req_ctx.get("message_id")
         session_id = req_ctx.get("session_id")
         path = req_ctx.get("path")
+        if isinstance(path, str) and path.startswith("/sse"):
+            path = None
         call_id_short = payload.get("call_id")
 
         arg_summary = _args_summary(all_args)
-        kv = _format_log_kv(
-            {
-                "tool": tool_name,
-                "call_id": call_id_short,
-                "write": int(bool(write_action)),
-                "request_id": req_id,
-                "session_id": session_id,
-                "message_id": msg_id,
-                "path": path,
-                **{k: v for k, v in arg_summary.items()},
-            }
-        )
-        LOGGER.info(
-            f"tool_call_started {kv}",
-            extra={"event": "tool_call_started", **payload},
-        )
+        kv_map: dict[str, Any] = {
+            "tool": tool_name,
+            "write": int(bool(write_action)),
+            **{k: v for k, v in arg_summary.items()},
+        }
+        if LOG_TOOL_LOG_IDS:
+            kv_map.update(
+                {
+                    "call_id": call_id_short,
+                    "session_id": session_id,
+                    "message_id": msg_id,
+                    "path": path,
+                }
+            )
+
+        line = _format_log_kv(kv_map)
+        prefix = _ansi("▶", ANSI_GREEN) + " " + _ansi(tool_name, ANSI_CYAN)
+        LOGGER.info(f"{prefix} {line}", extra={"event": "tool_call_started", **payload})
     else:
-        LOGGER.info(
-            f"tool_call_started tool={tool_name} call_id={call_id} write_action={bool(write_action)}",
-            extra={"event": "tool_call_started", **payload},
-        )
+        # Non-human logs still keep message strings compact.
+        kv_map: dict[str, Any] = {
+            "tool": tool_name,
+            "write": int(bool(write_action)),
+        }
+        if LOG_TOOL_LOG_IDS:
+            kv_map["call_id"] = shorten_token(call_id)
+        line = _format_log_kv(kv_map)
+        prefix = _ansi("▶", ANSI_GREEN) + " " + _ansi(tool_name, ANSI_CYAN)
+        LOGGER.info(f"{prefix} {line}", extra={"event": "tool_call_started", **payload})
 
 
 def _log_tool_success(
@@ -865,29 +1009,33 @@ def _log_tool_success(
 
     if HUMAN_LOGS:
         req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
-        req_id = req_ctx.get("request_id")
         msg_id = req_ctx.get("message_id")
         session_id = req_ctx.get("session_id")
         path = req_ctx.get("path")
         call_id_short = payload.get("call_id")
 
+        if isinstance(path, str) and path.startswith("/sse"):
+            path = None
+
         arg_summary = _args_summary(all_args or {})
-        kv = _format_log_kv(
-            {
-                "tool": tool_name,
-                "call_id": call_id_short,
-                "ms": f"{duration_ms:.2f}",
-                "request_id": req_id,
-                "session_id": session_id,
-                "message_id": msg_id,
-                "path": path,
-                **{k: v for k, v in arg_summary.items()},
-            }
-        )
-        LOGGER.info(
-            f"tool_call_completed {kv}",
-            extra={"event": "tool_call_completed", **payload},
-        )
+        kv_map: dict[str, Any] = {
+            "tool": tool_name,
+            "ms": f"{duration_ms:.2f}",
+            **{k: v for k, v in arg_summary.items()},
+        }
+        if LOG_TOOL_LOG_IDS:
+            kv_map.update(
+                {
+                    "call_id": call_id_short,
+                    "session_id": session_id,
+                    "message_id": msg_id,
+                    "path": path,
+                }
+            )
+
+        line = _format_log_kv(kv_map)
+        prefix = _ansi("✓", ANSI_GREEN) + " " + _ansi(tool_name, ANSI_CYAN)
+        LOGGER.info(f"{prefix} {line}", extra={"event": "tool_call_completed", **payload})
 
         # Optional developer-facing visuals for common workflows.
         # These are emitted as a second log entry so dashboards can filter on
@@ -937,6 +1085,11 @@ def _log_tool_success(
                             str(result.get("path") or ""), str(result.get("text") or "")
                         )
 
+                # 4) terminal_command output preview (stdout/stderr)
+                if not visual and isinstance(result, Mapping) and tool_name == "terminal_command":
+                    kind = "terminal"
+                    visual = _preview_terminal_result(result)
+
                 if visual:
                     _log_tool_visual(
                         tool_name=tool_name,
@@ -949,10 +1102,15 @@ def _log_tool_success(
             # Visual logging is best-effort.
             pass
     else:
-        LOGGER.info(
-            f"tool_call_completed tool={tool_name} call_id={call_id} duration_ms={duration_ms:.2f}",
-            extra={"event": "tool_call_completed", **payload},
-        )
+        kv_map: dict[str, Any] = {
+            "tool": tool_name,
+            "ms": f"{duration_ms:.2f}",
+        }
+        if LOG_TOOL_LOG_IDS:
+            kv_map["call_id"] = shorten_token(call_id)
+        line = _format_log_kv(kv_map)
+        prefix = _ansi("✓", ANSI_GREEN) + " " + _ansi(tool_name, ANSI_CYAN)
+        LOGGER.info(f"{prefix} {line}", extra={"event": "tool_call_completed", **payload})
 
 
 def _log_tool_failure(
@@ -995,29 +1153,34 @@ def _log_tool_failure(
 
     call_id_short = payload.get("call_id")
 
-    # Emit a scan-friendly message that includes request correlation + a compact arg summary.
+    # Emit a scan-friendly message with a compact arg summary.
     req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
-    req_id = req_ctx.get("request_id")
     msg_id = req_ctx.get("message_id")
     session_id = req_ctx.get("session_id")
     path = req_ctx.get("path")
+    if isinstance(path, str) and path.startswith("/sse"):
+        path = None
 
     arg_summary = _args_summary(all_args)
-    kv = _format_log_kv(
-        {
-            "tool": tool_name,
-            "call_id": call_id_short,
-            "phase": phase,
-            "ms": f"{duration_ms:.2f}",
-            "request_id": req_id,
-            "session_id": session_id,
-            "message_id": msg_id,
-            "path": path,
-            **{k: v for k, v in arg_summary.items()},
-        }
-    )
+    kv_map: dict[str, Any] = {
+        "tool": tool_name,
+        "phase": phase,
+        "ms": f"{duration_ms:.2f}",
+        **{k: v for k, v in arg_summary.items()},
+    }
+    if LOG_TOOL_LOG_IDS:
+        kv_map.update(
+            {
+                "call_id": call_id_short,
+                "session_id": session_id,
+                "message_id": msg_id,
+                "path": path,
+            }
+        )
+    line = _format_log_kv(kv_map)
+    prefix = _ansi("✗", ANSI_RED) + " " + _ansi(tool_name, ANSI_CYAN)
     LOGGER.warning(
-        f"tool_call_failed {kv}",
+        f"{prefix} {line}",
         extra={"event": "tool_call_failed", **payload},
         exc_info=exc,
     )
