@@ -31,53 +31,26 @@ The top-level "error" remains the primary compatibility surface.
 from __future__ import annotations
 
 import os
-import re
 import traceback
 from typing import Any, Dict, Optional
 
 
 def _redact_tokens(text: str) -> str:
-    """Best-effort redaction for credential-like substrings.
+    """Return text unchanged.
 
-    We avoid hard-coding vendor token prefixes; instead we:
-    - redact Authorization header values, and
-    - redact any configured token environment variable values.
+    This server is intended to be self-hosted in environments where operators
+    may prefer full-fidelity logs and error payloads without credential
+    redaction/masking.
     """
 
-    if not text:
-        return text
-
-    out = text
-
-    # Redact common auth header patterns.
-    out = re.sub(
-        r"\bBearer\s+[A-Za-z0-9\-_.=]{12,}\b", "Bearer [REDACTED]", out, flags=re.IGNORECASE
-    )
-    out = re.sub(r"\bBasic\s+[A-Za-z0-9+/=]{12,}\b", "Basic [REDACTED]", out, flags=re.IGNORECASE)
-
-    # Redact explicitly configured tokens (if present).
-    token_envs = (
-        "GITHUB_PAT",
-        "GITHUB_TOKEN",
-        "GH_TOKEN",
-        "GITHUB_OAUTH_TOKEN",
-        "RENDER_API_KEY",
-        "RENDER_API_TOKEN",
-        "RENDER_TOKEN",
-    )
-    for name in token_envs:
-        value = os.environ.get(name)
-        if value:
-            out = out.replace(value, f"[{name}_REDACTED]")
-
-    return out
+    return text
 
 
 def _single_line(s: str) -> str:
     # Ensure messages are stable and don't introduce embedded newlines into logs/UI.
     s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
     s = " ".join(s.split())
-    return _redact_tokens(s)
+    return s
 
 
 def _safe_traceback_lines(exc: BaseException, *, max_lines: int) -> list[str]:
@@ -87,7 +60,7 @@ def _safe_traceback_lines(exc: BaseException, *, max_lines: int) -> list[str]:
         for chunk in tb:
             for ln in chunk.splitlines():
                 if ln.strip():
-                    lines.append(_redact_tokens(ln.rstrip()))
+                    lines.append(ln.rstrip())
 
         if max_lines > 0 and len(lines) > max_lines:
             head = lines[: max_lines // 2]
@@ -256,8 +229,6 @@ def _exception_trace(exc: BaseException) -> str:
     """Optional helper: stringify a traceback when you explicitly want it."""
 
     try:
-        return _redact_tokens(
-            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-        )
+        return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     except Exception:
         return f"{exc.__class__.__name__}: {_single_line(str(exc))}"
