@@ -231,7 +231,7 @@ def _friendly_arg_bits(all_args: Mapping[str, Any]) -> list[str]:
 
     title = all_args.get("title")
     if isinstance(title, str) and title.strip():
-        bits.append(f"\"{title.strip()}\"")
+        bits.append(f'"{title.strip()}"')
 
     base = all_args.get("base")
     head = all_args.get("head") or all_args.get("branch")
@@ -461,7 +461,9 @@ def _log_tool_visual(
             }
         )
     kv = _format_log_kv(kv_map)
-    header = _ansi(kind or "visual", ANSI_CYAN) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+    header = (
+        _ansi(kind or "visual", ANSI_CYAN) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+    )
     if kv:
         header = header + " " + kv
     LOGGER.info(
