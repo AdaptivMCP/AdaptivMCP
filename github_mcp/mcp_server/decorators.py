@@ -57,6 +57,124 @@ from github_mcp.mcp_server.schemas import (
 LOGGER = BASE_LOGGER.getChild("mcp_server.decorators")
 
 
+def _env_flag(name: str, *, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return bool(default)
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _truncate_text(value: Any, *, limit: int = 180) -> str:
+    try:
+        s = value if isinstance(value, str) else json.dumps(value, default=str, ensure_ascii=False)
+    except Exception:
+        s = str(value)
+    s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    s = " ".join(s.split())
+    if len(s) <= limit:
+        return s
+    return s[: max(0, limit - 1)] + "…"
+
+
+_SENSITIVE_KEY_FRAGMENTS = (
+    "token",
+    "pat",
+    "secret",
+    "password",
+    "passwd",
+    "authorization",
+    "api_key",
+    "apikey",
+    "private_key",
+)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    lk = key.lower()
+    return any(fragment in lk for fragment in _SENSITIVE_KEY_FRAGMENTS)
+
+
+def _args_summary(all_args: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a compact, developer-friendly subset of args for log lines.
+
+    This is meant for provider logs where only the message string is easily
+    visible (e.g., Render). It intentionally excludes payload-sized fields and
+    secret-like keys.
+
+    To allow logging of sensitive fields (not recommended), set:
+      GITHUB_MCP_LOG_SENSITIVE=1
+    """
+
+    if not isinstance(all_args, Mapping) or not all_args:
+        return {}
+
+    allow_sensitive = _env_flag("GITHUB_MCP_LOG_SENSITIVE", default=False)
+    candidates = (
+        # Repo identity
+        "full_name",
+        "owner",
+        "repo",
+        # Refs
+        "ref",
+        "branch",
+        "base_ref",
+        "base",
+        "head",
+        # Paths/queries
+        "path",
+        "paths",
+        "query",
+        "pattern",
+        # PR-ish
+        "title",
+        "number",
+        # Workspace
+        "reset",
+        # Commands / patches (truncate)
+        "command",
+        "command_lines",
+        "patch",
+        # Misc
+        "schedule",
+    )
+
+    out: dict[str, Any] = {}
+    for key in candidates:
+        if key not in all_args:
+            continue
+        if (not allow_sensitive) and _is_sensitive_key(key):
+            continue
+        val = all_args.get(key)
+        if val is None:
+            continue
+        # Avoid massive payloads.
+        if key in {"patch"}:
+            out[key] = _truncate_text(val, limit=160)
+        elif key in {"command"}:
+            out[key] = _truncate_text(val, limit=160)
+        elif key in {"command_lines"}:
+            # Keep only first few command lines.
+            if isinstance(val, list):
+                out[key] = [_truncate_text(v, limit=120) for v in val[:3]]
+            else:
+                out[key] = _truncate_text(val, limit=160)
+        else:
+            out[key] = _truncate_text(val, limit=160)
+
+    return out
+
+
+def _format_log_kv(data: Mapping[str, Any]) -> str:
+    parts: list[str] = []
+    for k, v in data.items():
+        if v is None:
+            continue
+        if v == "":
+            continue
+        parts.append(f"{k}={v}")
+    return " ".join(parts)
+
+
 class _ToolStub:
     """Minimal tool object used when FastMCP is unavailable.
 
@@ -476,16 +594,28 @@ def _log_tool_start(
     )
     # Human-readable message (scan-friendly) + machine-readable extras.
     if HUMAN_LOGS:
-        req_id = payload.get("request", {}).get("request_id")
-        msg_id = payload.get("request", {}).get("message_id")
-        session_id = payload.get("request", {}).get("session_id")
+        req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
+        req_id = req_ctx.get("request_id")
+        msg_id = req_ctx.get("message_id")
+        session_id = req_ctx.get("session_id")
+        path = req_ctx.get("path")
         call_id_short = payload.get("call_id")
+
+        arg_summary = _args_summary(all_args)
+        kv = _format_log_kv(
+            {
+                "tool": tool_name,
+                "call_id": call_id_short,
+                "write": int(bool(write_action)),
+                "request_id": req_id,
+                "session_id": session_id,
+                "message_id": msg_id,
+                "path": path,
+                **{k: v for k, v in arg_summary.items()},
+            }
+        )
         LOGGER.info(
-            (
-                "tool_call_started "
-                f"tool={tool_name} call_id={call_id_short} write_action={bool(write_action)} "
-                f"request_id={req_id} session_id={session_id} message_id={msg_id}"
-            ),
+            f"tool_call_started {kv}",
             extra={"event": "tool_call_started", **payload},
         )
     else:
@@ -505,6 +635,7 @@ def _log_tool_success(
     schema_present: bool,
     duration_ms: float,
     result: Any,
+    all_args: Mapping[str, Any] | None = None,
 ) -> None:
     if not LOG_TOOL_CALLS:
         return
@@ -516,6 +647,8 @@ def _log_tool_success(
         schema_hash=schema_hash,
         schema_present=schema_present,
     )
+    if all_args is not None:
+        payload.update(_extract_context(all_args))
     payload.update(
         {
             "duration_ms": duration_ms,
@@ -532,13 +665,28 @@ def _log_tool_success(
             payload["result"] = result
 
     if HUMAN_LOGS:
-        req_id = payload.get("request", {}).get("request_id")
+        req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
+        req_id = req_ctx.get("request_id")
+        msg_id = req_ctx.get("message_id")
+        session_id = req_ctx.get("session_id")
+        path = req_ctx.get("path")
         call_id_short = payload.get("call_id")
+
+        arg_summary = _args_summary(all_args or {})
+        kv = _format_log_kv(
+            {
+                "tool": tool_name,
+                "call_id": call_id_short,
+                "ms": f"{duration_ms:.2f}",
+                "request_id": req_id,
+                "session_id": session_id,
+                "message_id": msg_id,
+                "path": path,
+                **{k: v for k, v in arg_summary.items()},
+            }
+        )
         LOGGER.info(
-            (
-                "tool_call_completed "
-                f"tool={tool_name} call_id={call_id_short} duration_ms={duration_ms:.2f} request_id={req_id}"
-            ),
+            f"tool_call_completed {kv}",
             extra={"event": "tool_call_completed", **payload},
         )
     else:
@@ -587,8 +735,30 @@ def _log_tool_failure(
             payload["error_message"] = err
 
     call_id_short = payload.get("call_id")
+
+    # Emit a scan-friendly message that includes request correlation + a compact arg summary.
+    req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
+    req_id = req_ctx.get("request_id")
+    msg_id = req_ctx.get("message_id")
+    session_id = req_ctx.get("session_id")
+    path = req_ctx.get("path")
+
+    arg_summary = _args_summary(all_args)
+    kv = _format_log_kv(
+        {
+            "tool": tool_name,
+            "call_id": call_id_short,
+            "phase": phase,
+            "ms": f"{duration_ms:.2f}",
+            "request_id": req_id,
+            "session_id": session_id,
+            "message_id": msg_id,
+            "path": path,
+            **{k: v for k, v in arg_summary.items()},
+        }
+    )
     LOGGER.warning(
-        f"tool_call_failed tool={tool_name} call_id={call_id_short} phase={phase} duration_ms={duration_ms:.2f}",
+        f"tool_call_failed {kv}",
         extra={"event": "tool_call_failed", **payload},
         exc_info=exc,
     )
@@ -947,6 +1117,7 @@ def mcp_tool(
                     schema_present=schema_present,
                     duration_ms=duration_ms,
                     result=result,
+                    all_args=all_args,
                 )
                 if isinstance(result, Mapping):
                     # Return tool payload as-is; do not inject UI-only fields.
@@ -1123,6 +1294,7 @@ def mcp_tool(
                 schema_present=schema_present,
                 duration_ms=duration_ms,
                 result=result,
+                all_args=all_args,
             )
             if isinstance(result, Mapping):
                 # Return tool payload as-is; do not inject UI-only fields.
