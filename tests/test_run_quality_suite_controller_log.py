@@ -5,7 +5,7 @@ import types
 import pytest
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_run_quality_suite_controller_log_on_lint_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

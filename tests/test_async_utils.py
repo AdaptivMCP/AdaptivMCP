@@ -17,7 +17,7 @@ class _FakeAsyncClient:
         self.closed_calls += 1
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_active_event_loop_returns_running_loop() -> None:
     loop = asyncio.get_running_loop()
     assert active_event_loop() is loop

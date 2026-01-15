@@ -1,7 +1,7 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
 import shutil
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from github_mcp.server import (
     _structured_tool_error,
@@ -104,15 +104,11 @@ def _workspace_write_text(
 
 @mcp_tool(write_action=True)
 async def delete_workspace_paths(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
-    paths: Optional[List[str]] = None,
-    *,
+    paths: List[str] | None = None,
     allow_missing: bool = True,
     allow_recursive: bool = False,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Delete one or more paths from the repo mirror (workspace clone).
 
@@ -133,8 +129,6 @@ async def delete_workspace_paths(
 
     try:
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -165,7 +159,7 @@ async def delete_workspace_paths(
                 failed.append({"path": rel_path, "error": str(exc)})
 
         return {
-            "branch": effective_ref,
+            "ref": effective_ref,
             "status": "deleted",
             "removed": removed,
             "missing": missing,
@@ -178,13 +172,9 @@ async def delete_workspace_paths(
 
 @mcp_tool(write_action=False)
 async def get_workspace_file_contents(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
     path: str = "",
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Read a file from the persistent repo mirror (workspace clone) (no shell).
 
@@ -200,8 +190,6 @@ async def get_workspace_file_contents(
             raise ValueError("path must be a non-empty string")
 
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
@@ -214,15 +202,11 @@ async def get_workspace_file_contents(
 
 @mcp_tool(write_action=True)
 async def set_workspace_file_contents(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
     path: str = "",
     content: str = "",
     create_parents: bool = True,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Replace a workspace file's contents by writing the full file text.
 
@@ -239,8 +223,6 @@ async def set_workspace_file_contents(
             raise TypeError("content must be a string")
 
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -252,7 +234,7 @@ async def set_workspace_file_contents(
         )
 
         return {
-            "branch": effective_ref,
+            "ref": effective_ref,
             "status": "written",
             **write_info,
         }
@@ -262,13 +244,9 @@ async def set_workspace_file_contents(
 
 @mcp_tool(write_action=True)
 async def apply_patch(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
     patch: str = "",
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Apply a unified diff patch to the persistent repo mirror (workspace clone)."""
 
@@ -277,11 +255,9 @@ async def apply_patch(
             raise ValueError("patch must be a non-empty string")
 
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         await deps["apply_patch_to_repo"](repo_dir, patch)
-        return {"branch": effective_ref, "status": "patched"}
+        return {"ref": effective_ref, "status": "patched"}
     except Exception as exc:
         return _structured_tool_error(exc, context="apply_patch")
