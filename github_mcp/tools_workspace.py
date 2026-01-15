@@ -1,7 +1,15 @@
-"""Public workspace tools (repo mirror operations).
+"""Workspace mirror tool surface (developer-facing).
 
-This module keeps a stable surface for callers and tests.
-Implementation is split across `github_mcp.workspace_tools.*`.
+This module re-exports the persistent-repo-mirror (workspace clone) tools under
+a stable import path for callers and tests. The actual implementations live
+under `github_mcp.workspace_tools.*` and are registered via `@mcp_tool` at
+import time.
+
+Developer notes:
+- Importing this module eagerly imports all workspace_tools submodules to ensure
+  newly-added tools are registered.
+- Tools are designed to be called by an MCP client or via the HTTP tool registry
+  endpoints; return values are JSON-serializable dict payloads or scalars.
 """
 
 from __future__ import annotations
