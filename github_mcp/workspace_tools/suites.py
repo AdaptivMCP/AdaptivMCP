@@ -281,27 +281,31 @@ async def run_quality_suite(
     if preflight:
         controller_log.append("- Preflight: enabled")
         # Diagnostics only; no gating.
-        await _run_named_step(
-            name="python_version",
-            full_name=full_name,
-            ref=ref,
-            command="python --version",
-            timeout_seconds=min(60, timeout_seconds_i),
-            workdir=workdir,
-            use_temp_venv=use_temp_venv,
-            installing_dependencies=False,
-            include_raw=include_raw_step_outputs,
+        steps.append(
+            await _run_named_step(
+                name="python_version",
+                full_name=full_name,
+                ref=ref,
+                command="python --version",
+                timeout_seconds=min(60, timeout_seconds_i),
+                workdir=workdir,
+                use_temp_venv=use_temp_venv,
+                installing_dependencies=False,
+                include_raw=include_raw_step_outputs,
+            )
         )
-        await _run_named_step(
-            name="pip_version",
-            full_name=full_name,
-            ref=ref,
-            command="python -m pip --version",
-            timeout_seconds=min(60, timeout_seconds_i),
-            workdir=workdir,
-            use_temp_venv=use_temp_venv,
-            installing_dependencies=False,
-            include_raw=include_raw_step_outputs,
+        steps.append(
+            await _run_named_step(
+                name="pip_version",
+                full_name=full_name,
+                ref=ref,
+                command="python -m pip --version",
+                timeout_seconds=min(60, timeout_seconds_i),
+                workdir=workdir,
+                use_temp_venv=use_temp_venv,
+                installing_dependencies=False,
+                include_raw=include_raw_step_outputs,
+            )
         )
 
     # Optional developer checks.

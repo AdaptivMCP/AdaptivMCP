@@ -50,8 +50,7 @@ async def commit_and_open_pr_from_workspace(
                 lint_command=lint_command,
                 timeout_seconds=quality_timeout_seconds,
                 fail_fast=True,
-                developer_defaults=True,
-                auto_setup_repo=True,
+                developer_defaults=False,
             )
             if isinstance(quality, dict) and quality.get("status") in {
                 "failed",
@@ -60,7 +59,7 @@ async def commit_and_open_pr_from_workspace(
                 return {
                     "status": "error",
                     "reason": "quality_suite_failed",
-                    "branch": effective_ref,
+                    "ref": effective_ref,
                     "base": effective_base,
                     "quality": quality,
                     "message": "Quality suite failed; changes were not committed and no PR was opened.",
