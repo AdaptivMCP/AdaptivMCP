@@ -435,10 +435,10 @@ def _build_tool_docstring(
         "",
         f"Write action: {'yes' if write_action else 'no'}.",
         (
-            "Write actions may be gated by server policy. If the server requires approval, "
-            "the tool will return a structured error indicating approval is required."
+            "This tool can change remote state. Your client may ask for confirmation before running it. "
+            "If confirmation is required, the tool returns a structured error explaining the next step."
             if write_action
-            else "This tool is read-only and is not subject to write-approval gating."
+            else "This tool is read-only and does not change remote state."
         ),
         "",
         f"Visibility: {visibility}.",
