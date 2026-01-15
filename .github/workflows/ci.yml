@@ -38,11 +38,12 @@ jobs:
             dev-requirements.txt
 
       - name: Setup ripgrep (vendored)
+        shell: bash
         run: |
-          chmod 0755 vendor/rg/linux-x64/rg
-          export PATH="${GITHUB_WORKSPACE}/vendor/rg/linux-x64:$PATH"
+          set -euo pipefail
+          . ./scripts/rg-path.sh
           rg --version
-          echo "${GITHUB_WORKSPACE}/vendor/rg/linux-x64" >> "$GITHUB_PATH"
+          echo "${PATH%%:*}" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: |
@@ -87,11 +88,12 @@ jobs:
             dev-requirements.txt
 
       - name: Setup ripgrep (vendored)
+        shell: bash
         run: |
-          chmod 0755 vendor/rg/linux-x64/rg
-          export PATH="${GITHUB_WORKSPACE}/vendor/rg/linux-x64:$PATH"
+          set -euo pipefail
+          . ./scripts/rg-path.sh
           rg --version
-          echo "${GITHUB_WORKSPACE}/vendor/rg/linux-x64" >> "$GITHUB_PATH"
+          echo "${PATH%%:*}" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: |

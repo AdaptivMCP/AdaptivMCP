@@ -27,6 +27,12 @@ case "$ARCH" in
 esac
 
 RG_BIN="$RG_DIR/rg"
+if [ -f "$RG_BIN" ]; then
+  # Some environments can drop the executable bit on vendored binaries.
+  # Ensure it is runnable rather than hard-failing.
+  chmod 0755 "$RG_BIN" 2>/dev/null || true
+fi
+
 if [ ! -x "$RG_BIN" ]; then
   echo "Vendored rg binary missing or not executable: $RG_BIN" >&2
   echo "If you are on a non-Linux system, install ripgrep via your package manager (e.g., brew/apt)." >&2
