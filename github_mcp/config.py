@@ -405,7 +405,7 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").strip().upper()
 # Default to a compact, scannable format.
 LOG_FORMAT = os.environ.get(
     "LOG_FORMAT",
-    "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    "%(levelname)s | %(name)s | %(message)s",
 )
 
 

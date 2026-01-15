@@ -20,3 +20,6 @@ ruff>=0.6.0
 twine>=5.1.1
 types-python-dateutil>=2.9.0.20240316
 wheel>=0.43.0
+
+# Syntax highlighting for developer-facing log visuals
+Pygments>=2.18.0
