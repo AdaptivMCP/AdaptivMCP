@@ -4,7 +4,11 @@ This repo treats the Python code as the source of truth.
 Tool docs may be regenerated when the tool surface or schemas change.
 
 Usage:
- python scripts/generate_detailed_tools.py > Detailed_Tools.md
+  python scripts/generate_detailed_tools.py
+  python scripts/generate_detailed_tools.py Detailed_Tools.md
+
+This script writes atomically (via a temporary file) so failed imports or
+runtime errors do not truncate the existing output file.
 """
 
 from __future__ import annotations
@@ -12,20 +16,49 @@ from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 # Ensure repository root is on sys.path when invoked as a script.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-import main  # noqa: E402
+
+def _load_main():
+    """Import main lazily.
+
+    The running server depends on runtime packages (for example httpx). When
+    those packages are missing, importing main will fail. This helper keeps the
+    failure mode explicit and prevents partial file writes.
+    """
+
+    try:
+        import main  # type: ignore  # noqa: E402
+
+        return main
+    except ModuleNotFoundError as exc:
+        missing = getattr(exc, "name", None) or str(exc)
+        raise RuntimeError(
+            "Unable to import the server registry (main). Install runtime dependencies "
+            "first (for example: pip install -r requirements.txt). Missing module: "
+            f"{missing}"
+        ) from exc
 
 
 def _as_json(obj: object) -> str:
     return json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=False)
 
 
-def main_cli() -> None:
+def _resolve_output_path(argv: list[str]) -> Path:
+    if len(argv) >= 2 and argv[1].strip():
+        return Path(argv[1]).expanduser()
+    return Path("Detailed_Tools.md")
+
+
+def main_cli(argv: list[str]) -> None:
+    out_path = _resolve_output_path(argv)
+    main = _load_main()
     catalog = main.list_all_actions(include_parameters=True, compact=False)
     tools = list(catalog.get("tools", []))
     tools.sort(key=lambda t: (t.get("name") or ""))
@@ -83,8 +116,21 @@ def main_cli() -> None:
         lines.append(_as_json({"tool": name, "args": {}}) + "\n")
         lines.append("```\n")
 
-    sys.stdout.write("".join(lines))
+    rendered = "".join(lines)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_dir = str(out_path.parent)
+    with NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=tmp_dir) as tmp:
+        tmp.write(rendered)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp_name = tmp.name
+
+    os.replace(tmp_name, out_path)
+
+    # Also echo to stdout for convenience.
+    sys.stdout.write(rendered)
 
 
 if __name__ == "__main__":
-    main_cli()
+    main_cli(sys.argv)

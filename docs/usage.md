@@ -55,7 +55,7 @@ GitHub API read tools cover discovery and inspection, such as:
 - list_recent_issues, list_repository_issues, fetch_issue
 - fetch_pr, get_pr_info, list_pr_changed_filenames
 
-If REST helpers are blocked by client safety gating, the GraphQL fallbacks cover the same scenarios:
+GraphQL fallbacks cover many of the same discovery scenarios:
 
 - list_open_issues_graphql
 - list_workflow_runs_graphql, list_recent_failures_graphql
@@ -87,7 +87,7 @@ Typical flow:
 
    Convenience: `commit_and_open_pr_from_workspace` performs the common "commit + push + open PR" workflow.
    - Optional: set `run_quality=true` to run lint/tests before creating the commit.
-   - This tool pushes only to the current `ref` (the feature branch) and then opens a PR into `base`.
+   - This tool pushes to the current `ref` (the feature branch) and then opens a PR into `base`.
 
 4. Refresh when you need a clean snapshot
    - The repo mirror does not automatically reflect the live GitHub state unless you fetch/pull or recreate it.
@@ -126,7 +126,7 @@ Operational notes:
 
 - Pagination: `limit` is clamped to a safe range (owners/services/deploys: 1..100; logs: 1..1000).
 - `create_render_deploy`: provide at most one of `commit_id` or `image_url`.
-- `get_render_logs`: `resource_type` must be `service` or `job`. If both `start_time` and `end_time` are provided, start must be <= end. Timestamps must be ISO8601 (for example `2026-01-14T12:34:56Z`).
+- `get_render_logs`: `resource_type` is expected to be `service` or `job`. If both `start_time` and `end_time` are provided, start is validated to be <= end. Timestamps are validated as ISO8601 strings (for example `2026-01-14T12:34:56Z`).
 
 Example flow:
 

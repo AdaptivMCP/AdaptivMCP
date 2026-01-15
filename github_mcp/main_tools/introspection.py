@@ -121,11 +121,17 @@ def _tool_attr(tool: Any, func: Any, name: str, default: Any = None) -> Any:
 
 
 def _tool_tags(tool: Any, func: Any) -> list[str]:
-    """Return tags for a tool.
+    """Return tags for a tool."""
 
-    Tags are intentionally suppressed. Some clients interpret tags as
-    policy/execution hints and may misclassify tools when tags are present.
-    """
+    tags = getattr(func, "__mcp_tags__", None)
+    if isinstance(tags, (list, tuple)):
+        return [str(t) for t in tags if t is not None and str(t).strip()]
+
+    meta = getattr(tool, "meta", None)
+    if isinstance(meta, dict):
+        mtags = meta.get("tags")
+        if isinstance(mtags, (list, tuple)):
+            return [str(t) for t in mtags if t is not None and str(t).strip()]
 
     return []
 
@@ -200,6 +206,7 @@ def list_all_actions(
             "visibility": str(visibility),
             # Correct semantic classification:
             "write_action": base_write_action,
+            "tags": _tool_tags(tool, func),
             "write_allowed": True,
             "write_enabled": gate["write_enabled"],
             "write_auto_approved": write_auto_approved,
@@ -210,8 +217,7 @@ def list_all_actions(
         if description:
             tool_info["description"] = description
 
-        # Do not surface tags or risk metadata. Tool classification is expressed
-        # exclusively via write_action plus the approval gating fields.
+        # Tool classification is expressed via write_action plus the gating fields.
 
         if include_parameters:
             schema = getattr(func, "__mcp_input_schema__", None)

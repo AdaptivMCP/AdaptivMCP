@@ -650,17 +650,15 @@ def _apply_tool_metadata(
     tool_obj: Any,
     schema: Mapping[str, Any],
     visibility: str,  # noqa: ARG001
-    tags: Optional[Iterable[str]] = None,  # noqa: ARG001
+    tags: Optional[Iterable[str]] = None,
     *,
     write_action: Optional[bool] = None,  # noqa: ARG001
     write_allowed: Optional[bool] = None,  # noqa: ARG001
 ) -> None:
-    """Attach only safe metadata onto the registered tool object.
+    """Attach metadata onto the registered tool object.
 
-    Some MCP clients interpret tool-object metadata as execution directives.
-    To avoid misclassification, we keep policy and classification on the Python
-    wrapper ("__mcp_*" attributes) and attach only the input schema onto the
-    tool object when needed for FastMCP.
+    The tool wrapper remains the source of truth for behavior. The tool object
+    metadata is intended for discovery/UIs.
     """
 
     if tool_obj is None:
@@ -674,6 +672,13 @@ def _apply_tool_metadata(
             meta = getattr(tool_obj, "meta", None)
             if isinstance(meta, dict):
                 meta.setdefault("input_schema", schema)
+
+    if tags:
+        tag_list = [str(t) for t in tags if t is not None and str(t).strip()]
+        if tag_list:
+            meta = getattr(tool_obj, "meta", None)
+            if isinstance(meta, dict):
+                meta["tags"] = tag_list
 
 
 def _tool_write_allowed(write_action: bool) -> bool:
@@ -1287,7 +1292,7 @@ def _register_with_fastmcp(
     *,
     name: str,
     description: Optional[str],
-    tags: Optional[Iterable[str]] = None,  # noqa: ARG001
+    tags: Optional[Iterable[str]] = None,
 ) -> Any:
     """Register a tool with FastMCP across signature variants.
 
@@ -1298,8 +1303,6 @@ def _register_with_fastmcp(
       TypeError: FastMCP.tool() got multiple values for argument 'name'
 
     Notes for developers:
-      - Tags are intentionally suppressed. Some downstream clients interpret tags
-        as execution/policy hints.
       - When FastMCP is not installed, we register a lightweight stub tool so
         HTTP routes and introspection can still function.
 
@@ -1325,9 +1328,6 @@ def _register_with_fastmcp(
     style = _fastmcp_call_style(params)
 
     # Build kwargs in descending compatibility order.
-    #
-    # IMPORTANT: do not emit tags. Some downstream clients treat tags as
-    # policy/execution hints and may misclassify tools.
 
     base: dict[str, Any] = {"name": name, "description": description}
     base_with_meta: dict[str, Any] = {
@@ -1335,6 +1335,10 @@ def _register_with_fastmcp(
         "description": description,
         "meta": {},
     }
+    if tags:
+        tag_list = [str(t) for t in tags if t is not None and str(t).strip()]
+        if tag_list:
+            base_with_meta["meta"]["tags"] = tag_list
     attempts = [base_with_meta, base, {"name": name}]
 
     last_exc: Optional[Exception] = None
@@ -1393,7 +1397,7 @@ def mcp_tool(
     *,
     name: str | None = None,
     write_action: bool,
-    tags: Optional[Iterable[str]] = None,  # noqa: ARG001
+    tags: Optional[Iterable[str]] = None,
     description: str | None = None,
     visibility: str = "public",  # accepted, ignored
     **_ignored: Any,
@@ -1413,7 +1417,7 @@ def mcp_tool(
       write_action: Whether the tool performs mutations (git push, PR creation, etc.).
       description: Optional human/developer-facing description (defaults to func.__doc__).
       visibility: Currently accepted for compatibility; reported via introspection.
-      tags: Accepted for compatibility but intentionally ignored.
+      tags: Optional metadata labels exposed via introspection.
 
     Reserved argument (_meta):
       Tools may accept an optional '_meta' kwarg. This is stripped before calling
@@ -1438,7 +1442,7 @@ def mcp_tool(
         normalized_description = description or _normalize_tool_description(
             func, signature, llm_level=llm_level
         )
-        # Tags are accepted for backwards compatibility but intentionally ignored.
+        tag_list = [str(t) for t in (tags or []) if t is not None and str(t).strip()]
 
         if asyncio.iscoroutinefunction(func):
 
@@ -1579,6 +1583,7 @@ def mcp_tool(
                 wrapper,
                 name=tool_name,
                 description=normalized_description,
+                tags=tag_list,
             )
 
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
@@ -1591,10 +1596,12 @@ def mcp_tool(
             wrapper.__mcp_tool_name__ = tool_name
             wrapper.__mcp_write_action__ = bool(write_action)
             wrapper.__mcp_visibility__ = visibility
+            wrapper.__mcp_tags__ = tag_list
             _apply_tool_metadata(
                 wrapper.__mcp_tool__,
                 schema,
                 visibility,
+                tags=tag_list,
                 write_action=bool(write_action),
                 write_allowed=_tool_write_allowed(write_action),
             )
@@ -1756,6 +1763,7 @@ def mcp_tool(
             wrapper,
             name=tool_name,
             description=normalized_description,
+            tags=tag_list,
         )
 
         schema = _normalize_input_schema(wrapper.__mcp_tool__)
@@ -1768,10 +1776,12 @@ def mcp_tool(
         wrapper.__mcp_tool_name__ = tool_name
         wrapper.__mcp_write_action__ = bool(write_action)
         wrapper.__mcp_visibility__ = visibility
+        wrapper.__mcp_tags__ = tag_list
         _apply_tool_metadata(
             wrapper.__mcp_tool__,
             schema,
             visibility,
+            tags=tag_list,
             write_action=bool(write_action),
             write_allowed=_tool_write_allowed(write_action),
         )
