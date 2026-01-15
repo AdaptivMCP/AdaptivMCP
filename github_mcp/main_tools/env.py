@@ -5,6 +5,7 @@ import subprocess
 import shutil
 import sys
 import platform
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -25,6 +26,16 @@ from github_mcp.config import (
 from github_mcp.render_api import _get_optional_render_token
 from github_mcp.render_api import render_request
 from github_mcp.exceptions import GitHubAPIError
+
+
+_DISPATCH_PROBE_COOLDOWN_SECONDS = 300
+_dispatch_probe_state: Dict[str, Any] = {
+    "last_at": 0.0,
+    "last_workflow_id": None,
+    "last_workflow_name": None,
+    "last_workflow_path": None,
+    "last_run_id": None,
+}
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -552,34 +563,178 @@ async def validate_environment() -> Dict[str, Any]:
                     }
                 )
 
-            # 3) Can dispatch workflow? Avoid side effects by inference.
-            # - Classic PATs/OAuth tokens: require the "workflow" scope.
-            # - Fine-grained PATs: scopes are not reported; cannot confirm without
-            #   an actual dispatch (side effect).
-            list_workflows_ok = any(
-                p.get("probe") == "can_list_workflows" and p.get("result") == "pass" for p in probes
-            )
-            workflow_scope = "workflow" in (scope_list or [])
-            inferred_dispatch = workflow_scope and list_workflows_ok
-            dispatch_result = "pass" if inferred_dispatch else "fail"
+            # 3) Can dispatch workflow? Actual probe.
+            # This creates a workflow run as a side effect. We keep it best-effort
+            # and try a small set of candidate workflows until one accepts a
+            # workflow_dispatch event.
             dispatch_details: Dict[str, Any] = {
                 "token_type_inferred": token_type_inferred,
-                "workflow_scope_present": workflow_scope,
-                "list_workflows_ok": list_workflows_ok,
-                "note": "Inferred without dispatching a workflow run (no side effects).",
+                "ref": controller_branch,
+                "cooldown_seconds": _DISPATCH_PROBE_COOLDOWN_SECONDS,
             }
-            if token_type_inferred == "fine_grained_pat_or_unknown" and not workflow_scope:
-                dispatch_details["caveat"] = (
-                    "Fine-grained PAT permissions are not surfaced via OAuth scope headers; dispatch may still work."
+
+            # Process-level throttle metadata (we still perform a real dispatch).
+            now = time.time()
+            last_at = float(_dispatch_probe_state.get("last_at") or 0.0)
+            if now - last_at < _DISPATCH_PROBE_COOLDOWN_SECONDS:
+                dispatch_details["cooldown_note"] = (
+                    "Previous dispatch probe was recent; continuing anyway per configuration."
                 )
-            probes.append(
-                {
-                    "probe": "can_dispatch_workflow",
-                    "mode": "inferred",
-                    "result": dispatch_result,
-                    "details": dispatch_details,
-                }
-            )
+                dispatch_details["last_at"] = last_at
+                dispatch_details["last_workflow_id"] = _dispatch_probe_state.get("last_workflow_id")
+                dispatch_details["last_workflow_name"] = _dispatch_probe_state.get(
+                    "last_workflow_name"
+                )
+                dispatch_details["last_run_id"] = _dispatch_probe_state.get("last_run_id")
+
+            try:
+                wf_list = await m._github_request(
+                    "GET",
+                    f"/repos/{controller_repo}/actions/workflows",
+                    params={"per_page": 100},
+                )
+            except Exception as exc:
+                probes.append(
+                    {
+                        "probe": "can_dispatch_workflow",
+                        "mode": "actual",
+                        "result": "fail",
+                        "details": {
+                            **dispatch_details,
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                        },
+                    }
+                )
+            else:
+                wf_json = wf_list.get("json")
+                workflows: List[Dict[str, Any]] = []
+                if isinstance(wf_json, dict) and isinstance(wf_json.get("workflows"), list):
+                    workflows = [w for w in wf_json.get("workflows") if isinstance(w, dict)]
+
+                # Prefer common CI-like workflows first.
+                preferred: List[Dict[str, Any]] = []
+                other: List[Dict[str, Any]] = []
+                for w in workflows:
+                    name = w.get("name")
+                    name_lower = str(name).lower() if isinstance(name, str) else ""
+                    if any(tok in name_lower for tok in ("ci", "test", "lint", "build")):
+                        preferred.append(w)
+                    else:
+                        other.append(w)
+                candidates = preferred + other
+
+                dispatched = False
+                chosen_id: Optional[int] = None
+                chosen_name: Optional[str] = None
+                chosen_path: Optional[str] = None
+                last_error: Optional[Dict[str, Any]] = None
+
+                for w in candidates[:10]:
+                    wid = w.get("id")
+                    if not isinstance(wid, int):
+                        continue
+                    chosen_id = wid
+                    chosen_name = w.get("name") if isinstance(w.get("name"), str) else None
+                    chosen_path = w.get("path") if isinstance(w.get("path"), str) else None
+                    try:
+                        await m._github_request(
+                            "POST",
+                            f"/repos/{controller_repo}/actions/workflows/{wid}/dispatches",
+                            json_body={"ref": controller_branch, "inputs": {}},
+                            expect_json=False,
+                        )
+                    except GitHubAPIError as exc:
+                        status_code = getattr(exc, "status_code", None)
+                        # 404 typically indicates the workflow does not support workflow_dispatch.
+                        if status_code == 404:
+                            last_error = {
+                                "status_code": status_code,
+                                "error": str(exc),
+                                "workflow_id": wid,
+                                "workflow_name": chosen_name,
+                            }
+                            continue
+                        last_error = {
+                            "status_code": status_code,
+                            "error": str(exc),
+                            "workflow_id": wid,
+                            "workflow_name": chosen_name,
+                        }
+                        break
+                    except Exception as exc:
+                        last_error = {
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                            "workflow_id": wid,
+                            "workflow_name": chosen_name,
+                        }
+                        break
+                    else:
+                        dispatched = True
+                        break
+
+                if not dispatched:
+                    probes.append(
+                        {
+                            "probe": "can_dispatch_workflow",
+                            "mode": "actual",
+                            "result": "fail",
+                            "details": {
+                                **dispatch_details,
+                                "reason": "No workflow accepted a workflow_dispatch request",
+                                "last_error": last_error,
+                            },
+                        }
+                    )
+                else:
+                    run_id = None
+                    try:
+                        runs_resp = await m._github_request(
+                            "GET",
+                            f"/repos/{controller_repo}/actions/workflows/{chosen_id}/runs",
+                            params={
+                                "event": "workflow_dispatch",
+                                "per_page": 5,
+                                "branch": controller_branch,
+                            },
+                        )
+                        runs_json = runs_resp.get("json")
+                        if (
+                            isinstance(runs_json, dict)
+                            and isinstance(runs_json.get("workflow_runs"), list)
+                            and runs_json.get("workflow_runs")
+                        ):
+                            first = runs_json.get("workflow_runs")[0]
+                            if isinstance(first, dict):
+                                run_id = first.get("id")
+                    except Exception:
+                        run_id = None
+
+                    _dispatch_probe_state.update(
+                        {
+                            "last_at": now,
+                            "last_workflow_id": chosen_id,
+                            "last_workflow_name": chosen_name,
+                            "last_workflow_path": chosen_path,
+                            "last_run_id": run_id,
+                        }
+                    )
+
+                    probes.append(
+                        {
+                            "probe": "can_dispatch_workflow",
+                            "mode": "actual",
+                            "result": "pass",
+                            "details": {
+                                **dispatch_details,
+                                "workflow_id": chosen_id,
+                                "workflow_name": chosen_name,
+                                "workflow_path": chosen_path,
+                                "workflow_run_id": run_id,
+                            },
+                        }
+                    )
 
             probe_level = "ok" if all(p.get("result") == "pass" for p in probes) else "warning"
             add_check(
