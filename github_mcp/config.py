@@ -19,38 +19,11 @@ _UUID_RE = re.compile(
 
 
 def shorten_token(value: object, *, head: int = 8, tail: int = 4) -> object:
-    """Shorten opaque identifiers for human-facing logs.
+    """Return value unchanged.
 
-    Render logs are read by humans. Long opaque identifiers (UUIDs, hashes,
-    idempotency keys) degrade readability. This helper preserves the original
-    value type where possible and shortens only strings that look like tokens.
+    This server is intended to be self-hosted in environments where operators
+    may prefer full-fidelity logs without token shortening/masking.
     """
-
-    if not isinstance(value, str):
-        return value
-
-    raw = value.strip()
-    if not raw:
-        return value
-
-    # If it looks like a UUID, keep the prefix.
-    if _UUID_RE.match(raw):
-        return raw.split("-")[0]
-
-    # Long hex strings (hashes, digests).
-    if len(raw) >= 32 and all(ch in "0123456789abcdefABCDEF" for ch in raw):
-        if len(raw) <= head + tail + 1:
-            return raw
-        return f"{raw[:head]}…{raw[-tail:]}"
-
-    # Base64-ish / URL-safe random strings.
-    if len(raw) >= 40 and all(
-        ("a" <= ch <= "z") or ("A" <= ch <= "Z") or ("0" <= ch <= "9") or ch in "-_=+/"
-        for ch in raw
-    ):
-        if len(raw) <= head + tail + 1:
-            return raw
-        return f"{raw[:head]}…{raw[-tail:]}"
 
     return value
 
@@ -68,70 +41,28 @@ _HUMANIZE_ID_KEYS = {
 
 
 def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> object:
-    """Recursively sanitize extra payloads for readability in hosted logs."""
+    """Return full-fidelity JSONable payloads for provider logs.
 
-    if depth > max_depth:
-        return "…"
-
-    if isinstance(value, dict):
-        out: dict[str, object] = {}
-        for k, v in value.items():
-            key = str(k)
-            if HUMAN_LOGS and key in _HUMANIZE_ID_KEYS:
-                out[key] = shorten_token(v)
-            else:
-                out[key] = _sanitize_for_logs(v, depth=depth + 1, max_depth=max_depth)
-        return out
-
-    if isinstance(value, (list, tuple)):
-        items = list(value)
-        cap = 20 if HUMAN_LOGS else 100
-        trimmed = items[:cap]
-        out = [_sanitize_for_logs(v, depth=depth + 1, max_depth=max_depth) for v in trimmed]
-        if len(items) > cap:
-            out.append(f"…(+{len(items) - cap} more)")
-        return out
-
-    if isinstance(value, str):
-        # Prefer shortening opaque tokens; keep human strings as-is.
-        shortened = shorten_token(value)
-        if shortened is not value:
-            return shortened
-        if HUMAN_LOGS and len(value) > 400:
-            return value[:380] + "…"
-        return value
+    This intentionally does not truncate, shorten, or otherwise sanitize values.
+    """
 
     return _jsonable(value)
 
 
 def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Return a compact request context suitable for provider logs.
+    """Return full request context for provider logs.
 
-    The raw request context may include verbose ChatGPT metadata fields (long
-    opaque IDs). For hosted logs (Render) we keep only correlation fields that
-    are actually useful to operators.
+    This intentionally returns the entire request context (JSONable) without
+    shortening or dropping fields.
     """
 
     if not isinstance(req, Mapping):
         return {}
 
-    out: dict[str, Any] = {
-        "request_id": shorten_token(req.get("request_id")),
-        "path": req.get("path"),
-        "session_id": shorten_token(req.get("session_id")),
-        "message_id": shorten_token(req.get("message_id")),
-    }
-
-    chatgpt = req.get("chatgpt")
-    if isinstance(chatgpt, Mapping):
-        # Keep only the two most useful identifiers for debugging.
-        out["chatgpt"] = {
-            "conversation_id": shorten_token(chatgpt.get("conversation_id")),
-            "assistant_id": shorten_token(chatgpt.get("assistant_id")),
-        }
-
-    # Drop nulls to keep the payload small.
-    return {k: v for k, v in out.items() if v not in (None, "")}
+    try:
+        return _jsonable(dict(req))
+    except Exception:
+        return {}
 
 
 def _is_render_runtime() -> bool:
