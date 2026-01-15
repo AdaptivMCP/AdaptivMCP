@@ -201,6 +201,86 @@ async def validate_environment() -> Dict[str, Any]:
         },
     )
 
+    # ------------------------------------------------------------------
+    # Tool registry sanity checks
+    # ------------------------------------------------------------------
+    # This server relies on side-effect registration (decorators execute at import
+    # time). For operator confidence (and to catch bad deploys), confirm that the
+    # expected GitHub + Render tool surfaces are present.
+    try:
+        from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
+        from github_mcp.main_tools.introspection import list_all_actions
+
+        catalog = list_all_actions(include_parameters=False, compact=True)
+        tools = catalog.get("tools") if isinstance(catalog, dict) else None
+        tool_names = {
+            t.get("name") for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str)
+        }
+        # Minimum expected surface (Render + core introspection).
+        expected = {
+            # Introspection
+            "list_all_actions",
+            "list_tools",
+            "describe_tool",
+            # Render (canonical)
+            "list_render_owners",
+            "list_render_services",
+            "get_render_service",
+            "list_render_deploys",
+            "get_render_deploy",
+            "create_render_deploy",
+            "cancel_render_deploy",
+            "rollback_render_deploy",
+            "restart_render_service",
+            "get_render_logs",
+            "list_render_logs",
+            # Render (aliases)
+            "render_list_owners",
+            "render_list_services",
+            "render_get_service",
+            "render_list_deploys",
+            "render_get_deploy",
+            "render_create_deploy",
+            "render_cancel_deploy",
+            "render_rollback_deploy",
+            "render_restart_service",
+            "render_get_logs",
+            "render_list_logs",
+        }
+
+        missing = sorted(name for name in expected if name not in tool_names)
+        registered_count = len(_REGISTERED_MCP_TOOLS) if isinstance(_REGISTERED_MCP_TOOLS, list) else None
+        unique_count = len(tool_names)
+
+        if missing:
+            add_check(
+                "tool_registry",
+                "error",
+                "Tool registry is missing expected tools; deploy may have failed to import/register all tools",
+                {
+                    "registered_entries": registered_count,
+                    "unique_tools": unique_count,
+                    "missing": missing,
+                },
+            )
+        else:
+            add_check(
+                "tool_registry",
+                "ok",
+                "Tool registry contains expected GitHub + Render tool surfaces",
+                {
+                    "registered_entries": registered_count,
+                    "unique_tools": unique_count,
+                },
+            )
+    except Exception as exc:
+        add_check(
+            "tool_registry",
+            "warning",
+            "Could not validate tool registry (best-effort)",
+            {"error_type": type(exc).__name__, "error": str(exc)},
+        )
+
     # Remote validation for controller repo/branch, only if token is usable.
     if token_ok:
         repo_payload: Dict[str, Any] = {}
