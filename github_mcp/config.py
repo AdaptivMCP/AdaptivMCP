@@ -408,12 +408,65 @@ LOG_FORMAT = os.environ.get(
     "%(levelname)s | %(name)s | %(message)s",
 )
 
+# ANSI color for log level + logger name (intended for developer-tail workflows).
+LOG_COLOR = _env_flag("LOG_COLOR", "true")
+
 
 class _StructuredFormatter(logging.Formatter):
     """Formatter that appends structured extra fields as JSON."""
 
     def format(self, record: logging.LogRecord) -> str:  # pragma: no cover - formatting
-        base = super().format(record)
+        # Mutate the record for a clean, developer-facing console format.
+        original_levelname = record.levelname
+        original_name = record.name
+
+        try:
+            if HUMAN_LOGS and LOG_COLOR:
+                reset = "\x1b[0m"
+                dim = "\x1b[2m"
+                red = "\x1b[31m"
+                green = "\x1b[32m"
+                yellow = "\x1b[33m"
+                cyan = "\x1b[36m"
+
+                # Colorize levelname.
+                if record.levelno >= logging.ERROR:
+                    record.levelname = f"{red}{original_levelname}{reset}"
+                elif record.levelno >= logging.WARNING:
+                    record.levelname = f"{yellow}{original_levelname}{reset}"
+                else:
+                    # INFO/DEBUG
+                    record.levelname = f"{green}{original_levelname}{reset}"
+
+                # Shorten and lightly colorize logger names.
+                name = original_name
+                if name.startswith("github_mcp."):
+                    name = name[len("github_mcp.") :]
+                if name in {"mcp", "mcp_server.decorators", "mcp_server"}:
+                    name = "mcp"
+                elif name.startswith("tools_workspace"):
+                    name = "workspace"
+                elif name.startswith("github_client"):
+                    name = "github"
+                record.name = f"{dim}{cyan}{name}{reset}"
+            else:
+                # Even without ANSI, shorten the logger name for readability.
+                name = original_name
+                if name.startswith("github_mcp."):
+                    name = name[len("github_mcp.") :]
+                if name in {"mcp", "mcp_server.decorators", "mcp_server"}:
+                    name = "mcp"
+                elif name.startswith("tools_workspace"):
+                    name = "workspace"
+                elif name.startswith("github_client"):
+                    name = "github"
+                record.name = name
+
+            base = super().format(record)
+        finally:
+            record.levelname = original_levelname
+            record.name = original_name
+
         extra_payload = _extract_log_extras(record)
         if extra_payload:
             # Keep INFO lines scan-friendly for humans.
@@ -469,9 +522,15 @@ def _configure_logging() -> None:
         force=True,
     )
 
+    # Uvicorn CLI applies its own logging configuration. We rebind uvicorn loggers
+    # to the root handler so the output format is consistent (and colorized).
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        lg = logging.getLogger(name)
+        lg.handlers = []
+        lg.propagate = True
+
     # Reduce noisy framework logs in provider log streams.
     for noisy in (
-        "uvicorn.access",
         "mcp",
         "mcp.server",
         "mcp.server.lowlevel.server",
@@ -479,6 +538,9 @@ def _configure_logging() -> None:
         "httpcore",
     ):
         logging.getLogger(noisy).setLevel(logging.ERROR if QUIET_LOGS else logging.WARNING)
+
+    # Keep access logs off by default (they include request IDs / IPs and are very noisy).
+    logging.getLogger("uvicorn.access").setLevel(logging.ERROR if QUIET_LOGS else logging.WARNING)
 
     setattr(root, "_github_mcp_configured", True)
 

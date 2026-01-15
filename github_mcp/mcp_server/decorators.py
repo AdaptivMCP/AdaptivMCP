@@ -55,7 +55,8 @@ from github_mcp.mcp_server.schemas import (
 )
 
 
-LOGGER = BASE_LOGGER.getChild("mcp_server.decorators")
+# Intentionally short logger name; config's formatter further shortens/colorizes.
+LOGGER = BASE_LOGGER.getChild("mcp")
 
 
 def _env_flag(name: str, *, default: bool = False) -> bool:
@@ -171,6 +172,85 @@ def _ansi(text: str, code: str) -> str:
     if not LOG_TOOL_COLOR:
         return text
     return f"{code}{text}{ANSI_RESET}"
+
+
+# Friendly tool naming for developer-facing logs.
+_TOOL_FRIENDLY_NAMES: dict[str, str] = {
+    "validate_environment": "Environment check",
+    "get_server_config": "Server config",
+    "ensure_workspace_clone": "Workspace sync",
+    "workspace_create_branch": "Create branch",
+    "workspace_delete_branch": "Delete branch",
+    "commit_workspace": "Commit changes",
+    "open_pr_for_existing_branch": "Open pull request",
+    "apply_patch": "Apply patch",
+    "get_workspace_file_contents": "Read file",
+    "set_workspace_file_contents": "Write file",
+    "delete_workspace_paths": "Delete paths",
+    "list_workspace_files": "List files",
+    "search_workspace": "Search workspace",
+    "terminal_command": "Run command",
+    "render_shell": "Run shell",
+    "run_quality_suite": "Quality suite",
+    "run_lint_suite": "Lint suite",
+    "run_tests": "Test suite",
+}
+
+
+def _friendly_tool_name(tool_name: str) -> str:
+    name = _TOOL_FRIENDLY_NAMES.get(str(tool_name))
+    if name:
+        return name
+    return str(tool_name).replace("_", " ").strip().title() or str(tool_name)
+
+
+def _friendly_arg_bits(all_args: Mapping[str, Any]) -> list[str]:
+    """Convert common args into short, human-readable fragments."""
+
+    bits: list[str] = []
+    if not isinstance(all_args, Mapping):
+        return bits
+
+    full_name = all_args.get("full_name")
+    ref = all_args.get("ref")
+    if isinstance(full_name, str) and full_name:
+        if isinstance(ref, str) and ref:
+            bits.append(f"{full_name}@{ref}")
+        else:
+            bits.append(full_name)
+
+    path = all_args.get("path")
+    if isinstance(path, str) and path:
+        bits.append(path)
+
+    paths = all_args.get("paths")
+    if isinstance(paths, list) and paths and all(isinstance(p, str) for p in paths):
+        show = paths[:3]
+        tail = f" (+{len(paths) - len(show)} more)" if len(paths) > len(show) else ""
+        bits.append(", ".join(show) + tail)
+
+    title = all_args.get("title")
+    if isinstance(title, str) and title.strip():
+        bits.append(f"\"{title.strip()}\"")
+
+    base = all_args.get("base")
+    head = all_args.get("head") or all_args.get("branch")
+    if isinstance(head, str) and head:
+        if isinstance(base, str) and base:
+            bits.append(f"{head} -> {base}")
+        else:
+            bits.append(head)
+
+    cmd = all_args.get("command")
+    if isinstance(cmd, str) and cmd.strip():
+        bits.append(cmd.strip())
+    cmd_lines = all_args.get("command_lines")
+    if isinstance(cmd_lines, list) and cmd_lines and all(isinstance(x, str) for x in cmd_lines):
+        first = cmd_lines[0].strip()
+        if first:
+            bits.append(first + (f" (+{len(cmd_lines) - 1} more)" if len(cmd_lines) > 1 else ""))
+
+    return bits
 
 
 def _clip_text(text: str, *, max_lines: int, max_chars: int) -> str:
@@ -370,10 +450,7 @@ def _log_tool_visual(
     if not (LOG_TOOL_CALLS and HUMAN_LOGS and LOG_TOOL_VISUALS):
         return
 
-    kv_map: dict[str, Any] = {
-        "tool": tool_name,
-        "kind": kind,
-    }
+    kv_map: dict[str, Any] = {"kind": kind}
     if LOG_TOOL_LOG_IDS:
         req_ctx = summarize_request_context(req)
         kv_map.update(
@@ -384,7 +461,7 @@ def _log_tool_visual(
             }
         )
     kv = _format_log_kv(kv_map)
-    header = _ansi(kind or "visual", ANSI_CYAN) + " " + _ansi(tool_name, ANSI_CYAN)
+    header = _ansi(kind or "visual", ANSI_CYAN) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
     if kv:
         header = header + " " + kv
     LOGGER.info(
@@ -926,46 +1003,15 @@ def _log_tool_start(
         schema_present=schema_present,
         all_args=all_args,
     )
-    # Human-readable message (scan-friendly) + machine-readable extras.
-    if HUMAN_LOGS:
-        req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
-        msg_id = req_ctx.get("message_id")
-        session_id = req_ctx.get("session_id")
-        path = req_ctx.get("path")
-        if isinstance(path, str) and path.startswith("/sse"):
-            path = None
-        call_id_short = payload.get("call_id")
-
-        arg_summary = _args_summary(all_args)
-        kv_map: dict[str, Any] = {
-            "tool": tool_name,
-            "write": int(bool(write_action)),
-            **{k: v for k, v in arg_summary.items()},
-        }
-        if LOG_TOOL_LOG_IDS:
-            kv_map.update(
-                {
-                    "call_id": call_id_short,
-                    "session_id": session_id,
-                    "message_id": msg_id,
-                    "path": path,
-                }
-            )
-
-        line = _format_log_kv(kv_map)
-        prefix = _ansi("▶", ANSI_GREEN) + " " + _ansi(tool_name, ANSI_CYAN)
-        LOGGER.info(f"{prefix} {line}", extra={"event": "tool_call_started", **payload})
-    else:
-        # Non-human logs still keep message strings compact.
-        kv_map: dict[str, Any] = {
-            "tool": tool_name,
-            "write": int(bool(write_action)),
-        }
-        if LOG_TOOL_LOG_IDS:
-            kv_map["call_id"] = shorten_token(call_id)
-        line = _format_log_kv(kv_map)
-        prefix = _ansi("▶", ANSI_GREEN) + " " + _ansi(tool_name, ANSI_CYAN)
-        LOGGER.info(f"{prefix} {line}", extra={"event": "tool_call_started", **payload})
+    # Developer-facing, human-readable line (provider log UIs show message strings most prominently).
+    friendly = _friendly_tool_name(tool_name)
+    bits = _friendly_arg_bits(all_args)
+    suffix = (" - " + " - ".join(bits)) if bits else ""
+    prefix = _ansi("▶", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN)
+    msg = f"{prefix}{suffix}"
+    if LOG_TOOL_LOG_IDS:
+        msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+    LOGGER.info(msg, extra={"event": "tool_call_started", **payload})
 
 
 def _log_tool_success(
@@ -1008,34 +1054,15 @@ def _log_tool_success(
             payload["result"] = result
 
     if HUMAN_LOGS:
-        req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
-        msg_id = req_ctx.get("message_id")
-        session_id = req_ctx.get("session_id")
-        path = req_ctx.get("path")
-        call_id_short = payload.get("call_id")
-
-        if isinstance(path, str) and path.startswith("/sse"):
-            path = None
-
-        arg_summary = _args_summary(all_args or {})
-        kv_map: dict[str, Any] = {
-            "tool": tool_name,
-            "ms": f"{duration_ms:.2f}",
-            **{k: v for k, v in arg_summary.items()},
-        }
+        friendly = _friendly_tool_name(tool_name)
+        bits = _friendly_arg_bits(all_args or {})
+        suffix = (" - " + " - ".join(bits)) if bits else ""
+        prefix = _ansi("✓", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN)
+        ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
+        msg = f"{prefix} {ms}{suffix}"
         if LOG_TOOL_LOG_IDS:
-            kv_map.update(
-                {
-                    "call_id": call_id_short,
-                    "session_id": session_id,
-                    "message_id": msg_id,
-                    "path": path,
-                }
-            )
-
-        line = _format_log_kv(kv_map)
-        prefix = _ansi("✓", ANSI_GREEN) + " " + _ansi(tool_name, ANSI_CYAN)
-        LOGGER.info(f"{prefix} {line}", extra={"event": "tool_call_completed", **payload})
+            msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+        LOGGER.info(msg, extra={"event": "tool_call_completed", **payload})
 
         # Optional developer-facing visuals for common workflows.
         # These are emitted as a second log entry so dashboards can filter on
@@ -1163,7 +1190,6 @@ def _log_tool_failure(
 
     arg_summary = _args_summary(all_args)
     kv_map: dict[str, Any] = {
-        "tool": tool_name,
         "phase": phase,
         "ms": f"{duration_ms:.2f}",
         **{k: v for k, v in arg_summary.items()},
@@ -1178,7 +1204,7 @@ def _log_tool_failure(
             }
         )
     line = _format_log_kv(kv_map)
-    prefix = _ansi("✗", ANSI_RED) + " " + _ansi(tool_name, ANSI_CYAN)
+    prefix = _ansi("✗", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
     LOGGER.warning(
         f"{prefix} {line}",
         extra={"event": "tool_call_failed", **payload},
