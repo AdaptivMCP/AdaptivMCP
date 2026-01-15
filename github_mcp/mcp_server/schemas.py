@@ -670,7 +670,13 @@ def _schema_from_signature(
     schema: Dict[str, Any] = {
         "type": "object",
         "properties": properties,
-        "additionalProperties": False,
+        # Contract policy:
+        # The server does not enforce JSON Schema at runtime, but some clients
+        # and UIs may treat the schema as a hard contract. For a developer-facing
+        # MCP server we prefer permissive schemas by default so clients can send
+        # extra keys (legacy aliases, forward-compatible params) without being
+        # blocked by their own validators.
+        "additionalProperties": True,
     }
     if required:
         schema["required"] = required
