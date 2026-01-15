@@ -211,15 +211,25 @@ def _workspace_deps() -> Dict[str, Any]:
     }
 
 
-def _resolve_full_name(full_name: Optional[str]) -> str:
+def _resolve_full_name(
+    full_name: Optional[str], *, owner: Optional[str] = None, repo: Optional[str] = None
+) -> str:
     """Resolve a repository identifier.
 
-    This codebase uses `full_name` ("owner/repo") as the single source of truth.
-    When omitted, tools default to the controller repo configured by the server.
+    Canonical identifier is `full_name` ("owner/repo").
+
+    For backwards compatibility, some internal tool wrappers still pass legacy
+    alias parameters (owner, repo). Those are accepted here to avoid runtime
+    failures even though the external tool schema prefers `full_name`.
     """
 
     if isinstance(full_name, str) and full_name.strip():
         return full_name.strip()
+
+    # Back-compat: allow callers to provide owner+repo instead of full_name.
+    if isinstance(owner, str) and owner.strip() and isinstance(repo, str) and repo.strip():
+        return owner.strip() + "/" + repo.strip()
+
     return CONTROLLER_REPO
 
 
