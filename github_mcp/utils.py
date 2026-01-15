@@ -107,8 +107,23 @@ def _default_branch_for_repo(full_name: str) -> str:
 def _normalize_repo_path(path: str) -> str:
     """Normalize a repo-relative path and enforce basic safety invariants."""
 
+    # Contract policy:
+    # Historically we raised ToolPreflightValidationError for any non-string or
+    # empty/invalid paths. For a developer-facing, self-hosted MCP server we
+    # prefer to be permissive and avoid hard-failing on common client mistakes.
+    #
+    # Strict mode can be re-enabled via:
+    #   GITHUB_MCP_STRICT_CONTRACTS=1
+    strict = _env_flag("GITHUB_MCP_STRICT_CONTRACTS", default=False)
+
     if not isinstance(path, str):
-        raise ToolPreflightValidationError("<server>", "path must be a string")
+        if strict:
+            raise ToolPreflightValidationError("<server>", "path must be a string")
+        # Best-effort stringification.
+        try:
+            path = str(path)
+        except Exception:
+            path = ""
 
     normalized = path.strip().replace("\\", "/").lstrip("/")
     while "//" in normalized:
@@ -116,6 +131,7 @@ def _normalize_repo_path(path: str) -> str:
 
     parts = [part for part in normalized.split("/") if part not in ("", ".")]
     if any(part == ".." for part in parts):
+        # Never allow path traversal.
         raise ToolPreflightValidationError(
             "<server>",
             f"Invalid path {path!r}: parent-directory segments are not allowed.",
@@ -123,9 +139,13 @@ def _normalize_repo_path(path: str) -> str:
 
     normalized = "/".join(parts)
     if not normalized:
-        raise ToolPreflightValidationError(
-            "<server>", "Path must not be empty after normalization."
-        )
+        if strict:
+            raise ToolPreflightValidationError(
+                "<server>", "Path must not be empty after normalization."
+            )
+        # Permissive mode: allow empty/root path and let higher-level tools
+        # decide whether that is meaningful for the specific operation.
+        return ""
 
     return normalized
 
@@ -133,8 +153,15 @@ def _normalize_repo_path(path: str) -> str:
 def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
     """Normalize a repo-relative path while forgiving common URL prefixes."""
 
+    strict = _env_flag("GITHUB_MCP_STRICT_CONTRACTS", default=False)
+
     if not isinstance(path, str):
-        raise ToolPreflightValidationError("<server>", "path must be a string")
+        if strict:
+            raise ToolPreflightValidationError("<server>", "path must be a string")
+        try:
+            path = str(path)
+        except Exception:
+            path = ""
 
     normalized = path.strip().replace("\\", "/")
     # Accept common GitHub URL forms (html, raw, api) and extract the repo-relative
@@ -219,10 +246,12 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
     # clearer error than "empty after normalization".
     cleaned = normalized.strip().replace("\\", "/")
     if cleaned in {"", "/", ".", "./"}:
-        raise ToolPreflightValidationError(
-            "<server>",
-            f"Invalid path {path!r}: expected a repository-relative file path (for example 'docs/readme.md'), got an empty/root path.",
-        )
+        if strict:
+            raise ToolPreflightValidationError(
+                "<server>",
+                f"Invalid path {path!r}: expected a repository-relative file path (for example 'docs/readme.md'), got an empty/root path.",
+            )
+        return ""
 
     return _normalize_repo_path(normalized)
 
@@ -230,20 +259,27 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
 def _normalize_branch(full_name: str, branch: str | None) -> str:
     """Normalize a branch name while honoring controller defaults."""
 
+    strict = _env_flag("GITHUB_MCP_STRICT_CONTRACTS", default=False)
+
     normalized_branch = branch.strip() if isinstance(branch, str) else None
     effective = _effective_ref_for_repo(full_name, normalized_branch)
 
     # Let higher layers decide whether writes to the default branch are allowed.
     # The normalizer only ensures we have a stable, explicit ref.
     if not effective:
-        raise ToolPreflightValidationError(
-            "<server>", "Effective branch name resolved to an empty value."
-        )
+        if strict:
+            raise ToolPreflightValidationError(
+                "<server>", "Effective branch name resolved to an empty value."
+            )
+        effective = "main"
 
     if any(ord(ch) < 32 for ch in effective):
-        raise ToolPreflightValidationError(
-            "<server>", f"Branch name contains control characters: {effective!r}"
-        )
+        if strict:
+            raise ToolPreflightValidationError(
+                "<server>", f"Branch name contains control characters: {effective!r}"
+            )
+        # Permissive mode: strip control characters.
+        effective = "".join(ch for ch in effective if ord(ch) >= 32).strip() or "main"
 
     return effective
 
