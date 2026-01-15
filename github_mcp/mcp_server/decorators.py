@@ -669,6 +669,21 @@ def _register_with_fastmcp(
     description: Optional[str],
     tags: Optional[Iterable[str]] = None,  # noqa: ARG001
 ) -> Any:
+    """Register a tool with FastMCP across signature variants.
+
+    FastMCP has had multiple API shapes over time ("factory" vs "direct" tool
+    registration). This helper attempts registration in a compatibility order
+    while avoiding the common failure:
+
+      TypeError: FastMCP.tool() got multiple values for argument 'name'
+
+    Notes for developers:
+      - Tags are intentionally suppressed. Some downstream clients interpret tags
+        as execution/policy hints.
+      - When FastMCP is not installed, we register a lightweight stub tool so
+        HTTP routes and introspection can still function.
+
+    """
     # FastMCP is an optional dependency. In production, when it is not installed,
     # `mcp` is typically unset/None and registration should be skipped. Unit tests
     # may inject a FakeMCP into this module even when FastMCP is not installed;
@@ -686,14 +701,6 @@ def _register_with_fastmcp(
         _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
         return tool_obj
 
-    """
- Robust FastMCP registration across signature variants.
-
- Prevents the crash:
- TypeError: FastMCP.tool() got multiple values for argument 'name'
- by is not supported passing `fn` positionally when the tool() signature expects `name`
- positionally.
- """
     params = _fastmcp_tool_params()
     style = _fastmcp_call_style(params)
 
@@ -771,6 +778,34 @@ def mcp_tool(
     visibility: str = "public",  # accepted, ignored
     **_ignored: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Declare an MCP tool with developer-oriented metadata.
+
+    This decorator is the canonical way to expose a Python callable via the
+    GitHub MCP server. It wraps the function to provide:
+
+    - Structured error payloads (top-level 'error' plus 'error_detail')
+    - Optional write-action gating semantics (write_action=True)
+    - Best-effort request-level idempotency/deduplication (see _meta)
+    - Stable input schema generation for clients (signature-based fallback)
+
+    Parameters:
+      name: Optional override for the tool name (defaults to function __name__).
+      write_action: Whether the tool performs mutations (git push, PR creation, etc.).
+      description: Optional human/developer-facing description (defaults to func.__doc__).
+      visibility: Currently accepted for compatibility; reported via introspection.
+      tags: Accepted for compatibility but intentionally ignored.
+
+    Reserved argument (_meta):
+      Tools may accept an optional '_meta' kwarg. This is stripped before calling
+      the underlying function and is used only for safe runtime behaviors.
+      Supported keys: dedupe (bool), dedupe_ttl_s/dedupe_ttl_seconds (number),
+      idempotency_key/dedupe_key (string).
+
+    Error contract:
+      On failure, tools return a JSON object with 'error' and a structured
+      'error_detail'. HTTP clients additionally map common categories to status codes.
+
+    """
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         try:
             signature: Optional[inspect.Signature] = inspect.signature(func)

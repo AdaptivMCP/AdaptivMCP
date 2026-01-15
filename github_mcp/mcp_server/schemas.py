@@ -485,6 +485,14 @@ def _build_tool_docstring(
         "",
         "Errors:",
         "  On failure, tools return a structured error payload (JSON object) describing the failure, context, and any relevant metadata.",
+        "  Error shape (typical):",
+        "    {\"error\": \"<message>\", \"error_detail\": {..}}",
+        "  Categories include: validation, auth, rate_limited, not_found, conflict, timeout, upstream, internal.",
+        "",
+        "Execution hints (_meta):",
+        "  Tools accept an optional _meta kwarg (stripped before dispatch). Use it for safe runtime hints such as request-level idempotency.",
+        "  Supported keys: dedupe (bool), dedupe_ttl_s/dedupe_ttl_seconds (number), idempotency_key/dedupe_key (string).",
+        "  Default TTLs are controlled by env: GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S and GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S.",
     ]
 
     if schema is not None:

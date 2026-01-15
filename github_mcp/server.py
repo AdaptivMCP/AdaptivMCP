@@ -1,7 +1,13 @@
-"""Shared server setup and decorator utilities for the GitHub MCP.
+"""Public server surface for the GitHub MCP (developer-facing).
 
-This module is the stable public import surface.
-Implementation lives under `github_mcp.mcp_server.*`.
+This module is the stable import surface for embedding or extending the MCP
+server. Most implementation details live under `github_mcp.mcp_server.*`.
+
+For tool authors:
+- Use `@mcp_tool(write_action=...)` to register tools with generated input
+  schemas and structured error payloads.
+- Prefer short, imperative first-line docstrings; the server expands them into
+  a full developer reference (parameters, errors, write semantics).
 """
 
 from __future__ import annotations
