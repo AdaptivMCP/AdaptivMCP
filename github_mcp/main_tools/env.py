@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import subprocess
 import shutil
+import sys
+import platform
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,6 +22,7 @@ from github_mcp.config import (
     RENDER_TOKEN_ENV_VARS,
 )
 from github_mcp.render_api import _get_optional_render_token
+from github_mcp.render_api import render_request
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -119,6 +122,40 @@ async def validate_environment() -> Dict[str, Any]:
             {"env_var": token_env_var, "length": len(raw_token)},
         )
         token_ok = True
+
+    # Runtime/platform context (always informational)
+    add_check(
+        "runtime",
+        "ok",
+        "Runtime metadata",
+        {
+            "python": sys.version.split("\n")[0],
+            "implementation": platform.python_implementation(),
+            "platform": platform.platform(),
+            "executable": sys.executable,
+            "pid": os.getpid(),
+        },
+    )
+
+    # Render/host environment signals (best-effort; do not assume Render)
+    env_signals: Dict[str, Any] = {}
+    for key in (
+        "RENDER",
+        "RENDER_SERVICE_ID",
+        "RENDER_INSTANCE_ID",
+        "RENDER_EXTERNAL_HOSTNAME",
+        "RENDER_REGION",
+        "RENDER_GIT_COMMIT",
+        "RENDER_GIT_BRANCH",
+    ):
+        if key in os.environ:
+            env_signals[key.lower()] = os.environ.get(key)
+    add_check(
+        "deployment_signals",
+        "ok",
+        "Deployment environment signals (best-effort)",
+        env_signals,
+    )
 
     # Controller repo/branch config
     controller_repo = os.environ.get("GITHUB_MCP_CONTROLLER_REPO") or m.CONTROLLER_REPO
@@ -285,6 +322,124 @@ async def validate_environment() -> Dict[str, Any]:
 
     # Remote validation for controller repo/branch, only if token is usable.
     if token_ok:
+        # ------------------------------------------------------------------
+        # Token introspection (best-effort)
+        # ------------------------------------------------------------------
+        # GitHub exposes OAuth/PAT scopes in response headers for classic tokens.
+        # Fine-grained PATs typically do not include X-OAuth-Scopes.
+        def _get_header_ci(headers: Any, key: str) -> Optional[str]:
+            if not isinstance(headers, dict):
+                return None
+            for k, v in headers.items():
+                if isinstance(k, str) and k.lower() == key.lower():
+                    return str(v)
+            return None
+
+        token_details: Dict[str, Any] = {
+            "env_var": token_env_var,
+            "length": len(raw_token or "") if raw_token is not None else None,
+            "authorization_scheme": "Bearer",
+        }
+
+        try:
+            user_resp = await m._github_request("GET", "/user")
+        except Exception as exc:
+            add_check(
+                "github_token_details",
+                "warning",
+                "Unable to fetch /user; token may be invalid or missing required permissions",
+                {"error_type": type(exc).__name__, "error": str(exc), **token_details},
+            )
+        else:
+            headers = user_resp.get("headers")
+            scopes = _get_header_ci(headers, "X-OAuth-Scopes")
+            accepted = _get_header_ci(headers, "X-Accepted-OAuth-Scopes")
+
+            user_json = user_resp.get("json")
+            if isinstance(user_json, dict):
+                token_details.update(
+                    {
+                        "login": user_json.get("login"),
+                        "id": user_json.get("id"),
+                        "account_type": user_json.get("type"),
+                    }
+                )
+
+            scope_list: List[str] = []
+            if isinstance(scopes, str) and scopes.strip():
+                scope_list = [s.strip() for s in scopes.split(",") if s.strip()]
+            token_details["oauth_scopes"] = scope_list
+            if isinstance(accepted, str) and accepted.strip():
+                token_details["accepted_oauth_scopes"] = [
+                    s.strip() for s in accepted.split(",") if s.strip()
+                ]
+
+            # Infer token type.
+            token_type = "unknown"
+            if scope_list:
+                token_type = "classic_pat_or_oauth"
+            else:
+                # Detect GitHub App tokens via /app (works only for app auth).
+                try:
+                    await m._github_request("GET", "/app")
+                except Exception:
+                    token_type = "fine_grained_pat_or_unknown"
+                else:
+                    token_type = "github_app_token"
+            token_details["token_type_inferred"] = token_type
+
+            # Provide a lightweight "what can this token do" hint for classic PAT scopes.
+            if scope_list:
+                common_required = {
+                    # Common read/write repo operations
+                    "repo": "Read/write private repositories",
+                    "public_repo": "Read/write public repositories",
+                    "workflow": "Trigger GitHub Actions workflows",
+                    "read:org": "Read org membership (useful for org repo discovery)",
+                    "write:packages": "Publish packages",
+                    "delete_repo": "Delete repositories",
+                }
+                token_details["scope_hints"] = {
+                    scope: common_required.get(scope)
+                    for scope in scope_list
+                    if scope in common_required
+                }
+
+            add_check(
+                "github_token_details",
+                "ok",
+                "GitHub token details (best-effort; scopes only available for classic tokens)",
+                token_details,
+            )
+
+        # Rate limit snapshot (useful for diagnosing 403/429)
+        try:
+            rl_resp = await m._github_request("GET", "/rate_limit")
+        except Exception as exc:
+            add_check(
+                "github_rate_limit",
+                "warning",
+                "Unable to fetch GitHub rate limit; requests may still work but diagnostics are incomplete",
+                {"error_type": type(exc).__name__, "error": str(exc)},
+            )
+        else:
+            rl_json = rl_resp.get("json")
+            core = None
+            graphql = None
+            search = None
+            if isinstance(rl_json, dict):
+                resources = rl_json.get("resources")
+                if isinstance(resources, dict):
+                    core = resources.get("core")
+                    graphql = resources.get("graphql")
+                    search = resources.get("search")
+            add_check(
+                "github_rate_limit",
+                "ok",
+                "GitHub rate limit snapshot",
+                {"core": core, "graphql": graphql, "search": search},
+            )
+
         repo_payload: Dict[str, Any] = {}
         try:
             repo_response = await m._github_request("GET", f"/repos/{controller_repo}")
@@ -312,6 +467,14 @@ async def validate_environment() -> Dict[str, Any]:
             permissions = {}
             if isinstance(repo_payload, dict):
                 permissions = repo_payload.get("permissions") or {}
+
+            # Surface the repo permissions block prominently for clarity.
+            add_check(
+                "controller_repo_permissions",
+                "ok" if isinstance(permissions, dict) and permissions else "warning",
+                "Repository permissions as reported by GitHub (permission-aware tokens only)",
+                {"full_name": controller_repo, "permissions": permissions},
+            )
 
             push_allowed = permissions.get("push") if isinstance(permissions, dict) else None
             if push_allowed is True:
@@ -416,6 +579,52 @@ async def validate_environment() -> Dict[str, Any]:
             "Render API token is configured",
             {"length": len(render_token)},
         )
+
+        # Render API validation + owner snapshot (best-effort, read-only).
+        try:
+            owners_resp = await render_request("GET", "/owners", params={"limit": 5})
+        except Exception as exc:
+            add_check(
+                "render_api",
+                "warning",
+                "Unable to call Render API with the configured token",
+                {"error_type": type(exc).__name__, "error": str(exc)},
+            )
+        else:
+            owners_json = owners_resp.get("json") if isinstance(owners_resp, dict) else None
+            owners: List[Dict[str, Any]] = []
+            cursor = None
+            if isinstance(owners_json, dict):
+                # Some Render API responses are paginated objects.
+                items = owners_json.get("owners") or owners_json.get("items") or owners_json.get(
+                    "data"
+                )
+                if isinstance(items, list):
+                    owners = [o for o in items if isinstance(o, dict)]
+                cursor = owners_json.get("cursor") or owners_json.get("nextCursor")
+            elif isinstance(owners_json, list):
+                owners = [o for o in owners_json if isinstance(o, dict)]
+
+            owner_samples: List[Dict[str, Any]] = []
+            for o in owners[:5]:
+                owner_samples.append(
+                    {
+                        "id": o.get("id"),
+                        "name": o.get("name") or o.get("displayName"),
+                        "type": o.get("type"),
+                        "owner_type": o.get("ownerType") or o.get("owner_type"),
+                    }
+                )
+
+            add_check(
+                "render_api",
+                "ok",
+                "Render API is reachable with the configured token (owner sample)",
+                {
+                    "owners_sample": owner_samples,
+                    "next_cursor": cursor,
+                },
+            )
 
     summary = {
         "ok": sum(1 for c in checks if c["level"] == "ok"),
