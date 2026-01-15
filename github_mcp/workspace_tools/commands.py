@@ -147,20 +147,17 @@ def _required_packages_for_command(command: str) -> list[str]:
 
 @mcp_tool(write_action=True)
 async def render_shell(
-    full_name: Optional[str] = None,
+    full_name: str,
     *,
     command: str = "echo hello Render",
     command_lines: Optional[list[str]] = None,
     create_branch: Optional[str] = None,
     push_new_branch: bool = True,
     ref: str = "main",
-    branch: Optional[str] = None,
     timeout_seconds: float = 300,
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Render-focused shell entry point for interacting with GitHub workspaces.
 
@@ -181,16 +178,10 @@ async def render_shell(
 
         # Execute the raw intended command (may contain newlines if provided via command_lines).
         command = requested_command
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-
-        base_ref = _tw()._resolve_ref(ref, branch=branch)
-        if not base_ref:
-            base_ref = _tw()._default_branch_for_repo(full_name)
-        effective_ref = _tw()._effective_ref_for_repo(full_name, base_ref)
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
         branch_creation: Optional[Dict[str, Any]] = None
         target_ref = effective_ref
-        effective_branch_arg = effective_ref
 
         if create_branch:
             branch_creation = await _tw().workspace_create_branch(
@@ -203,12 +194,10 @@ async def render_shell(
             if push_new_branch:
                 # Remote branch exists, safe to target it directly.
                 target_ref = create_branch
-                effective_branch_arg = create_branch
             else:
                 # IMPORTANT: branch exists only locally in the base workcell (repo mirror).
                 # Do NOT try to clone a non-existent remote branch.
                 target_ref = effective_ref
-                effective_branch_arg = effective_ref
                 command = f"git checkout {shlex.quote(create_branch)} && {command}"
 
         command_result = await _tw().terminal_command(
@@ -219,9 +208,6 @@ async def render_shell(
             workdir=workdir,
             use_temp_venv=use_temp_venv,
             installing_dependencies=installing_dependencies,
-            owner=owner,
-            repo=repo,
-            branch=effective_branch_arg,
         )
 
         cleaned_command = command_result
@@ -255,7 +241,7 @@ async def render_shell(
 
 @mcp_tool(write_action=True)
 async def terminal_command(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
     command: str = "pytest",
     command_lines: Optional[list[str]] = None,
@@ -263,10 +249,6 @@ async def terminal_command(
     workdir: Optional[str] = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run a shell command inside the repo workcell and return its result.
 
@@ -284,8 +266,6 @@ async def terminal_command(
     )
     try:
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         if use_temp_venv:
@@ -293,74 +273,33 @@ async def terminal_command(
 
         cwd = _resolve_workdir(repo_dir, workdir)
 
-        install_result = None
-        install_steps: list[Dict[str, Any]] = []
-        retry_info: Dict[str, Any] = {"attempted": False, "packages": []}
-
         # Execute the raw intended command (may contain newlines if provided via command_lines).
         command = requested_command
 
-        # Optional: install only *missing* dependencies (best-effort) when running
-        # in a temp venv, then retry. This avoids proactively running
-        # `pip install -r ...` but supports sequential missing-module installs.
-        max_install_rounds = 3
-        rounds = 0
-        while True:
-            result = await deps["run_shell"](
-                command,
-                cwd=cwd,
-                timeout_seconds=timeout_seconds,
-                env=env,
-            )
-
-            if not (installing_dependencies and use_temp_venv):
-                break
-
-            cmd_lower = command.lower()
-            already_installing = ("pip install" in cmd_lower) or ("pip3 install" in cmd_lower)
-            exit_code = result.get("exit_code", 0) if isinstance(result, dict) else 0
-            if already_installing or exit_code == 0:
-                break
-
-            if rounds >= max_install_rounds:
-                break
-            rounds += 1
-
-            stdout = (result.get("stdout") or "") if isinstance(result, dict) else ""
-            stderr = (result.get("stderr") or "") if isinstance(result, dict) else ""
-            missing_module = _extract_missing_module(stdout, stderr)
-
-            packages: list[str] = []
-            if missing_module:
-                packages = [missing_module]
-            else:
-                packages = _required_packages_for_command(command)
-
-            if not packages:
-                break
-
-            retry_info = {"attempted": True, "packages": packages}
-            install_cmd = "python -m pip install " + " ".join(packages)
+        install_result = None
+        install_steps: list[Dict[str, Any]] = []
+        if installing_dependencies and use_temp_venv:
+            install_cmd = "python -m pip install -r dev-requirements.txt"
             install_result = await deps["run_shell"](
                 install_cmd,
                 cwd=cwd,
                 timeout_seconds=max(600, timeout_seconds),
                 env=env,
             )
-            install_steps.append(
-                {
-                    "packages": packages,
-                    "command": install_cmd,
-                    "result": install_result,
-                }
-            )
+            install_steps.append({"command": install_cmd, "result": install_result})
             if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
                 i_stderr = install_result.get("stderr") or ""
                 i_stdout = install_result.get("stdout") or ""
                 raise GitHubAPIError(
-                    "Dependency installation failed: "
-                    + ((i_stderr.strip() or i_stdout.strip())[:2000])
+                    "Dependency installation failed: " + (i_stderr.strip() or i_stdout.strip())
                 )
+
+        result = await deps["run_shell"](
+            command,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            env=env,
+        )
 
         out: Dict[str, Any] = {
             "workdir": cwd,
@@ -370,7 +309,6 @@ async def terminal_command(
             "command": command,
             "install": install_result,
             "install_steps": install_steps,
-            "retry": retry_info,
             "result": result,
         }
 

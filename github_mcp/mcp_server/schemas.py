@@ -669,16 +669,8 @@ def _schema_from_signature(
     return _simplify_input_schema_for_tool(schema, tool_name=tool_name)
 
 
-def _truncate_str(s: str) -> str:
-    return s
-
-
-def _normalize_and_truncate(s: str) -> str:
-    return s
-
-
 # ---------------------------------------------------------------------------
-# Backwards-compatible helpers
+# Helpers
 # ---------------------------------------------------------------------------
 
 

@@ -1,4 +1,5 @@
 import asyncio
+
 import pytest
 
 import github_mcp.mcp_server.context as context
@@ -29,7 +30,7 @@ def test_render_shell_error_reports_surface(monkeypatch):
 
     def fake_tw():
         class FakeTW:
-            def _resolve_full_name(self, *args, **kwargs):
+            def _effective_ref_for_repo(self, *args, **kwargs):
                 raise RuntimeError("boom")
 
         return FakeTW()

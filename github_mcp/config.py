@@ -330,13 +330,7 @@ DEFAULT_GIT_IDENTITY = {
     "committer_email": "adaptiv-mcp@local",
 }
 
-# Back-compat placeholder values from earlier versions.
-PLACEHOLDER_GIT_IDENTITY = {
-    "author_name": "Ally",
-    "author_email": "ally@example.com",
-    "committer_name": "Ally",
-    "committer_email": "ally@example.com",
-}
+PLACEHOLDER_GIT_IDENTITY: dict[str, str] = {}
 
 
 def _slugify_app_name(value: str | None) -> str | None:
@@ -443,22 +437,7 @@ def _resolve_git_identity() -> dict[str, object]:
         "committer_email": committer_email_source,
     }
 
-    # Mark placeholder active only when the fallback values are clearly placeholders.
-    # Using DEFAULT_GIT_IDENTITY as the fallback identity is valid for deployments that do
-    # not set explicit git identity env vars.
     placeholder_active = False
-    for key, source in sources.items():
-        if source != "default_placeholder":
-            continue
-        value = {
-            "author_name": author_name,
-            "author_email": author_email,
-            "committer_name": committer_name,
-            "committer_email": committer_email,
-        }[key]
-        if value == PLACEHOLDER_GIT_IDENTITY[key]:
-            placeholder_active = True
-            break
 
     return {
         "author_name": author_name,
@@ -576,7 +555,6 @@ def _configure_logging() -> None:
 _configure_logging()
 
 BASE_LOGGER = logging.getLogger("github_mcp")
-# Back-compat: a single provider logger is sufficient.
 ERRORS_LOGGER = BASE_LOGGER
 GITHUB_LOGGER = logging.getLogger("github_mcp.github_client")
 

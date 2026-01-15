@@ -208,11 +208,10 @@ def register_render_routes(app: Any) -> None:
           - owner_id (required)
           - resources (one or more ids)
 
-        Legacy shape (kept for back-compat):
-          - resource_type + resource_id
+        This route only supports the Render public API shape.
         """
 
-        from github_mcp.main_tools.render import get_render_logs, list_render_logs
+        from github_mcp.main_tools.render import list_render_logs
 
         owner_id = _parse_str(request.query_params.get("owner_id"))
         start_time = _parse_str(request.query_params.get("start_time"))
@@ -231,7 +230,6 @@ def register_render_routes(app: Any) -> None:
         try:
             # Starlette's QueryParams supports multi-values.
             resources.extend([r for r in request.query_params.getlist("resources") if r])
-            resources.extend([r for r in request.query_params.getlist("resource") if r])
         except Exception:
             pass
         if not resources:
@@ -256,53 +254,34 @@ def register_render_routes(app: Any) -> None:
             except Exception:
                 return JSONResponse({"error": "status_code must be an integer"}, status_code=400)
 
-        # Preferred path.
-        if owner_id and resources:
-            try:
-                result = await list_render_logs(
-                    owner_id=owner_id,
-                    resources=resources,
-                    start_time=start_time,
-                    end_time=end_time,
-                    direction=direction,
-                    limit=limit,
-                    instance=instance,
-                    host=host,
-                    level=level,
-                    method=method,
-                    status_code=status_code,
-                    path=path,
-                    text=text,
-                    log_type=log_type,
-                )
-                return JSONResponse(result)
-            except Exception as exc:
-                return _error_response(exc, context="http:render_list_logs")
-
-        # Legacy path.
-        resource_type = _parse_str(request.query_params.get("resource_type"))
-        resource_id = _parse_str(request.query_params.get("resource_id"))
-        if not resource_type or not resource_id:
+        if not owner_id or not resources:
             return JSONResponse(
                 {
-                    "error": (
-                        "Provide either (owner_id + resources) or (resource_type + resource_id). "
-                        "Example: /render/logs?owner_id=<id>&resources=srv-..."
-                    )
+                    "error": "Provide owner_id and resources. Example: /render/logs?owner_id=<id>&resources=srv-...",
                 },
                 status_code=400,
             )
+
         try:
-            result = await get_render_logs(
-                resource_type=resource_type,
-                resource_id=resource_id,
+            result = await list_render_logs(
+                owner_id=owner_id,
+                resources=resources,
                 start_time=start_time,
                 end_time=end_time,
+                direction=direction,
                 limit=limit,
+                instance=instance,
+                host=host,
+                level=level,
+                method=method,
+                status_code=status_code,
+                path=path,
+                text=text,
+                log_type=log_type,
             )
             return JSONResponse(result)
         except Exception as exc:
-            return _error_response(exc, context="http:render_logs")
+            return _error_response(exc, context="http:render_list_logs")
 
     app.add_route("/render/owners", owners, methods=["GET"])
     app.add_route("/render/services", services, methods=["GET"])

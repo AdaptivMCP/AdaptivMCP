@@ -211,17 +211,22 @@ def _workspace_deps() -> Dict[str, Any]:
     }
 
 
-def _resolve_full_name(
-    full_name: Optional[str], *, owner: Optional[str] = None, repo: Optional[str] = None
-) -> str:
+def _resolve_full_name(full_name: Optional[str]) -> str:
+    """Resolve a repository identifier.
+
+    This codebase uses `full_name` ("owner/repo") as the single source of truth.
+    When omitted, tools default to the controller repo configured by the server.
+    """
+
     if isinstance(full_name, str) and full_name.strip():
         return full_name.strip()
-    if isinstance(owner, str) and owner.strip() and isinstance(repo, str) and repo.strip():
-        return f"{owner.strip()}/{repo.strip()}"
     return CONTROLLER_REPO
 
 
-def _resolve_ref(ref: str, *, branch: Optional[str] = None) -> str:
-    if isinstance(branch, str) and branch.strip():
-        return branch.strip()
+def _resolve_ref(ref: str) -> str:
+    """Return the git ref to operate on.
+
+    The only supported ref selector is `ref`.
+    """
+
     return ref

@@ -572,9 +572,6 @@ async def run_quality_suite(
                     timeout_seconds=timeout_seconds_i,
                     workdir=workdir,
                     use_temp_venv=use_temp_venv,
-                    owner=owner,
-                    repo=repo,
-                    branch=branch,
                 )
                 steps.append(install_step)
                 if install_step.get("status") == "passed":
@@ -587,38 +584,11 @@ async def run_quality_suite(
                         workdir=workdir,
                         use_temp_venv=use_temp_venv,
                         installing_dependencies=installing_dependencies,
-                        owner=owner,
-                        repo=repo,
-                        branch=branch,
                     )
         steps.append(lint_step)
         controller_log.append(f"- Lint: {lint_step.get('status')}")
 
         if fail_fast and lint_step.get("status") == "failed":
-            # Back-compat: return the lint raw payload shape when possible.
-            raw = lint_step.get("raw")
-            if isinstance(raw, dict):
-                # Merge any existing terminal_command controller_log with the suite log.
-                # NOTE: terminal_command frequently returns a controller_log key; using
-                # setdefault would drop suite context when the key exists.
-                merged_log: List[str] = []
-                existing = raw.get("controller_log")
-                if isinstance(existing, list):
-                    merged_log.extend([str(x) for x in existing])
-                elif existing:
-                    merged_log.append(str(existing))
-                merged_log.extend(controller_log)
-                merged_log.append("- Aborted: lint failed")
-                raw["controller_log"] = merged_log
-                # Drop stale UI fields so the suite-level decorator can rebuild
-                # controller_log/summary/user_message from the merged log.
-                raw.pop("summary", None)
-                raw.pop("user_message", None)
-                raw["status"] = "failed"
-                raw["suite"] = suite
-                raw["steps"] = _prune_raw_steps(steps, include_raw_step_outputs)
-                raw["diagnostics"] = diagnostics
-                return raw
             return {
                 "status": "failed",
                 "suite": suite,
@@ -691,9 +661,6 @@ async def run_quality_suite(
         workdir=workdir,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
-        owner=owner,
-        repo=repo,
-        branch=branch,
     )
     if (
         auto_setup_repo
@@ -709,9 +676,6 @@ async def run_quality_suite(
                 timeout_seconds=timeout_seconds_i,
                 workdir=workdir,
                 use_temp_venv=use_temp_venv,
-                owner=owner,
-                repo=repo,
-                branch=branch,
             )
             steps.append(install_step)
             if install_step.get("status") == "passed":
@@ -724,34 +688,14 @@ async def run_quality_suite(
                     workdir=workdir,
                     use_temp_venv=use_temp_venv,
                     installing_dependencies=installing_dependencies,
-                    owner=owner,
-                    repo=repo,
-                    branch=branch,
                 )
 
     steps.append(tests_step)
 
-    # Build a run_tests-compatible payload for back-compat.
     tests_raw = tests_step.get("raw") if isinstance(tests_step, dict) else None
     cmd_result = tests_raw.get("result") if isinstance(tests_raw, dict) else {}
     exit_code = cmd_result.get("exit_code") if isinstance(cmd_result, dict) else None
     tests_status = "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
-
-    tests_result: Dict[str, Any] = {
-        "status": tests_status,
-        "command": test_command,
-        "exit_code": exit_code,
-        "workdir": tests_raw.get("workdir") if isinstance(tests_raw, dict) else workdir,
-        "result": cmd_result,
-        "controller_log": [
-            "Completed test command in repo mirror:",
-            f"- Repo: {full_name}",
-            f"- Ref: {ref}",
-            f"- Command: {test_command}",
-            f"- Status: {tests_status}",
-            f"- Exit code: {exit_code}",
-        ],
-    }
 
     controller_log.append(f"- Tests: {tests_status}")
 
@@ -769,27 +713,13 @@ async def run_quality_suite(
     if overall_status == "passed" and tests_status == "no_tests":
         overall_status = "passed_with_warnings"
 
-    if not fail_fast:
-        return {
-            "status": overall_status,
-            "suite": suite,
-            "lint": lint_step.get("raw"),
-            "tests": tests_result,
-            "steps": _prune_raw_steps(steps, include_raw_step_outputs),
-            "diagnostics": diagnostics,
-            "controller_log": controller_log,
-        }
-
-    # Back-compat: return tests_result as the primary shape, but enrich it.
-    existing_log = tests_result.get("controller_log")
-    if isinstance(existing_log, list) and existing_log:
-        controller_log.extend(existing_log)
-    tests_result["controller_log"] = controller_log
-    tests_result["status"] = overall_status
-    tests_result["suite"] = suite
-    tests_result["steps"] = _prune_raw_steps(steps, include_raw_step_outputs)
-    tests_result["diagnostics"] = diagnostics
-    return tests_result
+    return {
+        "status": overall_status,
+        "suite": suite,
+        "steps": _prune_raw_steps(steps, include_raw_step_outputs),
+        "diagnostics": diagnostics,
+        "controller_log": controller_log,
+    }
 
 
 def _prune_raw_steps(steps: List[Dict[str, Any]], include_raw: bool) -> List[Dict[str, Any]]:
