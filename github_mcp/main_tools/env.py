@@ -596,8 +596,8 @@ async def validate_environment() -> Dict[str, Any]:
             cursor = None
             if isinstance(owners_json, dict):
                 # Some Render API responses are paginated objects.
-                items = owners_json.get("owners") or owners_json.get("items") or owners_json.get(
-                    "data"
+                items = (
+                    owners_json.get("owners") or owners_json.get("items") or owners_json.get("data")
                 )
                 if isinstance(items, list):
                     owners = [o for o in items if isinstance(o, dict)]
