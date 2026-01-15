@@ -200,8 +200,6 @@ def _git_auth_env() -> Dict[str, str]:
 
     # Correct name (no extra underscore).
     env["GIT_HTTP_EXTRAHEADER"] = header_value
-    # Back-compat for any code that mistakenly used the wrong name.
-    env["GIT_HTTP_EXTRA_HEADER"] = header_value
 
     # Also set via config-env to improve compatibility across git builds.
     _append_git_config_env(env, "http.extraHeader", header_value)
@@ -210,7 +208,7 @@ def _git_auth_env() -> Dict[str, str]:
 
 
 def _git_env_has_auth_header(env: Dict[str, str]) -> bool:
-    if env.get("GIT_HTTP_EXTRAHEADER") or env.get("GIT_HTTP_EXTRA_HEADER"):
+    if env.get("GIT_HTTP_EXTRAHEADER"):
         return True
     for key, value in env.items():
         if key.startswith("GIT_CONFIG_KEY_") and value == "http.extraHeader":

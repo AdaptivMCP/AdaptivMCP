@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_render_request_requires_auth_by_default(monkeypatch):
     from github_mcp.exceptions import RenderAuthError
     from github_mcp.render_api import render_request
@@ -15,7 +15,7 @@ async def test_render_request_requires_auth_by_default(monkeypatch):
         await render_request("GET", "/owners")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_render_request_success_payload(monkeypatch):
     import httpx
 
@@ -38,7 +38,7 @@ async def test_render_request_success_payload(monkeypatch):
     assert payload["json"] == {"ok": True}
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_render_request_auto_applies_v1_prefix(monkeypatch):
     import httpx
 
@@ -62,7 +62,7 @@ async def test_render_request_auto_applies_v1_prefix(monkeypatch):
     assert observed.get("url") == "/v1/owners"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_render_request_does_not_double_prefix(monkeypatch):
     import httpx
 

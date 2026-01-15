@@ -15,7 +15,7 @@ def _tw():
 
 @mcp_tool(write_action=True)
 async def commit_and_open_pr_from_workspace(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
     base: str = "main",
     title: Optional[str] = None,
@@ -26,10 +26,6 @@ async def commit_and_open_pr_from_workspace(
     quality_timeout_seconds: float = 600,
     test_command: str = "pytest",
     lint_command: str = "ruff check .",
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Commit repo mirror changes on `ref` and open a PR into `base`.
 
@@ -42,8 +38,6 @@ async def commit_and_open_pr_from_workspace(
 
     try:
         tw = _tw()
-        full_name = tw._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = tw._resolve_ref(ref, branch=branch)
         effective_ref = tw._effective_ref_for_repo(full_name, ref)
         effective_base = tw._effective_ref_for_repo(full_name, base)
 
@@ -58,9 +52,6 @@ async def commit_and_open_pr_from_workspace(
                 fail_fast=True,
                 developer_defaults=True,
                 auto_setup_repo=True,
-                owner=owner,
-                repo=repo,
-                branch=branch,
             )
             if isinstance(quality, dict) and quality.get("status") in {
                 "failed",
@@ -81,9 +72,6 @@ async def commit_and_open_pr_from_workspace(
             message=commit_message,
             add_all=True,
             push=True,
-            owner=owner,
-            repo=repo,
-            branch=branch,
         )
 
         if isinstance(commit_result, dict) and commit_result.get("error"):

@@ -29,7 +29,7 @@ def _make_structured_422(message: str, *, error_entry_message: str) -> Dict[str,
     }
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_open_pr_for_existing_branch_returns_noop_on_no_commits(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -68,7 +68,7 @@ async def test_open_pr_for_existing_branch_returns_noop_on_no_commits(
     assert result.get("reason") == "no_commits_between_branches"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_open_pr_for_existing_branch_reuses_existing_pr_on_conflict(
     monkeypatch: pytest.MonkeyPatch,
 ):

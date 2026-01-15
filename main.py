@@ -88,7 +88,6 @@ from github_mcp.workspace import (
     _run_shell,  # noqa: F401
     _workspace_path,  # noqa: F401
 )
-from github_mcp.http_routes.actions_compat import register_actions_compat_routes
 from github_mcp.http_routes.healthz import register_healthz_route
 from github_mcp.http_routes.render import register_render_routes
 from github_mcp.http_routes.tool_registry import register_tool_registry_routes
@@ -578,7 +577,6 @@ except Exception:
     # Static assets are optional; failures should not prevent server startup.
     pass
 
-register_actions_compat_routes(app, server)
 register_healthz_route(app)
 register_tool_registry_routes(app)
 register_ui_routes(app)
@@ -1333,13 +1331,8 @@ async def get_file_contents(
     full_name: str,
     path: str,
     ref: str = "main",
-    *,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Fetch a single file from GitHub and decode base64 to UTF-8 text."""
-    # Back-compat: some callers send 'branch' instead of 'ref'.
-    if branch:
-        ref = branch
 
     # Resolve moving refs (like branch names) to an immutable commit SHA so the
     # in-process cache never serves stale content after the branch advances.
@@ -1627,7 +1620,6 @@ async def describe_tool(
     name: Optional[str] = None,
     names: Optional[List[str]] = None,
     include_parameters: bool = True,
-    tool_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Inspect one or more registered MCP tools by name.
 
@@ -1636,23 +1628,12 @@ async def describe_tool(
 
     Args:
     name: The MCP tool name (for example, "update_files_and_open_pr").
-    For backwards compatibility, this behaves like the legacy
-    single-tool describe_tool API.
     names: Optional list of tool names to inspect. When provided, up to
     10 tools are returned in a single call. Duplicates are ignored
     while preserving order.
     include_parameters: When True, include the serialized input schema for
     each tool (equivalent to list_all_actions(include_parameters=True)).
     """
-
-    # Back-compat: some callers send tool_name instead of name.
-    if tool_name:
-        if names is not None:
-            raise ValueError("Provide either tool_name/name or names (not both).")
-        if name is None:
-            name = tool_name
-        elif name != tool_name:
-            raise ValueError("Provide only one of tool_name or name (or set them equal).")
 
     from github_mcp.main_tools.introspection import describe_tool as _impl
 

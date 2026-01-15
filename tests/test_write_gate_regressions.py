@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import types
 
 
 def _reload_context():
@@ -27,56 +26,6 @@ def test_decorators_do_not_block_write_tools_when_gate_is_false():
 
     # Write tool should not be blocked; clients are expected to prompt.
     _enforce_write_allowed("write_tool", write_action=True)
-
-
-def test_actions_compat_reports_write_allowed(monkeypatch):
-    # Create a fake server with registered tools.
-    read_tool = types.SimpleNamespace(name="read_tool", write_action=False, description="read")
-    write_tool = types.SimpleNamespace(name="write_tool", write_action=True, description="write")
-
-    def read_fn():
-        return "ok"
-
-    def write_fn():
-        return "ok"
-
-    server = types.SimpleNamespace(
-        _REGISTERED_MCP_TOOLS=[(read_tool, read_fn), (write_tool, write_fn)],
-        _normalize_input_schema=lambda _obj: {"type": "object", "properties": {}},
-    )
-
-    # Patch introspection so actions_compat uses a deterministic catalog.
-    import github_mcp.http_routes.actions_compat as actions_compat
-
-    def fake_catalog(*_args, **_kwargs):
-        return {
-            "tools": [
-                {
-                    "name": "read_tool",
-                    "description": "read",
-                    "write_action": False,
-                    "write_allowed": True,
-                    "input_schema": {"type": "object", "properties": {}},
-                    "visibility": "public",
-                },
-                {
-                    "name": "write_tool",
-                    "description": "write",
-                    "write_action": True,
-                    "write_allowed": True,
-                    "input_schema": {"type": "object", "properties": {}},
-                    "visibility": "public",
-                },
-            ]
-        }
-
-    monkeypatch.setattr(actions_compat, "list_all_actions", fake_catalog)
-
-    actions = actions_compat.serialize_actions_for_compatibility(server)
-    idx = {a["name"]: a for a in actions}
-    assert idx["read_tool"]["write_allowed"] is True
-    assert idx["write_tool"]["write_action"] is True
-    assert idx["write_tool"]["write_allowed"] is True
 
 
 def test_no_write_gate_env_var_in_ci():

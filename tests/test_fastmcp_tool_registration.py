@@ -111,7 +111,7 @@ def test_mcp_tool_preserves_scalar_returns_sync(monkeypatch):
     assert sync_tool() == "ok"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_mcp_tool_preserves_scalar_returns_async(monkeypatch):
     class FakeMCP:
         def tool(self, *, name=None, description=None, meta=None, annotations=None):

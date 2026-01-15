@@ -82,14 +82,10 @@ def _tw():
 
 @mcp_tool(write_action=True)
 async def workspace_create_branch(
-    full_name: Optional[str] = None,
+    full_name: str,
     base_ref: str = "main",
     new_branch: str = "",
     push: bool = True,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create a branch using the repo mirror (workspace clone), optionally pushing to origin.
 
@@ -98,8 +94,6 @@ async def workspace_create_branch(
 
     try:
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        base_ref = _tw()._resolve_ref(base_ref, branch=branch)
         effective_base = _tw()._effective_ref_for_repo(full_name, base_ref)
 
         if not isinstance(new_branch, str) or not new_branch:
@@ -139,11 +133,8 @@ async def workspace_create_branch(
 
 @mcp_tool(write_action=True)
 async def workspace_delete_branch(
-    full_name: Optional[str] = None,
+    full_name: str,
     branch: str = "",
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Delete a non-default branch using the repo mirror (workspace clone).
 
@@ -153,7 +144,6 @@ async def workspace_delete_branch(
 
     try:
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
 
         if not isinstance(branch, str) or not branch.strip():
             raise ValueError("branch must be a non-empty string")
@@ -209,7 +199,7 @@ async def workspace_delete_branch(
 
 @mcp_tool(write_action=True)
 async def workspace_self_heal_branch(
-    full_name: Optional[str] = None,
+    full_name: str,
     branch: str = "",
     *,
     base_ref: str = "main",
@@ -219,8 +209,6 @@ async def workspace_self_heal_branch(
     reset_base: bool = True,
     enumerate_repo: bool = True,
     dry_run: bool = False,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Detect a mangled repo mirror branch and recover to a fresh branch.
 
@@ -239,7 +227,6 @@ async def workspace_self_heal_branch(
 
     try:
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
 
         if not isinstance(branch, str) or not branch.strip():
             raise ValueError("branch must be a non-empty string")
@@ -461,18 +448,12 @@ async def workspace_self_heal_branch(
 
 @mcp_tool(write_action=False)
 async def workspace_sync_status(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Report how a repo mirror (workspace clone) differs from its remote branch."""
     try:
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
         snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
@@ -490,19 +471,14 @@ async def workspace_sync_status(
 
 @mcp_tool(write_action=True)
 async def workspace_sync_to_remote(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
     *,
     discard_local_changes: bool = False,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Reset a repo mirror (workspace clone) to match the remote branch."""
     try:
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
@@ -543,22 +519,17 @@ async def workspace_sync_to_remote(
 
 @mcp_tool(write_action=True)
 async def workspace_sync_bidirectional(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
     commit_message: str = "Sync workspace changes",
     add_all: bool = True,
     push: bool = True,
     *,
     discard_local_changes: bool = False,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Sync repo mirror changes to the remote and refresh local state from GitHub."""
     try:
         deps = _tw()._workspace_deps()
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 

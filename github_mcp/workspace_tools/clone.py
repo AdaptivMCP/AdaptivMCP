@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from github_mcp.server import _structured_tool_error, mcp_tool
 
@@ -16,19 +16,13 @@ def _tw():
 
 @mcp_tool(write_action=False)
 async def ensure_workspace_clone(
-    full_name: Optional[str] = None,
+    full_name: str,
     ref: str = "main",
     reset: bool = False,
-    *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Ensure a persistent repo mirror (workspace clone) exists for a repo/ref."""
 
     try:
-        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         workspace_dir = _tw()._workspace_path(full_name, effective_ref)
         existed = os.path.isdir(os.path.join(workspace_dir, ".git"))
@@ -37,7 +31,7 @@ async def ensure_workspace_clone(
         await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=not reset)
 
         return {
-            "branch": effective_ref,
+            "ref": effective_ref,
             "reset": reset,
             "created": not existed,
         }

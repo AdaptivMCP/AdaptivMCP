@@ -5,20 +5,19 @@ import types
 import pytest
 
 
-@pytest.mark.asyncio
-async def test_run_quality_suite_merges_controller_log_on_lint_failure(
+@pytest.mark.anyio
+async def test_run_quality_suite_controller_log_on_lint_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: fail-fast lint path needs to not drop suite controller_log.
+    """Fail-fast lint failures must return a complete suite controller_log.
 
-    Prior behavior used dict.setdefault('controller_log', ...), which does not
-    overwrite when terminal_command already includes controller_log.
+    The suite returns a stable top-level payload and keeps the underlying
+    terminal_command payload on the step under steps[*].raw.
     """
 
     from github_mcp.workspace_tools import suites
 
     async def _fake_terminal_command(*args, **kwargs):
-        # Simulate terminal_command payload shape.
         return {
             "command_input": kwargs.get("command"),
             "command": kwargs.get("command"),
@@ -30,10 +29,7 @@ async def test_run_quality_suite_merges_controller_log_on_lint_failure(
                 "stdout_truncated": False,
                 "stderr_truncated": False,
             },
-            "controller_log": [
-                "Command: fake",
-                "Exit code: 1",
-            ],
+            "controller_log": ["Command: fake", "Exit code: 1"],
         }
 
     fake_tw = types.SimpleNamespace(terminal_command=_fake_terminal_command)
@@ -47,10 +43,10 @@ async def test_run_quality_suite_merges_controller_log_on_lint_failure(
         fail_fast=True,
         use_temp_venv=True,
         installing_dependencies=False,
+        include_raw_step_outputs=True,
     )
 
     assert isinstance(out, dict)
-    # Back-compat path returns the raw lint payload, but should be enriched.
     assert out.get("status") == "failed"
     assert "suite" in out
     assert "steps" in out
@@ -58,13 +54,15 @@ async def test_run_quality_suite_merges_controller_log_on_lint_failure(
     log = out.get("controller_log")
     assert isinstance(log, list)
 
-    # Existing terminal_command log must be preserved.
-    assert log[0] == "Command: fake"
-
-    # Suite log must be present (not dropped).
     assert any(line == "Quality suite run:" for line in log)
     assert any(line == "- Repo: OWNER/REPO" for line in log)
     assert any(line == "- Ref: main" for line in log)
-
-    # Aborted marker must be appended.
     assert log[-1] == "- Aborted: lint failed"
+
+    steps = out.get("steps")
+    assert isinstance(steps, list)
+
+    lint_step = next(step for step in steps if step.get("name") == "lint")
+    raw = lint_step.get("raw")
+    assert isinstance(raw, dict)
+    assert raw.get("controller_log") == ["Command: fake", "Exit code: 1"]
