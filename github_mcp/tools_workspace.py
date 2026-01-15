@@ -82,6 +82,9 @@ _workspace_read_text = _fs._workspace_read_text
 _workspace_write_text = _fs._workspace_write_text
 get_workspace_file_contents = _fs.get_workspace_file_contents
 set_workspace_file_contents = _fs.set_workspace_file_contents
+edit_workspace_text_range = _fs.edit_workspace_text_range
+edit_workspace_line = _fs.edit_workspace_line
+replace_workspace_text = _fs.replace_workspace_text
 apply_patch = _fs.apply_patch
 delete_workspace_paths = _fs.delete_workspace_paths
 
@@ -128,6 +131,9 @@ __all__ = [
     "ensure_workspace_clone",
     "get_workspace_file_contents",
     "set_workspace_file_contents",
+    "edit_workspace_text_range",
+    "edit_workspace_line",
+    "replace_workspace_text",
     "apply_patch",
     "delete_workspace_paths",
     "list_workspace_files",
