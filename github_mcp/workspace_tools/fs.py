@@ -938,11 +938,22 @@ async def apply_workspace_operations(
 
                     abs_path = _workspace_safe_join(repo_dir, path)
                     _backup_path(abs_path)
-                    before = backups[abs_path].decode("utf-8", errors="replace") if backups[abs_path] else ""
+                    before = (
+                        backups[abs_path].decode("utf-8", errors="replace")
+                        if backups[abs_path]
+                        else ""
+                    )
                     after = content
                     if not preview_only:
-                        _workspace_write_text(repo_dir, path, content, create_parents=create_parents)
-                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=backups[abs_path] is not None)
+                        _workspace_write_text(
+                            repo_dir, path, content, create_parents=create_parents
+                        )
+                    d = _maybe_diff_for_log(
+                        path=path,
+                        before=before,
+                        after=after,
+                        before_exists=backups[abs_path] is not None,
+                    )
                     if isinstance(d, str) and d:
                         diffs.append(d)
                     results.append({"index": idx, "op": "write", "path": path, "status": "ok"})
@@ -967,7 +978,11 @@ async def apply_workspace_operations(
                     if not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
-                    before = backups[abs_path].decode("utf-8", errors="replace") if backups[abs_path] else ""
+                    before = (
+                        backups[abs_path].decode("utf-8", errors="replace")
+                        if backups[abs_path]
+                        else ""
+                    )
 
                     if replace_all:
                         after = before.replace(old, new)
@@ -985,7 +1000,9 @@ async def apply_workspace_operations(
 
                     if not preview_only and after != before:
                         _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
-                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    d = _maybe_diff_for_log(
+                        path=path, before=before, after=after, before_exists=True
+                    )
                     if isinstance(d, str) and d:
                         diffs.append(d)
                     results.append(
@@ -1020,7 +1037,11 @@ async def apply_workspace_operations(
                     if not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
-                    before = backups[abs_path].decode("utf-8", errors="replace") if backups[abs_path] else ""
+                    before = (
+                        backups[abs_path].decode("utf-8", errors="replace")
+                        if backups[abs_path]
+                        else ""
+                    )
                     lines = _split_lines_keepends(before)
                     start_offset = _pos_to_offset(lines, start_line, start_col)
                     end_offset = _pos_to_offset(lines, end_line, end_col)
@@ -1030,7 +1051,9 @@ async def apply_workspace_operations(
 
                     if not preview_only and after != before:
                         _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
-                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    d = _maybe_diff_for_log(
+                        path=path, before=before, after=after, before_exists=True
+                    )
                     if isinstance(d, str) and d:
                         diffs.append(d)
                     results.append(
@@ -1052,11 +1075,17 @@ async def apply_workspace_operations(
                     _backup_path(abs_path)
                     if backups[abs_path] is None:
                         if allow_missing:
-                            results.append({"index": idx, "op": "delete", "path": path, "status": "noop"})
+                            results.append(
+                                {"index": idx, "op": "delete", "path": path, "status": "noop"}
+                            )
                             continue
                         raise FileNotFoundError(path)
 
-                    before = backups[abs_path].decode("utf-8", errors="replace") if backups[abs_path] else ""
+                    before = (
+                        backups[abs_path].decode("utf-8", errors="replace")
+                        if backups[abs_path]
+                        else ""
+                    )
                     d = _delete_diff_for_log(path=path, before=before)
                     if isinstance(d, str) and d:
                         diffs.append(d)
@@ -1090,7 +1119,9 @@ async def apply_workspace_operations(
                         if create_parents:
                             os.makedirs(os.path.dirname(abs_dst), exist_ok=True)
                         shutil.move(abs_src, abs_dst)
-                    results.append({"index": idx, "op": "move", "src": src, "dst": dst, "status": "ok"})
+                    results.append(
+                        {"index": idx, "op": "move", "src": src, "dst": dst, "status": "ok"}
+                    )
                     continue
 
                 if op_name == "apply_patch":

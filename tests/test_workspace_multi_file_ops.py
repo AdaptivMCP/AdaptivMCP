@@ -120,4 +120,3 @@ def test_move_workspace_paths_moves(tmp_path, monkeypatch):
     assert result.get("error") is None
     assert not (repo_dir / "src.txt").exists()
     assert (repo_dir / "dst.txt").read_text(encoding="utf-8") == "x\n"
-

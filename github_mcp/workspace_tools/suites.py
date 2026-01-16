@@ -390,8 +390,7 @@ async def run_quality_suite(
 
     if status in {"passed", "no_tests"} and optional_failures:
         controller_log.append(
-            "- Warnings: optional steps failed: "
-            + ", ".join(sorted(set(optional_failures)))
+            "- Warnings: optional steps failed: " + ", ".join(sorted(set(optional_failures)))
         )
         if status == "passed":
             status = "passed_with_warnings"

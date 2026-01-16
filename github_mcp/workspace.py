@@ -492,34 +492,112 @@ async def _clone_repo(
 
 
 async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
-    """Create an isolated virtualenv and return env vars that activate it."""
+    """Create an isolated virtualenv and return env vars that activate it.
+
+    The hosted execution environments backing these tools can vary:
+    - Some Python builds omit pip in newly-created venvs (or ship a broken pip).
+    - Cached venv directories can become partially deleted.
+
+    This helper treats the venv as a cache: if it looks unhealthy, it is
+    recreated. After creation, it ensures pip is present and usable.
+    """
     main_module = _get_main_module()
     run_shell = getattr(main_module, "_run_shell", _run_shell)
 
-    venv_dir = os.path.join(repo_dir, ".venv-mcp")
-    if os.path.isdir(venv_dir):
-        bin_dir = "Scripts" if os.name == "nt" else "bin"
-        bin_path = os.path.join(venv_dir, bin_dir)
+    def _venv_bin_dir() -> str:
+        return "Scripts" if os.name == "nt" else "bin"
+
+    def _venv_python_path(venv_root: str) -> str:
+        bin_dir = _venv_bin_dir()
+        exe = "python.exe" if os.name == "nt" else "python"
+        return os.path.join(venv_root, bin_dir, exe)
+
+    def _activation_env(venv_root: str) -> Dict[str, str]:
+        bin_dir = _venv_bin_dir()
+        bin_path = os.path.join(venv_root, bin_dir)
         return {
-            "VIRTUAL_ENV": venv_dir,
+            "VIRTUAL_ENV": venv_root,
             "PATH": f"{bin_path}{os.pathsep}" + os.environ.get("PATH", ""),
         }
 
-    result = await run_shell(
-        f"{sys.executable} -m venv {venv_dir}",
-        cwd=repo_dir,
-        timeout_seconds=300,
-    )
-    if result["exit_code"] != 0:
-        stderr = result.get("stderr", "") or result.get("stdout", "")
-        raise GitHubAPIError(f"Failed to create temp virtualenv: {stderr}")
+    async def _ensure_pip(venv_root: str) -> None:
+        vpy = shlex.quote(_venv_python_path(venv_root))
 
-    bin_dir = "Scripts" if os.name == "nt" else "bin"
-    bin_path = os.path.join(venv_dir, bin_dir)
-    return {
-        "VIRTUAL_ENV": venv_dir,
-        "PATH": f"{bin_path}{os.pathsep}" + os.environ.get("PATH", ""),
-    }
+        # First check whether pip is usable.
+        check = await run_shell(
+            f"{vpy} -m pip --version",
+            cwd=repo_dir,
+            timeout_seconds=120,
+        )
+        if check.get("exit_code", 0) == 0:
+            # Upgrade tooling for more reliable installs.
+            upgrade = await run_shell(
+                f"{vpy} -m pip install --upgrade pip setuptools wheel",
+                cwd=repo_dir,
+                timeout_seconds=600,
+            )
+            if upgrade.get("exit_code", 0) != 0:
+                stderr = upgrade.get("stderr", "") or upgrade.get("stdout", "")
+                raise GitHubAPIError(f"Failed to upgrade pip tooling: {stderr}")
+            return
+
+        # Attempt to bootstrap pip using ensurepip.
+        ensure = await run_shell(
+            f"{vpy} -m ensurepip --upgrade",
+            cwd=repo_dir,
+            timeout_seconds=300,
+        )
+        if ensure.get("exit_code", 0) != 0:
+            stderr = ensure.get("stderr", "") or ensure.get("stdout", "")
+            raise GitHubAPIError(f"Failed to bootstrap pip via ensurepip: {stderr}")
+
+        # Re-check and upgrade.
+        check2 = await run_shell(
+            f"{vpy} -m pip --version",
+            cwd=repo_dir,
+            timeout_seconds=120,
+        )
+        if check2.get("exit_code", 0) != 0:
+            stderr = check2.get("stderr", "") or check2.get("stdout", "")
+            raise GitHubAPIError(f"pip remains unavailable after ensurepip: {stderr}")
+
+        upgrade2 = await run_shell(
+            f"{vpy} -m pip install --upgrade pip setuptools wheel",
+            cwd=repo_dir,
+            timeout_seconds=600,
+        )
+        if upgrade2.get("exit_code", 0) != 0:
+            stderr = upgrade2.get("stderr", "") or upgrade2.get("stdout", "")
+            raise GitHubAPIError(f"Failed to upgrade pip tooling: {stderr}")
+
+    venv_dir = os.path.join(repo_dir, ".venv-mcp")
+
+    # If a venv exists, validate it isn't partially deleted.
+    if os.path.isdir(venv_dir):
+        vpy = _venv_python_path(venv_dir)
+        if not os.path.isfile(vpy):
+            shutil.rmtree(venv_dir, ignore_errors=True)
+        else:
+            try:
+                await _ensure_pip(venv_dir)
+                return _activation_env(venv_dir)
+            except Exception:
+                # Treat as cache corruption and recreate.
+                shutil.rmtree(venv_dir, ignore_errors=True)
+
+    # Create venv. Prefer --upgrade-deps when supported.
+    create_cmd = f"{shlex.quote(sys.executable)} -m venv --upgrade-deps {shlex.quote(venv_dir)}"
+    result = await run_shell(create_cmd, cwd=repo_dir, timeout_seconds=300)
+    if result.get("exit_code", 0) != 0:
+        # Fallback for older/stripped venv modules.
+        create_cmd2 = f"{shlex.quote(sys.executable)} -m venv {shlex.quote(venv_dir)}"
+        result2 = await run_shell(create_cmd2, cwd=repo_dir, timeout_seconds=300)
+        if result2.get("exit_code", 0) != 0:
+            stderr = result2.get("stderr", "") or result2.get("stdout", "")
+            raise GitHubAPIError(f"Failed to create temp virtualenv: {stderr}")
+
+    await _ensure_pip(venv_dir)
+    return _activation_env(venv_dir)
 
 
 def _maybe_unescape_unified_diff(patch: str) -> str:

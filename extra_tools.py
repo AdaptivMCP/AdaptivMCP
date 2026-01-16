@@ -147,9 +147,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         write_action=False,
         description="Ping the MCP server extensions surface.",
         tags=["meta", "diagnostics"],
-    )(
-        ping_extensions
-    )  # type: ignore[arg-type]
+    )(ping_extensions)  # type: ignore[arg-type]
 
     # write actions
     mcp_tool(
@@ -159,9 +157,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "Often used in combination with branch management helpers."
         ),
         tags=["github", "write", "files", "delete"],
-    )(
-        delete_file
-    )  # type: ignore[arg-type]
+    )(delete_file)  # type: ignore[arg-type]
 
     mcp_tool(
         write_action=True,
@@ -171,6 +167,4 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
             "terminal_command) to modify a file and then write it back to the branch."
         ),
         tags=["github", "write", "files"],
-    )(
-        update_file_from_workspace
-    )  # type: ignore[arg-type]
+    )(update_file_from_workspace)  # type: ignore[arg-type]

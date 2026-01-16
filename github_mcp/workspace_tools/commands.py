@@ -215,7 +215,9 @@ async def render_shell(
             "status": cleaned_command.get("status") if isinstance(cleaned_command, dict) else None,
             "ok": cleaned_command.get("ok") if isinstance(cleaned_command, dict) else None,
             "error": cleaned_command.get("error") if isinstance(cleaned_command, dict) else None,
-            "error_detail": cleaned_command.get("error_detail") if isinstance(cleaned_command, dict) else None,
+            "error_detail": cleaned_command.get("error_detail")
+            if isinstance(cleaned_command, dict)
+            else None,
             "workdir": (
                 cleaned_command.get("workdir") if isinstance(cleaned_command, dict) else None
             ),
@@ -399,9 +401,7 @@ async def run_python(
 
         cwd = _resolve_workdir(repo_dir, workdir)
 
-        rel_path = (
-            filename.strip() if isinstance(filename, str) and filename.strip() else None
-        )
+        rel_path = filename.strip() if isinstance(filename, str) and filename.strip() else None
         if rel_path is None:
             rel_path = f".mcp_tmp/run_python_{uuid.uuid4().hex}.py"
 
@@ -426,8 +426,7 @@ async def run_python(
                 i_stderr = install_result.get("stderr") or ""
                 i_stdout = install_result.get("stdout") or ""
                 raise GitHubAPIError(
-                    "Dependency installation failed: "
-                    + (i_stderr.strip() or i_stdout.strip())
+                    "Dependency installation failed: " + (i_stderr.strip() or i_stdout.strip())
                 )
 
         cmd = "python " + shlex.quote(rel_path)
@@ -463,9 +462,7 @@ async def run_python(
                     full_name, ref=effective_ref, preserve_changes=True
                 )
                 rel_path2 = (
-                    filename.strip()
-                    if isinstance(filename, str) and filename.strip()
-                    else None
+                    filename.strip() if isinstance(filename, str) and filename.strip() else None
                 )
                 if rel_path2 is None:
                     # Only auto-cleanup when we created the file.
