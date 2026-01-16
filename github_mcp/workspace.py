@@ -108,7 +108,7 @@ async def _run_shell(
                     break
                 candidate = parent
         except Exception:
-            # Never fail the tool due to PATH decoration.
+            # Avoid failing the tool due to PATH decoration.
             pass
 
     start_new_session = os.name != "nt"
@@ -238,7 +238,7 @@ def _raise_git_auth_error(operation: str, stderr: str) -> None:
     if not _is_git_auth_error(stderr):
         return
 
-    # Best-effort context without dumping huge logs. Do not include any env content here.
+    # Best-effort context without dumping huge logs. Exclude environment content.
     excerpt = " ".join((stderr or "").replace("\r", " ").replace("\n", " ").split())
 
     raise GitHubAuthError(

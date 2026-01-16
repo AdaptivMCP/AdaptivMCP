@@ -1,18 +1,8 @@
-"""github_mcp.mcp_server.decorators
+"""Decorators and helpers for registering MCP tools.
 
-Decorators and helpers for registering MCP tools.
-
-Behavioral contract:
-- The server does not hard-block write tools; clients decide whether to prompt.
-- Tools publish input schemas for introspection, but the server does NOT
- enforce JSONSchema validation at runtime.
-- Tags are accepted for backwards compatibility but are not emitted to clients.
-- Dedupe helpers remain for compatibility and test coverage.
-
-Dedupe contract:
-- Async dedupe caches completed results for a short TTL within the SAME event loop.
-- Async dedupe is scoped per event loop (does not share futures across loops).
-- Sync dedupe memoizes results for TTL.
+This module provides the primary `mcp_tool` decorator and related utilities.
+It also includes optional, best-effort request deduplication helpers used by
+the server and tests.
 """
 
 from __future__ import annotations
@@ -390,7 +380,11 @@ def _preview_unified_diff(diff_text: str) -> str:
     try:
         rendered = _render_rich_unified_diff(diff_text)
     except Exception:
-        body = _highlight_code(diff_text, kind="diff") if LOG_TOOL_COLOR else _non_ansi_diff_markers(diff_text)
+        body = (
+            _highlight_code(diff_text, kind="diff")
+            if LOG_TOOL_COLOR
+            else _non_ansi_diff_markers(diff_text)
+        )
         numbered: list[str] = []
         for idx, line in enumerate(body.splitlines(), start=1):
             ln = _ansi(f"{idx:>4}│", ANSI_DIM)
@@ -862,7 +856,7 @@ def _args_summary(all_args: Mapping[str, Any]) -> dict[str, Any]:
     visible (e.g., Render). It intentionally excludes payload-sized fields and
     secret-like keys.
 
-    To allow logging of sensitive fields (not recommended), set:
+    Sensitive fields can be included by setting:
       GITHUB_MCP_LOG_SENSITIVE=1
     """
 
@@ -1030,9 +1024,7 @@ def _apply_tool_metadata(
 
 
 def _tool_write_allowed(write_action: bool) -> bool:
-    # This value is used for metadata/introspection and by some clients as a hint
-    # for whether a confirmation prompt is required. The server itself does not
-    # block write tools.
+    # Used for metadata/introspection.
     return True
 
 
@@ -1131,7 +1123,7 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
     except Exception as exc:
         if not fut.done():
             fut.set_exception(exc)
-        # Do not cache failures.
+        # Failures are not cached.
         async with lock:
             cur = _DEDUPE_ASYNC_CACHE.get(cache_key)
             if cur and cur[1] is fut:
@@ -1194,7 +1186,7 @@ def _strip_internal_log_fields(payload: Mapping[str, Any]) -> Dict[str, Any]:
 
     Tool implementations may include keys prefixed with ``__log_`` to pass
     additional context to provider logs (e.g., precomputed diffs).
-    These keys must never be returned to clients.
+    These keys are filtered from client responses.
     """
 
     if not isinstance(payload, Mapping):
@@ -1207,12 +1199,7 @@ def _strip_internal_log_fields(payload: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _extract_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
-    """Extract the optional _meta payload without mutating kwargs.
-
-    _meta is reserved for client-side execution hints. The server ignores
-    unknown keys, but may use a small subset for safe runtime behaviors like
-    idempotency.
-    """
+    """Extract the optional _meta payload without mutating kwargs."""
 
     if not kwargs:
         return {}
@@ -1268,9 +1255,8 @@ def _dedupe_key(
     # Prefer a stable idempotency key (if the client provides one), then the
     # (session_id, message_id) pair.
     #
-    # IMPORTANT: request_id is commonly regenerated on retries. Including it
-    # when a more stable scope exists prevents dedupe from working and can
-    # cause the same tool call to be executed multiple times.
+    # request_id is commonly regenerated on retries. Including it when a more
+    # stable scope exists can reduce dedupe effectiveness.
     explicit_idempotency_key = req.get("idempotency_key") or req.get("dedupe_key")
     if explicit_idempotency_key:
         scope = f"i:{explicit_idempotency_key}"
@@ -1448,9 +1434,7 @@ def _log_tool_success(
                 diff_candidate = None
                 if isinstance(result, Mapping):
                     diff_candidate = (
-                        result.get("__log_diff")
-                        or result.get("diff")
-                        or result.get("patch")
+                        result.get("__log_diff") or result.get("diff") or result.get("patch")
                     )
                 if diff_candidate is None and isinstance(all_args, Mapping):
                     diff_candidate = all_args.get("diff") or all_args.get("patch")
@@ -1487,11 +1471,15 @@ def _log_tool_success(
                         )
 
                 # 2c) Render endpoints
-                if not visual and isinstance(result, Mapping) and (
-                    tool_name.startswith("list_render_")
-                    or tool_name.startswith("render_list_")
-                    or tool_name.startswith("render_get_")
-                    or tool_name.startswith("get_render_")
+                if (
+                    not visual
+                    and isinstance(result, Mapping)
+                    and (
+                        tool_name.startswith("list_render_")
+                        or tool_name.startswith("render_list_")
+                        or tool_name.startswith("render_get_")
+                        or tool_name.startswith("get_render_")
+                    )
                 ):
                     body = result.get("json") if "json" in result else result
                     items = _render_extract_list(body)
@@ -1772,7 +1760,7 @@ def _register_with_fastmcp(
 
         # Direct style: mcp.tool(fn, **kw)
         if style in {"direct", "unknown"}:
-            # IMPORTANT: do not attempt direct style if signature starts with name
+            # Skip direct style when signature starts with name.
             if style == "unknown" and params and params[0].name == "name":
                 continue
             try:
@@ -1808,33 +1796,14 @@ def mcp_tool(
     visibility: str = "public",  # accepted, ignored
     **_ignored: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Declare an MCP tool with developer-oriented metadata.
+    """Register a callable as an MCP tool.
 
-    This decorator is the canonical way to expose a Python callable via the
-    GitHub MCP server. It wraps the function to provide:
-
-    - Structured error payloads (top-level 'error' plus 'error_detail')
-    - Optional write-action gating semantics (write_action=True)
-    - Best-effort request-level idempotency/deduplication (see _meta)
-    - Stable input schema generation for clients (signature-based fallback)
-
-    Parameters:
+    Args:
       name: Optional override for the tool name (defaults to function __name__).
-      write_action: Whether the tool performs mutations (git push, PR creation, etc.).
-      description: Optional human/developer-facing description (defaults to func.__doc__).
-      visibility: Currently accepted for compatibility; reported via introspection.
-      tags: Optional metadata labels exposed via introspection.
-
-    Reserved argument (_meta):
-      Tools may accept an optional '_meta' kwarg. This is stripped before calling
-      the underlying function and is used only for safe runtime behaviors.
-      Supported keys: dedupe (bool), dedupe_ttl_s/dedupe_ttl_seconds (number),
-      idempotency_key/dedupe_key (string).
-
-    Error contract:
-      On failure, tools return a JSON object with 'error' and a structured
-      'error_detail'. HTTP clients additionally map common categories to status codes.
-
+      write_action: Whether the tool performs mutations (e.g., git push, PR creation).
+      description: Optional description (defaults to func.__doc__).
+      visibility: Accepted for compatibility; reported via introspection.
+      tags: Optional metadata labels reported via introspection.
     """
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:

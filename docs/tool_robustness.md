@@ -1,6 +1,6 @@
 # Tool robustness and usage patterns
 
-This note documents server-side input validation and recommended usage flows for the workspace (repo mirror), GitHub, and Render tools.
+This note documents server-side input validation and common usage flows for the workspace (repo mirror), GitHub, and Render tools.
 
 ## Workspace (repo mirror)
 
@@ -37,11 +37,11 @@ Validation and reliability:
 - REST pagination inputs are clamped to safe bounds (e.g., `per_page` 1–100 where applicable; `page` >= 1).
 - For long-running or multi-call summaries (e.g., dashboards), helpers degrade gracefully and return section-level errors instead of failing the entire call.
 
-Usage guidance:
+Common usage patterns:
 
-- Prefer `get_repo_dashboard` / `get_repo_dashboard_graphql` for quick triage and orientation.
-- Prefer `cache_files` + `get_cached_files` for repeated reads of the same content during an interactive session.
-- For CI triage, use `get_workflow_run_overview` and then `get_job_logs` for untruncated job output.
+- `get_repo_dashboard` / `get_repo_dashboard_graphql` for quick triage and orientation.
+- `cache_files` + `get_cached_files` for repeated reads of the same content during an interactive session.
+- For CI triage, `get_workflow_run_overview` and then `get_job_logs` for untruncated job output.
 
 ## Render tools
 
@@ -56,7 +56,7 @@ Validation and safety controls:
   - Provide `image_url` for image-backed services.
 - `get_render_logs` validates timestamps as ISO8601 strings when provided, and clamps `limit`.
 
-Usage guidance:
+Common usage patterns:
 
 - Start discovery with `list_render_owners` and `list_render_services`.
 - Use `list_render_deploys` to locate relevant deploy ids before calling `get_render_deploy`, `cancel_render_deploy`, or `rollback_render_deploy`.

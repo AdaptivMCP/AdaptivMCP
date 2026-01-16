@@ -17,30 +17,13 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from github_mcp.server import mcp_tool
+from github_mcp.utils import _normalize_timeout_seconds
 
 
 def _tw():
     from github_mcp import tools_workspace as tw
 
     return tw
-
-
-def _normalize_timeout_seconds(value: object, default: int) -> int:
-    if value is None or isinstance(value, bool):
-        return max(1, int(default))
-    if isinstance(value, int):
-        return max(1, value)
-    if isinstance(value, float):
-        return max(1, int(value))
-    if isinstance(value, str):
-        s = value.strip()
-        if not s:
-            return max(1, int(default))
-        try:
-            return max(1, int(float(s)))
-        except Exception:
-            return max(1, int(default))
-    return max(1, int(default))
 
 
 def _text_stats(text: str) -> Tuple[int, int]:

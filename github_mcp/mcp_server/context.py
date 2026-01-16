@@ -104,7 +104,8 @@ class _WriteAllowedFlag:
     - bool(WRITE_ALLOWED)
     - WRITE_ALLOWED.value
     - WRITE_ALLOWED.value = True/False
-    Always returns true; write tools are never blocked at the server layer.
+
+    Compatibility shim: write approval is treated as enabled.
     """
 
     def __init__(self) -> None:
@@ -127,7 +128,8 @@ WRITE_ALLOWED = _WriteAllowedFlag()
 
 def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     """
-    Returns effective write permission; always true to avoid server-side blocking.
+    Compatibility shim returning True.
+
     refresh_after_seconds is ignored but kept for backwards compatibility.
     """
     del refresh_after_seconds
@@ -137,7 +139,7 @@ def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
 
 def set_write_allowed(approved: bool) -> bool:
     """
-    Compatibility shim for legacy callers. Always returns true.
+    Compatibility shim for legacy callers.
     """
     del approved
     WRITE_ALLOWED._cache_value = True

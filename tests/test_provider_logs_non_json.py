@@ -80,4 +80,3 @@ def test_truncate_text_does_not_json_dump_mappings():
     assert "a=1" in s
     assert "b=2" in s
     assert "{" not in s
-

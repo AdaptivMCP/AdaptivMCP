@@ -68,7 +68,7 @@ def _get_controller_revision_info() -> Dict[str, Any]:
             ).strip()
             info["git_branch"] = branch
     except Exception:
-        # Never fail env validation because git metadata is unavailable.
+        # Avoid failing env validation when git metadata is unavailable.
         pass
 
     return info

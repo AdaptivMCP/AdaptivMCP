@@ -45,7 +45,7 @@ The ASGI application is exposed in `main.py` as `app`.
 - GET /ui and GET /ui.json — lightweight UI diagnostics (serves `assets/index.html` when present)
 - GET /static/* — static assets (if `assets/` is present)
 
-## Recommended workflows
+## Common workflows
 
 ### Read-only workflows
 
@@ -71,9 +71,9 @@ Typical flow:
    - `ensure_workspace_clone` creates or reuses the repo mirror.
    - `workspace_sync_status` reports whether the repo mirror is ahead/behind or has uncommitted changes.
 
-   Recommended: do active work on a feature branch.
+   Common practice: do active work on a feature branch.
    - `workspace_create_branch` creates a new branch from a base ref (and can push it).
-   - Avoid committing directly on the default branch unless you explicitly intend to.
+   - Committing directly on the default branch is possible; many workflows prefer feature branches.
 
 2. Make changes in the repo mirror
    - Edit files using workspace file tools or shell editors.
@@ -89,10 +89,10 @@ Typical flow:
    - Optional: set `run_quality=true` to run lint/tests before creating the commit.
    - This tool pushes to the current `ref` (the feature branch) and then opens a PR into `base`.
 
-4. Refresh when you need a clean snapshot
+4. Refresh when you want a clean snapshot
    - The repo mirror does not automatically reflect the live GitHub state unless you fetch/pull or recreate it.
    - To align the repo mirror with a branch’s remote state, `workspace_sync_to_remote` updates it.
-   - As a last resort, `ensure_workspace_clone(reset=true)` rebuilds the repo mirror.
+   - `ensure_workspace_clone(reset=true)` rebuilds the repo mirror.
 
 ### GitHub API usage guidance
 
@@ -168,18 +168,18 @@ Render-specific notes:
 
 ### Minimum required configuration
 
-Provide at least one GitHub authentication token so the server can access the API:
+At least one GitHub authentication token is needed for the server to access the API:
 
 - GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, or GITHUB_OAUTH_TOKEN
 
-For Render integration, set one Render API token so the server can access the Render API:
+For Render integration, a Render API token is needed for the server to access the Render API:
 
 - RENDER_API_KEY or RENDER_API_TOKEN (first configured token wins; see RENDER_TOKEN_ENV_VARS)
 
 Transport security (trusted hosts)
 
 - ALLOWED_HOSTS (optional) — comma/space-separated list of hostnames that are allowed to use the MCP transport.
-  The server always adds hostnames derived from Render-provided env vars (`RENDER_EXTERNAL_HOSTNAME` / `RENDER_EXTERNAL_URL`).
+  The server also adds hostnames derived from Render-provided env vars (`RENDER_EXTERNAL_HOSTNAME` / `RENDER_EXTERNAL_URL`).
   If neither ALLOWED_HOSTS nor those Render vars are present, host checks are disabled.
 
 ### GitHub authentication
@@ -196,7 +196,7 @@ Transport security (trusted hosts)
 
 These flags control provider-side logs (for example, Render logs). They leave tool outputs unchanged.
 
-Important: provider logs are human-facing by default. This server avoids emitting raw JSON blobs in log lines.
+Provider logs are human-facing by default. This server avoids emitting raw JSON blobs in log lines.
 Structured context (request IDs, tool metadata, etc.) is appended as a YAML-like block when enabled.
 
 - QUIET_LOGS (default: false) — suppresses most non-error logs.
