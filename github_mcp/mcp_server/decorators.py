@@ -94,7 +94,8 @@ LOG_TOOL_DIFF_SNIPPETS = _env_flag("GITHUB_MCP_LOG_DIFF_SNIPPETS", default=True)
 LOG_TOOL_STYLE = os.environ.get("GITHUB_MCP_LOG_STYLE", "monokai")
 
 # Reduce log noise by omitting correlation IDs from INFO/WARN message strings.
-# Structured JSON extras still include the full request context.
+# Structured extras (appended by the provider log formatter) still include the
+# full request context.
 LOG_TOOL_LOG_IDS = _env_flag("GITHUB_MCP_LOG_IDS", default=False)
 
 LOG_TOOL_VISUAL_MAX_LINES = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_LINES", default=80)
@@ -784,8 +785,49 @@ def _log_tool_visual(
 
 
 def _truncate_text(value: Any, *, limit: int = 180) -> str:
+    def scalar(v: Any) -> str:
+        if v is None:
+            return "null"
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if isinstance(v, (int, float)):
+            return str(v)
+        return str(v)
+
     try:
-        s = value if isinstance(value, str) else json.dumps(value, default=str, ensure_ascii=False)
+        if isinstance(value, str):
+            s = value
+        elif isinstance(value, Mapping):
+            preferred = [
+                "id",
+                "name",
+                "full_name",
+                "path",
+                "status",
+                "state",
+                "type",
+                "message",
+                "url",
+            ]
+            parts: list[str] = []
+            for key in preferred:
+                if key in value and value.get(key) is not None:
+                    parts.append(f"{key}={scalar(value.get(key))}")
+            if not parts:
+                for k in sorted(list(value.keys()))[:6]:
+                    if value.get(k) is None:
+                        continue
+                    parts.append(f"{k}={scalar(value.get(k))}")
+            s = ", ".join(parts) if parts else "(object)"
+        elif isinstance(value, list):
+            if not value:
+                s = "(empty list)"
+            else:
+                head = ", ".join(scalar(v) for v in value[:6])
+                tail = f" (+{len(value) - 6} more)" if len(value) > 6 else ""
+                s = f"[{head}{tail}]"
+        else:
+            s = str(value)
     except Exception:
         s = str(value)
     s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")

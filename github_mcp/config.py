@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -228,19 +227,27 @@ LOG_RENDER_HTTP = _env_flag("LOG_RENDER_HTTP", "false")
 # WARNING: This can be very large for log endpoints.
 LOG_RENDER_HTTP_BODIES = _env_flag("LOG_RENDER_HTTP_BODIES", "false")
 
-# Append structured extras ("data={...}") to provider log lines.
+# Append structured extras to provider log lines.
 #
-# When HUMAN_LOGS is enabled, our primary audience is humans tailing Render logs.
-# Extra JSON payloads can become noisy and redundant (especially alongside
-# platform-level access logs). Default to:
-# - INFO: no appended JSON
-# - WARNING/ERROR: appended JSON for debugging
+# Render log viewers and similar UIs are optimized for humans; emitting raw JSON
+# blobs makes logs significantly harder to read. This server therefore formats
+# extras as a YAML-like block (no JSON) when appended.
 #
-# Set LOG_APPEND_EXTRAS_JSON=true to force extras on INFO as well.
-LOG_APPEND_EXTRAS_JSON = _env_flag(
-    "LOG_APPEND_EXTRAS_JSON",
-    "false" if HUMAN_LOGS else "true",
+# Defaults:
+# - When HUMAN_LOGS=true: append extras for tool events (tool_call_* and tool_visual)
+#   and for WARNING/ERROR.
+# - When HUMAN_LOGS=false: keep extras off by default.
+LOG_APPEND_EXTRAS = _env_flag(
+    "LOG_APPEND_EXTRAS",
+    "true" if HUMAN_LOGS else "false",
 )
+
+# Cap appended extras to keep provider log ingestion healthy.
+LOG_EXTRAS_MAX_LINES = int(os.environ.get("LOG_EXTRAS_MAX_LINES", "200"))
+LOG_EXTRAS_MAX_CHARS = int(os.environ.get("LOG_EXTRAS_MAX_CHARS", "20000"))
+
+# Backwards-compat: deprecated.
+LOG_APPEND_EXTRAS_JSON = _env_flag("LOG_APPEND_EXTRAS_JSON", "false")
 
 # Repo mirror diff application can be slow for large diffs. Keep this configurable.
 WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS = int(
@@ -413,7 +420,7 @@ LOG_COLOR = _env_flag("LOG_COLOR", "true")
 
 
 class _StructuredFormatter(logging.Formatter):
-    """Formatter that appends structured extra fields as JSON."""
+    """Formatter that appends structured extra fields for provider logs."""
 
     def format(self, record: logging.LogRecord) -> str:  # pragma: no cover - formatting
         # Mutate the record for a clean, developer-facing console format.
@@ -468,35 +475,106 @@ class _StructuredFormatter(logging.Formatter):
             record.name = original_name
 
         extra_payload = _extract_log_extras(record)
-        if extra_payload:
-            # Keep INFO lines scan-friendly for humans.
-            # Always include extras for WARNING/ERROR (or when explicitly enabled).
-            #
-            # Tool calls are operationally important even at INFO, and are often
-            # consumed by structured log aggregation (searchable fields, alerts,
-            # dashboards). Ensure tool events always carry their structured
-            # payloads without requiring LOG_APPEND_EXTRAS_JSON=true.
-            always_append_events = {
-                "tool_call_started",
-                "tool_call_completed",
-                "tool_call_failed",
-                "tool_visual",
-            }
-            event = getattr(record, "event", None)
-            if (
-                LOG_APPEND_EXTRAS_JSON
-                or record.levelno >= logging.WARNING
+        if not extra_payload:
+            return base
+
+        # Keep INFO lines scan-friendly for humans while ensuring tool events and
+        # warnings/errors are self-contained for debugging.
+        always_append_events = {
+            "tool_call_started",
+            "tool_call_completed",
+            "tool_call_failed",
+            "tool_visual",
+        }
+        event = getattr(record, "event", None)
+        should_append = (
+            bool(LOG_APPEND_EXTRAS)
+            and (
+                record.levelno >= logging.WARNING
                 or (isinstance(event, str) and event in always_append_events)
-            ):
-                extra_payload = _sanitize_for_logs(extra_payload)
-                extra_json = json.dumps(
-                    extra_payload,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-                return f"{base} | data={extra_json}"
+            )
+        )
+
+        if not should_append:
+            return base
+
+        extra_payload = _sanitize_for_logs(extra_payload)
+        extras_block = _format_extras_block(extra_payload)
+        if extras_block:
+            return f"{base}\n{extras_block}"
         return base
+
+
+def _format_extras_block(payload: Mapping[str, Any]) -> str:
+    """Render log extras as a YAML-like block (no JSON)."""
+
+    if not isinstance(payload, Mapping) or not payload:
+        return ""
+
+    # Helper to render scalars safely.
+    def scalar(v: object) -> str:
+        if v is None:
+            return "null"
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if isinstance(v, (int, float)):
+            return str(v)
+        s = str(v)
+        # Keep single-line scalars.
+        s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+        return " ".join(s.split())
+
+    lines: list[str] = []
+    max_lines = max(20, int(LOG_EXTRAS_MAX_LINES))
+    max_chars = max(2000, int(LOG_EXTRAS_MAX_CHARS))
+
+    def emit(line: str) -> None:
+        if len(lines) >= max_lines:
+            return
+        lines.append(line)
+
+    def walk(key: str, value: object, indent: int) -> None:
+        prefix = "  " * indent
+        if isinstance(value, Mapping):
+            emit(f"{prefix}{key}:")
+            for k2, v2 in list(value.items()):
+                if len(lines) >= max_lines:
+                    break
+                walk(str(k2), v2, indent + 1)
+            return
+        if isinstance(value, list):
+            emit(f"{prefix}{key}:")
+            for item in value[:50]:
+                if len(lines) >= max_lines:
+                    break
+                if isinstance(item, (Mapping, list)):
+                    emit(f"{prefix}  -")
+                    if isinstance(item, Mapping):
+                        for k2, v2 in list(item.items()):
+                            if len(lines) >= max_lines:
+                                break
+                            walk(str(k2), v2, indent + 2)
+                    else:
+                        emit(f"{prefix}    - {scalar(item)}")
+                else:
+                    emit(f"{prefix}  - {scalar(item)}")
+            if len(value) > 50 and len(lines) < max_lines:
+                emit(f"{prefix}  - … ({len(value) - 50} more)")
+            return
+
+        emit(f"{prefix}{key}: {scalar(value)}")
+
+    # Sort for stable output.
+    emit("extras:")
+    for k, v in sorted(payload.items(), key=lambda kv: str(kv[0])):
+        if len(lines) >= max_lines:
+            break
+        walk(str(k), v, 1)
+
+    out = "\n".join(lines)
+    if len(out) > max_chars:
+        out = out[: max(0, max_chars - 1)] + "…"
+    return out
 
 
 _STANDARD_LOG_FIELDS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys())
@@ -507,9 +585,9 @@ def _extract_log_extras(record: logging.LogRecord) -> dict[str, object]:
 
     # NOTE:
     # The formatter mutates the record by injecting fields like `asctime` and
-    # computing `message` from msg/args. When we later append `data=<json>`
+    # computing `message` from msg/args. When we later append structured extras
     # using record.__dict__, those injected fields can be picked up as extras and
-    # cause double-encoding (lots of backslashes) and extremely noisy logs.
+    # cause duplication and extremely noisy logs.
     _exclude_dynamic = {"asctime", "message"}
 
     for key, value in record.__dict__.items():
@@ -618,6 +696,9 @@ __all__ = [
     "HTTPX_MAX_CONNECTIONS",
     "HTTPX_MAX_KEEPALIVE",
     "HTTPX_TIMEOUT",
+    "LOG_APPEND_EXTRAS",
+    "LOG_EXTRAS_MAX_LINES",
+    "LOG_EXTRAS_MAX_CHARS",
     "LOG_RENDER_HTTP",
     "LOG_RENDER_HTTP_BODIES",
     "LOG_TOOL_CALLS",
