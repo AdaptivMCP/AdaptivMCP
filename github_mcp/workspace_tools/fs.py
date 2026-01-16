@@ -260,7 +260,7 @@ async def delete_workspace_paths(
     allow_missing: bool = True,
     allow_recursive: bool = False,
 ) -> Dict[str, Any]:
-    """Delete one or more paths from the repo mirror (workspace clone).
+    """Delete one or more paths from the repo mirror.
 
     This tool exists because some environments can block patch-based file deletions.
     Prefer this over embedding deletions into unified-diff patches.
@@ -326,7 +326,7 @@ async def get_workspace_file_contents(
     ref: str = "main",
     path: str = "",
 ) -> Dict[str, Any]:
-    """Read a file from the persistent repo mirror (workspace clone) (no shell).
+    """Read a file from the persistent repo mirror (no shell).
 
     Args:
       path: Repo-relative path (POSIX-style). Must resolve inside the repo mirror.
@@ -360,8 +360,8 @@ async def set_workspace_file_contents(
 ) -> Dict[str, Any]:
     """Replace a workspace file's contents by writing the full file text.
 
-    This is the preferred write primitive for workspace edits in the repo mirror. It avoids
-    patch/unified-diff application.
+    This is a good fit for repo-mirror edits when you want to replace the full
+    contents of a file without relying on unified-diff patch application.
     """
 
     try:
@@ -754,7 +754,7 @@ async def apply_patch(
     ref: str = "main",
     patch: str = "",
 ) -> Dict[str, Any]:
-    """Apply a unified diff patch to the persistent repo mirror (workspace clone)."""
+    """Apply a unified diff patch to the persistent repo mirror."""
 
     try:
         if not isinstance(patch, str) or not patch.strip():

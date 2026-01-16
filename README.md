@@ -4,7 +4,9 @@
 
 This server maintains a persistent server-side git copy for workspace-backed tools.
 In this documentation, we call that copy the **repo mirror** to avoid confusion with the tool name `ensure_workspace_clone`.
-The repo mirror is the place to edit, run commands, commit, and push.
+The repo mirror is a convenient place to edit files, run commands, and prepare commits to push.
+
+You can also make changes directly on GitHub using the GitHub API-backed tools; those do not require using the repo mirror.
 
 The repo mirror is not automatically the live GitHub state. GitHub becomes the source of truth after you push.
 If you need the repo mirror to exactly match a remote branch after merges/force-updates, you can reset the workspace by rebuilding it.
