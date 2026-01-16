@@ -471,7 +471,23 @@ class _StructuredFormatter(logging.Formatter):
         if extra_payload:
             # Keep INFO lines scan-friendly for humans.
             # Always include extras for WARNING/ERROR (or when explicitly enabled).
-            if LOG_APPEND_EXTRAS_JSON or record.levelno >= logging.WARNING:
+            #
+            # Tool calls are operationally important even at INFO, and are often
+            # consumed by structured log aggregation (searchable fields, alerts,
+            # dashboards). Ensure tool events always carry their structured
+            # payloads without requiring LOG_APPEND_EXTRAS_JSON=true.
+            always_append_events = {
+                "tool_call_started",
+                "tool_call_completed",
+                "tool_call_failed",
+                "tool_visual",
+            }
+            event = getattr(record, "event", None)
+            if (
+                LOG_APPEND_EXTRAS_JSON
+                or record.levelno >= logging.WARNING
+                or (isinstance(event, str) and event in always_append_events)
+            ):
                 extra_payload = _sanitize_for_logs(extra_payload)
                 extra_json = json.dumps(
                     extra_payload,
