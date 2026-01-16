@@ -214,7 +214,7 @@ async def run_quality_suite(
     test_command: str = "pytest -q",
     timeout_seconds: float = 600,
     workdir: Optional[str] = None,
-    use_temp_venv: bool = False,
+    use_temp_venv: bool = True,
     installing_dependencies: bool = True,
     lint_command: str = "ruff check .",
     format_command: Optional[str] = None,

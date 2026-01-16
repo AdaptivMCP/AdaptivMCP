@@ -34,16 +34,17 @@ import os
 import traceback
 from typing import Any, Dict, Optional
 
+from github_mcp.redaction import redact_any, redact_text
+
 
 def _redact_tokens(text: str) -> str:
-    """Return text unchanged.
+    """Redact common secrets from error strings.
 
-    This server is intended to be self-hosted in environments where operators
-    may prefer full-fidelity logs and error payloads without credential
-    redaction/masking.
+    In hosted connector environments, emitting raw tokens/keys can cause the
+    upstream platform to block tool outputs. We therefore redact by default.
     """
 
-    return text
+    return redact_text(text)
 
 
 def _single_line(s: str) -> str:
@@ -67,9 +68,9 @@ def _safe_traceback_lines(exc: BaseException, *, max_lines: int) -> list[str]:
             tail = lines[-(max_lines - len(head)) :]
             omitted = len(lines) - (len(head) + len(tail))
             lines = head + [f"… ({omitted} lines omitted) …"] + tail
-        return lines
+        return [redact_text(ln) for ln in lines]
     except Exception:
-        return [f"{exc.__class__.__name__}: {_single_line(str(exc))}"]
+        return [redact_text(f"{exc.__class__.__name__}: {_single_line(str(exc))}")]
 
 
 def _categorize_exception(exc: BaseException) -> tuple[str, str, bool]:
@@ -172,7 +173,7 @@ def _structured_tool_error(
     - Adds "error_detail" for clients that want structured diagnostics.
     """
 
-    message = _single_line(str(exc) or exc.__class__.__name__)
+    message = _redact_tokens(_single_line(str(exc) or exc.__class__.__name__))
     category, code, retryable = _categorize_exception(exc)
     disposition, requires_confirmation = _disposition_from_category(category)
 
@@ -194,7 +195,9 @@ def _structured_tool_error(
 
     if args:
         # Keep args compact and single-line.
-        debug["args"] = {k: _single_line(str(v))[:500] for k, v in list(args.items())[:50]}
+        debug["args"] = {
+            k: _redact_tokens(_single_line(str(v))[:500]) for k, v in list(args.items())[:50]
+        }
 
     detail: Dict[str, Any] = {
         "message": message,
@@ -207,11 +210,11 @@ def _structured_tool_error(
             "context": context,
             "path": path,
             "tool_surface": tool_surface,
-            "routing_hint": routing_hint,
-            "request": request,
+            "routing_hint": redact_any(routing_hint) if routing_hint is not None else None,
+            "request": redact_any(request) if request is not None else None,
         },
         "help": _default_help(category),
-        "debug": debug,
+        "debug": redact_any(debug),
     }
 
     # Preserve richer details emitted by higher-level exceptions.
@@ -234,11 +237,13 @@ def _structured_tool_error(
     if tool_descriptor is not None:
         detail["context"]["tool_descriptor"] = tool_descriptor
     if tool_descriptor_text is not None:
-        detail["context"]["tool_descriptor_text"] = _single_line(tool_descriptor_text)[:2000]
+        detail["context"]["tool_descriptor_text"] = _redact_tokens(
+            _single_line(tool_descriptor_text)[:2000]
+        )
     if trace is not None:
-        detail["trace"] = trace
+        detail["trace"] = redact_any(trace)
 
-    return {"error": message, "error_detail": detail}
+    return {"error": message, "error_detail": redact_any(detail)}
 
 
 def _exception_trace(exc: BaseException) -> str:
