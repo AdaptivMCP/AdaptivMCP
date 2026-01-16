@@ -5,11 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 
-class GitHubAuthError(Exception):
-    pass
+class APIError(Exception):
+    """Base error type for upstream/provider API failures."""
 
-
-class GitHubAPIError(Exception):
     def __init__(
         self,
         message: str,
@@ -20,6 +18,14 @@ class GitHubAPIError(Exception):
         super().__init__(message)
         self.status_code = status_code
         self.response_payload = response_payload
+
+
+class GitHubAuthError(Exception):
+    pass
+
+
+class GitHubAPIError(APIError):
+    pass
 
 
 class GitHubRateLimitError(GitHubAPIError):
@@ -32,17 +38,8 @@ class RenderAuthError(Exception):
     """Raised when Render API authentication is missing or invalid."""
 
 
-class RenderAPIError(Exception):
-    def __init__(
-        self,
-        message: str,
-        *,
-        status_code: int | None = None,
-        response_payload: dict[str, Any] | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-        self.response_payload = response_payload
+class RenderAPIError(APIError):
+    pass
 
 
 class WriteNotAuthorizedError(Exception):
@@ -75,6 +72,7 @@ class UsageError(Exception):
 
 
 __all__ = [
+    "APIError",
     "GitHubAPIError",
     "GitHubAuthError",
     "GitHubRateLimitError",

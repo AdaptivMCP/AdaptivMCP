@@ -34,6 +34,30 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return val.lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _normalize_timeout_seconds(value: object, default: int) -> int:
+    """Normalize a timeout value to an integer number of seconds.
+
+    Accepts ints/floats/strings (including float-like strings) and ensures a
+    minimum value of 1 second. Any invalid values fall back to `default`.
+    """
+
+    if value is None or isinstance(value, bool):
+        return max(1, int(default))
+    if isinstance(value, int):
+        return max(1, value)
+    if isinstance(value, float):
+        return max(1, int(value))
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return max(1, int(default))
+        try:
+            return max(1, int(float(s)))
+        except Exception:
+            return max(1, int(default))
+    return max(1, int(default))
+
+
 def _extract_hostname(value: str | None) -> str | None:
     """Extract a hostname from an env-var style value.
 
@@ -417,6 +441,7 @@ __all__ = [
     "_effective_ref_for_repo",
     "_extract_hostname",
     "_env_flag",
+    "_normalize_timeout_seconds",
     "extract_sha",
     "_normalize_branch",
     "_normalize_repo_path",

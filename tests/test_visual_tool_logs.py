@@ -60,4 +60,3 @@ def test_strip_internal_log_fields_removes_private_keys() -> None:
     payload = {"ok": True, "__log_diff": "x", "__log_start_line": 12}
     cleaned = decorators._strip_internal_log_fields(payload)
     assert cleaned == {"ok": True}
-

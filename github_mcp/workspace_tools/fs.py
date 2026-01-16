@@ -17,9 +17,7 @@ _LOG_WRITE_DIFFS = os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS", "1").strip().low
     "no",
     "off",
 }
-_LOG_WRITE_DIFFS_MAX_CHARS = int(
-    os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS_MAX_CHARS", "120000")
-)
+_LOG_WRITE_DIFFS_MAX_CHARS = int(os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS_MAX_CHARS", "120000"))
 _LOG_WRITE_DIFFS_MAX_FILE_CHARS = int(
     os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS_MAX_FILE_CHARS", "250000")
 )
@@ -43,7 +41,10 @@ def _maybe_diff_for_log(
     if not isinstance(before, str) or not isinstance(after, str):
         return None
     # Avoid expensive diffs for huge files.
-    if len(before) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS or len(after) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS:
+    if (
+        len(before) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS
+        or len(after) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS
+    ):
         return None
     if before == after:
         return None

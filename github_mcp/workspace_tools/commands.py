@@ -5,6 +5,7 @@ import shlex
 from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
+from github_mcp.utils import _normalize_timeout_seconds
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
@@ -40,24 +41,6 @@ def _tw():
     from github_mcp import tools_workspace as tw
 
     return tw
-
-
-def _normalize_timeout_seconds(value: object, default: int) -> int:
-    if value is None or isinstance(value, bool):
-        return max(1, int(default))
-    if isinstance(value, int):
-        return max(1, value)
-    if isinstance(value, float):
-        return max(1, int(value))
-    if isinstance(value, str):
-        s = value.strip()
-        if not s:
-            return max(1, int(default))
-        try:
-            return max(1, int(float(s)))
-        except Exception:
-            return max(1, int(default))
-    return max(1, int(default))
 
 
 def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
@@ -218,18 +201,18 @@ async def render_shell(
             "base_ref": effective_ref,
             "target_ref": target_ref,
             "branch": branch_creation,
-            "workdir": cleaned_command.get("workdir")
-            if isinstance(cleaned_command, dict)
-            else None,
+            "workdir": (
+                cleaned_command.get("workdir") if isinstance(cleaned_command, dict) else None
+            ),
             # Keep payload fields newline-free to avoid downstream double-escaping.
             "command_input": command,
             "command_lines": command_lines_out,
-            "command": cleaned_command.get("command")
-            if isinstance(cleaned_command, dict)
-            else command,
-            "install": cleaned_command.get("install")
-            if isinstance(cleaned_command, dict)
-            else None,
+            "command": (
+                cleaned_command.get("command") if isinstance(cleaned_command, dict) else command
+            ),
+            "install": (
+                cleaned_command.get("install") if isinstance(cleaned_command, dict) else None
+            ),
             "result": cleaned_command.get("result") if isinstance(cleaned_command, dict) else None,
         }
         return out

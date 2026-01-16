@@ -390,7 +390,11 @@ def _preview_unified_diff(diff_text: str) -> str:
     try:
         rendered = _render_rich_unified_diff(diff_text)
     except Exception:
-        body = _highlight_code(diff_text, kind="diff") if LOG_TOOL_COLOR else _non_ansi_diff_markers(diff_text)
+        body = (
+            _highlight_code(diff_text, kind="diff")
+            if LOG_TOOL_COLOR
+            else _non_ansi_diff_markers(diff_text)
+        )
         numbered: list[str] = []
         for idx, line in enumerate(body.splitlines(), start=1):
             ln = _ansi(f"{idx:>4}│", ANSI_DIM)
@@ -1448,9 +1452,7 @@ def _log_tool_success(
                 diff_candidate = None
                 if isinstance(result, Mapping):
                     diff_candidate = (
-                        result.get("__log_diff")
-                        or result.get("diff")
-                        or result.get("patch")
+                        result.get("__log_diff") or result.get("diff") or result.get("patch")
                     )
                 if diff_candidate is None and isinstance(all_args, Mapping):
                     diff_candidate = all_args.get("diff") or all_args.get("patch")
@@ -1487,11 +1489,15 @@ def _log_tool_success(
                         )
 
                 # 2c) Render endpoints
-                if not visual and isinstance(result, Mapping) and (
-                    tool_name.startswith("list_render_")
-                    or tool_name.startswith("render_list_")
-                    or tool_name.startswith("render_get_")
-                    or tool_name.startswith("get_render_")
+                if (
+                    not visual
+                    and isinstance(result, Mapping)
+                    and (
+                        tool_name.startswith("list_render_")
+                        or tool_name.startswith("render_list_")
+                        or tool_name.startswith("render_get_")
+                        or tool_name.startswith("get_render_")
+                    )
                 ):
                     body = result.get("json") if "json" in result else result
                     items = _render_extract_list(body)

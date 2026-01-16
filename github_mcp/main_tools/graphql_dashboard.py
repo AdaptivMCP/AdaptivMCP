@@ -328,15 +328,19 @@ def _normalize_pull_request(node: Any) -> Dict[str, Any]:
         "user": _normalize_actor(node.get("author")),
         "head": {
             "ref": node.get("headRefName"),
-            "repo": {"full_name": node.get("headRepository", {}).get("nameWithOwner")}
-            if isinstance(node.get("headRepository"), dict)
-            else None,
+            "repo": (
+                {"full_name": node.get("headRepository", {}).get("nameWithOwner")}
+                if isinstance(node.get("headRepository"), dict)
+                else None
+            ),
         },
         "base": {
             "ref": node.get("baseRefName"),
-            "repo": {"full_name": node.get("baseRepository", {}).get("nameWithOwner")}
-            if isinstance(node.get("baseRepository"), dict)
-            else None,
+            "repo": (
+                {"full_name": node.get("baseRepository", {}).get("nameWithOwner")}
+                if isinstance(node.get("baseRepository"), dict)
+                else None
+            ),
         },
     }
 
@@ -617,12 +621,16 @@ async def get_repo_dashboard_graphql(
         "created_at": repo_data.get("createdAt"),
         "updated_at": repo_data.get("updatedAt"),
         "owner": {
-            "login": repo_data.get("owner", {}).get("login")
-            if isinstance(repo_data.get("owner"), dict)
-            else None,
-            "html_url": repo_data.get("owner", {}).get("url")
-            if isinstance(repo_data.get("owner"), dict)
-            else None,
+            "login": (
+                repo_data.get("owner", {}).get("login")
+                if isinstance(repo_data.get("owner"), dict)
+                else None
+            ),
+            "html_url": (
+                repo_data.get("owner", {}).get("url")
+                if isinstance(repo_data.get("owner"), dict)
+                else None
+            ),
         },
         "default_branch": default_branch,
     }

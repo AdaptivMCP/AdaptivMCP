@@ -487,12 +487,9 @@ class _StructuredFormatter(logging.Formatter):
             "tool_visual",
         }
         event = getattr(record, "event", None)
-        should_append = (
-            bool(LOG_APPEND_EXTRAS)
-            and (
-                record.levelno >= logging.WARNING
-                or (isinstance(event, str) and event in always_append_events)
-            )
+        should_append = bool(LOG_APPEND_EXTRAS) and (
+            record.levelno >= logging.WARNING
+            or (isinstance(event, str) and event in always_append_events)
         )
 
         if not should_append:
