@@ -1,6 +1,9 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
+import glob
+import hashlib
 import shutil
+import subprocess
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
 from github_mcp.diff_utils import build_unified_diff
@@ -148,6 +151,136 @@ def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
     return {
         "exists": True,
         "path": path,
+        "text": text,
+        "encoding": "utf-8",
+        "had_decoding_errors": had_errors,
+        "size_bytes": len(data),
+    }
+
+
+def _workspace_read_text_limited(
+    repo_dir: str,
+    path: str,
+    *,
+    max_chars: int,
+) -> Dict[str, Any]:
+    """Read a workspace file as text, returning at most max_chars characters.
+
+    Intended for multi-file examination workflows where returning full file
+    contents can be expensive.
+    """
+
+    if not isinstance(max_chars, int) or max_chars < 1:
+        raise ValueError("max_chars must be an int >= 1")
+
+    abs_path = _workspace_safe_join(repo_dir, path)
+    if not os.path.exists(abs_path):
+        return {
+            "exists": False,
+            "path": path,
+            "text": "",
+            "encoding": "utf-8",
+            "had_decoding_errors": False,
+            "truncated": False,
+        }
+
+    size_bytes = os.path.getsize(abs_path)
+
+    # UTF-8 can be up to 4 bytes per codepoint; read slightly more than needed.
+    max_bytes = min(size_bytes, max(1024, (max_chars * 4) + 256))
+    with open(abs_path, "rb") as f:
+        data = f.read(max_bytes + 1)
+
+    truncated = len(data) > max_bytes
+    if truncated:
+        data = data[:max_bytes]
+
+    had_errors = False
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        had_errors = True
+        text = data.decode("utf-8", errors="replace")
+
+    if len(text) > max_chars:
+        text = text[:max_chars]
+        truncated = True
+
+    digest = hashlib.blake2s(text.encode("utf-8", errors="replace"), digest_size=4).hexdigest()
+
+    return {
+        "exists": True,
+        "path": path,
+        "text": text,
+        "encoding": "utf-8",
+        "had_decoding_errors": had_errors,
+        "size_bytes": size_bytes,
+        "truncated": truncated,
+        "text_digest": digest,
+    }
+
+
+def _sanitize_git_ref(ref: str) -> str:
+    if not isinstance(ref, str) or not ref.strip():
+        raise ValueError("git ref must be a non-empty string")
+    r = ref.strip()
+    if any(ch.isspace() for ch in r):
+        raise ValueError("git ref must not contain whitespace")
+    if r.startswith("-"):
+        raise ValueError("git ref must not start with '-' ")
+    if "\x00" in r:
+        raise ValueError("git ref must not contain NUL")
+    return r
+
+
+def _sanitize_git_path(path: str) -> str:
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("path must be a non-empty string")
+    p = path.strip().replace("\\", "/").lstrip("/")
+    if ":" in p:
+        raise ValueError("path must not contain ':'")
+    if p.startswith("-"):
+        raise ValueError("path must not start with '-' ")
+    return p
+
+
+def _git_show_text(repo_dir: str, git_ref: str, path: str) -> Dict[str, Any]:
+    """Read a file as text from a git object (ref:path) without checkout."""
+
+    ref = _sanitize_git_ref(git_ref)
+    rel = _sanitize_git_path(path)
+    # Ensure the rel path is safe and inside the workspace.
+    _workspace_safe_join(repo_dir, rel)
+
+    proc = subprocess.run(
+        ["git", "show", f"{ref}:{rel}"],
+        cwd=repo_dir,
+        capture_output=True,
+        timeout=20,
+    )
+    if proc.returncode != 0:
+        return {
+            "exists": False,
+            "ref": ref,
+            "path": rel,
+            "text": "",
+            "encoding": "utf-8",
+            "had_decoding_errors": False,
+            "error": (proc.stderr or b"").decode("utf-8", errors="replace").strip() or None,
+        }
+
+    data = proc.stdout or b""
+    had_errors = False
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        had_errors = True
+        text = data.decode("utf-8", errors="replace")
+
+    return {
+        "exists": True,
+        "ref": ref,
+        "path": rel,
         "text": text,
         "encoding": "utf-8",
         "had_decoding_errors": had_errors,
@@ -348,6 +481,280 @@ async def get_workspace_file_contents(
         return info
     except Exception as exc:
         return _structured_tool_error(exc, context="get_workspace_file_contents", path=path)
+
+
+@mcp_tool(write_action=False)
+async def get_workspace_files_contents(
+    full_name: str,
+    ref: str = "main",
+    paths: List[str] | None = None,
+    *,
+    expand_globs: bool = True,
+    max_chars_per_file: int = 20000,
+    max_total_chars: int = 120000,
+    include_missing: bool = True,
+) -> Dict[str, Any]:
+    """Read multiple files from the persistent repo mirror in one call.
+
+    This tool is optimized for examination workflows where a client wants to
+    inspect several files (optionally via glob patterns) without issuing many
+    per-file calls.
+
+    Notes:
+      - All paths are repository-relative.
+      - When expand_globs is true, glob patterns (e.g. "src/**/*.py") are
+        expanded relative to the repo root.
+      - Returned text is truncated by max_chars_per_file and max_total_chars.
+    """
+
+    try:
+        if paths is None:
+            paths = []
+        if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
+            raise TypeError("paths must be a list of strings")
+        if not paths:
+            raise ValueError("paths must contain at least one path")
+        if not isinstance(max_chars_per_file, int) or max_chars_per_file < 1:
+            raise ValueError("max_chars_per_file must be an int >= 1")
+        if not isinstance(max_total_chars, int) or max_total_chars < 1:
+            raise ValueError("max_total_chars must be an int >= 1")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        expanded: List[str] = []
+        for raw in paths:
+            p = (raw or "").strip().replace("\\", "/")
+            if not p:
+                continue
+            if expand_globs and any(ch in p for ch in ("*", "?", "[")):
+                pat_abs = _workspace_safe_join(repo_dir, p)
+                matches = glob.glob(pat_abs, recursive=True)
+                for m in matches:
+                    try:
+                        rel = os.path.relpath(m, repo_dir).replace("\\", "/")
+                        _workspace_safe_join(repo_dir, rel)
+                        expanded.append(rel)
+                    except Exception:
+                        continue
+            else:
+                _workspace_safe_join(repo_dir, p)
+                expanded.append(p.lstrip("/"))
+
+        seen: set[str] = set()
+        normalized_paths: List[str] = []
+        for p in expanded:
+            if p in seen:
+                continue
+            seen.add(p)
+            normalized_paths.append(p)
+
+        files: List[Dict[str, Any]] = []
+        missing: List[str] = []
+        errors: List[Dict[str, Any]] = []
+        total_chars = 0
+        truncated_any = False
+
+        for p in normalized_paths:
+            if total_chars >= max_total_chars:
+                truncated_any = True
+                break
+            budget = max(1, min(max_chars_per_file, max_total_chars - total_chars))
+            try:
+                info = _workspace_read_text_limited(repo_dir, p, max_chars=budget)
+                total_chars += len(info.get("text") or "")
+                if info.get("exists"):
+                    files.append(info)
+                    truncated_any = truncated_any or bool(info.get("truncated"))
+                else:
+                    if include_missing:
+                        files.append(info)
+                    missing.append(p)
+            except Exception as exc:
+                errors.append({"path": p, "error": str(exc)})
+
+        ok = len(errors) == 0
+        status = "ok" if ok else "partial"
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "status": status,
+            "ok": ok,
+            "expanded_globs": bool(expand_globs),
+            "max_chars_per_file": int(max_chars_per_file),
+            "max_total_chars": int(max_total_chars),
+            "summary": {
+                "requested": len(paths),
+                "resolved": len(normalized_paths),
+                "returned": len(files),
+                "missing": len(missing),
+                "errors": len(errors),
+                "total_chars": total_chars,
+                "truncated": bool(truncated_any),
+            },
+            "files": files,
+            "missing_paths": missing,
+            "errors": errors,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="get_workspace_files_contents")
+
+
+@mcp_tool(write_action=False)
+async def compare_workspace_files(
+    full_name: str,
+    ref: str = "main",
+    comparisons: List[Dict[str, Any]] | None = None,
+    *,
+    context_lines: int = 3,
+    max_chars_per_side: int = 200000,
+    max_diff_chars: int = 200000,
+) -> Dict[str, Any]:
+    """Compare multiple file pairs or ref/path variants and return diffs.
+
+    Each entry in `comparisons` supports one of the following shapes:
+      1) {"left_path": "a.txt", "right_path": "b.txt"}
+         Compares two workspace paths.
+      2) {"path": "a.txt", "base_ref": "main"}
+         Compares the workspace file at `path` (current checkout) to the file
+         content at `base_ref:path` via `git show`.
+      3) {"left_ref": "main", "left_path": "a.txt", "right_ref": "feature", "right_path": "a.txt"}
+         Compares two git object versions without changing checkout.
+
+    Returned diffs are unified diffs and may be truncated.
+    """
+
+    try:
+        if comparisons is None:
+            comparisons = []
+        if not isinstance(comparisons, list) or any(not isinstance(c, dict) for c in comparisons):
+            raise TypeError("comparisons must be a list of dicts")
+        if not comparisons:
+            raise ValueError("comparisons must contain at least one item")
+        if not isinstance(context_lines, int) or context_lines < 0:
+            raise ValueError("context_lines must be an int >= 0")
+        if not isinstance(max_chars_per_side, int) or max_chars_per_side < 1:
+            raise ValueError("max_chars_per_side must be an int >= 1")
+        if not isinstance(max_diff_chars, int) or max_diff_chars < 1:
+            raise ValueError("max_diff_chars must be an int >= 1")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        out: List[Dict[str, Any]] = []
+        errors: List[Dict[str, Any]] = []
+
+        for idx, spec in enumerate(comparisons):
+            try:
+                left_ref = spec.get("left_ref")
+                right_ref = spec.get("right_ref")
+                left_path = spec.get("left_path") or spec.get("path")
+                right_path = spec.get("right_path")
+
+                base_ref = spec.get("base_ref")
+                if base_ref is not None and right_ref is None and right_path is None:
+                    # Workspace path vs git ref:path.
+                    if not isinstance(left_path, str) or not left_path.strip():
+                        raise ValueError("path must be a non-empty string")
+                    if not isinstance(base_ref, str) or not base_ref.strip():
+                        raise ValueError("base_ref must be a non-empty string")
+
+                    ws = _workspace_read_text_limited(repo_dir, left_path, max_chars=max_chars_per_side)
+                    base = _git_show_text(repo_dir, base_ref, left_path)
+                    if not base.get("exists"):
+                        raise FileNotFoundError(f"missing at {base_ref}:{left_path}")
+                    left_text = (base.get("text") or "")
+                    right_text = (ws.get("text") or "")
+                    fromfile = f"a/{left_path} ({_sanitize_git_ref(base_ref)})"
+                    tofile = f"b/{left_path} ({effective_ref})"
+                    partial = bool(ws.get("truncated"))
+                elif left_ref is not None or right_ref is not None:
+                    # git ref:path vs git ref:path.
+                    if not isinstance(left_ref, str) or not left_ref.strip():
+                        raise ValueError("left_ref must be a non-empty string")
+                    if not isinstance(right_ref, str) or not right_ref.strip():
+                        raise ValueError("right_ref must be a non-empty string")
+                    if not isinstance(left_path, str) or not left_path.strip():
+                        raise ValueError("left_path must be a non-empty string")
+                    if not isinstance(right_path, str) or not right_path.strip():
+                        raise ValueError("right_path must be a non-empty string")
+
+                    l = _git_show_text(repo_dir, left_ref, left_path)
+                    r = _git_show_text(repo_dir, right_ref, right_path)
+                    if not l.get("exists"):
+                        raise FileNotFoundError(f"missing at {left_ref}:{left_path}")
+                    if not r.get("exists"):
+                        raise FileNotFoundError(f"missing at {right_ref}:{right_path}")
+                    left_text = (l.get("text") or "")
+                    right_text = (r.get("text") or "")
+                    fromfile = f"a/{left_path} ({_sanitize_git_ref(left_ref)})"
+                    tofile = f"b/{right_path} ({_sanitize_git_ref(right_ref)})"
+                    partial = False
+                else:
+                    # Workspace path vs workspace path.
+                    if not isinstance(left_path, str) or not left_path.strip():
+                        raise ValueError("left_path must be a non-empty string")
+                    if not isinstance(right_path, str) or not right_path.strip():
+                        raise ValueError("right_path must be a non-empty string")
+                    l = _workspace_read_text_limited(repo_dir, left_path, max_chars=max_chars_per_side)
+                    r = _workspace_read_text_limited(repo_dir, right_path, max_chars=max_chars_per_side)
+                    if not l.get("exists"):
+                        raise FileNotFoundError(left_path)
+                    if not r.get("exists"):
+                        raise FileNotFoundError(right_path)
+                    left_text = (l.get("text") or "")
+                    right_text = (r.get("text") or "")
+                    fromfile = f"a/{left_path}"
+                    tofile = f"b/{right_path}"
+                    partial = bool(l.get("truncated")) or bool(r.get("truncated"))
+
+                diff = build_unified_diff(
+                    left_text,
+                    right_text,
+                    fromfile=fromfile,
+                    tofile=tofile,
+                    n=int(context_lines),
+                )
+                if not diff:
+                    diff = ""
+
+                truncated = False
+                if len(diff) > max_diff_chars:
+                    diff = diff[:max_diff_chars] + "\n… (diff truncated)\n"
+                    truncated = True
+
+                out.append(
+                    {
+                        "index": idx,
+                        "status": "ok",
+                        "partial": bool(partial),
+                        "truncated": bool(truncated),
+                        "diff": diff,
+                    }
+                )
+            except Exception as exc:
+                errors.append({"index": idx, "error": str(exc), "spec": spec})
+                out.append({"index": idx, "status": "error", "error": str(exc)})
+
+        ok = len(errors) == 0
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "status": "ok" if ok else "partial",
+            "ok": ok,
+            "comparisons": out,
+            "errors": errors,
+            "limits": {
+                "context_lines": int(context_lines),
+                "max_chars_per_side": int(max_chars_per_side),
+                "max_diff_chars": int(max_diff_chars),
+            },
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="compare_workspace_files")
 
 
 @mcp_tool(write_action=True)
