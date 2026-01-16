@@ -3,10 +3,62 @@ import os
 import shutil
 from typing import Any, Dict, List, Literal, Tuple
 
+from github_mcp.diff_utils import build_unified_diff
+
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
+
+
+_LOG_WRITE_DIFFS = os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+_LOG_WRITE_DIFFS_MAX_CHARS = int(
+    os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS_MAX_CHARS", "120000")
+)
+_LOG_WRITE_DIFFS_MAX_FILE_CHARS = int(
+    os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS_MAX_FILE_CHARS", "250000")
+)
+
+
+def _maybe_diff_for_log(
+    *,
+    path: str,
+    before: str,
+    after: str,
+    before_exists: bool,
+) -> str | None:
+    """Best-effort unified diff for provider logs.
+
+    The diff is attached to tool results under a __log_* key and stripped from
+    client-visible payloads by the tool wrapper.
+    """
+
+    if not _LOG_WRITE_DIFFS:
+        return None
+    if not isinstance(before, str) or not isinstance(after, str):
+        return None
+    # Avoid expensive diffs for huge files.
+    if len(before) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS or len(after) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS:
+        return None
+    if before == after:
+        return None
+
+    diff = build_unified_diff(
+        before,
+        after,
+        a_path=(path if before_exists else "/dev/null"),
+        b_path=path,
+    )
+    if not diff:
+        return None
+    if len(diff) > _LOG_WRITE_DIFFS_MAX_CHARS:
+        diff = diff[:_LOG_WRITE_DIFFS_MAX_CHARS] + "\n… (diff truncated)\n"
+    return diff
 
 
 def _tw():
@@ -295,6 +347,8 @@ async def set_workspace_file_contents(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        before_info = _workspace_read_text(repo_dir, path)
+        before_text = (before_info.get("text") or "") if before_info.get("exists") else ""
         write_info = _workspace_write_text(
             repo_dir,
             path,
@@ -302,9 +356,17 @@ async def set_workspace_file_contents(
             create_parents=create_parents,
         )
 
+        log_diff = _maybe_diff_for_log(
+            path=path,
+            before=before_text,
+            after=content,
+            before_exists=bool(before_info.get("exists")),
+        )
+
         return {
             "ref": effective_ref,
             "status": "written",
+            "__log_diff": log_diff,
             **write_info,
         }
     except Exception as exc:
@@ -366,6 +428,13 @@ async def edit_workspace_text_range(
             create_parents=create_parents,
         )
 
+        log_diff = _maybe_diff_for_log(
+            path=path,
+            before=original,
+            after=updated,
+            before_exists=True,
+        )
+
         return {
             "ref": effective_ref,
             "status": "edited",
@@ -374,6 +443,7 @@ async def edit_workspace_text_range(
             "end": {"line": int(end_line), "col": int(end_col)},
             "bytes_before": len(original.encode("utf-8")),
             "bytes_after": len(updated.encode("utf-8")),
+            "__log_diff": log_diff,
             **write_info,
         }
     except Exception as exc:
@@ -463,6 +533,12 @@ async def edit_workspace_line(
                 "removed": removed,
                 "line_count_before": len(_split_lines_keepends(original)),
                 "line_count_after": len(updated_lines),
+                "__log_diff": _maybe_diff_for_log(
+                    path=path,
+                    before=original,
+                    after=updated,
+                    before_exists=True,
+                ),
                 **write_info,
             }
 
@@ -488,6 +564,12 @@ async def edit_workspace_line(
                 "inserted": payload,
                 "line_count_before": len(_split_lines_keepends(original)),
                 "line_count_after": len(lines),
+                "__log_diff": _maybe_diff_for_log(
+                    path=path,
+                    before=original,
+                    after=updated,
+                    before_exists=True,
+                ),
                 **write_info,
             }
 
@@ -521,6 +603,12 @@ async def edit_workspace_line(
             "line_number": line_number,
             "line_count_before": len(_split_lines_keepends(original)),
             "line_count_after": len(_split_lines_keepends(updated)),
+            "__log_diff": _maybe_diff_for_log(
+                path=path,
+                before=original,
+                after=updated,
+                before_exists=True,
+            ),
             **write_info,
         }
     except Exception as exc:
@@ -613,6 +701,12 @@ async def replace_workspace_text(
             "replaced": replaced,
             "replace_all": bool(replace_all),
             "occurrence": int(occurrence),
+            "__log_diff": _maybe_diff_for_log(
+                path=path,
+                before=original,
+                after=updated,
+                before_exists=True,
+            ),
             **write_info,
         }
     except Exception as exc:

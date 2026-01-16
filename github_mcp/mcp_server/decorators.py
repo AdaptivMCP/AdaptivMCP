@@ -91,6 +91,7 @@ LOG_TOOL_VISUALS = _env_flag("GITHUB_MCP_LOG_VISUALS", default=True)
 LOG_TOOL_COLOR = _env_flag("GITHUB_MCP_LOG_COLOR", default=True)
 LOG_TOOL_READ_SNIPPETS = _env_flag("GITHUB_MCP_LOG_READ_SNIPPETS", default=True)
 LOG_TOOL_DIFF_SNIPPETS = _env_flag("GITHUB_MCP_LOG_DIFF_SNIPPETS", default=True)
+LOG_TOOL_STYLE = os.environ.get("GITHUB_MCP_LOG_STYLE", "monokai")
 
 # Reduce log noise by omitting correlation IDs from INFO/WARN message strings.
 # Structured JSON extras still include the full request context.
@@ -144,7 +145,7 @@ def _highlight_code(text: str, *, kind: str = "text") -> str:
             lexer = PythonLexer()
         else:
             lexer = TextLexer()
-        return highlight(text, lexer, Terminal256Formatter(style="default")).rstrip("\n")
+        return highlight(text, lexer, Terminal256Formatter(style=LOG_TOOL_STYLE)).rstrip("\n")
     except Exception:
         return text
 
@@ -163,7 +164,26 @@ def _highlight_file_text(path: str, text: str) -> str:
             lexer = get_lexer_for_filename(path or "", text)
         except Exception:
             lexer = TextLexer()
-        return highlight(text, lexer, Terminal256Formatter(style="default")).rstrip("\n")
+        return highlight(text, lexer, Terminal256Formatter(style=LOG_TOOL_STYLE)).rstrip("\n")
+    except Exception:
+        return text
+
+
+def _highlight_line_for_filename(path: str, text: str) -> str:
+    """Syntax-highlight a single line of text using the filename for lexer selection."""
+
+    if not (LOG_TOOL_COLOR and _pygments_available() and isinstance(text, str) and text):
+        return text
+    try:
+        from pygments import highlight
+        from pygments.formatters import Terminal256Formatter
+        from pygments.lexers import get_lexer_for_filename, TextLexer
+
+        try:
+            lexer = get_lexer_for_filename(path or "", text)
+        except Exception:
+            lexer = TextLexer()
+        return highlight(text, lexer, Terminal256Formatter(style=LOG_TOOL_STYLE)).rstrip("\n")
     except Exception:
         return text
 
@@ -317,6 +337,7 @@ def _clip_text(text: str, *, max_lines: int, max_chars: int) -> str:
 
 
 _DIFF_HEADER_RE = re.compile(r"^(diff --git|\+\+\+ |--- |@@ )")
+_DIFF_HUNK_RE = re.compile(r"^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@")
 
 
 def _looks_like_unified_diff(text: str) -> bool:
@@ -345,10 +366,17 @@ def _non_ansi_diff_markers(diff_text: str) -> str:
 
 
 def _preview_unified_diff(diff_text: str) -> str:
+    """Preview a unified diff with file-accurate line numbers.
+
+    The output resembles an editor diff view:
+      <old_ln> <new_ln> │ <prefix><code>
+    where old/new line numbers advance per hunk header.
+    """
+
     if not diff_text:
         return ""
+
     header = "diff"
-    body = diff_text
     try:
         from github_mcp.diff_utils import diff_stats
 
@@ -357,23 +385,112 @@ def _preview_unified_diff(diff_text: str) -> str:
     except Exception:
         pass
 
-    if LOG_TOOL_COLOR:
-        # Prefer Pygments (more Python-like) when available.
-        body = _highlight_code(diff_text, kind="diff")
-    else:
-        body = _non_ansi_diff_markers(diff_text)
+    # Best-effort parse; fall back to a simple numbered listing if parsing fails.
+    try:
+        rendered = _render_rich_unified_diff(diff_text)
+    except Exception:
+        body = _highlight_code(diff_text, kind="diff") if LOG_TOOL_COLOR else _non_ansi_diff_markers(diff_text)
+        numbered: list[str] = []
+        for idx, line in enumerate(body.splitlines(), start=1):
+            ln = _ansi(f"{idx:>4}│", ANSI_DIM)
+            numbered.append(f"{ln} {line}")
+        rendered = "\n".join(numbered)
 
-    # Add line numbers for scannability.
-    numbered: list[str] = []
-    for idx, line in enumerate(body.splitlines(), start=1):
-        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
-        numbered.append(f"{ln} {line}")
     clipped = _clip_text(
-        "\n".join(numbered),
+        rendered,
         max_lines=LOG_TOOL_VISUAL_MAX_LINES,
         max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
     )
     return _ansi(header, ANSI_CYAN) + "\n" + clipped
+
+
+def _render_rich_unified_diff(diff_text: str) -> str:
+    current_path = ""
+    old_ln: Optional[int] = None
+    new_ln: Optional[int] = None
+
+    out: list[str] = []
+    for raw in (diff_text or "").splitlines():
+        line = raw.rstrip("\n")
+
+        if line.startswith("diff --git "):
+            old_ln = None
+            new_ln = None
+            out.append(_ansi(line, ANSI_DIM) if LOG_TOOL_COLOR else line)
+            continue
+        if line.startswith("index "):
+            out.append(_ansi(line, ANSI_DIM) if LOG_TOOL_COLOR else line)
+            continue
+        if line.startswith("--- "):
+            out.append(_ansi(line, ANSI_DIM) if LOG_TOOL_COLOR else line)
+            continue
+        if line.startswith("+++ "):
+            # Track the "new" path for syntax highlighting when possible.
+            # Prefer b/<path> but accept whatever is present.
+            current_path = line[4:].strip()
+            if current_path.startswith("b/"):
+                current_path = current_path[2:]
+            out.append(_ansi(line, ANSI_DIM) if LOG_TOOL_COLOR else line)
+            continue
+
+        if line.startswith("@@"):
+            m = _DIFF_HUNK_RE.match(line)
+            if m:
+                old_ln = int(m.group(1))
+                new_ln = int(m.group(3))
+            else:
+                old_ln = None
+                new_ln = None
+            out.append(_ansi(line, ANSI_YELLOW) if LOG_TOOL_COLOR else f"[HUNK] {line}")
+            continue
+
+        # Hunk content
+        if old_ln is None or new_ln is None:
+            # Not in a hunk yet; render verbatim.
+            out.append(_highlight_code(line, kind="diff") if LOG_TOOL_COLOR else line)
+            continue
+
+        prefix = line[:1] if line else ""
+        content = line[1:] if len(line) > 1 else ""
+
+        old_cell = ""
+        new_cell = ""
+        colored_prefix = prefix
+
+        if prefix == " ":
+            old_cell = f"{old_ln:>5}"
+            new_cell = f"{new_ln:>5}"
+            old_ln += 1
+            new_ln += 1
+            if LOG_TOOL_COLOR:
+                colored_prefix = _ansi(" ", ANSI_DIM)
+        elif prefix == "-" and not line.startswith("---"):
+            old_cell = f"{old_ln:>5}"
+            new_cell = " " * 5
+            old_ln += 1
+            if LOG_TOOL_COLOR:
+                colored_prefix = _ansi("-", ANSI_RED)
+        elif prefix == "+" and not line.startswith("+++"):
+            old_cell = " " * 5
+            new_cell = f"{new_ln:>5}"
+            new_ln += 1
+            if LOG_TOOL_COLOR:
+                colored_prefix = _ansi("+", ANSI_GREEN)
+        else:
+            old_cell = " " * 5
+            new_cell = " " * 5
+            if LOG_TOOL_COLOR:
+                colored_prefix = _ansi(prefix or " ", ANSI_DIM)
+
+        # Syntax highlight the content as file text (best-effort), preserving diff prefix coloring.
+        rendered_content = (
+            _highlight_line_for_filename(current_path, content) if LOG_TOOL_COLOR else content
+        )
+
+        gutter = f"{old_cell} {new_cell} {_ansi('│', ANSI_DIM) if LOG_TOOL_COLOR else '|'}"
+        out.append(f"{gutter} {colored_prefix}{rendered_content}")
+
+    return "\n".join(out)
 
 
 def _preview_terminal_result(payload: Mapping[str, Any]) -> str:
@@ -463,13 +580,32 @@ def _preview_changed_files(status_lines: list[str]) -> str:
     return _ansi("workspace_changes", ANSI_CYAN) + "\n" + "\n".join(rendered)
 
 
-def _preview_file_snippet(path: str, text: str) -> str:
+_PORCELAIN_RE = re.compile(r"^[ MADRCU?]{2} ")
+
+
+def _is_porcelain_status_list(lines: list[str]) -> bool:
+    if not lines:
+        return False
+    checked = 0
+    ok = 0
+    for raw in lines[:50]:
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        checked += 1
+        if _PORCELAIN_RE.match(raw):
+            ok += 1
+    # Require most lines to match to avoid mis-classifying file listings.
+    return checked > 0 and (ok / checked) >= 0.8
+
+
+def _preview_file_snippet(path: str, text: str, *, start_line: int = 1) -> str:
     highlighted = _highlight_file_text(path, text or "")
     lines = highlighted.splitlines()
     max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
     preview = lines[:max_lines]
     rendered: list[str] = []
-    for idx, line in enumerate(preview, start=1):
+    start_line = max(1, int(start_line))
+    for idx, line in enumerate(preview, start=start_line):
         ln = _ansi(f"{idx:>4}│", ANSI_DIM)
         rendered.append(f"{ln} {line}")
     if len(lines) > max_lines:
@@ -485,6 +621,126 @@ def _preview_file_snippet(path: str, text: str) -> str:
             max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
         )
     )
+
+
+def _preview_file_list(paths: list[str], *, header: str = "files") -> str:
+    if not paths:
+        return ""
+    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
+    rendered: list[str] = []
+    for idx, p in enumerate(paths[:max_lines], start=1):
+        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
+        rendered.append(f"{ln} {_ansi(p, ANSI_CYAN) if LOG_TOOL_COLOR else p}")
+    if len(paths) > max_lines:
+        rendered.append(_ansi(f"… ({len(paths) - max_lines} more)", ANSI_DIM))
+    return _ansi(header, ANSI_CYAN) + "\n" + "\n".join(rendered)
+
+
+def _preview_search_hits(hits: list[Mapping[str, Any]]) -> str:
+    if not hits:
+        return ""
+    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
+    rendered: list[str] = []
+    for idx, hit in enumerate(hits[:max_lines], start=1):
+        file = str(hit.get("file") or "")
+        line_no = hit.get("line")
+        text = str(hit.get("text") or "")
+        loc = f"{file}:{line_no}" if file and isinstance(line_no, int) else file
+        loc = _ansi(loc, ANSI_CYAN) if LOG_TOOL_COLOR else loc
+        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
+        rendered.append(f"{ln} {loc} {text}".rstrip())
+    if len(hits) > max_lines:
+        rendered.append(_ansi(f"… ({len(hits) - max_lines} more hits)", ANSI_DIM))
+    return _ansi("search", ANSI_CYAN) + "\n" + "\n".join(rendered)
+
+
+def _preview_json_objects(items: list[Any], *, header: str) -> str:
+    """Preview list[dict] payloads from provider APIs (e.g., Render)."""
+
+    if not items:
+        return ""
+    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
+    rendered: list[str] = []
+    for idx, item in enumerate(items[:max_lines], start=1):
+        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
+        if isinstance(item, Mapping):
+            name = item.get("name") or item.get("service") or item.get("type")
+            ident = item.get("id") or item.get("serviceId") or item.get("deployId")
+            bits: list[str] = []
+            if ident:
+                bits.append(str(ident))
+            if name:
+                bits.append(str(name))
+            line = " - ".join(bits) if bits else _truncate_text(item, limit=140)
+        else:
+            line = _truncate_text(item, limit=140)
+        rendered.append(f"{ln} {line}")
+    if len(items) > max_lines:
+        rendered.append(_ansi(f"… ({len(items) - max_lines} more)", ANSI_DIM))
+    return _ansi(header, ANSI_CYAN) + "\n" + "\n".join(rendered)
+
+
+def _render_extract_list(body: Any) -> list[Any] | None:
+    """Extract a representative list from a Render API json payload."""
+
+    if isinstance(body, list):
+        return body
+    if not isinstance(body, Mapping):
+        return None
+
+    # Render endpoints vary: some return a bare list; others wrap under keys.
+    for key in (
+        "logs",
+        "items",
+        "services",
+        "deploys",
+        "owners",
+        "envVars",
+        "events",
+    ):
+        val = body.get(key)
+        if isinstance(val, list):
+            return val
+    # Otherwise pick the first list-like value.
+    for _k, v in body.items():
+        if isinstance(v, list):
+            return v
+    return None
+
+
+def _preview_render_logs(items: list[Any]) -> str:
+    if not items:
+        return ""
+    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
+    rendered: list[str] = []
+    for idx, item in enumerate(items[:max_lines], start=1):
+        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
+        if isinstance(item, Mapping):
+            ts = item.get("timestamp") or item.get("time") or item.get("createdAt")
+            level = item.get("level") or item.get("severity")
+            msg = item.get("message") or item.get("text") or item.get("log")
+            bits: list[str] = []
+            if ts:
+                bits.append(str(ts))
+            if level:
+                lvl = str(level)
+                if LOG_TOOL_COLOR:
+                    if lvl.lower().startswith("err"):
+                        lvl = _ansi(lvl, ANSI_RED)
+                    elif lvl.lower().startswith("warn"):
+                        lvl = _ansi(lvl, ANSI_YELLOW)
+                    else:
+                        lvl = _ansi(lvl, ANSI_GREEN)
+                bits.append(lvl)
+            if msg:
+                bits.append(str(msg))
+            line = " ".join(bits) if bits else _truncate_text(item, limit=180)
+        else:
+            line = _truncate_text(item, limit=180)
+        rendered.append(f"{ln} {line}")
+    if len(items) > max_lines:
+        rendered.append(_ansi(f"… ({len(items) - max_lines} more)", ANSI_DIM))
+    return _ansi("render_logs", ANSI_CYAN) + "\n" + "\n".join(rendered)
 
 
 def _log_tool_visual(
@@ -891,6 +1147,23 @@ def _strip_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in kwargs.items() if k != "_meta"}
 
 
+def _strip_internal_log_fields(payload: Mapping[str, Any]) -> Dict[str, Any]:
+    """Remove internal log-only keys from a tool result before returning.
+
+    Tool implementations may include keys prefixed with ``__log_`` to pass
+    additional context to provider logs (e.g., precomputed diffs).
+    These keys must never be returned to clients.
+    """
+
+    if not isinstance(payload, Mapping):
+        return dict(payload)
+    out = dict(payload)
+    for k in list(out.keys()):
+        if isinstance(k, str) and k.startswith("__log_"):
+            out.pop(k, None)
+    return out
+
+
 def _extract_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
     """Extract the optional _meta payload without mutating kwargs.
 
@@ -1132,7 +1405,11 @@ def _log_tool_success(
                 # 1) Diff / patch tools
                 diff_candidate = None
                 if isinstance(result, Mapping):
-                    diff_candidate = result.get("diff") or result.get("patch")
+                    diff_candidate = (
+                        result.get("__log_diff")
+                        or result.get("diff")
+                        or result.get("patch")
+                    )
                 if diff_candidate is None and isinstance(all_args, Mapping):
                     diff_candidate = all_args.get("diff") or all_args.get("patch")
 
@@ -1151,8 +1428,37 @@ def _log_tool_success(
                     if isinstance(status_lines, list) and all(
                         isinstance(x, str) for x in status_lines
                     ):
-                        kind = "changes"
-                        visual = _preview_changed_files(status_lines)
+                        if _is_porcelain_status_list(status_lines):
+                            kind = "changes"
+                            visual = _preview_changed_files(status_lines)
+                        else:
+                            kind = "files"
+                            visual = _preview_file_list(status_lines)
+
+                # 2b) Search hits
+                if not visual and isinstance(result, Mapping) and tool_name == "search_workspace":
+                    hits = result.get("results")
+                    if isinstance(hits, list):
+                        kind = "search"
+                        visual = _preview_search_hits(
+                            [x for x in hits if isinstance(x, Mapping)]  # type: ignore[list-item]
+                        )
+
+                # 2c) Render endpoints
+                if not visual and isinstance(result, Mapping) and (
+                    tool_name.startswith("list_render_")
+                    or tool_name.startswith("render_list_")
+                    or tool_name.startswith("render_get_")
+                    or tool_name.startswith("get_render_")
+                ):
+                    body = result.get("json") if "json" in result else result
+                    items = _render_extract_list(body)
+                    if isinstance(items, list):
+                        kind = "render"
+                        if tool_name.endswith("_logs"):
+                            visual = _preview_render_logs(items)
+                        else:
+                            visual = _preview_json_objects(items, header="render")
 
                 # 3) File reads (show which file + a snippet)
                 if (
@@ -1162,11 +1468,19 @@ def _log_tool_success(
                     and isinstance(result.get("path"), str)
                     and isinstance(result.get("text"), str)
                 ):
+                    start_line = 1
+                    if isinstance(result.get("start_line"), int):
+                        start_line = int(result.get("start_line"))
+                    elif isinstance(result.get("__log_start_line"), int):
+                        start_line = int(result.get("__log_start_line"))
+
                     # Only preview on read tools to avoid echoing writes unless explicitly enabled.
                     if not bool(write_action):
                         kind = "read"
                         visual = _preview_file_snippet(
-                            str(result.get("path") or ""), str(result.get("text") or "")
+                            str(result.get("path") or ""),
+                            str(result.get("text") or ""),
+                            start_line=start_line,
                         )
 
                 # 4) terminal_command output preview (stdout/stderr)
@@ -1626,7 +1940,7 @@ def mcp_tool(
                 )
                 if isinstance(result, Mapping):
                     # Return tool payload as-is; do not inject UI-only fields.
-                    return dict(result)
+                    return _strip_internal_log_fields(result)
                 return result
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -1806,7 +2120,7 @@ def mcp_tool(
             )
             if isinstance(result, Mapping):
                 # Return tool payload as-is; do not inject UI-only fields.
-                return dict(result)
+                return _strip_internal_log_fields(result)
             return result
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(

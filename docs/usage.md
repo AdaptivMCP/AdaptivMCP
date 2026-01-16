@@ -207,6 +207,34 @@ These flags control provider-side logs (for example, Render logs). They leave to
 - LOG_HTTP_BODIES (default: false) — when enabled, logs the POST /messages body (no truncation). This may include sensitive payloads.
 - LOG_TOOL_CALLS (default: true) — logs tool_call_started/tool_call_completed lines to provider logs. Failures are still logged as warnings.
 
+Visual tool previews
+~~~~~~~~~~~~~~~~~~~~
+
+When `HUMAN_LOGS` and `LOG_TOOL_CALLS` are enabled, the server can additionally emit user-facing, color-coordinated previews of common tool payloads into provider logs (for example, Render logs). These previews are intended to be scan-friendly and resemble editor-style output.
+
+Key properties:
+
+- Tool outputs returned to clients are unchanged.
+- Previews are written to provider logs only.
+- File snippets and diffs include line numbers that correspond to the underlying file (or unified diff hunk headers).
+
+Controls:
+
+- GITHUB_MCP_LOG_VISUALS (default: true) — enable/disable visual previews.
+- GITHUB_MCP_LOG_COLOR (default: true) — enable/disable ANSI color + syntax highlighting.
+- GITHUB_MCP_LOG_STYLE (default: monokai) — Pygments style for syntax highlighting.
+- GITHUB_MCP_LOG_READ_SNIPPETS (default: true) — allow previews for read operations (file snippets, search hits, listings).
+- GITHUB_MCP_LOG_DIFF_SNIPPETS (default: true) — allow previews for unified diffs (patches and write diffs).
+
+Write diffs (workspace tools)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Workspace write tools can attach a best-effort unified diff to provider logs so that file mutations (replace/edit/patch) are visually reviewable.
+
+- GITHUB_MCP_LOG_WRITE_DIFFS (default: true) — compute and log write diffs (provider logs only).
+- GITHUB_MCP_LOG_WRITE_DIFFS_MAX_CHARS (default: 120000) — cap diff size; larger diffs are truncated.
+- GITHUB_MCP_LOG_WRITE_DIFFS_MAX_FILE_CHARS (default: 250000) — skip diff generation for very large files.
+
 HTTP exception logging
 ~~~~~~~~~~~~~~~~~~~~~~
 
