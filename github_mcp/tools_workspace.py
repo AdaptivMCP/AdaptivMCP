@@ -81,6 +81,7 @@ _workspace_safe_join = _fs._workspace_safe_join
 _workspace_read_text = _fs._workspace_read_text
 _workspace_write_text = _fs._workspace_write_text
 get_workspace_file_contents = _fs.get_workspace_file_contents
+get_workspace_files_contents = _fs.get_workspace_files_contents
 set_workspace_file_contents = _fs.set_workspace_file_contents
 edit_workspace_text_range = _fs.edit_workspace_text_range
 edit_workspace_line = _fs.edit_workspace_line
@@ -89,6 +90,7 @@ apply_patch = _fs.apply_patch
 delete_workspace_paths = _fs.delete_workspace_paths
 move_workspace_paths = _fs.move_workspace_paths
 apply_workspace_operations = _fs.apply_workspace_operations
+compare_workspace_files = _fs.compare_workspace_files
 
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace
@@ -133,6 +135,7 @@ __all__ = [
     "_resolve_ref",
     "ensure_workspace_clone",
     "get_workspace_file_contents",
+    "get_workspace_files_contents",
     "set_workspace_file_contents",
     "edit_workspace_text_range",
     "edit_workspace_line",
@@ -141,6 +144,7 @@ __all__ = [
     "delete_workspace_paths",
     "move_workspace_paths",
     "apply_workspace_operations",
+    "compare_workspace_files",
     "list_workspace_files",
     "search_workspace",
     "render_shell",
