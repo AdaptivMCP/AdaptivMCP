@@ -18,6 +18,48 @@ _UUID_RE = re.compile(
 )
 
 
+# Render and similar log UIs often do not preserve indentation across multi-line
+# log messages (only the first line is prefixed with level/logger metadata).
+#
+# We re-indent subsequent lines under the start of the formatted message so tool
+# visuals, tracebacks, and other multi-line logs remain scannable.
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(value: str) -> str:
+    if not value:
+        return value
+    return _ANSI_ESCAPE_RE.sub("", value)
+
+
+def _indent_multiline_log(base: str, record: logging.LogRecord) -> str:
+    if not base or "\n" not in base:
+        return base
+
+    lines = base.splitlines()
+    if len(lines) <= 1:
+        return base
+
+    # Determine the column where the message begins on the first line so
+    # subsequent lines can align under it.
+    first_line = lines[0]
+    msg = record.getMessage() or ""
+    msg_first = msg.splitlines()[0] if msg else ""
+
+    plain_first = _strip_ansi(first_line)
+    plain_msg_first = _strip_ansi(msg_first)
+
+    idx = plain_first.find(plain_msg_first) if plain_msg_first else -1
+    if idx < 0:
+        # Fallback: indent under the last delimiter, preserving common formats
+        # like "LEVEL | logger | message".
+        delim_idx = plain_first.rfind(" | ")
+        idx = (delim_idx + 3) if delim_idx >= 0 else 0
+
+    indent = " " * max(0, idx)
+    return "\n".join([lines[0], *[indent + line for line in lines[1:]]])
+
+
 def shorten_token(value: object, *, head: int = 8, tail: int = 4) -> object:
     """Return value unchanged.
 
@@ -463,6 +505,7 @@ class _StructuredFormatter(logging.Formatter):
                 record.name = name
 
             base = super().format(record)
+            base = _indent_multiline_log(base, record)
         finally:
             record.levelname = original_levelname
             record.name = original_name
@@ -495,6 +538,10 @@ class _StructuredFormatter(logging.Formatter):
                     sort_keys=True,
                     separators=(",", ":"),
                 )
+                if "\n" in base:
+                    lines = base.splitlines()
+                    lines[0] = f"{lines[0]} | data={extra_json}"
+                    return "\n".join(lines)
                 return f"{base} | data={extra_json}"
         return base
 
