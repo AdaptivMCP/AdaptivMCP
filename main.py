@@ -814,6 +814,15 @@ async def restart_render_service(service_id: str) -> Dict[str, Any]:
     return await _impl(service_id=service_id)
 
 
+@mcp_tool(write_action=True)
+async def create_render_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new Render service."""
+
+    from github_mcp.main_tools.render import create_render_service as _impl
+
+    return await _impl(service_spec=service_spec)
+
+
 @mcp_tool(write_action=False)
 async def get_render_logs(
     resource_type: str,
@@ -949,6 +958,11 @@ async def render_rollback_deploy(service_id: str, deploy_id: str) -> Dict[str, A
 @mcp_tool(write_action=True, name="render_restart_service")
 async def render_restart_service(service_id: str) -> Dict[str, Any]:
     return await restart_render_service(service_id=service_id)
+
+
+@mcp_tool(write_action=True, name="render_create_service")
+async def render_create_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
+    return await create_render_service(service_spec=service_spec)
 
 
 @mcp_tool(write_action=False, name="render_get_logs")

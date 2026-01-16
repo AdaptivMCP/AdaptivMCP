@@ -40,6 +40,12 @@ def _require_non_empty_str(name: str, value: Any) -> str:
     return value.strip()
 
 
+def _require_non_empty_dict(name: str, value: Any) -> Dict[str, Any]:
+    if not isinstance(value, dict) or not value:
+        raise ValueError(f"{name} must be a non-empty object")
+    return value
+
+
 def _normalize_optional_str(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
@@ -262,6 +268,21 @@ async def restart_render_service(service_id: str) -> Dict[str, Any]:
     return await render_request("POST", f"/services/{service_id}/restart")
 
 
+async def create_render_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new Render service.
+
+    Render service creation supports multiple service types and payload shapes.
+    To keep the MCP surface durable, this tool accepts a "service_spec" object
+    and forwards it directly to Render's POST /services endpoint.
+
+    The payload is passed through as-is; this function only validates that it
+    is a non-empty JSON object.
+    """
+
+    body = _require_non_empty_dict("service_spec", service_spec)
+    return await render_request("POST", "/services", json_body=body)
+
+
 async def list_render_logs(
     owner_id: str,
     resources: List[str],
@@ -411,6 +432,7 @@ async def get_render_logs(
 __all__ = [
     "cancel_render_deploy",
     "create_render_deploy",
+    "create_render_service",
     "get_render_deploy",
     "get_render_logs",
     "get_render_service",

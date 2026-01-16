@@ -688,14 +688,14 @@ async def compare_workspace_files(
                     if not isinstance(right_path, str) or not right_path.strip():
                         raise ValueError("right_path must be a non-empty string")
 
-                    l = _git_show_text(repo_dir, left_ref, left_path)
-                    r = _git_show_text(repo_dir, right_ref, right_path)
-                    if not l.get("exists"):
+                    left_info = _git_show_text(repo_dir, left_ref, left_path)
+                    right_info = _git_show_text(repo_dir, right_ref, right_path)
+                    if not left_info.get("exists"):
                         raise FileNotFoundError(f"missing at {left_ref}:{left_path}")
-                    if not r.get("exists"):
+                    if not right_info.get("exists"):
                         raise FileNotFoundError(f"missing at {right_ref}:{right_path}")
-                    left_text = (l.get("text") or "")
-                    right_text = (r.get("text") or "")
+                    left_text = (left_info.get("text") or "")
+                    right_text = (right_info.get("text") or "")
                     fromfile = f"a/{left_path} ({_sanitize_git_ref(left_ref)})"
                     tofile = f"b/{right_path} ({_sanitize_git_ref(right_ref)})"
                     partial = False
@@ -705,17 +705,21 @@ async def compare_workspace_files(
                         raise ValueError("left_path must be a non-empty string")
                     if not isinstance(right_path, str) or not right_path.strip():
                         raise ValueError("right_path must be a non-empty string")
-                    l = _workspace_read_text_limited(repo_dir, left_path, max_chars=max_chars_per_side)
-                    r = _workspace_read_text_limited(repo_dir, right_path, max_chars=max_chars_per_side)
-                    if not l.get("exists"):
+                    left_info = _workspace_read_text_limited(
+                        repo_dir, left_path, max_chars=max_chars_per_side
+                    )
+                    right_info = _workspace_read_text_limited(
+                        repo_dir, right_path, max_chars=max_chars_per_side
+                    )
+                    if not left_info.get("exists"):
                         raise FileNotFoundError(left_path)
-                    if not r.get("exists"):
+                    if not right_info.get("exists"):
                         raise FileNotFoundError(right_path)
-                    left_text = (l.get("text") or "")
-                    right_text = (r.get("text") or "")
+                    left_text = (left_info.get("text") or "")
+                    right_text = (right_info.get("text") or "")
                     fromfile = f"a/{left_path}"
                     tofile = f"b/{right_path}"
-                    partial = bool(l.get("truncated")) or bool(r.get("truncated"))
+                    partial = bool(left_info.get("truncated")) or bool(right_info.get("truncated"))
 
                 diff_full = build_unified_diff(
                     left_text,
