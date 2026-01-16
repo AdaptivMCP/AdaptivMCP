@@ -2059,11 +2059,16 @@ def _register_with_fastmcp(
         if style in {"factory", "unknown"}:
             try:
                 decorator = mcp.tool(**kw2)
-                # decorator should be callable; if it's already a tool object, keep it.
-                if callable(decorator) and not hasattr(decorator, "name"):
-                    tool_obj = decorator(fn)
+                # FastMCP variants sometimes return a callable decorator object that already
+                # has `.name` (and other metadata). In that case we STILL need to invoke it
+                # with `fn` to actually register the tool.
+                if callable(decorator):
+                    try:
+                        tool_obj = decorator(fn)
+                    except TypeError:
+                        # If it is not a decorator factory, treat it as an already-registered tool.
+                        tool_obj = decorator
                 else:
-                    # Some implementations may return a Tool-like object directly.
                     tool_obj = decorator
                 break
             except TypeError as exc:
