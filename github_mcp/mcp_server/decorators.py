@@ -182,15 +182,26 @@ _TOOL_FRIENDLY_NAMES: dict[str, str] = {
     "workspace_create_branch": "Create branch",
     "workspace_delete_branch": "Delete branch",
     "commit_workspace": "Commit changes",
+    "commit_workspace_files": "Commit selected files",
+    "get_workspace_changes_summary": "Workspace changes",
+    "build_pr_summary": "Build PR summary",
+    "commit_and_open_pr_from_workspace": "Commit and open PR",
     "open_pr_for_existing_branch": "Open pull request",
     "apply_patch": "Apply patch",
     "get_workspace_file_contents": "Read file",
     "set_workspace_file_contents": "Write file",
+    "edit_workspace_text_range": "Edit text range",
+    "edit_workspace_line": "Edit line",
+    "replace_workspace_text": "Replace text",
     "delete_workspace_paths": "Delete paths",
     "list_workspace_files": "List files",
     "search_workspace": "Search workspace",
     "terminal_command": "Run command",
     "render_shell": "Run shell",
+    "workspace_self_heal_branch": "Self-heal branch",
+    "workspace_sync_status": "Workspace sync status",
+    "workspace_sync_to_remote": "Sync to remote",
+    "workspace_sync_bidirectional": "Bidirectional sync",
     "run_quality_suite": "Quality suite",
     "run_lint_suite": "Lint suite",
     "run_tests": "Test suite",
@@ -233,13 +244,52 @@ def _friendly_arg_bits(all_args: Mapping[str, Any]) -> list[str]:
     if isinstance(title, str) and title.strip():
         bits.append(f'"{title.strip()}"')
 
-    base = all_args.get("base")
-    head = all_args.get("head") or all_args.get("branch")
+    base = all_args.get("base") or all_args.get("base_ref")
+    head = all_args.get("head") or all_args.get("branch") or all_args.get("new_branch")
     if isinstance(head, str) and head:
         if isinstance(base, str) and base:
             bits.append(f"{head} -> {base}")
         else:
             bits.append(head)
+
+    # File list variants (commit_workspace_files)
+    files = all_args.get("files")
+    if isinstance(files, list) and files and all(isinstance(p, str) for p in files):
+        show = files[:3]
+        tail = f" (+{len(files) - len(show)} more)" if len(files) > len(show) else ""
+        bits.append(", ".join(show) + tail)
+
+    # Common edit parameters.
+    operation = all_args.get("operation")
+    if isinstance(operation, str) and operation:
+        bits.append(operation)
+    line_number = all_args.get("line_number")
+    if isinstance(line_number, int) and line_number > 0:
+        bits.append(f"L{line_number}")
+    start_line = all_args.get("start_line")
+    end_line = all_args.get("end_line")
+    if isinstance(start_line, int) and isinstance(end_line, int):
+        start_col = all_args.get("start_col")
+        end_col = all_args.get("end_col")
+        if isinstance(start_col, int) and isinstance(end_col, int):
+            bits.append(f"{start_line}:{start_col}-{end_line}:{end_col}")
+        else:
+            bits.append(f"{start_line}-{end_line}")
+
+    # Search / listing.
+    path_prefix = all_args.get("path_prefix")
+    if isinstance(path_prefix, str) and path_prefix.strip():
+        bits.append(f"prefix={path_prefix.strip()}")
+
+    # Flags (only show when True to reduce noise).
+    for key in ("draft", "run_quality", "replace_all", "discard_local_changes"):
+        val = all_args.get(key)
+        if val is True:
+            bits.append(f"{key}=true")
+
+    occurrence = all_args.get("occurrence")
+    if isinstance(occurrence, int) and occurrence > 1:
+        bits.append(f"occurrence={occurrence}")
 
     cmd = all_args.get("command")
     if isinstance(cmd, str) and cmd.strip():
