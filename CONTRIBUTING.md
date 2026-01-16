@@ -8,7 +8,9 @@ Principle: the Python code is the source of truth. Documentation and tests must 
 
 1) Create a virtualenv and install dependencies
 
-- `make install-dev`
+- `make bootstrap` (or `python scripts/bootstrap.py`)
+
+If you prefer manual steps, you can still run `make install-dev` after creating your own virtualenv.
 
 2) Run the server
 

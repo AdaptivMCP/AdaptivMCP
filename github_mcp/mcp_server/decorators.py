@@ -1525,7 +1525,6 @@ def _result_snapshot(result: Any) -> dict[str, Any]:
     return {"type": type(result).__name__, "value": _truncate_text(result, limit=180)}
 
 
-
 def _friendly_result_bits(snapshot: Mapping[str, Any] | None) -> list[str]:
     """Convert a result snapshot into short, user-facing bits for RES lines."""
 

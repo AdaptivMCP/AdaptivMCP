@@ -45,7 +45,7 @@ def test_preview_file_snippet_respects_start_line() -> None:
         GITHUB_MCP_LOG_READ_SNIPPETS="1",
     )
 
-    text = "a\n" "b\n" "c\n"
+    text = "a\nb\nc\n"
     rendered = decorators._preview_file_snippet("example.py", text, start_line=10)
     assert "  10│" in rendered
     assert "  11│" in rendered

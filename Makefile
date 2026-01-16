@@ -1,4 +1,7 @@
-.PHONY: install install-dev format format-check lint typecheck security test precommit rg-shell
+.PHONY: bootstrap install install-dev format format-check lint typecheck security test precommit rg-shell
+
+bootstrap:
+	python scripts/bootstrap.py --deps dev
 
 install:
 	python -m pip install -r requirements.txt

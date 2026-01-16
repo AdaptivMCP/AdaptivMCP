@@ -165,7 +165,12 @@ def _refresh_async_client(
 def _render_client_instance() -> "httpx.AsyncClient":
     """Singleton async client for Render API requests."""
 
-    global _http_client_render, _http_client_render_loop, _http_client_render_token, _http_client_render_base, _render_api_version_prefix
+    global \
+        _http_client_render, \
+        _http_client_render_loop, \
+        _http_client_render_token, \
+        _http_client_render_base, \
+        _render_api_version_prefix
 
     current_token = _get_optional_render_token()
     token_changed = current_token != _http_client_render_token

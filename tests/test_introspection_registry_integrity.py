@@ -32,9 +32,9 @@ def test_list_all_actions_registry_has_no_duplicates_and_callables() -> None:
             registered_names.append(name)
 
     assert registered_names, "Expected at least one registered tool"
-    assert len(registered_names) == len(
-        set(registered_names)
-    ), "Duplicate tool names detected in registry"
+    assert len(registered_names) == len(set(registered_names)), (
+        "Duplicate tool names detected in registry"
+    )
 
     catalog = introspection.list_all_actions(include_parameters=False, compact=True)
     catalog_names = [t.get("name") for t in catalog.get("tools", [])]
@@ -72,9 +72,9 @@ def test_describe_tool_dedupes_requested_names_and_round_trips() -> None:
     assert described_names == [sample[0], sample[-1]]
 
     for tool in described.get("tools", []) or []:
-        assert (
-            "input_schema" in tool
-        ), "describe_tool(include_parameters=True) should return input_schema"
+        assert "input_schema" in tool, (
+            "describe_tool(include_parameters=True) should return input_schema"
+        )
 
 
 def test_list_all_actions_deduplicates_duplicate_registry_entries(monkeypatch) -> None:

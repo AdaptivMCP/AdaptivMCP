@@ -134,9 +134,7 @@ from github_mcp.mcp_server.context import get_request_context  # noqa: E402
 _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
     weakref.WeakKeyDictionary()
 )
-_search_rate_limit_states: (
-    "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, Dict[str, Any]]"
-) = weakref.WeakKeyDictionary()
+_search_rate_limit_states: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, Dict[str, Any]]" = weakref.WeakKeyDictionary()
 _http_client_github: Optional[httpx.AsyncClient] = None
 _http_client_github_loop: Optional[asyncio.AbstractEventLoop] = None
 _http_client_github_token: Optional[str] = None
