@@ -197,7 +197,8 @@ Transport security (trusted hosts)
 These flags control provider-side logs (for example, Render logs). They leave tool outputs unchanged.
 
 Provider logs are human-facing by default. This server avoids emitting raw JSON blobs in log lines.
-Structured context (request IDs, tool metadata, etc.) is appended as a YAML-like block when enabled.
+Tool calls are logged as compact request/response snapshots (REQ/RES) suitable for Render-style log viewers.
+Multi-line structured context blocks are reserved for warnings/errors and visual previews (or when explicitly enabled).
 
 - QUIET_LOGS (default: false) — suppresses most non-error logs.
 - HUMAN_LOGS (default: true) — emits scan-friendly tool call log lines with correlation fields.
@@ -208,8 +209,11 @@ Structured context (request IDs, tool metadata, etc.) is appended as a YAML-like
 - LOG_RENDER_HTTP_BODIES (default: false) — includes full Render response bodies/headers in provider logs.
 - LOG_HTTP_REQUESTS (default: true) — logs inbound HTTP requests to the ASGI server (method/path/status/duration) with request_id.
 - LOG_HTTP_BODIES (default: false) — when enabled, logs the POST /messages body (no truncation). This may include sensitive payloads.
-- LOG_TOOL_CALLS (default: true) — logs tool_call_started/tool_call_completed lines to provider logs. Failures are still logged as warnings.
-- LOG_APPEND_EXTRAS (default: true when HUMAN_LOGS=true; else false) — append a YAML-like `extras:` block to provider log lines for tool events and warnings/errors.
+- LOG_TOOL_CALLS (default: true) — logs tool call snapshot lines to provider logs (REQ/RES). Failures are logged as warnings.
+- GITHUB_MCP_LOG_SNAPSHOTS (default: true) — emit a request snapshot (REQ) and a response snapshot (RES) per tool call.
+- GITHUB_MCP_LOG_VERBOSE_EXTRAS (default: false) — include deeper diagnostic fields in provider log extras (schema metadata, etc.).
+- GITHUB_MCP_LOG_IDS (default: false) — include correlation IDs (call_id) in the REQ/RES message strings.
+- LOG_APPEND_EXTRAS (default: true when HUMAN_LOGS=true; else false) — append a YAML-like `extras:` block to provider log lines for warnings/errors and visual previews.
 - LOG_EXTRAS_MAX_LINES (default: 200) — max number of lines appended in the `extras:` block.
 - LOG_EXTRAS_MAX_CHARS (default: 20000) — max total characters appended in the `extras:` block.
 
