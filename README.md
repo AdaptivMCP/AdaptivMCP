@@ -101,4 +101,4 @@ The server exposes:
 ## Documentation
 
 - [Usage guide](docs/usage.md) — current functionality, behavior, configuration, and usage patterns.
-- [Detailed tools reference](Detailed_Tools.md) — tool catalog grouped by function.
+- [Detailed tools reference](Detailed_Tools.md) — generated tool catalog. If you change the tool surface or schemas, regenerate it with `python scripts/generate_detailed_tools.py`. CI enforces that the generated file is up to date.

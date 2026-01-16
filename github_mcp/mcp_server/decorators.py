@@ -59,6 +59,20 @@ from github_mcp.mcp_server.schemas import (
 LOGGER = BASE_LOGGER.getChild("mcp")
 
 
+@functools.lru_cache(maxsize=1024)
+def _tool_logger(tool_name: str):
+    """Return a per-tool logger.
+
+    Many log sinks make filtering easiest when logger names are stable and
+    specific. Using a dedicated logger per tool enables targeted filtering
+    without suppressing other tool telemetry.
+    """
+
+    raw = str(tool_name or "tool").strip() or "tool"
+    safe = "".join(ch if (ch.isalnum() or ch in "._-") else "_" for ch in raw)
+    return BASE_LOGGER.getChild(f"mcp.tool.{safe}")
+
+
 def _env_flag(name: str, *, default: bool = False) -> bool:
     raw = os.environ.get(name)
     if raw is None:
@@ -466,7 +480,7 @@ def _log_tool_visual(
     )
     if kv:
         header = header + " " + kv
-    LOGGER.info(
+    _tool_logger(tool_name).info(
         f"{header}\n{visual}",
         extra={
             "event": "tool_visual",
@@ -1018,7 +1032,7 @@ def _log_tool_start(
     msg = f"{prefix}{suffix}"
     if LOG_TOOL_LOG_IDS:
         msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
-    LOGGER.info(msg, extra={"event": "tool_call_started", **payload})
+    _tool_logger(tool_name).info(msg, extra={"event": "tool_call_started", **payload})
 
 
 def _log_tool_success(
@@ -1069,7 +1083,7 @@ def _log_tool_success(
         msg = f"{prefix} {ms}{suffix}"
         if LOG_TOOL_LOG_IDS:
             msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
-        LOGGER.info(msg, extra={"event": "tool_call_completed", **payload})
+        _tool_logger(tool_name).info(msg, extra={"event": "tool_call_completed", **payload})
 
         # Optional developer-facing visuals for common workflows.
         # These are emitted as a second log entry so dashboards can filter on
@@ -1144,7 +1158,10 @@ def _log_tool_success(
             kv_map["call_id"] = shorten_token(call_id)
         line = _format_log_kv(kv_map)
         prefix = _ansi("✓", ANSI_GREEN) + " " + _ansi(tool_name, ANSI_CYAN)
-        LOGGER.info(f"{prefix} {line}", extra={"event": "tool_call_completed", **payload})
+        _tool_logger(tool_name).info(
+            f"{prefix} {line}",
+            extra={"event": "tool_call_completed", **payload},
+        )
 
 
 def _log_tool_failure(
@@ -1212,7 +1229,7 @@ def _log_tool_failure(
         )
     line = _format_log_kv(kv_map)
     prefix = _ansi("✗", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
-    LOGGER.warning(
+    _tool_logger(tool_name).warning(
         f"{prefix} {line}",
         extra={"event": "tool_call_failed", **payload},
         exc_info=exc,

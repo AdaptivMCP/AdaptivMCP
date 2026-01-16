@@ -31,10 +31,11 @@ uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
 If you add/remove tools or change tool signatures, regenerate it:
 
 ```bash
-python scripts/generate_detailed_tools.py > Detailed_Tools.md
+python scripts/generate_detailed_tools.py
 ```
 
-Then commit the updated file alongside code changes.
+Then commit the updated file alongside code changes. CI enforces that the generated
+catalog is up to date.
 
 ### Updating usage and safety docs
 

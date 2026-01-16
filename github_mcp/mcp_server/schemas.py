@@ -356,6 +356,49 @@ def _title_from_tool_name(name: str) -> str:
     return " ".join(p[:1].upper() + p[1:] for p in parts)
 
 
+def _normalize_docstring_text(text: str) -> str:
+    """Normalize tool docstrings for presentation.
+
+    This is a conservative formatting pass intended to improve consistency in
+    generated tool catalogs and docs without rewriting author intent.
+
+    Rules:
+      - Trim leading/trailing whitespace.
+      - Ensure the first non-empty line starts with a capital letter when it
+        begins with an ASCII letter.
+      - Ensure the first non-empty line ends with terminal punctuation.
+    """
+
+    doc = (text or "").strip()
+    if not doc:
+        return ""
+
+    lines = [ln.rstrip() for ln in doc.splitlines()]
+    # Preserve internal blank lines while normalizing trailing whitespace.
+    doc = "\n".join(lines).strip()
+
+    # Normalize the first non-empty line.
+    parts = doc.splitlines()
+    first_idx = None
+    for i, ln in enumerate(parts):
+        if ln.strip():
+            first_idx = i
+            break
+    if first_idx is None:
+        return doc
+
+    first = parts[first_idx].strip()
+    if first:
+        ch0 = first[0]
+        if "a" <= ch0 <= "z":
+            first = ch0.upper() + first[1:]
+        if first[-1] not in (".", "!", "?", ":"):
+            first = first + "."
+        parts[first_idx] = first
+
+    return "\n".join(parts).strip()
+
+
 def _normalize_tool_description(
     func: Any,
     signature: Optional[inspect.Signature],
@@ -363,7 +406,7 @@ def _normalize_tool_description(
     llm_level: str = "basic",
 ) -> str:
     # Prefer docstring; fall back to signature-based description.
-    doc = (inspect.getdoc(func) or "").strip()
+    doc = _normalize_docstring_text(inspect.getdoc(func) or "")
     if doc:
         return doc
 
@@ -377,7 +420,7 @@ def _normalize_tool_description(
     if sig:
         base += f" Signature: {getattr(func, '__name__', 'tool')}{sig}."
     base += f" LLM level: {llm_level}."
-    return base
+    return _normalize_docstring_text(base)
 
 
 def _build_tool_docstring(
