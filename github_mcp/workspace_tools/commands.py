@@ -2,6 +2,7 @@
 import asyncio
 import os
 import shlex
+import uuid
 from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
@@ -302,6 +303,146 @@ async def terminal_command(
         return _structured_tool_error(
             exc, context="terminal_command", tool_surface="terminal_command"
         )
+
+
+def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
+    """Return a repo-relative, safe path.
+
+    Prevent absolute paths and path traversal outside the repo mirror.
+    """
+
+    if not isinstance(path, str):
+        raise ValueError("path must be a string")
+    normalized = path.strip().replace("\\", "/")
+    if not normalized:
+        raise ValueError("path must be non-empty")
+    if normalized.startswith("/"):
+        raise ValueError("path must be repo-relative")
+    candidate = os.path.realpath(os.path.join(repo_dir, normalized))
+    repo_real = os.path.realpath(repo_dir)
+    if candidate == repo_real or not candidate.startswith(repo_real + os.sep):
+        raise ValueError("path must resolve inside the repo mirror")
+    return normalized
+
+
+@mcp_tool(write_action=True)
+async def run_python(
+    full_name: str,
+    ref: str = "main",
+    script: str = "",
+    filename: Optional[str] = None,
+    args: Optional[list[str]] = None,
+    timeout_seconds: float = 300,
+    workdir: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+    cleanup: bool = True,
+) -> Dict[str, Any]:
+    """Run an inline Python script inside the repo mirror.
+
+    The script content is written to a file within the workspace mirror and executed.
+    The tool exists to support multi-line scripts without relying on shell-special syntax.
+    """
+
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
+
+    if not isinstance(script, str) or not script.strip():
+        raise ValueError("script must be a non-empty string")
+
+    if args is not None:
+        if not isinstance(args, list) or any(not isinstance(a, str) for a in args):
+            raise ValueError("args must be a list[str]")
+
+    env: Optional[Dict[str, str]] = None
+
+    try:
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        if use_temp_venv:
+            env = await deps["prepare_temp_virtualenv"](repo_dir)
+
+        cwd = _resolve_workdir(repo_dir, workdir)
+
+        rel_path = (
+            filename.strip() if isinstance(filename, str) and filename.strip() else None
+        )
+        if rel_path is None:
+            rel_path = f".mcp_tmp/run_python_{uuid.uuid4().hex}.py"
+
+        rel_path = _safe_repo_relative_path(repo_dir, rel_path)
+        abs_path = os.path.realpath(os.path.join(repo_dir, rel_path))
+        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        with open(abs_path, "w", encoding="utf-8") as handle:
+            handle.write(script)
+
+        install_result = None
+        install_steps: list[Dict[str, Any]] = []
+        if installing_dependencies and use_temp_venv:
+            install_cmd = "python -m pip install -r dev-requirements.txt"
+            install_result = await deps["run_shell"](
+                install_cmd,
+                cwd=cwd,
+                timeout_seconds=max(600, timeout_seconds),
+                env=env,
+            )
+            install_steps.append({"command": install_cmd, "result": install_result})
+            if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
+                i_stderr = install_result.get("stderr") or ""
+                i_stdout = install_result.get("stdout") or ""
+                raise GitHubAPIError(
+                    "Dependency installation failed: "
+                    + (i_stderr.strip() or i_stdout.strip())
+                )
+
+        cmd = "python " + shlex.quote(rel_path)
+        if args:
+            cmd += " " + " ".join(shlex.quote(a) for a in args)
+
+        result = await deps["run_shell"](
+            cmd,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            env=env,
+        )
+
+        return {
+            "workdir": cwd,
+            "ref": effective_ref,
+            "script_path": rel_path,
+            "command": cmd,
+            "install": install_result,
+            "install_steps": install_steps,
+            "result": result,
+        }
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        return _structured_tool_error(exc, context="run_python", tool_surface="run_python")
+    finally:
+        if cleanup:
+            try:
+                deps = _tw()._workspace_deps()
+                effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+                repo_dir = await deps["clone_repo"](
+                    full_name, ref=effective_ref, preserve_changes=True
+                )
+                rel_path2 = (
+                    filename.strip()
+                    if isinstance(filename, str) and filename.strip()
+                    else None
+                )
+                if rel_path2 is None:
+                    # Only auto-cleanup when we created the file.
+                    pass
+                else:
+                    rel_path2 = _safe_repo_relative_path(repo_dir, rel_path2)
+                    abs_path2 = os.path.realpath(os.path.join(repo_dir, rel_path2))
+                    if os.path.isfile(abs_path2):
+                        os.remove(abs_path2)
+            except Exception:
+                # Best-effort cleanup.
+                pass
 
 
 # NOTE: The legacy tool name `run_command` has been removed.
