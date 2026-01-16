@@ -4,13 +4,14 @@ import uuid
 from github_mcp.mcp_server import decorators
 
 
-def test_async_dedupe_cancellation_is_not_cached():
-    """Regression: Cancelled work must not poison the async dedupe cache.
+def test_async_dedupe_cancellation_does_not_cancel_shared_work():
+    """Regression: caller cancellation must not abort shared deduped work.
 
-    Expected behavior:
-    - A cancelled call raises asyncio.CancelledError.
-    - The dedupe cache entry is removed.
-    - A subsequent call with the same key executes normally.
+    Hosted MCP deployments can see upstream disconnects mid-workflow. In that
+    situation, the server should:
+    - propagate asyncio.CancelledError to the *caller*,
+    - but keep the shared in-flight work running,
+    - so a subsequent retry with the same dedupe key can reuse the result.
     """
 
     key = f"dedupe-cancel-{uuid.uuid4()}"
@@ -22,12 +23,14 @@ def test_async_dedupe_cancellation_is_not_cached():
 
         async def _scenario() -> tuple[str, int]:
             started = asyncio.Event()
+            proceed = asyncio.Event()
 
             async def _work_cancelled() -> str:
                 counter["calls"] += 1
                 started.set()
-                # Ensure we are cancellable while awaiting.
-                await asyncio.sleep(60)
+                # Block until the test allows completion. This avoids long
+                # sleeps while still ensuring the work is in-flight.
+                await proceed.wait()
                 return "unreachable"
 
             task = asyncio.create_task(
@@ -41,6 +44,9 @@ def test_async_dedupe_cancellation_is_not_cached():
             except asyncio.CancelledError:
                 pass
 
+            # Allow the shared work to finish.
+            proceed.set()
+
             async def _work_ok() -> str:
                 counter["calls"] += 1
                 return "ok"
@@ -53,8 +59,9 @@ def test_async_dedupe_cancellation_is_not_cached():
         loop.close()
         asyncio.set_event_loop(None)
 
-    assert result == "ok"
-    assert calls == 2
+    # The retry should reuse the original in-flight work (and not execute _work_ok).
+    assert result == "unreachable"
+    assert calls == 1
 
 
 def test_mcp_tool_cancellation_propagates():
