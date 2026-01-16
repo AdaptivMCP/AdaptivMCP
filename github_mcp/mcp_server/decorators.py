@@ -1106,7 +1106,7 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
 # Compatibility: dedupe helpers used by tests
 # -----------------------------------------------------------------------------
 
-# Async dedupe cache is scoped per loop so futures are never shared across loops.
+# Async dedupe cache is scoped per loop so futures/tasks are never shared across loops.
 _DEDUPE_LOCKS: Dict[int, asyncio.Lock] = {}
 _DEDUPE_ASYNC_CACHE: Dict[Tuple[int, str], Tuple[float, asyncio.Future]] = {}
 
@@ -1132,9 +1132,19 @@ def _get_async_lock(loop: asyncio.AbstractEventLoop) -> asyncio.Lock:
 async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> Any:
     """Coalesce identical work within an event loop for ttl_s seconds.
 
-    - First call creates a Future and runs work.
-    - Subsequent calls within TTL await the cached Future (even if already done).
-    - Failures are not cached; cache entry is removed immediately on exception.
+    This function exists to prevent duplicate tool executions when the upstream
+    client retries an identical call (common during long-running workflows).
+
+    Semantics:
+    - First call creates a Task and runs work.
+    - Subsequent calls while the Task is still running await the same Task.
+    - Successful results are cached for ttl_s seconds after completion.
+    - Failures are not cached; the cache entry is removed on completion.
+
+    Important: if an awaiting caller is cancelled (e.g. upstream disconnect), we
+    propagate asyncio.CancelledError to that caller but we do NOT cancel the
+    shared Task. A later retry with the same dedupe key can await the in-flight
+    work instead of restarting mid-workflow.
     """
     ttl_s = max(0.0, float(ttl_s))
     now = time.time()
@@ -1146,46 +1156,73 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
 
     async with lock:
         # Opportunistic cleanup for this loop.
-        expired = [k for k, (exp, _) in _DEDUPE_ASYNC_CACHE.items() if k[0] == lid and exp < now]
+        # Only expire entries whose underlying work is done.
+        expired = [
+            k
+            for k, (exp, fut) in _DEDUPE_ASYNC_CACHE.items()
+            if k[0] == lid and exp < now and getattr(fut, "done", lambda: True)()
+        ]
         for k in expired:
             _DEDUPE_ASYNC_CACHE.pop(k, None)
 
         item = _DEDUPE_ASYNC_CACHE.get(cache_key)
         if item is not None:
             expires_at, fut = item
-            if expires_at >= now:
-                return await fut
-            _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
+            try:
+                if fut.cancelled():
+                    _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
+                elif not fut.done():
+                    # Shield prevents request cancellation from cancelling the shared task.
+                    return await asyncio.shield(fut)
+                elif expires_at >= now:
+                    return await fut
+                else:
+                    _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
+            except Exception:
+                # If the cached future is in an unexpected state, drop it and recompute.
+                _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
 
-        fut = loop.create_future()
+        aw = work() if callable(work) else work
+        fut = asyncio.create_task(aw)
+        # Temporary expiry until we know completion time.
         _DEDUPE_ASYNC_CACHE[cache_key] = (now + ttl_s, fut)
 
-    try:
-        aw = work() if callable(work) else work
-        result = await aw
-    except asyncio.CancelledError:
-        # Preserve cancellation semantics. Avoid turning cancellation into a
-        # cached exception and ensure future waiters are cancelled as well.
-        if not fut.done():
-            fut.cancel()
-        async with lock:
-            cur = _DEDUPE_ASYNC_CACHE.get(cache_key)
-            if cur and cur[1] is fut:
-                _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
-        raise
-    except Exception as exc:
-        if not fut.done():
-            fut.set_exception(exc)
-        # Failures are not cached.
-        async with lock:
-            cur = _DEDUPE_ASYNC_CACHE.get(cache_key)
-            if cur and cur[1] is fut:
-                _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
-        raise
-    else:
-        if not fut.done():
-            fut.set_result(result)
-        return result
+        # Finalize caching/cleanup once the task completes.
+        def _finalize_done(task: asyncio.Future) -> None:
+            async def _finalize_async() -> None:
+                completed_at = time.time()
+                async with lock:
+                    cur = _DEDUPE_ASYNC_CACHE.get(cache_key)
+                    if not cur or cur[1] is not task:
+                        return
+                    if task.cancelled():
+                        _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
+                        return
+                    try:
+                        exc = task.exception()
+                    except Exception:
+                        exc = Exception("Failed to resolve task exception")
+                    if exc is not None:
+                        # Failures are not cached.
+                        _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
+                        return
+                    # Success: extend expiry from completion so retries can reuse the result.
+                    _DEDUPE_ASYNC_CACHE[cache_key] = (completed_at + ttl_s, task)
+
+            try:
+                loop.create_task(_finalize_async())
+            except Exception:
+                # Best-effort; if scheduling fails (e.g. loop closing), do nothing.
+                return
+
+        try:
+            fut.add_done_callback(_finalize_done)
+        except Exception:
+            pass
+
+    # Await the shared task. If the caller is cancelled (e.g. upstream disconnect),
+    # the Task continues running due to shielding; a retry can await it later.
+    return await asyncio.shield(fut)
 
 
 def _maybe_dedupe_call_sync(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> Any:
