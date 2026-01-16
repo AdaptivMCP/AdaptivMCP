@@ -215,6 +215,8 @@ _TOOL_FRIENDLY_NAMES: dict[str, str] = {
     "edit_workspace_line": "Edit line",
     "replace_workspace_text": "Replace text",
     "delete_workspace_paths": "Delete paths",
+    "move_workspace_paths": "Move paths",
+    "apply_workspace_operations": "Apply workspace operations",
     "list_workspace_files": "List files",
     "search_workspace": "Search workspace",
     "terminal_command": "Run command",

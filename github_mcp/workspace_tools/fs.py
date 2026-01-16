@@ -1,7 +1,7 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
 import shutil
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
 from github_mcp.diff_utils import build_unified_diff
 
@@ -52,14 +52,47 @@ def _maybe_diff_for_log(
     diff = build_unified_diff(
         before,
         after,
-        a_path=(path if before_exists else "/dev/null"),
-        b_path=path,
+        fromfile=(path if before_exists else "/dev/null"),
+        tofile=path,
     )
     if not diff:
         return None
     if len(diff) > _LOG_WRITE_DIFFS_MAX_CHARS:
         diff = diff[:_LOG_WRITE_DIFFS_MAX_CHARS] + "\n… (diff truncated)\n"
     return diff
+
+
+def _delete_diff_for_log(*, path: str, before: str) -> str | None:
+    """Best-effort unified diff for deletions."""
+
+    if not _LOG_WRITE_DIFFS:
+        return None
+    if not isinstance(before, str) or before == "":
+        return None
+    if len(before) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS:
+        return None
+    diff = build_unified_diff(before, "", fromfile=path, tofile="/dev/null")
+    if not diff:
+        return None
+    if len(diff) > _LOG_WRITE_DIFFS_MAX_CHARS:
+        diff = diff[:_LOG_WRITE_DIFFS_MAX_CHARS] + "\n… (diff truncated)\n"
+    return diff
+
+
+def _looks_like_diff(text: str) -> bool:
+    if not isinstance(text, str):
+        return False
+    s = text.lstrip()
+    if not s:
+        return False
+    sample = "\n".join(s.splitlines()[:25])
+    return (
+        "diff --git" in sample
+        or sample.startswith("diff --git")
+        or "+++ " in sample
+        or "--- " in sample
+        or "@@ " in sample
+    )
 
 
 def _tw():
@@ -739,3 +772,370 @@ async def apply_patch(
         return {"ref": effective_ref, "status": "patched"}
     except Exception as exc:
         return _structured_tool_error(exc, context="apply_patch")
+
+
+@mcp_tool(write_action=True)
+async def move_workspace_paths(
+    full_name: str,
+    ref: str = "main",
+    moves: List[Dict[str, Any]] | None = None,
+    overwrite: bool = False,
+    create_parents: bool = True,
+) -> Dict[str, Any]:
+    """Move (rename) one or more workspace paths inside the repo mirror.
+
+    Args:
+      moves: list of {"src": "path", "dst": "path"}
+      overwrite: if true, allow replacing an existing destination.
+    """
+
+    if moves is None:
+        moves = []
+    if not isinstance(moves, list) or any(not isinstance(m, dict) for m in moves):
+        raise TypeError("moves must be a list of dicts")
+    if not moves:
+        raise ValueError("moves must contain at least one item")
+
+    try:
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        moved: List[Dict[str, str]] = []
+        failed: List[Dict[str, Any]] = []
+
+        for m in moves:
+            src = m.get("src")
+            dst = m.get("dst")
+            if not isinstance(src, str) or not src.strip():
+                failed.append({"src": src, "dst": dst, "error": "src must be a non-empty string"})
+                continue
+            if not isinstance(dst, str) or not dst.strip():
+                failed.append({"src": src, "dst": dst, "error": "dst must be a non-empty string"})
+                continue
+
+            try:
+                abs_src = _workspace_safe_join(repo_dir, src)
+                abs_dst = _workspace_safe_join(repo_dir, dst)
+                if not os.path.exists(abs_src):
+                    raise FileNotFoundError(src)
+                if os.path.exists(abs_dst):
+                    if overwrite:
+                        if os.path.isdir(abs_dst):
+                            shutil.rmtree(abs_dst)
+                        else:
+                            os.remove(abs_dst)
+                    else:
+                        raise FileExistsError(dst)
+
+                if create_parents:
+                    os.makedirs(os.path.dirname(abs_dst), exist_ok=True)
+
+                shutil.move(abs_src, abs_dst)
+                moved.append({"src": src, "dst": dst})
+            except Exception as exc:
+                failed.append({"src": src, "dst": dst, "error": str(exc)})
+
+        return {
+            "ref": effective_ref,
+            "status": "moved",
+            "moved": moved,
+            "failed": failed,
+            "ok": len(failed) == 0,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="move_workspace_paths")
+
+
+@mcp_tool(write_action=True)
+async def apply_workspace_operations(
+    full_name: str,
+    ref: str = "main",
+    operations: List[Dict[str, Any]] | None = None,
+    fail_fast: bool = True,
+    rollback_on_error: bool = True,
+    preview_only: bool = False,
+    create_parents: bool = True,
+) -> Dict[str, Any]:
+    """Apply multiple file operations in a single workspace clone.
+
+    This is a higher-level, multi-file alternative to calling the single-file
+    primitives repeatedly.
+
+    Supported operations (each item in `operations`):
+      - {"op": "write", "path": "...", "content": "..."}
+      - {"op": "replace_text", "path": "...", "old": "...", "new": "...", "replace_all": bool, "occurrence": int}
+      - {"op": "edit_range", "path": "...", "start": {"line": int, "col": int}, "end": {"line": int, "col": int}, "replacement": "..."}
+      - {"op": "delete", "path": "...", "allow_missing": bool}
+      - {"op": "move", "src": "...", "dst": "...", "overwrite": bool}
+      - {"op": "apply_patch", "patch": "..."}
+    """
+
+    if operations is None:
+        operations = []
+    if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
+        raise TypeError("operations must be a list of dicts")
+    if not operations:
+        raise ValueError("operations must contain at least one item")
+
+    def _read_bytes(path: str) -> bytes:
+        with open(path, "rb") as f:
+            return f.read()
+
+    def _write_bytes(path: str, data: bytes) -> None:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+
+    # Best-effort rollback by restoring prior file bytes.
+    backups: Dict[str, Optional[bytes]] = {}
+
+    def _backup_path(abs_path: str) -> None:
+        if abs_path in backups:
+            return
+        if os.path.exists(abs_path):
+            backups[abs_path] = _read_bytes(abs_path)
+        else:
+            backups[abs_path] = None
+
+    def _restore_backups() -> None:
+        for abs_path, data in backups.items():
+            try:
+                if data is None:
+                    if os.path.exists(abs_path):
+                        if os.path.isdir(abs_path):
+                            shutil.rmtree(abs_path)
+                        else:
+                            os.remove(abs_path)
+                    continue
+                _write_bytes(abs_path, data)
+            except Exception:
+                # Best-effort rollback.
+                pass
+
+    try:
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        results: List[Dict[str, Any]] = []
+        diffs: List[str] = []
+
+        for idx, op in enumerate(operations):
+            op_name = op.get("op")
+            if not isinstance(op_name, str) or not op_name.strip():
+                entry = {"index": idx, "status": "error", "error": "op must be a non-empty string"}
+                results.append(entry)
+                if fail_fast:
+                    raise ValueError(entry["error"])
+                continue
+
+            try:
+                if op_name == "write":
+                    path = op.get("path")
+                    content = op.get("content")
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("write.path must be a non-empty string")
+                    if content is None:
+                        content = ""
+                    if not isinstance(content, str):
+                        raise TypeError("write.content must be a string")
+
+                    abs_path = _workspace_safe_join(repo_dir, path)
+                    _backup_path(abs_path)
+                    before = backups[abs_path].decode("utf-8", errors="replace") if backups[abs_path] else ""
+                    after = content
+                    if not preview_only:
+                        _workspace_write_text(repo_dir, path, content, create_parents=create_parents)
+                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=backups[abs_path] is not None)
+                    if isinstance(d, str) and d:
+                        diffs.append(d)
+                    results.append({"index": idx, "op": "write", "path": path, "status": "ok"})
+                    continue
+
+                if op_name == "replace_text":
+                    path = op.get("path")
+                    old = op.get("old")
+                    new = op.get("new")
+                    replace_all = bool(op.get("replace_all", False))
+                    occurrence = int(op.get("occurrence", 1) or 1)
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("replace_text.path must be a non-empty string")
+                    if not isinstance(old, str) or old == "":
+                        raise ValueError("replace_text.old must be a non-empty string")
+                    if new is None:
+                        new = ""
+                    if not isinstance(new, str):
+                        raise TypeError("replace_text.new must be a string")
+
+                    abs_path = _workspace_safe_join(repo_dir, path)
+                    if not os.path.exists(abs_path):
+                        raise FileNotFoundError(path)
+                    _backup_path(abs_path)
+                    before = backups[abs_path].decode("utf-8", errors="replace") if backups[abs_path] else ""
+
+                    if replace_all:
+                        after = before.replace(old, new)
+                    else:
+                        start = 0
+                        found_at = -1
+                        for _i in range(max(1, occurrence)):
+                            found_at = before.find(old, start)
+                            if found_at == -1:
+                                break
+                            start = found_at + len(old)
+                        after = before
+                        if found_at != -1:
+                            after = before[:found_at] + new + before[found_at + len(old) :]
+
+                    if not preview_only and after != before:
+                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    if isinstance(d, str) and d:
+                        diffs.append(d)
+                    results.append(
+                        {
+                            "index": idx,
+                            "op": "replace_text",
+                            "path": path,
+                            "status": "ok" if after != before else "noop",
+                        }
+                    )
+                    continue
+
+                if op_name == "edit_range":
+                    path = op.get("path")
+                    start = op.get("start")
+                    end = op.get("end")
+                    replacement = op.get("replacement")
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("edit_range.path must be a non-empty string")
+                    if replacement is None:
+                        replacement = ""
+                    if not isinstance(replacement, str):
+                        raise TypeError("edit_range.replacement must be a string")
+                    if not isinstance(start, Mapping) or not isinstance(end, Mapping):
+                        raise TypeError("edit_range.start/end must be objects")
+                    start_line = int(start.get("line"))
+                    start_col = int(start.get("col"))
+                    end_line = int(end.get("line"))
+                    end_col = int(end.get("col"))
+
+                    abs_path = _workspace_safe_join(repo_dir, path)
+                    if not os.path.exists(abs_path):
+                        raise FileNotFoundError(path)
+                    _backup_path(abs_path)
+                    before = backups[abs_path].decode("utf-8", errors="replace") if backups[abs_path] else ""
+                    lines = _split_lines_keepends(before)
+                    start_offset = _pos_to_offset(lines, start_line, start_col)
+                    end_offset = _pos_to_offset(lines, end_line, end_col)
+                    if end_offset < start_offset:
+                        raise ValueError("edit_range.end must be after start")
+                    after = before[:start_offset] + replacement + before[end_offset:]
+
+                    if not preview_only and after != before:
+                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    if isinstance(d, str) and d:
+                        diffs.append(d)
+                    results.append(
+                        {
+                            "index": idx,
+                            "op": "edit_range",
+                            "path": path,
+                            "status": "ok" if after != before else "noop",
+                        }
+                    )
+                    continue
+
+                if op_name == "delete":
+                    path = op.get("path")
+                    allow_missing = bool(op.get("allow_missing", True))
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("delete.path must be a non-empty string")
+                    abs_path = _workspace_safe_join(repo_dir, path)
+                    _backup_path(abs_path)
+                    if backups[abs_path] is None:
+                        if allow_missing:
+                            results.append({"index": idx, "op": "delete", "path": path, "status": "noop"})
+                            continue
+                        raise FileNotFoundError(path)
+
+                    before = backups[abs_path].decode("utf-8", errors="replace") if backups[abs_path] else ""
+                    d = _delete_diff_for_log(path=path, before=before)
+                    if isinstance(d, str) and d:
+                        diffs.append(d)
+                    if not preview_only:
+                        os.remove(abs_path)
+                    results.append({"index": idx, "op": "delete", "path": path, "status": "ok"})
+                    continue
+
+                if op_name == "move":
+                    src = op.get("src")
+                    dst = op.get("dst")
+                    overwrite = bool(op.get("overwrite", False))
+                    if not isinstance(src, str) or not src.strip():
+                        raise ValueError("move.src must be a non-empty string")
+                    if not isinstance(dst, str) or not dst.strip():
+                        raise ValueError("move.dst must be a non-empty string")
+                    abs_src = _workspace_safe_join(repo_dir, src)
+                    abs_dst = _workspace_safe_join(repo_dir, dst)
+                    if not os.path.exists(abs_src):
+                        raise FileNotFoundError(src)
+                    _backup_path(abs_src)
+                    _backup_path(abs_dst)
+                    if os.path.exists(abs_dst) and not overwrite:
+                        raise FileExistsError(dst)
+                    if not preview_only:
+                        if os.path.exists(abs_dst) and overwrite:
+                            if os.path.isdir(abs_dst):
+                                shutil.rmtree(abs_dst)
+                            else:
+                                os.remove(abs_dst)
+                        if create_parents:
+                            os.makedirs(os.path.dirname(abs_dst), exist_ok=True)
+                        shutil.move(abs_src, abs_dst)
+                    results.append({"index": idx, "op": "move", "src": src, "dst": dst, "status": "ok"})
+                    continue
+
+                if op_name == "apply_patch":
+                    patch = op.get("patch")
+                    if not isinstance(patch, str) or not patch.strip():
+                        raise ValueError("apply_patch.patch must be a non-empty string")
+                    if not preview_only:
+                        await deps["apply_patch_to_repo"](repo_dir, patch)
+                    # Prefer letting the provider visual handler render this patch directly.
+                    if _looks_like_diff(patch):
+                        diffs.append(patch)
+                    results.append({"index": idx, "op": "apply_patch", "status": "ok"})
+                    continue
+
+                raise ValueError(f"Unsupported op: {op_name}")
+
+            except Exception as exc:
+                entry = {"index": idx, "op": op_name, "status": "error", "error": str(exc)}
+                results.append(entry)
+                if fail_fast:
+                    raise
+
+        ok = all(r.get("status") not in {"error"} for r in results)
+        combined_diff = "\n".join(diffs).strip() if diffs else None
+        if combined_diff and not combined_diff.endswith("\n"):
+            combined_diff += "\n"
+
+        return {
+            "ref": effective_ref,
+            "status": "ok" if ok else "partial",
+            "ok": ok,
+            "preview_only": bool(preview_only),
+            "results": results,
+            "__log_diff": combined_diff,
+        }
+
+    except Exception as exc:
+        if rollback_on_error and backups:
+            try:
+                _restore_backups()
+            except Exception:
+                pass
+        return _structured_tool_error(exc, context="apply_workspace_operations")

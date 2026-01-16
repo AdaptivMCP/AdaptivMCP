@@ -87,6 +87,8 @@ edit_workspace_line = _fs.edit_workspace_line
 replace_workspace_text = _fs.replace_workspace_text
 apply_patch = _fs.apply_patch
 delete_workspace_paths = _fs.delete_workspace_paths
+move_workspace_paths = _fs.move_workspace_paths
+apply_workspace_operations = _fs.apply_workspace_operations
 
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace
@@ -136,6 +138,8 @@ __all__ = [
     "replace_workspace_text",
     "apply_patch",
     "delete_workspace_paths",
+    "move_workspace_paths",
+    "apply_workspace_operations",
     "list_workspace_files",
     "search_workspace",
     "render_shell",
