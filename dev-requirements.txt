@@ -1,25 +1,63 @@
-# Runtime dependencies (server)
+# NOTE:
+# This file is used by the MCP server at runtime (per your setup), so it MUST include
+# all runtime dependencies as well as developer tooling.
+
+# -----------------------------
+# Runtime (production) deps
+# -----------------------------
 -r requirements.txt
 
-# Development / QA tooling
-anyio>=4.7.0
-black>=24.3.0
+# -----------------------------
+# Packaging / build / release
+# -----------------------------
+# Keep pip/setuptools explicit so fresh environments can build/install reliably.
+pip>=24.0
+setuptools>=70.0
+wheel>=0.43.0
 build>=1.2.1
-coverage[toml]>=7.5.0
-flake8>=7.0.0
-isort>5.13.0
-mypy>=1.8.0
 pip-tools>=7.4.1
-pre-commit>=3.7.0
+pipdeptree>=2.23.0
+virtualenv>=20.26.0
+
+twine>=5.1.1
+
+# -----------------------------
+# Testing
+# -----------------------------
+pytest>=8.0.0
 pytest-asyncio>=0.23.0
 pytest-cov>=5.0.0
 pytest-timeout>=2.3.1
-pytest>=8.0.0
-python-dotenv>=1.1.0
+pytest-xdist>=3.6.1
+coverage[toml]>=7.5.0
+anyio>=4.7.0
+
+# -----------------------------
+# Lint / format / typecheck
+# -----------------------------
 ruff>=0.6.0
-twine>=5.1.1
+black>=24.3.0
+isort>5.13.0
+flake8>=7.0.0
+mypy>=1.8.0
+
+# Type stubs
+# (Add more stubs as mypy/pyright reports missing packages.)
 types-python-dateutil>=2.9.0.20240316
-wheel>=0.43.0
+
+# -----------------------------
+# Security / supply-chain checks
+# -----------------------------
+bandit>=1.7.9
+pip-audit>=2.7.3
+safety>=3.2.4
+
+# -----------------------------
+# Developer experience
+# -----------------------------
+pre-commit>=3.7.0
+python-dotenv>=1.1.0
+ipython>=8.26.0
 
 # Syntax highlighting for developer-facing log visuals
 Pygments>=2.18.0
