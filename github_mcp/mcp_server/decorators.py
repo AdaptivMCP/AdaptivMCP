@@ -100,6 +100,24 @@ LOG_TOOL_SNAPSHOTS = _env_flag("GITHUB_MCP_LOG_SNAPSHOTS", default=True)
 # This is intentionally off by default to keep logs scan-friendly.
 LOG_TOOL_VERBOSE_EXTRAS = _env_flag("GITHUB_MCP_LOG_VERBOSE_EXTRAS", default=False)
 
+# Tool result envelope
+#
+# Many clients benefit from a consistent, machine-readable success/warning/error
+# surface. Tool implementations historically returned heterogeneous payloads.
+#
+# This envelope normalizes *mapping* (dict-like) results by adding:
+#   - ok: bool
+#   - status: success|warning|error
+#   - warnings: list[str] (only when warning)
+#
+# Scalar/list results are preserved by default for backward compatibility.
+# IMPORTANT: default is False to preserve the repo's compatibility contract:
+# tool return values must not be mutated by the wrapper.
+TOOL_RESULT_ENVELOPE = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE", default=False)
+TOOL_RESULT_ENVELOPE_SCALARS = _env_flag(
+    "GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALARS", default=False
+)
+
 LOG_TOOL_VISUAL_MAX_LINES = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_LINES", default=80)
 LOG_TOOL_READ_MAX_LINES = _env_int("GITHUB_MCP_LOG_READ_MAX_LINES", default=40)
 LOG_TOOL_VISUAL_MAX_CHARS = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_CHARS", default=8000)
@@ -1265,6 +1283,77 @@ def _tool_result_outcome(result: Any) -> str:
         return "warning"
 
     return "ok"
+
+
+def _normalize_tool_result_envelope(result: Any) -> Any:
+    """Normalize tool results to a consistent ok/status/warnings surface.
+
+    - Mapping results are augmented in-place (copied) with ok/status fields.
+    - Scalar/list results are returned unchanged unless TOOL_RESULT_ENVELOPE_SCALARS is enabled.
+    """
+
+    if not TOOL_RESULT_ENVELOPE:
+        return result
+
+    # Preserve non-mapping results for compatibility.
+    if not isinstance(result, Mapping):
+        if TOOL_RESULT_ENVELOPE_SCALARS:
+            return {"status": "success", "ok": True, "result": result}
+        return result
+
+    out: dict[str, Any] = dict(result)
+    outcome = _tool_result_outcome(out)
+
+    raw_status = out.get("status")
+    raw_status_str = str(raw_status).strip() if raw_status is not None else ""
+
+    if outcome == "error":
+        out["status"] = "error"
+        out["ok"] = False
+        # Ensure a top-level error message when possible.
+        if not (isinstance(out.get("error"), str) and str(out.get("error")).strip()):
+            err_detail = out.get("error_detail")
+            if isinstance(err_detail, Mapping):
+                msg = err_detail.get("message") or err_detail.get("error")
+                if isinstance(msg, str) and msg.strip():
+                    out["error"] = msg.strip()
+        return out
+
+    if outcome == "warning":
+        # Preserve the original status string when it conveys more nuance.
+        if raw_status_str and raw_status_str.lower() not in {"warning", "warn"}:
+            out.setdefault("status_raw", raw_status_str)
+        out["status"] = "warning"
+        out.setdefault("ok", True)
+
+        warnings = out.get("warnings")
+        if isinstance(warnings, str):
+            cleaned = warnings.strip()
+            out["warnings"] = [cleaned] if cleaned else []
+        elif isinstance(warnings, list):
+            cleaned_list: list[str] = []
+            for w in warnings:
+                if w is None:
+                    continue
+                s = str(w).strip()
+                if s:
+                    cleaned_list.append(s)
+            out["warnings"] = cleaned_list
+        elif warnings is None:
+            out["warnings"] = []
+        else:
+            out["warnings"] = [str(warnings).strip()] if str(warnings).strip() else []
+
+        return out
+
+    # Success
+    out.setdefault("ok", True)
+    if not raw_status_str:
+        out["status"] = "success"
+    elif raw_status_str.lower() in {"ok", "success", "succeeded", "passed"}:
+        out["status"] = "success"
+    # Otherwise, preserve the original status value.
+    return out
 
 
 def _log_tool_warning(

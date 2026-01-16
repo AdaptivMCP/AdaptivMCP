@@ -119,6 +119,14 @@ async def run_tests(
     )
 
     if isinstance(result, dict) and "error" in result:
+        err_obj = result.get("error")
+        err_msg = ""
+        if isinstance(err_obj, dict):
+            err_msg = str(err_obj.get("error") or err_obj.get("message") or "").strip()
+        else:
+            err_msg = str(err_obj or "").strip()
+        if not err_msg:
+            err_msg = "TerminalCommandError"
         return {
             "status": "failed",
             "command": test_command,
@@ -126,7 +134,7 @@ async def run_tests(
             "controller_log": [
                 "Test run failed due to a repo mirror or command error.",
                 f"- Command: {test_command}",
-                f"- Error: {result['error'].get('error')}",
+                f"- Error: {err_msg}",
             ],
         }
 
