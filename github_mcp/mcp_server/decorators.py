@@ -22,9 +22,11 @@ from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 from github_mcp.config import (
     BASE_LOGGER,
     HUMAN_LOGS,
+    LOG_INLINE_CONTEXT,
     LOG_TOOL_CALL_STARTS,
     LOG_TOOL_CALLS,
     LOG_TOOL_PAYLOADS,
+    format_log_context,
     shorten_token,
     snapshot_request_context,
     summarize_request_context,
@@ -193,6 +195,22 @@ def _ansi(text: str, code: str) -> str:
     if not LOG_TOOL_COLOR:
         return text
     return f"{code}{text}{ANSI_RESET}"
+
+
+def _inline_context(req: Mapping[str, Any]) -> str:
+    """Return compact correlation context for single-line logs."""
+
+    if not LOG_INLINE_CONTEXT:
+        return ""
+    try:
+        return format_log_context(req) or ""
+    except Exception as exc:
+        # Best-effort: do not break tool logging, but make failures visible.
+        try:
+            LOGGER.debug("Failed to format inline log context", exc_info=exc)
+        except Exception:
+            pass
+        return ""
 
 
 # Friendly tool naming for developer-facing logs.
@@ -779,6 +797,9 @@ def _log_tool_visual(
     )
     if kv:
         header = header + " " + kv
+    inline = _inline_context(req)
+    if inline:
+        header = header + " " + _ansi(inline, ANSI_DIM)
     LOGGER.info(
         f"{header}\n{visual}",
         extra={
@@ -786,6 +807,8 @@ def _log_tool_visual(
             "tool": tool_name,
             "kind": kind,
             "call_id": shorten_token(call_id),
+            "request": snapshot_request_context(req),
+            "log_context": inline or None,
         },
     )
 
@@ -1289,6 +1312,9 @@ def _log_tool_warning(
     msg = f"{prefix} {ms}{suffix}{res_suffix}"
     if LOG_TOOL_LOG_IDS:
         msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+    inline = payload.get("log_context")
+    if isinstance(inline, str) and inline:
+        msg = msg + " " + _ansi(inline, ANSI_DIM)
     LOGGER.warning(msg, extra={"event": "tool_call_completed_with_warnings", **payload})
 
 
@@ -1351,7 +1377,11 @@ def _log_tool_returned_error(
         )
     line = _format_log_kv(kv_map)
     prefix = _ansi("RES", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
-    LOGGER.warning(f"{prefix} {line}", extra={"event": "tool_call_failed", **payload})
+    msg = f"{prefix} {line}"
+    inline = payload.get("log_context")
+    if isinstance(inline, str) and inline:
+        msg = msg + " " + _ansi(inline, ANSI_DIM)
+    LOGGER.warning(msg, extra={"event": "tool_call_failed", **payload})
 
 
 def _extract_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
@@ -1576,10 +1606,12 @@ def _tool_log_payload(
     schema_present: bool,
     all_args: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    inline = _inline_context(req)
     payload: dict[str, Any] = {
         "tool": tool_name,
         "call_id": shorten_token(call_id),
         "request": snapshot_request_context(req),
+        "log_context": inline or None,
     }
     if write_action:
         payload["write_action"] = True
@@ -1621,6 +1653,9 @@ def _log_tool_start(
     msg = f"{prefix}{suffix}"
     if LOG_TOOL_LOG_IDS:
         msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+    inline = payload.get("log_context")
+    if isinstance(inline, str) and inline:
+        msg = msg + " " + _ansi(inline, ANSI_DIM)
     LOGGER.info(msg, extra={"event": "tool_call_started", **payload})
 
 
@@ -1671,6 +1706,9 @@ def _log_tool_success(
         msg = f"{prefix} {ms}{suffix}{res_suffix}"
         if LOG_TOOL_LOG_IDS:
             msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+        inline = payload.get("log_context")
+        if isinstance(inline, str) and inline:
+            msg = msg + " " + _ansi(inline, ANSI_DIM)
         LOGGER.info(msg, extra={"event": "tool_call_completed", **payload})
 
         # Optional developer-facing visuals for common workflows.
@@ -1777,9 +1815,12 @@ def _log_tool_success(
                         kind=kind or "info",
                         visual=visual,
                     )
-        except Exception:
-            # Visual logging is best-effort.
-            pass
+        except Exception as exc:
+            # Visual logging is best-effort, but failures should be visible.
+            try:
+                LOGGER.debug("Visual logging failed", exc_info=exc)
+            except Exception:
+                pass
     else:
         kv_map: dict[str, Any] = {
             "tool": tool_name,
@@ -1789,7 +1830,11 @@ def _log_tool_success(
             kv_map["call_id"] = shorten_token(call_id)
         line = _format_log_kv(kv_map)
         prefix = _ansi("✓", ANSI_GREEN) + " " + _ansi(tool_name, ANSI_CYAN)
-        LOGGER.info(f"{prefix} {line}", extra={"event": "tool_call_completed", **payload})
+        msg = f"{prefix} {line}"
+        inline = payload.get("log_context")
+        if isinstance(inline, str) and inline:
+            msg = msg + " " + _ansi(inline, ANSI_DIM)
+        LOGGER.info(msg, extra={"event": "tool_call_completed", **payload})
 
 
 def _log_tool_failure(
@@ -1871,8 +1916,12 @@ def _log_tool_failure(
         )
     line = _format_log_kv(kv_map)
     prefix = _ansi("RES", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+    msg = f"{prefix} {line}"
+    inline = payload.get("log_context")
+    if isinstance(inline, str) and inline:
+        msg = msg + " " + _ansi(inline, ANSI_DIM)
     LOGGER.warning(
-        f"{prefix} {line}",
+        msg,
         extra={"event": "tool_call_failed", **payload},
         exc_info=exc,
     )

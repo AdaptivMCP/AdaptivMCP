@@ -99,7 +99,14 @@ def snapshot_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
     if isinstance(chatgpt, Mapping) and chatgpt:
         # Keep only IDs that help correlate across systems.
         cg_out: dict[str, Any] = {}
-        for k in ("conversation_id", "assistant_id", "project_id", "organization_id", "user_id"):
+        for k in (
+            "conversation_id",
+            "assistant_id",
+            "project_id",
+            "organization_id",
+            "user_id",
+            "session_id",
+        ):
             v = chatgpt.get(k)
             if v is None or v == "":
                 continue
@@ -111,6 +118,62 @@ def snapshot_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
         return _jsonable(out)
     except Exception:
         return out
+
+
+def _humanize_id_for_log_line(value: object, *, head: int = 8, tail: int = 4) -> str:
+    """Return a compact representation of an identifier for single-line logs."""
+
+    if value is None:
+        return ""
+    raw = str(value).strip()
+    if not raw:
+        return ""
+    if len(raw) <= head + tail + 2:
+        return raw
+    if _UUID_RE.match(raw):
+        # Render request IDs are frequently UUIDs; show the first segment.
+        return raw.split("-")[0]
+    return f"{raw[:head]}…{raw[-tail:]}"
+
+
+def format_log_context(req: Mapping[str, Any] | None) -> str:
+    """Format request correlation fields for single-line provider logs."""
+
+    snap = snapshot_request_context(req)
+    if not snap:
+        return ""
+
+    bits: list[str] = []
+
+    def add(key: str, label: str) -> None:
+        val = snap.get(key)
+        if val is None or val == "":
+            return
+        bits.append(f"{label}={_humanize_id_for_log_line(val)}")
+
+    add("request_id", "rid")
+    add("session_id", "sid")
+    add("message_id", "mid")
+    add("idempotency_key", "idem")
+    add("dedupe_key", "dedupe")
+    add("routing_hint", "route")
+
+    chatgpt = snap.get("chatgpt")
+    if isinstance(chatgpt, Mapping):
+        for key, label in (
+            ("conversation_id", "cg_conv"),
+            ("assistant_id", "cg_asst"),
+            ("project_id", "cg_proj"),
+            ("organization_id", "cg_org"),
+            ("user_id", "cg_user"),
+            ("session_id", "cg_sess"),
+        ):
+            val = chatgpt.get(key)
+            if val is None or val == "":
+                continue
+            bits.append(f"{label}={_humanize_id_for_log_line(val)}")
+
+    return " ".join(bits)
 
 
 def _is_render_runtime() -> bool:
@@ -268,6 +331,13 @@ LOG_HTTP_REQUESTS = _env_flag("LOG_HTTP_REQUESTS", _log_http_default)
 # When enabled, include HTTP request bodies for POST /messages in logs.
 # WARNING: Can be large. This does not modify tool outputs.
 LOG_HTTP_BODIES = _env_flag("LOG_HTTP_BODIES", "false")
+
+# Include compact request correlation fields (request_id + ChatGPT ids) inline
+# in single-line provider logs (tool calls, outbound HTTP, etc.).
+LOG_INLINE_CONTEXT = _env_flag(
+    "GITHUB_MCP_LOG_CONTEXT",
+    "true" if HUMAN_LOGS else "false",
+)
 
 # When enabled, include outbound Render HTTP request/response details in logs.
 LOG_RENDER_HTTP = _env_flag("LOG_RENDER_HTTP", "false")
@@ -748,6 +818,7 @@ __all__ = [
     "LOG_TOOL_CALLS",
     "LOG_TOOL_CALL_STARTS",
     "LOG_HTTP_REQUESTS",
+    "LOG_INLINE_CONTEXT",
     "MAX_CONCURRENCY",
     "RENDER_API_BASE",
     "RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS",
@@ -759,6 +830,7 @@ __all__ = [
     "WORKSPACE_BASE_DIR",
     "SANDBOX_CONTENT_BASE_URL",
     "git_identity_warnings",
+    "format_log_context",
     "shorten_token",
     "snapshot_request_context",
     "summarize_request_context",

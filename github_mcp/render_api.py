@@ -28,6 +28,8 @@ from github_mcp.config import (
     RENDER_RATE_LIMIT_RETRY_MAX_ATTEMPTS,
     RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS,
     RENDER_TOKEN_ENV_VARS,
+    LOG_INLINE_CONTEXT,
+    format_log_context,
     summarize_request_context,
 )
 from github_mcp.exceptions import RenderAPIError, RenderAuthError
@@ -294,9 +296,16 @@ async def render_request(
         if LOG_RENDER_HTTP:
             req = get_request_context()
             duration_ms = (time.perf_counter() - started) * 1000
+            inline_ctx = ""
+            if LOG_INLINE_CONTEXT:
+                try:
+                    inline_ctx = format_log_context(req)
+                except Exception:
+                    inline_ctx = ""
             payload: Dict[str, Any] = {
                 "event": "render_http",
                 "request": summarize_request_context(req) if isinstance(req, dict) else {},
+                "log_context": inline_ctx or None,
                 "method": str(method).upper(),
                 "path": effective_path,
                 "status_code": getattr(resp, "status_code", None),
@@ -313,10 +322,13 @@ async def render_request(
                 payload["response_headers"] = dict(getattr(resp, "headers", {}) or {})
                 payload["response_body"] = body if body is not None else getattr(resp, "text", "")
 
-            BASE_LOGGER.info(
-                f"render_http method={str(method).upper()} path={effective_path} status={getattr(resp, 'status_code', None)} duration_ms={duration_ms:.2f}",
-                extra=payload,
+            msg = (
+                f"render_http method={str(method).upper()} path={effective_path} "
+                f"status={getattr(resp, 'status_code', None)} duration_ms={duration_ms:.2f}"
             )
+            if inline_ctx:
+                msg = msg + " " + inline_ctx
+            BASE_LOGGER.info(msg, extra=payload)
 
         status_code = getattr(resp, "status_code", 0)
         if status_code in (401, 403):
