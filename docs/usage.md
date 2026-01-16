@@ -15,7 +15,7 @@ Important: the repo mirror is not the live GitHub state. It is a local copy that
 
 In this document, we use **workcell** to describe the server-side environment where the repo mirror lives and where commands run. It can be thought of as a stable working directory plus the repo mirror.
 
-Because the workcell holds the repo mirror, the two terms are closely related, but the repo mirror is the source of truth for edits, while GitHub remains the source of truth for the remote state.
+Because the workcell holds the repo mirror, the two terms are closely related. In practice, the repo mirror is a working copy for edits and command execution, while GitHub remains the source of truth for the remote state.
 
 3) GitHub API tools vs workspace tools
 
@@ -61,9 +61,9 @@ GraphQL fallbacks cover many of the same discovery scenarios:
 - list_workflow_runs_graphql, list_recent_failures_graphql
 - get_repo_dashboard_graphql
 
-### Edit workflows (mirror-first)
+### Edit workflows
 
-Edits are typically done in the repo mirror.
+Edits can be done in the repo mirror when you want filesystem-style changes and local command execution.
 
 Typical flow:
 
@@ -96,7 +96,7 @@ Typical flow:
 
 ### GitHub API usage guidance
 
-Because the repo mirror is not the live GitHub state, GitHub API tools are typically used for:
+Because the repo mirror is not the live GitHub state, GitHub API tools are often used for:
 
 - Workspace tools for changes, followed by push.
 - GitHub API tools to confirm live state (PR status, CI, branch contents, etc.).

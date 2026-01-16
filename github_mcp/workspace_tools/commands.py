@@ -155,11 +155,11 @@ async def render_shell(
 ) -> Dict[str, Any]:
     """Render-focused shell entry point for interacting with GitHub workspaces.
 
-    The tool intentionally mirrors the Render deployment model by always
-    operating through the server-side repo mirror (workspace clone). It ensures
-    the repo mirror is cloned from the default branch (or a provided ref),
-    optionally creates a fresh branch from that ref, and then executes the
-    supplied shell command inside the repo mirror.
+    This helper mirrors the Render deployment model by operating through the
+    server-side repo mirror. It ensures the repo mirror exists
+    for the default branch (or a provided ref), optionally creates a fresh
+    branch from that ref, and then executes the supplied shell command inside
+    the repo mirror.
     """
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
@@ -251,7 +251,7 @@ async def terminal_command(
     """Run a shell command inside the repo workcell and return its result.
 
     This supports tests, linters, or project scripts that need the real tree and
-    virtualenv. The repo mirror (workspace clone) persists across calls so
+    virtualenv. The repo mirror persists across calls so
     installed dependencies and edits are reused.
     """
 

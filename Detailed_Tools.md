@@ -12,7 +12,7 @@ Total tools: 124
 
 ## apply_patch
 
-Apply a unified diff patch to the persistent repo mirror (workspace clone).
+Apply a unified diff patch to the persistent repo mirror.
 
 Parameters:
 - full_name (string; required)
@@ -1838,7 +1838,7 @@ Example invocation:
 
 ## delete_workspace_paths
 
-Delete one or more paths from the repo mirror (workspace clone).
+Delete one or more paths from the repo mirror.
 
 This tool exists because some environments can block patch-based file deletions.
 Prefer this over embedding deletions into unified-diff patches.
@@ -2383,7 +2383,7 @@ Example invocation:
 
 ## ensure_workspace_clone
 
-Ensure a persistent repo mirror (workspace clone) exists for a repo/ref.
+Ensure a persistent repo mirror exists for a repo/ref.
 
 Parameters:
 - full_name (unknown; required)
@@ -4538,7 +4538,7 @@ Example invocation:
 
 ## get_workspace_file_contents
 
-Read a file from the persistent repo mirror (workspace clone) (no shell).
+Read a file from the persistent repo mirror (no shell).
 
 Args:
   path: Repo-relative path (POSIX-style). Must resolve inside the repo mirror.
@@ -6583,7 +6583,7 @@ Example invocation:
 
 ## list_workspace_files
 
-List files in the repo mirror (workspace clone).
+List files in the repo mirror.
 
 Parameters:
 - full_name (string | null; optional)
@@ -8284,15 +8284,15 @@ Example invocation:
 
 Render-focused shell entry point for interacting with GitHub workspaces.
 
-The tool intentionally mirrors the Render deployment model by always
-operating through the server-side repo mirror (workspace clone). It ensures
-the repo mirror is cloned from the default branch (or a provided ref),
-optionally creates a fresh branch from that ref, and then executes the
-supplied shell command inside the repo mirror.
+This helper mirrors the Render deployment model by operating through the
+server-side repo mirror. It ensures the repo mirror exists
+for the default branch (or a provided ref), optionally creates a fresh
+branch from that ref, and then executes the supplied shell command inside
+the repo mirror.
 
 Parameters:
 - command (string; optional, default='echo hello Render')
-  Shell command to execute in the repo mirror (workspace clone).
+  Shell command to execute in the repo mirror.
   Examples: 'pytest', 'python -m ruff check .'
 - command_lines (array | null; optional)
   Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload.
@@ -8342,7 +8342,7 @@ Input schema:
       "type": "string",
       "default": "echo hello Render",
       "title": "Command",
-      "description": "Shell command to execute in the repo mirror (workspace clone).",
+      "description": "Shell command to execute in the repo mirror.",
       "examples": [
         "pytest",
         "python -m ruff check ."
@@ -9208,7 +9208,7 @@ Example invocation:
 
 ## search_workspace
 
-Search text files in the repo mirror (workspace clone) (bounded, no shell).
+Search text files in the repo mirror (bounded, no shell).
 
 Behavior for `query`:
 - Always treated as a literal substring match.
@@ -9362,7 +9362,7 @@ Example invocation:
 
 Replace a workspace file's contents by writing the full file text.
 
-This is the preferred write primitive for workspace edits in the repo mirror. It avoids
+This is a good fit for repo-mirror edits when you want to replace the full contents of a file. It avoids
 patch/unified-diff application.
 
 Parameters:
@@ -9457,12 +9457,12 @@ Example invocation:
 Run a shell command inside the repo workcell and return its result.
 
 This supports tests, linters, or project scripts that need the real tree and
-virtualenv. The repo mirror (workspace clone) persists across calls so
+virtualenv. The repo mirror persists across calls so
 installed dependencies and edits are reused.
 
 Parameters:
 - command (string; optional, default='pytest')
-  Shell command to execute in the repo mirror (workspace clone).
+  Shell command to execute in the repo mirror.
   Examples: 'pytest', 'python -m ruff check .'
 - command_lines (array | null; optional)
   Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload.
@@ -9521,7 +9521,7 @@ Input schema:
       "type": "string",
       "default": "pytest",
       "title": "Command",
-      "description": "Shell command to execute in the repo mirror (workspace clone).",
+      "description": "Shell command to execute in the repo mirror.",
       "examples": [
         "pytest",
         "python -m ruff check ."
@@ -10241,7 +10241,7 @@ Example invocation:
 
 ## workspace_create_branch
 
-Create a branch using the repo mirror (workspace clone), optionally pushing to origin.
+Create a branch using the repo mirror, optionally pushing to origin.
 
 This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
 
@@ -10325,7 +10325,7 @@ Example invocation:
 
 ## workspace_delete_branch
 
-Delete a non-default branch using the repo mirror (workspace clone).
+Delete a non-default branch using the repo mirror.
 
 This is the workspace counterpart to branch-creation helpers and is intended
 for closing out ephemeral feature branches once their work has been merged.
@@ -10395,7 +10395,7 @@ Example invocation:
 
 Detect a mangled repo mirror branch and recover to a fresh branch.
 
-This tool targets cases where a repo mirror (workspace clone) becomes inconsistent (wrong
+This tool targets cases where a repo mirror becomes inconsistent (wrong
 branch checked out, merge/rebase state, conflicts, etc.). When healing, it:
 
 1) Diagnoses the repo mirror for ``branch``.
@@ -10621,7 +10621,7 @@ Example invocation:
 
 ## workspace_sync_status
 
-Report how a repo mirror (workspace clone) differs from its remote branch.
+Report how a repo mirror differs from its remote branch.
 
 Parameters:
 - full_name (string; required)
@@ -10687,7 +10687,7 @@ Example invocation:
 
 ## workspace_sync_to_remote
 
-Reset a repo mirror (workspace clone) to match the remote branch.
+Reset a repo mirror to match the remote branch.
 
 Parameters:
 - discard_local_changes (boolean; optional, default=False)
