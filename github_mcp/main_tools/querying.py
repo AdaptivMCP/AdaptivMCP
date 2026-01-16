@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from typing import Any, Dict, Literal, Optional
 
+from github_mcp.redaction import redact_any
 from github_mcp.http_clients import (
     _external_client_instance as _default_external_client_instance,
     _get_concurrency_semaphore as _default_get_concurrency_semaphore,
@@ -84,11 +85,20 @@ async def fetch_url(url: str) -> Dict[str, Any]:
                 path=url,
             )
 
-    return {
-        "status_code": resp.status_code,
-        "headers": dict(resp.headers),
-        "content": resp.text,
-    }
+    # Avoid returning potentially sensitive headers and redact secrets that may
+    # appear in response bodies.
+    headers = dict(resp.headers)
+    for k in list(headers.keys()):
+        if str(k).lower() in {"authorization", "cookie", "set-cookie", "proxy-authorization"}:
+            headers.pop(k, None)
+
+    return redact_any(
+        {
+            "status_code": resp.status_code,
+            "headers": headers,
+            "content": resp.text,
+        }
+    )
 
 
 async def search(
@@ -108,11 +118,28 @@ async def search(
 
     allowed_types = {"code", "repositories", "issues", "commits", "users"}
     if search_type not in allowed_types:
-        raise ValueError(f"search_type must be one of {sorted(allowed_types)}")
+        return structured_tool_error(
+            ValueError(f"search_type must be one of {sorted(allowed_types)}"),
+            context="search",
+        )
     if per_page <= 0:
-        raise ValueError("per_page must be > 0")
+        return structured_tool_error(ValueError("per_page must be > 0"), context="search")
     if page <= 0:
-        raise ValueError("page must be > 0")
+        return structured_tool_error(ValueError("page must be > 0"), context="search")
+
+    # GitHub Search API constraints: per_page max 100.
+    per_page = min(int(per_page), 100)
+
+    # GitHub's Search API only returns up to 1,000 results. We therefore cap
+    # pages to 10 when per_page=100 (and proportionally otherwise).
+    max_page = max(1, 1000 // max(1, per_page))
+    if page > max_page:
+        return structured_tool_error(
+            ValueError(
+                f"page is too large for GitHub Search API (max page for per_page={per_page} is {max_page})"
+            ),
+            context="search",
+        )
 
     params: Dict[str, Any] = {"q": query, "per_page": per_page, "page": page}
     if sort:
@@ -120,7 +147,10 @@ async def search(
     if order is not None:
         allowed_order = {"asc", "desc"}
         if order not in allowed_order:
-            raise ValueError("order must be 'asc' or 'desc'")
+            return structured_tool_error(
+                ValueError("order must be 'asc' or 'desc'"),
+                context="search",
+            )
         params["order"] = order
 
     headers = None
@@ -130,12 +160,14 @@ async def search(
         }
 
     try:
-        return await github_request(
+        result = await github_request(
             "GET",
             f"/search/{search_type}",
             params=params,
             headers=headers,
         )
+        # Search results can include snippets that contain secrets; redact.
+        return redact_any(result)
     except Exception as exc:  # noqa: BLE001
         return structured_tool_error(
             exc,
