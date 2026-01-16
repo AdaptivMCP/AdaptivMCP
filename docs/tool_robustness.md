@@ -8,6 +8,7 @@ The workspace tools operate on a persistent server-side clone (“repo mirror”
 
 1. `ensure_workspace_clone` (create or re-create the repo mirror if needed)
 2. Modify files via `set_workspace_file_contents` or `apply_patch`
+   - For multi-file edits, moves, and deletions in one call, use `apply_workspace_operations`.
 3. Inspect changes via `get_workspace_changes_summary`
 4. Commit and push via `commit_workspace` / `commit_workspace_files`
 5. Open a PR via `create_pull_request` (or `commit_and_open_pr_from_workspace`)
@@ -17,6 +18,8 @@ Input validation and guardrails:
 - All file path inputs are validated as repo-relative paths and are required to resolve within the repo root (path traversal is rejected).
 - `set_workspace_file_contents` requires a non-empty `path` and writes using UTF-8 text.
 - `delete_workspace_paths` requires a non-empty `paths` list.
+- `move_workspace_paths` moves (renames) multiple paths in one call.
+- `apply_workspace_operations` batches writes, edits, moves, and deletions with optional rollback.
   - Directories are refused unless `allow_recursive=true`.
   - Missing paths are ignored only when `allow_missing=true`.
 - `apply_patch` rejects patches that attempt to write outside the repo mirror.
