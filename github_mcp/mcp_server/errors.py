@@ -243,7 +243,7 @@ def _structured_tool_error(
     if trace is not None:
         detail["trace"] = redact_any(trace)
 
-    return {"error": message, "error_detail": redact_any(detail)}
+    return {"status": "error", "ok": False, "error": message, "error_detail": redact_any(detail)}
 
 
 def _exception_trace(exc: BaseException) -> str:

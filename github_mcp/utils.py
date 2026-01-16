@@ -317,6 +317,10 @@ def _normalize_write_context(
     normalized_path: str | None = None
     if path is not None:
         normalized_path = _normalize_repo_path_for_repo(full_name, path)
+        # A repo-relative file path must not normalize to "". Some callers pass
+        # repo roots or URLs; treat those as invalid for write tools.
+        if normalized_path == "":
+            normalized_path = None
     return effective_branch, normalized_path
 
 

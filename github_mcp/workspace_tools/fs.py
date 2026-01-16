@@ -107,15 +107,10 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     raw_path = rel_path.strip().replace("\\", "/")
     root = os.path.realpath(repo_dir)
     if os.path.isabs(raw_path):
-        candidate = os.path.realpath(raw_path)
-        # Allow absolute paths only when they resolve inside the workspace.
-        try:
-            common = os.path.commonpath([root, candidate])
-        except Exception:
-            common = ""
-        if common != root:
-            raise ValueError("path must resolve inside the workspace repository")
-        return candidate
+        # For consistent tool UX (and to reduce ambiguity around workspace base
+        # directories), require repository-relative paths. All workspace file
+        # tools accept paths relative to the repo mirror root.
+        raise ValueError("path must be repository-relative (no leading '/')")
     rel_path = raw_path.lstrip("/\\")
     if not rel_path:
         raise ValueError("path must be a non-empty string")
