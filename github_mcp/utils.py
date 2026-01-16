@@ -155,7 +155,7 @@ def _normalize_repo_path(path: str) -> str:
 
     parts = [part for part in normalized.split("/") if part not in ("", ".")]
     if any(part == ".." for part in parts):
-        # Never allow path traversal.
+        # Block path traversal.
         raise ToolPreflightValidationError(
             "<server>",
             f"Invalid path {path!r}: parent-directory segments are not allowed.",

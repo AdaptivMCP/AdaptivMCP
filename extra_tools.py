@@ -3,9 +3,9 @@
 These tools are registered opportunistically at server startup via
 ``register_extra_tools_if_available``.
 
-Important: avoid importing ``main`` here. The main module imports the server,
-and the server imports this module to register tools. Importing ``main`` would
-create a cycle, causing registration to fail and the tools to be omitted.
+Note: this module intentionally does not import ``main``. The main module
+imports the server, and the server imports this module to register tools.
+Importing ``main`` here would create an import cycle.
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         write_action=True,
         description=(
             "Delete a file from a GitHub repository using the Contents API. "
-            "Use ensure_branch if you want to delete on a dedicated branch."
+            "Often used in combination with branch management helpers."
         ),
         tags=["github", "write", "files", "delete"],
     )(
@@ -167,8 +167,8 @@ def register_extra_tools(mcp_tool: ToolDecorator) -> None:
         write_action=True,
         description=(
             "Update a single file in a GitHub repository from the persistent "
-            "workspace checkout. Use terminal_command to edit the workspace file "
-            "first, then call this tool to sync it back to the branch."
+            "workspace checkout. This pairs with workspace editing tools (for example, "
+            "terminal_command) to modify a file and then write it back to the branch."
         ),
         tags=["github", "write", "files"],
     )(

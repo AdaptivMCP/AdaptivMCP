@@ -178,7 +178,7 @@ async def render_shell(
                 # Remote branch exists, safe to target it directly.
                 target_ref = create_branch
             else:
-                # IMPORTANT: branch exists only locally in the base workcell (repo mirror).
+                # Note: branch exists only locally in the base workcell (repo mirror).
                 # Do NOT try to clone a non-existent remote branch.
                 target_ref = effective_ref
                 command = f"git checkout {shlex.quote(create_branch)} && {command}"

@@ -373,10 +373,13 @@ def _normalize_tool_description(
     except Exception:
         sig = ""
 
+    # Keep fallback descriptions non-prescriptive; clients and agents should not
+    # treat tool descriptions as behavioral constraints.
     base = f"{_title_from_tool_name(getattr(func, '__name__', 'tool'))}."
     if sig:
         base += f" Signature: {getattr(func, '__name__', 'tool')}{sig}."
-    base += f" LLM level: {llm_level}."
+    # llm_level retained for backward compatibility but not emitted.
+    _ = llm_level
     return base
 
 
@@ -431,18 +434,10 @@ def _build_tool_docstring(
         if rest:
             lines += ["", rest]
 
-    lines += [
-        "",
-        f"Write action: {'yes' if write_action else 'no'}.",
-        (
-            "This tool can change remote state. Your client may ask for confirmation before running it. "
-            "If confirmation is required, the tool returns a structured error explaining the next step."
-            if write_action
-            else "This tool is read-only and does not change remote state."
-        ),
-        "",
-        f"Visibility: {visibility}.",
-    ]
+    # Keep tool docstrings factual and non-prescriptive so they do not compete
+    # with user/client instructions.
+    _ = write_action
+    _ = visibility
 
     schema = input_schema if isinstance(input_schema, Mapping) else None
     props = schema.get("properties") if schema is not None else None
@@ -478,29 +473,7 @@ def _build_tool_docstring(
                 rendered = ", ".join(repr(e) for e in examples[:3])
                 lines.append(f"  Examples: {rendered}")
 
-    lines += [
-        "",
-        "Returns:",
-        "  A JSON-serializable object defined by the tool. Most tools return a mapping (dict-like) payload.",
-        "",
-        "Errors:",
-        "  On failure, tools return a structured error payload (JSON object) describing the failure, context, and any relevant metadata.",
-        "  Error shape (typical):",
-        '    {"error": "<message>", "error_detail": {..}}',
-        "  Categories include: validation, auth, rate_limited, not_found, conflict, timeout, upstream, internal.",
-        "",
-        "Execution hints (_meta):",
-        "  Tools accept an optional _meta kwarg (stripped before dispatch). Use it for safe runtime hints such as request-level idempotency.",
-        "  Supported keys: dedupe (bool), dedupe_ttl_s/dedupe_ttl_seconds (number), idempotency_key/dedupe_key (string).",
-        "  Default TTLs are controlled by env: GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S and GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S.",
-    ]
-
-    if schema is not None:
-        lines += [
-            "",
-            "Example:",
-            f"  {{'tool': {tool_name!r}, 'args': {{...}}}}",
-        ]
+    lines += ["", "Returns:", "  A JSON-serializable value defined by the tool."]
 
     return "\n".join(lines).rstrip() + "\n"
 

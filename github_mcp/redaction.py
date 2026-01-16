@@ -7,7 +7,7 @@ error payloads can cause upstream safety systems to block the response.
 These helpers implement conservative, best-effort redaction for common secret
 formats while minimizing false positives.
 
-Redaction can be disabled (not recommended) via:
+Redaction can be disabled via:
   GITHUB_MCP_REDACT_SECRETS=0
 """
 
