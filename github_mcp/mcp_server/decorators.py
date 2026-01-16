@@ -1242,9 +1242,9 @@ def _dedupe_ttl_seconds(*, write_action: bool, meta: Mapping[str, Any]) -> float
 
     # Environment defaults.
     if write_action:
-        raw = os.environ.get("GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S", "60")
+        raw = os.environ.get("GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S", "0")
     else:
-        raw = os.environ.get("GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S", "15")
+        raw = os.environ.get("GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S", "0")
     try:
         return max(0.0, float(raw))
     except Exception:

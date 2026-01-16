@@ -55,6 +55,16 @@ def list_write_tools() -> Dict[str, Any]:
             "description": "Apply a unified diff patch inside the persistent repo mirror (workspace clone).",
         },
         {
+            "name": "move_workspace_paths",
+            "category": "workspace",
+            "description": "Move (rename) paths inside the persistent repo mirror (workspace clone).",
+        },
+        {
+            "name": "apply_workspace_operations",
+            "category": "workspace",
+            "description": "Apply multiple file operations in one call inside the persistent repo mirror.",
+        },
+        {
             "name": "commit_workspace_files",
             "category": "workspace",
             "description": "Commit a specific list of files from the persistent repo mirror.",
@@ -63,6 +73,11 @@ def list_write_tools() -> Dict[str, Any]:
             "name": "run_tests",
             "category": "workspace",
             "description": "Run tests (default: pytest) inside the persistent repo mirror (workspace clone).",
+        },
+        {
+            "name": "run_python",
+            "category": "workspace",
+            "description": "Run a Python script inside the persistent repo mirror without heredoc.",
         },
         {
             "name": "trigger_workflow_dispatch",
