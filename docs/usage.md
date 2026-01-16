@@ -196,6 +196,9 @@ Transport security (trusted hosts)
 
 These flags control provider-side logs (for example, Render logs). They leave tool outputs unchanged.
 
+Important: provider logs are human-facing by default. This server avoids emitting raw JSON blobs in log lines.
+Structured context (request IDs, tool metadata, etc.) is appended as a YAML-like block when enabled.
+
 - QUIET_LOGS (default: false) — suppresses most non-error logs.
 - HUMAN_LOGS (default: true) — emits scan-friendly tool call log lines with correlation fields.
 - LOG_TOOL_PAYLOADS (default: false) — logs full tool input arguments and full tool results (no truncation).
@@ -206,6 +209,9 @@ These flags control provider-side logs (for example, Render logs). They leave to
 - LOG_HTTP_REQUESTS (default: true) — logs inbound HTTP requests to the ASGI server (method/path/status/duration) with request_id.
 - LOG_HTTP_BODIES (default: false) — when enabled, logs the POST /messages body (no truncation). This may include sensitive payloads.
 - LOG_TOOL_CALLS (default: true) — logs tool_call_started/tool_call_completed lines to provider logs. Failures are still logged as warnings.
+- LOG_APPEND_EXTRAS (default: true when HUMAN_LOGS=true; else false) — append a YAML-like `extras:` block to provider log lines for tool events and warnings/errors.
+- LOG_EXTRAS_MAX_LINES (default: 200) — max number of lines appended in the `extras:` block.
+- LOG_EXTRAS_MAX_CHARS (default: 20000) — max total characters appended in the `extras:` block.
 
 Visual tool previews
 ~~~~~~~~~~~~~~~~~~~~
