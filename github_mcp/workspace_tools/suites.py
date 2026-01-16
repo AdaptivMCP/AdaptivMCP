@@ -265,6 +265,8 @@ async def run_quality_suite(
 
     steps: List[Dict[str, Any]] = []
 
+    optional_failures: List[str] = []
+
     async def run_optional(name: str, command: Optional[str]) -> Optional[Dict[str, Any]]:
         if not command:
             return None
@@ -281,6 +283,13 @@ async def run_quality_suite(
             allow_missing_command=True,
         )
         steps.append(step)
+
+        # Optional steps are informative by default. When they fail, surface a
+        # warning signal without failing the overall suite unless explicitly
+        # requested via gate_optional_steps.
+        if step.get("status") == "failed" and not gate_optional_steps:
+            optional_failures.append(name)
+
         # Optional steps are informative by default; do not gate the suite unless explicitly requested.
         if gate_optional_steps and fail_fast and step.get("status") == "failed":
             controller_log.append(f"- Aborted: {name} failed")
@@ -378,6 +387,14 @@ async def run_quality_suite(
         status = "no_tests"
     else:
         status = "passed" if tests_step.get("status") == "passed" else "failed"
+
+    if status in {"passed", "no_tests"} and optional_failures:
+        controller_log.append(
+            "- Warnings: optional steps failed: "
+            + ", ".join(sorted(set(optional_failures)))
+        )
+        if status == "passed":
+            status = "passed_with_warnings"
 
     controller_log.append(f"- Status: {status}")
 
