@@ -1210,6 +1210,150 @@ def _strip_internal_log_fields(payload: Mapping[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _tool_result_outcome(result: Any) -> str:
+    """Classify a tool return payload as ok/warning/error.
+
+    Tools historically used both raised exceptions and structured error dicts.
+    This helper ensures we do not log structured errors as successful tool calls.
+    """
+
+    if not isinstance(result, Mapping):
+        return "ok"
+
+    status = str(result.get("status") or "").strip().lower()
+    ok_val = result.get("ok")
+    if isinstance(ok_val, bool) and ok_val is False:
+        return "error"
+    if status in {"error", "failed", "failure"}:
+        return "error"
+
+    err = result.get("error")
+    if isinstance(err, str) and err.strip():
+        return "error"
+    if isinstance(err, Mapping) and (err.get("message") or err.get("detail")):
+        return "error"
+
+    if status in {"warning", "warn", "passed_with_warnings"}:
+        return "warning"
+    warnings = result.get("warnings")
+    if isinstance(warnings, list) and any(bool(str(w).strip()) for w in warnings):
+        return "warning"
+    if isinstance(warnings, str) and warnings.strip():
+        return "warning"
+
+    return "ok"
+
+
+def _log_tool_warning(
+    *,
+    tool_name: str,
+    call_id: str,
+    write_action: bool,
+    req: Mapping[str, Any],
+    schema_hash: Optional[str],
+    schema_present: bool,
+    duration_ms: float,
+    result: Any,
+    all_args: Mapping[str, Any] | None = None,
+) -> None:
+    if not LOG_TOOL_CALLS:
+        return
+    payload = _tool_log_payload(
+        tool_name=tool_name,
+        call_id=call_id,
+        write_action=write_action,
+        req=req,
+        schema_hash=schema_hash,
+        schema_present=schema_present,
+    )
+    if all_args is not None:
+        payload.update(_extract_context(all_args))
+    payload["duration_ms"] = duration_ms
+    payload["response"] = _result_snapshot(result) if not LOG_TOOL_PAYLOADS else result
+
+    if not HUMAN_LOGS:
+        LOGGER.warning(
+            f"{_ansi('!', ANSI_YELLOW)} {_ansi(tool_name, ANSI_CYAN)} ms={duration_ms:.2f}",
+            extra={"event": "tool_call_completed_with_warnings", **payload},
+        )
+        return
+
+    friendly = _friendly_tool_name(tool_name)
+    bits = _friendly_arg_bits(all_args or {})
+    suffix = (" - " + " - ".join(bits)) if bits else ""
+    prefix = _ansi("RES", ANSI_YELLOW) + " " + _ansi(friendly, ANSI_CYAN)
+    ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
+    snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
+    rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
+    res_suffix = (" - " + " - ".join(rbits)) if rbits else ""
+    msg = f"{prefix} {ms}{suffix}{res_suffix}"
+    if LOG_TOOL_LOG_IDS:
+        msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+    LOGGER.warning(msg, extra={"event": "tool_call_completed_with_warnings", **payload})
+
+
+def _log_tool_returned_error(
+    *,
+    tool_name: str,
+    call_id: str,
+    write_action: bool,
+    req: Mapping[str, Any],
+    schema_hash: Optional[str],
+    schema_present: bool,
+    duration_ms: float,
+    result: Mapping[str, Any],
+    all_args: Mapping[str, Any],
+) -> None:
+    """Log a tool call that returned an error payload without raising."""
+
+    payload = _tool_log_payload(
+        tool_name=tool_name,
+        call_id=call_id,
+        write_action=write_action,
+        req=req,
+        schema_hash=schema_hash,
+        schema_present=schema_present,
+        all_args=all_args,
+    )
+    payload.update({"duration_ms": duration_ms, "phase": "execute", "error_type": "ReturnedError"})
+
+    err = result.get("error")
+    if isinstance(err, Mapping):
+        payload["error_message"] = err.get("message")
+    elif isinstance(err, str):
+        payload["error_message"] = err
+
+    payload["response"] = result if LOG_TOOL_PAYLOADS else _result_snapshot(result)
+
+    arg_summary = _args_summary(all_args)
+    kv_map: dict[str, Any] = {
+        "phase": "execute",
+        "ms": f"{duration_ms:.2f}",
+        **{k: v for k, v in arg_summary.items()},
+    }
+    err_msg = payload.get("error_message")
+    if isinstance(err_msg, str) and err_msg.strip():
+        kv_map["error"] = _truncate_text(err_msg, limit=140)
+    snap = payload.get("response")
+    if isinstance(snap, Mapping):
+        rbits = _friendly_result_bits(snap)
+        if rbits:
+            kv_map["response"] = "; ".join(rbits[:3])
+    if LOG_TOOL_LOG_IDS:
+        req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
+        kv_map.update(
+            {
+                "call_id": payload.get("call_id"),
+                "session_id": req_ctx.get("session_id"),
+                "message_id": req_ctx.get("message_id"),
+                "path": req_ctx.get("path"),
+            }
+        )
+    line = _format_log_kv(kv_map)
+    prefix = _ansi("RES", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+    LOGGER.warning(f"{prefix} {line}", extra={"event": "tool_call_failed", **payload})
+
+
 def _extract_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
     """Extract the optional _meta payload without mutating kwargs."""
 
@@ -2060,17 +2204,43 @@ def mcp_tool(
                 # breaks output validation (e.g., ping_extensionsOutput expects a
                 # string but receives an object).
                 duration_ms = (time.perf_counter() - start) * 1000
-                _log_tool_success(
-                    tool_name=tool_name,
-                    call_id=call_id,
-                    write_action=write_action,
-                    req=req,
-                    schema_hash=schema_hash if schema_present else None,
-                    schema_present=schema_present,
-                    duration_ms=duration_ms,
-                    result=result,
-                    all_args=all_args,
-                )
+                outcome = _tool_result_outcome(result)
+                if outcome == "error" and isinstance(result, Mapping):
+                    _log_tool_returned_error(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        write_action=write_action,
+                        req=req,
+                        schema_hash=schema_hash if schema_present else None,
+                        schema_present=schema_present,
+                        duration_ms=duration_ms,
+                        result=result,
+                        all_args=all_args,
+                    )
+                elif outcome == "warning":
+                    _log_tool_warning(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        write_action=write_action,
+                        req=req,
+                        schema_hash=schema_hash if schema_present else None,
+                        schema_present=schema_present,
+                        duration_ms=duration_ms,
+                        result=result,
+                        all_args=all_args,
+                    )
+                else:
+                    _log_tool_success(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        write_action=write_action,
+                        req=req,
+                        schema_hash=schema_hash if schema_present else None,
+                        schema_present=schema_present,
+                        duration_ms=duration_ms,
+                        result=result,
+                        all_args=all_args,
+                    )
                 if isinstance(result, Mapping):
                     # Return tool payload as-is; do not inject UI-only fields.
                     return _strip_internal_log_fields(result)
@@ -2240,17 +2410,43 @@ def mcp_tool(
 
             # Preserve scalar return types for tools that naturally return scalars.
             duration_ms = (time.perf_counter() - start) * 1000
-            _log_tool_success(
-                tool_name=tool_name,
-                call_id=call_id,
-                write_action=write_action,
-                req=req,
-                schema_hash=schema_hash if schema_present else None,
-                schema_present=schema_present,
-                duration_ms=duration_ms,
-                result=result,
-                all_args=all_args,
-            )
+            outcome = _tool_result_outcome(result)
+            if outcome == "error" and isinstance(result, Mapping):
+                _log_tool_returned_error(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    req=req,
+                    schema_hash=schema_hash if schema_present else None,
+                    schema_present=schema_present,
+                    duration_ms=duration_ms,
+                    result=result,
+                    all_args=all_args,
+                )
+            elif outcome == "warning":
+                _log_tool_warning(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    req=req,
+                    schema_hash=schema_hash if schema_present else None,
+                    schema_present=schema_present,
+                    duration_ms=duration_ms,
+                    result=result,
+                    all_args=all_args,
+                )
+            else:
+                _log_tool_success(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    write_action=write_action,
+                    req=req,
+                    schema_hash=schema_hash if schema_present else None,
+                    schema_present=schema_present,
+                    duration_ms=duration_ms,
+                    result=result,
+                    all_args=all_args,
+                )
             if isinstance(result, Mapping):
                 # Return tool payload as-is; do not inject UI-only fields.
                 return _strip_internal_log_fields(result)

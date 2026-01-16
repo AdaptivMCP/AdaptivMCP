@@ -45,17 +45,27 @@ def _tw():
 
 
 def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
+    """Resolve a working directory inside the repo mirror.
+
+    For consistency across tools, ``workdir`` must be repository-relative.
+    Absolute paths are rejected.
+    """
+
+    repo_real = os.path.realpath(repo_dir)
     if not workdir:
-        return os.path.realpath(repo_dir)
+        return repo_real
     if not isinstance(workdir, str):
         raise ValueError("workdir must be a string")
+
     normalized = workdir.strip().replace("\\", "/")
-    if not normalized:
-        return os.path.realpath(repo_dir)
-    if os.path.isabs(normalized):
-        candidate = os.path.realpath(normalized)
-    else:
-        candidate = os.path.realpath(os.path.join(repo_dir, normalized))
+    if not normalized or normalized in {".", "./"}:
+        return repo_real
+    if os.path.isabs(normalized) or normalized.startswith("/"):
+        raise ValueError("workdir must be repository-relative (no leading '/')")
+
+    candidate = os.path.realpath(os.path.join(repo_real, normalized))
+    if candidate != repo_real and not candidate.startswith(repo_real + os.sep):
+        raise ValueError("workdir must resolve inside the workspace repository")
     if not os.path.isdir(candidate):
         raise ValueError("workdir must point to a directory")
     return candidate
@@ -202,6 +212,10 @@ async def render_shell(
             "base_ref": effective_ref,
             "target_ref": target_ref,
             "branch": branch_creation,
+            "status": cleaned_command.get("status") if isinstance(cleaned_command, dict) else None,
+            "ok": cleaned_command.get("ok") if isinstance(cleaned_command, dict) else None,
+            "error": cleaned_command.get("error") if isinstance(cleaned_command, dict) else None,
+            "error_detail": cleaned_command.get("error_detail") if isinstance(cleaned_command, dict) else None,
             "workdir": (
                 cleaned_command.get("workdir") if isinstance(cleaned_command, dict) else None
             ),
@@ -285,7 +299,28 @@ async def terminal_command(
             env=env,
         )
 
+        exit_code = 0
+        timed_out = False
+        if isinstance(result, dict):
+            try:
+                exit_code = int(result.get("exit_code", 0) or 0)
+            except Exception:
+                exit_code = 0
+            timed_out = bool(result.get("timed_out", False))
+
+        ok = (exit_code == 0) and (not timed_out)
+        status = "ok" if ok else "failed"
+
+        error: Optional[str] = None
+        error_detail: Optional[Dict[str, Any]] = None
+        if not ok:
+            error = "Command timed out" if timed_out else f"Command exited with code {exit_code}"
+            error_detail = {"exit_code": exit_code, "timed_out": timed_out}
+
         out: Dict[str, Any] = {
+            "status": status,
+            "ok": ok,
+            **({"error": error, "error_detail": error_detail} if error else {}),
             "workdir": cwd,
             # Keep payload fields newline-free to avoid downstream double-escaping.
             "command_input": command,
