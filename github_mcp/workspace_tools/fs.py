@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
-from github_mcp.diff_utils import build_unified_diff
+from github_mcp.diff_utils import build_unified_diff, diff_stats
 
 from github_mcp.server import (
     _structured_tool_error,
@@ -611,6 +611,7 @@ async def compare_workspace_files(
     context_lines: int = 3,
     max_chars_per_side: int = 200000,
     max_diff_chars: int = 200000,
+    include_stats: bool = False,
 ) -> Dict[str, Any]:
     """Compare multiple file pairs or ref/path variants and return diffs.
 
@@ -624,6 +625,10 @@ async def compare_workspace_files(
          Compares two git object versions without changing checkout.
 
     Returned diffs are unified diffs and may be truncated.
+
+    If include_stats is true, each comparison result includes a "stats" object
+    with {added, removed} line counts derived from the full (pre-truncation)
+    unified diff.
     """
 
     try:
@@ -639,6 +644,7 @@ async def compare_workspace_files(
             raise ValueError("max_chars_per_side must be an int >= 1")
         if not isinstance(max_diff_chars, int) or max_diff_chars < 1:
             raise ValueError("max_diff_chars must be an int >= 1")
+        include_stats = bool(include_stats)
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
@@ -711,17 +717,26 @@ async def compare_workspace_files(
                     tofile = f"b/{right_path}"
                     partial = bool(l.get("truncated")) or bool(r.get("truncated"))
 
-                diff = build_unified_diff(
+                diff_full = build_unified_diff(
                     left_text,
                     right_text,
                     fromfile=fromfile,
                     tofile=tofile,
                     n=int(context_lines),
                 )
-                if not diff:
-                    diff = ""
+                if not diff_full:
+                    diff_full = ""
+
+                stats_obj: Dict[str, int] | None = None
+                if include_stats:
+                    if diff_full:
+                        ds = diff_stats(diff_full)
+                        stats_obj = {"added": int(ds.added), "removed": int(ds.removed)}
+                    else:
+                        stats_obj = {"added": 0, "removed": 0}
 
                 truncated = False
+                diff = diff_full
                 if len(diff) > max_diff_chars:
                     diff = diff[:max_diff_chars] + "\n… (diff truncated)\n"
                     truncated = True
@@ -732,6 +747,7 @@ async def compare_workspace_files(
                         "status": "ok",
                         "partial": bool(partial),
                         "truncated": bool(truncated),
+                        **({"stats": stats_obj} if include_stats else {}),
                         "diff": diff,
                     }
                 )
@@ -751,6 +767,7 @@ async def compare_workspace_files(
                 "context_lines": int(context_lines),
                 "max_chars_per_side": int(max_chars_per_side),
                 "max_diff_chars": int(max_diff_chars),
+                "include_stats": bool(include_stats),
             },
         }
     except Exception as exc:
