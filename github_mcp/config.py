@@ -64,6 +64,55 @@ def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
         return {}
 
 
+def snapshot_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return a compact request context snapshot for provider logs.
+
+    Provider log UIs (e.g., Render) are optimized for scanning. Full request
+    context includes many null/unset fields; this snapshot keeps only stable
+    correlation keys that are typically populated.
+
+    This does not affect tool outputs returned to clients.
+    """
+
+    if not isinstance(req, Mapping) or not req:
+        return {}
+
+    out: dict[str, Any] = {}
+    for key in (
+        "request_id",
+        "idempotency_key",
+        "dedupe_key",
+        "path",
+        "session_id",
+        "message_id",
+        "routing_hint",
+    ):
+        val = req.get(key)
+        if val is None or val == "":
+            continue
+        if key == "path" and isinstance(val, str) and val.startswith("/sse"):
+            # Avoid repeating transport-level SSE paths.
+            continue
+        out[key] = val
+
+    chatgpt = req.get("chatgpt")
+    if isinstance(chatgpt, Mapping) and chatgpt:
+        # Keep only IDs that help correlate across systems.
+        cg_out: dict[str, Any] = {}
+        for k in ("conversation_id", "assistant_id", "project_id", "organization_id", "user_id"):
+            v = chatgpt.get(k)
+            if v is None or v == "":
+                continue
+            cg_out[k] = v
+        if cg_out:
+            out["chatgpt"] = cg_out
+
+    try:
+        return _jsonable(out)
+    except Exception:
+        return out
+
+
 def _is_render_runtime() -> bool:
     """Best-effort detection for Render deployments.
 
@@ -481,9 +530,7 @@ class _StructuredFormatter(logging.Formatter):
         # Keep INFO lines scan-friendly for humans while ensuring tool events and
         # warnings/errors are self-contained for debugging.
         always_append_events = {
-            "tool_call_started",
-            "tool_call_completed",
-            "tool_call_failed",
+            # Visual previews are intentionally multi-line (diffs/snippets).
             "tool_visual",
         }
         event = getattr(record, "event", None)
@@ -713,5 +760,6 @@ __all__ = [
     "SANDBOX_CONTENT_BASE_URL",
     "git_identity_warnings",
     "shorten_token",
+    "snapshot_request_context",
     "summarize_request_context",
 ]

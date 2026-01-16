@@ -26,6 +26,7 @@ from github_mcp.config import (
     LOG_TOOL_CALLS,
     LOG_TOOL_PAYLOADS,
     shorten_token,
+    snapshot_request_context,
     summarize_request_context,
 )
 from github_mcp.exceptions import UsageError
@@ -87,6 +88,15 @@ LOG_TOOL_STYLE = os.environ.get("GITHUB_MCP_LOG_STYLE", "monokai")
 # Structured extras (appended by the provider log formatter) still include the
 # full request context.
 LOG_TOOL_LOG_IDS = _env_flag("GITHUB_MCP_LOG_IDS", default=False)
+
+# Emit one request snapshot line and one response snapshot line per tool call.
+# This is enabled by default because provider log UIs are optimized for
+# scan-friendly summaries.
+LOG_TOOL_SNAPSHOTS = _env_flag("GITHUB_MCP_LOG_SNAPSHOTS", default=True)
+
+# When enabled, include deeper diagnostic fields in provider extras.
+# This is intentionally off by default to keep logs scan-friendly.
+LOG_TOOL_VERBOSE_EXTRAS = _env_flag("GITHUB_MCP_LOG_VERBOSE_EXTRAS", default=False)
 
 LOG_TOOL_VISUAL_MAX_LINES = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_LINES", default=80)
 LOG_TOOL_READ_MAX_LINES = _env_int("GITHUB_MCP_LOG_READ_MAX_LINES", default=40)
@@ -1295,23 +1305,120 @@ def _dedupe_key(
 
 
 def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
-    # Keep context small by default; full payloads are opt-in.
-    payload: dict[str, Any] = {
-        "arg_keys": sorted(all_args.keys()),
-        "arg_count": len(all_args),
-    }
+    # Keep context small by default.
+    if not isinstance(all_args, Mapping) or not all_args:
+        return {}
     if LOG_TOOL_PAYLOADS:
         # Preserve full args without truncation; ensure JSON-serializable.
         try:
             from github_mcp.mcp_server.schemas import _preflight_tool_args
 
             preflight = _preflight_tool_args("<tool>", all_args, compact=False)
-            payload["args"] = (
-                preflight.get("args") if isinstance(preflight, Mapping) else dict(all_args)
-            )
+            args = preflight.get("args") if isinstance(preflight, Mapping) else dict(all_args)
         except Exception:
-            payload["args"] = dict(all_args)
-    return payload
+            args = dict(all_args)
+        return {"tool_args": args}
+
+    # Default: compact snapshot.
+    return {"tool_args": _args_summary(all_args)}
+
+
+def _result_snapshot(result: Any) -> dict[str, Any]:
+    """Produce a compact result summary for provider logs."""
+
+    # Scalars
+    if result is None:
+        return {"type": "null"}
+    if isinstance(result, (bool, int, float, str)):
+        return {"type": type(result).__name__, "value": _truncate_text(result, limit=180)}
+
+    # Collections
+    if isinstance(result, list):
+        return {
+            "type": "list",
+            "len": len(result),
+            "head": [_truncate_text(v, limit=140) for v in result[:3]],
+        }
+
+    if isinstance(result, Mapping):
+        # Prefer common "status" and "error" surfaces.
+        out: dict[str, Any] = {
+            "type": "dict",
+            "keys": len(result),
+        }
+
+        # Common runtime fields
+        for key in (
+            "status",
+            "state",
+            "ok",
+            "success",
+            "url",
+            "html_url",
+            "number",
+            "id",
+            "name",
+            "full_name",
+        ):
+            if key in result and result.get(key) not in (None, ""):
+                out[key] = _truncate_text(result.get(key), limit=180)
+
+        # Structured tool error shape
+        err = result.get("error")
+        if isinstance(err, Mapping) and err.get("message"):
+            out["error"] = _truncate_text(err.get("message"), limit=220)
+        elif isinstance(err, str) and err.strip():
+            out["error"] = _truncate_text(err, limit=220)
+
+        # terminal_command convenience: capture exit code
+        inner = result.get("result")
+        if isinstance(inner, Mapping) and inner.get("exit_code") is not None:
+            out["exit_code"] = inner.get("exit_code")
+        return out
+
+    return {"type": type(result).__name__, "value": _truncate_text(result, limit=180)}
+
+
+
+def _friendly_result_bits(snapshot: Mapping[str, Any] | None) -> list[str]:
+    """Convert a result snapshot into short, user-facing bits for RES lines."""
+
+    if not isinstance(snapshot, Mapping) or not snapshot:
+        return []
+
+    typ = snapshot.get("type")
+    bits: list[str] = []
+
+    if typ == "dict":
+        # Preferred high-signal fields.
+        for k in ("exit_code", "status", "state", "ok", "success", "number", "name", "full_name"):
+            if k in snapshot and snapshot.get(k) not in (None, ""):
+                bits.append(f"{k}={_truncate_text(snapshot.get(k), limit=60)}")
+
+        # URLs are helpful but can be long.
+        for k in ("html_url", "url"):
+            if k in snapshot and snapshot.get(k) not in (None, ""):
+                bits.append(f"{k}={_truncate_text(snapshot.get(k), limit=80)}")
+                break
+
+        err = snapshot.get("error")
+        if isinstance(err, str) and err.strip():
+            bits.append(f"error={_truncate_text(err, limit=120)}")
+
+        if not bits and snapshot.get("keys") is not None:
+            bits.append(f"keys={snapshot.get('keys')}")
+        return bits
+
+    if typ == "list":
+        if snapshot.get("len") is not None:
+            bits.append(f"len={snapshot.get('len')}")
+        return bits
+
+    # Scalar-ish
+    val = snapshot.get("value")
+    if val not in (None, ""):
+        bits.append(f"value={_truncate_text(val, limit=120)}")
+    return bits
 
 
 def _tool_log_payload(
@@ -1324,16 +1431,17 @@ def _tool_log_payload(
     schema_present: bool,
     all_args: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    payload = {
+    payload: dict[str, Any] = {
         "tool": tool_name,
         "call_id": shorten_token(call_id),
-        "write_action": bool(write_action),
-        "schema_hash": shorten_token(schema_hash) if schema_present else None,
-        "schema_present": bool(schema_present),
-        "request": summarize_request_context(req),
+        "request": snapshot_request_context(req),
     }
+    if write_action:
+        payload["write_action"] = True
+    if LOG_TOOL_VERBOSE_EXTRAS:
+        payload["schema_present"] = bool(schema_present)
+        payload["schema_hash"] = shorten_token(schema_hash) if schema_present else None
     if all_args is not None:
-        # _extract_context may inject full args if LOG_TOOL_PAYLOADS is enabled.
         payload.update(_extract_context(all_args))
     return payload
 
@@ -1348,9 +1456,8 @@ def _log_tool_start(
     schema_present: bool,
     all_args: Mapping[str, Any],
 ) -> None:
-    # Default: avoid logging both start + completion for every tool call.
-    # Completion logs already include correlation ids + duration.
-    if not LOG_TOOL_CALLS or not LOG_TOOL_CALL_STARTS:
+    # Snapshot mode emits both request and response lines.
+    if not LOG_TOOL_CALLS or not (LOG_TOOL_SNAPSHOTS or LOG_TOOL_CALL_STARTS):
         return
     payload = _tool_log_payload(
         tool_name=tool_name,
@@ -1361,11 +1468,11 @@ def _log_tool_start(
         schema_present=schema_present,
         all_args=all_args,
     )
-    # Developer-facing, human-readable line (provider log UIs show message strings most prominently).
+    # Developer-facing, scan-friendly request snapshot.
     friendly = _friendly_tool_name(tool_name)
     bits = _friendly_arg_bits(all_args)
     suffix = (" - " + " - ".join(bits)) if bits else ""
-    prefix = _ansi("▶", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN)
+    prefix = _ansi("REQ", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN)
     msg = f"{prefix}{suffix}"
     if LOG_TOOL_LOG_IDS:
         msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
@@ -1396,28 +1503,27 @@ def _log_tool_success(
     )
     if all_args is not None:
         payload.update(_extract_context(all_args))
-    payload.update(
-        {
-            "duration_ms": duration_ms,
-            "result_type": type(result).__name__,
-            "result_is_mapping": isinstance(result, Mapping),
-        }
-    )
+    payload["duration_ms"] = duration_ms
     if LOG_TOOL_PAYLOADS:
         try:
             from github_mcp.mcp_server.schemas import _jsonable
 
-            payload["result"] = _jsonable(result)
+            payload["response"] = _jsonable(result)
         except Exception:
-            payload["result"] = result
+            payload["response"] = result
+    else:
+        payload["response"] = _result_snapshot(result)
 
     if HUMAN_LOGS:
         friendly = _friendly_tool_name(tool_name)
         bits = _friendly_arg_bits(all_args or {})
         suffix = (" - " + " - ".join(bits)) if bits else ""
-        prefix = _ansi("✓", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN)
+        prefix = _ansi("RES", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN)
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
-        msg = f"{prefix} {ms}{suffix}"
+        snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
+        rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
+        res_suffix = (" - " + " - ".join(rbits)) if rbits else ""
+        msg = f"{prefix} {ms}{suffix}{res_suffix}"
         if LOG_TOOL_LOG_IDS:
             msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
         LOGGER.info(msg, extra={"event": "tool_call_completed", **payload})
@@ -1579,6 +1685,12 @@ def _log_tool_failure(
         elif isinstance(err, str):
             payload["error_message"] = err
 
+        # Include a compact response snapshot so failures have both sides.
+        if LOG_TOOL_PAYLOADS:
+            payload["response"] = structured_error
+        else:
+            payload["response"] = _result_snapshot(structured_error)
+
     call_id_short = payload.get("call_id")
 
     # Emit a scan-friendly message with a compact arg summary.
@@ -1595,6 +1707,14 @@ def _log_tool_failure(
         "ms": f"{duration_ms:.2f}",
         **{k: v for k, v in arg_summary.items()},
     }
+    err_msg = payload.get("error_message")
+    if isinstance(err_msg, str) and err_msg.strip():
+        kv_map["error"] = _truncate_text(err_msg, limit=140)
+    snap = payload.get("response")
+    if isinstance(snap, Mapping):
+        rbits = _friendly_result_bits(snap)
+        if rbits:
+            kv_map["response"] = "; ".join(rbits[:3])
     if LOG_TOOL_LOG_IDS:
         kv_map.update(
             {
@@ -1605,7 +1725,7 @@ def _log_tool_failure(
             }
         )
     line = _format_log_kv(kv_map)
-    prefix = _ansi("✗", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+    prefix = _ansi("RES", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
     LOGGER.warning(
         f"{prefix} {line}",
         extra={"event": "tool_call_failed", **payload},
