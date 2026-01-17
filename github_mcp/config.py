@@ -722,11 +722,25 @@ class _StructuredFormatter(logging.Formatter):
         if not extra_payload:
             return base
 
-        # Keep INFO lines scan-friendly for humans while ensuring tool events and
-        # warnings/errors are self-contained for debugging.
+        # Keep INFO lines scan-friendly for humans while ensuring key tool/http
+        # events are self-contained for debugging in provider logs.
+        #
+        # NOTE:
+        # These are intentionally limited to high-signal events so enabling
+        # LOG_APPEND_EXTRAS does not explode log volume.
         always_append_events = {
             # Visual previews are intentionally multi-line (diffs/snippets).
             "tool_visual",
+            # Tool lifecycle events (INFO).
+            "tool_call_started",
+            "tool_call_completed",
+            "tool_call_completed_with_warnings",
+            "tool_call_failed",
+            # HTTP request lifecycle events emitted by the ASGI middleware.
+            "http_request",
+            "http_exception",
+            # Render client request logs (when enabled).
+            "render_http",
         }
         event = getattr(record, "event", None)
         should_append = bool(LOG_APPEND_EXTRAS) and (

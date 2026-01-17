@@ -17,7 +17,7 @@ def _reload_config(monkeypatch):
     return importlib.reload(config)
 
 
-def test_provider_tool_success_logs_do_not_append_extras_block(monkeypatch):
+def test_provider_tool_success_logs_append_human_extras_block(monkeypatch):
     config = _reload_config(monkeypatch)
 
     stream = io.StringIO()
@@ -42,12 +42,12 @@ def test_provider_tool_success_logs_do_not_append_extras_block(monkeypatch):
     )
 
     out = stream.getvalue()
-    # INFO tool completion lines are intended to be scan-friendly.
-    # Structured extras are still attached to the LogRecord, but are not appended
-    # as multi-line blocks unless explicitly enabled for debugging.
-    assert "extras:" not in out
-    assert "foo" not in out
-    assert "nested" not in out
+    # Tool lifecycle events are appended as a YAML-like extras block when
+    # LOG_APPEND_EXTRAS=1 so provider logs are self-contained for debugging.
+    assert "extras:" in out
+    assert "foo: bar" in out
+    assert "nested:" in out
+    assert "a: 1" in out
     # No JSON blobs.
     assert "data=" not in out
     assert "{" not in out
