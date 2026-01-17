@@ -9,9 +9,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from github_mcp.config import (
-    SERVER_START_TIME,
-    SERVER_GIT_COMMIT,
     GIT_IDENTITY_PLACEHOLDER_ACTIVE,
+    SERVER_GIT_COMMIT,
+    SERVER_START_TIME,
     git_identity_warnings,
 )
 from github_mcp.exceptions import GitHubAuthError

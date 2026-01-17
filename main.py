@@ -9,11 +9,15 @@ import base64
 import json
 import time
 import uuid
-from urllib.parse import parse_qs
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Literal
-import httpx  # noqa: F401
+from typing import Any, Dict, List, Literal, Optional
+from urllib.parse import parse_qs
+
 import anyio
+import httpx  # noqa: F401
+from starlette.applications import Starlette
+from starlette.responses import PlainTextResponse
+from starlette.staticfiles import StaticFiles
 
 import github_mcp.server as server  # noqa: F401
 import github_mcp.tools_workspace as tools_workspace  # noqa: F401
@@ -21,19 +25,19 @@ from github_mcp import http_clients as _http_clients  # noqa: F401
 from github_mcp.config import (
     BASE_LOGGER,  # noqa: F401
     FETCH_FILES_CONCURRENCY,
+    FILE_CACHE_MAX_BYTES,  # noqa: F401
+    FILE_CACHE_MAX_ENTRIES,  # noqa: F401
     GITHUB_API_BASE,
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
-    MAX_CONCURRENCY,
-    FILE_CACHE_MAX_BYTES,  # noqa: F401
-    FILE_CACHE_MAX_ENTRIES,  # noqa: F401
-    WORKSPACE_BASE_DIR,  # noqa: F401
     HUMAN_LOGS,
-    LOG_HTTP_REQUESTS,
     LOG_HTTP_BODIES,
+    LOG_HTTP_REQUESTS,
     LOG_RENDER_HTTP,  # noqa: F401
     LOG_RENDER_HTTP_BODIES,  # noqa: F401
+    MAX_CONCURRENCY,
+    WORKSPACE_BASE_DIR,  # noqa: F401
     shorten_token,
 )
 from github_mcp.exceptions import (
@@ -43,13 +47,13 @@ from github_mcp.exceptions import (
     WriteApprovalRequiredError,  # noqa: F401
     WriteNotAuthorizedError,  # noqa: F401
 )
+from github_mcp.file_cache import (
+    clear_cache,
+)
 from github_mcp.github_content import (
     _decode_github_content,
     _load_body_from_content_url,
     _resolve_file_sha,  # noqa: F401
-)
-from github_mcp.file_cache import (
-    clear_cache,
 )
 from github_mcp.http_clients import (
     _external_client_instance,  # noqa: F401
@@ -57,9 +61,13 @@ from github_mcp.http_clients import (
     _get_github_token,  # noqa: F401
     _github_client_instance,  # noqa: F401
 )
+from github_mcp.http_routes.healthz import register_healthz_route
+from github_mcp.http_routes.render import register_render_routes
+from github_mcp.http_routes.tool_registry import register_tool_registry_routes
+from github_mcp.http_routes.ui import register_ui_routes
 from github_mcp.mcp_server.context import (
-    REQUEST_ID,
     REQUEST_CHATGPT_METADATA,
+    REQUEST_ID,
     REQUEST_MESSAGE_ID,
     REQUEST_PATH,
     REQUEST_RECEIVED_AT,
@@ -68,15 +76,15 @@ from github_mcp.mcp_server.context import (
 )
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
+    COMPACT_METADATA_DEFAULT,
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,
-    _structured_tool_error,  # noqa: F401
+    _find_registered_tool,
     _github_request,
+    _normalize_input_schema,
+    _structured_tool_error,  # noqa: F401
     mcp_tool,
     register_extra_tools_if_available,
-    COMPACT_METADATA_DEFAULT,
-    _find_registered_tool,
-    _normalize_input_schema,
 )
 from github_mcp.utils import (
     _effective_ref_for_repo,  # noqa: F401
@@ -88,13 +96,6 @@ from github_mcp.workspace import (
     _run_shell,  # noqa: F401
     _workspace_path,  # noqa: F401
 )
-from github_mcp.http_routes.healthz import register_healthz_route
-from github_mcp.http_routes.render import register_render_routes
-from github_mcp.http_routes.tool_registry import register_tool_registry_routes
-from github_mcp.http_routes.ui import register_ui_routes
-from starlette.staticfiles import StaticFiles
-from starlette.responses import PlainTextResponse
-from starlette.applications import Starlette
 
 
 class _CacheControlMiddleware:
@@ -495,6 +496,8 @@ def __getattr__(name: str):
 if not getattr(server, "_WRITE_ALLOWED_INITIALIZED", False):
     from github_mcp.mcp_server.context import (
         WRITE_ALLOWED as _CONTEXT_WRITE_ALLOWED,
+    )
+    from github_mcp.mcp_server.context import (
         get_write_allowed as _get_write_allowed,
     )
 

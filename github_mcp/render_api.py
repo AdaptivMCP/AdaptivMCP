@@ -12,6 +12,7 @@ Design goals:
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import os
 import time
 from typing import Any, Dict, Optional
@@ -21,6 +22,7 @@ from github_mcp.config import (
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
+    LOG_INLINE_CONTEXT,
     LOG_RENDER_HTTP,
     LOG_RENDER_HTTP_BODIES,
     RENDER_API_BASE,
@@ -28,16 +30,12 @@ from github_mcp.config import (
     RENDER_RATE_LIMIT_RETRY_MAX_ATTEMPTS,
     RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS,
     RENDER_TOKEN_ENV_VARS,
-    LOG_INLINE_CONTEXT,
     format_log_context,
     summarize_request_context,
 )
 from github_mcp.exceptions import RenderAPIError, RenderAuthError
 from github_mcp.http_clients import _get_concurrency_semaphore
 from github_mcp.mcp_server.context import get_request_context
-
-import importlib.util
-
 
 if importlib.util.find_spec("httpx") is not None:  # pragma: no cover
     import httpx

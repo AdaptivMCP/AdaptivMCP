@@ -8,9 +8,9 @@ the server and tests.
 from __future__ import annotations
 
 import asyncio
-import importlib
 import functools
 import hashlib
+import importlib
 import inspect
 import json
 import os
@@ -33,20 +33,19 @@ from github_mcp.config import (
 )
 from github_mcp.exceptions import UsageError
 from github_mcp.mcp_server.context import (
+    FASTMCP_AVAILABLE,
     WRITE_ALLOWED,
     get_request_context,
     mcp,
-    FASTMCP_AVAILABLE,
 )
 from github_mcp.mcp_server.errors import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.mcp_server.schemas import (
-    _schema_from_signature,
+    _build_tool_docstring,
     _normalize_input_schema,
     _normalize_tool_description,
-    _build_tool_docstring,
+    _schema_from_signature,
 )
-
 
 # Intentionally short logger name; config's formatter further shortens/colorizes.
 LOGGER = BASE_LOGGER.getChild("mcp")
@@ -144,9 +143,7 @@ LOG_TOOL_VERBOSE_EXTRAS = _env_flag("GITHUB_MCP_LOG_VERBOSE_EXTRAS", default=Fal
 # IMPORTANT: default is False to preserve the repo's compatibility contract:
 # tool return values must not be mutated by the wrapper.
 TOOL_RESULT_ENVELOPE = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE", default=False)
-TOOL_RESULT_ENVELOPE_SCALARS = _env_flag(
-    "GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALARS", default=False
-)
+TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALARS", default=False)
 
 LOG_TOOL_VISUAL_MAX_LINES = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_LINES", default=80)
 LOG_TOOL_READ_MAX_LINES = _env_int("GITHUB_MCP_LOG_READ_MAX_LINES", default=40)
@@ -183,8 +180,8 @@ def _highlight_code(text: str, *, kind: str = "text") -> str:
         from pygments.formatters import Terminal256Formatter
         from pygments.lexers import (
             DiffLexer,
-            PythonTracebackLexer,
             PythonLexer,
+            PythonTracebackLexer,
             TextLexer,
         )
 
@@ -209,7 +206,7 @@ def _highlight_file_text(path: str, text: str) -> str:
     try:
         from pygments import highlight
         from pygments.formatters import Terminal256Formatter
-        from pygments.lexers import get_lexer_for_filename, TextLexer
+        from pygments.lexers import TextLexer, get_lexer_for_filename
 
         try:
             lexer = get_lexer_for_filename(path or "", text)
@@ -228,7 +225,7 @@ def _highlight_line_for_filename(path: str, text: str) -> str:
     try:
         from pygments import highlight
         from pygments.formatters import Terminal256Formatter
-        from pygments.lexers import get_lexer_for_filename, TextLexer
+        from pygments.lexers import TextLexer, get_lexer_for_filename
 
         try:
             lexer = get_lexer_for_filename(path or "", text)

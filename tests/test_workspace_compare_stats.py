@@ -70,4 +70,3 @@ def test_compare_workspace_files_include_stats_zero_for_equal(tmp_path, monkeypa
     assert comp.get("status") == "ok"
     assert comp.get("diff") == ""
     assert comp.get("stats") == {"added": 0, "removed": 0}
-

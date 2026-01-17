@@ -10,7 +10,6 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from github_mcp.utils import _extract_hostname, _render_external_hosts
 
-
 # ------------------------------------------------------------------------------
 # Request-scoped context (used for correlation/logging/dedupe)
 # ------------------------------------------------------------------------------

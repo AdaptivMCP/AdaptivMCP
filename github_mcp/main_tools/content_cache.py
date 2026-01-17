@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from typing import Any, Dict, List, Optional
 
 from github_mcp.config import FETCH_FILES_CONCURRENCY
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.file_cache import bulk_get_cached, cache_payload, cache_stats
+from github_mcp.github_content import _decode_github_content as _decode_default
 from github_mcp.server import _github_request, _structured_tool_error
 from github_mcp.utils import _effective_ref_for_repo, _normalize_repo_path_for_repo
-import sys
-
-from github_mcp.github_content import _decode_github_content as _decode_default
 
 
 async def _resolve_ref_snapshot(full_name: str, ref: str | None) -> Dict[str, Any]:

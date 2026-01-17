@@ -6,11 +6,11 @@ import uuid
 from typing import Any, Dict, Optional
 
 from github_mcp.exceptions import GitHubAPIError
-from github_mcp.utils import _normalize_timeout_seconds
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
+from github_mcp.utils import _normalize_timeout_seconds
 
 
 def _normalize_command_payload(

@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import os
-import subprocess
-import shutil
-import sys
 import platform
+import shutil
+import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
-from ._main import _main
 from github_mcp.config import (
     GIT_AUTHOR_EMAIL,
     GIT_AUTHOR_NAME,
@@ -23,10 +21,10 @@ from github_mcp.config import (
     GITHUB_TOKEN_ENV_VARS,
     RENDER_TOKEN_ENV_VARS,
 )
-from github_mcp.render_api import _get_optional_render_token
-from github_mcp.render_api import render_request
 from github_mcp.exceptions import GitHubAPIError
+from github_mcp.render_api import _get_optional_render_token, render_request
 
+from ._main import _main
 
 _DISPATCH_PROBE_COOLDOWN_SECONDS = 300
 _dispatch_probe_state: Dict[str, Any] = {
@@ -258,8 +256,8 @@ async def validate_environment() -> Dict[str, Any]:
     # time). For operator confidence (and to catch bad deploys), confirm that the
     # expected GitHub + Render tool surfaces are present.
     try:
-        from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
         from github_mcp.main_tools.introspection import list_all_actions
+        from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 
         catalog = list_all_actions(include_parameters=False, compact=True)
         tools = catalog.get("tools") if isinstance(catalog, dict) else None

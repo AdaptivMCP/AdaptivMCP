@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-
 import sys
+from typing import Any, Dict, Optional
 
 from github_mcp.config import BASE_LOGGER
 from github_mcp.github_content import _perform_github_commit as _default_commit

@@ -7,11 +7,11 @@ from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import CONTROLLER_REPO
 from github_mcp.utils import _get_main_module
 from github_mcp.workspace import (
+    _apply_patch_to_repo,
     _clone_repo,
+    _git_auth_env,
     _prepare_temp_virtualenv,
     _run_shell,
-    _git_auth_env,
-    _apply_patch_to_repo,
 )
 
 

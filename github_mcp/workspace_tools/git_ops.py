@@ -1,8 +1,8 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
+import shlex
 import shutil
 import time
-import shlex
 from typing import Any, Dict, List, Optional
 
 from github_mcp.exceptions import GitHubAPIError
@@ -12,10 +12,10 @@ from github_mcp.server import (
 )
 
 from ._shared import (
-    _safe_branch_slug,
-    _run_shell_ok,
-    _diagnose_workspace_branch,
     _delete_branch_via_workspace,
+    _diagnose_workspace_branch,
+    _run_shell_ok,
+    _safe_branch_slug,
 )
 
 

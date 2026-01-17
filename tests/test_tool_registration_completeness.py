@@ -26,7 +26,6 @@ def _import_all_submodules(package_name: str) -> list[ModuleType]:
 def test_all_mcp_wrapped_tools_are_registered() -> None:
     # Importing main is the canonical bootstrap for tool registration.
     import main  # noqa: F401
-
     from github_mcp.server import _REGISTERED_MCP_TOOLS
 
     registered_names: Set[str] = set()
@@ -63,7 +62,6 @@ def test_all_mcp_wrapped_tools_are_registered() -> None:
 
 def test_registered_tools_have_write_action_flag() -> None:
     import main  # noqa: F401
-
     from github_mcp.server import _REGISTERED_MCP_TOOLS
 
     missing_flag = []

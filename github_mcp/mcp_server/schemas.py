@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import inspect
+import json
 import types
 import typing
 from typing import Any, Dict, Mapping, Optional, get_args, get_origin
-
 
 # ---------------------------------------------------------------------------
 # Schema ergonomics

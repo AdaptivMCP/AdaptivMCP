@@ -1,18 +1,16 @@
 # Split from github_mcp.tools_workspace (generated).
-import os
 import glob
 import hashlib
+import os
 import shutil
 import subprocess
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
 from github_mcp.diff_utils import build_unified_diff, diff_stats
-
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
-
 
 _LOG_WRITE_DIFFS = os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS", "1").strip().lower() not in {
     "0",
@@ -668,12 +666,14 @@ async def compare_workspace_files(
                     if not isinstance(base_ref, str) or not base_ref.strip():
                         raise ValueError("base_ref must be a non-empty string")
 
-                    ws = _workspace_read_text_limited(repo_dir, left_path, max_chars=max_chars_per_side)
+                    ws = _workspace_read_text_limited(
+                        repo_dir, left_path, max_chars=max_chars_per_side
+                    )
                     base = _git_show_text(repo_dir, base_ref, left_path)
                     if not base.get("exists"):
                         raise FileNotFoundError(f"missing at {base_ref}:{left_path}")
-                    left_text = (base.get("text") or "")
-                    right_text = (ws.get("text") or "")
+                    left_text = base.get("text") or ""
+                    right_text = ws.get("text") or ""
                     fromfile = f"a/{left_path} ({_sanitize_git_ref(base_ref)})"
                     tofile = f"b/{left_path} ({effective_ref})"
                     partial = bool(ws.get("truncated"))
@@ -694,8 +694,8 @@ async def compare_workspace_files(
                         raise FileNotFoundError(f"missing at {left_ref}:{left_path}")
                     if not right_info.get("exists"):
                         raise FileNotFoundError(f"missing at {right_ref}:{right_path}")
-                    left_text = (left_info.get("text") or "")
-                    right_text = (right_info.get("text") or "")
+                    left_text = left_info.get("text") or ""
+                    right_text = right_info.get("text") or ""
                     fromfile = f"a/{left_path} ({_sanitize_git_ref(left_ref)})"
                     tofile = f"b/{right_path} ({_sanitize_git_ref(right_ref)})"
                     partial = False
@@ -715,8 +715,8 @@ async def compare_workspace_files(
                         raise FileNotFoundError(left_path)
                     if not right_info.get("exists"):
                         raise FileNotFoundError(right_path)
-                    left_text = (left_info.get("text") or "")
-                    right_text = (right_info.get("text") or "")
+                    left_text = left_info.get("text") or ""
+                    right_text = right_info.get("text") or ""
                     fromfile = f"a/{left_path}"
                     tofile = f"b/{right_path}"
                     partial = bool(left_info.get("truncated")) or bool(right_info.get("truncated"))

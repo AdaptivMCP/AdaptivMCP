@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import importlib.util
 import logging
 import os
 import sys
 import time
-from typing import Any, Callable, Dict, Optional, Tuple
 import weakref
-
-import importlib.util
+from typing import Any, Callable, Dict, Optional, Tuple
 
 
 def _get_main_module_for_patching():
@@ -110,26 +109,27 @@ else:
 
     httpx = _HttpxModule()
 
+from github_mcp.mcp_server.context import get_request_context  # noqa: E402
+
 from .config import (  # noqa: E402
     GITHUB_API_BASE,
     GITHUB_API_BASE_URL,
-    GITHUB_REQUEST_TIMEOUT_SECONDS,
-    GITHUB_SEARCH_MIN_INTERVAL_SECONDS,
-    GITHUB_TOKEN_ENV_VARS,
+    GITHUB_LOGGER,
     GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS,
     GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS,
     GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS,
+    GITHUB_REQUEST_TIMEOUT_SECONDS,
+    GITHUB_SEARCH_MIN_INTERVAL_SECONDS,
+    GITHUB_TOKEN_ENV_VARS,
     HTTPX_MAX_CONNECTIONS,
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
-    MAX_CONCURRENCY,
-    GITHUB_LOGGER,
     LOG_GITHUB_HTTP,
     LOG_GITHUB_HTTP_BODIES,
+    MAX_CONCURRENCY,
     summarize_request_context,
 )
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
-from github_mcp.mcp_server.context import get_request_context  # noqa: E402
 
 _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
     weakref.WeakKeyDictionary()

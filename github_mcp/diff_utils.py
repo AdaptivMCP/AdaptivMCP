@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from difflib import unified_diff
 from typing import List
 
-
 ANSI_RESET = "\x1b[0m"
 ANSI_RED = "\x1b[31m"
 ANSI_GREEN = "\x1b[32m"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, Optional
 
+import github_mcp.server as server
 from github_mcp.config import (
     FETCH_FILES_CONCURRENCY,
     GIT_AUTHOR_EMAIL,
@@ -20,9 +21,8 @@ from github_mcp.config import (
     SANDBOX_CONTENT_BASE_URL,
     git_identity_warnings,
 )
-from github_mcp.render_api import _get_optional_render_token
-import github_mcp.server as server
 from github_mcp.exceptions import GitHubAPIError, GitHubAuthError
+from github_mcp.render_api import _get_optional_render_token
 from github_mcp.server import (
     CONTROLLER_DEFAULT_BRANCH,
     CONTROLLER_REPO,

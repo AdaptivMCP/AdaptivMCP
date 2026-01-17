@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import types
-
 import asyncio
-
+import types
 
 import main
 from github_mcp.main_tools import introspection

@@ -11,7 +11,6 @@ from typing import Any, Mapping
 
 from github_mcp.mcp_server.schemas import _jsonable
 
-
 _UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )

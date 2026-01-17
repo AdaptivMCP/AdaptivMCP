@@ -13,12 +13,10 @@ For tool authors:
 from __future__ import annotations
 
 from github_mcp.http_clients import _github_request  # noqa: F401
-from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO, _env_flag  # noqa: F401
-
 from github_mcp.mcp_server.context import (  # noqa: F401
+    _TOOL_EXAMPLES,
     COMPACT_METADATA_DEFAULT,
     WRITE_ALLOWED,
-    _TOOL_EXAMPLES,
     mcp,
 )
 from github_mcp.mcp_server.decorators import mcp_tool, register_extra_tools_if_available
@@ -33,6 +31,7 @@ from github_mcp.mcp_server.schemas import (  # noqa: F401
     _preflight_tool_args,
     _stringify_annotation,
 )
+from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO, _env_flag  # noqa: F401
 
 __all__ = [
     "COMPACT_METADATA_DEFAULT",
