@@ -1,6 +1,6 @@
 # Tool robustness and usage patterns
 
-This note documents server-side input validation and common usage flows for the workspace (repo mirror), GitHub, and Render tools.
+This note documents server-side input validation and usage patterns for the workspace (repo mirror), GitHub, and Render tools.
 
 This document uses the terminology defined in `docs/terminology.md`.
 
@@ -62,6 +62,46 @@ Response shaping:
 Some deployments enable response shaping for ChatGPT-hosted connectors (see
 `docs/usage.md`). When enabled, mapping tool results may be normalized to
 include `ok` / `status` and large nested payloads may be truncated.
+
+## Logging and failure semantics
+
+The server emits provider-facing tool logs intended for hosted log UIs (for
+example Render) and incident triage.
+
+Events (structured `event` field):
+
+- `tool_call_started` (INFO): emitted when a tool wrapper begins execution.
+- `tool_call_completed` (INFO): emitted when a tool returns a non-error result.
+- `tool_call_completed_with_warnings` (WARNING): emitted when a tool returns a
+  warning result.
+- `tool_call_failed` (ERROR): emitted when a tool raises an exception or returns
+  an explicit error payload.
+
+Failure classification:
+
+- A mapping result is treated as an error when it includes any of:
+  - `ok=false`
+  - `status` in `error|failed|failure`
+  - a non-empty `error` string
+  - terminal-style outcomes: `exit_code != 0` or `timed_out=true` (either at the
+    top level or under a nested `result` mapping)
+
+Structured errors:
+
+- Exceptions are converted to a compatibility-preserving payload that always
+  includes a top-level single-line `error` string and an `error_detail` object
+  with `category`, `code`, `retryable`, `help`, and redacted `debug` fields.
+
+- Tool wrappers attach an `error_detail.trace` object with:
+  - `phase`: `preflight` or `execute`
+  - `call_id`: shortened call identifier
+
+Tracebacks:
+
+- Provider logs can include `exc_info` for failures when
+  `GITHUB_MCP_LOG_EXC_INFO=1` (default: enabled locally; disabled on Render).
+- Tool payloads include tracebacks only when `GITHUB_MCP_INCLUDE_TRACEBACK` is
+  enabled (default: enabled locally; disabled on Render).
 
 ## Render tools
 
