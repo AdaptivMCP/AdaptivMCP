@@ -6,14 +6,18 @@ This document uses the terminology defined in `docs/terminology.md`.
 
 ## Workspace (repo mirror)
 
-The workspace tools operate on a persistent server-side clone (“repo mirror”). A common write flow is:
+The workspace tools operate on a persistent server-side clone (“repo mirror”).
+They cover repository working-copy management, file edits, command execution,
+and git operations (commit/push/PR creation).
 
-1. `ensure_workspace_clone` (create or re-create the repo mirror if needed)
-2. Modify files via `set_workspace_file_contents` or `apply_patch`
-   - For multi-file edits, moves, and deletions in one call, use `apply_workspace_operations`.
-3. Inspect changes via `get_workspace_changes_summary`
-4. Commit and push via `commit_workspace` / `commit_workspace_files`
-5. Open a PR via `create_pull_request` (or `commit_and_open_pr_from_workspace`)
+Representative tools:
+
+- Repo mirror management: `ensure_workspace_clone`, `workspace_sync_status`, `workspace_sync_to_remote`
+- Branch management: `workspace_create_branch`
+- File edits: `set_workspace_file_contents`, `apply_patch`, `apply_workspace_operations`
+- Change inspection: `get_workspace_changes_summary`
+- Commit/push: `commit_workspace`, `commit_workspace_files`
+- PR creation: `create_pull_request`, `commit_and_open_pr_from_workspace`
 
 Input validation and guardrails:
 
@@ -47,11 +51,11 @@ Validation and reliability:
 - REST pagination inputs are clamped to safe bounds (e.g., `per_page` 1–100 where applicable; `page` >= 1).
 - For long-running or multi-call summaries (e.g., dashboards), helpers degrade gracefully and return section-level errors instead of failing the entire call.
 
-Common usage patterns:
+Representative combinations:
 
-- `get_repo_dashboard` / `get_repo_dashboard_graphql` for quick triage and orientation.
-- `cache_files` + `get_cached_files` for repeated reads of the same content during an interactive session.
-- For CI triage, `get_workflow_run_overview` and then `get_job_logs` for untruncated job output.
+- `get_repo_dashboard` / `get_repo_dashboard_graphql` for repository-level status and orientation.
+- `cache_files` + `get_cached_files` for repeated reads of the same content during a session.
+- CI inspection: `get_workflow_run_overview`, `get_job_logs`.
 
 Response shaping:
 
@@ -72,8 +76,8 @@ Validation and safety controls:
   - Provide `image_url` for image-backed services.
 - `get_render_logs` validates timestamps as ISO8601 strings when provided, and clamps `limit`.
 
-Common usage patterns:
+Representative combinations:
 
-- Start discovery with `list_render_owners` and `list_render_services`.
-- Use `list_render_deploys` to locate relevant deploy ids before calling `get_render_deploy`, `cancel_render_deploy`, or `rollback_render_deploy`.
-- For incident response, couple `get_render_deploy` (state/metadata) with `get_render_logs` (runtime symptoms).
+- Inventory/inspection: `list_render_owners`, `list_render_services`, `list_render_deploys`.
+- Deploy lifecycle: `get_render_deploy`, `cancel_render_deploy`, `rollback_render_deploy`.
+- Runtime diagnostics: `get_render_deploy`, `get_render_logs`.

@@ -93,7 +93,7 @@ The server exposes:
 
 ## Documentation
 
-- [Usage guide](docs/usage.md) — workflows, configuration, operational behavior.
+- [Usage guide](docs/usage.md) — tool surface, configuration, operational behavior.
 - [Terminology and glossary](docs/terminology.md) — stable definitions used across docs and code.
 - [Architecture and safety](docs/architecture_safety.md) — safety posture and guardrails.
 - [Tool robustness](docs/tool_robustness.md) — validation rules and common patterns.
