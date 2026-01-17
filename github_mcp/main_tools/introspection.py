@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional
 
-from github_mcp.mcp_server.registry import _registered_tool_name
+from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.mcp_server.schemas import _jsonable
 
 from ._main import _main
@@ -173,6 +173,14 @@ def _approval_required(write_action: bool, write_auto_approved: bool) -> bool:
     return False
 
 
+def _tool_registry() -> list[tuple[Any, Any]]:
+    m = _main()
+    registry = getattr(m, "_REGISTERED_MCP_TOOLS", None)
+    if isinstance(registry, list):
+        return registry
+    return _REGISTERED_MCP_TOOLS
+
+
 def list_all_actions(
     include_parameters: bool = False, compact: Optional[bool] = None
 ) -> Dict[str, Any]:
@@ -189,7 +197,7 @@ def list_all_actions(
     gate = _write_gate_state()
     write_auto_approved = gate["write_auto_approved"]
     seen_names: set[str] = set()
-    for tool, func in m._REGISTERED_MCP_TOOLS:
+    for tool, func in _tool_registry():
         name = _registered_tool_name(tool, func)
         if not name:
             continue
@@ -406,18 +414,21 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
         raise TypeError("args must be a mapping")
 
     m = _main()
-    found = m._find_registered_tool(tool_name)
-    if found is None:
+    tool = None
+    func = None
+    for candidate_tool, candidate_func in _tool_registry():
+        if _registered_tool_name(candidate_tool, candidate_func) == tool_name:
+            tool, func = candidate_tool, candidate_func
+            break
+    if tool is None or func is None:
         available = sorted(
             set(
                 _registered_tool_name(tool, func)
-                for tool, func in m._REGISTERED_MCP_TOOLS
+                for tool, func in _tool_registry()
                 if _registered_tool_name(tool, func)
             )
         )
         raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
-
-    tool, func = found
 
     schema = getattr(func, "__mcp_input_schema__", None)
     if not isinstance(schema, Mapping):
