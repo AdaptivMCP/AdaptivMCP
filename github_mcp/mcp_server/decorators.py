@@ -169,8 +169,12 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALAR
 # decorator will wrap scalar outputs, add ok/status when missing, and truncate
 # very large nested "json" payloads.
 RESPONSE_MODE_DEFAULT = os.environ.get("GITHUB_MCP_RESPONSE_MODE", "raw").strip().lower()
-CHATGPT_RESPONSE_MAX_JSON_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_JSON_CHARS", default=20000)
-CHATGPT_RESPONSE_MAX_TEXT_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_TEXT_CHARS", default=20000)
+# NOTE: "token limits" in hosted connector environments typically translate to
+# payload-size caps rather than true model-context limits. Setting these to 0
+# disables truncation entirely.
+CHATGPT_RESPONSE_MAX_JSON_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_JSON_CHARS", default=0)
+CHATGPT_RESPONSE_MAX_TEXT_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_TEXT_CHARS", default=0)
+CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int("GITHUB_MCP_RESPONSE_MAX_LIST_ITEMS", default=0)
 
 # In hosted LLM connector environments, returning token-like strings (even from
 # test fixtures or diffs) can trigger upstream safety filters and block tool
@@ -1547,6 +1551,7 @@ def _truncate_string(value: str, *, limit: int) -> tuple[str, bool]:
     if not isinstance(value, str):
         return str(value), False
     if limit <= 0:
+        # limit <= 0 means "no truncation".
         return value, False
     if len(value) <= limit:
         return value, False
@@ -1633,9 +1638,13 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
         # Truncate common large lists to keep payload sizes manageable.
         for key in ("packages", "checks", "results", "items"):
             val = out.get(key)
-            if isinstance(val, list) and len(val) > 200:
+            if (
+                isinstance(val, list)
+                and CHATGPT_RESPONSE_MAX_LIST_ITEMS > 0
+                and len(val) > CHATGPT_RESPONSE_MAX_LIST_ITEMS
+            ):
                 out[f"{key}_total"] = len(val)
-                out[key] = val[:200]
+                out[key] = val[:CHATGPT_RESPONSE_MAX_LIST_ITEMS]
                 out[f"{key}_truncated"] = True
                 truncated_fields.append(key)
 
