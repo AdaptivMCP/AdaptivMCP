@@ -63,7 +63,7 @@ async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) 
     # main.py historically returned only the parsed JSON for graphql_query.
     payload_json = result.get("json")
     if isinstance(payload_json, dict):
-        return payload_json
+        return redact_any(payload_json)
     return structured_tool_error(
         RuntimeError("GraphQL response did not include a JSON object"),
         context="graphql_query",
