@@ -18,13 +18,36 @@ _UUID_RE = re.compile(
 
 
 def shorten_token(value: object, *, head: int = 8, tail: int = 4) -> object:
-    """Return value unchanged.
+    """Optionally shorten identifiers for scan-friendly provider logs.
 
-    This server is intended to be self-hosted in environments where operators
-    may prefer full-fidelity logs without token shortening/masking.
+    By default, self-hosted deployments preserve full-fidelity values.
+    Hosted providers (e.g., Render) tend to benefit from shorter correlation
+    IDs to keep log lines readable.
+
+    Control via:
+      - GITHUB_MCP_SHORTEN_TOKENS=1|0
     """
 
-    return value
+    raw = os.environ.get("GITHUB_MCP_SHORTEN_TOKENS")
+    if raw is None:
+        # Default to shortening on Render only.
+        shorten = _is_render_runtime()
+    else:
+        shorten = str(raw).strip().lower() in ("1", "true", "t", "yes", "y", "on")
+
+    if not shorten:
+        return value
+
+    if value is None:
+        return value
+    s = str(value).strip()
+    if not s:
+        return value
+    if len(s) <= head + tail + 2:
+        return s
+    if _UUID_RE.match(s):
+        return s.split("-")[0]
+    return f"{s[:head]}…{s[-tail:]}"
 
 
 _HUMANIZE_ID_KEYS = {
@@ -40,23 +63,99 @@ _HUMANIZE_ID_KEYS = {
 
 
 def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> object:
-    """Return full-fidelity JSONable payloads for provider logs.
+    """Sanitize payloads for provider logs.
 
-    This intentionally does not truncate, shorten, or otherwise sanitize values.
+    Hosted log UIs can become unusably noisy if we emit full-fidelity nested
+    payloads (large request contexts, HTTP bodies, tool results). By default we:
+      - cap string lengths,
+      - cap list lengths,
+      - cap nesting depth.
+
+    Self-hosted deployments can opt into full fidelity via:
+      - GITHUB_MCP_LOG_FULL_FIDELITY=1
     """
 
-    return _jsonable(value)
+    full_raw = os.environ.get("GITHUB_MCP_LOG_FULL_FIDELITY")
+    if full_raw is None:
+        full_fidelity = not _is_render_runtime()
+    else:
+        full_fidelity = str(full_raw).strip().lower() in ("1", "true", "t", "yes", "y", "on")
+
+    if full_fidelity:
+        return _jsonable(value)
+
+    max_depth_cfg = int(os.environ.get("GITHUB_MCP_LOG_MAX_DEPTH", "4") or "4")
+    max_list_cfg = int(os.environ.get("GITHUB_MCP_LOG_MAX_LIST", "50") or "50")
+    max_str_cfg = int(os.environ.get("GITHUB_MCP_LOG_MAX_STR", "500") or "500")
+
+    def _clip_str(s: str) -> str:
+        s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+        s = " ".join(s.split())
+        if max_str_cfg > 0 and len(s) > max_str_cfg:
+            return s[: max(0, max_str_cfg - 1)] + "…"
+        return s
+
+    def walk(v: object, d: int) -> object:
+        if v is None or isinstance(v, (bool, int, float)):
+            return v
+        if isinstance(v, str):
+            return _clip_str(v)
+
+        if d >= max(0, max_depth_cfg):
+            # Depth cap: keep a short scalar-ish representation.
+            try:
+                return _clip_str(str(v))
+            except Exception:
+                return "…"
+
+        if isinstance(v, Mapping):
+            out: dict[str, object] = {}
+            for k, vv in list(v.items())[:200]:
+                out[str(k)] = walk(vv, d + 1)
+            if len(v) > 200:
+                out["…"] = f"({len(v) - 200} more keys)"
+            return out
+
+        if isinstance(v, list):
+            items = [walk(x, d + 1) for x in v[: max(0, max_list_cfg)]]
+            if max_list_cfg > 0 and len(v) > max_list_cfg:
+                items.append(f"… ({len(v) - max_list_cfg} more)")
+            return items
+
+        try:
+            return _clip_str(str(v))
+        except Exception:
+            return "…"
+
+    try:
+        jsonable = _jsonable(value)
+    except Exception:
+        jsonable = value
+    return walk(jsonable, depth)
 
 
 def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Return full request context for provider logs.
+    """Return request context for provider logs.
 
-    This intentionally returns the entire request context (JSONable) without
-    shortening or dropping fields.
+    Defaults:
+      - Render: compact snapshot (correlation fields only)
+      - Self-hosted: full request context
+
+    Override via:
+      - GITHUB_MCP_LOG_FULL_REQUEST_CONTEXT=1|0
     """
 
     if not isinstance(req, Mapping):
         return {}
+
+    full_raw = os.environ.get("GITHUB_MCP_LOG_FULL_REQUEST_CONTEXT")
+    if full_raw is None:
+        full = not _is_render_runtime()
+    else:
+        full = str(full_raw).strip().lower() in ("1", "true", "t", "yes", "y", "on")
+
+    if not full:
+        return snapshot_request_context(req)
 
     try:
         return _jsonable(dict(req))
