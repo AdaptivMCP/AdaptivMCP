@@ -11094,7 +11094,7 @@ Example invocation:
 
 ## update_file_from_workspace
 
-Update a single file in a GitHub repository from the persistent workspace checkout. This pairs with workspace editing tools (for example, terminal_command) to modify a file and then write it back to the branch.
+Update a single file in a GitHub repository from the persistent workspace checkout. This is commonly paired with workspace editing tools (for example, terminal_command) to modify a file and later write it back to the branch.
 
 Parameters:
 - branch (unknown; required)
