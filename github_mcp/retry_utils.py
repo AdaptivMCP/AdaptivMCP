@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import os
-import random
+import secrets
+
+
+# Expose an object with a ``uniform`` method for both production usage and
+# easy monkeypatching in tests.
+random = secrets.SystemRandom()
 
 
 def jitter_sleep_seconds(
@@ -41,6 +46,8 @@ def jitter_sleep_seconds(
         except Exception:
             cap = 0.0
         cap = max(0.0, cap)
+        # Use a cryptographically strong RNG to avoid any future temptation to
+        # reuse this helper for security-sensitive randomness.
         return delay + random.uniform(0.0, min(cap, delay * 0.25))
 
     # "Full jitter" for exponential backoff.
