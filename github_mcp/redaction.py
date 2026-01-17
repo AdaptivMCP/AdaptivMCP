@@ -45,12 +45,16 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 # Generic high-entropy-ish token: 32+ characters, mostly urlsafe/base64-ish.
-# We only redact these when they appear in an obvious "key" context to reduce
-# false positives.
-_GENERIC_TOKEN = re.compile(r"\b[A-Za-z0-9_\-]{32,}\b")
-_KEY_CONTEXT = re.compile(
-    r"(?i)(token|secret|api[_-]?key|authorization|bearer|password|passwd|private[_-]?key)"
+# IMPORTANT: Avoid blanket redaction of all long strings when a single "token" word
+# appears elsewhere in the payload (this caused over-redaction of SHAs, IDs, etc.).
+# Instead, only redact long values that are *directly* associated with a key context.
+_GENERIC_TOKEN = r"[A-Za-z0-9_\-]{32,}"
+
+_KEY_VALUE_CONTEXTUAL = re.compile(
+    rf"(?i)(\b(?:token|secret|api[_-]?key|password|passwd|private[_-]?key)\b\s*[:=]\s*)(['\"]?){_GENERIC_TOKEN}(\2)"
 )
+_AUTH_BEARER_CONTEXTUAL = re.compile(rf"(?i)(\bauthorization\b\s*[:=]\s*bearer\s+){_GENERIC_TOKEN}")
+_BEARER_TOKEN_CONTEXTUAL = re.compile(rf"(?i)(\bbearer\s+){_GENERIC_TOKEN}")
 
 
 def redact_text(text: str) -> str:
@@ -65,9 +69,11 @@ def redact_text(text: str) -> str:
     for pattern, replacement in _PATTERNS:
         out = pattern.sub(replacement, out)
 
-    # Contextual generic redaction: look for key context anywhere in the text.
-    if _KEY_CONTEXT.search(out):
-        out = _GENERIC_TOKEN.sub("<REDACTED_TOKEN>", out)
+    # Contextual generic redaction: only redact values that are directly tied
+    # to an obvious secret-bearing key or Authorization/Bearer token.
+    out = _KEY_VALUE_CONTEXTUAL.sub(r"\1\2<REDACTED_TOKEN>\3", out)
+    out = _AUTH_BEARER_CONTEXTUAL.sub(r"\1<REDACTED_TOKEN>", out)
+    out = _BEARER_TOKEN_CONTEXTUAL.sub(r"\1<REDACTED_TOKEN>", out)
 
     return out
 
