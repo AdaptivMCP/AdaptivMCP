@@ -11,8 +11,9 @@ Importing ``main`` here would create an import cycle.
 from __future__ import annotations
 
 import base64
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from github_mcp.github_content import _resolve_file_sha
 from github_mcp.http_clients import _github_request
@@ -27,12 +28,15 @@ class ToolDecorator(Protocol):
         self,
         *,
         write_action: bool = False,
-        **tool_kwargs: Any,
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+        **tool_kwargs: object,
+    ) -> Callable[[Callable[..., object]], Callable[..., object]]:
+        """Return a decorator that registers a function as an MCP tool."""
+
+        ...
 
 
 def ping_extensions() -> str:
-    """Simple ping used for diagnostics."""
+    """Return a ping string for diagnostics."""
 
     return "Adaptiv Connected."
 
@@ -43,7 +47,7 @@ async def delete_file(
     message: str = "Delete file via MCP GitHub connector",
     branch: str = "main",
     if_missing: Literal["error", "noop"] = "error",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Delete a single file in a repository via the GitHub Contents API."""
 
     if if_missing not in ("error", "noop"):
@@ -86,7 +90,7 @@ async def update_file_from_workspace(
     target_path: str,
     branch: str,
     message: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Commit a repo mirror (workspace clone) file to a target path in the repository."""
 
     effective_ref = _effective_ref_for_repo(full_name, branch)
@@ -113,7 +117,7 @@ async def update_file_from_workspace(
 
     sha = await _resolve_file_sha(full_name, normalized_target_path, effective_ref)
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "message": message,
         "content": encoded,
         "branch": effective_ref,
