@@ -665,7 +665,17 @@ LOG_FORMAT = os.environ.get(
 )
 
 # ANSI color for log level + logger name (intended for developer-tail workflows).
-LOG_COLOR = _env_flag("LOG_COLOR", "true")
+#
+# Compatibility:
+# - Docs and tool visual logging use GITHUB_MCP_LOG_COLOR.
+# - Older deployments (and some tests) used LOG_COLOR.
+#
+# Prefer the prefixed variant when present, but keep LOG_COLOR as a fallback.
+_raw_log_color = os.environ.get("GITHUB_MCP_LOG_COLOR")
+if _raw_log_color is None:
+    LOG_COLOR = _env_flag("LOG_COLOR", "true")
+else:
+    LOG_COLOR = str(_raw_log_color).strip().lower() in ("1", "true", "t", "yes", "y", "on")
 
 
 class _StructuredFormatter(logging.Formatter):
