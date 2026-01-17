@@ -54,16 +54,18 @@ def _single_line(s: str) -> str:
     s = " ".join(s.split())
     return s
 
+
 _SENSITIVE_ARG_KEYS = {
-    'patch',
-    'content',
-    'body',
-    'text',
-    'data',
-    'replacement',
-    'old',
-    'new',
+    "patch",
+    "content",
+    "body",
+    "text",
+    "data",
+    "replacement",
+    "old",
+    "new",
 }
+
 
 def _safe_arg_value(key: str, value: Any) -> Any:
     """Return a compact, redacted representation of an arg value.
@@ -72,8 +74,9 @@ def _safe_arg_value(key: str, value: Any) -> Any:
     contain token-like strings that trigger upstream safety filters. We avoid
     echoing these values back in error payloads.
     """
+
     try:
-        k = (key or '').strip().lower()
+        k = (key or "").strip().lower()
     except Exception:
         k = str(key)
 
@@ -83,16 +86,16 @@ def _safe_arg_value(key: str, value: Any) -> Any:
         if isinstance(value, (bytes, bytearray)):
             b = bytes(value)
             digest = hashlib.sha256(b).hexdigest()
-            return f'<omitted bytes len={len(b)} sha256={digest}>'
+            return f"<omitted bytes len={len(b)} sha256={digest}>"
         s = str(value)
-        digest = hashlib.sha256(s.encode('utf-8', errors='replace')).hexdigest()
-        return f'<omitted len={len(s)} sha256={digest}>'
+        digest = hashlib.sha256(s.encode("utf-8", errors="replace")).hexdigest()
+        return f"<omitted len={len(s)} sha256={digest}>"
 
     # Default: single-line + bounded preview + token redaction.
     s = _single_line(str(value))
-    max_chars = int(os.environ.get('GITHUB_MCP_ERROR_ARG_MAX_CHARS', '500') or '500')
+    max_chars = int(os.environ.get("GITHUB_MCP_ERROR_ARG_MAX_CHARS", "500") or "500")
     if max_chars > 0 and len(s) > max_chars:
-        s = s[: max(0, max_chars - 1)] + '…'
+        s = s[: max(0, max_chars - 1)] + "…"
     return _redact_tokens(s)
 
 

@@ -230,7 +230,7 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
             payload = result if isinstance(result, dict) else result
             return JSONResponse(payload)
         except Exception as exc:
-            from github_mcp.mcp_server.errors import _structured_tool_error
+            from github_mcp.mcp_server.error_handling import _structured_tool_error
 
             structured = _structured_tool_error(exc, context=f"tool_http:{tool_name}")
 

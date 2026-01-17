@@ -38,7 +38,7 @@ from github_mcp.mcp_server.context import (
     get_request_context,
     mcp,
 )
-from github_mcp.mcp_server.errors import _structured_tool_error
+from github_mcp.mcp_server.error_handling import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.redaction import redact_any
 from github_mcp.mcp_server.schemas import (

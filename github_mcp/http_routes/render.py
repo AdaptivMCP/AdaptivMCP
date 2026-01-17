@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from github_mcp.mcp_server.errors import _structured_tool_error
+from github_mcp.mcp_server.error_handling import _structured_tool_error
 
 
 def _parse_int(
