@@ -30,6 +30,7 @@ The top-level "error" remains the primary compatibility surface.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import traceback
 from typing import Any, Dict, Optional
@@ -52,6 +53,47 @@ def _single_line(s: str) -> str:
     s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
     s = " ".join(s.split())
     return s
+
+_SENSITIVE_ARG_KEYS = {
+    'patch',
+    'content',
+    'body',
+    'text',
+    'data',
+    'replacement',
+    'old',
+    'new',
+}
+
+def _safe_arg_value(key: str, value: Any) -> Any:
+    """Return a compact, redacted representation of an arg value.
+
+    Some tool args (notably patches and file contents) can be very large or
+    contain token-like strings that trigger upstream safety filters. We avoid
+    echoing these values back in error payloads.
+    """
+    try:
+        k = (key or '').strip().lower()
+    except Exception:
+        k = str(key)
+
+    if k in _SENSITIVE_ARG_KEYS:
+        if value is None:
+            return None
+        if isinstance(value, (bytes, bytearray)):
+            b = bytes(value)
+            digest = hashlib.sha256(b).hexdigest()
+            return f'<omitted bytes len={len(b)} sha256={digest}>'
+        s = str(value)
+        digest = hashlib.sha256(s.encode('utf-8', errors='replace')).hexdigest()
+        return f'<omitted len={len(s)} sha256={digest}>'
+
+    # Default: single-line + bounded preview + token redaction.
+    s = _single_line(str(value))
+    max_chars = int(os.environ.get('GITHUB_MCP_ERROR_ARG_MAX_CHARS', '500') or '500')
+    if max_chars > 0 and len(s) > max_chars:
+        s = s[: max(0, max_chars - 1)] + '…'
+    return _redact_tokens(s)
 
 
 def _safe_traceback_lines(exc: BaseException, *, max_lines: int) -> list[str]:
@@ -226,9 +268,7 @@ def _structured_tool_error(
 
     if args:
         # Keep args compact and single-line.
-        debug["args"] = {
-            k: _redact_tokens(_single_line(str(v))[:500]) for k, v in list(args.items())[:50]
-        }
+        debug["args"] = {k: _safe_arg_value(str(k), v) for k, v in list(args.items())[:50]}
 
     detail: Dict[str, Any] = {
         "message": message,
