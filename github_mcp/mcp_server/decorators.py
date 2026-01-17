@@ -145,6 +145,40 @@ LOG_TOOL_VERBOSE_EXTRAS = _env_flag("GITHUB_MCP_LOG_VERBOSE_EXTRAS", default=Fal
 TOOL_RESULT_ENVELOPE = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE", default=False)
 TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALARS", default=False)
 
+# Tool response shaping
+#
+# Some clients (including ChatGPT-hosted connectors) benefit from consistently
+# shaped tool responses that:
+# - always include ok/status
+# - avoid huge nested blobs (e.g., raw upstream JSON)
+# - are easy to scan without reading provider logs
+#
+# This is intentionally opt-in via env var. If you set it to "chatgpt", the
+# decorator will wrap scalar outputs, add ok/status when missing, and truncate
+# very large nested "json" payloads.
+RESPONSE_MODE_DEFAULT = os.environ.get("GITHUB_MCP_RESPONSE_MODE", "raw").strip().lower()
+CHATGPT_RESPONSE_MAX_JSON_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_JSON_CHARS", default=20000)
+CHATGPT_RESPONSE_MAX_TEXT_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_TEXT_CHARS", default=20000)
+
+
+def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
+    """Determine response shaping mode.
+
+    - If GITHUB_MCP_RESPONSE_MODE is set to a non-raw value, honor it.
+    - Otherwise, if the inbound request includes ChatGPT metadata, default to
+      'chatgpt' (ChatGPT-hosted connectors benefit from consistent, compact outputs).
+    """
+
+    mode = (RESPONSE_MODE_DEFAULT or "raw").strip().lower()
+    if mode and mode not in {"raw", "default"}:
+        return mode
+    if isinstance(req, Mapping):
+        cg = req.get("chatgpt")
+        if isinstance(cg, Mapping) and cg:
+            return "chatgpt"
+    return "raw"
+
+
 LOG_TOOL_VISUAL_MAX_LINES = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_LINES", default=80)
 LOG_TOOL_READ_MAX_LINES = _env_int("GITHUB_MCP_LOG_READ_MAX_LINES", default=40)
 LOG_TOOL_VISUAL_MAX_CHARS = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_CHARS", default=8000)
@@ -1422,6 +1456,121 @@ def _normalize_tool_result_envelope(result: Any) -> Any:
     return out
 
 
+def _safe_json_dumps(value: Any) -> str:
+    try:
+        return json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
+        )
+    except Exception:
+        try:
+            return json.dumps(value, ensure_ascii=False, default=str)
+        except Exception:
+            return str(value)
+
+
+def _truncate_string(value: str, *, limit: int) -> tuple[str, bool]:
+    if not isinstance(value, str):
+        return str(value), False
+    if limit <= 0:
+        return value, False
+    if len(value) <= limit:
+        return value, False
+    # Keep end-users aware of truncation while staying single-line friendly.
+    return value[: max(0, limit - 1)] + "…", True
+
+
+def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = None) -> Any:
+    """Return a ChatGPT-friendly version of a tool result.
+
+    This is opt-in via GITHUB_MCP_RESPONSE_MODE=chatgpt.
+
+    Goals:
+    - consistent ok/status surface
+    - bounded payload sizes (truncate large text/json blobs)
+    - include a compact summary to aid LLM planning
+    """
+
+    mode = _effective_response_mode(req)
+    if mode not in {"chatgpt", "compact"}:
+        return result
+
+    try:
+        # Scalars/lists: wrap so callers always get a mapping with status.
+        if not isinstance(result, Mapping):
+            return {
+                "status": "success",
+                "ok": True,
+                "result": result,
+                "summary": _result_snapshot(result),
+            }
+
+        out: dict[str, Any] = dict(result)
+
+        # Ensure stable status/ok.
+        outcome = _tool_result_outcome(out)
+        if "ok" not in out:
+            out["ok"] = outcome != "error"
+        status = out.get("status")
+        status_str = str(status).strip().lower() if status is not None else ""
+        if not status_str or status_str in {"ok", "passed", "succeeded", "success"}:
+            out["status"] = (
+                "success" if outcome == "ok" else ("warning" if outcome == "warning" else "error")
+            )
+        elif status_str in {"warn", "warning"}:
+            out["status"] = "warning"
+        elif status_str in {"error", "failed", "failure"}:
+            out["status"] = "error"
+
+        # Add a compact snapshot for LLMs (does not replace the full payload).
+        out.setdefault("summary", _result_snapshot(out))
+
+        # Truncate very large text surfaces.
+        truncated_fields: list[str] = []
+        for key in ("text", "stdout", "stderr", "body", "message"):
+            val = out.get(key)
+            if isinstance(val, str) and val:
+                clipped, did = _truncate_string(val, limit=CHATGPT_RESPONSE_MAX_TEXT_CHARS)
+                if did:
+                    out[key] = clipped
+                    truncated_fields.append(key)
+
+        # Truncate large upstream JSON payloads (common on provider APIs).
+        j = out.get("json")
+        if isinstance(j, (Mapping, list)):
+            dumped = _safe_json_dumps(j)
+            if (
+                CHATGPT_RESPONSE_MAX_JSON_CHARS > 0
+                and len(dumped) > CHATGPT_RESPONSE_MAX_JSON_CHARS
+            ):
+                preview, _ = _truncate_string(dumped, limit=CHATGPT_RESPONSE_MAX_JSON_CHARS)
+                out["json"] = {
+                    "truncated": True,
+                    "preview": preview,
+                    "type": "list" if isinstance(j, list) else "dict",
+                    "len": len(j) if isinstance(j, list) else None,
+                    "keys": len(j) if isinstance(j, Mapping) else None,
+                }
+                out["json_truncated"] = True
+                truncated_fields.append("json")
+
+        # Truncate common large lists to keep payload sizes manageable.
+        for key in ("packages", "checks", "results", "items"):
+            val = out.get(key)
+            if isinstance(val, list) and len(val) > 200:
+                out[f"{key}_total"] = len(val)
+                out[key] = val[:200]
+                out[f"{key}_truncated"] = True
+                truncated_fields.append(key)
+
+        if truncated_fields:
+            out.setdefault("truncated_fields", sorted(set(truncated_fields)))
+
+        return out
+    except Exception:
+        # Best-effort: never break tool behavior if the shaper fails.
+        return result
+
+
 def _log_tool_warning(
     *,
     tool_name: str,
@@ -2472,10 +2621,13 @@ def mcp_tool(
                         result=result,
                         all_args=all_args,
                     )
+                # Return payload (client-facing). Keep logs based on the raw result.
+                client_payload: Any
                 if isinstance(result, Mapping):
-                    # Return tool payload as-is; do not inject UI-only fields.
-                    return _strip_internal_log_fields(result)
-                return result
+                    client_payload = _strip_internal_log_fields(result)
+                else:
+                    client_payload = result
+                return _chatgpt_friendly_result(client_payload, req=req)
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
                 wrapper,
@@ -2678,10 +2830,12 @@ def mcp_tool(
                     result=result,
                     all_args=all_args,
                 )
+            client_payload: Any
             if isinstance(result, Mapping):
-                # Return tool payload as-is; do not inject UI-only fields.
-                return _strip_internal_log_fields(result)
-            return result
+                client_payload = _strip_internal_log_fields(result)
+            else:
+                client_payload = result
+            return _chatgpt_friendly_result(client_payload, req=req)
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(
             wrapper,
