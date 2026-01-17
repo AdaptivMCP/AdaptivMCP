@@ -179,30 +179,30 @@ def _categorize_exception(exc: BaseException) -> tuple[str, str, bool]:
 def _default_help(category: str) -> list[str]:
     if category == "validation":
         return [
-            "Check the tool arguments and try again.",
-            "If you are calling this via HTTP, ensure the JSON payload matches the tool schema.",
+            "Tool arguments failed validation.",
+            "For HTTP callers, the JSON payload may not match the tool schema.",
         ]
     if category == "auth":
         return [
-            "Verify the required credentials are configured in environment variables.",
-            "For GitHub: set one of GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, or GITHUB_OAUTH_TOKEN.",
-            "For Render: set RENDER_API_KEY or RENDER_API_TOKEN.",
+            "Authentication credentials appear to be missing or invalid.",
+            "GitHub tokens: GITHUB_PAT, GITHUB_TOKEN, GH_TOKEN, or GITHUB_OAUTH_TOKEN.",
+            "Render tokens: RENDER_API_KEY or RENDER_API_TOKEN.",
         ]
     if category == "rate_limited":
         return [
-            "Retry after a short delay.",
-            "If this persists, reduce call rate or use a token with higher rate limits.",
+            "Request was rate limited by the upstream provider.",
+            "A later retry may succeed; check retry_after_seconds when available.",
         ]
     if category == "write_approval_required":
         return [
-            "This tool can modify remote state and requires confirmation in your client.",
-            "Confirm/approve the write action in your client, then retry the same call.",
+            "This tool can modify remote state and requires confirmation in the client.",
+            "Once confirmed, the same call can proceed.",
         ]
     # Avoid imperative instructions that can cause LLM clients to loop.
     # Keep guidance informational and direct operators to logs/telemetry.
     return [
-        "Review provider logs/telemetry for the corresponding request for details.",
-        "If this is transient, re-run the call once with the same inputs.",
+        "Provider logs/telemetry may include more detail for the request.",
+        "Transient failures can sometimes succeed on a subsequent call.",
     ]
 
 
