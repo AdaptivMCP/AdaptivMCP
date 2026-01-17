@@ -224,17 +224,21 @@ async def create_render_deploy(
     if commit_id and image_url:
         raise ValueError("Provide only one of commit_id or image_url")
 
-    body: Dict[str, Any] = {"clearCache": bool(clear_cache)}
-    if commit_id:
-        body["commitId"] = commit_id
-    if image_url:
-        body["imageUrl"] = image_url
+    # Render's deploy trigger endpoint accepts an optional JSON body.
+    # Some services (and/or API versions) appear to reject a body containing
+    # only falsey defaults (observed as 400 {"message":"invalid JSON"}).
+    # Avoid sending a body unless we are explicitly setting a deploy option.
+    body: Optional[Dict[str, Any]] = None
+    if clear_cache or commit_id or image_url:
+        body = {}
+        if clear_cache:
+            body["clearCache"] = True
+        if commit_id:
+            body["commitId"] = commit_id
+        if image_url:
+            body["imageUrl"] = image_url
 
-    return await render_request(
-        "POST",
-        f"/services/{service_id}/deploys",
-        json_body=body,
-    )
+    return await render_request("POST", f"/services/{service_id}/deploys", json_body=body)
 
 
 async def cancel_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
