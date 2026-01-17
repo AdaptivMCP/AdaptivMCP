@@ -8,7 +8,7 @@ Regenerate via:
 python scripts/generate_detailed_tools.py > Detailed_Tools.md
 ```
 
-Total tools: 124
+Total tools: 135
 
 ## apply_patch
 
@@ -187,6 +187,124 @@ Example invocation:
 ```json
 {
   "tool": "apply_text_update_and_commit",
+  "args": {}
+}
+```
+
+## apply_workspace_operations
+
+Apply multiple file operations in a single workspace clone.
+
+This is a higher-level, multi-file alternative to calling the single-file
+primitives repeatedly.
+
+Supported operations (each item in `operations`):
+  - {"op": "write", "path": "...", "content": "..."}
+  - {"op": "replace_text", "path": "...", "old": "...", "new": "...", "replace_all": bool, "occurrence": int}
+  - {"op": "edit_range", "path": "...", "start": {"line": int, "col": int}, "end": {"line": int, "col": int}, "replacement": "..."}
+  - {"op": "delete", "path": "...", "allow_missing": bool}
+  - {"op": "move", "src": "...", "dst": "...", "overwrite": bool}
+  - {"op": "apply_patch", "patch": "..."}
+
+Parameters:
+- create_parents (boolean; optional, default=True)
+- fail_fast (boolean; optional, default=True)
+- full_name (string; required)
+  GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
+  Examples: 'octocat/Hello-World'
+- operations (array | null; optional)
+- preview_only (boolean; optional, default=False)
+- ref (string; optional, default='main')
+  Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
+  Examples: 'main', 'develop', 'feature/my-branch'
+- rollback_on_error (boolean; optional, default=True)
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: True
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
+    },
+    "operations": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Operations"
+    },
+    "fail_fast": {
+      "type": "boolean",
+      "default": true,
+      "title": "Fail Fast"
+    },
+    "rollback_on_error": {
+      "type": "boolean",
+      "default": true,
+      "title": "Rollback On Error"
+    },
+    "preview_only": {
+      "type": "boolean",
+      "default": false,
+      "title": "Preview Only"
+    },
+    "create_parents": {
+      "type": "boolean",
+      "default": true,
+      "title": "Create Parents"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "full_name"
+  ],
+  "title": "Apply Workspace Operations"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "apply_workspace_operations",
   "args": {}
 }
 ```
@@ -966,6 +1084,128 @@ Example invocation:
 }
 ```
 
+## compare_workspace_files
+
+Compare multiple file pairs or ref/path variants and return diffs.
+
+Each entry in `comparisons` supports one of the following shapes:
+  1) {"left_path": "a.txt", "right_path": "b.txt"}
+     Compares two workspace paths.
+  2) {"path": "a.txt", "base_ref": "main"}
+     Compares the workspace file at `path` (current checkout) to the file
+     content at `base_ref:path` via `git show`.
+  3) {"left_ref": "main", "left_path": "a.txt", "right_ref": "feature", "right_path": "a.txt"}
+     Compares two git object versions without changing checkout.
+
+Returned diffs are unified diffs and may be truncated.
+
+If include_stats is true, each comparison result includes a "stats" object
+with {added, removed} line counts derived from the full (pre-truncation)
+unified diff.
+
+Parameters:
+- comparisons (array | null; optional)
+- context_lines (integer; optional, default=3)
+- full_name (string; required)
+  GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
+  Examples: 'octocat/Hello-World'
+- include_stats (boolean; optional, default=False)
+- max_chars_per_side (integer; optional, default=200000)
+- max_diff_chars (integer; optional, default=200000)
+- ref (string; optional, default='main')
+  Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
+  Examples: 'main', 'develop', 'feature/my-branch'
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: False
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
+    },
+    "comparisons": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Comparisons"
+    },
+    "context_lines": {
+      "type": "integer",
+      "default": 3,
+      "title": "Context Lines"
+    },
+    "max_chars_per_side": {
+      "type": "integer",
+      "default": 200000,
+      "title": "Max Chars Per Side"
+    },
+    "max_diff_chars": {
+      "type": "integer",
+      "default": 200000,
+      "title": "Max Diff Chars"
+    },
+    "include_stats": {
+      "type": "boolean",
+      "default": false,
+      "title": "Include Stats"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "full_name"
+  ],
+  "title": "Compare Workspace Files"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "compare_workspace_files",
+  "args": {}
+}
+```
+
 ## create_branch
 
 Create Branch. Signature: create_branch(full_name: str, branch: str, from_ref: str = 'main') -> Dict[str, Any].
@@ -1429,6 +1669,53 @@ Example invocation:
 ```json
 {
   "tool": "create_render_deploy",
+  "args": {}
+}
+```
+
+## create_render_service
+
+Create a new Render service.
+
+Parameters:
+- service_spec (object; required)
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: True
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "service_spec": {
+      "type": "object",
+      "additionalProperties": {},
+      "title": "Service Spec"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "service_spec"
+  ],
+  "title": "Create Render Service"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "create_render_service",
   "args": {}
 }
 ```
@@ -2383,7 +2670,7 @@ Example invocation:
 
 ## ensure_workspace_clone
 
-Ensure a persistent repo mirror exists for a repo/ref.
+Ensure a persistent repo mirror (workspace clone) exists for a repo/ref.
 
 Parameters:
 - full_name (unknown; required)
@@ -3160,6 +3447,135 @@ Example invocation:
 ```json
 {
   "tool": "get_file_contents",
+  "args": {}
+}
+```
+
+## get_file_excerpt
+
+Get File Excerpt. Signature: get_file_excerpt(full_name: str, path: str, ref: str = 'main', start_byte: Optional[int] = None, max_bytes: int = 65536, tail_bytes: Optional[int] = None, as_text: bool = True, max_text_chars: int = 200000, numbered_lines: bool = True) -> Dict[str, Any].
+
+Parameters:
+- as_text (boolean; optional, default=True)
+- full_name (string; required)
+  GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
+  Examples: 'octocat/Hello-World'
+- max_bytes (integer; optional, default=65536)
+- max_text_chars (integer; optional, default=200000)
+- numbered_lines (boolean; optional, default=True)
+- path (string; required)
+  Repository-relative path (POSIX-style).
+  Examples: 'README.md', 'src/app.py'
+- ref (string; optional, default='main')
+  Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
+  Examples: 'main', 'develop', 'feature/my-branch'
+- start_byte (integer | null; optional)
+- tail_bytes (integer | null; optional)
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: False
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "path": {
+      "type": "string",
+      "title": "Path",
+      "description": "Repository-relative path (POSIX-style).",
+      "examples": [
+        "README.md",
+        "src/app.py"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
+    },
+    "start_byte": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Start Byte"
+    },
+    "max_bytes": {
+      "type": "integer",
+      "default": 65536,
+      "title": "Max Bytes"
+    },
+    "tail_bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tail Bytes"
+    },
+    "as_text": {
+      "type": "boolean",
+      "default": true,
+      "title": "As Text"
+    },
+    "max_text_chars": {
+      "type": "integer",
+      "default": 200000,
+      "title": "Max Text Chars"
+    },
+    "numbered_lines": {
+      "type": "boolean",
+      "default": true,
+      "title": "Numbered Lines"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "full_name",
+    "path"
+  ],
+  "title": "Get File Excerpt"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "get_file_excerpt",
   "args": {}
 }
 ```
@@ -4621,6 +5037,131 @@ Example invocation:
 }
 ```
 
+## get_workspace_files_contents
+
+Read multiple files from the persistent repo mirror in one call.
+
+This tool is optimized for examination workflows where a client wants to
+inspect several files (optionally via glob patterns) without issuing many
+per-file calls.
+
+Notes:
+  - All paths are repository-relative.
+  - When expand_globs is true, glob patterns (e.g. "src/**/*.py") are
+    expanded relative to the repo root.
+  - Returned text is truncated by max_chars_per_file and max_total_chars.
+
+Parameters:
+- expand_globs (boolean; optional, default=True)
+- full_name (string; required)
+  GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
+  Examples: 'octocat/Hello-World'
+- include_missing (boolean; optional, default=True)
+- max_chars_per_file (integer; optional, default=20000)
+- max_total_chars (integer; optional, default=120000)
+- paths (array | null; optional)
+  List of repository-relative paths.
+  Examples: ['README.md', 'src/app.py']
+- ref (string; optional, default='main')
+  Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
+  Examples: 'main', 'develop', 'feature/my-branch'
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: False
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
+    },
+    "paths": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Paths",
+      "description": "List of repository-relative paths.",
+      "examples": [
+        [
+          "README.md",
+          "src/app.py"
+        ]
+      ]
+    },
+    "expand_globs": {
+      "type": "boolean",
+      "default": true,
+      "title": "Expand Globs"
+    },
+    "max_chars_per_file": {
+      "type": "integer",
+      "default": 20000,
+      "title": "Max Chars Per File"
+    },
+    "max_total_chars": {
+      "type": "integer",
+      "default": 120000,
+      "title": "Max Total Chars"
+    },
+    "include_missing": {
+      "type": "boolean",
+      "default": true,
+      "title": "Include Missing"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "full_name"
+  ],
+  "title": "Get Workspace Files Contents"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "get_workspace_files_contents",
+  "args": {}
+}
+```
+
 ## graphql_query
 
 Graphql Query. Signature: graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any].
@@ -4628,7 +5169,7 @@ Graphql Query. Signature: graphql_query(query: str, variables: Optional[Dict[str
 Parameters:
 - query (string; required)
   Search query string.
-  Examples: 'TODO', 'def main'
+  Examples: 'def main', 'import os', 'async def'
 - variables (object | null; optional)
 
 Returns:
@@ -4653,8 +5194,9 @@ Input schema:
       "title": "Query",
       "description": "Search query string.",
       "examples": [
-        "TODO",
-        "def main"
+        "def main",
+        "import os",
+        "async def"
       ]
     },
     "variables": {
@@ -6583,7 +7125,7 @@ Example invocation:
 
 ## list_workspace_files
 
-List files in the repo mirror.
+List files in the repo mirror (workspace clone).
 
 Parameters:
 - full_name (string | null; optional)
@@ -6997,6 +7539,105 @@ Example invocation:
 ```json
 {
   "tool": "move_file",
+  "args": {}
+}
+```
+
+## move_workspace_paths
+
+Move (rename) one or more workspace paths inside the repo mirror.
+
+Args:
+  moves: list of {"src": "path", "dst": "path"}
+  overwrite: if true, allow replacing an existing destination.
+
+Parameters:
+- create_parents (boolean; optional, default=True)
+- full_name (string; required)
+  GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
+  Examples: 'octocat/Hello-World'
+- moves (array | null; optional)
+- overwrite (boolean; optional, default=False)
+- ref (string; optional, default='main')
+  Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
+  Examples: 'main', 'develop', 'feature/my-branch'
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: True
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
+    },
+    "moves": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Moves"
+    },
+    "overwrite": {
+      "type": "boolean",
+      "default": false,
+      "title": "Overwrite"
+    },
+    "create_parents": {
+      "type": "boolean",
+      "default": true,
+      "title": "Create Parents"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "full_name"
+  ],
+  "title": "Move Workspace Paths"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "move_workspace_paths",
   "args": {}
 }
 ```
@@ -7503,6 +8144,53 @@ Example invocation:
 ```json
 {
   "tool": "render_create_deploy",
+  "args": {}
+}
+```
+
+## render_create_service
+
+Render Create Service. Signature: render_create_service(service_spec: Dict[str, Any]) -> Dict[str, Any].
+
+Parameters:
+- service_spec (object; required)
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: True
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "service_spec": {
+      "type": "object",
+      "additionalProperties": {},
+      "title": "Service Spec"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "service_spec"
+  ],
+  "title": "Render Create Service"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "render_create_service",
   "args": {}
 }
 ```
@@ -8292,7 +8980,7 @@ the repo mirror.
 
 Parameters:
 - command (string; optional, default='echo hello Render')
-  Shell command to execute in the repo mirror.
+  Shell command to execute in the repo mirror (workspace clone).
   Examples: 'pytest', 'python -m ruff check .'
 - command_lines (array | null; optional)
   Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload.
@@ -8342,7 +9030,7 @@ Input schema:
       "type": "string",
       "default": "echo hello Render",
       "title": "Command",
-      "description": "Shell command to execute in the repo mirror.",
+      "description": "Shell command to execute in the repo mirror (workspace clone).",
       "examples": [
         "pytest",
         "python -m ruff check ."
@@ -8722,6 +9410,151 @@ Example invocation:
 }
 ```
 
+## run_command
+
+Backward-compatible alias for :func:`terminal_command`.
+
+This exists for older MCP clients that still invoke `run_command`.
+
+Parameters:
+- command (string; optional, default='pytest')
+  Shell command to execute in the repo mirror (workspace clone).
+  Examples: 'pytest', 'python -m ruff check .'
+- command_lines (array | null; optional)
+  Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload.
+- full_name (string; required)
+  GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
+  Examples: 'octocat/Hello-World'
+- installing_dependencies (boolean; optional, default=False)
+- ref (string; optional, default='main')
+  Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
+  Examples: 'main', 'develop', 'feature/my-branch'
+- timeout_seconds (number; optional, default=300)
+  Timeout for the operation in seconds.
+  Examples: 60, 300, 600
+- use_temp_venv (boolean; optional, default=True)
+- workdir (string | null; optional)
+  Working directory to run the command from. If relative, it is resolved within the repo mirror.
+  Examples: '', 'src'
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: True
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
+    },
+    "command": {
+      "type": "string",
+      "default": "pytest",
+      "title": "Command",
+      "description": "Shell command to execute in the repo mirror (workspace clone).",
+      "examples": [
+        "pytest",
+        "python -m ruff check ."
+      ]
+    },
+    "command_lines": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Command Lines",
+      "description": "Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload."
+    },
+    "timeout_seconds": {
+      "type": "number",
+      "default": 300,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
+    },
+    "workdir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workdir",
+      "description": "Working directory to run the command from. If relative, it is resolved within the repo mirror.",
+      "examples": [
+        "",
+        "src"
+      ]
+    },
+    "use_temp_venv": {
+      "type": "boolean",
+      "default": true,
+      "title": "Use Temp Venv"
+    },
+    "installing_dependencies": {
+      "type": "boolean",
+      "default": false,
+      "title": "Installing Dependencies"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "full_name"
+  ],
+  "title": "Run Command"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "run_command",
+  "args": {}
+}
+```
+
 ## run_lint_suite
 
 Run Lint Suite. Signature: run_lint_suite(full_name: 'str', ref: 'str' = 'main', lint_command: 'str' = 'ruff check .', timeout_seconds: 'float' = 600, workdir: 'Optional[str]' = None, use_temp_venv: 'bool' = False, installing_dependencies: 'bool' = False) -> 'Dict[str, Any]'.
@@ -8822,6 +9655,162 @@ Example invocation:
 ```json
 {
   "tool": "run_lint_suite",
+  "args": {}
+}
+```
+
+## run_python
+
+Run an inline Python script inside the repo mirror.
+
+The script content is written to a file within the workspace mirror and executed.
+The tool exists to support multi-line scripts without relying on shell-special syntax.
+
+Parameters:
+- args (array | null; optional)
+- cleanup (boolean; optional, default=True)
+- filename (string | null; optional)
+- full_name (string; required)
+  GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
+  Examples: 'octocat/Hello-World'
+- installing_dependencies (boolean; optional, default=False)
+- ref (string; optional, default='main')
+  Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
+  Examples: 'main', 'develop', 'feature/my-branch'
+- script (string; optional, default='')
+- timeout_seconds (number; optional, default=300)
+  Timeout for the operation in seconds.
+  Examples: 60, 300, 600
+- use_temp_venv (boolean; optional, default=True)
+- workdir (string | null; optional)
+  Working directory to run the command from. If relative, it is resolved within the repo mirror.
+  Examples: '', 'src'
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: True
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
+    },
+    "script": {
+      "type": "string",
+      "default": "",
+      "title": "Script"
+    },
+    "filename": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Filename"
+    },
+    "args": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Args"
+    },
+    "timeout_seconds": {
+      "type": "number",
+      "default": 300,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
+    },
+    "workdir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workdir",
+      "description": "Working directory to run the command from. If relative, it is resolved within the repo mirror.",
+      "examples": [
+        "",
+        "src"
+      ]
+    },
+    "use_temp_venv": {
+      "type": "boolean",
+      "default": true,
+      "title": "Use Temp Venv"
+    },
+    "installing_dependencies": {
+      "type": "boolean",
+      "default": false,
+      "title": "Installing Dependencies"
+    },
+    "cleanup": {
+      "type": "boolean",
+      "default": true,
+      "title": "Cleanup"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "full_name"
+  ],
+  "title": "Run Python"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "run_python",
   "args": {}
 }
 ```
@@ -8980,6 +9969,296 @@ Example invocation:
 }
 ```
 
+## run_shell
+
+Backward-compatible alias for :func:`terminal_command`.
+
+Some integrations refer to the workspace command runner as `run_shell`.
+
+Parameters:
+- command (string; optional, default='pytest')
+  Shell command to execute in the repo mirror (workspace clone).
+  Examples: 'pytest', 'python -m ruff check .'
+- command_lines (array | null; optional)
+  Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload.
+- full_name (string; required)
+  GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
+  Examples: 'octocat/Hello-World'
+- installing_dependencies (boolean; optional, default=False)
+- ref (string; optional, default='main')
+  Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
+  Examples: 'main', 'develop', 'feature/my-branch'
+- timeout_seconds (number; optional, default=300)
+  Timeout for the operation in seconds.
+  Examples: 60, 300, 600
+- use_temp_venv (boolean; optional, default=True)
+- workdir (string | null; optional)
+  Working directory to run the command from. If relative, it is resolved within the repo mirror.
+  Examples: '', 'src'
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: True
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
+    },
+    "command": {
+      "type": "string",
+      "default": "pytest",
+      "title": "Command",
+      "description": "Shell command to execute in the repo mirror (workspace clone).",
+      "examples": [
+        "pytest",
+        "python -m ruff check ."
+      ]
+    },
+    "command_lines": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Command Lines",
+      "description": "Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload."
+    },
+    "timeout_seconds": {
+      "type": "number",
+      "default": 300,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
+    },
+    "workdir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workdir",
+      "description": "Working directory to run the command from. If relative, it is resolved within the repo mirror.",
+      "examples": [
+        "",
+        "src"
+      ]
+    },
+    "use_temp_venv": {
+      "type": "boolean",
+      "default": true,
+      "title": "Use Temp Venv"
+    },
+    "installing_dependencies": {
+      "type": "boolean",
+      "default": false,
+      "title": "Installing Dependencies"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "full_name"
+  ],
+  "title": "Run Shell"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "run_shell",
+  "args": {}
+}
+```
+
+## run_terminal_commands
+
+Backward-compatible alias for :func:`terminal_command`.
+
+This name appears in some older controller-side tool catalogs.
+
+Parameters:
+- command (string; optional, default='pytest')
+  Shell command to execute in the repo mirror (workspace clone).
+  Examples: 'pytest', 'python -m ruff check .'
+- command_lines (array | null; optional)
+  Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload.
+- full_name (string; required)
+  GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
+  Examples: 'octocat/Hello-World'
+- installing_dependencies (boolean; optional, default=False)
+- ref (string; optional, default='main')
+  Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
+  Examples: 'main', 'develop', 'feature/my-branch'
+- timeout_seconds (number; optional, default=300)
+  Timeout for the operation in seconds.
+  Examples: 60, 300, 600
+- use_temp_venv (boolean; optional, default=True)
+- workdir (string | null; optional)
+  Working directory to run the command from. If relative, it is resolved within the repo mirror.
+  Examples: '', 'src'
+
+Returns:
+  A JSON-serializable value defined by the tool.
+
+Metadata:
+- visibility: public
+- write_action: True
+- write_allowed: True
+- write_enabled: True
+- write_auto_approved: True
+- approval_required: False
+
+Input schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.",
+      "examples": [
+        "octocat/Hello-World"
+      ]
+    },
+    "ref": {
+      "type": "string",
+      "default": "main",
+      "title": "Ref",
+      "description": "Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.",
+      "examples": [
+        "main",
+        "develop",
+        "feature/my-branch"
+      ]
+    },
+    "command": {
+      "type": "string",
+      "default": "pytest",
+      "title": "Command",
+      "description": "Shell command to execute in the repo mirror (workspace clone).",
+      "examples": [
+        "pytest",
+        "python -m ruff check ."
+      ]
+    },
+    "command_lines": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Command Lines",
+      "description": "Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload."
+    },
+    "timeout_seconds": {
+      "type": "number",
+      "default": 300,
+      "title": "Timeout Seconds",
+      "description": "Timeout for the operation in seconds.",
+      "examples": [
+        60,
+        300,
+        600
+      ]
+    },
+    "workdir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workdir",
+      "description": "Working directory to run the command from. If relative, it is resolved within the repo mirror.",
+      "examples": [
+        "",
+        "src"
+      ]
+    },
+    "use_temp_venv": {
+      "type": "boolean",
+      "default": true,
+      "title": "Use Temp Venv"
+    },
+    "installing_dependencies": {
+      "type": "boolean",
+      "default": false,
+      "title": "Installing Dependencies"
+    }
+  },
+  "additionalProperties": true,
+  "required": [
+    "full_name"
+  ],
+  "title": "Run Terminal Commands"
+}
+```
+
+Example invocation:
+
+```json
+{
+  "tool": "run_terminal_commands",
+  "args": {}
+}
+```
+
 ## run_tests
 
 Run Tests. Signature: run_tests(full_name: 'str', ref: 'str' = 'main', test_command: 'str' = 'pytest', timeout_seconds: 'float' = 600, workdir: 'Optional[str]' = None, use_temp_venv: 'bool' = False, installing_dependencies: 'bool' = False) -> 'Dict[str, Any]'.
@@ -9098,7 +10377,7 @@ Parameters:
   Examples: 30, 100
 - query (string; required)
   Search query string.
-  Examples: 'TODO', 'def main'
+  Examples: 'def main', 'import os', 'async def'
 - search_type (string; optional, default='code')
 - sort (string | null; optional)
 
@@ -9124,8 +10403,9 @@ Input schema:
       "title": "Query",
       "description": "Search query string.",
       "examples": [
-        "TODO",
-        "def main"
+        "def main",
+        "import os",
+        "async def"
       ]
     },
     "search_type": {
@@ -9208,11 +10488,13 @@ Example invocation:
 
 ## search_workspace
 
-Search text files in the repo mirror (bounded, no shell).
+Search text files in the repo mirror (workspace clone) (bounded, no shell).
 
 Behavior for `query`:
-- Always treated as a literal substring match.
-- `regex` is accepted for compatibility but is not enforced.
+- When regex=true, `query` is treated as a Python regular expression.
+- Otherwise `query` is treated as a literal substring match.
+- Results can be bounded via max_results and files can be bounded via
+  max_file_bytes to keep searches responsive on large repositories.
 
 Parameters:
 - case_sensitive (boolean; optional, default=False)
@@ -9227,7 +10509,7 @@ Parameters:
   Examples: 'README.md', 'src/app.py'
 - query (string; optional, default='')
   Search query string.
-  Examples: 'TODO', 'def main'
+  Examples: 'def main', 'import os', 'async def'
 - ref (string; optional, default='main')
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
@@ -9283,8 +10565,9 @@ Input schema:
       "title": "Query",
       "description": "Search query string.",
       "examples": [
-        "TODO",
-        "def main"
+        "def main",
+        "import os",
+        "async def"
       ]
     },
     "path": {
@@ -9362,8 +10645,8 @@ Example invocation:
 
 Replace a workspace file's contents by writing the full file text.
 
-This is a good fit for repo-mirror edits when you want to replace the full contents of a file. It avoids
-patch/unified-diff application.
+This is a good fit for repo-mirror edits when you want to replace the full
+contents of a file without relying on unified-diff patch application.
 
 Parameters:
 - content (string; optional, default='')
@@ -9454,15 +10737,27 @@ Example invocation:
 
 ## terminal_command
 
-Run a shell command inside the repo workcell and return its result.
+Run a shell command inside the repo mirror and return its result.
 
-This supports tests, linters, or project scripts that need the real tree and
-virtualenv. The repo mirror persists across calls so
-installed dependencies and edits are reused.
+This supports tests, linters, and project scripts that need the real working
+tree.
+
+Execution model:
+
+- The command runs within the server-side repo mirror (a persistent git
+  working copy).
+- If ``use_temp_venv=true`` (default), the server creates an ephemeral
+  virtualenv for the duration of the command.
+- If ``installing_dependencies=true`` and ``use_temp_venv=true``, the tool
+  will run a best-effort `pip install -r dev-requirements.txt` before
+  executing the command.
+
+The repo mirror persists across calls so file edits and git state are
+preserved until explicitly reset.
 
 Parameters:
 - command (string; optional, default='pytest')
-  Shell command to execute in the repo mirror.
+  Shell command to execute in the repo mirror (workspace clone).
   Examples: 'pytest', 'python -m ruff check .'
 - command_lines (array | null; optional)
   Optional list of shell command lines. When provided, lines are joined with newlines and executed as a single command payload.
@@ -9521,7 +10816,7 @@ Input schema:
       "type": "string",
       "default": "pytest",
       "title": "Command",
-      "description": "Shell command to execute in the repo mirror.",
+      "description": "Shell command to execute in the repo mirror (workspace clone).",
       "examples": [
         "pytest",
         "python -m ruff check ."
@@ -10241,7 +11536,7 @@ Example invocation:
 
 ## workspace_create_branch
 
-Create a branch using the repo mirror, optionally pushing to origin.
+Create a branch using the repo mirror (workspace clone), optionally pushing to origin.
 
 This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
 
@@ -10325,7 +11620,7 @@ Example invocation:
 
 ## workspace_delete_branch
 
-Delete a non-default branch using the repo mirror.
+Delete a non-default branch using the repo mirror (workspace clone).
 
 This is the workspace counterpart to branch-creation helpers and is intended
 for closing out ephemeral feature branches once their work has been merged.
@@ -10395,7 +11690,7 @@ Example invocation:
 
 Detect a mangled repo mirror branch and recover to a fresh branch.
 
-This tool targets cases where a repo mirror becomes inconsistent (wrong
+This tool targets cases where a repo mirror (workspace clone) becomes inconsistent (wrong
 branch checked out, merge/rebase state, conflicts, etc.). When healing, it:
 
 1) Diagnoses the repo mirror for ``branch``.
@@ -10621,7 +11916,7 @@ Example invocation:
 
 ## workspace_sync_status
 
-Report how a repo mirror differs from its remote branch.
+Report how a repo mirror (workspace clone) differs from its remote branch.
 
 Parameters:
 - full_name (string; required)
@@ -10687,7 +11982,7 @@ Example invocation:
 
 ## workspace_sync_to_remote
 
-Reset a repo mirror to match the remote branch.
+Reset a repo mirror (workspace clone) to match the remote branch.
 
 Parameters:
 - discard_local_changes (boolean; optional, default=False)

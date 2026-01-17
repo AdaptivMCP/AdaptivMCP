@@ -1,21 +1,32 @@
-# Adaptiv GitHub MCP server usage
+# Adaptiv MCP server usage
 
 This document describes the current functionality, behavior, and usage
-patterns for the GitHub MCP (Model Context Protocol) server.
+patterns for the Adaptiv MCP (Model Context Protocol) server.
+
+Adaptiv MCP exposes GitHub and Render tool surfaces over MCP. It supports two
+complementary approaches for repository work:
+
+- GitHub API tools operate directly against GitHub's remote state.
+- Workspace tools operate on a persistent server-side git working copy (the
+  "repo mirror").
 
 ## Key concepts
 
-1) Persistent repo mirror (server-side git copy)
+This document uses a small set of terms with specific meanings. See
+`docs/terminology.md` for the authoritative glossary.
+
+1) Repo mirror (persistent server-side git working copy)
 
 When you use any workspace-backed tool, the server maintains a persistent git copy of the target repository on the server filesystem. In this documentation, we call that copy the **repo mirror** to avoid confusion with the tool name `ensure_workspace_clone`. The repo mirror is what workspace tools operate on (editing files, running commands, committing, and pushing).
 
 Important: the repo mirror is not the live GitHub state. It is a local copy that becomes “live” on GitHub after you push.
 
-2) Server “workcell” (execution environment)
+2) Server execution environment
 
-In this document, we use **workcell** to describe the server-side environment where the repo mirror lives and where commands run. It can be thought of as a stable working directory plus the repo mirror.
-
-Because the workcell holds the repo mirror, the two terms are closely related. In practice, the repo mirror is a working copy for edits and command execution, while GitHub remains the source of truth for the remote state.
+Workspace tools execute on the server runtime (for example, a Render web
+service) and operate on the repo mirror stored on the server filesystem.
+The execution environment is stable across tool calls until the service is
+restarted or the repo mirror is explicitly reset.
 
 3) GitHub API tools vs workspace tools
 
@@ -109,6 +120,31 @@ Because the repo mirror is not the live GitHub state, GitHub API tools are often
 - ChatGPT metadata: the server captures safe ChatGPT headers (conversation, assistant, project, org, session, user IDs) for correlation and includes them in request context/logging.
 - Cache control: dynamic endpoints are served with `Cache-Control: no-store`; static assets under `/static` are cacheable.
 - File caching: GitHub file contents may be cached in-memory to reduce repeated fetches.
+
+### Response shaping (ChatGPT-friendly tool outputs)
+
+The server supports an optional response shaping mode intended for clients that
+benefit from consistent envelopes and bounded output size.
+
+Controls (environment variables):
+
+- `GITHUB_MCP_RESPONSE_MODE`
+  - `raw` (default): return tool outputs unchanged.
+  - `chatgpt`: enable response shaping for ChatGPT-hosted connectors.
+  - When unset, some deployments may auto-enable `chatgpt` for requests that
+    include ChatGPT connector metadata.
+
+- `GITHUB_MCP_TOOL_RESULT_ENVELOPE` (default: false)
+  - When enabled, mapping (dict-like) tool results are normalized to include an
+    `ok` boolean and a `status` string (`success`/`warning`/`error`) when missing.
+
+- `GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALARS` (default: false)
+  - When enabled alongside the envelope, scalar results may be wrapped into a
+    mapping (`{"ok": true, "status": "success", "result": ...}`).
+
+- `GITHUB_MCP_RESPONSE_MAX_JSON_CHARS` and `GITHUB_MCP_RESPONSE_MAX_TEXT_CHARS`
+  - Bounds for truncating unusually large nested JSON/text fields in shaped
+    outputs.
 
 Workspace path handling: workspace file tools enforce that requested paths resolve inside the repository root. Relative traversal and absolute paths that point outside the repo are treated as invalid input. File tools also require non-empty paths; deletion helpers require a non-empty `paths` list. Directory deletion requires `allow_recursive=true` for non-empty directories.
 

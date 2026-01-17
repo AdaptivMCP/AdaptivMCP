@@ -63,7 +63,7 @@ _PARAM_DOCS: Dict[str, Dict[str, Any]] = {
     },
     "query": {
         "description": "Search query string.",
-        "examples": ["TODO", "def main"],
+        "examples": ["def main", "import os", "async def"],
     },
     "command": {
         "description": "Shell command to execute in the repo mirror (workspace clone).",

@@ -2,6 +2,8 @@
 
 This note documents server-side input validation and common usage flows for the workspace (repo mirror), GitHub, and Render tools.
 
+This document uses the terminology defined in `docs/terminology.md`.
+
 ## Workspace (repo mirror)
 
 The workspace tools operate on a persistent server-side clone (“repo mirror”). A common write flow is:
@@ -29,6 +31,11 @@ Operational notes:
 - If the upstream branch diverged (rebases/force-push), use `ensure_workspace_clone` with `reset=true` to recreate the mirror.
 - If unified diff patches are inconvenient for your client, `delete_workspace_paths` provides a direct deletion path.
 
+Diagnostics:
+
+- `validate_environment` returns an operator-friendly report including token detection,
+  tool registry sanity checks, and (optionally) an installed dependency snapshot.
+
 ## GitHub tools
 
 The GitHub tools primarily wrap the REST and GraphQL APIs.
@@ -45,6 +52,12 @@ Common usage patterns:
 - `get_repo_dashboard` / `get_repo_dashboard_graphql` for quick triage and orientation.
 - `cache_files` + `get_cached_files` for repeated reads of the same content during an interactive session.
 - For CI triage, `get_workflow_run_overview` and then `get_job_logs` for untruncated job output.
+
+Response shaping:
+
+Some deployments enable response shaping for ChatGPT-hosted connectors (see
+`docs/usage.md`). When enabled, mapping tool results may be normalized to
+include `ok` / `status` and large nested payloads may be truncated.
 
 ## Render tools
 

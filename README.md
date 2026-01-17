@@ -1,32 +1,22 @@
-# Adaptiv MCP (GitHub workspace MCP server)
+# Adaptiv MCP (GitHub + Render MCP server)
 
-## Workflow: repo mirror vs GitHub live state
+Adaptiv MCP is an MCP (Model Context Protocol) server that provides GitHub and Render operations to MCP clients.
 
-This server maintains a persistent server-side git copy for workspace-backed tools.
-In this documentation, we call that copy the **repo mirror** to avoid confusion with the tool name `ensure_workspace_clone`.
-The repo mirror is a convenient place to edit files, run commands, and prepare commits to push.
+It supports two complementary ways of working with GitHub repositories:
 
-You can also make changes directly on GitHub using the GitHub API-backed tools; those do not require using the repo mirror.
+- GitHub API tools operate directly against GitHub's remote state (REST + GraphQL).
+- Workspace tools operate on a persistent server-side git working copy (the "repo mirror").
 
-The repo mirror is not automatically the live GitHub state. GitHub becomes the source of truth after you push.
-If you need the repo mirror to exactly match a remote branch after merges/force-updates, you can reset the workspace by rebuilding it.
-`ensure_workspace_clone` with `"reset": true` recreates the repo mirror before continuing work.
+The code is the source of truth. Documentation is expected to track runtime behavior.
 
-Tool robustness notes:
+## Repo mirror vs live GitHub state
 
-- Workspace file tools validate that requested paths resolve inside the repo root and require non-empty path inputs.
-- `delete_workspace_paths` requires a non-empty `paths` list; non-empty directory deletion requires `allow_recursive=true`.
-- Render tools validate identifiers, clamp pagination limits, enforce `commit_id` XOR `image_url` for deploy creation, and require ISO8601 timestamps for log queries.
+The server maintains a persistent server-side git working copy for workspace-backed tools. In this documentation we call that copy the **repo mirror** (created/reused via `ensure_workspace_clone`).
 
-Adaptiv is designed to act as an AI model's personal PC, assisting users through the
-connected Adaptiv connector with multiple tasks and queries. Today it ships with
-GitHub and Render integrations, with plans for additional service integrations in
-future updates.
+The repo mirror is not automatically the live GitHub state. GitHub becomes the source of truth only after you push.
+If you need the repo mirror to exactly match a remote branch after merges/force-updates, rebuild it with `ensure_workspace_clone(reset=true)`.
 
-Render integration includes a minimal set of user-facing tools for service
-inspection and operations (list owners/workspaces, list services, view deploys,
-trigger deploys, rollbacks, restarts, and fetch logs). These tools use Render's
-public API and require a Render API token to be configured.
+For a glossary of terms used across docs and code, see `docs/terminology.md`.
 
 ## Quickstart
 
@@ -103,5 +93,8 @@ The server exposes:
 
 ## Documentation
 
-- [Usage guide](docs/usage.md) — current functionality, behavior, configuration, and usage patterns.
-- [Detailed tools reference](Detailed_Tools.md) — tool catalog grouped by function.
+- [Usage guide](docs/usage.md) — workflows, configuration, operational behavior.
+- [Terminology and glossary](docs/terminology.md) — stable definitions used across docs and code.
+- [Architecture and safety](docs/architecture_safety.md) — safety posture and guardrails.
+- [Tool robustness](docs/tool_robustness.md) — validation rules and common patterns.
+- [Detailed tools reference](Detailed_Tools.md) — generated tool catalog grouped by function.

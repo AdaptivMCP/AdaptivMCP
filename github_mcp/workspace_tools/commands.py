@@ -189,7 +189,7 @@ async def render_shell(
                 # Remote branch exists, safe to target it directly.
                 target_ref = create_branch
             else:
-                # Note: branch exists only locally in the base workcell (repo mirror).
+                # Note: branch exists only locally in the base repo mirror.
                 # Do NOT try to clone a non-existent remote branch.
                 target_ref = effective_ref
                 command = f"git checkout {shlex.quote(create_branch)} && {command}"
@@ -250,11 +250,23 @@ async def terminal_command(
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
 ) -> Dict[str, Any]:
-    """Run a shell command inside the repo workcell and return its result.
+    """Run a shell command inside the repo mirror and return its result.
 
-    This supports tests, linters, or project scripts that need the real tree and
-    virtualenv. The repo mirror persists across calls so
-    installed dependencies and edits are reused.
+    This supports tests, linters, and project scripts that need the real working
+    tree.
+
+    Execution model:
+
+    - The command runs within the server-side repo mirror (a persistent git
+      working copy).
+    - If ``use_temp_venv=true`` (default), the server creates an ephemeral
+      virtualenv for the duration of the command.
+    - If ``installing_dependencies=true`` and ``use_temp_venv=true``, the tool
+      will run a best-effort `pip install -r dev-requirements.txt` before
+      executing the command.
+
+    The repo mirror persists across calls so file edits and git state are
+    preserved until explicitly reset.
     """
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
