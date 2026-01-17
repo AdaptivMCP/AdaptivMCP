@@ -67,10 +67,32 @@
           <div class="pill">Repository</div>
           <p class="muted">This UI is intentionally minimal and exists primarily to help debug deployments.</p>
           <p>
-            Source: <a href="https://github.com/Proofgate-Revocations/chatgpt-mcp-github">Proofgate-Revocations/chatgpt-mcp-github</a>
+            Source: <a id="repo-link" href="#">(loading)</a>
           </p>
         </div>
       </div>
+
+      <script>
+        (function () {
+          var link = document.getElementById("repo-link");
+          if (!link) return;
+          fetch("/ui.json", { cache: "no-store" })
+            .then(function (resp) {
+              if (!resp.ok) throw new Error("ui.json not available");
+              return resp.json();
+            })
+            .then(function (data) {
+              var repo = data && data.repo && data.repo.full_name;
+              if (!repo || typeof repo !== "string") throw new Error("repo missing");
+              link.textContent = repo;
+              link.href = "https://github.com/" + repo;
+            })
+            .catch(function () {
+              link.textContent = "Repository";
+              link.href = "#";
+            });
+        })();
+      </script>
     </div>
   </body>
 </html>
