@@ -313,13 +313,19 @@ class _RequestContextMiddleware:
 
         def _auto_idempotency_for_tool(path: str, payload: Any) -> str:
             try:
-                canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+                canonical = json.dumps(
+                    payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+                )
             except Exception:
                 canonical = repr(payload)
-            digest = hashlib.sha256(f"{path}|{canonical}".encode("utf-8", errors="ignore")).hexdigest()
+            digest = hashlib.sha256(
+                f"{path}|{canonical}".encode("utf-8", errors="ignore")
+            ).hexdigest()
             return f"auto:{digest[:24]}"
 
-        should_parse_body = scope.get("method") == "POST" and (path.endswith("/messages") or path.startswith("/tools/"))
+        should_parse_body = scope.get("method") == "POST" and (
+            path.endswith("/messages") or path.startswith("/tools/")
+        )
 
         if should_parse_body:
             body_chunks: list[bytes] = []
