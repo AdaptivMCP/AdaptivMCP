@@ -6,7 +6,11 @@ import re
 from contextvars import ContextVar
 from typing import Any, Optional
 
-from mcp.server.transport_security import TransportSecuritySettings
+try:
+    # Optional dependency: FastMCP and its transport security helpers.
+    from mcp.server.transport_security import TransportSecuritySettings
+except Exception:  # pragma: no cover
+    TransportSecuritySettings = None  # type: ignore[assignment]
 
 from github_mcp.utils import _extract_hostname, _render_external_hosts
 
@@ -16,6 +20,13 @@ from github_mcp.utils import _extract_hostname, _render_external_hosts
 
 REQUEST_MESSAGE_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_MESSAGE_ID", default=None)
 REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID", default=None)
+# Optional idempotency/dedupe keys for correlating retries across transport boundaries.
+# These are intentionally kept separate from REQUEST_ID (per-HTTP-request) and
+# MESSAGE_ID (per JSON-RPC message) because upstream clients may choose to
+# retry a request with a new request id but the same idempotency key.
+REQUEST_IDEMPOTENCY_KEY: ContextVar[Optional[str]] = ContextVar(
+    "REQUEST_IDEMPOTENCY_KEY", default=None
+)
 REQUEST_CHATGPT_METADATA: ContextVar[Optional[dict[str, str]]] = ContextVar(
     "REQUEST_CHATGPT_METADATA", default=None
 )
@@ -36,6 +47,7 @@ def get_request_context() -> dict[str, Any]:
         "received_at": REQUEST_RECEIVED_AT.get(),
         "session_id": REQUEST_SESSION_ID.get(),
         "message_id": REQUEST_MESSAGE_ID.get(),
+        "idempotency_key": REQUEST_IDEMPOTENCY_KEY.get(),
         "chatgpt": REQUEST_CHATGPT_METADATA.get(),
     }
 
@@ -51,6 +63,7 @@ __all__ = [
     "REQUEST_PATH",
     "REQUEST_RECEIVED_AT",
     "REQUEST_SESSION_ID",
+    "REQUEST_IDEMPOTENCY_KEY",
     "REQUEST_CHATGPT_METADATA",
     "get_request_context",
     "get_request_id",
@@ -168,32 +181,19 @@ def _split_host_list(value: str | None) -> list[str]:
     return [part.strip() for part in parts if part.strip()]
 
 
-def _resolve_transport_security() -> TransportSecuritySettings | None:
-    host_inputs = _split_host_list(os.environ.get("ALLOWED_HOSTS"))
-    host_inputs.extend(_render_external_hosts())
+def _resolve_transport_security() -> Any:
+    """Server-side transport security settings.
 
-    base_hosts: list[str] = []
-    for host in host_inputs:
-        hostname = _extract_hostname(host) or host
-        hostname = hostname.strip().lower()
-        if hostname and hostname not in base_hosts:
-            base_hosts.append(hostname)
+    This project is typically deployed behind a trusted reverse proxy (e.g.,
+    Render) and uses explicit authentication/authorization on the tool layer.
 
-    if not base_hosts:
-        return None
+    Per operator request, we disable FastMCP transport security enforcement
+    (allowed hosts/origins, DNS rebinding protection) so it cannot block
+    long-running workflows or internal tooling.
+    """
 
-    allowed_hosts: list[str] = []
-    allowed_origins: list[str] = []
-    for hostname in base_hosts:
-        allowed_hosts.extend([hostname, f"{hostname}:*"])
-        for scheme in ("http", "https"):
-            allowed_origins.extend([f"{scheme}://{hostname}", f"{scheme}://{hostname}:*"])
-
-    return TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=allowed_hosts,
-        allowed_origins=allowed_origins,
-    )
+    # NOTE: This does not and cannot disable any platform-level safety systems.
+    return None
 
 
 try:

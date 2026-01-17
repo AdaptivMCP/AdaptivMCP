@@ -1570,14 +1570,31 @@ def _dedupe_ttl_seconds(*, write_action: bool, meta: Mapping[str, Any]) -> float
         return max(0.0, float(override))
 
     # Environment defaults.
-    if write_action:
-        raw = os.environ.get("GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S", "0")
-    else:
-        raw = os.environ.get("GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S", "0")
+    #
+    # Reliability note:
+    # Long workflows frequently involve transient transport failures. Dedupe is
+    # our primary protection against accidentally re-executing a tool after a
+    # retry. Historically the default TTL was 0 (disabled), which made retries
+    # much more likely to double-execute.
+    #
+    # New behavior:
+    # - If the env var is UNSET, we use conservative defaults.
+    # - If the env var is SET (including to "0"), we honor it exactly.
+    env_name = "GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S" if write_action else "GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S"
+    raw = os.environ.get(env_name)
+
+    if raw is None:
+        # Defaults tuned for typical agent retry windows.
+        # Reads: short window to coalesce repeated polling and transient retries.
+        # Writes: longer window because downstream providers can take longer and
+        # retries are more dangerous.
+        return 300.0 if write_action else 30.0
+
     try:
-        return max(0.0, float(raw))
+        return max(0.0, float(str(raw).strip()))
     except Exception:
-        return 0.0
+        # If misconfigured, fall back to safe defaults.
+        return 300.0 if write_action else 30.0
 
 
 def _dedupe_key(

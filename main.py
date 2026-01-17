@@ -6,6 +6,7 @@ single place so clients can see how to interact with the server.
 """
 
 import base64
+import hashlib
 import json
 import time
 import uuid
@@ -68,6 +69,7 @@ from github_mcp.http_routes.ui import register_ui_routes
 from github_mcp.mcp_server.context import (
     REQUEST_CHATGPT_METADATA,
     REQUEST_ID,
+    REQUEST_IDEMPOTENCY_KEY,
     REQUEST_MESSAGE_ID,
     REQUEST_PATH,
     REQUEST_RECEIVED_AT,
@@ -178,10 +180,12 @@ class _RequestContextMiddleware:
         REQUEST_SESSION_ID.set(None)
         REQUEST_MESSAGE_ID.set(None)
         REQUEST_ID.set(None)
+        REQUEST_IDEMPOTENCY_KEY.set(None)
         REQUEST_CHATGPT_METADATA.set(None)
 
         # Correlation id: honor upstream X-Request-Id if provided, else generate.
         request_id: Optional[str] = None
+        idempotency_key: Optional[str] = None
         try:
             for k, v in scope.get("headers") or []:
                 if (k or b"").lower() == b"x-request-id":
@@ -189,12 +193,21 @@ class _RequestContextMiddleware:
                     if decoded:
                         request_id = decoded
                         break
+            for k, v in scope.get("headers") or []:
+                lk = (k or b"").lower()
+                if lk in {b"idempotency-key", b"x-idempotency-key", b"x-dedupe-key"}:
+                    decoded = (v or b"").decode("utf-8", errors="ignore").strip()
+                    if decoded:
+                        idempotency_key = decoded
+                        break
         except Exception:
             request_id = None
 
         if not request_id:
             request_id = uuid.uuid4().hex
         REQUEST_ID.set(request_id)
+        if idempotency_key:
+            REQUEST_IDEMPOTENCY_KEY.set(idempotency_key)
 
         try:
             metadata = _extract_chatgpt_metadata(list(scope.get("headers") or []))
@@ -224,6 +237,10 @@ class _RequestContextMiddleware:
             session_id = (qs.get("session_id") or [None])[0]
             if session_id:
                 REQUEST_SESSION_ID.set(str(session_id))
+            if not REQUEST_IDEMPOTENCY_KEY.get():
+                qs_idempotency = (qs.get("idempotency_key") or qs.get("dedupe_key") or [None])[0]
+                if qs_idempotency:
+                    REQUEST_IDEMPOTENCY_KEY.set(str(qs_idempotency))
         except Exception:
             pass
 
@@ -278,8 +295,33 @@ class _RequestContextMiddleware:
                     )
             return await send_wrapper(message)
 
-        # Only parse JSON body for POST /messages.
-        if path.endswith("/messages") and scope.get("method") == "POST":
+        def _extract_idempotency_from_payload(payload: Any) -> Optional[str]:
+            if not isinstance(payload, dict):
+                return None
+            for key in ("idempotency_key", "dedupe_key"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            for nested_key in ("params", "args", "_meta"):
+                nested = payload.get(nested_key)
+                if isinstance(nested, dict):
+                    for key in ("idempotency_key", "dedupe_key"):
+                        value = nested.get(key)
+                        if isinstance(value, str) and value.strip():
+                            return value.strip()
+            return None
+
+        def _auto_idempotency_for_tool(path: str, payload: Any) -> str:
+            try:
+                canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+            except Exception:
+                canonical = repr(payload)
+            digest = hashlib.sha256(f"{path}|{canonical}".encode("utf-8", errors="ignore")).hexdigest()
+            return f"auto:{digest[:24]}"
+
+        should_parse_body = scope.get("method") == "POST" and (path.endswith("/messages") or path.startswith("/tools/"))
+
+        if should_parse_body:
             body_chunks: list[bytes] = []
             total = 0
             more_body = True
@@ -310,6 +352,12 @@ class _RequestContextMiddleware:
                     msg_id = payload.get("id")
                     if msg_id is not None:
                         REQUEST_MESSAGE_ID.set(str(msg_id))
+                    if not REQUEST_IDEMPOTENCY_KEY.get():
+                        extracted = _extract_idempotency_from_payload(payload)
+                        if extracted:
+                            REQUEST_IDEMPOTENCY_KEY.set(extracted)
+                        elif path.startswith("/tools/"):
+                            REQUEST_IDEMPOTENCY_KEY.set(_auto_idempotency_for_tool(path, payload))
             except Exception:
                 pass
 
