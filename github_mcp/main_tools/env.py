@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import uuid
+from importlib import metadata
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -167,6 +168,63 @@ async def validate_environment() -> Dict[str, Any]:
         "Deployment environment signals (best-effort)",
         env_signals,
     )
+
+    # Installed dependencies snapshot (best-effort).
+    # Intended primarily for Render troubleshooting, but safe anywhere.
+    #
+    # Controls:
+    # - GITHUB_MCP_LOG_DEPENDENCIES (default: true): include dependency list.
+    # - GITHUB_MCP_LOG_DEPENDENCIES_MAX (default: 0): cap number of packages (0 = no cap).
+    include_deps = os.environ.get("GITHUB_MCP_LOG_DEPENDENCIES", "true").strip().lower() in (
+        "1",
+        "true",
+        "t",
+        "yes",
+        "y",
+        "on",
+    )
+    if include_deps:
+        max_raw = os.environ.get("GITHUB_MCP_LOG_DEPENDENCIES_MAX", "0").strip()
+        try:
+            max_pkgs = int(max_raw)
+        except Exception:
+            max_pkgs = 0
+
+        deps_level = "ok"
+        deps_details: Dict[str, Any] = {
+            "python": sys.version.split("\n")[0],
+            "executable": sys.executable,
+            "package_count": None,
+            "packages": None,
+            "truncated": False,
+            "max": max_pkgs,
+        }
+        try:
+            dists = list(metadata.distributions())
+            pkgs: List[Dict[str, str]] = []
+            for dist in dists:
+                name = dist.metadata.get("Name") if hasattr(dist, "metadata") else None
+                version = getattr(dist, "version", None)
+                if not name:
+                    continue
+                pkgs.append({"name": str(name), "version": str(version or "")})
+            pkgs.sort(key=lambda x: x["name"].lower())
+            deps_details["package_count"] = len(pkgs)
+            if max_pkgs and len(pkgs) > max_pkgs:
+                deps_details["packages"] = pkgs[:max_pkgs]
+                deps_details["truncated"] = True
+            else:
+                deps_details["packages"] = pkgs
+        except Exception as exc:
+            deps_level = "warning"
+            deps_details.update({"error_type": type(exc).__name__, "error": str(exc)})
+
+        add_check(
+            "installed_dependencies",
+            deps_level,
+            "Installed Python dependencies (best-effort)",
+            deps_details,
+        )
 
     # Controller repo/branch config
     controller_repo = os.environ.get("GITHUB_MCP_CONTROLLER_REPO") or m.CONTROLLER_REPO
