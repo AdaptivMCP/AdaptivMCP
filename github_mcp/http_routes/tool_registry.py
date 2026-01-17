@@ -141,6 +141,10 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
     value = getattr(func, "__mcp_write_action__", None)
     if value is None:
         value = getattr(tool_obj, "write_action", None)
+    if value is None:
+        meta = getattr(tool_obj, "meta", None)
+        if isinstance(meta, dict):
+            value = meta.get("write_action")
     return bool(value)
 
 
@@ -182,7 +186,7 @@ def _coerce_error_detail(structured: Dict[str, Any]) -> Dict[str, Any]:
     return {}
 
 
-async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: int = 3) -> Response:
+async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: int = 1) -> Response:
     resolved = _find_registered_tool(tool_name)
     if not resolved:
         return JSONResponse({"error": f"Unknown tool {tool_name!r}."}, status_code=404)
@@ -303,9 +307,11 @@ def build_tool_invoke_endpoint() -> Callable[[Request], Response]:
             return JSONResponse({"error": "tool_name is required"}, status_code=400)
 
         try:
-            max_attempts = int(request.query_params.get("max_attempts") or "3")
+            # Default to a single attempt to avoid unexpected mid-workflow retries.
+            # Callers may opt in to retries by passing max_attempts>1.
+            max_attempts = int(request.query_params.get("max_attempts") or "1")
         except Exception:
-            max_attempts = 3
+            max_attempts = 1
 
         payload: Any = {}
         if request.method in {"POST", "PUT", "PATCH"}:
