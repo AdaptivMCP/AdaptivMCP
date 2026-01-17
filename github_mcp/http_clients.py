@@ -130,6 +130,7 @@ from .config import (  # noqa: E402
     summarize_request_context,
 )
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
+from .utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO  # noqa: E402
 
 _loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
     weakref.WeakKeyDictionary()
@@ -468,28 +469,21 @@ async def _github_request(
         "y",
         "on",
     )
-    if (
-        enable_synthetic
-        and os.environ.get("PYTEST_CURRENT_TEST")
-        and "Proofgate-Revocations/chatgpt-mcp-github" in path
-    ):
-        if (
-            method.upper() == "GET"
-            and path.rstrip("/") == "/repos/Proofgate-Revocations/chatgpt-mcp-github"
-        ):
+    controller_repo = CONTROLLER_REPO
+    controller_repo_api = f"/repos/{controller_repo}"
+    controller_repo_contents_prefix = f"{controller_repo_api}/contents/"
+    if enable_synthetic and os.environ.get("PYTEST_CURRENT_TEST") and controller_repo in path:
+        if method.upper() == "GET" and path.rstrip("/") == controller_repo_api:
             return {
                 "status_code": 200,
                 "headers": {},
                 "text": "",
                 "json": {
-                    "default_branch": "main",
-                    "full_name": "Proofgate-Revocations/chatgpt-mcp-github",
+                    "default_branch": CONTROLLER_DEFAULT_BRANCH,
+                    "full_name": controller_repo,
                 },
             }
-        if (
-            method.upper() == "GET"
-            and "/Proofgate-Revocations/chatgpt-mcp-github/git/trees" in path
-        ):
+        if method.upper() == "GET" and f"/{controller_repo}/git/trees" in path:
             return {
                 "status_code": 200,
                 "headers": {},
@@ -508,7 +502,7 @@ async def _github_request(
                 },
             }
         if (
-            "Proofgate-Revocations/chatgpt-mcp-github/contents/docs/start_session.md" in path
+            f"{controller_repo_contents_prefix}docs/start_session.md" in path
             and method.upper() == "GET"
         ):
             content_bytes = b"Sample doc content\n"
@@ -523,7 +517,7 @@ async def _github_request(
                     "encoding": "base64",
                 },
             }
-        if "Proofgate-Revocations/chatgpt-mcp-github/contents/" in path and method.upper() in {
+        if controller_repo_contents_prefix in path and method.upper() in {
             "PUT",
             "DELETE",
         }:

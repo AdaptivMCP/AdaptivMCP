@@ -5,6 +5,8 @@ from __future__ import annotations
 import io
 import json
 import os  # noqa: E402  pylint: disable=wrong-import-position
+import re
+import subprocess
 import sys
 import zipfile
 from types import SimpleNamespace
@@ -431,10 +433,115 @@ def _load_repo_defaults() -> tuple[Dict[str, Dict[str, str]], str | None]:
 
 
 REPO_DEFAULTS, REPO_DEFAULTS_PARSE_ERROR = _load_repo_defaults()
-CONTROLLER_REPO = os.environ.get(
-    "GITHUB_MCP_CONTROLLER_REPO", "Proofgate-Revocations/chatgpt-mcp-github"
-)
-CONTROLLER_DEFAULT_BRANCH = os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH", "main")
+
+
+def _parse_github_remote_repo(remote_url: str) -> str | None:
+    """Best-effort parse of a git remote URL into an owner/repo slug."""
+
+    url = (remote_url or "").strip()
+    if not url:
+        return None
+
+    # Common shapes:
+    # - https://github.com/<owner>/<repo>.git
+    # - git@github.com:<owner>/<repo>.git
+    patterns = (r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$",)
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            owner = (match.group("owner") or "").strip()
+            repo = (match.group("repo") or "").strip()
+            if owner and repo:
+                return f"{owner}/{repo}"
+    return None
+
+
+def _detect_controller_repo(*, fallback: str) -> str:
+    """Resolve the controller repo slug (owner/repo) with best-effort inference.
+
+    Resolution order:
+    1) Explicit override via GITHUB_MCP_CONTROLLER_REPO
+    2) GitHub Actions-style env vars (GITHUB_REPOSITORY)
+    3) Render-style env vars (if present)
+    4) Local git remote.origin.url (if available)
+    5) Provided fallback
+    """
+
+    explicit = (os.environ.get("GITHUB_MCP_CONTROLLER_REPO") or "").strip()
+    if explicit:
+        return explicit
+
+    github_repo = (os.environ.get("GITHUB_REPOSITORY") or "").strip()
+    if github_repo and "/" in github_repo:
+        return github_repo
+
+    # Render (and similar platforms) occasionally expose repo metadata.
+    render_slug = (
+        os.environ.get("RENDER_GIT_REPO")
+        or os.environ.get("RENDER_GIT_REPO_SLUG")
+        or os.environ.get("RENDER_REPO")
+        or os.environ.get("RENDER_REPO_SLUG")
+        or ""
+    ).strip()
+    if render_slug:
+        if "/" in render_slug:
+            return render_slug
+        render_owner = (
+            os.environ.get("RENDER_GIT_REPO_OWNER") or os.environ.get("RENDER_REPO_OWNER") or ""
+        ).strip()
+        if render_owner and "/" not in render_owner:
+            return f"{render_owner}/{render_slug}"
+
+    try:
+        remote_url = subprocess.check_output(
+            ["git", "config", "--get", "remote.origin.url"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except Exception:
+        remote_url = ""
+
+    parsed = _parse_github_remote_repo(remote_url)
+    if parsed:
+        return parsed
+
+    return fallback
+
+
+def _detect_controller_branch(*, fallback: str) -> str:
+    """Resolve the controller default branch with best-effort inference."""
+
+    explicit = (os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") or "").strip()
+    if explicit:
+        return explicit
+
+    for env_name in (
+        "GITHUB_REF_NAME",
+        "GITHUB_HEAD_REF",
+        "RENDER_GIT_BRANCH",
+        "GIT_BRANCH",
+    ):
+        candidate = (os.environ.get(env_name) or "").strip()
+        if candidate:
+            return candidate
+
+    # Try to infer from the local repo if git metadata is available.
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        if branch and branch not in {"HEAD", "(unknown)"}:
+            return branch
+    except Exception:
+        pass
+
+    return fallback
+
+
+CONTROLLER_REPO = _detect_controller_repo(fallback="owner/repo")
+CONTROLLER_DEFAULT_BRANCH = _detect_controller_branch(fallback="main")
 
 __all__ = [
     "_get_main_module",

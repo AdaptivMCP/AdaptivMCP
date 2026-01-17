@@ -6,6 +6,8 @@ from typing import Any
 
 from starlette.responses import FileResponse, JSONResponse, Response
 
+from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
+
 
 def _assets_dir() -> Path:
     # main.py mounts /static from `<repo_root>/assets`.
@@ -38,6 +40,10 @@ def build_ui_json_endpoint() -> Any:
         return JSONResponse(
             {
                 "service": "adaptiv-mcp-github",
+                "repo": {
+                    "full_name": CONTROLLER_REPO,
+                    "default_branch": CONTROLLER_DEFAULT_BRANCH,
+                },
                 "version": {
                     "git_commit": os.getenv("GIT_COMMIT") or os.getenv("RENDER_GIT_COMMIT"),
                     "git_branch": os.getenv("GIT_BRANCH") or os.getenv("RENDER_GIT_BRANCH"),
@@ -62,7 +68,7 @@ def build_ui_json_endpoint() -> Any:
                 },
                 "notes": [
                     "/healthz reports baseline health after deploy.",
-                    "/tools supports discovery; POST /tools/<name> invokes a tool.",
+                    "/tools supports discovery; POST /tools/{tool_name} invokes a tool.",
                     "Render endpoints require RENDER_API_KEY/RENDER_API_TOKEN configured.",
                 ],
             }
