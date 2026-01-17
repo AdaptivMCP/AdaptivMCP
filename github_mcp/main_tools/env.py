@@ -887,14 +887,31 @@ async def validate_environment() -> Dict[str, Any]:
             elif isinstance(owners_json, list):
                 owners = [o for o in owners_json if isinstance(o, dict)]
 
+                # Some Render endpoints return a list of wrapper objects like:
+                # [{"cursor": "...", "owner": {...}}]. In that case, treat the last
+                # cursor as a best-effort pagination signal.
+                if owners:
+                    last_cursor = owners[-1].get("cursor")
+                    if isinstance(last_cursor, str) and last_cursor:
+                        cursor = last_cursor
+
             owner_samples: List[Dict[str, Any]] = []
             for o in owners[:5]:
+                owner_obj = o
+                # Handle wrapper shape {"cursor": "...", "owner": {...}}
+                wrapped = o.get("owner")
+                if isinstance(wrapped, dict):
+                    owner_obj = wrapped
                 owner_samples.append(
                     {
-                        "id": o.get("id"),
-                        "name": o.get("name") or o.get("displayName"),
-                        "type": o.get("type"),
-                        "owner_type": o.get("ownerType") or o.get("owner_type"),
+                        "id": owner_obj.get("id"),
+                        "name": owner_obj.get("name")
+                        or owner_obj.get("displayName")
+                        or owner_obj.get("display_name"),
+                        "type": owner_obj.get("type"),
+                        "owner_type": owner_obj.get("ownerType")
+                        or owner_obj.get("owner_type")
+                        or owner_obj.get("owner_type"),
                     }
                 )
 
@@ -904,6 +921,7 @@ async def validate_environment() -> Dict[str, Any]:
                 "Render API is reachable with the configured token (owner sample)",
                 {
                     "owners_sample": owner_samples,
+                    "owners_count": len(owners),
                     "next_cursor": cursor,
                 },
             )
