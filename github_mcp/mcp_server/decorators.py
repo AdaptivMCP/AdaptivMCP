@@ -1601,8 +1601,22 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
             out.setdefault("truncated_fields", sorted(set(truncated_fields)))
 
         return out
-    except Exception:
+    except Exception as exc:
         # Best-effort: never break tool behavior if the shaper fails.
+        # However, failures here are otherwise invisible and can look like
+        # "errors being swallowed" to operators and clients.
+        try:
+            LOGGER.warning(
+                "Tool result shaping failed; returning raw result",
+                extra={
+                    "event": "tool_result_shape_failed",
+                    "error_type": exc.__class__.__name__,
+                    "error_message": _truncate_text(str(exc), limit=200) if str(exc) else None,
+                },
+                exc_info=exc if LOG_TOOL_EXC_INFO else None,
+            )
+        except Exception:
+            pass
         return result
 
 
