@@ -153,8 +153,17 @@ async def _run_shell(
 
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=5)
-        except Exception:
-            stdout_bytes, stderr_bytes = b"", b""
+        except Exception as exc:
+            # Do not swallow errors while collecting stdout/stderr after a timeout.
+            # When communicate() fails (e.g., pipes already closed), return a
+            # diagnostic string in stderr so callers can surface meaningful context.
+            stdout_bytes = b""
+            try:
+                stderr_bytes = (f"Failed to collect process output after timeout: {exc.__class__.__name__}: {exc}\n").encode(
+                    "utf-8", errors="replace"
+                )
+            except Exception:
+                stderr_bytes = b"Failed to collect process output after timeout.\n"
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
     raw_stderr = stderr_bytes.decode("utf-8", errors="replace")
