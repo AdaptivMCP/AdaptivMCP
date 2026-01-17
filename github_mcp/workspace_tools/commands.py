@@ -479,3 +479,92 @@ async def run_python(
 
 # NOTE: The legacy tool name `run_command` has been removed.
 # `terminal_command` replaces it.
+#
+# However, several downstream clients (and prompt templates) still call
+# `run_command`, `run_shell`, or `run_terminal_commands`. To avoid breaking
+# those callers, we keep lightweight MCP-tool aliases that forward to
+# `terminal_command`.
+
+
+@mcp_tool(write_action=True, name="run_command")
+async def run_command_alias(
+    full_name: str,
+    ref: str = "main",
+    command: str = "pytest",
+    command_lines: Optional[list[str]] = None,
+    timeout_seconds: float = 300,
+    workdir: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+) -> Dict[str, Any]:
+    """Backward-compatible alias for :func:`terminal_command`.
+
+    This exists for older MCP clients that still invoke `run_command`.
+    """
+
+    return await terminal_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        command_lines=command_lines,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+    )
+
+
+@mcp_tool(write_action=True, name="run_shell")
+async def run_shell_alias(
+    full_name: str,
+    ref: str = "main",
+    command: str = "pytest",
+    command_lines: Optional[list[str]] = None,
+    timeout_seconds: float = 300,
+    workdir: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+) -> Dict[str, Any]:
+    """Backward-compatible alias for :func:`terminal_command`.
+
+    Some integrations refer to the workspace command runner as `run_shell`.
+    """
+
+    return await terminal_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        command_lines=command_lines,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+    )
+
+
+@mcp_tool(write_action=True, name="run_terminal_commands")
+async def run_terminal_commands_alias(
+    full_name: str,
+    ref: str = "main",
+    command: str = "pytest",
+    command_lines: Optional[list[str]] = None,
+    timeout_seconds: float = 300,
+    workdir: Optional[str] = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+) -> Dict[str, Any]:
+    """Backward-compatible alias for :func:`terminal_command`.
+
+    This name appears in some older controller-side tool catalogs.
+    """
+
+    return await terminal_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        command_lines=command_lines,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+    )
