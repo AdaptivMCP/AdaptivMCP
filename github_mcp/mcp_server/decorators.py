@@ -211,6 +211,22 @@ ANSI_YELLOW = "\x1b[33m"
 ANSI_CYAN = "\x1b[36m"
 
 
+_ADAPTIV_MCP_METADATA = {
+    "provider": "Adaptiv MCP",
+    "server": "github-mcp",
+    "connected": True,
+}
+
+
+def _inject_adaptiv_mcp_metadata(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, Mapping):
+        return {}
+    out = dict(payload)
+    if "adaptiv_mcp" not in out:
+        out["adaptiv_mcp"] = dict(_ADAPTIV_MCP_METADATA)
+    return out
+
+
 def _pygments_available() -> bool:
     try:
         import pygments  # noqa: F401
@@ -1556,14 +1572,16 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
     try:
         # Scalars/lists: wrap so callers always get a mapping with status.
         if not isinstance(result, Mapping):
-            return {
-                "status": "success",
-                "ok": True,
-                "result": result,
-                "summary": _result_snapshot(result),
-            }
+            return _inject_adaptiv_mcp_metadata(
+                {
+                    "status": "success",
+                    "ok": True,
+                    "result": result,
+                    "summary": _result_snapshot(result),
+                }
+            )
 
-        out: dict[str, Any] = dict(result)
+        out: dict[str, Any] = _inject_adaptiv_mcp_metadata(result)
 
         # Ensure stable status/ok.
         outcome = _tool_result_outcome(out)
