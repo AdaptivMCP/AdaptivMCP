@@ -44,11 +44,15 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
 ]
 
-# Generic high-entropy-ish token: 32+ characters, mostly urlsafe/base64-ish.
-# IMPORTANT: Avoid blanket redaction of all long strings when a single "token" word
-# appears elsewhere in the payload (this caused over-redaction of SHAs, IDs, etc.).
-# Instead, only redact long values that are *directly* associated with a key context.
-_GENERIC_TOKEN = r"[A-Za-z0-9_\-]{32,}"
+# Generic high-entropy-ish token.
+#
+# Prior iterations used a broad 32+ urlsafe matcher which could over-redact
+# non-secret identifiers (e.g., commit SHAs) when payloads contained nearby
+# "token"-ish keys. This heuristic is intentionally narrower:
+# - Require a longer minimum length (48+) to reduce false positives.
+# - Exclude pure-hex identifiers (40/64) which commonly represent git SHAs/digests.
+# - Keep it urlsafe-ish to avoid masking normal prose.
+_GENERIC_TOKEN = r"(?:(?![a-f0-9]{40}\b)(?![A-F0-9]{40}\b)(?![a-f0-9]{64}\b)(?![A-F0-9]{64}\b)[A-Za-z0-9_\-]{48,})"
 
 _KEY_VALUE_CONTEXTUAL = re.compile(
     rf"(?i)(\b(?:token|secret|api[_-]?key|password|passwd|private[_-]?key)\b\s*[:=]\s*)(['\"]?){_GENERIC_TOKEN}(\2)"
