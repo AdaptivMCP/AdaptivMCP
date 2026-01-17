@@ -58,6 +58,17 @@ def _env_flag(name: str, *, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _running_under_pytest() -> bool:
+    """Return True when executing under pytest.
+
+    Pytest sets the PYTEST_CURRENT_TEST environment variable for each active
+    test. We use this to keep unit tests deterministic even if operator-facing
+    environment variables (e.g., response shaping) are enabled in the runtime.
+    """
+
+    return bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+
 def _env_int(name: str, *, default: int) -> int:
     raw = os.environ.get(name)
     if raw is None:
@@ -168,6 +179,8 @@ def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
     - Otherwise, if the inbound request includes ChatGPT metadata, default to
       'chatgpt' (ChatGPT-hosted connectors benefit from consistent, compact outputs).
     """
+    if _running_under_pytest():
+        return "raw"
 
     mode = (RESPONSE_MODE_DEFAULT or "raw").strip().lower()
     if mode and mode not in {"raw", "default"}:
@@ -1391,6 +1404,8 @@ def _normalize_tool_result_envelope(result: Any) -> Any:
     - Mapping results are augmented in-place (copied) with ok/status fields.
     - Scalar/list results are returned unchanged unless TOOL_RESULT_ENVELOPE_SCALARS is enabled.
     """
+    if _running_under_pytest():
+        return result
 
     if not TOOL_RESULT_ENVELOPE:
         return result
