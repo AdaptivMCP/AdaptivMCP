@@ -12,7 +12,6 @@ try:
 except Exception:  # pragma: no cover
     TransportSecuritySettings = None  # type: ignore[assignment]
 
-from github_mcp.utils import _extract_hostname, _render_external_hosts
 
 # ------------------------------------------------------------------------------
 # Request-scoped context (used for correlation/logging/dedupe)

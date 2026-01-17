@@ -1580,7 +1580,11 @@ def _dedupe_ttl_seconds(*, write_action: bool, meta: Mapping[str, Any]) -> float
     # New behavior:
     # - If the env var is UNSET, we use conservative defaults.
     # - If the env var is SET (including to "0"), we honor it exactly.
-    env_name = "GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S" if write_action else "GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S"
+    env_name = (
+        "GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S"
+        if write_action
+        else "GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S"
+    )
     raw = os.environ.get(env_name)
 
     if raw is None:

@@ -18,9 +18,9 @@ def test_transport_security_configured_from_env(monkeypatch):
     context = _reload_context()
     settings = context.mcp.settings.transport_security
 
-    assert settings is not None
-    assert settings.enable_dns_rebinding_protection is True
-    assert "localhost" in settings.allowed_hosts
-    assert "localhost:*" in settings.allowed_hosts
-    assert "chatgpt-mcp-github-iu2y.onrender.com" in settings.allowed_hosts
-    assert "https://chatgpt-mcp-github-iu2y.onrender.com" in settings.allowed_origins
+    # This server intentionally disables FastMCP transport security enforcement
+    # (allowed hosts/origins, DNS rebinding protection) because it is commonly
+    # deployed behind a trusted reverse proxy and enforces authorization at the
+    # tool layer. The env vars may still be set in hosted environments, but the
+    # server must not construct transport security settings.
+    assert settings is None
