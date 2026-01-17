@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -335,3 +335,37 @@ def register_tool_registry_routes(app: Any) -> None:
     app.add_route("/resources", resources_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", detail_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", invoke_endpoint, methods=["POST"])
+    _prioritize_tool_registry_routes(
+        app,
+        [
+            registry_endpoint,
+            resources_endpoint,
+            detail_endpoint,
+            invoke_endpoint,
+        ],
+    )
+
+
+def _prioritize_tool_registry_routes(app: Any, endpoints: Iterable[Callable[..., Any]]) -> None:
+    """Move tool registry routes to the front of the routing table."""
+
+    router = getattr(app, "router", None)
+    routes = getattr(router, "routes", None)
+    if not isinstance(routes, list):
+        return
+
+    endpoint_set = {endpoint for endpoint in endpoints if callable(endpoint)}
+    if not endpoint_set:
+        return
+
+    prioritized = []
+    remaining = []
+    for route in routes:
+        endpoint = getattr(route, "endpoint", None)
+        if endpoint in endpoint_set:
+            prioritized.append(route)
+        else:
+            remaining.append(route)
+
+    if prioritized:
+        router.routes = prioritized + remaining
