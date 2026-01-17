@@ -40,6 +40,7 @@ from github_mcp.mcp_server.context import (
 )
 from github_mcp.mcp_server.errors import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
+from github_mcp.redaction import redact_any
 from github_mcp.mcp_server.schemas import (
     _build_tool_docstring,
     _normalize_input_schema,
@@ -170,6 +171,11 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALAR
 RESPONSE_MODE_DEFAULT = os.environ.get("GITHUB_MCP_RESPONSE_MODE", "raw").strip().lower()
 CHATGPT_RESPONSE_MAX_JSON_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_JSON_CHARS", default=20000)
 CHATGPT_RESPONSE_MAX_TEXT_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_TEXT_CHARS", default=20000)
+
+# In hosted LLM connector environments, returning token-like strings (even from
+# test fixtures or diffs) can trigger upstream safety filters and block tool
+# outputs. Redaction is therefore enabled by default, with an escape hatch.
+REDACT_TOOL_OUTPUTS = _env_flag("GITHUB_MCP_REDACT_TOOL_OUTPUTS", default=True)
 
 
 def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
@@ -2699,6 +2705,12 @@ def mcp_tool(
                     client_payload = _strip_internal_log_fields(result)
                 else:
                     client_payload = result
+                if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                    try:
+                        client_payload = redact_any(client_payload)
+                    except Exception:
+                        # Best-effort: never break tool behavior.
+                        pass
                 return _chatgpt_friendly_result(client_payload, req=req)
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -2909,6 +2921,12 @@ def mcp_tool(
                 client_payload = _strip_internal_log_fields(result)
             else:
                 client_payload = result
+            if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                try:
+                    client_payload = redact_any(client_payload)
+                except Exception:
+                    # Best-effort: never break tool behavior.
+                    pass
             return _chatgpt_friendly_result(client_payload, req=req)
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(
