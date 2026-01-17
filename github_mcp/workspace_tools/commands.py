@@ -12,6 +12,8 @@ from github_mcp.server import (
 )
 from github_mcp.utils import _normalize_timeout_seconds
 
+from ._shared import _tw
+
 
 def _normalize_command_payload(
     command: str,
@@ -36,14 +38,6 @@ def _normalize_command_payload(
         lines_out = requested.splitlines() if requested else []
 
     return requested, lines_out
-
-
-def _tw():
-    from github_mcp import tools_workspace as tw
-
-    return tw
-
-
 def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
     """Resolve a working directory inside the repo mirror.
 

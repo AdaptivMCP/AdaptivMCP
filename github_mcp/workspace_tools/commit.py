@@ -8,13 +8,7 @@ from github_mcp.server import (
     mcp_tool,
 )
 
-
-def _tw():
-    from github_mcp import tools_workspace as tw
-
-    return tw
-
-
+from ._shared import _tw
 def _slim_shell_result(result: Any) -> Dict[str, Any]:
     """Return a connector-safe view of a run_shell result without truncation."""
     if not isinstance(result, dict):

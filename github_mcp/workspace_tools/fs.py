@@ -12,6 +12,8 @@ from github_mcp.server import (
     mcp_tool,
 )
 
+from ._shared import _tw
+
 _LOG_WRITE_DIFFS = os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS", "1").strip().lower() not in {
     "0",
     "false",
@@ -94,14 +96,6 @@ def _looks_like_diff(text: str) -> bool:
         or "--- " in sample
         or "@@ " in sample
     )
-
-
-def _tw():
-    from github_mcp import tools_workspace as tw
-
-    return tw
-
-
 def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
         raise ValueError("path must be a non-empty string")

@@ -16,6 +16,7 @@ from ._shared import (
     _diagnose_workspace_branch,
     _run_shell_ok,
     _safe_branch_slug,
+    _tw,
 )
 
 
@@ -72,14 +73,6 @@ async def _workspace_sync_snapshot(
         "is_clean": not status_lines,
         "diverged": bool(ahead or behind),
     }
-
-
-def _tw():
-    from github_mcp import tools_workspace as tw
-
-    return tw
-
-
 @mcp_tool(write_action=True)
 async def workspace_create_branch(
     full_name: str,

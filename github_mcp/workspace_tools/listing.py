@@ -10,13 +10,7 @@ from github_mcp.server import (
     mcp_tool,
 )
 
-
-def _tw():
-    from github_mcp import tools_workspace as tw
-
-    return tw
-
-
+from ._shared import _tw
 def _normalize_workspace_path(path: str) -> str:
     normalized = path.strip().replace("\\", "/")
     while "//" in normalized:

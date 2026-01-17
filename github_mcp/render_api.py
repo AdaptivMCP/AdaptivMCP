@@ -11,7 +11,6 @@ Design goals:
 
 from __future__ import annotations
 
-import asyncio
 import importlib.util
 import os
 import time
@@ -46,7 +45,7 @@ else:  # pragma: no cover
 
 
 _http_client_render: Optional["httpx.AsyncClient"] = None
-_http_client_render_loop: Optional[asyncio.AbstractEventLoop] = None
+_http_client_render_loop: Optional["asyncio.AbstractEventLoop"] = None
 _http_client_render_token: Optional[str] = None
 _http_client_render_base: Optional[str] = None
 _render_api_version_prefix: str = "/v1"
@@ -95,14 +94,6 @@ def _apply_render_version_prefix(path: str) -> str:
     if p == prefix or p.startswith(prefix + "/"):
         return p
     return prefix + p
-
-
-def _active_event_loop() -> asyncio.AbstractEventLoop:
-    """Backward-compatible wrapper for shared active-loop helper."""
-
-    from .async_utils import active_event_loop
-
-    return active_event_loop()
 
 
 def _get_render_token() -> str:

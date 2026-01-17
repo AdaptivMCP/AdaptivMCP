@@ -111,6 +111,8 @@ else:
 
 from github_mcp.mcp_server.context import get_request_context  # noqa: E402
 
+from .async_utils import active_event_loop  # noqa: E402
+
 from .config import (  # noqa: E402
     GITHUB_API_BASE,
     GITHUB_API_BASE_URL,
@@ -220,7 +222,7 @@ def _get_concurrency_semaphore() -> asyncio.Semaphore:
     collected automatically.
     """
 
-    loop = _active_event_loop()
+    loop = active_event_loop()
 
     semaphore = _loop_semaphores.get(loop)
     loop_hint = getattr(semaphore, "_loop", None) if semaphore is not None else None
@@ -270,18 +272,10 @@ def _is_rate_limit_response(*, resp: httpx.Response, message_lower: str, error_f
     return False
 
 
-def _active_event_loop() -> asyncio.AbstractEventLoop:
-    """Backward-compatible wrapper for shared active-loop helper."""
-
-    from .async_utils import active_event_loop
-
-    return active_event_loop()
-
-
 def _get_search_rate_limit_state() -> Dict[str, Any]:
     """Return per-event-loop search throttle state."""
 
-    loop = _active_event_loop()
+    loop = active_event_loop()
     state = _search_rate_limit_states.get(loop)
     if state is None:
         state = {"lock": asyncio.Lock(), "next_time": 0.0}

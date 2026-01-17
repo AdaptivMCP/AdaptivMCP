@@ -19,13 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from github_mcp.server import mcp_tool
 from github_mcp.utils import _normalize_timeout_seconds
 
-
-def _tw():
-    from github_mcp import tools_workspace as tw
-
-    return tw
-
-
+from ._shared import _tw
 def _text_stats(text: str) -> Tuple[int, int]:
     if not text:
         return (0, 0)
