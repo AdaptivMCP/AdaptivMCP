@@ -156,8 +156,11 @@ def _default_help(category: str) -> list[str]:
             "This tool can modify remote state and requires confirmation in your client.",
             "Confirm/approve the write action in your client, then retry the same call.",
         ]
+    # Avoid imperative instructions that can cause LLM clients to loop.
+    # Keep guidance informational and direct operators to logs/telemetry.
     return [
-        "Retry once. If the error persists, check provider logs for the corresponding request.",
+        "Review provider logs/telemetry for the corresponding request for details.",
+        "If this is transient, re-run the call once with the same inputs.",
     ]
 
 
