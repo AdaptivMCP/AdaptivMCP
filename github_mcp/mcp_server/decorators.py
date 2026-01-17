@@ -38,7 +38,7 @@ from github_mcp.mcp_server.context import (
     get_request_context,
     mcp,
 )
-from github_mcp.mcp_server.errors import _structured_tool_error
+from github_mcp.mcp_server.error_handling import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.redaction import redact_any
 from github_mcp.mcp_server.schemas import (
@@ -1585,7 +1585,7 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
 
         # Truncate very large text surfaces.
         truncated_fields: list[str] = []
-        for key in ("text", "stdout", "stderr", "body", "message"):
+        for key in ("text", "body", "message"):
             val = out.get(key)
             if isinstance(val, str) and val:
                 clipped, did = _truncate_string(val, limit=CHATGPT_RESPONSE_MAX_TEXT_CHARS)

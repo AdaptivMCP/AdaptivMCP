@@ -20,7 +20,7 @@ from github_mcp.mcp_server.context import (  # noqa: F401
     mcp,
 )
 from github_mcp.mcp_server.decorators import mcp_tool, register_extra_tools_if_available
-from github_mcp.mcp_server.errors import _structured_tool_error
+from github_mcp.mcp_server.error_handling import _structured_tool_error
 from github_mcp.mcp_server.registry import (
     _REGISTERED_MCP_TOOLS,
     _find_registered_tool,
