@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import Any
 
 from starlette.responses import FileResponse, JSONResponse, Response
 
+from github_mcp.config import SERVER_GIT_COMMIT, SERVER_START_TIME
 from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
 
 
@@ -13,6 +15,15 @@ def _assets_dir() -> Path:
     # main.py mounts /static from `<repo_root>/assets`.
     # Keep this aligned for UI routes.
     return Path(__file__).resolve().parents[2] / "assets"
+
+
+def _iso_utc(ts: float | None) -> str | None:
+    if ts is None:
+        return None
+    try:
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(float(ts)))
+    except Exception:
+        return None
 
 
 def build_ui_index_endpoint() -> Any:
@@ -37,6 +48,9 @@ def build_ui_index_endpoint() -> Any:
 def build_ui_json_endpoint() -> Any:
     async def _endpoint(_request) -> Response:
         # Avoid guessing hostnames. This endpoint is purely descriptive.
+        now = time.time()
+        uptime_seconds = max(0, int(now - float(SERVER_START_TIME)))
+
         return JSONResponse(
             {
                 "service": "adaptiv-mcp-github",
@@ -45,8 +59,17 @@ def build_ui_json_endpoint() -> Any:
                     "default_branch": CONTROLLER_DEFAULT_BRANCH,
                 },
                 "version": {
-                    "git_commit": os.getenv("GIT_COMMIT") or os.getenv("RENDER_GIT_COMMIT"),
+                    "git_commit": (
+                        SERVER_GIT_COMMIT
+                        or os.getenv("GIT_COMMIT")
+                        or os.getenv("RENDER_GIT_COMMIT")
+                    ),
                     "git_branch": os.getenv("GIT_BRANCH") or os.getenv("RENDER_GIT_BRANCH"),
+                },
+                "runtime": {
+                    "server_time_utc": _iso_utc(now),
+                    "started_at_utc": _iso_utc(float(SERVER_START_TIME)),
+                    "uptime_seconds": uptime_seconds,
                 },
                 "endpoints": {
                     "health": "/healthz",

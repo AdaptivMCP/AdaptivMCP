@@ -1154,7 +1154,8 @@ def _apply_tool_metadata(
 
 def _tool_write_allowed(write_action: bool) -> bool:
     # Used for metadata/introspection.
-    return True
+    del write_action
+    return bool(WRITE_ALLOWED)
 
 
 def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:

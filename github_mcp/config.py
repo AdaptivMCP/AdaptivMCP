@@ -436,7 +436,13 @@ LOG_TOOL_CALLS = _env_flag("LOG_TOOL_CALLS", "true")
 #
 # To keep provider logs concise, we default to logging only tool completion
 # (success/failure) which already includes correlation ids + duration.
-LOG_TOOL_CALL_STARTS = _env_flag("LOG_TOOL_CALL_STARTS", "false")
+# Whether to emit tool_call_started lines.
+#
+# In developer-facing environments, the start line is the most actionable
+# signal (it answers: what is the server doing right now?). Keep it on by
+# default when HUMAN_LOGS are enabled.
+_log_tool_call_starts_default = "true" if HUMAN_LOGS else "false"
+LOG_TOOL_CALL_STARTS = _env_flag("LOG_TOOL_CALL_STARTS", _log_tool_call_starts_default)
 
 # When enabled, include full tool args and full tool results in logs.
 # WARNING: This can create very large log lines and may stress hosted log ingestion.

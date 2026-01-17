@@ -159,10 +159,12 @@ def _clean_description(text: str) -> str:
 
 
 def _write_gate_state() -> Dict[str, bool]:
+    m = _main()
+    write_allowed = bool(getattr(m, "WRITE_ALLOWED", True))
     return {
         "write_auto_approved": True,
         "write_actions_enabled": True,
-        "write_enabled": True,
+        "write_enabled": write_allowed,
     }
 
 
@@ -223,7 +225,7 @@ def list_all_actions(
             # Correct semantic classification:
             "write_action": base_write_action,
             "tags": _tool_tags(tool, func),
-            "write_allowed": True,
+            "write_allowed": gate["write_enabled"],
             "write_enabled": gate["write_enabled"],
             "write_auto_approved": write_auto_approved,
             "write_actions_enabled": gate["write_actions_enabled"],
@@ -255,7 +257,7 @@ def list_all_actions(
             "description": "Enumerate every available MCP tool with optional schemas.",
             "visibility": "public",
             "write_action": False,
-            "write_allowed": True,
+            "write_allowed": gate["write_enabled"],
             "write_enabled": gate["write_enabled"],
             "write_auto_approved": write_auto_approved,
             "write_actions_enabled": gate["write_actions_enabled"],
@@ -446,7 +448,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
             or "public"
         ),
         "write_action": base_write_action,
-        "write_allowed": True,
+        "write_allowed": gate["write_enabled"],
         "write_enabled": gate["write_enabled"],
         "write_auto_approved": write_auto_approved,
         "write_actions_enabled": gate["write_actions_enabled"],

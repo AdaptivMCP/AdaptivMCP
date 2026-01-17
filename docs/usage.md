@@ -235,6 +235,7 @@ Multi-line structured context blocks are reserved for warnings/errors and visual
 - LOG_RENDER_HTTP_BODIES (default: false) — includes full Render response bodies/headers in provider logs.
 - LOG_HTTP_REQUESTS (default: true) — logs inbound HTTP requests to the ASGI server (method/path/status/duration) with request_id.
 - LOG_HTTP_BODIES (default: false) — when enabled, logs the POST /messages body (no truncation). This may include sensitive payloads.
+- LOG_TOOL_CALL_STARTS (default: true when HUMAN_LOGS=true; else false) — emit a tool_call_started snapshot line (REQ) for each tool invocation.
 - LOG_TOOL_CALLS (default: true) — logs tool call snapshot lines to provider logs (REQ/RES). Failures are logged as warnings.
 - GITHUB_MCP_LOG_SNAPSHOTS (default: true) — emit a request snapshot (REQ) and a response snapshot (RES) per tool call.
 - GITHUB_MCP_LOG_VERBOSE_EXTRAS (default: false) — include deeper diagnostic fields in provider log extras (schema metadata, etc.).
