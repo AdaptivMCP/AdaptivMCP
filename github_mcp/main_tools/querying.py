@@ -17,6 +17,11 @@ from github_mcp.server import (
     _structured_tool_error as _default_structured_tool_error,
 )
 
+from github_mcp.config import (
+    GITHUB_MCP_MAX_FETCH_URL_BYTES,
+    GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS,
+)
+
 
 def _resolve_main_helper(name: str, default):
     """Resolve an optional helper override from the entry module.
@@ -79,30 +84,74 @@ async def fetch_url(url: str) -> Dict[str, Any]:
     )
 
     client = external_client_instance()
+
+    max_bytes = int(GITHUB_MCP_MAX_FETCH_URL_BYTES) if GITHUB_MCP_MAX_FETCH_URL_BYTES else 0
+    max_text_chars = (
+        int(GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS) if GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS else 0
+    )
+    if max_bytes < 0:
+        max_bytes = 0
+    if max_text_chars < 0:
+        max_text_chars = 0
+
+    body = bytearray()
+    truncated = False
+    status_code: Optional[int] = None
+    response_headers: Dict[str, Any] = {}
+
     async with get_concurrency_semaphore():
         try:
-            resp = await client.get(url)
-        except Exception as e:  # noqa: BLE001
+            async with client.stream("GET", url) as resp:
+                status_code = resp.status_code
+                response_headers = dict(getattr(resp, "headers", {}) or {})
+
+                async for chunk in resp.aiter_bytes():
+                    if not chunk:
+                        continue
+                    if max_bytes:
+                        remaining = max_bytes - len(body)
+                        if remaining <= 0:
+                            truncated = True
+                            break
+                        if len(chunk) > remaining:
+                            body.extend(chunk[:remaining])
+                            truncated = True
+                            break
+                    body.extend(chunk)
+        except Exception as exc:  # noqa: BLE001
             return structured_tool_error(
-                e,
+                exc,
                 context="fetch_url",
                 path=url,
             )
 
-    # Avoid returning potentially sensitive headers and redact secrets that may
-    # appear in response bodies.
-    headers = dict(resp.headers)
-    for k in list(headers.keys()):
-        if str(k).lower() in {"authorization", "cookie", "set-cookie", "proxy-authorization"}:
-            headers.pop(k, None)
+    keep = {"content-type", "content-length", "etag", "last-modified", "cache-control"}
+    headers = {
+        str(k): v
+        for k, v in (response_headers or {}).items()
+        if isinstance(k, str) and k.lower() in keep
+    }
 
-    return redact_any(
-        {
-            "status_code": resp.status_code,
-            "headers": headers,
-            "content": resp.text,
-        }
-    )
+    try:
+        content = bytes(body).decode("utf-8", errors="replace")
+    except Exception:
+        content = ""
+
+    if max_text_chars and len(content) > max_text_chars:
+        content = content[:max_text_chars]
+        truncated = True
+
+    payload: Dict[str, Any] = {
+        "status_code": status_code,
+        "headers": headers,
+        "content_type": headers.get("content-type"),
+        "size_bytes": len(body),
+        "truncated": truncated,
+        "content": content,
+    }
+    if truncated:
+        payload["note"] = "Response body truncated to configured limits."
+    return redact_any(payload)
 
 
 async def search(

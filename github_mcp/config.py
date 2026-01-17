@@ -378,6 +378,11 @@ GITHUB_MCP_MAX_FILE_CONTENT_BYTES = int(
 )
 GITHUB_MCP_MAX_FILE_TEXT_CHARS = int(os.environ.get("GITHUB_MCP_MAX_FILE_TEXT_CHARS", "200000"))
 
+GITHUB_MCP_MAX_FETCH_URL_BYTES = int(os.environ.get("GITHUB_MCP_MAX_FETCH_URL_BYTES", "500000"))
+GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS = int(
+    os.environ.get("GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS", "200000")
+)
+
 _include_b64 = os.environ.get("GITHUB_MCP_INCLUDE_BASE64_CONTENT", "0").strip().lower()
 GITHUB_MCP_INCLUDE_BASE64_CONTENT = _include_b64 in (
     "1",
@@ -968,6 +973,8 @@ __all__ = [
     "SERVER_START_TIME",
     "WORKSPACE_BASE_DIR",
     "SANDBOX_CONTENT_BASE_URL",
+    "GITHUB_MCP_MAX_FETCH_URL_BYTES",
+    "GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS",
     "git_identity_warnings",
     "format_log_context",
     "shorten_token",
