@@ -5,7 +5,12 @@ from __future__ import annotations
 import base64
 from typing import Any, Dict, Optional
 
-from .config import SANDBOX_CONTENT_BASE_URL
+from .config import (
+    GITHUB_MCP_INCLUDE_BASE64_CONTENT,
+    GITHUB_MCP_MAX_FILE_CONTENT_BYTES,
+    GITHUB_MCP_MAX_FILE_TEXT_CHARS,
+    SANDBOX_CONTENT_BASE_URL,
+)
 from .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
 from .utils import (
@@ -70,30 +75,74 @@ async def _decode_github_content(
         raise GitHubAPIError("Unexpected content response shape from GitHub")
 
     j = data["json"]
+
+    # GitHub's Contents API may omit `content` for large files and instead
+    # return metadata such as `size`, `sha`, and `download_url`.
     content = j.get("content")
     encoding = j.get("encoding")
     if not isinstance(content, str) or not isinstance(encoding, str):
-        raise GitHubAPIError("Missing content/encoding in GitHub response")
+        size = j.get("size")
+        return {
+            "json": j,
+            "content": None,
+            "encoding": None,
+            "sha": j.get("sha"),
+            "text": None,
+            "decoded_bytes": None,
+            "size": size if isinstance(size, int) else None,
+            "large_file": True,
+            "message": (
+                "GitHub did not return inline content for this file (likely due to size). "
+                "Use get_file_excerpt for range-based access."
+            ),
+        }
 
     try:
         decoded = base64.b64decode(content)
     except Exception as exc:
         raise GitHubAPIError("Failed to decode GitHub content") from exc
 
-    text: Optional[str] = None
-    try:
-        text = decoded.decode("utf-8")
-    except Exception:
-        text = None
+    decoded_len = len(decoded)
+    is_truncated = False
+    stored_bytes: Optional[bytes] = decoded
+    if GITHUB_MCP_MAX_FILE_CONTENT_BYTES > 0 and decoded_len > GITHUB_MCP_MAX_FILE_CONTENT_BYTES:
+        # Do not retain large blobs in memory or return them to the client.
+        stored_bytes = None
+        is_truncated = True
 
-    return {
+    text: Optional[str] = None
+    if stored_bytes is not None:
+        try:
+            text = stored_bytes.decode("utf-8")
+        except Exception:
+            text = None
+    else:
+        # Best-effort preview when the decoded content is too large.
+        try:
+            preview = decoded[: max(0, min(decoded_len, 65536))].decode("utf-8", errors="replace")
+        except Exception:
+            preview = None
+
+        if isinstance(preview, str) and GITHUB_MCP_MAX_FILE_TEXT_CHARS > 0:
+            preview = preview[:GITHUB_MCP_MAX_FILE_TEXT_CHARS]
+        text = preview
+
+    response: Dict[str, Any] = {
         "json": j,
-        "content": content,
-        "encoding": encoding,
+        "content": content if (GITHUB_MCP_INCLUDE_BASE64_CONTENT and not is_truncated) else None,
+        "encoding": encoding if (GITHUB_MCP_INCLUDE_BASE64_CONTENT and not is_truncated) else None,
         "sha": j.get("sha"),
         "text": text,
-        "decoded_bytes": decoded,
+        "decoded_bytes": stored_bytes,
+        "size": decoded_len,
+        "truncated": is_truncated,
     }
+    if is_truncated:
+        response["message"] = (
+            "File content exceeded configured limits and was truncated. "
+            "Use get_file_excerpt for range-based access."
+        )
+    return response
 
 
 async def _get_branch_sha(full_name: str, branch: str) -> str:

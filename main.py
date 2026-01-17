@@ -1371,6 +1371,33 @@ async def get_file_contents(
 
 
 @mcp_tool(write_action=False)
+async def get_file_excerpt(
+    full_name: str,
+    path: str,
+    ref: str = "main",
+    start_byte: Optional[int] = None,
+    max_bytes: int = 65536,
+    tail_bytes: Optional[int] = None,
+    as_text: bool = True,
+    max_text_chars: int = 200000,
+    numbered_lines: bool = True,
+) -> Dict[str, Any]:
+    from github_mcp.main_tools.large_files import get_file_excerpt as _impl
+
+    return await _impl(
+        full_name=full_name,
+        path=path,
+        ref=ref,
+        start_byte=start_byte,
+        max_bytes=max_bytes,
+        tail_bytes=tail_bytes,
+        as_text=as_text,
+        max_text_chars=max_text_chars,
+        numbered_lines=numbered_lines,
+    )
+
+
+@mcp_tool(write_action=False)
 async def fetch_files(
     full_name: str,
     paths: List[str],

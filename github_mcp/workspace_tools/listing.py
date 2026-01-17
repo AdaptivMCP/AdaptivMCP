@@ -2,6 +2,7 @@
 
 import os
 import posixpath
+import re
 from typing import Any, Dict, Optional
 
 from github_mcp.server import (
@@ -170,8 +171,10 @@ async def search_workspace(
     """Search text files in the repo mirror (workspace clone) (bounded, no shell).
 
     Behavior for `query`:
-    - Always treated as a literal substring match.
-    - `regex` is accepted for compatibility but is not enforced.
+    - When regex=true, `query` is treated as a Python regular expression.
+    - Otherwise `query` is treated as a literal substring match.
+    - Results can be bounded via max_results and files can be bounded via
+      max_file_bytes to keep searches responsive on large repositories.
     """
 
     if not isinstance(query, str) or not query:
@@ -205,13 +208,26 @@ async def search_workspace(
                 "max_file_bytes": max_file_bytes,
             }
 
-        used_regex = False
+        used_regex = bool(regex)
+
         q = query
-        if not case_sensitive:
+        if not used_regex and (not case_sensitive):
             q = q.lower()
+
+        pattern = None
+        if used_regex:
+            flags = 0
+            if not case_sensitive:
+                flags |= re.IGNORECASE
+            try:
+                pattern = re.compile(query, flags=flags)
+            except re.error as exc:
+                raise ValueError(f"Invalid regex pattern: {exc}") from exc
 
         def _match_line(line: str) -> bool:
             try:
+                if pattern is not None:
+                    return pattern.search(line) is not None
                 hay = line
                 if not case_sensitive:
                     hay = hay.lower()
@@ -222,6 +238,7 @@ async def search_workspace(
         results: list[dict[str, Any]] = []
         files_scanned = 0
         files_skipped = 0
+        truncated = False
 
         walk_iter = (
             [(os.path.dirname(start), [], [os.path.basename(start)])]
@@ -239,10 +256,19 @@ async def search_workspace(
 
                 abs_path = os.path.join(cur_dir, fname)
                 try:
-                    os.stat(abs_path)
+                    st = os.stat(abs_path)
                 except OSError:
                     files_skipped += 1
                     continue
+
+                if max_file_bytes is not None and max_file_bytes > 0:
+                    try:
+                        if st.st_size > max_file_bytes:
+                            files_skipped += 1
+                            continue
+                    except Exception:
+                        files_skipped += 1
+                        continue
 
                 # max_file_bytes is accepted for compatibility/observability but is not
                 # enforced as an output limit.
@@ -274,14 +300,28 @@ async def search_workspace(
                                     "text": line.rstrip("\n"),
                                 }
                             )
+
+                            if (
+                                max_results is not None
+                                and max_results > 0
+                                and len(results) >= max_results
+                            ):
+                                truncated = True
+                                break
                 except OSError:
                     files_skipped += 1
                     continue
 
+                if truncated:
+                    break
+
                 # max_results is accepted for compatibility/observability but is not
                 # enforced as an output limit.
 
-        # Return after scanning the full walk.
+            if truncated:
+                break
+
+        # Return after scanning the full walk (or truncation).
         return {
             "full_name": full_name,
             "ref": effective_ref,
@@ -290,7 +330,7 @@ async def search_workspace(
             "case_sensitive": case_sensitive,
             "used_regex": used_regex,
             "results": results,
-            "truncated": False,
+            "truncated": truncated,
             "files_scanned": files_scanned,
             "files_skipped": files_skipped,
             "max_results": max_results,

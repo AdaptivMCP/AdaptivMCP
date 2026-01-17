@@ -360,6 +360,33 @@ FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "80"))
 # File cache eviction caps. Set to 0 (or negative) to disable eviction.
 FILE_CACHE_MAX_ENTRIES = int(os.environ.get("FILE_CACHE_MAX_ENTRIES", "0"))
 FILE_CACHE_MAX_BYTES = int(os.environ.get("FILE_CACHE_MAX_BYTES", "0"))
+
+# ---------------------------------------------------------------------------
+# Large file handling
+# ---------------------------------------------------------------------------
+#
+# GitHub's Contents API can refuse to return base64 payloads for large files.
+# Additionally, returning very large decoded payloads to MCP clients is
+# counterproductive because it can exceed message limits and inflate memory.
+#
+# These caps apply to decoded bytes and decoded UTF-8 text returned by
+# get_file_contents/fetch_files and related helpers. For precise navigation
+# within large files, prefer the range-based tools (get_file_excerpt).
+
+GITHUB_MCP_MAX_FILE_CONTENT_BYTES = int(
+    os.environ.get("GITHUB_MCP_MAX_FILE_CONTENT_BYTES", "200000")
+)
+GITHUB_MCP_MAX_FILE_TEXT_CHARS = int(os.environ.get("GITHUB_MCP_MAX_FILE_TEXT_CHARS", "200000"))
+
+_include_b64 = os.environ.get("GITHUB_MCP_INCLUDE_BASE64_CONTENT", "0").strip().lower()
+GITHUB_MCP_INCLUDE_BASE64_CONTENT = _include_b64 in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+    "on",
+)
 GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS = int(
     os.environ.get("GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS", "2")
 )
