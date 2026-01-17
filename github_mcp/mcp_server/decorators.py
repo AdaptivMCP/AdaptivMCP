@@ -1381,13 +1381,32 @@ def _tool_result_outcome(result: Any) -> str:
     if status in {"error", "failed", "failure"}:
         return "error"
 
+    # Some tool results (notably terminal-style tools) indicate failure via
+    # process outcomes rather than explicit status/error fields.
+    exit_code = result.get("exit_code")
+    timed_out = result.get("timed_out")
+    if isinstance(exit_code, int) and exit_code != 0:
+        return "error"
+    if timed_out is True:
+        return "error"
+
+    # Some results wrap a nested result payload under "result".
+    nested = result.get("result")
+    if isinstance(nested, Mapping):
+        n_exit = nested.get("exit_code")
+        n_timeout = nested.get("timed_out")
+        if isinstance(n_exit, int) and n_exit != 0:
+            return "error"
+        if n_timeout is True:
+            return "error"
+
     err = result.get("error")
     if isinstance(err, str) and err.strip():
         return "error"
     if isinstance(err, Mapping) and (err.get("message") or err.get("detail")):
         return "error"
 
-    if status in {"warning", "warn", "passed_with_warnings"}:
+    if status in {"warning", "warn", "passed_with_warnings", "cancelled", "canceled"}:
         return "warning"
     warnings = result.get("warnings")
     if isinstance(warnings, list) and any(bool(str(w).strip()) for w in warnings):
@@ -1700,7 +1719,7 @@ def _log_tool_returned_error(
     inline = payload.get("log_context")
     if isinstance(inline, str) and inline:
         msg = msg + " " + _ansi(inline, ANSI_DIM)
-    LOGGER.warning(msg, extra={"event": "tool_call_failed", **payload})
+    LOGGER.error(msg, extra={"event": "tool_call_failed", **payload})
 
 
 def _extract_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
@@ -2260,7 +2279,7 @@ def _log_tool_failure(
     inline = payload.get("log_context")
     if isinstance(inline, str) and inline:
         msg = msg + " " + _ansi(inline, ANSI_DIM)
-    LOGGER.warning(
+    LOGGER.error(
         msg,
         extra={"event": "tool_call_failed", **payload},
         # Hosted providers (Render) can become unusably noisy when every failure
@@ -2281,12 +2300,15 @@ def _emit_tool_error(
     req: Mapping[str, Any],
     exc: BaseException,
     phase: str,
+    all_args: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:
     structured_error = _structured_tool_error(
         exc,
         context=tool_name,
         path=None,
         request=dict(req) if isinstance(req, Mapping) else None,
+        trace={"phase": phase, "call_id": shorten_token(call_id)},
+        args=dict(all_args) if isinstance(all_args, Mapping) else None,
     )
 
     return structured_error
@@ -2520,6 +2542,7 @@ def mcp_tool(
                         req=req,
                         exc=exc,
                         phase="preflight",
+                        all_args=all_args,
                     )
                     _log_tool_failure(
                         tool_name=tool_name,
@@ -2577,6 +2600,7 @@ def mcp_tool(
                         req=req,
                         exc=exc,
                         phase="execute",
+                        all_args=all_args,
                     )
                     _log_tool_failure(
                         tool_name=tool_name,
@@ -2736,6 +2760,7 @@ def mcp_tool(
                     req=req,
                     exc=exc,
                     phase="preflight",
+                    all_args=all_args,
                 )
                 _log_tool_failure(
                     tool_name=tool_name,
@@ -2790,6 +2815,7 @@ def mcp_tool(
                     req=req,
                     exc=exc,
                     phase="execute",
+                    all_args=all_args,
                 )
                 _log_tool_failure(
                     tool_name=tool_name,
