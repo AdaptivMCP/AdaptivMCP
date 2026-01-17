@@ -246,7 +246,10 @@ def list_all_actions(
             safe_schema = _jsonable(schema)
             if not isinstance(safe_schema, Mapping):
                 safe_schema = {"type": "object", "properties": {}}
+            # Compatibility: some MCP clients and UIs expect `inputSchema`
+            # (camelCase) per the MCP tool schema convention.
             tool_info["input_schema"] = safe_schema
+            tool_info["inputSchema"] = safe_schema
 
         tools.append(tool_info)
 
@@ -272,6 +275,7 @@ def list_all_actions(
                 },
                 "additionalProperties": False,
             }
+            synthetic["inputSchema"] = synthetic["input_schema"]
         tools.append(synthetic)
 
     tools.sort(key=lambda entry: entry["name"])

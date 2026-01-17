@@ -1139,10 +1139,28 @@ def _apply_tool_metadata(
     if not isinstance(existing_schema, Mapping):
         try:
             setattr(tool_obj, "input_schema", schema)
+            # Some clients/framework versions prefer camelCase.
+            try:
+                setattr(tool_obj, "inputSchema", schema)
+            except Exception:
+                pass
         except Exception:
             meta = getattr(tool_obj, "meta", None)
             if isinstance(meta, dict):
                 meta.setdefault("input_schema", schema)
+                # Keep a camelCase alias for downstream UIs that follow MCP's
+                # `inputSchema` convention.
+                meta.setdefault("inputSchema", schema)
+
+    # Best-effort: attach visibility to tool metadata so UIs that only inspect
+    # the registered tool object (and not the wrapper function) can still render
+    # it. Visibility remains non-authoritative (the wrapper enforces behavior).
+    try:
+        setattr(tool_obj, "__mcp_visibility__", str(visibility))
+    except Exception:
+        meta = getattr(tool_obj, "meta", None)
+        if isinstance(meta, dict):
+            meta.setdefault("visibility", str(visibility))
 
     if tags:
         tag_list = [str(t) for t in tags if t is not None and str(t).strip()]
