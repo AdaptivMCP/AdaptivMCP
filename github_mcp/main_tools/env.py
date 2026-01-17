@@ -257,13 +257,21 @@ async def validate_environment() -> Dict[str, Any]:
     # expected GitHub + Render tool surfaces are present.
     try:
         from github_mcp.main_tools.introspection import list_all_actions
-        from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
+        from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 
+        # Prefer the public introspection catalog (stable schema), but fall back
+        # to the raw registry if catalog generation fails or returns empty.
         catalog = list_all_actions(include_parameters=False, compact=True)
         tools = catalog.get("tools") if isinstance(catalog, dict) else None
         tool_names = {
             t.get("name") for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str)
         }
+
+        if not tool_names and isinstance(_REGISTERED_MCP_TOOLS, list):
+            for tool_obj, func in _REGISTERED_MCP_TOOLS:
+                name = _registered_tool_name(tool_obj, func)
+                if isinstance(name, str) and name:
+                    tool_names.add(name)
         # Minimum expected surface (Render + core introspection).
         expected = {
             # Introspection
