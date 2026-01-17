@@ -776,7 +776,9 @@ def _preview_render_logs(items: list[Any]) -> str:
                         lvl = _ansi(lvl, ANSI_GREEN)
                 bits.append(lvl)
             if msg:
-                bits.append(str(msg))
+                # Render log messages can include large JSON payloads and full tracebacks.
+                # Keep previews single-line and bounded to avoid flooding provider logs.
+                bits.append(_truncate_text(msg, limit=240))
             line = " ".join(bits) if bits else _truncate_text(item, limit=180)
         else:
             line = _truncate_text(item, limit=180)
