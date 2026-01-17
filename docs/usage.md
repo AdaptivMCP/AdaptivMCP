@@ -56,62 +56,52 @@ The ASGI application is exposed in `main.py` as `app`.
 - GET /ui and GET /ui.json — lightweight UI diagnostics (serves `assets/index.html` when present)
 - GET /static/* — static assets (if `assets/` is present)
 
-## Common workflows
+## Tool groupings
 
-### Read-only workflows
+This section lists tool families by capability. It is descriptive only; the
+server does not require any particular sequence of tool calls.
 
-GitHub API read tools cover discovery and inspection, such as:
+### GitHub API tools
+
+Read/inspect:
 
 - get_repo_defaults, get_server_config, validate_environment
 - list_recent_issues, list_repository_issues, fetch_issue
 - fetch_pr, get_pr_info, list_pr_changed_filenames
 
-GraphQL fallbacks cover many of the same discovery scenarios:
+GraphQL variants (alternative surfaces for similar inspection operations):
 
 - list_open_issues_graphql
 - list_workflow_runs_graphql, list_recent_failures_graphql
 - get_repo_dashboard_graphql
 
-### Edit workflows
+### Workspace tools (repo mirror)
 
-Edits can be done in the repo mirror when you want filesystem-style changes and local command execution.
+Repository working copy management:
 
-Typical flow:
+- ensure_workspace_clone, workspace_sync_status, workspace_sync_to_remote
+- workspace_create_branch
 
-1. Prepare or reuse the repo mirror
-   - `ensure_workspace_clone` creates or reuses the repo mirror.
-   - `workspace_sync_status` reports whether the repo mirror is ahead/behind or has uncommitted changes.
+File edits and batch operations:
 
-   Common practice: do active work on a feature branch.
-   - `workspace_create_branch` creates a new branch from a base ref (and can push it).
-   - Committing directly on the default branch is possible; many workflows prefer feature branches.
+- set_workspace_file_contents, apply_patch
+- apply_workspace_operations (batch write/edit/move/delete)
 
-2. Make changes in the repo mirror
-   - Edit files using workspace file tools or shell editors.
-   - Validate changes using your normal commands (tests, linters, etc.).
+Command execution:
 
-3. Commit and push from the repo mirror
-   - `terminal_command` (or the higher-level git helpers) runs:
-     - git add
-     - git commit
-     - git push
+- terminal_command
 
-   Convenience: `commit_and_open_pr_from_workspace` performs the common "commit + push + open PR" workflow.
-   - Optional: set `run_quality=true` to run lint/tests before creating the commit.
-   - This tool pushes to the current `ref` (the feature branch) and then opens a PR into `base`.
+Commit/push and PR creation:
 
-4. Refresh when you want a clean snapshot
-   - The repo mirror does not automatically reflect the live GitHub state unless you fetch/pull or recreate it.
-   - To align the repo mirror with a branch’s remote state, `workspace_sync_to_remote` updates it.
-   - `ensure_workspace_clone(reset=true)` rebuilds the repo mirror.
+- commit_workspace, commit_workspace_files
+- commit_and_open_pr_from_workspace
 
-### GitHub API usage guidance
+Notes:
 
-Because the repo mirror is not the live GitHub state, GitHub API tools are often used for:
-
-- Workspace tools for changes, followed by push.
-- GitHub API tools to confirm live state (PR status, CI, branch contents, etc.).
-- Re-sync/rebuild when the repo mirror needs to match GitHub exactly (for example, after a merge or force-update).
+- The repo mirror is a persistent server-side working copy; it does not
+  automatically match the remote GitHub state.
+- `workspace_sync_to_remote` updates the mirror from the remote.
+- `ensure_workspace_clone(reset=true)` rebuilds the mirror.
 
 ## Behavior notes
 
@@ -164,27 +154,27 @@ Operational notes:
 - `create_render_deploy`: provide at most one of `commit_id` or `image_url`.
 - `get_render_logs`: `resource_type` is expected to be `service` or `job`. If both `start_time` and `end_time` are provided, start is validated to be <= end. Timestamps are validated as ISO8601 strings (for example `2026-01-14T12:34:56Z`).
 
-Example flow:
+Example requests:
 
-1) Discover your owners/workspaces:
+Discover owners/workspaces:
 
 ```json
 {"tool":"list_render_owners","args":{"limit":20}}
 ```
 
-2) List services for a specific owner:
+List services for a specific owner:
 
 ```json
 {"tool":"list_render_services","args":{"owner_id":"<owner-id>","limit":20}}
 ```
 
-3) Trigger a deploy:
+Trigger a deploy:
 
 ```json
 {"tool":"create_render_deploy","args":{"service_id":"<service-id>","clear_cache":false,"commit_id":"<sha>"}}
 ```
 
-4) Fetch logs for a service:
+Fetch logs for a service:
 
 ```json
 {"tool":"get_render_logs","args":{"resource_type":"service","resource_id":"<service-id>","start_time":"2026-01-14T12:34:56Z","end_time":"2026-01-14T13:34:56Z","limit":200}}
