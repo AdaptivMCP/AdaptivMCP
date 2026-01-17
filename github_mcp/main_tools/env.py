@@ -74,7 +74,12 @@ def _get_controller_revision_info() -> Dict[str, Any]:
 
 
 async def validate_environment() -> Dict[str, Any]:
-    """Check environment settings for GitHub and Render and report problems."""
+    """Validate the running environment and return an operator-friendly report.
+
+    The output is a structured list of checks with levels (ok/warning/error).
+    It is intended for production diagnostics (for example on Render) and for
+    MCP clients that want a single "is this configured" signal.
+    """
 
     m = _main()
 
