@@ -69,6 +69,26 @@ def _env_int(name: str, *, default: int) -> int:
         return int(default)
 
 
+def _is_render_runtime() -> bool:
+    """Best-effort detection for Render deployments.
+
+    Render sets a number of standard environment variables for running services.
+    We use these signals to tune provider-facing defaults.
+    """
+
+    return any(
+        os.environ.get(name)
+        for name in (
+            "RENDER",
+            "RENDER_SERVICE_ID",
+            "RENDER_SERVICE_NAME",
+            "RENDER_EXTERNAL_URL",
+            "RENDER_INSTANCE_ID",
+            "RENDER_GIT_COMMIT",
+        )
+    )
+
+
 # Visual logging (developer-facing).
 #
 # Render and similar providers often display only the message string, so these
@@ -85,6 +105,16 @@ LOG_TOOL_COLOR = _env_flag("GITHUB_MCP_LOG_COLOR", default=True)
 LOG_TOOL_READ_SNIPPETS = _env_flag("GITHUB_MCP_LOG_READ_SNIPPETS", default=True)
 LOG_TOOL_DIFF_SNIPPETS = _env_flag("GITHUB_MCP_LOG_DIFF_SNIPPETS", default=True)
 LOG_TOOL_STYLE = os.environ.get("GITHUB_MCP_LOG_STYLE", "monokai")
+
+# Whether to include Python tracebacks in provider logs for tool failures.
+#
+# Hosted providers (Render) already surface structured errors well, and emitting
+# `exc_info` can create extremely verbose log streams. Default to disabling
+# exception tracebacks on Render unless explicitly enabled.
+LOG_TOOL_EXC_INFO = _env_flag(
+    "GITHUB_MCP_LOG_EXC_INFO",
+    default=(not _is_render_runtime()),
+)
 
 # Reduce log noise by omitting correlation IDs from INFO/WARN message strings.
 # Structured extras (appended by the provider log formatter) still include the
@@ -2051,7 +2081,9 @@ def _log_tool_failure(
     LOGGER.warning(
         msg,
         extra={"event": "tool_call_failed", **payload},
-        exc_info=exc,
+        # Hosted providers (Render) can become unusably noisy when every failure
+        # includes a full traceback. Emit `exc_info` only when explicitly enabled.
+        exc_info=exc if LOG_TOOL_EXC_INFO else None,
     )
 
     # NOTE: we intentionally emit a single provider log line per failure.

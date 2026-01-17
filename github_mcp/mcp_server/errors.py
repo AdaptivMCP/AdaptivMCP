@@ -73,6 +73,27 @@ def _safe_traceback_lines(exc: BaseException, *, max_lines: int) -> list[str]:
         return [redact_text(f"{exc.__class__.__name__}: {_single_line(str(exc))}")]
 
 
+def _is_render_runtime() -> bool:
+    """Best-effort detection for Render deployments.
+
+    Render sets a number of standard environment variables for running services.
+    We use these signals to adjust provider-facing defaults (e.g., avoid emitting
+    verbose tracebacks into hosted logs unless explicitly requested).
+    """
+
+    return any(
+        os.environ.get(name)
+        for name in (
+            "RENDER",
+            "RENDER_SERVICE_ID",
+            "RENDER_SERVICE_NAME",
+            "RENDER_EXTERNAL_URL",
+            "RENDER_INSTANCE_ID",
+            "RENDER_GIT_COMMIT",
+        )
+    )
+
+
 def _categorize_exception(exc: BaseException) -> tuple[str, str, bool]:
     """Return (category, code, retryable)."""
 
@@ -177,14 +198,21 @@ def _structured_tool_error(
     category, code, retryable = _categorize_exception(exc)
     disposition, requires_confirmation = _disposition_from_category(category)
 
-    include_tb = os.environ.get("GITHUB_MCP_INCLUDE_TRACEBACK", "true").strip().lower() in (
-        "1",
-        "true",
-        "t",
-        "yes",
-        "y",
-        "on",
-    )
+    # Hosted providers (Render) already surface stack traces in platform logs when
+    # `exc_info` is used. Default to *not* embedding tracebacks in tool payloads
+    # unless explicitly enabled.
+    include_tb_raw = os.environ.get("GITHUB_MCP_INCLUDE_TRACEBACK")
+    if include_tb_raw is None:
+        include_tb = not _is_render_runtime()
+    else:
+        include_tb = str(include_tb_raw).strip().lower() in (
+            "1",
+            "true",
+            "t",
+            "yes",
+            "y",
+            "on",
+        )
     max_tb_lines = int(os.environ.get("GITHUB_MCP_TRACEBACK_MAX_LINES", "60") or "60")
 
     debug: Dict[str, Any] = {
