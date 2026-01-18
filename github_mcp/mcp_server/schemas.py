@@ -1,4 +1,20 @@
-"""Schema + metadata helpers."""
+"""Schema and metadata helpers for MCP tools.
+
+This module is developer-facing infrastructure. It exists to keep the public
+tool surface (schemas, parameter descriptions, UI hints) aligned with the
+implementation while remaining backwards compatible for existing clients.
+
+What this file does:
+1) Generate JSON Schema-like input schemas from Python signatures.
+2) Apply schema-only ergonomics (hide legacy aliases, add titles/descriptions).
+3) Provide log-safe serialization helpers used by tooling and UI layers.
+
+Important invariants:
+- Schemas are descriptive, not enforcement. The server generally accepts extra
+  keys to preserve forward/backward compatibility.
+- "Legacy" alias parameters may remain supported at runtime, but are hidden
+  from schemas so callers see a single canonical argument.
+"""
 
 from __future__ import annotations
 
@@ -382,6 +398,8 @@ def _normalize_tool_description(
     return base
 
 
+
+
 def _build_tool_docstring(
     *,
     tool_name: str,
@@ -389,14 +407,31 @@ def _build_tool_docstring(
     input_schema: Optional[Mapping[str, Any]],
     write_action: bool,
     visibility: str,
+    write_allowed: Optional[bool] = None,
+    tags: Optional[Sequence[str]] = None,
+    ui: Optional[Mapping[str, Any]] = None,
 ) -> str:
-    """Build a developer-oriented tool docstring.
+    """Build a developer-oriented MCP tool docstring.
 
-    The MCP tool surface is consumed by humans and LLM agents. This helper
-    builds a consistent docstring that:
-    - Keeps the first line compact (for UIs that show only a summary).
-    - Provides a complete reference for parameters, return payloads, and
-      write-action semantics.
+    This repository treats Python tool implementations as the source of truth.
+    Tool documentation is assembled at registration time so that clients
+    (including ChatGPT-style UIs) can display a consistent, detailed surface.
+
+    Design goals:
+    - Compact first line (many clients show only a summary in tool pickers).
+    - Developer-facing detail aligned with runtime schema and tool metadata
+      (write gates, visibility, UI hints).
+    - Truthful, non-prescriptive language: reference material, not policy.
+
+    High-level runtime behavior:
+    - Tools are registered via the @mcp_tool decorator which attaches a JSON
+      Schema-like input schema (plus a stable schema hash for observability).
+    - In ChatGPT-oriented response modes, results may be normalized to include
+      ok/status/summary and common streams (stdout/stderr) may be surfaced when
+      present.
+
+    This docstring intentionally stays high-level. Deeper lifecycle details
+    belong in repository documentation.
     """
 
     def _schema_type(prop: Mapping[str, Any]) -> str:
@@ -420,6 +455,18 @@ def _build_tool_docstring(
             return "enum"
         return "unknown"
 
+    def _fmt_bool(val: Any) -> str:
+        if val is True:
+            return "true"
+        if val is False:
+            return "false"
+        return "unknown"
+
+    def _ui_get(key: str) -> Any:
+        if not isinstance(ui, Mapping):
+            return None
+        return ui.get(key)
+
     clean_desc = (description or "").strip()
     summary = clean_desc.splitlines()[0].strip() if clean_desc else ""
     if not summary:
@@ -427,17 +474,47 @@ def _build_tool_docstring(
 
     lines: list[str] = [summary]
 
-    # Provide the long description if it adds more than the first line.
+    # Long description (if it adds more than the first line).
     if clean_desc:
         rest = "\n".join([ln.rstrip() for ln in clean_desc.splitlines()[1:]]).strip()
         if rest:
             lines += ["", rest]
 
-    # Keep tool docstrings factual and non-prescriptive so they do not compete
-    # with user/client instructions.
-    _ = write_action
-    _ = visibility
+    # Classification / metadata.
+    lines += ["", "Tool metadata:"]
+    lines.append(f"- name: {tool_name}")
+    if visibility:
+        lines.append(f"- visibility: {visibility}")
+    lines.append(f"- write_action: {_fmt_bool(write_action)}")
+    if write_allowed is not None:
+        lines.append(f"- write_allowed: {_fmt_bool(write_allowed)}")
 
+    if tags:
+        tag_list = [t for t in tags if isinstance(t, str) and t.strip()]
+        if tag_list:
+            lines.append(f"- tags: {', '.join(sorted(dict.fromkeys(tag_list)))}")
+
+    # Optional UI hints: advisory and not displayed by all clients.
+    if isinstance(ui, Mapping) and ui:
+        group = _ui_get("group")
+        icon = _ui_get("icon")
+        prompt = _ui_get("prompt")
+        inv_msg = _ui_get("invoking")
+        done_msg = _ui_get("invoked")
+
+        lines += ["", "UI hints (optional):"]
+        if isinstance(group, str) and group.strip():
+            lines.append(f"- group: {group.strip()}")
+        if isinstance(icon, str) and icon.strip():
+            lines.append(f"- icon: {icon.strip()}")
+        if isinstance(prompt, str) and prompt.strip():
+            lines.append(f"- prompt: {prompt.strip()}")
+        if isinstance(inv_msg, str) and inv_msg.strip():
+            lines.append(f"- invoking: {inv_msg.strip()}")
+        if isinstance(done_msg, str) and done_msg.strip():
+            lines.append(f"- invoked: {done_msg.strip()}")
+
+    # Parameters (from the attached JSON schema).
     schema = input_schema if isinstance(input_schema, Mapping) else None
     props = schema.get("properties") if schema is not None else None
     required = schema.get("required") if schema is not None else None
@@ -468,11 +545,19 @@ def _build_tool_docstring(
 
             examples = prop.get("examples")
             if isinstance(examples, list) and examples:
-                # Keep examples short and JSON-ish.
                 rendered = ", ".join(repr(e) for e in examples[:3])
                 lines.append(f"  Examples: {rendered}")
 
-    lines += ["", "Returns:", "  A JSON-serializable value defined by the tool."]
+    lines += [
+        "",
+        "Runtime notes:",
+        "  - Tool calls are logged with a per-invocation call_id and may include a schema hash.",
+        "  - Internal log-only keys prefixed with '__log_' are filtered from client responses.",
+        "  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.",
+        "",
+        "Returns:",
+        "  A JSON-serializable value defined by the tool implementation.",
+    ]
 
     return "\n".join(lines).rstrip() + "\n"
 

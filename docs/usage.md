@@ -136,6 +136,32 @@ Controls (environment variables):
   - Bounds for truncating common large list fields (e.g., `items`, `results`) in
     shaped outputs.
 
+### Tool discovery UX (invoking/invoked messages, schemas, and UI hints)
+
+Many MCP clients render a “tool picker” and a “tool details” view. This server
+aims to make those views useful for developers by exporting:
+
+- A structured input schema (JSON Schema-like), derived from the Python
+  function signature and enriched with stable titles, descriptions, and
+  examples.
+- Tool metadata, including whether the tool is a write action and whether
+  writes are currently allowed for this request.
+- Optional UI hints intended for ChatGPT-hosted connectors and similar UIs.
+
+Where these fields come from:
+
+- Input schema: computed from the tool’s implementation signature and
+  normalized via `github_mcp.mcp_server.schemas`.
+- Metadata + UI hints: attached during tool registration (the `@mcp_tool`
+  decorator).
+
+Generated documentation:
+
+- `Detailed_Tools.md` is generated from the live tool registry and includes:
+  - “Invoking …” and “Invoked …” strings when provided by a tool.
+  - Tool metadata (visibility, write_action, write_allowed).
+  - Parameter list and the full input schema.
+
 Workspace path handling: workspace file tools enforce that requested paths resolve inside the repository root. Relative traversal and absolute paths that point outside the repo are treated as invalid input. File tools also require non-empty paths; deletion helpers require a non-empty `paths` list. Directory deletion requires `allow_recursive=true` for non-empty directories.
 
 ## Render tools (operations)

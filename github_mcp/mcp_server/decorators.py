@@ -3063,6 +3063,9 @@ def mcp_tool(
                     input_schema=schema,
                     write_action=bool(write_action),
                     visibility=str(visibility),
+                    write_allowed=_tool_write_allowed(write_action),
+                    tags=tag_list,
+                    ui=ui_meta or None,
                 )
             except Exception:
                 # Best-effort; do not break tool registration.
@@ -3332,6 +3335,9 @@ def mcp_tool(
                 input_schema=schema,
                 write_action=bool(write_action),
                 visibility=str(visibility),
+                write_allowed=_tool_write_allowed(write_action),
+                tags=tag_list,
+                ui=ui_meta or None,
             )
         except Exception:
             try:

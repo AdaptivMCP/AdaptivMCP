@@ -12,7 +12,22 @@ Total tools: 135
 
 ## apply_patch
 
-Apply a unified diff patch to the persistent repo mirror.
+Apply a unified diff patch to the persistent repo mirror.  Schema: full_name*:string, patch:string=, ref:string=main
+
+Invoking Apply Patch…
+Invoked Apply Patch.
+
+Tool metadata:
+- name: apply_patch
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🧩
+- invoking: Invoking Apply Patch…
+- invoked: Invoked Apply Patch.
 
 Parameters:
 - full_name (string; required)
@@ -23,8 +38,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -84,7 +104,22 @@ Example invocation:
 
 ## apply_text_update_and_commit
 
-Apply Text Update And Commit. Signature: apply_text_update_and_commit(full_name: str, path: str, updated_content: str, *, branch: str = 'main', message: Optional[str] = None, return_diff: bool = False) -> Dict[str, Any].
+Apply Text Update And Commit. Signature: apply_text_update_and_commit(full_name: str, path: str, updated_content: str, *, branch: str = 'main', message: Optional[str] = None, return_diff: bool = False) -> Dict[str, Any].  Schema: branch:string=main, full_name*:string, message:any, path*:string, return_diff:boolean=False, updated_content*:string
+
+Invoking Apply Text Update And Commit…
+Invoked Apply Text Update And Commit.
+
+Tool metadata:
+- name: apply_text_update_and_commit
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Apply Text Update And Commit…
+- invoked: Invoked Apply Text Update And Commit.
 
 Parameters:
 - branch (string; optional, default='main')
@@ -102,8 +137,13 @@ Parameters:
 - return_diff (boolean; optional, default=False)
 - updated_content (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -193,7 +233,7 @@ Example invocation:
 
 ## apply_workspace_operations
 
-Apply multiple file operations in a single workspace clone.
+Apply multiple file operations in a single workspace clone.  Schema: create_parents:boolean=True, fail_fast:boolean=True, full_name*:string, operations:any, preview_only:boolean=False, ref:string=main, rollback_on_error:boolean=True
 
 This is a higher-level, multi-file alternative to calling the single-file
 primitives repeatedly.
@@ -205,6 +245,21 @@ Supported operations (each item in `operations`):
   - {"op": "delete", "path": "...", "allow_missing": bool}
   - {"op": "move", "src": "...", "dst": "...", "overwrite": bool}
   - {"op": "apply_patch", "patch": "..."}
+
+Invoking Apply Workspace Operations…
+Invoked Apply Workspace Operations.
+
+Tool metadata:
+- name: apply_workspace_operations
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🧩
+- invoking: Invoking Apply Workspace Operations…
+- invoked: Invoked Apply Workspace Operations.
 
 Parameters:
 - create_parents (boolean; optional, default=True)
@@ -219,8 +274,13 @@ Parameters:
   Examples: 'main', 'develop', 'feature/my-branch'
 - rollback_on_error (boolean; optional, default=True)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -311,7 +371,22 @@ Example invocation:
 
 ## build_pr_summary
 
-Build a normalized JSON summary for a pull request description.
+Build a normalized JSON summary for a pull request description.  Schema: body*:string, breaking_changes:any, changed_files:any, full_name*:string, lint_status:any, ref*:string, tests_status:any, title*:string
+
+Invoking Build Pr Summary…
+Invoked Build Pr Summary.
+
+Tool metadata:
+- name: build_pr_summary
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Build Pr Summary…
+- invoked: Invoked Build Pr Summary.
 
 Parameters:
 - body (string; required)
@@ -327,8 +402,13 @@ Parameters:
 - tests_status (string | null; optional)
 - title (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -444,7 +524,23 @@ Example invocation:
 
 ## cache_files
 
-Fetch one or more files and persist them in the server-side cache so callers can reuse them without repeating GitHub reads. refresh=true bypasses existing cache entries.
+Fetch one or more files and persist them in the server-side cache so callers can reuse them without repeating GitHub reads. refresh=true bypasses existing cache entries.  Schema: full_name*:string, paths*:array, ref:string=main, refresh:boolean=False
+
+Invoking Cache Files…
+Invoked Cache Files.
+
+Tool metadata:
+- name: cache_files
+- visibility: public
+- write_action: false
+- write_allowed: true
+- tags: cache, files, github
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Cache Files…
+- invoked: Invoked Cache Files.
 
 Parameters:
 - full_name (string; required)
@@ -458,8 +554,13 @@ Parameters:
   Examples: 'main', 'develop', 'feature/my-branch'
 - refresh (boolean; optional, default=False)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -534,7 +635,22 @@ Example invocation:
 
 ## cancel_render_deploy
 
-Cancel an in-progress Render deploy.
+Cancel an in-progress Render deploy.  Schema: deploy_id*:string, service_id*:string
+
+Invoking Cancel Render Deploy…
+Invoked Cancel Render Deploy.
+
+Tool metadata:
+- name: cancel_render_deploy
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Cancel Render Deploy…
+- invoked: Invoked Cancel Render Deploy.
 
 Parameters:
 - deploy_id (string; required)
@@ -542,8 +658,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -590,7 +711,22 @@ Example invocation:
 
 ## close_pull_request
 
-Close Pull Request. Signature: close_pull_request(full_name: str, number: int) -> Dict[str, Any].
+Close Pull Request. Signature: close_pull_request(full_name: str, number: int) -> Dict[str, Any].  Schema: full_name*:string, number*:integer
+
+Invoking Close Pull Request…
+Invoked Close Pull Request.
+
+Tool metadata:
+- name: close_pull_request
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Close Pull Request…
+- invoked: Invoked Close Pull Request.
 
 Parameters:
 - full_name (string; required)
@@ -598,8 +734,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -648,7 +789,22 @@ Example invocation:
 
 ## comment_on_issue
 
-Post a comment on an issue.
+Post a comment on an issue.  Schema: body*:string, full_name*:string, issue_number*:integer
+
+Invoking Comment On Issue…
+Invoked Comment On Issue.
+
+Tool metadata:
+- name: comment_on_issue
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Comment On Issue…
+- invoked: Invoked Comment On Issue.
 
 Parameters:
 - body (string; required)
@@ -657,8 +813,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - issue_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -712,7 +873,22 @@ Example invocation:
 
 ## comment_on_pull_request
 
-Comment On Pull Request. Signature: comment_on_pull_request(full_name: str, number: int, body: str) -> Dict[str, Any].
+Comment On Pull Request. Signature: comment_on_pull_request(full_name: str, number: int, body: str) -> Dict[str, Any].  Schema: body*:string, full_name*:string, number*:integer
+
+Invoking Comment On Pull Request…
+Invoked Comment On Pull Request.
+
+Tool metadata:
+- name: comment_on_pull_request
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Comment On Pull Request…
+- invoked: Invoked Comment On Pull Request.
 
 Parameters:
 - body (string; required)
@@ -721,8 +897,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -776,13 +957,28 @@ Example invocation:
 
 ## commit_and_open_pr_from_workspace
 
-Commit repo mirror changes on `ref` and open a PR into `base`.
+Commit repo mirror changes on `ref` and open a PR into `base`.  Schema: base:any=main, body:any, commit_message:any=Commit workspace changes, draft:any=False, full_name*:any, lint_command:any=ruff check ., quality_timeout_seconds:any=600, ref:any=main, +3 more
 
 This helper is intended for the common "edit in repo mirror -> commit/push -> open PR" flow.
 
 Notes:
 - This tool only pushes to the current `ref` (feature branch). It does not mutate the base branch.
 - When `run_quality` is enabled, lint/tests run before the commit is created.
+
+Invoking Commit And Open Pr From Workspace…
+Invoked Commit And Open Pr From Workspace.
+
+Tool metadata:
+- name: commit_and_open_pr_from_workspace
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Commit And Open Pr From Workspace…
+- invoked: Invoked Commit And Open Pr From Workspace.
 
 Parameters:
 - base (unknown; optional, default='main')
@@ -801,8 +997,13 @@ Parameters:
 - test_command (unknown; optional, default='pytest')
 - title (unknown; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -891,7 +1092,22 @@ Example invocation:
 
 ## commit_workspace
 
-Commit repo mirror changes and optionally push them.
+Commit repo mirror changes and optionally push them.  Schema: add_all:boolean=True, full_name:any, message:string=Commit workspace changes, push:boolean=True, ref:string=main
+
+Invoking Commit Workspace…
+Invoked Commit Workspace.
+
+Tool metadata:
+- name: commit_workspace
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Commit Workspace…
+- invoked: Invoked Commit Workspace.
 
 Parameters:
 - add_all (boolean; optional, default=True)
@@ -906,8 +1122,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -986,7 +1207,22 @@ Example invocation:
 
 ## commit_workspace_files
 
-Commit and optionally push specific files from the persistent repo mirror.
+Commit and optionally push specific files from the persistent repo mirror.  Schema: files*:array, full_name*:any, message:string=Commit selected workspa…, push:boolean=True, ref:string=main
+
+Invoking Commit Workspace Files…
+Invoked Commit Workspace Files.
+
+Tool metadata:
+- name: commit_workspace_files
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Commit Workspace Files…
+- invoked: Invoked Commit Workspace Files.
 
 Parameters:
 - files (array; required)
@@ -1001,8 +1237,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -1086,7 +1327,7 @@ Example invocation:
 
 ## compare_workspace_files
 
-Compare multiple file pairs or ref/path variants and return diffs.
+Compare multiple file pairs or ref/path variants and return diffs.  Schema: comparisons:any, context_lines:integer=3, full_name*:string, include_stats:boolean=False, max_chars_per_side:integer=200000, max_diff_chars:integer=200000, ref:string=main
 
 Each entry in `comparisons` supports one of the following shapes:
   1) {"left_path": "a.txt", "right_path": "b.txt"}
@@ -1103,6 +1344,21 @@ If include_stats is true, each comparison result includes a "stats" object
 with {added, removed} line counts derived from the full (pre-truncation)
 unified diff.
 
+Invoking Compare Workspace Files…
+Invoked Compare Workspace Files.
+
+Tool metadata:
+- name: compare_workspace_files
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Compare Workspace Files…
+- invoked: Invoked Compare Workspace Files.
+
 Parameters:
 - comparisons (array | null; optional)
 - context_lines (integer; optional, default=3)
@@ -1116,8 +1372,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -1208,7 +1469,22 @@ Example invocation:
 
 ## create_branch
 
-Create Branch. Signature: create_branch(full_name: str, branch: str, from_ref: str = 'main') -> Dict[str, Any].
+Create Branch. Signature: create_branch(full_name: str, branch: str, from_ref: str = 'main') -> Dict[str, Any].  Schema: branch*:string, from_ref:string=main, full_name*:string
+
+Invoking Create Branch…
+Invoked Create Branch.
+
+Tool metadata:
+- name: create_branch
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Create Branch…
+- invoked: Invoked Create Branch.
 
 Parameters:
 - branch (string; required)
@@ -1221,8 +1497,13 @@ Parameters:
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -1285,7 +1566,22 @@ Example invocation:
 
 ## create_file
 
-Create File. Signature: create_file(full_name: str, path: str, content: str, *, branch: str = 'main', message: Optional[str] = None) -> Dict[str, Any].
+Create File. Signature: create_file(full_name: str, path: str, content: str, *, branch: str = 'main', message: Optional[str] = None) -> Dict[str, Any].  Schema: branch:string=main, content*:string, full_name*:string, message:any, path*:string
+
+Invoking Create File…
+Invoked Create File.
+
+Tool metadata:
+- name: create_file
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Create File…
+- invoked: Invoked Create File.
 
 Parameters:
 - branch (string; optional, default='main')
@@ -1302,8 +1598,13 @@ Parameters:
   Repository-relative path (POSIX-style).
   Examples: 'README.md', 'src/app.py'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -1388,7 +1689,22 @@ Example invocation:
 
 ## create_issue
 
-Create a GitHub issue in the given repository.
+Create a GitHub issue in the given repository.  Schema: assignees:any, body:any, full_name*:string, labels:any, title*:string
+
+Invoking Create Issue…
+Invoked Create Issue.
+
+Tool metadata:
+- name: create_issue
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Create Issue…
+- invoked: Invoked Create Issue.
 
 Parameters:
 - assignees (array | null; optional)
@@ -1399,8 +1715,13 @@ Parameters:
 - labels (array | null; optional)
 - title (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -1491,11 +1812,26 @@ Example invocation:
 
 ## create_pull_request
 
-Open a pull request from ``head`` into ``base``.
+Open a pull request from ``head`` into ``base``.  Schema: base:string=main, body:any, draft:boolean=False, full_name*:string, head*:string, title*:string
 
 The base branch is normalized via ``_effective_ref_for_repo`` so that
 controller repos honor the configured default branch even when callers
 supply a simple base name like "main".
+
+Invoking Create Pull Request…
+Invoked Create Pull Request.
+
+Tool metadata:
+- name: create_pull_request
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Create Pull Request…
+- invoked: Invoked Create Pull Request.
 
 Parameters:
 - base (string; optional, default='main')
@@ -1507,8 +1843,13 @@ Parameters:
 - head (string; required)
 - title (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -1584,7 +1925,22 @@ Example invocation:
 
 ## create_render_deploy
 
-Trigger a new deploy for a Render service.
+Trigger a new deploy for a Render service.  Schema: clear_cache:boolean=False, commit_id:any, image_url:any, service_id*:string
+
+Invoking Create Render Deploy…
+Invoked Create Render Deploy.
+
+Tool metadata:
+- name: create_render_deploy
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Create Render Deploy…
+- invoked: Invoked Create Render Deploy.
 
 Parameters:
 - clear_cache (boolean; optional, default=False)
@@ -1597,8 +1953,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -1675,13 +2036,33 @@ Example invocation:
 
 ## create_render_service
 
-Create a new Render service.
+Create a new Render service.  Schema: service_spec*:object
+
+Invoking Create Render Service…
+Invoked Create Render Service.
+
+Tool metadata:
+- name: create_render_service
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Create Render Service…
+- invoked: Invoked Create Render Service.
 
 Parameters:
 - service_spec (object; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -1722,7 +2103,22 @@ Example invocation:
 
 ## create_repository
 
-Create Repository. Signature: create_repository(name: str, owner: Optional[str] = None, owner_type: Literal['auto', 'user', 'org'] = 'auto', description: Optional[str] = None, homepage: Optional[str] = None, visibility: Optional[Literal['public', 'private', 'internal']] = None, private: Optional[bool] = None, auto_init: bool = True, gitignore_template: Optional[str] = None, license_template: Optional[str] = None, is_template: bool = False, has_issues: bool = True, has_projects: Optional[bool] = None, has_wiki: bool = True, has_discussions: Optional[bool] = None, team_id: Optional[int] = None, security_and_analysis: Optional[Dict[str, Any]] = None, template_full_name: Optional[str] = None, include_all_branches: bool = False, topics: Optional[List[str]] = None, create_payload_overrides: Optional[Dict[str, Any]] = None, update_payload_overrides: Optional[Dict[str, Any]] = None, clone_to_workspace: bool = False, clone_ref: Optional[str] = None) -> Dict[str, Any].
+Create Repository. Signature: create_repository(name: str, owner: Optional[str] = None, owner_type: Literal['auto', 'user', 'org'] = 'auto', description: Optional[str] = None, homepage: Optional[str] = None, visibility: Optional[Literal['public', 'private', 'internal']] = None, private: Optional[bool] = None, auto_init: bool = True, gitignore_template: Optional[str] = None, license_template: Optional[str] = None, is_template: bool = False, has_issues: bool = True, has_projects: Optional[bool] = None, has_wiki: bool = True, has_discussions: Optional[bool] = None, team_id: Optional[int] = None, security_and_analysis: Optional[Dict[str, Any]] = None, template_full_name: Optional[str] = None, include_all_branches: bool = False, topics: Optional[List[str]] = None, create_payload_overrides: Optional[Dict[str, Any]] = None, update_payload_overrides: Optional[Dict[str, Any]] = None, clone_to_workspace: bool = False, clone_ref: Optional[str] = None) -> Dict[str, Any].  Schema: auto_init:boolean=True, clone_ref:any, clone_to_workspace:boolean=False, create_payload_overrides:any, description:any, gitignore_template:any, has_discussions:any, has_issues:boolean=True, +16 more
+
+Invoking Create Repository…
+Invoked Create Repository.
+
+Tool metadata:
+- name: create_repository
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Create Repository…
+- invoked: Invoked Create Repository.
 
 Parameters:
 - auto_init (boolean; optional, default=True)
@@ -1750,8 +2146,13 @@ Parameters:
 - update_payload_overrides (object | null; optional)
 - visibility (string | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2034,7 +2435,23 @@ Example invocation:
 
 ## delete_file
 
-Delete a file from a GitHub repository using the Contents API. Often used in combination with branch management helpers.
+Delete a file from a GitHub repository using the Contents API. Often used in combination with branch management helpers.  Schema: branch:any=main, full_name*:any, if_missing:any=error, message:any=Delete file via MCP Git…, path*:any
+
+Invoking Delete File…
+Invoked Delete File.
+
+Tool metadata:
+- name: delete_file
+- visibility: public
+- write_action: true
+- write_allowed: true
+- tags: delete, files, github, write
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Delete File…
+- invoked: Invoked Delete File.
 
 Parameters:
 - branch (unknown; optional, default='main')
@@ -2051,8 +2468,13 @@ Parameters:
   Repository-relative path (POSIX-style).
   Examples: 'README.md', 'src/app.py'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2125,7 +2547,7 @@ Example invocation:
 
 ## delete_workspace_paths
 
-Delete one or more paths from the repo mirror.
+Delete one or more paths from the repo mirror.  Schema: allow_missing:boolean=True, allow_recursive:boolean=False, full_name*:string, paths:any, ref:string=main
 
 This tool exists because some environments can block patch-based file deletions.
 Prefer this over embedding deletions into unified-diff patches.
@@ -2133,6 +2555,21 @@ Prefer this over embedding deletions into unified-diff patches.
 Notes:
   - `paths` must be repo-relative paths.
   - Directories require `allow_recursive=true` (for non-empty directories).
+
+Invoking Delete Workspace Paths…
+Invoked Delete Workspace Paths.
+
+Tool metadata:
+- name: delete_workspace_paths
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Delete Workspace Paths…
+- invoked: Invoked Delete Workspace Paths.
 
 Parameters:
 - allow_missing (boolean; optional, default=True)
@@ -2147,8 +2584,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2235,15 +2677,35 @@ Example invocation:
 
 ## describe_tool
 
-Return optional schema for one or more tools. Prefer this over manually scanning list_all_actions in long sessions.
+Return optional schema for one or more tools. Prefer this over manually scanning list_all_actions in long sessions.  Schema: include_parameters:boolean=True, name:any, names:any
+
+Invoking Describe Tool…
+Invoked Describe Tool.
+
+Tool metadata:
+- name: describe_tool
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Describe Tool…
+- invoked: Invoked Describe Tool.
 
 Parameters:
 - include_parameters (boolean; optional, default=True)
 - name (string | null; optional)
 - names (array | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2308,13 +2770,33 @@ Example invocation:
 
 ## download_user_content
 
-Download user-provided content (sandbox/local/http) with base64 encoding.
+Download user-provided content (sandbox/local/http) with base64 encoding.  Schema: content_url*:string
+
+Invoking Download User Content…
+Invoked Download User Content.
+
+Tool metadata:
+- name: download_user_content
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Download User Content…
+- invoked: Invoked Download User Content.
 
 Parameters:
 - content_url (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2354,7 +2836,7 @@ Example invocation:
 
 ## edit_workspace_line
 
-Edit a single line in a workspace file.
+Edit a single line in a workspace file.  Schema: create_parents:boolean=True, full_name*:string, line_number:integer=1, operation:string=replace, path:string=, ref:string=main, text:string=
 
 Operations:
   - replace: replace the target line's content (preserves its line ending).
@@ -2362,6 +2844,21 @@ Operations:
   - delete: delete the target line.
 
 Line numbers are 1-indexed.
+
+Invoking Edit Workspace Line…
+Invoked Edit Workspace Line.
+
+Tool metadata:
+- name: edit_workspace_line
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Edit Workspace Line…
+- invoked: Invoked Edit Workspace Line.
 
 Parameters:
 - create_parents (boolean; optional, default=True)
@@ -2378,8 +2875,13 @@ Parameters:
   Examples: 'main', 'develop', 'feature/my-branch'
 - text (string; optional, default='')
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2470,7 +2972,7 @@ Example invocation:
 
 ## edit_workspace_text_range
 
-Edit a file by replacing a precise (line, column) text range.
+Edit a file by replacing a precise (line, column) text range.  Schema: create_parents:boolean=True, end_col:integer=1, end_line:integer=1, full_name*:string, path:string=, ref:string=main, replacement:string=, start_col:integer=1, +1 more
 
 This is the most granular edit primitive:
   - Single-character edit: start=(L,C), end=(L,C+1)
@@ -2479,6 +2981,21 @@ This is the most granular edit primitive:
 
 Positions are 1-indexed. The end position is *exclusive* (Python-slice
 semantics).
+
+Invoking Edit Workspace Text Range…
+Invoked Edit Workspace Text Range.
+
+Tool metadata:
+- name: edit_workspace_text_range
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Edit Workspace Text Range…
+- invoked: Invoked Edit Workspace Text Range.
 
 Parameters:
 - create_parents (boolean; optional, default=True)
@@ -2497,8 +3014,13 @@ Parameters:
 - start_col (integer; optional, default=1)
 - start_line (integer; optional, default=1)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2593,7 +3115,22 @@ Example invocation:
 
 ## ensure_branch
 
-Ensure Branch. Signature: ensure_branch(full_name: str, branch: str, from_ref: str = 'main') -> Dict[str, Any].
+Ensure Branch. Signature: ensure_branch(full_name: str, branch: str, from_ref: str = 'main') -> Dict[str, Any].  Schema: branch*:string, from_ref:string=main, full_name*:string
+
+Invoking Ensure Branch…
+Invoked Ensure Branch.
+
+Tool metadata:
+- name: ensure_branch
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Ensure Branch…
+- invoked: Invoked Ensure Branch.
 
 Parameters:
 - branch (string; required)
@@ -2606,8 +3143,13 @@ Parameters:
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2670,7 +3212,22 @@ Example invocation:
 
 ## ensure_workspace_clone
 
-Ensure a persistent repo mirror (workspace clone) exists for a repo/ref.
+Ensure a persistent repo mirror (workspace clone) exists for a repo/ref.  Schema: full_name*:any, ref:any=main, reset:any=False
+
+Invoking Ensure Workspace Clone…
+Invoked Ensure Workspace Clone.
+
+Tool metadata:
+- name: ensure_workspace_clone
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Ensure Workspace Clone…
+- invoked: Invoked Ensure Workspace Clone.
 
 Parameters:
 - full_name (unknown; required)
@@ -2681,8 +3238,13 @@ Parameters:
   Examples: 'main', 'develop', 'feature/my-branch'
 - reset (unknown; optional, default=False)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2739,7 +3301,22 @@ Example invocation:
 
 ## fetch_files
 
-Fetch Files. Signature: fetch_files(full_name: str, paths: List[str], ref: str = 'main') -> Dict[str, Any].
+Fetch Files. Signature: fetch_files(full_name: str, paths: List[str], ref: str = 'main') -> Dict[str, Any].  Schema: full_name*:string, paths*:array, ref:string=main
+
+Invoking Fetch Files…
+Invoked Fetch Files.
+
+Tool metadata:
+- name: fetch_files
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Fetch Files…
+- invoked: Invoked Fetch Files.
 
 Parameters:
 - full_name (string; required)
@@ -2752,8 +3329,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2823,7 +3405,22 @@ Example invocation:
 
 ## fetch_issue
 
-Fetch Issue. Signature: fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any].
+Fetch Issue. Signature: fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any].  Schema: full_name*:string, issue_number*:integer
+
+Invoking Fetch Issue…
+Invoked Fetch Issue.
+
+Tool metadata:
+- name: fetch_issue
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Fetch Issue…
+- invoked: Invoked Fetch Issue.
 
 Parameters:
 - full_name (string; required)
@@ -2831,8 +3428,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - issue_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2881,7 +3483,22 @@ Example invocation:
 
 ## fetch_issue_comments
 
-Fetch Issue Comments. Signature: fetch_issue_comments(full_name: str, issue_number: int, per_page: int = 30, page: int = 1) -> Dict[str, Any].
+Fetch Issue Comments. Signature: fetch_issue_comments(full_name: str, issue_number: int, per_page: int = 30, page: int = 1) -> Dict[str, Any].  Schema: full_name*:string, issue_number*:integer, page:integer=1, per_page:integer=30
+
+Invoking Fetch Issue Comments…
+Invoked Fetch Issue Comments.
+
+Tool metadata:
+- name: fetch_issue_comments
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Fetch Issue Comments…
+- invoked: Invoked Fetch Issue Comments.
 
 Parameters:
 - full_name (string; required)
@@ -2895,8 +3512,13 @@ Parameters:
   Number of results per page for GitHub REST pagination.
   Examples: 30, 100
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -2965,7 +3587,22 @@ Example invocation:
 
 ## fetch_pr
 
-Fetch Pr. Signature: fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any].
+Fetch Pr. Signature: fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any].  Schema: full_name*:string, pull_number*:integer
+
+Invoking Fetch Pr…
+Invoked Fetch Pr.
+
+Tool metadata:
+- name: fetch_pr
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Fetch Pr…
+- invoked: Invoked Fetch Pr.
 
 Parameters:
 - full_name (string; required)
@@ -2973,8 +3610,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - pull_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3023,7 +3665,22 @@ Example invocation:
 
 ## fetch_pr_comments
 
-Fetch Pr Comments. Signature: fetch_pr_comments(full_name: str, pull_number: int, per_page: int = 30, page: int = 1) -> Dict[str, Any].
+Fetch Pr Comments. Signature: fetch_pr_comments(full_name: str, pull_number: int, per_page: int = 30, page: int = 1) -> Dict[str, Any].  Schema: full_name*:string, page:integer=1, per_page:integer=30, pull_number*:integer
+
+Invoking Fetch Pr Comments…
+Invoked Fetch Pr Comments.
+
+Tool metadata:
+- name: fetch_pr_comments
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Fetch Pr Comments…
+- invoked: Invoked Fetch Pr Comments.
 
 Parameters:
 - full_name (string; required)
@@ -3037,8 +3694,13 @@ Parameters:
   Examples: 30, 100
 - pull_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3107,13 +3769,33 @@ Example invocation:
 
 ## fetch_url
 
-Fetch Url. Signature: fetch_url(url: str) -> Dict[str, Any].
+Fetch Url. Signature: fetch_url(url: str) -> Dict[str, Any].  Schema: url*:string
+
+Invoking Fetch Url…
+Invoked Fetch Url.
+
+Tool metadata:
+- name: fetch_url
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Fetch Url…
+- invoked: Invoked Fetch Url.
 
 Parameters:
 - url (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3153,7 +3835,22 @@ Example invocation:
 
 ## get_branch_summary
 
-Get Branch Summary. Signature: get_branch_summary(full_name: str, branch: str, base: str = 'main') -> Dict[str, Any].
+Get Branch Summary. Signature: get_branch_summary(full_name: str, branch: str, base: str = 'main') -> Dict[str, Any].  Schema: base:string=main, branch*:string, full_name*:string
+
+Invoking Get Branch Summary…
+Invoked Get Branch Summary.
+
+Tool metadata:
+- name: get_branch_summary
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Branch Summary…
+- invoked: Invoked Get Branch Summary.
 
 Parameters:
 - base (string; optional, default='main')
@@ -3164,8 +3861,13 @@ Parameters:
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3224,7 +3926,23 @@ Example invocation:
 
 ## get_cached_files
 
-Return cached file payloads for a repository/ref without re-fetching from GitHub. Entries persist for the lifetime of the server process until evicted by size or entry caps.
+Return cached file payloads for a repository/ref without re-fetching from GitHub. Entries persist for the lifetime of the server process until evicted by size or entry caps.  Schema: full_name*:string, paths*:array, ref:string=main
+
+Invoking Get Cached Files…
+Invoked Get Cached Files.
+
+Tool metadata:
+- name: get_cached_files
+- visibility: public
+- write_action: false
+- write_allowed: true
+- tags: cache, files, github
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Cached Files…
+- invoked: Invoked Get Cached Files.
 
 Parameters:
 - full_name (string; required)
@@ -3237,8 +3955,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3308,7 +4031,22 @@ Example invocation:
 
 ## get_commit_combined_status
 
-Get Commit Combined Status. Signature: get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any].
+Get Commit Combined Status. Signature: get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any].  Schema: full_name*:string, ref*:string
+
+Invoking Get Commit Combined Status…
+Invoked Get Commit Combined Status.
+
+Tool metadata:
+- name: get_commit_combined_status
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Commit Combined Status…
+- invoked: Invoked Get Commit Combined Status.
 
 Parameters:
 - full_name (string; required)
@@ -3318,8 +4056,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3374,7 +4117,22 @@ Example invocation:
 
 ## get_file_contents
 
-Fetch a single file from GitHub and decode base64 to UTF-8 text.
+Fetch a single file from GitHub and decode base64 to UTF-8 text.  Schema: full_name*:string, path*:string, ref:string=main
+
+Invoking Get File Contents…
+Invoked Get File Contents.
+
+Tool metadata:
+- name: get_file_contents
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get File Contents…
+- invoked: Invoked Get File Contents.
 
 Parameters:
 - full_name (string; required)
@@ -3387,8 +4145,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3453,7 +4216,22 @@ Example invocation:
 
 ## get_file_excerpt
 
-Get File Excerpt. Signature: get_file_excerpt(full_name: str, path: str, ref: str = 'main', start_byte: Optional[int] = None, max_bytes: int = 65536, tail_bytes: Optional[int] = None, as_text: bool = True, max_text_chars: int = 200000, numbered_lines: bool = True) -> Dict[str, Any].
+Get File Excerpt. Signature: get_file_excerpt(full_name: str, path: str, ref: str = 'main', start_byte: Optional[int] = None, max_bytes: int = 65536, tail_bytes: Optional[int] = None, as_text: bool = True, max_text_chars: int = 200000, numbered_lines: bool = True) -> Dict[str, Any].  Schema: as_text:boolean=True, full_name*:string, max_bytes:integer=65536, max_text_chars:integer=200000, numbered_lines:boolean=True, path*:string, ref:string=main, start_byte:any, +1 more
+
+Invoking Get File Excerpt…
+Invoked Get File Excerpt.
+
+Tool metadata:
+- name: get_file_excerpt
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get File Excerpt…
+- invoked: Invoked Get File Excerpt.
 
 Parameters:
 - as_text (boolean; optional, default=True)
@@ -3472,8 +4250,13 @@ Parameters:
 - start_byte (integer | null; optional)
 - tail_bytes (integer | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3582,7 +4365,22 @@ Example invocation:
 
 ## get_issue_comment_reactions
 
-Get Issue Comment Reactions. Signature: get_issue_comment_reactions(full_name: str, comment_id: int, per_page: int = 30, page: int = 1) -> Dict[str, Any].
+Get Issue Comment Reactions. Signature: get_issue_comment_reactions(full_name: str, comment_id: int, per_page: int = 30, page: int = 1) -> Dict[str, Any].  Schema: comment_id*:integer, full_name*:string, page:integer=1, per_page:integer=30
+
+Invoking Get Issue Comment Reactions…
+Invoked Get Issue Comment Reactions.
+
+Tool metadata:
+- name: get_issue_comment_reactions
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Issue Comment Reactions…
+- invoked: Invoked Get Issue Comment Reactions.
 
 Parameters:
 - comment_id (integer; required)
@@ -3596,8 +4394,13 @@ Parameters:
   Number of results per page for GitHub REST pagination.
   Examples: 30, 100
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3666,7 +4469,22 @@ Example invocation:
 
 ## get_issue_overview
 
-Return a high-level overview of an issue, including related branches, pull requests, and checklist items.
+Return a high-level overview of an issue, including related branches, pull requests, and checklist items.  Schema: full_name*:string, issue_number*:integer
+
+Invoking Get Issue Overview…
+Invoked Get Issue Overview.
+
+Tool metadata:
+- name: get_issue_overview
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Issue Overview…
+- invoked: Invoked Get Issue Overview.
 
 Parameters:
 - full_name (string; required)
@@ -3674,8 +4492,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - issue_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3724,7 +4547,22 @@ Example invocation:
 
 ## get_job_logs
 
-Fetch raw logs for a GitHub Actions job without truncation.
+Fetch raw logs for a GitHub Actions job without truncation.  Schema: full_name*:string, job_id*:integer
+
+Invoking Get Job Logs…
+Invoked Get Job Logs.
+
+Tool metadata:
+- name: get_job_logs
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Job Logs…
+- invoked: Invoked Get Job Logs.
 
 Parameters:
 - full_name (string; required)
@@ -3732,8 +4570,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - job_id (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3782,7 +4625,22 @@ Example invocation:
 
 ## get_latest_branch_status
 
-Get Latest Branch Status. Signature: get_latest_branch_status(full_name: str, branch: str, base: str = 'main') -> Dict[str, Any].
+Get Latest Branch Status. Signature: get_latest_branch_status(full_name: str, branch: str, base: str = 'main') -> Dict[str, Any].  Schema: base:string=main, branch*:string, full_name*:string
+
+Invoking Get Latest Branch Status…
+Invoked Get Latest Branch Status.
+
+Tool metadata:
+- name: get_latest_branch_status
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Latest Branch Status…
+- invoked: Invoked Get Latest Branch Status.
 
 Parameters:
 - base (string; optional, default='main')
@@ -3793,8 +4651,13 @@ Parameters:
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3853,7 +4716,22 @@ Example invocation:
 
 ## get_pr_info
 
-Get Pr Info. Signature: get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any].
+Get Pr Info. Signature: get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any].  Schema: full_name*:string, pull_number*:integer
+
+Invoking Get Pr Info…
+Invoked Get Pr Info.
+
+Tool metadata:
+- name: get_pr_info
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Pr Info…
+- invoked: Invoked Get Pr Info.
 
 Parameters:
 - full_name (string; required)
@@ -3861,8 +4739,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - pull_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3911,7 +4794,22 @@ Example invocation:
 
 ## get_pr_overview
 
-Return a compact overview of a pull request, including files and CI status.
+Return a compact overview of a pull request, including files and CI status.  Schema: full_name*:string, pull_number*:integer
+
+Invoking Get Pr Overview…
+Invoked Get Pr Overview.
+
+Tool metadata:
+- name: get_pr_overview
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Pr Overview…
+- invoked: Invoked Get Pr Overview.
 
 Parameters:
 - full_name (string; required)
@@ -3919,8 +4817,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - pull_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -3969,7 +4872,22 @@ Example invocation:
 
 ## get_pr_reactions
 
-Fetch reactions for a GitHub pull request.
+Fetch reactions for a GitHub pull request.  Schema: full_name*:string, page:integer=1, per_page:integer=30, pull_number*:integer
+
+Invoking Get Pr Reactions…
+Invoked Get Pr Reactions.
+
+Tool metadata:
+- name: get_pr_reactions
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Pr Reactions…
+- invoked: Invoked Get Pr Reactions.
 
 Parameters:
 - full_name (string; required)
@@ -3983,8 +4901,13 @@ Parameters:
   Examples: 30, 100
 - pull_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4053,7 +4976,22 @@ Example invocation:
 
 ## get_pr_review_comment_reactions
 
-Fetch reactions for a pull request review comment.
+Fetch reactions for a pull request review comment.  Schema: comment_id*:integer, full_name*:string, page:integer=1, per_page:integer=30
+
+Invoking Get Pr Review Comment Reactions…
+Invoked Get Pr Review Comment Reactions.
+
+Tool metadata:
+- name: get_pr_review_comment_reactions
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Pr Review Comment Reactions…
+- invoked: Invoked Get Pr Review Comment Reactions.
 
 Parameters:
 - comment_id (integer; required)
@@ -4067,8 +5005,13 @@ Parameters:
   Number of results per page for GitHub REST pagination.
   Examples: 30, 100
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4139,8 +5082,28 @@ Example invocation:
 
 Get Rate Limit. Signature: get_rate_limit() -> Dict[str, Any].
 
+Invoking Get Rate Limit…
+Invoked Get Rate Limit.
+
+Tool metadata:
+- name: get_rate_limit
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Rate Limit…
+- invoked: Invoked Get Rate Limit.
+
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4172,7 +5135,22 @@ Example invocation:
 
 ## get_render_deploy
 
-Fetch a specific deploy for a service.
+Fetch a specific deploy for a service.  Schema: deploy_id*:string, service_id*:string
+
+Invoking Get Render Deploy…
+Invoked Get Render Deploy.
+
+Tool metadata:
+- name: get_render_deploy
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Render Deploy…
+- invoked: Invoked Get Render Deploy.
 
 Parameters:
 - deploy_id (string; required)
@@ -4180,8 +5158,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4228,7 +5211,22 @@ Example invocation:
 
 ## get_render_logs
 
-Fetch logs for a Render resource.
+Fetch logs for a Render resource.  Schema: end_time:any, limit:integer=200, resource_id*:string, resource_type*:string, start_time:any
+
+Invoking Get Render Logs…
+Invoked Get Render Logs.
+
+Tool metadata:
+- name: get_render_logs
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Render Logs…
+- invoked: Invoked Get Render Logs.
 
 Parameters:
 - end_time (string | null; optional)
@@ -4246,8 +5244,13 @@ Parameters:
   Optional ISO8601 timestamp for the start of a log query window.
   Examples: '2026-01-14T12:34:56Z'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4341,14 +5344,34 @@ Example invocation:
 
 ## get_render_service
 
-Fetch a Render service by id.
+Fetch a Render service by id.  Schema: service_id*:string
+
+Invoking Get Render Service…
+Invoked Get Render Service.
+
+Tool metadata:
+- name: get_render_service
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Render Service…
+- invoked: Invoked Get Render Service.
 
 Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4389,7 +5412,7 @@ Example invocation:
 
 ## get_repo_dashboard
 
-Return a compact, multi-signal dashboard for a repository.
+Return a compact, multi-signal dashboard for a repository.  Schema: branch:any, full_name*:string
 
 This helper aggregates several lower-level tools into a single call so
 callers can quickly understand the current state of a repo. It is
@@ -4421,6 +5444,21 @@ on the branch to show the project layout.
 Individual sections degrade gracefully: if one underlying call fails,
 its corresponding "*_error" field is populated instead of raising.
 
+Invoking Get Repo Dashboard…
+Invoked Get Repo Dashboard.
+
+Tool metadata:
+- name: get_repo_dashboard
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Repo Dashboard…
+- invoked: Invoked Get Repo Dashboard.
+
 Parameters:
 - branch (string | null; optional)
   Branch name.
@@ -4429,8 +5467,13 @@ Parameters:
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4491,7 +5534,22 @@ Example invocation:
 
 ## get_repo_dashboard_graphql
 
-Return a compact dashboard using GraphQL as a fallback.
+Return a compact dashboard using GraphQL as a fallback.  Schema: branch:any, full_name*:string
+
+Invoking Get Repo Dashboard Graphql…
+Invoked Get Repo Dashboard Graphql.
+
+Tool metadata:
+- name: get_repo_dashboard_graphql
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Repo Dashboard Graphql…
+- invoked: Invoked Get Repo Dashboard Graphql.
 
 Parameters:
 - branch (string | null; optional)
@@ -4501,8 +5559,13 @@ Parameters:
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4563,15 +5626,35 @@ Example invocation:
 
 ## get_repo_defaults
 
-Get Repo Defaults. Signature: get_repo_defaults(full_name: Optional[str] = None) -> Dict[str, Any].
+Get Repo Defaults. Signature: get_repo_defaults(full_name: Optional[str] = None) -> Dict[str, Any].  Schema: full_name:any
+
+Invoking Get Repo Defaults…
+Invoked Get Repo Defaults.
+
+Tool metadata:
+- name: get_repo_defaults
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Repo Defaults…
+- invoked: Invoked Get Repo Defaults.
 
 Parameters:
 - full_name (string | null; optional)
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4620,15 +5703,35 @@ Example invocation:
 
 ## get_repository
 
-Look up repository metadata (topics, default branch, permissions).
+Look up repository metadata (topics, default branch, permissions).  Schema: full_name*:string
+
+Invoking Get Repository…
+Invoked Get Repository.
+
+Tool metadata:
+- name: get_repository
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Repository…
+- invoked: Invoked Get Repository.
 
 Parameters:
 - full_name (string; required)
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4674,8 +5777,28 @@ Example invocation:
 
 Get Server Config. Signature: get_server_config() -> Dict[str, Any].
 
+Invoking Get Server Config…
+Invoked Get Server Config.
+
+Tool metadata:
+- name: get_server_config
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Server Config…
+- invoked: Invoked Get Server Config.
+
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4709,8 +5832,28 @@ Example invocation:
 
 Get User Login. Signature: get_user_login() -> Dict[str, Any].
 
+Invoking Get User Login…
+Invoked Get User Login.
+
+Tool metadata:
+- name: get_user_login
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get User Login…
+- invoked: Invoked Get User Login.
+
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4742,7 +5885,22 @@ Example invocation:
 
 ## get_workflow_run
 
-Retrieve a specific workflow run including timing and conclusion.
+Retrieve a specific workflow run including timing and conclusion.  Schema: full_name*:string, run_id*:integer
+
+Invoking Get Workflow Run…
+Invoked Get Workflow Run.
+
+Tool metadata:
+- name: get_workflow_run
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Workflow Run…
+- invoked: Invoked Get Workflow Run.
 
 Parameters:
 - full_name (string; required)
@@ -4750,8 +5908,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - run_id (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4800,12 +5963,27 @@ Example invocation:
 
 ## get_workflow_run_overview
 
-Summarize a GitHub Actions workflow run for CI triage.
+Summarize a GitHub Actions workflow run for CI triage.  Schema: full_name*:string, max_jobs:integer=500, run_id*:integer
 
 This helper is read-only and safe to call before any write actions. It
 aggregates run metadata, jobs (with optional pagination up to max_jobs),
 failed jobs, and the longest jobs by duration to provide a single-call
 summary of run status.
+
+Invoking Get Workflow Run Overview…
+Invoked Get Workflow Run Overview.
+
+Tool metadata:
+- name: get_workflow_run_overview
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Workflow Run Overview…
+- invoked: Invoked Get Workflow Run Overview.
 
 Parameters:
 - full_name (string; required)
@@ -4814,8 +5992,13 @@ Parameters:
 - max_jobs (integer; optional, default=500)
 - run_id (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4869,7 +6052,22 @@ Example invocation:
 
 ## get_workspace_changes_summary
 
-Summarize modified, added, deleted, renamed, and untracked files in the repo mirror.
+Summarize modified, added, deleted, renamed, and untracked files in the repo mirror.  Schema: full_name*:string, max_files:integer=200, path_prefix:any, ref:string=main
+
+Invoking Get Workspace Changes Summary…
+Invoked Get Workspace Changes Summary.
+
+Tool metadata:
+- name: get_workspace_changes_summary
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Workspace Changes Summary…
+- invoked: Invoked Get Workspace Changes Summary.
 
 Parameters:
 - full_name (string; required)
@@ -4881,8 +6079,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -4954,13 +6157,28 @@ Example invocation:
 
 ## get_workspace_file_contents
 
-Read a file from the persistent repo mirror (no shell).
+Read a file from the persistent repo mirror (no shell).  Schema: full_name*:string, path:string=, ref:string=main
 
 Args:
   path: Repo-relative path (POSIX-style). Must resolve inside the repo mirror.
 
 Returns:
   A dict with keys like: exists, path, text, encoding, size_bytes.
+
+Invoking Get Workspace File Contents…
+Invoked Get Workspace File Contents.
+
+Tool metadata:
+- name: get_workspace_file_contents
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Workspace File Contents…
+- invoked: Invoked Get Workspace File Contents.
 
 Parameters:
 - full_name (string; required)
@@ -4973,8 +6191,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5039,7 +6262,7 @@ Example invocation:
 
 ## get_workspace_files_contents
 
-Read multiple files from the persistent repo mirror in one call.
+Read multiple files from the persistent repo mirror in one call.  Schema: expand_globs:boolean=True, full_name*:string, include_missing:boolean=True, max_chars_per_file:integer=20000, max_total_chars:integer=120000, paths:any, ref:string=main
 
 This tool is optimized for examination workflows where a client wants to
 inspect several files (optionally via glob patterns) without issuing many
@@ -5050,6 +6273,21 @@ Notes:
   - When expand_globs is true, glob patterns (e.g. "src/**/*.py") are
     expanded relative to the repo root.
   - Returned text is truncated by max_chars_per_file and max_total_chars.
+
+Invoking Get Workspace Files Contents…
+Invoked Get Workspace Files Contents.
+
+Tool metadata:
+- name: get_workspace_files_contents
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking Get Workspace Files Contents…
+- invoked: Invoked Get Workspace Files Contents.
 
 Parameters:
 - expand_globs (boolean; optional, default=True)
@@ -5066,8 +6304,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5164,7 +6407,22 @@ Example invocation:
 
 ## graphql_query
 
-Graphql Query. Signature: graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any].
+Graphql Query. Signature: graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any].  Schema: query*:string, variables:any
+
+Invoking Graphql Query…
+Invoked Graphql Query.
+
+Tool metadata:
+- name: graphql_query
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Graphql Query…
+- invoked: Invoked Graphql Query.
 
 Parameters:
 - query (string; required)
@@ -5172,8 +6430,13 @@ Parameters:
   Examples: 'def main', 'import os', 'async def'
 - variables (object | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5232,7 +6495,7 @@ Example invocation:
 
 ## list_all_actions
 
-Enumerate every available MCP tool with optional schemas.
+Enumerate every available MCP tool with optional schemas.  Schema: compact:any, include_parameters:boolean=False
 
 This helper exposes a structured catalog of all tools so clients can see
 the full command surface without reading this file. It is read-only and
@@ -5245,12 +6508,32 @@ compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA_DEFAULT=1`` is
 set), shorten descriptions and omit tag metadata to keep responses
 compact.
 
+Invoking List All Actions…
+Invoked List All Actions.
+
+Tool metadata:
+- name: list_all_actions
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List All Actions…
+- invoked: Invoked List All Actions.
+
 Parameters:
 - compact (boolean | null; optional)
 - include_parameters (boolean; optional, default=False)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5300,7 +6583,22 @@ Example invocation:
 
 ## list_branches
 
-Enumerate branches for a repository with GitHub-style pagination.
+Enumerate branches for a repository with GitHub-style pagination.  Schema: full_name*:string, page:integer=1, per_page:integer=100
+
+Invoking List Branches…
+Invoked List Branches.
+
+Tool metadata:
+- name: list_branches
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Branches…
+- invoked: Invoked List Branches.
 
 Parameters:
 - full_name (string; required)
@@ -5313,8 +6611,13 @@ Parameters:
   Number of results per page for GitHub REST pagination.
   Examples: 30, 100
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5378,7 +6681,22 @@ Example invocation:
 
 ## list_open_issues_graphql
 
-List issues (excluding PRs) using GraphQL, with cursor-based pagination.
+List issues (excluding PRs) using GraphQL, with cursor-based pagination.  Schema: cursor:any, full_name*:string, per_page:integer=30, state:string=open
+
+Invoking List Open Issues Graphql…
+Invoked List Open Issues Graphql.
+
+Tool metadata:
+- name: list_open_issues_graphql
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Open Issues Graphql…
+- invoked: Invoked List Open Issues Graphql.
 
 Parameters:
 - cursor (string | null; optional)
@@ -5391,8 +6709,13 @@ Parameters:
   Examples: 30, 100
 - state (string; optional, default='open')
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5469,7 +6792,22 @@ Example invocation:
 
 ## list_pr_changed_filenames
 
-List Pr Changed Filenames. Signature: list_pr_changed_filenames(full_name: str, pull_number: int, per_page: int = 100, page: int = 1) -> Dict[str, Any].
+List Pr Changed Filenames. Signature: list_pr_changed_filenames(full_name: str, pull_number: int, per_page: int = 100, page: int = 1) -> Dict[str, Any].  Schema: full_name*:string, page:integer=1, per_page:integer=100, pull_number*:integer
+
+Invoking List Pr Changed Filenames…
+Invoked List Pr Changed Filenames.
+
+Tool metadata:
+- name: list_pr_changed_filenames
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Pr Changed Filenames…
+- invoked: Invoked List Pr Changed Filenames.
 
 Parameters:
 - full_name (string; required)
@@ -5483,8 +6821,13 @@ Parameters:
   Examples: 30, 100
 - pull_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5553,7 +6896,22 @@ Example invocation:
 
 ## list_pull_requests
 
-List Pull Requests. Signature: list_pull_requests(full_name: str, state: Literal['open', 'closed', 'all'] = 'open', head: Optional[str] = None, base: Optional[str] = None, per_page: int = 30, page: int = 1) -> Dict[str, Any].
+List Pull Requests. Signature: list_pull_requests(full_name: str, state: Literal['open', 'closed', 'all'] = 'open', head: Optional[str] = None, base: Optional[str] = None, per_page: int = 30, page: int = 1) -> Dict[str, Any].  Schema: base:any, full_name*:string, head:any, page:integer=1, per_page:integer=30, state:string=open
+
+Invoking List Pull Requests…
+Invoked List Pull Requests.
+
+Tool metadata:
+- name: list_pull_requests
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Pull Requests…
+- invoked: Invoked List Pull Requests.
 
 Parameters:
 - base (string | null; optional)
@@ -5569,8 +6927,13 @@ Parameters:
   Examples: 30, 100
 - state (string; optional, default='open')
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5668,12 +7031,27 @@ Example invocation:
 
 ## list_recent_failures
 
-List recent failed or cancelled GitHub Actions workflow runs.
+List recent failed or cancelled GitHub Actions workflow runs.  Schema: branch:any, full_name*:string, limit:integer=10
 
 This helper composes ``list_workflow_runs`` and filters to runs whose
 conclusion indicates a non-successful outcome (for example failure,
 cancelled, or timed out). It is intended as a navigation helper for CI
 debugging flows.
+
+Invoking List Recent Failures…
+Invoked List Recent Failures.
+
+Tool metadata:
+- name: list_recent_failures
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Recent Failures…
+- invoked: Invoked List Recent Failures.
 
 Parameters:
 - branch (string | null; optional)
@@ -5686,8 +7064,13 @@ Parameters:
   Maximum number of results to return.
   Examples: 20, 50, 200
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5759,7 +7142,22 @@ Example invocation:
 
 ## list_recent_failures_graphql
 
-List recent workflow failures using GraphQL as a fallback.
+List recent workflow failures using GraphQL as a fallback.  Schema: branch:any, full_name*:string, limit:integer=10
+
+Invoking List Recent Failures Graphql…
+Invoked List Recent Failures Graphql.
+
+Tool metadata:
+- name: list_recent_failures_graphql
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Recent Failures Graphql…
+- invoked: Invoked List Recent Failures Graphql.
 
 Parameters:
 - branch (string | null; optional)
@@ -5772,8 +7170,13 @@ Parameters:
   Maximum number of results to return.
   Examples: 20, 50, 200
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5845,7 +7248,22 @@ Example invocation:
 
 ## list_recent_issues
 
-List Recent Issues. Signature: list_recent_issues(filter: str = 'assigned', state: str = 'open', per_page: int = 30, page: int = 1) -> Dict[str, Any].
+List Recent Issues. Signature: list_recent_issues(filter: str = 'assigned', state: str = 'open', per_page: int = 30, page: int = 1) -> Dict[str, Any].  Schema: filter:string=assigned, page:integer=1, per_page:integer=30, state:string=open
+
+Invoking List Recent Issues…
+Invoked List Recent Issues.
+
+Tool metadata:
+- name: list_recent_issues
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Recent Issues…
+- invoked: Invoked List Recent Issues.
 
 Parameters:
 - filter (string; optional, default='assigned')
@@ -5857,8 +7275,13 @@ Parameters:
   Examples: 30, 100
 - state (string; optional, default='open')
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5921,7 +7344,22 @@ Example invocation:
 
 ## list_render_deploys
 
-List deploys for a Render service.
+List deploys for a Render service.  Schema: cursor:any, limit:integer=20, service_id*:string
+
+Invoking List Render Deploys…
+Invoked List Render Deploys.
+
+Tool metadata:
+- name: list_render_deploys
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Render Deploys…
+- invoked: Invoked List Render Deploys.
 
 Parameters:
 - cursor (string | null; optional)
@@ -5932,8 +7370,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -5998,10 +7441,25 @@ Example invocation:
 
 ## list_render_logs
 
-List logs for one or more Render resources.
+List logs for one or more Render resources.  Schema: direction:string=backward, end_time:any, host:any, instance:any, level:any, limit:integer=200, log_type:any, method:any, +6 more
 
 This maps to Render's public /v1/logs API which requires an owner_id and one
 or more resource ids.
+
+Invoking List Render Logs…
+Invoked List Render Logs.
+
+Tool metadata:
+- name: list_render_logs
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Render Logs…
+- invoked: Invoked List Render Logs.
 
 Parameters:
 - direction (string; optional, default='backward')
@@ -6028,8 +7486,13 @@ Parameters:
 - status_code (integer | null; optional)
 - text (string | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -6227,7 +7690,22 @@ Example invocation:
 
 ## list_render_owners
 
-List Render owners (workspaces + personal owners).
+List Render owners (workspaces + personal owners).  Schema: cursor:any, limit:integer=20
+
+Invoking List Render Owners…
+Invoked List Render Owners.
+
+Tool metadata:
+- name: list_render_owners
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Render Owners…
+- invoked: Invoked List Render Owners.
 
 Parameters:
 - cursor (string | null; optional)
@@ -6236,8 +7714,13 @@ Parameters:
   Maximum number of results to return.
   Examples: 20, 50, 200
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -6294,7 +7777,22 @@ Example invocation:
 
 ## list_render_services
 
-List Render services (optionally filtered by owner_id).
+List Render services (optionally filtered by owner_id).  Schema: cursor:any, limit:integer=20, owner_id:any
+
+Invoking List Render Services…
+Invoked List Render Services.
+
+Tool metadata:
+- name: list_render_services
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Render Services…
+- invoked: Invoked List Render Services.
 
 Parameters:
 - cursor (string | null; optional)
@@ -6305,8 +7803,13 @@ Parameters:
 - owner_id (string | null; optional)
   Render owner id (workspace or personal owner). Use list_render_owners to discover values.
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -6376,7 +7879,22 @@ Example invocation:
 
 ## list_repositories
 
-List Repositories. Signature: list_repositories(affiliation: Optional[str] = None, visibility: Optional[str] = None, per_page: int = 30, page: int = 1) -> Dict[str, Any].
+List Repositories. Signature: list_repositories(affiliation: Optional[str] = None, visibility: Optional[str] = None, per_page: int = 30, page: int = 1) -> Dict[str, Any].  Schema: affiliation:any, page:integer=1, per_page:integer=30, visibility:any
+
+Invoking List Repositories…
+Invoked List Repositories.
+
+Tool metadata:
+- name: list_repositories
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Repositories…
+- invoked: Invoked List Repositories.
 
 Parameters:
 - affiliation (string | null; optional)
@@ -6388,8 +7906,13 @@ Parameters:
   Examples: 30, 100
 - visibility (string | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -6466,7 +7989,22 @@ Example invocation:
 
 ## list_repositories_by_installation
 
-List Repositories By Installation. Signature: list_repositories_by_installation(installation_id: int, per_page: int = 30, page: int = 1) -> Dict[str, Any].
+List Repositories By Installation. Signature: list_repositories_by_installation(installation_id: int, per_page: int = 30, page: int = 1) -> Dict[str, Any].  Schema: installation_id*:integer, page:integer=1, per_page:integer=30
+
+Invoking List Repositories By Installation…
+Invoked List Repositories By Installation.
+
+Tool metadata:
+- name: list_repositories_by_installation
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Repositories By Installation…
+- invoked: Invoked List Repositories By Installation.
 
 Parameters:
 - installation_id (integer; required)
@@ -6477,8 +8015,13 @@ Parameters:
   Number of results per page for GitHub REST pagination.
   Examples: 30, 100
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -6538,7 +8081,22 @@ Example invocation:
 
 ## list_repository_issues
 
-List Repository Issues. Signature: list_repository_issues(full_name: str, state: str = 'open', labels: Optional[List[str]] = None, assignee: Optional[str] = None, per_page: int = 30, page: int = 1) -> Dict[str, Any].
+List Repository Issues. Signature: list_repository_issues(full_name: str, state: str = 'open', labels: Optional[List[str]] = None, assignee: Optional[str] = None, per_page: int = 30, page: int = 1) -> Dict[str, Any].  Schema: assignee:any, full_name*:string, labels:any, page:integer=1, per_page:integer=30, state:string=open
+
+Invoking List Repository Issues…
+Invoked List Repository Issues.
+
+Tool metadata:
+- name: list_repository_issues
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Repository Issues…
+- invoked: Invoked List Repository Issues.
 
 Parameters:
 - assignee (string | null; optional)
@@ -6554,8 +8112,13 @@ Parameters:
   Examples: 30, 100
 - state (string; optional, default='open')
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -6651,7 +8214,22 @@ Example invocation:
 
 ## list_repository_tree
 
-List Repository Tree. Signature: list_repository_tree(full_name: str, ref: str = 'main', path_prefix: Optional[str] = None, recursive: bool = True, max_entries: int = 1000, include_blobs: bool = True, include_trees: bool = True) -> Dict[str, Any].
+List Repository Tree. Signature: list_repository_tree(full_name: str, ref: str = 'main', path_prefix: Optional[str] = None, recursive: bool = True, max_entries: int = 1000, include_blobs: bool = True, include_trees: bool = True) -> Dict[str, Any].  Schema: full_name*:string, include_blobs:boolean=True, include_trees:boolean=True, max_entries:integer=1000, path_prefix:any, recursive:boolean=True, ref:string=main
+
+Invoking List Repository Tree…
+Invoked List Repository Tree.
+
+Tool metadata:
+- name: list_repository_tree
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Repository Tree…
+- invoked: Invoked List Repository Tree.
 
 Parameters:
 - full_name (string; required)
@@ -6666,8 +8244,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -6754,15 +8337,35 @@ Example invocation:
 
 ## list_tools
 
-List available MCP tools with a compact description. Full schemas are available via describe_tool (or list_all_actions with include_parameters=true).
+List available MCP tools with a compact description. Full schemas are available via describe_tool (or list_all_actions with include_parameters=true).  Schema: name_prefix:any, only_read:boolean=False, only_write:boolean=False
+
+Invoking List Tools…
+Invoked List Tools.
+
+Tool metadata:
+- name: list_tools
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Tools…
+- invoked: Invoked List Tools.
 
 Parameters:
 - name_prefix (string | null; optional)
 - only_read (boolean; optional, default=False)
 - only_write (boolean; optional, default=False)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -6817,7 +8420,22 @@ Example invocation:
 
 ## list_workflow_run_jobs
 
-List jobs within a workflow run, useful for troubleshooting failures.
+List jobs within a workflow run, useful for troubleshooting failures.  Schema: full_name*:string, page:integer=1, per_page:integer=30, run_id*:integer
+
+Invoking List Workflow Run Jobs…
+Invoked List Workflow Run Jobs.
+
+Tool metadata:
+- name: list_workflow_run_jobs
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Workflow Run Jobs…
+- invoked: Invoked List Workflow Run Jobs.
 
 Parameters:
 - full_name (string; required)
@@ -6831,8 +8449,13 @@ Parameters:
   Examples: 30, 100
 - run_id (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -6901,7 +8524,22 @@ Example invocation:
 
 ## list_workflow_runs
 
-List recent GitHub Actions workflow runs with optional filters.
+List recent GitHub Actions workflow runs with optional filters.  Schema: branch:any, event:any, full_name*:string, page:integer=1, per_page:integer=30, status:any
+
+Invoking List Workflow Runs…
+Invoked List Workflow Runs.
+
+Tool metadata:
+- name: list_workflow_runs
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Workflow Runs…
+- invoked: Invoked List Workflow Runs.
 
 Parameters:
 - branch (string | null; optional)
@@ -6919,8 +8557,13 @@ Parameters:
   Examples: 30, 100
 - status (string | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7025,7 +8668,22 @@ Example invocation:
 
 ## list_workflow_runs_graphql
 
-List recent workflow runs using GraphQL with cursor-based pagination.
+List recent workflow runs using GraphQL with cursor-based pagination.  Schema: branch:any, cursor:any, full_name*:string, per_page:integer=30
+
+Invoking List Workflow Runs Graphql…
+Invoked List Workflow Runs Graphql.
+
+Tool metadata:
+- name: list_workflow_runs_graphql
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Workflow Runs Graphql…
+- invoked: Invoked List Workflow Runs Graphql.
 
 Parameters:
 - branch (string | null; optional)
@@ -7040,8 +8698,13 @@ Parameters:
   Number of results per page for GitHub REST pagination.
   Examples: 30, 100
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7125,7 +8788,22 @@ Example invocation:
 
 ## list_workspace_files
 
-List files in the repo mirror (workspace clone).
+List files in the repo mirror (workspace clone).  Schema: full_name:any, include_dirs:boolean=False, include_hidden:boolean=False, max_depth:any, max_files:any, max_results:any, path:string=, ref:string=main
+
+Invoking List Workspace Files…
+Invoked List Workspace Files.
+
+Tool metadata:
+- name: list_workspace_files
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Workspace Files…
+- invoked: Invoked List Workspace Files.
 
 Parameters:
 - full_name (string | null; optional)
@@ -7143,8 +8821,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7260,14 +8943,34 @@ Example invocation:
 
 ## list_write_actions
 
-Enumerate write-capable MCP tools with optional schemas.
+Enumerate write-capable MCP tools with optional schemas.  Schema: compact:any, include_parameters:boolean=False
+
+Invoking List Write Actions…
+Invoked List Write Actions.
+
+Tool metadata:
+- name: list_write_actions
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Write Actions…
+- invoked: Invoked List Write Actions.
 
 Parameters:
 - compact (boolean | null; optional)
 - include_parameters (boolean; optional, default=False)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7321,8 +9024,28 @@ Describe write-capable tools exposed by this server.
 
 This provides a concise summary without requiring a scan of the full module.
 
+Invoking List Write Tools…
+Invoked List Write Tools.
+
+Tool metadata:
+- name: list_write_tools
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 📖
+- invoking: Invoking List Write Tools…
+- invoked: Invoked List Write Tools.
+
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7354,7 +9077,22 @@ Example invocation:
 
 ## merge_pull_request
 
-Merge Pull Request. Signature: merge_pull_request(full_name: str, number: int, merge_method: Literal['merge', 'squash', 'rebase'] = 'squash', commit_title: Optional[str] = None, commit_message: Optional[str] = None) -> Dict[str, Any].
+Merge Pull Request. Signature: merge_pull_request(full_name: str, number: int, merge_method: Literal['merge', 'squash', 'rebase'] = 'squash', commit_title: Optional[str] = None, commit_message: Optional[str] = None) -> Dict[str, Any].  Schema: commit_message:any, commit_title:any, full_name*:string, merge_method:string=squash, number*:integer
+
+Invoking Merge Pull Request…
+Invoked Merge Pull Request.
+
+Tool metadata:
+- name: merge_pull_request
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Merge Pull Request…
+- invoked: Invoked Merge Pull Request.
 
 Parameters:
 - commit_message (string | null; optional)
@@ -7365,8 +9103,13 @@ Parameters:
 - merge_method (string; optional, default='squash')
 - number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7449,7 +9192,22 @@ Example invocation:
 
 ## move_file
 
-Move File. Signature: move_file(full_name: str, from_path: str, to_path: str, branch: str = 'main', message: Optional[str] = None) -> Dict[str, Any].
+Move File. Signature: move_file(full_name: str, from_path: str, to_path: str, branch: str = 'main', message: Optional[str] = None) -> Dict[str, Any].  Schema: branch:string=main, from_path*:string, full_name*:string, message:any, to_path*:string
+
+Invoking Move File…
+Invoked Move File.
+
+Tool metadata:
+- name: move_file
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Move File…
+- invoked: Invoked Move File.
 
 Parameters:
 - branch (string; optional, default='main')
@@ -7464,8 +9222,13 @@ Parameters:
   Examples: 'Refactor tool schemas'
 - to_path (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7545,11 +9308,26 @@ Example invocation:
 
 ## move_workspace_paths
 
-Move (rename) one or more workspace paths inside the repo mirror.
+Move (rename) one or more workspace paths inside the repo mirror.  Schema: create_parents:boolean=True, full_name*:string, moves:any, overwrite:boolean=False, ref:string=main
 
 Args:
   moves: list of {"src": "path", "dst": "path"}
   overwrite: if true, allow replacing an existing destination.
+
+Invoking Move Workspace Paths…
+Invoked Move Workspace Paths.
+
+Tool metadata:
+- name: move_workspace_paths
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Move Workspace Paths…
+- invoked: Invoked Move Workspace Paths.
 
 Parameters:
 - create_parents (boolean; optional, default=True)
@@ -7562,8 +9340,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7644,7 +9427,22 @@ Example invocation:
 
 ## open_issue_context
 
-Return an issue plus related branches and pull requests.
+Return an issue plus related branches and pull requests.  Schema: full_name*:string, issue_number*:integer
+
+Invoking Open Issue Context…
+Invoked Open Issue Context.
+
+Tool metadata:
+- name: open_issue_context
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Open Issue Context…
+- invoked: Invoked Open Issue Context.
 
 Parameters:
 - full_name (string; required)
@@ -7652,8 +9450,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - issue_number (integer; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7702,11 +9505,26 @@ Example invocation:
 
 ## open_pr_for_existing_branch
 
-Open a pull request for an existing branch into a base branch.
+Open a pull request for an existing branch into a base branch.  Schema: base:string=main, body:any, branch*:string, draft:boolean=False, full_name*:string, title:any
 
 This helper is intentionally idempotent: if there is already an open PR for
 the same head/base pair, it will return that existing PR instead of failing
 or creating a duplicate.
+
+Invoking Open Pr For Existing Branch…
+Invoked Open Pr For Existing Branch.
+
+Tool metadata:
+- name: open_pr_for_existing_branch
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Open Pr For Existing Branch…
+- invoked: Invoked Open Pr For Existing Branch.
 
 Parameters:
 - base (string; optional, default='main')
@@ -7720,8 +9538,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - title (string | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7811,8 +9634,29 @@ Example invocation:
 
 Ping the MCP server extensions surface.
 
+Invoking Ping Extensions…
+Invoked Ping Extensions.
+
+Tool metadata:
+- name: ping_extensions
+- visibility: public
+- write_action: false
+- write_allowed: true
+- tags: diagnostics, meta
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Ping Extensions…
+- invoked: Invoked Ping Extensions.
+
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7844,7 +9688,22 @@ Example invocation:
 
 ## pr_smoke_test
 
-Pr Smoke Test. Signature: pr_smoke_test(full_name: Optional[str] = None, base_branch: Optional[str] = None, draft: bool = True) -> Dict[str, Any].
+Pr Smoke Test. Signature: pr_smoke_test(full_name: Optional[str] = None, base_branch: Optional[str] = None, draft: bool = True) -> Dict[str, Any].  Schema: base_branch:any, draft:boolean=True, full_name:any
+
+Invoking Pr Smoke Test…
+Invoked Pr Smoke Test.
+
+Tool metadata:
+- name: pr_smoke_test
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Pr Smoke Test…
+- invoked: Invoked Pr Smoke Test.
 
 Parameters:
 - base_branch (string | null; optional)
@@ -7853,8 +9712,13 @@ Parameters:
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -7920,7 +9784,23 @@ Example invocation:
 
 ## recent_prs_for_branch
 
-Return recent pull requests associated with a branch, grouped by state.
+Return recent pull requests associated with a branch, grouped by state.  Schema: branch*:string, full_name*:string, include_closed:boolean=False, per_page_closed:integer=5, per_page_open:integer=20
+
+Invoking Recent Prs For Branch…
+Invoked Recent Prs For Branch.
+
+Tool metadata:
+- name: recent_prs_for_branch
+- visibility: public
+- write_action: false
+- write_allowed: true
+- tags: github, navigation, prs, read
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Recent Prs For Branch…
+- invoked: Invoked Recent Prs For Branch.
 
 Parameters:
 - branch (string; required)
@@ -7933,8 +9813,13 @@ Parameters:
 - per_page_closed (integer; optional, default=5)
 - per_page_open (integer; optional, default=20)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8003,7 +9888,22 @@ Example invocation:
 
 ## render_cancel_deploy
 
-Render Cancel Deploy. Signature: render_cancel_deploy(service_id: str, deploy_id: str) -> Dict[str, Any].
+Render Cancel Deploy. Signature: render_cancel_deploy(service_id: str, deploy_id: str) -> Dict[str, Any].  Schema: deploy_id*:string, service_id*:string
+
+Invoking Cancel Deploy…
+Invoked Cancel Deploy.
+
+Tool metadata:
+- name: render_cancel_deploy
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🛑
+- invoking: Invoking Cancel Deploy…
+- invoked: Invoked Cancel Deploy.
 
 Parameters:
 - deploy_id (string; required)
@@ -8011,8 +9911,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8059,7 +9964,22 @@ Example invocation:
 
 ## render_create_deploy
 
-Render Create Deploy. Signature: render_create_deploy(service_id: str, clear_cache: bool = False, commit_id: Optional[str] = None, image_url: Optional[str] = None) -> Dict[str, Any].
+Render Create Deploy. Signature: render_create_deploy(service_id: str, clear_cache: bool = False, commit_id: Optional[str] = None, image_url: Optional[str] = None) -> Dict[str, Any].  Schema: clear_cache:boolean=False, commit_id:any, image_url:any, service_id*:string
+
+Invoking Create Deploy…
+Invoked Create Deploy.
+
+Tool metadata:
+- name: render_create_deploy
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🚀
+- invoking: Invoking Create Deploy…
+- invoked: Invoked Create Deploy.
 
 Parameters:
 - clear_cache (boolean; optional, default=False)
@@ -8072,8 +9992,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8150,13 +10075,33 @@ Example invocation:
 
 ## render_create_service
 
-Render Create Service. Signature: render_create_service(service_spec: Dict[str, Any]) -> Dict[str, Any].
+Render Create Service. Signature: render_create_service(service_spec: Dict[str, Any]) -> Dict[str, Any].  Schema: service_spec*:object
+
+Invoking Create Service…
+Invoked Create Service.
+
+Tool metadata:
+- name: render_create_service
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🧱
+- invoking: Invoking Create Service…
+- invoked: Invoked Create Service.
 
 Parameters:
 - service_spec (object; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8197,7 +10142,22 @@ Example invocation:
 
 ## render_get_deploy
 
-Render Get Deploy. Signature: render_get_deploy(service_id: str, deploy_id: str) -> Dict[str, Any].
+Render Get Deploy. Signature: render_get_deploy(service_id: str, deploy_id: str) -> Dict[str, Any].  Schema: deploy_id*:string, service_id*:string
+
+Invoking Get Deploy…
+Invoked Get Deploy.
+
+Tool metadata:
+- name: render_get_deploy
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🟦
+- invoking: Invoking Get Deploy…
+- invoked: Invoked Get Deploy.
 
 Parameters:
 - deploy_id (string; required)
@@ -8205,8 +10165,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8253,7 +10218,22 @@ Example invocation:
 
 ## render_get_logs
 
-Render Get Logs. Signature: render_get_logs(resource_type: str, resource_id: str, start_time: Optional[str] = None, end_time: Optional[str] = None, limit: int = 200) -> Dict[str, Any].
+Render Get Logs. Signature: render_get_logs(resource_type: str, resource_id: str, start_time: Optional[str] = None, end_time: Optional[str] = None, limit: int = 200) -> Dict[str, Any].  Schema: end_time:any, limit:integer=200, resource_id*:string, resource_type*:string, start_time:any
+
+Invoking Get Logs…
+Invoked Get Logs.
+
+Tool metadata:
+- name: render_get_logs
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 📜
+- invoking: Invoking Get Logs…
+- invoked: Invoked Get Logs.
 
 Parameters:
 - end_time (string | null; optional)
@@ -8271,8 +10251,13 @@ Parameters:
   Optional ISO8601 timestamp for the start of a log query window.
   Examples: '2026-01-14T12:34:56Z'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8366,14 +10351,34 @@ Example invocation:
 
 ## render_get_service
 
-Render Get Service. Signature: render_get_service(service_id: str) -> Dict[str, Any].
+Render Get Service. Signature: render_get_service(service_id: str) -> Dict[str, Any].  Schema: service_id*:string
+
+Invoking Get Service…
+Invoked Get Service.
+
+Tool metadata:
+- name: render_get_service
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🟦
+- invoking: Invoking Get Service…
+- invoked: Invoked Get Service.
 
 Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8414,7 +10419,22 @@ Example invocation:
 
 ## render_list_deploys
 
-Render List Deploys. Signature: render_list_deploys(service_id: str, cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any].
+Render List Deploys. Signature: render_list_deploys(service_id: str, cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any].  Schema: cursor:any, limit:integer=20, service_id*:string
+
+Invoking List Deploys…
+Invoked List Deploys.
+
+Tool metadata:
+- name: render_list_deploys
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🟦
+- invoking: Invoking List Deploys…
+- invoked: Invoked List Deploys.
 
 Parameters:
 - cursor (string | null; optional)
@@ -8425,8 +10445,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8491,7 +10516,22 @@ Example invocation:
 
 ## render_list_logs
 
-Render List Logs. Signature: render_list_logs(owner_id: str, resources: List[str], start_time: Optional[str] = None, end_time: Optional[str] = None, direction: str = 'backward', limit: int = 200, instance: Optional[str] = None, host: Optional[str] = None, level: Optional[str] = None, method: Optional[str] = None, status_code: Optional[int] = None, path: Optional[str] = None, text: Optional[str] = None, log_type: Optional[str] = None) -> Dict[str, Any].
+Render List Logs. Signature: render_list_logs(owner_id: str, resources: List[str], start_time: Optional[str] = None, end_time: Optional[str] = None, direction: str = 'backward', limit: int = 200, instance: Optional[str] = None, host: Optional[str] = None, level: Optional[str] = None, method: Optional[str] = None, status_code: Optional[int] = None, path: Optional[str] = None, text: Optional[str] = None, log_type: Optional[str] = None) -> Dict[str, Any].  Schema: direction:string=backward, end_time:any, host:any, instance:any, level:any, limit:integer=200, log_type:any, method:any, +6 more
+
+Invoking List Logs…
+Invoked List Logs.
+
+Tool metadata:
+- name: render_list_logs
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 📜
+- invoking: Invoking List Logs…
+- invoked: Invoked List Logs.
 
 Parameters:
 - direction (string; optional, default='backward')
@@ -8518,8 +10558,13 @@ Parameters:
 - status_code (integer | null; optional)
 - text (string | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8717,7 +10762,22 @@ Example invocation:
 
 ## render_list_owners
 
-Render List Owners. Signature: render_list_owners(cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any].
+Render List Owners. Signature: render_list_owners(cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any].  Schema: cursor:any, limit:integer=20
+
+Invoking List Owners…
+Invoked List Owners.
+
+Tool metadata:
+- name: render_list_owners
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🟦
+- invoking: Invoking List Owners…
+- invoked: Invoked List Owners.
 
 Parameters:
 - cursor (string | null; optional)
@@ -8726,8 +10786,13 @@ Parameters:
   Maximum number of results to return.
   Examples: 20, 50, 200
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8784,7 +10849,22 @@ Example invocation:
 
 ## render_list_services
 
-Render List Services. Signature: render_list_services(owner_id: Optional[str] = None, cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any].
+Render List Services. Signature: render_list_services(owner_id: Optional[str] = None, cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any].  Schema: cursor:any, limit:integer=20, owner_id:any
+
+Invoking List Services…
+Invoked List Services.
+
+Tool metadata:
+- name: render_list_services
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🟦
+- invoking: Invoking List Services…
+- invoked: Invoked List Services.
 
 Parameters:
 - cursor (string | null; optional)
@@ -8795,8 +10875,13 @@ Parameters:
 - owner_id (string | null; optional)
   Render owner id (workspace or personal owner). Use list_render_owners to discover values.
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8866,14 +10951,34 @@ Example invocation:
 
 ## render_restart_service
 
-Render Restart Service. Signature: render_restart_service(service_id: str) -> Dict[str, Any].
+Render Restart Service. Signature: render_restart_service(service_id: str) -> Dict[str, Any].  Schema: service_id*:string
+
+Invoking Restart Service…
+Invoked Restart Service.
+
+Tool metadata:
+- name: render_restart_service
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🔁
+- invoking: Invoking Restart Service…
+- invoked: Invoked Restart Service.
 
 Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8914,7 +11019,22 @@ Example invocation:
 
 ## render_rollback_deploy
 
-Render Rollback Deploy. Signature: render_rollback_deploy(service_id: str, deploy_id: str) -> Dict[str, Any].
+Render Rollback Deploy. Signature: render_rollback_deploy(service_id: str, deploy_id: str) -> Dict[str, Any].  Schema: deploy_id*:string, service_id*:string
+
+Invoking Rollback Deploy…
+Invoked Rollback Deploy.
+
+Tool metadata:
+- name: render_rollback_deploy
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: ⏪
+- invoking: Invoking Rollback Deploy…
+- invoked: Invoked Rollback Deploy.
 
 Parameters:
 - deploy_id (string; required)
@@ -8922,8 +11042,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -8970,13 +11095,28 @@ Example invocation:
 
 ## render_shell
 
-Render-focused shell entry point for interacting with GitHub workspaces.
+Render-focused shell entry point for interacting with GitHub workspaces.  Schema: command:string=echo hello Render, command_lines:any, create_branch:any, full_name*:string, installing_dependencies:boolean=False, push_new_branch:boolean=True, ref:string=main, timeout_seconds:number=300, +2 more
 
 This helper mirrors the Render deployment model by operating through the
 server-side repo mirror. It ensures the repo mirror exists
 for the default branch (or a provided ref), optionally creates a fresh
 branch from that ref, and then executes the supplied shell command inside
 the repo mirror.
+
+Invoking Render Shell…
+Invoked Render Shell.
+
+Tool metadata:
+- name: render_shell
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: render
+- icon: 🟦
+- invoking: Invoking Render Shell…
+- invoked: Invoked Render Shell.
 
 Parameters:
 - command (string; optional, default='echo hello Render')
@@ -9001,8 +11141,13 @@ Parameters:
   Working directory to run the command from. If relative, it is resolved within the repo mirror.
   Examples: '', 'src'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -9138,10 +11283,25 @@ Example invocation:
 
 ## replace_workspace_text
 
-Replace text in a workspace file (single word/character or substring).
+Replace text in a workspace file (single word/character or substring).  Schema: create_parents:boolean=True, full_name*:string, new:string=, occurrence:integer=1, old:string=, path:string=, ref:string=main, replace_all:boolean=False
 
 By default, replaces the Nth occurrence (1-indexed). Use replace_all=true
 to replace all occurrences.
+
+Invoking Replace Workspace Text…
+Invoked Replace Workspace Text.
+
+Tool metadata:
+- name: replace_workspace_text
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Replace Workspace Text…
+- invoked: Invoked Replace Workspace Text.
 
 Parameters:
 - create_parents (boolean; optional, default=True)
@@ -9159,8 +11319,13 @@ Parameters:
   Examples: 'main', 'develop', 'feature/my-branch'
 - replace_all (boolean; optional, default=False)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -9250,7 +11415,22 @@ Example invocation:
 
 ## resolve_handle
 
-Resolve Handle. Signature: resolve_handle(full_name: str, handle: str) -> Dict[str, Any].
+Resolve Handle. Signature: resolve_handle(full_name: str, handle: str) -> Dict[str, Any].  Schema: full_name*:string, handle*:string
+
+Invoking Resolve Handle…
+Invoked Resolve Handle.
+
+Tool metadata:
+- name: resolve_handle
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Resolve Handle…
+- invoked: Invoked Resolve Handle.
 
 Parameters:
 - full_name (string; required)
@@ -9258,8 +11438,13 @@ Parameters:
   Examples: 'octocat/Hello-World'
 - handle (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -9308,14 +11493,34 @@ Example invocation:
 
 ## restart_render_service
 
-Restart a Render service.
+Restart a Render service.  Schema: service_id*:string
+
+Invoking Restart Render Service…
+Invoked Restart Render Service.
+
+Tool metadata:
+- name: restart_render_service
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Restart Render Service…
+- invoked: Invoked Restart Render Service.
 
 Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -9356,7 +11561,22 @@ Example invocation:
 
 ## rollback_render_deploy
 
-Roll back a service to the specified deploy.
+Roll back a service to the specified deploy.  Schema: deploy_id*:string, service_id*:string
+
+Invoking Rollback Render Deploy…
+Invoked Rollback Render Deploy.
+
+Tool metadata:
+- name: rollback_render_deploy
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Rollback Render Deploy…
+- invoked: Invoked Rollback Render Deploy.
 
 Parameters:
 - deploy_id (string; required)
@@ -9364,8 +11584,13 @@ Parameters:
 - service_id (string; required)
   Render service id (example: srv-...).
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -9412,9 +11637,24 @@ Example invocation:
 
 ## run_command
 
-Backward-compatible alias for :func:`terminal_command`.
+Backward-compatible alias for :func:`terminal_command`.  Schema: command:string=pytest, command_lines:any, full_name*:string, installing_dependencies:boolean=False, ref:string=main, timeout_seconds:number=300, use_temp_venv:boolean=True, workdir:any
 
 This exists for older MCP clients that still invoke `run_command`.
+
+Invoking Run Command…
+Invoked Run Command.
+
+Tool metadata:
+- name: run_command
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Run Command…
+- invoked: Invoked Run Command.
 
 Parameters:
 - command (string; optional, default='pytest')
@@ -9437,8 +11677,13 @@ Parameters:
   Working directory to run the command from. If relative, it is resolved within the repo mirror.
   Examples: '', 'src'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -9557,7 +11802,22 @@ Example invocation:
 
 ## run_lint_suite
 
-Run Lint Suite. Signature: run_lint_suite(full_name: 'str', ref: 'str' = 'main', lint_command: 'str' = 'ruff check .', timeout_seconds: 'float' = 600, workdir: 'Optional[str]' = None, use_temp_venv: 'bool' = False, installing_dependencies: 'bool' = False) -> 'Dict[str, Any]'.
+Run Lint Suite. Signature: run_lint_suite(full_name: 'str', ref: 'str' = 'main', lint_command: 'str' = 'ruff check .', timeout_seconds: 'float' = 600, workdir: 'Optional[str]' = None, use_temp_venv: 'bool' = False, installing_dependencies: 'bool' = False) -> 'Dict[str, Any]'.  Schema: full_name*:any, installing_dependencies:any=False, lint_command:any=ruff check ., ref:any=main, timeout_seconds:any=600, use_temp_venv:any=False, workdir:any
+
+Invoking Run Lint Suite…
+Invoked Run Lint Suite.
+
+Tool metadata:
+- name: run_lint_suite
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Run Lint Suite…
+- invoked: Invoked Run Lint Suite.
 
 Parameters:
 - full_name (unknown; required)
@@ -9576,8 +11836,13 @@ Parameters:
   Working directory to run the command from. If relative, it is resolved within the repo mirror.
   Examples: '', 'src'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -9661,10 +11926,25 @@ Example invocation:
 
 ## run_python
 
-Run an inline Python script inside the repo mirror.
+Run an inline Python script inside the repo mirror.  Schema: args:any, cleanup:boolean=True, filename:any, full_name*:string, installing_dependencies:boolean=False, ref:string=main, script:string=, timeout_seconds:number=300, +2 more
 
 The script content is written to a file within the workspace mirror and executed.
 The tool exists to support multi-line scripts without relying on shell-special syntax.
+
+Invoking Run Python…
+Invoked Run Python.
+
+Tool metadata:
+- name: run_python
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🐍
+- invoking: Invoking Run Python…
+- invoked: Invoked Run Python.
 
 Parameters:
 - args (array | null; optional)
@@ -9686,8 +11966,13 @@ Parameters:
   Working directory to run the command from. If relative, it is resolved within the repo mirror.
   Examples: '', 'src'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -9817,7 +12102,22 @@ Example invocation:
 
 ## run_quality_suite
 
-Run Quality Suite. Signature: run_quality_suite(full_name: 'str', ref: 'str' = 'main', test_command: 'str' = 'pytest -q', timeout_seconds: 'float' = 600, workdir: 'Optional[str]' = None, use_temp_venv: 'bool' = True, installing_dependencies: 'bool' = True, lint_command: 'str' = 'ruff check .', format_command: 'Optional[str]' = None, typecheck_command: 'Optional[str]' = None, security_command: 'Optional[str]' = None, preflight: 'bool' = True, fail_fast: 'bool' = True, include_raw_step_outputs: 'bool' = False, *, developer_defaults: 'bool' = True, auto_fix: 'bool' = False, gate_optional_steps: 'bool' = False) -> 'Dict[str, Any]'.
+Run Quality Suite. Signature: run_quality_suite(full_name: 'str', ref: 'str' = 'main', test_command: 'str' = 'pytest -q', timeout_seconds: 'float' = 600, workdir: 'Optional[str]' = None, use_temp_venv: 'bool' = True, installing_dependencies: 'bool' = True, lint_command: 'str' = 'ruff check .', format_command: 'Optional[str]' = None, typecheck_command: 'Optional[str]' = None, security_command: 'Optional[str]' = None, preflight: 'bool' = True, fail_fast: 'bool' = True, include_raw_step_outputs: 'bool' = False, *, developer_defaults: 'bool' = True, auto_fix: 'bool' = False, gate_optional_steps: 'bool' = False) -> 'Dict[str, Any]'.  Schema: auto_fix:any=False, developer_defaults:any=True, fail_fast:any=True, format_command:any, full_name*:any, gate_optional_steps:any=False, include_raw_step_outputs:any=False, installing_dependencies:any=True, +9 more
+
+Invoking Run Quality Suite…
+Invoked Run Quality Suite.
+
+Tool metadata:
+- name: run_quality_suite
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Run Quality Suite…
+- invoked: Invoked Run Quality Suite.
 
 Parameters:
 - auto_fix (unknown; optional, default=False)
@@ -9846,8 +12146,13 @@ Parameters:
   Working directory to run the command from. If relative, it is resolved within the repo mirror.
   Examples: '', 'src'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -9971,9 +12276,24 @@ Example invocation:
 
 ## run_shell
 
-Backward-compatible alias for :func:`terminal_command`.
+Backward-compatible alias for :func:`terminal_command`.  Schema: command:string=pytest, command_lines:any, full_name*:string, installing_dependencies:boolean=False, ref:string=main, timeout_seconds:number=300, use_temp_venv:boolean=True, workdir:any
 
 Some integrations refer to the workspace command runner as `run_shell`.
+
+Invoking Run Shell…
+Invoked Run Shell.
+
+Tool metadata:
+- name: run_shell
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Run Shell…
+- invoked: Invoked Run Shell.
 
 Parameters:
 - command (string; optional, default='pytest')
@@ -9996,8 +12316,13 @@ Parameters:
   Working directory to run the command from. If relative, it is resolved within the repo mirror.
   Examples: '', 'src'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -10116,9 +12441,24 @@ Example invocation:
 
 ## run_terminal_commands
 
-Backward-compatible alias for :func:`terminal_command`.
+Backward-compatible alias for :func:`terminal_command`.  Schema: command:string=pytest, command_lines:any, full_name*:string, installing_dependencies:boolean=False, ref:string=main, timeout_seconds:number=300, use_temp_venv:boolean=True, workdir:any
 
 This name appears in some older controller-side tool catalogs.
+
+Invoking Run Terminal Commands…
+Invoked Run Terminal Commands.
+
+Tool metadata:
+- name: run_terminal_commands
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Run Terminal Commands…
+- invoked: Invoked Run Terminal Commands.
 
 Parameters:
 - command (string; optional, default='pytest')
@@ -10141,8 +12481,13 @@ Parameters:
   Working directory to run the command from. If relative, it is resolved within the repo mirror.
   Examples: '', 'src'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -10261,7 +12606,22 @@ Example invocation:
 
 ## run_tests
 
-Run Tests. Signature: run_tests(full_name: 'str', ref: 'str' = 'main', test_command: 'str' = 'pytest', timeout_seconds: 'float' = 600, workdir: 'Optional[str]' = None, use_temp_venv: 'bool' = False, installing_dependencies: 'bool' = False) -> 'Dict[str, Any]'.
+Run Tests. Signature: run_tests(full_name: 'str', ref: 'str' = 'main', test_command: 'str' = 'pytest', timeout_seconds: 'float' = 600, workdir: 'Optional[str]' = None, use_temp_venv: 'bool' = False, installing_dependencies: 'bool' = False) -> 'Dict[str, Any]'.  Schema: full_name*:any, installing_dependencies:any=False, ref:any=main, test_command:any=pytest, timeout_seconds:any=600, use_temp_venv:any=False, workdir:any
+
+Invoking Run Tests…
+Invoked Run Tests.
+
+Tool metadata:
+- name: run_tests
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Run Tests…
+- invoked: Invoked Run Tests.
 
 Parameters:
 - full_name (unknown; required)
@@ -10280,8 +12640,13 @@ Parameters:
   Working directory to run the command from. If relative, it is resolved within the repo mirror.
   Examples: '', 'src'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -10365,7 +12730,22 @@ Example invocation:
 
 ## search
 
-Search. Signature: search(query: str, search_type: Literal['code', 'repositories', 'issues', 'commits', 'users'] = 'code', per_page: int = 30, page: int = 1, sort: Optional[str] = None, order: Optional[Literal['asc', 'desc']] = None) -> Dict[str, Any].
+Search. Signature: search(query: str, search_type: Literal['code', 'repositories', 'issues', 'commits', 'users'] = 'code', per_page: int = 30, page: int = 1, sort: Optional[str] = None, order: Optional[Literal['asc', 'desc']] = None) -> Dict[str, Any].  Schema: order:any, page:integer=1, per_page:integer=30, query*:string, search_type:string=code, sort:any
+
+Invoking Search…
+Invoked Search.
+
+Tool metadata:
+- name: search
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Search…
+- invoked: Invoked Search.
 
 Parameters:
 - order (string | null; optional)
@@ -10381,8 +12761,13 @@ Parameters:
 - search_type (string; optional, default='code')
 - sort (string | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -10488,13 +12873,28 @@ Example invocation:
 
 ## search_workspace
 
-Search text files in the repo mirror (workspace clone) (bounded, no shell).
+Search text files in the repo mirror (workspace clone) (bounded, no shell).  Schema: case_sensitive:boolean=False, full_name:any, include_hidden:boolean=False, max_file_bytes:any, max_results:any, path:string=, query:string=, ref:string=main, +1 more
 
 Behavior for `query`:
 - When regex=true, `query` is treated as a Python regular expression.
 - Otherwise `query` is treated as a literal substring match.
 - Results can be bounded via max_results and files can be bounded via
   max_file_bytes to keep searches responsive on large repositories.
+
+Invoking Search Workspace…
+Invoked Search Workspace.
+
+Tool metadata:
+- name: search_workspace
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Search Workspace…
+- invoked: Invoked Search Workspace.
 
 Parameters:
 - case_sensitive (boolean; optional, default=False)
@@ -10515,8 +12915,13 @@ Parameters:
   Examples: 'main', 'develop', 'feature/my-branch'
 - regex (boolean | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -10643,10 +13048,25 @@ Example invocation:
 
 ## set_workspace_file_contents
 
-Replace a workspace file's contents by writing the full file text.
+Replace a workspace file's contents by writing the full file text.  Schema: content:string=, create_parents:boolean=True, full_name*:string, path:string=, ref:string=main
 
 This is a good fit for repo-mirror edits when you want to replace the full
 contents of a file without relying on unified-diff patch application.
+
+Invoking Set Workspace File Contents…
+Invoked Set Workspace File Contents.
+
+Tool metadata:
+- name: set_workspace_file_contents
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Set Workspace File Contents…
+- invoked: Invoked Set Workspace File Contents.
 
 Parameters:
 - content (string; optional, default='')
@@ -10661,8 +13081,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -10737,7 +13162,7 @@ Example invocation:
 
 ## terminal_command
 
-Run a shell command inside the repo mirror and return its result.
+Run a shell command inside the repo mirror and return its result.  Schema: command:string=pytest, command_lines:any, full_name*:string, installing_dependencies:boolean=False, ref:string=main, timeout_seconds:number=300, use_temp_venv:boolean=True, workdir:any
 
 This supports tests, linters, and project scripts that need the real working
 tree.
@@ -10754,6 +13179,21 @@ Execution model:
 
 The repo mirror persists across calls so file edits and git state are
 preserved until explicitly reset.
+
+Invoking Terminal Command…
+Invoked Terminal Command.
+
+Tool metadata:
+- name: terminal_command
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🖥️
+- invoking: Invoking Terminal Command…
+- invoked: Invoked Terminal Command.
 
 Parameters:
 - command (string; optional, default='pytest')
@@ -10776,8 +13216,13 @@ Parameters:
   Working directory to run the command from. If relative, it is resolved within the repo mirror.
   Examples: '', 'src'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -10896,7 +13341,22 @@ Example invocation:
 
 ## trigger_and_wait_for_workflow
 
-Trigger a workflow and block until it completes or hits timeout.
+Trigger a workflow and block until it completes or hits timeout.  Schema: full_name*:string, inputs:any, poll_interval_seconds:integer=10, ref*:string, timeout_seconds:integer=900, workflow*:string
+
+Invoking Trigger And Wait For Workflow…
+Invoked Trigger And Wait For Workflow.
+
+Tool metadata:
+- name: trigger_and_wait_for_workflow
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Trigger And Wait For Workflow…
+- invoked: Invoked Trigger And Wait For Workflow.
 
 Parameters:
 - full_name (string; required)
@@ -10912,8 +13372,13 @@ Parameters:
   Examples: 60, 300, 600
 - workflow (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11002,13 +13467,28 @@ Example invocation:
 
 ## trigger_workflow_dispatch
 
-Trigger a workflow dispatch event on the given ref.
+Trigger a workflow dispatch event on the given ref.  Schema: full_name*:string, inputs:any, ref*:string, workflow*:string
 
 Args:
 full_name: "owner/repo" string.
 workflow: Workflow file name or ID (e.g. "ci.yml" or a numeric ID).
 ref: Git ref (branch, tag, or SHA) to run the workflow on.
 inputs: Optional input payload for workflows that declare inputs.
+
+Invoking Trigger Workflow Dispatch…
+Invoked Trigger Workflow Dispatch.
+
+Tool metadata:
+- name: trigger_workflow_dispatch
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Trigger Workflow Dispatch…
+- invoked: Invoked Trigger Workflow Dispatch.
 
 Parameters:
 - full_name (string; required)
@@ -11020,8 +13500,13 @@ Parameters:
   Examples: 'main', 'develop', 'feature/my-branch'
 - workflow (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11094,7 +13579,23 @@ Example invocation:
 
 ## update_file_from_workspace
 
-Update a single file in a GitHub repository from the persistent workspace checkout. This is commonly paired with workspace editing tools (for example, terminal_command) to modify a file and later write it back to the branch.
+Update a single file in a GitHub repository from the persistent workspace checkout. This pairs with workspace editing tools (for example, terminal_command) to modify a file and then write it back to the branch.  Schema: branch*:any, full_name*:any, message*:any, target_path*:any, workspace_path*:any
+
+Invoking Update File From Workspace…
+Invoked Update File From Workspace.
+
+Tool metadata:
+- name: update_file_from_workspace
+- visibility: public
+- write_action: true
+- write_allowed: true
+- tags: files, github, write
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Update File From Workspace…
+- invoked: Invoked Update File From Workspace.
 
 Parameters:
 - branch (unknown; required)
@@ -11109,8 +13610,13 @@ Parameters:
 - target_path (unknown; required)
 - workspace_path (unknown; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11178,7 +13684,22 @@ Example invocation:
 
 ## update_files_and_open_pr
 
-Commit multiple files, verify each, then open a PR in one call.
+Commit multiple files, verify each, then open a PR in one call.  Schema: base_branch:string=main, body:any, draft:boolean=False, files*:array, full_name*:string, new_branch:any, title*:string
+
+Invoking Update Files And Open Pr…
+Invoked Update Files And Open Pr.
+
+Tool metadata:
+- name: update_files_and_open_pr
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Update Files And Open Pr…
+- invoked: Invoked Update Files And Open Pr.
 
 Parameters:
 - base_branch (string; optional, default='main')
@@ -11193,8 +13714,13 @@ Parameters:
   Examples: 'simplify-tool-schemas'
 - title (string; required)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11290,7 +13816,22 @@ Example invocation:
 
 ## update_issue
 
-Update fields on an existing GitHub issue.
+Update fields on an existing GitHub issue.  Schema: assignees:any, body:any, full_name*:string, issue_number*:integer, labels:any, state:any, title:any
+
+Invoking Update Issue…
+Invoked Update Issue.
+
+Tool metadata:
+- name: update_issue
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Update Issue…
+- invoked: Invoked Update Issue.
 
 Parameters:
 - assignees (array | null; optional)
@@ -11303,8 +13844,13 @@ Parameters:
 - state (string | null; optional)
 - title (string | null; optional)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11425,8 +13971,28 @@ Example invocation:
 
 Check GitHub-related environment settings and report problems.
 
+Invoking Validate Environment…
+Invoked Validate Environment.
+
+Tool metadata:
+- name: validate_environment
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Validate Environment…
+- invoked: Invoked Validate Environment.
+
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11458,7 +14024,22 @@ Example invocation:
 
 ## wait_for_workflow_run
 
-Poll a workflow run until completion or timeout.
+Poll a workflow run until completion or timeout.  Schema: full_name*:string, poll_interval_seconds:integer=10, run_id*:integer, timeout_seconds:integer=900
+
+Invoking Wait For Workflow Run…
+Invoked Wait For Workflow Run.
+
+Tool metadata:
+- name: wait_for_workflow_run
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: github
+- icon: 🔧
+- invoking: Invoking Wait For Workflow Run…
+- invoked: Invoked Wait For Workflow Run.
 
 Parameters:
 - full_name (string; required)
@@ -11470,8 +14051,13 @@ Parameters:
   Timeout for the operation in seconds.
   Examples: 60, 300, 600
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11536,9 +14122,24 @@ Example invocation:
 
 ## workspace_create_branch
 
-Create a branch using the repo mirror (workspace clone), optionally pushing to origin.
+Create a branch using the repo mirror (workspace clone), optionally pushing to origin.  Schema: base_ref:string=main, full_name*:string, new_branch:string=, push:boolean=True
 
 This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
+
+Invoking Workspace Create Branch…
+Invoked Workspace Create Branch.
+
+Tool metadata:
+- name: workspace_create_branch
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🧩
+- invoking: Invoking Workspace Create Branch…
+- invoked: Invoked Workspace Create Branch.
 
 Parameters:
 - base_ref (string; optional, default='main')
@@ -11552,8 +14153,13 @@ Parameters:
   Examples: 'simplify-tool-schemas'
 - push (boolean; optional, default=True)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11620,10 +14226,25 @@ Example invocation:
 
 ## workspace_delete_branch
 
-Delete a non-default branch using the repo mirror (workspace clone).
+Delete a non-default branch using the repo mirror (workspace clone).  Schema: branch:string=, full_name*:string
 
 This is the workspace counterpart to branch-creation helpers and is intended
 for closing out ephemeral feature branches once their work has been merged.
+
+Invoking Workspace Delete Branch…
+Invoked Workspace Delete Branch.
+
+Tool metadata:
+- name: workspace_delete_branch
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🧩
+- invoking: Invoking Workspace Delete Branch…
+- invoked: Invoked Workspace Delete Branch.
 
 Parameters:
 - branch (string; optional, default='')
@@ -11633,8 +14254,13 @@ Parameters:
   GitHub repository in 'owner/repo' format. If omitted, defaults to the server's controller repository.
   Examples: 'octocat/Hello-World'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11688,7 +14314,7 @@ Example invocation:
 
 ## workspace_self_heal_branch
 
-Detect a mangled repo mirror branch and recover to a fresh branch.
+Detect a mangled repo mirror branch and recover to a fresh branch.  Schema: base_ref:string=main, branch:string=, delete_mangled_branch:boolean=True, discard_uncommitted_changes:boolean=True, dry_run:boolean=False, enumerate_repo:boolean=True, full_name*:string, new_branch:any, +1 more
 
 This tool targets cases where a repo mirror (workspace clone) becomes inconsistent (wrong
 branch checked out, merge/rebase state, conflicts, etc.). When healing, it:
@@ -11701,6 +14327,21 @@ branch checked out, merge/rebase state, conflicts, etc.). When healing, it:
 6) Optionally returns a small repo snapshot to rebuild context.
 
 Returns plain-language step logs for UI rendering.
+
+Invoking Workspace Self Heal Branch…
+Invoked Workspace Self Heal Branch.
+
+Tool metadata:
+- name: workspace_self_heal_branch
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🧩
+- invoking: Invoking Workspace Self Heal Branch…
+- invoked: Invoked Workspace Self Heal Branch.
 
 Parameters:
 - base_ref (string; optional, default='main')
@@ -11721,8 +14362,13 @@ Parameters:
   Examples: 'simplify-tool-schemas'
 - reset_base (boolean; optional, default=True)
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11826,7 +14472,22 @@ Example invocation:
 
 ## workspace_sync_bidirectional
 
-Sync repo mirror changes to the remote and refresh local state from GitHub.
+Sync repo mirror changes to the remote and refresh local state from GitHub.  Schema: add_all:boolean=True, commit_message:string=Sync workspace changes, discard_local_changes:boolean=False, full_name*:string, push:boolean=True, ref:string=main
+
+Invoking Workspace Sync Bidirectional…
+Invoked Workspace Sync Bidirectional.
+
+Tool metadata:
+- name: workspace_sync_bidirectional
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🧩
+- invoking: Invoking Workspace Sync Bidirectional…
+- invoked: Invoked Workspace Sync Bidirectional.
 
 Parameters:
 - add_all (boolean; optional, default=True)
@@ -11840,8 +14501,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11916,7 +14582,22 @@ Example invocation:
 
 ## workspace_sync_status
 
-Report how a repo mirror (workspace clone) differs from its remote branch.
+Report how a repo mirror (workspace clone) differs from its remote branch.  Schema: full_name*:string, ref:string=main
+
+Invoking Workspace Sync Status…
+Invoked Workspace Sync Status.
+
+Tool metadata:
+- name: workspace_sync_status
+- visibility: public
+- write_action: false
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🧩
+- invoking: Invoking Workspace Sync Status…
+- invoked: Invoked Workspace Sync Status.
 
 Parameters:
 - full_name (string; required)
@@ -11926,8 +14607,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
@@ -11982,7 +14668,22 @@ Example invocation:
 
 ## workspace_sync_to_remote
 
-Reset a repo mirror (workspace clone) to match the remote branch.
+Reset a repo mirror (workspace clone) to match the remote branch.  Schema: discard_local_changes:boolean=False, full_name*:string, ref:string=main
+
+Invoking Workspace Sync To Remote…
+Invoked Workspace Sync To Remote.
+
+Tool metadata:
+- name: workspace_sync_to_remote
+- visibility: public
+- write_action: true
+- write_allowed: true
+
+UI hints (optional):
+- group: workspace
+- icon: 🧩
+- invoking: Invoking Workspace Sync To Remote…
+- invoked: Invoked Workspace Sync To Remote.
 
 Parameters:
 - discard_local_changes (boolean; optional, default=False)
@@ -11993,8 +14694,13 @@ Parameters:
   Git ref to operate on. Typically a branch name, but may also be a tag or commit SHA. Defaults to 'main' when available.
   Examples: 'main', 'develop', 'feature/my-branch'
 
+Runtime notes:
+  - Tool calls are logged with a per-invocation call_id and may include a schema hash.
+  - Internal log-only keys prefixed with '__log_' are filtered from client responses.
+  - In ChatGPT-oriented response modes, results may be normalized to include ok/status/summary.
+
 Returns:
-  A JSON-serializable value defined by the tool.
+  A JSON-serializable value defined by the tool implementation.
 
 Metadata:
 - visibility: public
