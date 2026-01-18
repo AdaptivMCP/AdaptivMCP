@@ -159,9 +159,9 @@ async def _run_shell(
             # diagnostic string in stderr so callers can surface meaningful context.
             stdout_bytes = b""
             try:
-                stderr_bytes = (f"Failed to collect process output after timeout: {exc.__class__.__name__}: {exc}\n").encode(
-                    "utf-8", errors="replace"
-                )
+                stderr_bytes = (
+                    f"Failed to collect process output after timeout: {exc.__class__.__name__}: {exc}\n"
+                ).encode("utf-8", errors="replace")
             except Exception:
                 stderr_bytes = b"Failed to collect process output after timeout.\n"
 

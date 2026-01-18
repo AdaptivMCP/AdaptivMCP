@@ -38,4 +38,3 @@ def test_chatgpt_friendly_result_surfaces_stdout_and_stderr(monkeypatch):
     # Should include ANSI escape sequences.
     assert "\x1b[" in sc
     assert "\x1b[" in ec
-

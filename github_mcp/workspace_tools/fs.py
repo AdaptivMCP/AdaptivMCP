@@ -96,6 +96,8 @@ def _looks_like_diff(text: str) -> bool:
         or "--- " in sample
         or "@@ " in sample
     )
+
+
 def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
         raise ValueError("path must be a non-empty string")

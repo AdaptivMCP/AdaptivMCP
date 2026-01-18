@@ -38,4 +38,3 @@ def test_session_anchor_and_assert_routes_roundtrip():
     bad = client.get("/session/assert?anchor=deadbeef")
     assert bad.status_code == 409
     assert bad.json()["status"] == "anchor_mismatch"
-

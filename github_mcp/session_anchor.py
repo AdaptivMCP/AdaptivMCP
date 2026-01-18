@@ -98,4 +98,3 @@ def normalize_anchor(value: object) -> Optional[str]:
         return None
     raw = str(value).strip()
     return raw or None
-

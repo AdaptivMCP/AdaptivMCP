@@ -3,7 +3,7 @@
 This document describes the current architecture and safety posture of the
 Adaptiv MCP server.
 
-The code is the source of truth. If anything in this document diverges from
+Runtime behavior is governed by the code. If anything in this document diverges from
 runtime behavior, update the document.
 
 ## High-level architecture

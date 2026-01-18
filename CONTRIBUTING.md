@@ -2,7 +2,7 @@
 
 This repository is the source code for the Adaptiv GitHub MCP server.
 
-Principle: the Python code is the source of truth. Documentation and tests must follow the behavior of the code.
+Principle: runtime behavior is governed by the Python code. Documentation and tests must follow the behavior of the code.
 
 ## Local development
 

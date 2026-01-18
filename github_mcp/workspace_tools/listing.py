@@ -11,6 +11,8 @@ from github_mcp.server import (
 )
 
 from ._shared import _tw
+
+
 def _normalize_workspace_path(path: str) -> str:
     normalized = path.strip().replace("\\", "/")
     while "//" in normalized:

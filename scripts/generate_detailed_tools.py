@@ -1,6 +1,6 @@
 """Generate Detailed_Tools.md from the live tool registry.
 
-This repo treats the Python code as the source of truth.
+The Python code governs behavior.
 Tool docs may be regenerated when the tool surface or schemas change.
 
 Usage:
