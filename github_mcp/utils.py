@@ -390,8 +390,14 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
                     content = handle.read().decode("utf-8", errors="replace")
                 parts.append(f"[{name}]\n{content}".rstrip())
             return "\n\n".join(parts)
-    except Exception:
-        return ""
+    except Exception as exc:
+        exc_name = type(exc).__name__
+        exc_message = str(exc).strip()
+        if exc_message:
+            detail = f"{exc_name}: {exc_message}"
+        else:
+            detail = exc_name
+        return f"[error decoding job logs archive: {detail}]"
 
 
 def _load_repo_defaults() -> tuple[dict[str, dict[str, str]], str | None]:
