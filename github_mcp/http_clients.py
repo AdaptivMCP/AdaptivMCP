@@ -441,6 +441,40 @@ async def _send_request(
         )
 
 
+# ---------------------------------------------------------------------------
+# Retry policy helpers
+# ---------------------------------------------------------------------------
+
+_RETRYABLE_GITHUB_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _allow_rate_limit_retries(method: str, path: str, *, allow_retries: bool | None) -> bool:
+    """Return True when the request is safe to retry on secondary/rate limits.
+
+    Automatic retries are safe for idempotent/read-only requests, but can cause
+    duplicate side effects for write requests (double comments, duplicate
+    commits, etc.). Therefore, retries default to disabled for non-idempotent
+    methods unless callers explicitly opt in.
+
+    Special-case: GitHub GraphQL uses POST even for read-only queries; treat
+    POST /graphql as retryable by default.
+
+    Callers can override the default via `allow_retries=`.
+    """
+
+    if allow_retries is not None:
+        return bool(allow_retries)
+
+    m = (method or "").upper()
+    if m in _RETRYABLE_GITHUB_METHODS:
+        return True
+
+    if m == "POST" and (path or "").rstrip("/") == "/graphql":
+        return True
+
+    return False
+
+
 async def _github_request(
     method: str,
     path: str,
@@ -450,6 +484,7 @@ async def _github_request(
     headers: dict[str, str] | None = None,
     expect_json: bool = True,
     client_factory: callable | None = None,
+    allow_retries: bool | None = None,
 ) -> dict[str, Any]:
     """Async GitHub request wrapper with structured errors."""
     client_factory = client_factory or _github_client_instance
@@ -527,8 +562,10 @@ async def _github_request(
                 },
             }
 
+    retry_enabled = _allow_rate_limit_retries(method, path, allow_retries=allow_retries)
+
     attempt = 0
-    max_attempts = max(0, GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS)
+    max_attempts = max(0, GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS) if retry_enabled else 0
 
     while True:
         started = time.perf_counter()
@@ -594,12 +631,21 @@ async def _github_request(
             if retry_delay is None:
                 retry_delay = GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
 
-            if attempt < max_attempts and retry_delay <= GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS:
+            if retry_enabled and attempt < max_attempts and retry_delay <= GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS:
                 await asyncio.sleep(
                     _jitter_sleep_seconds(retry_delay, respect_min=header_delay is not None)
                 )
                 attempt += 1
                 continue
+
+            if not retry_enabled:
+                raise GitHubRateLimitError(
+                    (
+                        f"GitHub rate limit exceeded; retry after {reset_hint} (retries disabled for non-idempotent request)"
+                        if reset_hint
+                        else "GitHub rate limit exceeded (retries disabled for non-idempotent request)"
+                    )
+                )
 
             raise GitHubRateLimitError(
                 f"GitHub rate limit exceeded; retry after {reset_hint}"
