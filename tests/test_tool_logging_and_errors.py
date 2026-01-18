@@ -34,13 +34,12 @@ def test_emit_tool_error_includes_trace_and_args() -> None:
         schema_present=False,
         req={"path": "/test"},
         exc=ValueError("bad input"),
-        phase="execute",
         all_args={"path": "README.md", "n": 1},
     )
     assert err.get("status") == "error"
     detail = err.get("error_detail")
     assert isinstance(detail, dict)
-    assert detail.get("trace", {}).get("phase") == "execute"
+    assert detail.get("trace", {}).get("call_id")
     debug = detail.get("debug")
     assert isinstance(debug, dict)
     assert isinstance(debug.get("args"), dict)
@@ -59,7 +58,6 @@ def test_failure_logs_emit_at_error_level(caplog: pytest.LogCaptureFixture) -> N
         schema_hash=None,
         schema_present=False,
         duration_ms=12.3,
-        phase="execute",
         exc=RuntimeError("boom"),
         all_args={"x": 1},
         structured_error={"error": "boom"},

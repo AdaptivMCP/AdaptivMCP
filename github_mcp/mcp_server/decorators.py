@@ -2051,7 +2051,7 @@ def _log_tool_returned_error(
         schema_present=schema_present,
         all_args=all_args,
     )
-    payload.update({"duration_ms": duration_ms, "phase": "execute", "error_type": "ReturnedError"})
+    payload.update({"duration_ms": duration_ms, "error_type": "ReturnedError"})
 
     err = result.get("error")
     if isinstance(err, Mapping):
@@ -2063,7 +2063,6 @@ def _log_tool_returned_error(
 
     arg_summary = _args_summary(all_args)
     kv_map: dict[str, Any] = {
-        "phase": "execute",
         "ms": f"{duration_ms:.2f}",
         **arg_summary,
     }
@@ -2577,7 +2576,6 @@ def _log_tool_failure(
     schema_hash: str | None,
     schema_present: bool,
     duration_ms: float,
-    phase: str,
     exc: BaseException,
     all_args: Mapping[str, Any],
     structured_error: Mapping[str, Any] | None = None,
@@ -2594,7 +2592,6 @@ def _log_tool_failure(
     payload.update(
         {
             "duration_ms": duration_ms,
-            "phase": phase,
             "error_type": exc.__class__.__name__,
         }
     )
@@ -2624,7 +2621,6 @@ def _log_tool_failure(
 
     arg_summary = _args_summary(all_args)
     kv_map: dict[str, Any] = {
-        "phase": phase,
         "ms": f"{duration_ms:.2f}",
         **arg_summary,
     }
@@ -2671,7 +2667,6 @@ def _emit_tool_error(
     schema_present: bool,
     req: Mapping[str, Any],
     exc: BaseException,
-    phase: str,
     all_args: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     structured_error = _structured_tool_error(
@@ -2679,7 +2674,7 @@ def _emit_tool_error(
         context=tool_name,
         path=None,
         request=dict(req) if isinstance(req, Mapping) else None,
-        trace={"phase": phase, "call_id": shorten_token(call_id)},
+        trace={"call_id": shorten_token(call_id)},
         args=dict(all_args) if isinstance(all_args, Mapping) else None,
     )
 
@@ -3038,8 +3033,7 @@ def mcp_tool(
                         schema_present=schema_present,
                         req=req,
                         exc=exc,
-                        phase="preflight",
-                        all_args=all_args,
+all_args=all_args,
                     )
                     _log_tool_failure(
                         tool_name=tool_name,
@@ -3049,8 +3043,7 @@ def mcp_tool(
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
                         duration_ms=duration_ms,
-                        phase="preflight",
-                        exc=exc,
+exc=exc,
                         all_args=all_args,
                         structured_error=structured_error,
                     )
@@ -3098,8 +3091,7 @@ def mcp_tool(
                         schema_present=True,
                         req=req,
                         exc=exc,
-                        phase="execute",
-                        all_args=all_args,
+all_args=all_args,
                     )
                     _log_tool_failure(
                         tool_name=tool_name,
@@ -3109,8 +3101,7 @@ def mcp_tool(
                         schema_hash=schema_hash,
                         schema_present=True,
                         duration_ms=duration_ms,
-                        phase="execute",
-                        exc=exc,
+exc=exc,
                         all_args=all_args,
                         structured_error=structured_error,
                     )
@@ -3320,8 +3311,7 @@ def mcp_tool(
                     schema_present=schema_present,
                     req=req,
                     exc=exc,
-                    phase="preflight",
-                    all_args=all_args,
+all_args=all_args,
                 )
                 _log_tool_failure(
                     tool_name=tool_name,
@@ -3331,8 +3321,7 @@ def mcp_tool(
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
                     duration_ms=duration_ms,
-                    phase="preflight",
-                    exc=exc,
+exc=exc,
                     all_args=all_args,
                     structured_error=structured_error,
                 )
@@ -3377,8 +3366,7 @@ def mcp_tool(
                     schema_present=True,
                     req=req,
                     exc=exc,
-                    phase="execute",
-                    all_args=all_args,
+all_args=all_args,
                 )
                 _log_tool_failure(
                     tool_name=tool_name,
@@ -3388,8 +3376,7 @@ def mcp_tool(
                     schema_hash=schema_hash,
                     schema_present=True,
                     duration_ms=duration_ms,
-                    phase="execute",
-                    exc=exc,
+exc=exc,
                     all_args=all_args,
                     structured_error=structured_error,
                 )
