@@ -143,7 +143,7 @@ def main() -> int:
     _ensure_pip(vpy, cwd=root)
 
     if args.deps == "prod":
-        _run([str(vpy), "-m", "pip", "install", "-r", "requirements.txt"], cwd=root)
+        _run([str(vpy), "-m", "pip", "install", "-r", "dev-requirements.txt"], cwd=root)
     elif args.deps == "dev":
         _run([str(vpy), "-m", "pip", "install", "-r", "dev-requirements.txt"], cwd=root)
 

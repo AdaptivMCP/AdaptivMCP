@@ -9,7 +9,7 @@ fi
 python -m pip install --upgrade pip
 
 # Keep prod images small and deploys fast.
-pip install -r requirements.txt
+pip install -r dev-requirements.txt
 
 # Optional: allow installing dev deps in Render for debugging.
 if [ "${RENDER_INSTALL_DEV_DEPS:-}" = "1" ]; then

@@ -21,6 +21,7 @@ from starlette.responses import PlainTextResponse
 from starlette.staticfiles import StaticFiles
 
 import github_mcp.server as server  # noqa: F401
+import github_mcp.tools_main as tools_main  # noqa: F401
 import github_mcp.tools_workspace as tools_workspace  # noqa: F401
 from github_mcp import http_clients as _http_clients  # noqa: F401
 from github_mcp.config import (

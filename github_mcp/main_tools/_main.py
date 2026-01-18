@@ -11,4 +11,17 @@ def _main() -> ModuleType:
     `main` (e.g. `_github_request`, constants).
     """
 
-    return importlib.import_module("main")
+    try:
+        return importlib.import_module("main")
+    except Exception:
+        # Lightweight fallback surface.
+        # Ensure tools are registered even if `main` cannot be imported.
+        try:
+            importlib.import_module("github_mcp.tools_workspace")
+        except Exception:
+            pass
+        try:
+            importlib.import_module("github_mcp.tools_main")
+        except Exception:
+            pass
+        return importlib.import_module("github_mcp.server")

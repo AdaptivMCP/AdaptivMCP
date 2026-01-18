@@ -41,7 +41,7 @@ def _load_main():
         missing = getattr(exc, "name", None) or str(exc)
         raise RuntimeError(
             "Unable to import the server registry (main). Install runtime dependencies "
-            "first (for example: pip install -r requirements.txt). Missing module: "
+            "first (for example: pip install -r dev-requirements.txt). Missing module: "
             f"{missing}"
         ) from exc
 
