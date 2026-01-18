@@ -554,7 +554,17 @@ async def run_python(
 # `terminal_command`.
 
 
-@mcp_tool(write_action=True, name="run_command")
+# NOTE: These aliases must preserve the same write/read classification behavior
+# as `terminal_command`. Otherwise, read-only calls (e.g., `pytest`) would be
+# incorrectly gated as write actions when invoked via legacy tool names.
+@mcp_tool(
+    write_action=True,
+    name="run_command",
+    write_action_resolver=_terminal_command_write_action,
+    # Match the behavioral/safety hints from `terminal_command`.
+    open_world_hint=True,
+    destructive_hint=True,
+)
 async def run_command_alias(
     full_name: str,
     ref: str = "main",
@@ -582,7 +592,13 @@ async def run_command_alias(
     )
 
 
-@mcp_tool(write_action=True, name="run_shell")
+@mcp_tool(
+    write_action=True,
+    name="run_shell",
+    write_action_resolver=_terminal_command_write_action,
+    open_world_hint=True,
+    destructive_hint=True,
+)
 async def run_shell_alias(
     full_name: str,
     ref: str = "main",
@@ -610,7 +626,13 @@ async def run_shell_alias(
     )
 
 
-@mcp_tool(write_action=True, name="run_terminal_commands")
+@mcp_tool(
+    write_action=True,
+    name="run_terminal_commands",
+    write_action_resolver=_terminal_command_write_action,
+    open_world_hint=True,
+    destructive_hint=True,
+)
 async def run_terminal_commands_alias(
     full_name: str,
     ref: str = "main",
