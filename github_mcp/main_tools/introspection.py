@@ -251,6 +251,16 @@ def list_all_actions(
             if isinstance(ui, dict) and ui:
                 tool_info["ui"] = ui
 
+        # Convenience fields for UIs that want stable text labels.
+        if "ui" in tool_info and isinstance(tool_info.get("ui"), dict):
+            ui2 = tool_info["ui"]
+            inv = ui2.get("invoking")
+            done = ui2.get("invoked")
+            if isinstance(inv, str) and inv.strip():
+                tool_info["invoking_message"] = inv.strip()
+            if isinstance(done, str) and done.strip():
+                tool_info["invoked_message"] = done.strip()
+
         if description:
             tool_info["description"] = description
 

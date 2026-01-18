@@ -190,6 +190,7 @@ function toolBadges(t){
   if (ann.openWorldHint) b.appendChild(badge('OPEN WORLD'));
   if (ann.destructiveHint) b.appendChild(badge('DESTRUCTIVE'));
   if (t.visibility) b.appendChild(badge(String(t.visibility).toUpperCase()));
+  if (t.invoking_message) b.appendChild(badge('INVOKING'));
   return b;
 }
 
@@ -217,6 +218,8 @@ function card(t){
   const ui = t.ui || {};
   if (ui.group) kv.appendChild(Object.assign(document.createElement('span'), {textContent: 'group=' + ui.group}));
   if (ui.icon) kv.appendChild(Object.assign(document.createElement('span'), {textContent: 'icon=' + ui.icon}));
+  if (t.invoking_message) kv.appendChild(Object.assign(document.createElement('span'), {textContent: 'invoking=' + t.invoking_message}));
+  if (t.invoked_message) kv.appendChild(Object.assign(document.createElement('span'), {textContent: 'invoked=' + t.invoked_message}));
   if (Array.isArray(t.tags) && t.tags.length) kv.appendChild(Object.assign(document.createElement('span'), {textContent: 'tags=' + t.tags.join(',')}));
   meta.appendChild(kv);
   c.appendChild(meta);

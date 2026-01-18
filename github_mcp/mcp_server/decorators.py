@@ -8,6 +8,7 @@ the server and tests.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import functools
 import hashlib
 import importlib
@@ -1274,6 +1275,60 @@ def _tool_annotations(
         "destructiveHint": bool(destructive_hint),
         "openWorldHint": bool(open_world_hint),
     }
+
+
+def _schema_summary(schema: Mapping[str, Any], *, max_fields: int = 8) -> str:
+    """Create a compact, UI-friendly parameter summary from a JSON schema."""
+
+    try:
+        props = schema.get("properties")
+        if not isinstance(props, Mapping):
+            return ""
+        required = schema.get("required")
+        req = set(required) if isinstance(required, list) else set()
+        items: list[str] = []
+        for name in sorted(props.keys()):
+            if len(items) >= max_fields:
+                break
+            spec = props.get(name)
+            if not isinstance(spec, Mapping):
+                items.append(str(name))
+                continue
+            typ = spec.get("type")
+            if isinstance(typ, list):
+                typ_s = "|".join(str(t) for t in typ)
+            elif isinstance(typ, str):
+                typ_s = typ
+            else:
+                typ_s = str(spec.get("format") or "any")
+            default = spec.get("default")
+            d = ""
+            if default is not None:
+                d = f"={_truncate_text(default, limit=24)}"
+            req_mark = "*" if name in req else ""
+            items.append(f"{name}{req_mark}:{typ_s}{d}")
+        extra = len(props) - len(items)
+        tail = f", +{extra} more" if extra > 0 else ""
+        return ", ".join(items) + tail
+    except Exception:
+        return ""
+
+
+def _invocation_messages(
+    tool_name: str,
+    *,
+    ui: Optional[Mapping[str, Any]] = None,
+) -> tuple[str, str]:
+    """Compute default 'invoking' and 'invoked' messages for a tool."""
+
+    label = None
+    if isinstance(ui, Mapping):
+        label = ui.get("label")
+    if not label:
+        label = tool_name.replace("_", " ").strip().title()
+    invoking = f"Invoking {label}…"
+    invoked = f"Invoked {label}."
+    return invoking, invoked
 
 
 def _tool_write_allowed(write_action: bool) -> bool:
@@ -2581,6 +2636,7 @@ def mcp_tool(
     destructive_hint: Optional[bool] = None,
     read_only_hint: Optional[bool] = None,
     ui: Optional[Mapping[str, Any]] = None,
+    show_schema_in_description: bool = True,
     tags: Optional[Iterable[str]] = None,
     description: str | None = None,
     visibility: str = "public",  # accepted, ignored
@@ -2634,6 +2690,10 @@ def mcp_tool(
                 "icon": icon,
                 "label": tool_name.replace("_", " ").strip().title(),
             }
+
+        invoking_msg, invoked_msg = _invocation_messages(tool_name, ui=ui_meta)
+        ui_meta.setdefault("invoking", invoking_msg)
+        ui_meta.setdefault("invoked", invoked_msg)
         llm_level = "advanced" if write_action else "basic"
         normalized_description = description or _normalize_tool_description(
             func, signature, llm_level=llm_level
@@ -2858,6 +2918,33 @@ def mcp_tool(
             wrapper.__mcp_visibility__ = visibility
             wrapper.__mcp_tags__ = tag_list
             wrapper.__mcp_ui__ = ui_meta or None
+
+            # Ensure schema + invocation messages are visible in clients that only render
+            # the tool description (e.g., Actions list). Keep it compact.
+            if show_schema_in_description:
+                try:
+                    schema_inline = _schema_summary(schema)
+                except Exception:
+                    schema_inline = ""
+                if schema_inline:
+                    normalized_description = (normalized_description or "").strip()
+                    first, *rest = normalized_description.splitlines() if normalized_description else [""]
+                    first = (first or "").strip()
+                    if first and "Schema:" not in first:
+                        first = f"{first}  Schema: {schema_inline}"
+                    elif not first:
+                        first = f"Schema: {schema_inline}"
+                    normalized_description = "\n".join([first] + rest).strip()
+
+            try:
+                inv_line = str(ui_meta.get("invoking") or "").strip()
+                done_line = str(ui_meta.get("invoked") or "").strip()
+                if inv_line and inv_line not in normalized_description:
+                    normalized_description = (normalized_description + f"\n\n{inv_line}").strip()
+                if done_line and done_line not in normalized_description:
+                    normalized_description = (normalized_description + f"\n{done_line}").strip()
+            except Exception:
+                pass
             _apply_tool_metadata(
                 wrapper.__mcp_tool__,
                 schema,
@@ -3102,6 +3189,31 @@ def mcp_tool(
         wrapper.__mcp_visibility__ = visibility
         wrapper.__mcp_tags__ = tag_list
         wrapper.__mcp_ui__ = ui_meta or None
+
+        if show_schema_in_description:
+            try:
+                schema_inline = _schema_summary(schema)
+            except Exception:
+                schema_inline = ""
+            if schema_inline:
+                normalized_description = (normalized_description or "").strip()
+                first, *rest = normalized_description.splitlines() if normalized_description else [""]
+                first = (first or "").strip()
+                if first and "Schema:" not in first:
+                    first = f"{first}  Schema: {schema_inline}"
+                elif not first:
+                    first = f"Schema: {schema_inline}"
+                normalized_description = "\n".join([first] + rest).strip()
+
+        try:
+            inv_line = str(ui_meta.get("invoking") or "").strip()
+            done_line = str(ui_meta.get("invoked") or "").strip()
+            if inv_line and inv_line not in normalized_description:
+                normalized_description = (normalized_description + f"\n\n{inv_line}").strip()
+            if done_line and done_line not in normalized_description:
+                normalized_description = (normalized_description + f"\n{done_line}").strip()
+        except Exception:
+            pass
         _apply_tool_metadata(
             wrapper.__mcp_tool__,
             schema,
@@ -3203,5 +3315,18 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 write_allowed=allowed,
                 ui=ui if isinstance(ui, Mapping) else None,
             )
+
+            # Keep the tool description aligned (for UIs that only render description).
+            if isinstance(schema, Mapping):
+                try:
+                    desc = getattr(tool_obj, "description", None)
+                    if isinstance(desc, str) and desc:
+                        schema_inline = _schema_summary(schema)
+                        if schema_inline and "Schema:" not in desc.splitlines()[0]:
+                            first, *rest = desc.splitlines()
+                            first = (first or "").strip() + f"  Schema: {schema_inline}"
+                            setattr(tool_obj, "description", "\n".join([first] + rest).strip())
+                except Exception:
+                    pass
         except Exception:
             continue
