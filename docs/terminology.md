@@ -4,7 +4,7 @@ This repository uses a small number of terms with specific meanings. These
 definitions are intended to be stable across documentation, tool descriptions,
 and code comments.
 
-The code is the source of truth. If runtime behavior differs from the
+The code is the authoritative reference. If runtime behavior differs from the
 definitions below, update this document.
 
 Protocol
@@ -34,7 +34,7 @@ Repo mirror
 
 Live GitHub state
   The remote repository state on GitHub. The repo mirror does not automatically
-  reflect live GitHub state; GitHub becomes the source of truth after you push.
+  reflect live GitHub state; the remote branch reflects updates only after you push.
 
 Workspace tool
   A tool that operates on the repo mirror (filesystem + git). Workspace tools

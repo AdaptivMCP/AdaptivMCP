@@ -423,8 +423,6 @@ def _normalize_tool_description(
     return base
 
 
-
-
 def _build_tool_docstring(
     *,
     tool_name: str,
@@ -438,7 +436,7 @@ def _build_tool_docstring(
 ) -> str:
     """Build a developer-oriented MCP tool docstring.
 
-    This repository treats Python tool implementations as the source of truth.
+    This repository treats Python tool implementations as the governing reference for behavior.
     Tool documentation is assembled at registration time so that clients
     (including ChatGPT-style UIs) can display a consistent, detailed surface.
 

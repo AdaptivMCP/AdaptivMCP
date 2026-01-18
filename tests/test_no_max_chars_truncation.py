@@ -62,4 +62,3 @@ def test_docs_do_not_mention_removed_max_chars_controls() -> None:
     text = usage.read_text(encoding="utf-8")
     assert "GITHUB_MCP_RESPONSE_MAX_JSON_CHARS" not in text
     assert "GITHUB_MCP_RESPONSE_MAX_TEXT_CHARS" not in text
-

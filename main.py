@@ -558,7 +558,7 @@ def __getattr__(name: str):
 
 
 # Recalculate write-allowed state on first import to honor updated environment variables when
-# ``main`` is reloaded in tests, while keeping the env var as the sole source of truth.
+# ``main`` is reloaded in tests, while keeping the env var as the single authoritative value.
 if not getattr(server, "_WRITE_ALLOWED_INITIALIZED", False):
     from github_mcp.mcp_server.context import (
         WRITE_ALLOWED as _CONTEXT_WRITE_ALLOWED,

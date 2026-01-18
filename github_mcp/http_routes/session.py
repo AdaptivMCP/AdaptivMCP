@@ -77,7 +77,9 @@ def build_session_ping_endpoint() -> Callable[[Request], Response]:
 
 def build_session_assert_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
-        expected = normalize_anchor(request.query_params.get("anchor") or request.headers.get("x-session-anchor"))
+        expected = normalize_anchor(
+            request.query_params.get("anchor") or request.headers.get("x-session-anchor")
+        )
         current, payload = get_server_anchor()
         if not expected:
             return JSONResponse(
@@ -122,4 +124,3 @@ def register_session_routes(app: Any) -> None:
 
 
 __all__ = ["register_session_routes"]
-

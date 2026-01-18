@@ -7,13 +7,13 @@ It supports two complementary ways of working with GitHub repositories:
 - GitHub API tools operate directly against GitHub's remote state (REST + GraphQL).
 - Workspace tools operate on a persistent server-side git working copy (the "repo mirror").
 
-The code is the source of truth. Documentation is expected to track runtime behavior.
+The code is the authoritative reference. Documentation is expected to track runtime behavior.
 
 ## Repo mirror vs live GitHub state
 
 The server maintains a persistent server-side git working copy for workspace-backed tools. In this documentation we call that copy the **repo mirror** (created/reused via `ensure_workspace_clone`).
 
-The repo mirror is not automatically the live GitHub state. GitHub becomes the source of truth only after you push.
+The repo mirror is not automatically the live GitHub state. The remote branch reflects updates only after you push.
 If you need the repo mirror to exactly match a remote branch after merges/force-updates, rebuild it with `ensure_workspace_clone(reset=true)`.
 
 For a glossary of terms used across docs and code, see `docs/terminology.md`.

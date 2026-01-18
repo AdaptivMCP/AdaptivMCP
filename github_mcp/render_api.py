@@ -343,10 +343,16 @@ async def render_request(
         bits = []
         bits.append(_render_http_header("RENDER", method, effective_path, inline_ctx=inline_ctx))
         if normalized_base:
-            bits.append(_ansi(f"base={normalized_base}", ANSI_DIM) if LOG_TOOL_COLOR else f"base={normalized_base}")
+            bits.append(
+                _ansi(f"base={normalized_base}", ANSI_DIM)
+                if LOG_TOOL_COLOR
+                else f"base={normalized_base}"
+            )
         if token_source:
             bits.append(
-                _ansi(f"token={token_source}", ANSI_DIM) if LOG_TOOL_COLOR else f"token={token_source}"
+                _ansi(f"token={token_source}", ANSI_DIM)
+                if LOG_TOOL_COLOR
+                else f"token={token_source}"
             )
         if params:
             bits.append(
@@ -401,7 +407,9 @@ async def render_request(
             _log_render_http(
                 level="error",
                 msg=(
-                    _render_http_header("RENDER_FAIL", method, effective_path, inline_ctx=inline_ctx)
+                    _render_http_header(
+                        "RENDER_FAIL", method, effective_path, inline_ctx=inline_ctx
+                    )
                     + " "
                     + (
                         _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
@@ -409,9 +417,7 @@ async def render_request(
                         else f"({duration_ms:.0f}ms)"
                     )
                     + "\n"
-                    + (
-                        _ansi(str(exc), ANSI_RED) if LOG_TOOL_COLOR else str(exc)
-                    )
+                    + (_ansi(str(exc), ANSI_RED) if LOG_TOOL_COLOR else str(exc))
                 ),
                 extra={
                     "event": "render_http_exception",
@@ -453,7 +459,9 @@ async def render_request(
 
             # Highlight rate limit headers when present.
             resp_headers = dict(getattr(resp, "headers", {}) or {})
-            rl_remaining = resp_headers.get("Ratelimit-Remaining") or resp_headers.get("X-RateLimit-Remaining")
+            rl_remaining = resp_headers.get("Ratelimit-Remaining") or resp_headers.get(
+                "X-RateLimit-Remaining"
+            )
             rl_reset = resp_headers.get("Ratelimit-Reset") or resp_headers.get("X-RateLimit-Reset")
             rl_bits: list[str] = []
             if rl_remaining is not None:
@@ -468,13 +476,17 @@ async def render_request(
                 + " "
                 + status_txt
                 + " "
-                + (_ansi(f"({duration_ms:.0f}ms)", ANSI_DIM) if LOG_TOOL_COLOR else f"({duration_ms:.0f}ms)")
+                + (
+                    _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
+                    if LOG_TOOL_COLOR
+                    else f"({duration_ms:.0f}ms)"
+                )
             )
             if attempt:
                 line += " " + (
-                    _ansi(f"attempt={attempt+1}", ANSI_DIM)
+                    _ansi(f"attempt={attempt + 1}", ANSI_DIM)
                     if LOG_TOOL_COLOR
-                    else f"attempt={attempt+1}"
+                    else f"attempt={attempt + 1}"
                 )
             if rl:
                 line += " " + rl
@@ -555,11 +567,11 @@ async def render_request(
                         cap_seconds=1.0,
                     )
                     msg = (
-                        _render_http_header("RENDER_RETRY", method, effective_path, inline_ctx=inline_ctx)
-                        + " "
-                        + (
-                            _ansi("429", ANSI_YELLOW) if LOG_TOOL_COLOR else "429"
+                        _render_http_header(
+                            "RENDER_RETRY", method, effective_path, inline_ctx=inline_ctx
                         )
+                        + " "
+                        + (_ansi("429", ANSI_YELLOW) if LOG_TOOL_COLOR else "429")
                         + " "
                         + (
                             _ansi(f"sleep={delay:.2f}s", ANSI_DIM)
@@ -568,9 +580,9 @@ async def render_request(
                         )
                         + " "
                         + (
-                            _ansi(f"attempt={attempt+1}/{max_attempts+1}", ANSI_DIM)
+                            _ansi(f"attempt={attempt + 1}/{max_attempts + 1}", ANSI_DIM)
                             if LOG_TOOL_COLOR
-                            else f"attempt={attempt+1}/{max_attempts+1}"
+                            else f"attempt={attempt + 1}/{max_attempts + 1}"
                         )
                     )
                     _log_render_http(
@@ -578,7 +590,9 @@ async def render_request(
                         msg=msg,
                         extra={
                             "event": "render_http_retry",
-                            "request": summarize_request_context(req) if isinstance(req, dict) else {},
+                            "request": summarize_request_context(req)
+                            if isinstance(req, dict)
+                            else {},
                             "log_context": inline_ctx or None,
                             "method": str(method).upper(),
                             "path": effective_path,

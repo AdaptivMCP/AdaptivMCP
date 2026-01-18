@@ -280,9 +280,7 @@ def _highlight_code(
         else:
             lexer = TextLexer()
         formatter = (
-            Terminal256Formatter(style=LOG_TOOL_STYLE)
-            if use_256_enabled
-            else TerminalFormatter()
+            Terminal256Formatter(style=LOG_TOOL_STYLE) if use_256_enabled else TerminalFormatter()
         )
         rendered = highlight(text, lexer, formatter).rstrip("\n")
         # Some formatters (and some terminals/UIs) can leave attributes "open".
@@ -317,9 +315,7 @@ def _highlight_file_text(
         except Exception:
             lexer = TextLexer()
         formatter = (
-            Terminal256Formatter(style=LOG_TOOL_STYLE)
-            if use_256_enabled
-            else TerminalFormatter()
+            Terminal256Formatter(style=LOG_TOOL_STYLE) if use_256_enabled else TerminalFormatter()
         )
         rendered = highlight(text, lexer, formatter).rstrip("\n")
         if rendered and not rendered.endswith(ANSI_RESET):
@@ -352,9 +348,7 @@ def _highlight_line_for_filename(
         except Exception:
             lexer = TextLexer()
         formatter = (
-            Terminal256Formatter(style=LOG_TOOL_STYLE)
-            if use_256_enabled
-            else TerminalFormatter()
+            Terminal256Formatter(style=LOG_TOOL_STYLE) if use_256_enabled else TerminalFormatter()
         )
         rendered = highlight(text, lexer, formatter).rstrip("\n")
         if rendered and not rendered.endswith(ANSI_RESET):
@@ -797,11 +791,15 @@ def _format_stream_block(
         )
 
     header = _ansi(label, header_color, enabled=True)
-    return header + "\n" + _clip_text(
-        "\n".join(rendered),
-        max_lines=max_lines,
-        max_chars=max_chars,
-        enabled=True,
+    return (
+        header
+        + "\n"
+        + _clip_text(
+            "\n".join(rendered),
+            max_lines=max_lines,
+            max_chars=max_chars,
+            enabled=True,
+        )
     )
 
 
@@ -1327,7 +1325,7 @@ def _apply_tool_metadata(
 ) -> None:
     """Attach metadata onto the registered tool object.
 
-    The tool wrapper remains the source of truth for behavior. The tool object
+    The tool wrapper governs runtime behavior. The tool object
     metadata is intended for discovery/UIs.
     """
 
@@ -2860,7 +2858,12 @@ def mcp_tool(
             icon = "🔧"
             if tool_name.startswith("render_"):
                 group, icon = "render", "🟦"
-            elif tool_name in {"terminal_command", "run_python", "apply_patch", "apply_workspace_operations"}:
+            elif tool_name in {
+                "terminal_command",
+                "run_python",
+                "apply_patch",
+                "apply_workspace_operations",
+            }:
                 group, icon = "workspace", "🧩"
             elif tool_name.startswith("workspace_"):
                 group, icon = "workspace", "🧩"
@@ -2896,7 +2899,9 @@ def mcp_tool(
                 if callable(write_action_resolver):
                     try:
                         # Prefer bound args if available; otherwise use raw kwargs.
-                        basis = all_args if isinstance(all_args, Mapping) and all_args else clean_kwargs
+                        basis = (
+                            all_args if isinstance(all_args, Mapping) and all_args else clean_kwargs
+                        )
                         effective_write_action = bool(write_action_resolver(basis))
                     except Exception:
                         # Best-effort; preserve base classification.
@@ -3109,7 +3114,9 @@ def mcp_tool(
                     schema_inline = ""
                 if schema_inline:
                     normalized_description = (normalized_description or "").strip()
-                    first, *rest = normalized_description.splitlines() if normalized_description else [""]
+                    first, *rest = (
+                        normalized_description.splitlines() if normalized_description else [""]
+                    )
                     first = (first or "").strip()
                     if first and "Schema:" not in first:
                         first = f"{first}  Schema: {schema_inline}"
@@ -3381,7 +3388,9 @@ def mcp_tool(
                 schema_inline = ""
             if schema_inline:
                 normalized_description = (normalized_description or "").strip()
-                first, *rest = normalized_description.splitlines() if normalized_description else [""]
+                first, *rest = (
+                    normalized_description.splitlines() if normalized_description else [""]
+                )
                 first = (first or "").strip()
                 if first and "Schema:" not in first:
                     first = f"{first}  Schema: {schema_inline}"

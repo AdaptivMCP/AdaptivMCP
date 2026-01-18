@@ -21,9 +21,7 @@ def test_infer_write_action_from_shell_write_examples() -> None:
     assert infer_write_action_from_shell("sed -i 's/a/b/' file.txt") is True
     assert infer_write_action_from_shell("echo hi > out.txt") is True
     assert infer_write_action_from_shell("tee out.txt < in.txt") is True
-    assert (
-        infer_write_action_from_shell("python -m pip install -r dev-requirements.txt") is True
-    )
+    assert infer_write_action_from_shell("python -m pip install -r dev-requirements.txt") is True
 
 
 def test_mcp_tool_dynamic_write_action_is_exposed_in_response(monkeypatch) -> None:
@@ -119,4 +117,3 @@ def test_http_tool_registry_uses_effective_write_action_for_retries(monkeypatch)
     )
     assert resp2.status_code == 429
     assert calls["n"] == 1
-

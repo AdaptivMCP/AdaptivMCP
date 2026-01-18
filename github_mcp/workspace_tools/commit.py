@@ -9,6 +9,8 @@ from github_mcp.server import (
 )
 
 from ._shared import _tw
+
+
 def _slim_shell_result(result: Any) -> Dict[str, Any]:
     """Return a connector-safe view of a run_shell result without truncation."""
     if not isinstance(result, dict):

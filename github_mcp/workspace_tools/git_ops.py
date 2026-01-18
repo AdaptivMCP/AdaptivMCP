@@ -73,6 +73,8 @@ async def _workspace_sync_snapshot(
         "is_clean": not status_lines,
         "diverged": bool(ahead or behind),
     }
+
+
 @mcp_tool(write_action=True)
 async def workspace_create_branch(
     full_name: str,

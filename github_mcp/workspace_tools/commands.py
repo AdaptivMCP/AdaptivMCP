@@ -23,7 +23,9 @@ def _terminal_command_write_action(args: Dict[str, Any]) -> bool:
     command_lines = args.get("command_lines")
     lines = command_lines if isinstance(command_lines, list) else None
     installing = bool(args.get("installing_dependencies", False))
-    return infer_write_action_from_shell(command, command_lines=lines, installing_dependencies=installing)
+    return infer_write_action_from_shell(
+        command, command_lines=lines, installing_dependencies=installing
+    )
 
 
 def _always_write(_args: Dict[str, Any]) -> bool:
@@ -55,6 +57,8 @@ def _normalize_command_payload(
         lines_out = requested.splitlines() if requested else []
 
     return requested, lines_out
+
+
 def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
     """Resolve a working directory inside the repo mirror.
 

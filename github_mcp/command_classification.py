@@ -191,4 +191,3 @@ def infer_write_action_from_shell(
 
     # Default: unknown commands are treated as write actions.
     return True
-
