@@ -68,7 +68,7 @@ async def _run_git_with_retry(
 async def _run_shell(
     cmd: str,
     cwd: str | None = None,
-    timeout_seconds: int = 300,
+    timeout_seconds: int = 0,
     env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Execute a shell command with author/committer env vars injected."""
@@ -123,10 +123,14 @@ async def _run_shell(
     )
 
     try:
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout_seconds
-        )
-        timed_out = False
+        if timeout_seconds and timeout_seconds > 0:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout_seconds
+            )
+            timed_out = False
+        else:
+            stdout_bytes, stderr_bytes = await proc.communicate()
+            timed_out = False
     except TimeoutError:
         timed_out = True
         # Best-effort termination: kill the whole process group on POSIX so
@@ -151,8 +155,15 @@ async def _run_shell(
             except Exception:
                 pass
 
+        # Best-effort output collection after timeout. Keep configurable.
         try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=5)
+            collect_timeout = getattr(config, "GITHUB_MCP_TIMEOUT_COLLECT_SECONDS", 0)
+            if collect_timeout and int(collect_timeout) > 0:
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    proc.communicate(), timeout=int(collect_timeout)
+                )
+            else:
+                stdout_bytes, stderr_bytes = await proc.communicate()
         except Exception as exc:
             # Do not swallow errors while collecting stdout/stderr after a timeout.
             # When communicate() fails (e.g., pipes already closed), return a
@@ -346,11 +357,12 @@ async def _clone_repo(
             # existing repo mirror. When preserving changes we avoid destructive
             # resets, but we still enforce the requested branch when the repo mirror
             # is clean.
+            git_timeout = int(getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
             fetch_result = await _run_git_with_retry(
                 run_shell,
                 "git fetch origin --prune",
                 cwd=workspace_dir,
-                timeout_seconds=300,
+                timeout_seconds=git_timeout,
                 env=git_env,
             )
             if fetch_result["exit_code"] != 0:
@@ -360,7 +372,7 @@ async def _clone_repo(
                         run_shell,
                         "git fetch origin --prune",
                         cwd=workspace_dir,
-                        timeout_seconds=300,
+                        timeout_seconds=git_timeout,
                         env=no_auth_env,
                     )
                     if fetch_result["exit_code"] == 0:
@@ -376,14 +388,14 @@ async def _clone_repo(
             show_branch = await run_shell(
                 "git branch --show-current",
                 cwd=workspace_dir,
-                timeout_seconds=60,
+                timeout_seconds=git_timeout,
             )
             current_branch = (show_branch.get("stdout", "") or "").strip() or None
             if current_branch and current_branch != effective_ref:
                 status = await run_shell(
                     "git status --porcelain",
                     cwd=workspace_dir,
-                    timeout_seconds=60,
+                    timeout_seconds=git_timeout,
                 )
                 dirty = bool((status.get("stdout", "") or "").strip())
                 if dirty:
@@ -399,7 +411,7 @@ async def _clone_repo(
                     run_shell,
                     f"git checkout {q_ref}",
                     cwd=workspace_dir,
-                    timeout_seconds=120,
+                    timeout_seconds=git_timeout,
                     env=git_env,
                 )
                 if checkout.get("exit_code", 0) != 0:
@@ -408,7 +420,7 @@ async def _clone_repo(
                         run_shell,
                         f"git checkout -B {q_ref} origin/{q_ref}",
                         cwd=workspace_dir,
-                        timeout_seconds=120,
+                        timeout_seconds=git_timeout,
                         env=git_env,
                     )
                     if checkout.get("exit_code", 0) != 0:
@@ -423,11 +435,12 @@ async def _clone_repo(
         q_ref = shlex.quote(effective_ref)
         # When not preserving changes, ensure we are on the requested branch/ref and
         # hard-reset to match origin.
+        git_timeout = int(getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
         refresh_steps = [
-            ("git fetch origin --prune", 300),
-            (f"git checkout -B {q_ref} origin/{q_ref}", 120),
-            (f"git reset --hard origin/{q_ref}", 120),
-            ("git clean -fdx --exclude .venv-mcp", 120),
+            ("git fetch origin --prune", git_timeout),
+            (f"git checkout -B {q_ref} origin/{q_ref}", git_timeout),
+            (f"git reset --hard origin/{q_ref}", git_timeout),
+            ("git clean -fdx --exclude .venv-mcp", git_timeout),
         ]
 
         for cmd, timeout in refresh_steps:
@@ -468,11 +481,12 @@ async def _clone_repo(
     q_url = shlex.quote(url)
     q_tmpdir = shlex.quote(tmpdir)
     cmd = f"git clone --depth 1 --branch {q_ref} {q_url} {q_tmpdir}"
+    git_timeout = int(getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
     result = await _run_git_with_retry(
         run_shell,
         cmd,
         cwd=None,
-        timeout_seconds=600,
+        timeout_seconds=git_timeout,
         env=git_env,
     )
     if result["exit_code"] != 0:
@@ -486,7 +500,7 @@ async def _clone_repo(
                 run_shell,
                 cmd,
                 cwd=None,
-                timeout_seconds=600,
+                timeout_seconds=git_timeout,
                 env=no_auth_env,
             )
             if result["exit_code"] == 0:
@@ -536,14 +550,14 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         check = await run_shell(
             f"{vpy} -m pip --version",
             cwd=repo_dir,
-            timeout_seconds=120,
+            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
         if check.get("exit_code", 0) == 0:
             # Upgrade tooling for more reliable installs.
             upgrade = await run_shell(
                 f"{vpy} -m pip install --upgrade pip setuptools wheel",
                 cwd=repo_dir,
-                timeout_seconds=600,
+                timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
             )
             if upgrade.get("exit_code", 0) != 0:
                 stderr = upgrade.get("stderr", "") or upgrade.get("stdout", "")
@@ -554,7 +568,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         ensure = await run_shell(
             f"{vpy} -m ensurepip --upgrade",
             cwd=repo_dir,
-            timeout_seconds=300,
+            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
         if ensure.get("exit_code", 0) != 0:
             stderr = ensure.get("stderr", "") or ensure.get("stdout", "")
@@ -564,7 +578,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         check2 = await run_shell(
             f"{vpy} -m pip --version",
             cwd=repo_dir,
-            timeout_seconds=120,
+            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
         if check2.get("exit_code", 0) != 0:
             stderr = check2.get("stderr", "") or check2.get("stdout", "")
@@ -573,7 +587,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         upgrade2 = await run_shell(
             f"{vpy} -m pip install --upgrade pip setuptools wheel",
             cwd=repo_dir,
-            timeout_seconds=600,
+            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
         if upgrade2.get("exit_code", 0) != 0:
             stderr = upgrade2.get("stderr", "") or upgrade2.get("stdout", "")
@@ -596,11 +610,19 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
 
     # Create venv. Prefer --upgrade-deps when supported.
     create_cmd = f"{shlex.quote(sys.executable)} -m venv --upgrade-deps {shlex.quote(venv_dir)}"
-    result = await run_shell(create_cmd, cwd=repo_dir, timeout_seconds=300)
+    result = await run_shell(
+        create_cmd,
+        cwd=repo_dir,
+        timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+    )
     if result.get("exit_code", 0) != 0:
         # Fallback for older/stripped venv modules.
         create_cmd2 = f"{shlex.quote(sys.executable)} -m venv {shlex.quote(venv_dir)}"
-        result2 = await run_shell(create_cmd2, cwd=repo_dir, timeout_seconds=300)
+        result2 = await run_shell(
+            create_cmd2,
+            cwd=repo_dir,
+            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+        )
         if result2.get("exit_code", 0) != 0:
             stderr = result2.get("stderr", "") or result2.get("stdout", "")
             raise GitHubAPIError(f"Failed to create temp virtualenv: {stderr}")
@@ -1050,10 +1072,11 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
         with os.fdopen(patch_fd, "w", encoding="utf-8") as f:
             f.write(patch)
 
+        apply_timeout = int(getattr(config, "WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", 0) or 0)
         apply_result = await _run_shell(
             f"git apply --recount --whitespace=nowarn {shlex.quote(patch_path)}",
             cwd=repo_dir,
-            timeout_seconds=max(1, int(config.WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS)),
+            timeout_seconds=apply_timeout,
         )
         if apply_result["exit_code"] != 0:
             stderr = apply_result.get("stderr", "") or apply_result.get("stdout", "")

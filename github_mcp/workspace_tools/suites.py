@@ -19,6 +19,7 @@ import time
 import uuid
 from typing import Any
 
+from github_mcp import config
 from github_mcp.server import mcp_tool
 from github_mcp.utils import _normalize_timeout_seconds
 
@@ -228,12 +229,12 @@ async def run_tests(
     full_name: str,
     ref: str = "main",
     test_command: str = "pytest",
-    timeout_seconds: float = 600,
+    timeout_seconds: float = 0,
     workdir: str | None = None,
     use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
-    timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
+    timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
 
     t0 = time.monotonic()
     result = await _tw().terminal_command(
@@ -314,12 +315,12 @@ async def run_lint_suite(
     full_name: str,
     ref: str = "main",
     lint_command: str = "ruff check .",
-    timeout_seconds: float = 600,
+    timeout_seconds: float = 0,
     workdir: str | None = None,
     use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
-    timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
+    timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
 
     t0 = time.monotonic()
     result = await _tw().terminal_command(
@@ -404,7 +405,7 @@ async def run_quality_suite(
     full_name: str,
     ref: str = "main",
     test_command: str = "pytest -q",
-    timeout_seconds: float = 600,
+    timeout_seconds: float = 0,
     workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = True,
@@ -420,7 +421,12 @@ async def run_quality_suite(
     auto_fix: bool = False,
     gate_optional_steps: bool = False,
 ) -> dict[str, Any]:
-    timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
+    timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
+    preflight_timeout = _normalize_timeout_seconds(
+        config.GITHUB_MCP_PREFLIGHT_TIMEOUT_SECONDS,
+        timeout_seconds_i,
+    )
+    preflight_step_timeout = preflight_timeout if (preflight_timeout and preflight_timeout > 0) else timeout_seconds_i
 
     run_id = uuid.uuid4().hex
 
@@ -553,7 +559,7 @@ async def run_quality_suite(
                     full_name=full_name,
                     ref=ref,
                     command="python --version",
-                    timeout_seconds=min(60, timeout_seconds_i),
+                    timeout_seconds=preflight_step_timeout,
                     workdir=workdir,
                     use_temp_venv=use_temp_venv,
                     installing_dependencies=False,
@@ -566,7 +572,7 @@ async def run_quality_suite(
                     full_name=full_name,
                     ref=ref,
                     command="python -m pip --version",
-                    timeout_seconds=min(60, timeout_seconds_i),
+                    timeout_seconds=preflight_step_timeout,
                     workdir=workdir,
                     use_temp_venv=use_temp_venv,
                     installing_dependencies=False,
@@ -683,7 +689,7 @@ async def run_quality_suite(
                     full_name=full_name,
                     ref=ref,
                     command="python --version",
-                    timeout_seconds=min(60, timeout_seconds_i),
+                    timeout_seconds=preflight_step_timeout,
                     workdir=workdir,
                     use_temp_venv=use_temp_venv,
                     installing_dependencies=False,
@@ -696,7 +702,7 @@ async def run_quality_suite(
                     full_name=full_name,
                     ref=ref,
                     command="python -m pip --version",
-                    timeout_seconds=min(60, timeout_seconds_i),
+                    timeout_seconds=preflight_step_timeout,
                     workdir=workdir,
                     use_temp_venv=use_temp_venv,
                     installing_dependencies=False,

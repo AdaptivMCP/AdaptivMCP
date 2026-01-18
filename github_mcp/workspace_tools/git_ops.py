@@ -5,11 +5,13 @@ import shutil
 import time
 from typing import Any
 
+from github_mcp import config
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
+from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import (
     _delete_branch_via_workspace,
@@ -26,25 +28,26 @@ async def _workspace_sync_snapshot(
     repo_dir: str,
     branch: str,
 ) -> dict[str, Any]:
+    t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
     fetch = await _run_shell_ok(
         deps,
         "git fetch --prune origin",
         cwd=repo_dir,
-        timeout_seconds=300,
+        timeout_seconds=t_default,
     )
     remote_ref = f"origin/{branch}"
-    head = await _run_shell_ok(deps, "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+    head = await _run_shell_ok(deps, "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=t_default)
     remote = await _run_shell_ok(
         deps,
         f"git rev-parse {shlex.quote(remote_ref)}",
         cwd=repo_dir,
-        timeout_seconds=60,
+        timeout_seconds=t_default,
     )
     rev_list = await _run_shell_ok(
         deps,
         f"git rev-list --left-right --count HEAD...{shlex.quote(remote_ref)}",
         cwd=repo_dir,
-        timeout_seconds=120,
+        timeout_seconds=t_default,
     )
     counts = (rev_list.get("stdout", "") or "").strip().split()
     if len(counts) != 2:
@@ -58,7 +61,7 @@ async def _workspace_sync_snapshot(
         deps,
         "git status --porcelain",
         cwd=repo_dir,
-        timeout_seconds=60,
+        timeout_seconds=t_default,
     )
     status_lines = [line for line in (status.get("stdout", "") or "").splitlines() if line.strip()]
 
@@ -88,6 +91,7 @@ async def workspace_create_branch(
     """
 
     try:
+        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
         effective_base = _tw()._effective_ref_for_repo(full_name, base_ref)
 
@@ -99,7 +103,7 @@ async def workspace_create_branch(
         checkout = await deps["run_shell"](
             f"git checkout -b {shlex.quote(new_branch)}",
             cwd=repo_dir,
-            timeout_seconds=120,
+            timeout_seconds=t_default,
         )
         if checkout.get("exit_code", 0) != 0:
             stderr = checkout.get("stderr", "") or checkout.get("stdout", "")
@@ -110,7 +114,7 @@ async def workspace_create_branch(
             push_result = await deps["run_shell"](
                 f"git push -u origin {shlex.quote(new_branch)}",
                 cwd=repo_dir,
-                timeout_seconds=300,
+                timeout_seconds=t_default,
             )
             if push_result.get("exit_code", 0) != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
@@ -138,6 +142,7 @@ async def workspace_delete_branch(
     """
 
     try:
+        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
 
         if not isinstance(branch, str) or not branch.strip():
@@ -162,14 +167,14 @@ async def workspace_delete_branch(
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
             cwd=repo_dir,
-            timeout_seconds=120,
+            timeout_seconds=t_default,
         )
 
         # Delete remote first; if the remote delete fails, surface that.
         delete_remote = await deps["run_shell"](
             f"git push origin --delete {shlex.quote(branch)}",
             cwd=repo_dir,
-            timeout_seconds=300,
+            timeout_seconds=t_default,
         )
         if delete_remote.get("exit_code", 0) != 0:
             stderr = delete_remote.get("stderr", "") or delete_remote.get("stdout", "")
@@ -179,7 +184,7 @@ async def workspace_delete_branch(
         delete_local = await deps["run_shell"](
             f"git branch -D {shlex.quote(branch)}",
             cwd=repo_dir,
-            timeout_seconds=120,
+            timeout_seconds=t_default,
         )
 
         return {
@@ -221,6 +226,7 @@ async def workspace_self_heal_branch(
     """
 
     try:
+        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
 
         if not isinstance(branch, str) or not branch.strip():
@@ -367,19 +373,19 @@ async def workspace_self_heal_branch(
             deps,
             f"git checkout {shlex.quote(effective_base)}",
             cwd=base_repo_dir,
-            timeout_seconds=120,
+            timeout_seconds=t_default,
         )
         await _run_shell_ok(
             deps,
             f"git checkout -b {shlex.quote(candidate)}",
             cwd=base_repo_dir,
-            timeout_seconds=120,
+            timeout_seconds=t_default,
         )
         await _run_shell_ok(
             deps,
             f"git push -u origin {shlex.quote(candidate)}",
             cwd=base_repo_dir,
-            timeout_seconds=300,
+            timeout_seconds=t_default,
         )
 
         # The freshly checked out local repo mirror is used for the new branch.
@@ -393,10 +399,10 @@ async def workspace_self_heal_branch(
         snapshot: dict[str, Any] = {}
         if enumerate_repo:
             log_res = await deps["run_shell"](
-                "git log -n 1 --oneline", cwd=new_repo_dir, timeout_seconds=60
+                "git log -n 1 --oneline", cwd=new_repo_dir, timeout_seconds=t_default
             )
             st_res = await deps["run_shell"](
-                "git status --porcelain", cwd=new_repo_dir, timeout_seconds=60
+                "git status --porcelain", cwd=new_repo_dir, timeout_seconds=t_default
             )
 
             # Top-level entries (trim to keep responses small).
@@ -473,6 +479,7 @@ async def workspace_sync_to_remote(
 ) -> dict[str, Any]:
     """Reset a repo mirror (workspace clone) to match the remote branch."""
     try:
+        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -489,14 +496,14 @@ async def workspace_sync_to_remote(
             deps,
             f"git reset --hard {shlex.quote(before['remote_ref'])}",
             cwd=repo_dir,
-            timeout_seconds=300,
+            timeout_seconds=t_default,
         )
         if discard_local_changes:
             await _run_shell_ok(
                 deps,
                 "git clean -fd",
                 cwd=repo_dir,
-                timeout_seconds=120,
+                timeout_seconds=t_default,
             )
 
         after = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
@@ -524,6 +531,7 @@ async def workspace_sync_bidirectional(
 ) -> dict[str, Any]:
     """Sync repo mirror changes to the remote and refresh local state from GitHub."""
     try:
+        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -554,34 +562,34 @@ async def workspace_sync_bidirectional(
                 deps,
                 f"git reset --hard {shlex.quote(snapshot['remote_ref'])}",
                 cwd=repo_dir,
-                timeout_seconds=300,
+                timeout_seconds=t_default,
             )
             if discard_local_changes:
                 await _run_shell_ok(
                     deps,
                     "git clean -fd",
                     cwd=repo_dir,
-                    timeout_seconds=120,
+                    timeout_seconds=t_default,
                 )
             snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
 
         if not snapshot["is_clean"]:
             if add_all:
                 add_result = await deps["run_shell"](
-                    "git add -A", cwd=repo_dir, timeout_seconds=120
+                    "git add -A", cwd=repo_dir, timeout_seconds=t_default
                 )
                 if add_result.get("exit_code", 0) != 0:
                     stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
                     raise GitHubAPIError(f"git add failed: {stderr}")
 
             status_result = await deps["run_shell"](
-                "git status --porcelain", cwd=repo_dir, timeout_seconds=60
+                "git status --porcelain", cwd=repo_dir, timeout_seconds=t_default
             )
             status_lines = (status_result.get("stdout", "") or "").strip().splitlines()
             if status_lines:
                 commit_cmd = f"git commit -m {shlex.quote(commit_message)}"
                 commit_result = await deps["run_shell"](
-                    commit_cmd, cwd=repo_dir, timeout_seconds=300
+                    commit_cmd, cwd=repo_dir, timeout_seconds=t_default
                 )
                 if commit_result.get("exit_code", 0) != 0:
                     stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
@@ -592,7 +600,9 @@ async def workspace_sync_bidirectional(
 
         if push and snapshot["ahead"] > 0:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
+            push_result = await deps["run_shell"](
+                push_cmd, cwd=repo_dir, timeout_seconds=t_default
+            )
             if push_result.get("exit_code", 0) != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")

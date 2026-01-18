@@ -351,7 +351,21 @@ WORKSPACE_BASE_DIR = os.environ.get(
     _default_workspace_base_dir(),
 )
 
-HTTPX_TIMEOUT = float(os.environ.get("HTTPX_TIMEOUT", 150))
+# NOTE: For outbound HTTP (GitHub/Render), timeouts are configurable via env.
+# Semantics:
+# - Unset/empty -> no client-side timeout
+# - "0" (or any <= 0 value) -> no client-side timeout
+# - > 0 -> timeout seconds
+_raw_httpx_timeout = os.environ.get("HTTPX_TIMEOUT")
+if _raw_httpx_timeout is None or not str(_raw_httpx_timeout).strip():
+    HTTPX_TIMEOUT = None
+else:
+    try:
+        _v = float(str(_raw_httpx_timeout).strip())
+        HTTPX_TIMEOUT = None if _v <= 0 else _v
+    except Exception:
+        HTTPX_TIMEOUT = None
+
 GITHUB_REQUEST_TIMEOUT_SECONDS = HTTPX_TIMEOUT
 HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", 300))
 HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", 200))
@@ -374,14 +388,31 @@ FILE_CACHE_MAX_BYTES = int(os.environ.get("FILE_CACHE_MAX_BYTES", "0"))
 # get_file_contents/fetch_files and related helpers. For precise navigation
 # within large files, prefer the range-based tools (get_file_excerpt).
 
-GITHUB_MCP_MAX_FILE_CONTENT_BYTES = int(
-    os.environ.get("GITHUB_MCP_MAX_FILE_CONTENT_BYTES", "200000")
-)
-GITHUB_MCP_MAX_FILE_TEXT_CHARS = int(os.environ.get("GITHUB_MCP_MAX_FILE_TEXT_CHARS", "200000"))
+# Tool output caps (decoded bytes / decoded UTF-8 text).
+# Set to 0 (or negative) to disable.
+GITHUB_MCP_MAX_FILE_CONTENT_BYTES = int(os.environ.get("GITHUB_MCP_MAX_FILE_CONTENT_BYTES", "0"))
+GITHUB_MCP_MAX_FILE_TEXT_CHARS = int(os.environ.get("GITHUB_MCP_MAX_FILE_TEXT_CHARS", "0"))
 
-GITHUB_MCP_MAX_FETCH_URL_BYTES = int(os.environ.get("GITHUB_MCP_MAX_FETCH_URL_BYTES", "500000"))
-GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS = int(
-    os.environ.get("GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS", "200000")
+GITHUB_MCP_MAX_FETCH_URL_BYTES = int(os.environ.get("GITHUB_MCP_MAX_FETCH_URL_BYTES", "0"))
+GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS = int(os.environ.get("GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS", "0"))
+
+# Workspace / command timeouts.
+# Semantics: 0 (or negative) disables timeouts.
+GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS = int(os.environ.get("GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", "0"))
+GITHUB_MCP_DEP_INSTALL_TIMEOUT_SECONDS = int(
+    os.environ.get("GITHUB_MCP_DEP_INSTALL_TIMEOUT_SECONDS", "0")
+)
+GITHUB_MCP_PREFLIGHT_TIMEOUT_SECONDS = int(
+    os.environ.get("GITHUB_MCP_PREFLIGHT_TIMEOUT_SECONDS", "0")
+)
+GITHUB_MCP_TIMEOUT_COLLECT_SECONDS = int(
+    os.environ.get("GITHUB_MCP_TIMEOUT_COLLECT_SECONDS", "0")
+)
+GITHUB_MCP_DISPATCH_PROBE_COOLDOWN_SECONDS = int(
+    os.environ.get("GITHUB_MCP_DISPATCH_PROBE_COOLDOWN_SECONDS", "0")
+)
+GITHUB_MCP_WORKFLOW_DISPATCH_POLL_DEADLINE_SECONDS = int(
+    os.environ.get("GITHUB_MCP_WORKFLOW_DISPATCH_POLL_DEADLINE_SECONDS", "0")
 )
 
 _include_b64 = os.environ.get("GITHUB_MCP_INCLUDE_BASE64_CONTENT", "0").strip().lower()
@@ -402,8 +433,9 @@ GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS = int(
 GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS = float(
     os.environ.get("GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS", "1")
 )
+# Search throttling (client-side). Set to 0 to disable.
 GITHUB_SEARCH_MIN_INTERVAL_SECONDS = float(
-    os.environ.get("GITHUB_SEARCH_MIN_INTERVAL_SECONDS", "2")
+    os.environ.get("GITHUB_SEARCH_MIN_INTERVAL_SECONDS", "0")
 )
 
 # Logging controls
@@ -511,7 +543,7 @@ LOG_APPEND_EXTRAS_JSON = _env_flag("LOG_APPEND_EXTRAS_JSON", "false")
 
 # Repo mirror diff application can be slow for large diffs. Keep this configurable.
 WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS = int(
-    os.environ.get("MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", "300")
+    os.environ.get("MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", "0")
 )
 
 GITHUB_MCP_GIT_IDENTITY_ENV_VARS = (

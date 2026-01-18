@@ -19,7 +19,7 @@ async def commit_and_open_pr_from_workspace(
     draft: bool = False,
     commit_message: str = "Commit workspace changes",
     run_quality: bool = False,
-    quality_timeout_seconds: float = 600,
+    quality_timeout_seconds: float = 0,
     test_command: str = "pytest",
     lint_command: str = "ruff check .",
 ) -> dict[str, Any]:

@@ -2,11 +2,13 @@
 import shlex
 from typing import Any
 
+from github_mcp import config
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
+from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import _tw
 
@@ -40,6 +42,7 @@ async def commit_workspace(
     """Commit repo mirror changes and optionally push them."""
 
     try:
+        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
@@ -47,13 +50,15 @@ async def commit_workspace(
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         if add_all:
-            add_result = await deps["run_shell"]("git add -A", cwd=repo_dir, timeout_seconds=120)
+            add_result = await deps["run_shell"](
+                "git add -A", cwd=repo_dir, timeout_seconds=t_default
+            )
             if add_result["exit_code"] != 0:
                 stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
                 raise GitHubAPIError(f"git add failed: {stderr}")
 
         status_result = await deps["run_shell"](
-            "git status --porcelain", cwd=repo_dir, timeout_seconds=60
+            "git status --porcelain", cwd=repo_dir, timeout_seconds=t_default
         )
 
         status_lines = status_result.get("stdout", "").strip().splitlines()
@@ -61,7 +66,9 @@ async def commit_workspace(
             raise GitHubAPIError("No changes to commit in repo mirror")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
+        commit_result = await deps["run_shell"](
+            commit_cmd, cwd=repo_dir, timeout_seconds=t_default
+        )
         if commit_result["exit_code"] != 0:
             stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
@@ -69,15 +76,21 @@ async def commit_workspace(
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
+            push_result = await deps["run_shell"](
+                push_cmd, cwd=repo_dir, timeout_seconds=t_default
+            )
             if push_result["exit_code"] != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         # Collect commit metadata.
-        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+        rev = await deps["run_shell"](
+            "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=t_default
+        )
         head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
-        oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
+        oneline = await deps["run_shell"](
+            "git log -1 --oneline", cwd=repo_dir, timeout_seconds=t_default
+        )
         head_summary = oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
 
         return {
@@ -111,6 +124,7 @@ async def commit_workspace_files(
         raise ValueError("files must be a non-empty list of paths")
 
     try:
+        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
@@ -118,13 +132,13 @@ async def commit_workspace_files(
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         add_cmd = "git add -- " + " ".join(shlex.quote(path) for path in files)
-        add_result = await deps["run_shell"](add_cmd, cwd=repo_dir, timeout_seconds=120)
+        add_result = await deps["run_shell"](add_cmd, cwd=repo_dir, timeout_seconds=t_default)
         if add_result["exit_code"] != 0:
             stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
             raise GitHubAPIError(f"git add failed: {stderr}")
 
         staged_files_result = await deps["run_shell"](
-            "git diff --cached --name-only", cwd=repo_dir, timeout_seconds=60
+            "git diff --cached --name-only", cwd=repo_dir, timeout_seconds=t_default
         )
 
         staged_files = staged_files_result.get("stdout", "").strip().splitlines()
@@ -132,7 +146,9 @@ async def commit_workspace_files(
             raise GitHubAPIError("No staged changes to commit for provided files")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=300)
+        commit_result = await deps["run_shell"](
+            commit_cmd, cwd=repo_dir, timeout_seconds=t_default
+        )
         if commit_result["exit_code"] != 0:
             stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
@@ -140,15 +156,21 @@ async def commit_workspace_files(
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=300)
+            push_result = await deps["run_shell"](
+                push_cmd, cwd=repo_dir, timeout_seconds=t_default
+            )
             if push_result["exit_code"] != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         # Collect commit metadata.
-        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=60)
+        rev = await deps["run_shell"](
+            "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=t_default
+        )
         head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
-        oneline = await deps["run_shell"]("git log -1 --oneline", cwd=repo_dir, timeout_seconds=60)
+        oneline = await deps["run_shell"](
+            "git log -1 --oneline", cwd=repo_dir, timeout_seconds=t_default
+        )
         head_summary = oneline.get("stdout", "").strip() if isinstance(oneline, dict) else ""
 
         return {
@@ -176,9 +198,10 @@ async def get_workspace_changes_summary(
     deps = _tw()._workspace_deps()
     effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
     repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+    t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
 
     status_result = await deps["run_shell"](
-        "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=60
+        "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=t_default
     )
     raw_status = status_result.get("stdout", "")
     lines = [line for line in raw_status.splitlines() if line.strip()]
