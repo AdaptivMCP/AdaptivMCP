@@ -236,17 +236,24 @@ def _pygments_available() -> bool:
         return False
 
 
-def _highlight_code(text: str, *, kind: str = "text") -> str:
+def _highlight_code(
+    text: str,
+    *,
+    kind: str = "text",
+    enabled: bool | None = None,
+    use_256: bool = True,
+) -> str:
     """Best-effort syntax highlighting for log visuals.
 
     Uses Pygments if installed and ANSI color is enabled.
     """
 
-    if not (LOG_TOOL_COLOR and _pygments_available() and isinstance(text, str) and text):
+    color_enabled = LOG_TOOL_COLOR if enabled is None else bool(enabled)
+    if not (color_enabled and _pygments_available() and isinstance(text, str) and text):
         return text
     try:
         from pygments import highlight
-        from pygments.formatters import Terminal256Formatter
+        from pygments.formatters import Terminal256Formatter, TerminalFormatter
         from pygments.lexers import (
             DiffLexer,
             PythonLexer,
@@ -262,51 +269,92 @@ def _highlight_code(text: str, *, kind: str = "text") -> str:
             lexer = PythonLexer()
         else:
             lexer = TextLexer()
-        return highlight(text, lexer, Terminal256Formatter(style=LOG_TOOL_STYLE)).rstrip("\n")
+        formatter = (
+            Terminal256Formatter(style=LOG_TOOL_STYLE)
+            if use_256
+            else TerminalFormatter()
+        )
+        rendered = highlight(text, lexer, formatter).rstrip("\n")
+        # Some formatters (and some terminals/UIs) can leave attributes "open".
+        # Always hard-reset at the end of the highlighted block.
+        if rendered and not rendered.endswith(ANSI_RESET):
+            rendered += ANSI_RESET
+        return rendered
     except Exception:
         return text
 
 
-def _highlight_file_text(path: str, text: str) -> str:
+def _highlight_file_text(
+    path: str,
+    text: str,
+    *,
+    enabled: bool | None = None,
+    use_256: bool = True,
+) -> str:
     """Highlight file text by filename when possible."""
 
-    if not (LOG_TOOL_COLOR and _pygments_available() and isinstance(text, str) and text):
+    color_enabled = LOG_TOOL_COLOR if enabled is None else bool(enabled)
+    if not (color_enabled and _pygments_available() and isinstance(text, str) and text):
         return text
     try:
         from pygments import highlight
-        from pygments.formatters import Terminal256Formatter
+        from pygments.formatters import Terminal256Formatter, TerminalFormatter
         from pygments.lexers import TextLexer, get_lexer_for_filename
 
         try:
             lexer = get_lexer_for_filename(path or "", text)
         except Exception:
             lexer = TextLexer()
-        return highlight(text, lexer, Terminal256Formatter(style=LOG_TOOL_STYLE)).rstrip("\n")
+        formatter = (
+            Terminal256Formatter(style=LOG_TOOL_STYLE)
+            if use_256
+            else TerminalFormatter()
+        )
+        rendered = highlight(text, lexer, formatter).rstrip("\n")
+        if rendered and not rendered.endswith(ANSI_RESET):
+            rendered += ANSI_RESET
+        return rendered
     except Exception:
         return text
 
 
-def _highlight_line_for_filename(path: str, text: str) -> str:
+def _highlight_line_for_filename(
+    path: str,
+    text: str,
+    *,
+    enabled: bool | None = None,
+    use_256: bool = True,
+) -> str:
     """Syntax-highlight a single line of text using the filename for lexer selection."""
 
-    if not (LOG_TOOL_COLOR and _pygments_available() and isinstance(text, str) and text):
+    color_enabled = LOG_TOOL_COLOR if enabled is None else bool(enabled)
+    if not (color_enabled and _pygments_available() and isinstance(text, str) and text):
         return text
     try:
         from pygments import highlight
-        from pygments.formatters import Terminal256Formatter
+        from pygments.formatters import Terminal256Formatter, TerminalFormatter
         from pygments.lexers import TextLexer, get_lexer_for_filename
 
         try:
             lexer = get_lexer_for_filename(path or "", text)
         except Exception:
             lexer = TextLexer()
-        return highlight(text, lexer, Terminal256Formatter(style=LOG_TOOL_STYLE)).rstrip("\n")
+        formatter = (
+            Terminal256Formatter(style=LOG_TOOL_STYLE)
+            if use_256
+            else TerminalFormatter()
+        )
+        rendered = highlight(text, lexer, formatter).rstrip("\n")
+        if rendered and not rendered.endswith(ANSI_RESET):
+            rendered += ANSI_RESET
+        return rendered
     except Exception:
         return text
 
 
-def _ansi(text: str, code: str) -> str:
-    if not LOG_TOOL_COLOR:
+def _ansi(text: str, code: str, *, enabled: bool | None = None) -> str:
+    color_enabled = LOG_TOOL_COLOR if enabled is None else bool(enabled)
+    if not color_enabled:
         return text
     return f"{code}{text}{ANSI_RESET}"
 
@@ -458,14 +506,24 @@ def _friendly_arg_bits(all_args: Mapping[str, Any]) -> list[str]:
     return bits
 
 
-def _clip_text(text: str, *, max_lines: int, max_chars: int) -> str:
+def _clip_text(
+    text: str,
+    *,
+    max_lines: int,
+    max_chars: int,
+    enabled: bool | None = None,
+) -> str:
     if not text:
         return ""
     lines = text.splitlines()
     clipped = lines[: max(0, max_lines)]
     out = "\n".join(clipped)
     if len(lines) > max_lines:
-        out += "\n" + _ansi(f"… ({len(lines) - max_lines} more lines)", ANSI_DIM)
+        out += "\n" + _ansi(
+            f"… ({len(lines) - max_lines} more lines)",
+            ANSI_DIM,
+            enabled=enabled,
+        )
     if len(out) > max_chars:
         out = out[: max(0, max_chars - 1)] + "…"
     return out
@@ -708,17 +766,31 @@ def _format_stream_block(
     elif 'File "' in text and "line" in text and "Error" in text:
         kind = "traceback"
 
-    highlighted = _highlight_code(text, kind=kind)
+    # ChatGPT-facing payloads benefit from ANSI coloring even when provider logs
+    # disable it. Additionally, prefer basic ANSI (16-color) for broad UI
+    # compatibility (some clients do not render 256-color sequences correctly).
+    highlighted = _highlight_code(text, kind=kind, enabled=True, use_256=False)
     lines = highlighted.splitlines()
     preview = lines[: max(1, max_lines)]
     rendered: list[str] = []
     for idx, line in enumerate(preview, start=1):
-        rendered.append(f"{_ansi(f'{idx:>4}│', ANSI_DIM)} {line}")
+        rendered.append(f"{_ansi(f'{idx:>4}│', ANSI_DIM, enabled=True)} {line}{ANSI_RESET}")
     if len(lines) > max_lines:
-        rendered.append(_ansi(f"… ({len(lines) - max_lines} more lines)", ANSI_DIM))
+        rendered.append(
+            _ansi(
+                f"… ({len(lines) - max_lines} more lines)",
+                ANSI_DIM,
+                enabled=True,
+            )
+        )
 
-    header = _ansi(label, header_color)
-    return header + "\n" + _clip_text("\n".join(rendered), max_lines=max_lines, max_chars=max_chars)
+    header = _ansi(label, header_color, enabled=True)
+    return header + "\n" + _clip_text(
+        "\n".join(rendered),
+        max_lines=max_lines,
+        max_chars=max_chars,
+        enabled=True,
+    )
 
 
 def _inject_stdout_stderr(out: dict[str, Any]) -> None:
