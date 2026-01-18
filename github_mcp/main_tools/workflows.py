@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import string
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from github_mcp.exceptions import GitHubAPIError
+
+UTC = timezone.utc
 
 from ._main import _main
 
@@ -338,7 +340,11 @@ async def get_job_logs(full_name: str, job_id: int) -> dict[str, Any]:
 
     m = _main()
 
-    client = getattr(m, "_http_client_github", None) or m._github_client_instance()
+    client_factory = getattr(m, "_github_client_instance", None)
+    if client_factory is None:
+        from github_mcp.http_clients import _github_client_instance as client_factory
+
+    client = getattr(m, "_http_client_github", None) or client_factory()
     request = client.build_request(
         "GET",
         f"/repos/{full_name}/actions/jobs/{job_id}/logs",
