@@ -31,6 +31,7 @@ from github_mcp.workspace_tools import git_ops as _git_ops
 from github_mcp.workspace_tools import listing as _listing
 from github_mcp.workspace_tools import pr as _pr
 from github_mcp.workspace_tools import suites as _suites
+from github_mcp.workspace_tools import workflows as _workflows
 
 LOGGER = BASE_LOGGER.getChild("tools_workspace")
 
@@ -120,6 +121,8 @@ run_lint_suite = _suites.run_lint_suite
 
 commit_and_open_pr_from_workspace = _pr.commit_and_open_pr_from_workspace
 
+workspace_apply_ops_and_open_pr = _workflows.workspace_apply_ops_and_open_pr
+
 __all__ = [
     "uuid",
     "CONTROLLER_REPO",
@@ -170,4 +173,5 @@ __all__ = [
     "run_lint_suite",
     "build_pr_summary",
     "commit_and_open_pr_from_workspace",
+    "workspace_apply_ops_and_open_pr",
 ]
