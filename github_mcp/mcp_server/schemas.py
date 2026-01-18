@@ -124,7 +124,7 @@ _PARAM_DOCS: dict[str, dict[str, Any]] = {
     # Render tool parameters
     "owner_id": {
         "description": (
-            "Render owner id (workspace or personal owner). Use list_render_owners to discover values."
+            "Render owner id (workspace or personal owner). list_render_owners returns discoverable values."
         ),
     },
     "service_id": {

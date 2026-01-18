@@ -34,7 +34,7 @@ Repo mirror
 
 Live GitHub state
   The remote repository state on GitHub. The repo mirror does not automatically
-  reflect live GitHub state; the remote branch reflects updates only after you push.
+  reflect live GitHub state; the remote branch reflects updates only after changes are pushed.
 
 Workspace tool
   A tool that operates on the repo mirror (filesystem + git). Workspace tools

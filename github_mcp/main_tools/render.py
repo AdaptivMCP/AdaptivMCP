@@ -416,7 +416,8 @@ async def get_render_logs(
             )
         if not owner_id:
             raise ValueError(
-                "Unable to resolve ownerId for service. Ensure the Render service id is correct."
+                "Unable to resolve ownerId for service. The Render service id may be invalid, "
+                "inaccessible to the configured credentials, or returned an unexpected shape."
             )
         return await list_render_logs(
             owner_id=str(owner_id),
@@ -429,7 +430,8 @@ async def get_render_logs(
     # Jobs (and other resource types) require the caller to provide ownerId.
     # Keep legacy behavior explicit and actionable.
     raise ValueError(
-        "Render logs now require owner_id. Use list_render_logs(owner_id=..., resources=[...])."
+        "Render log queries require owner_id. list_render_logs accepts owner_id plus one or more "
+        "resource ids (service/job) for the query."
     )
 
 

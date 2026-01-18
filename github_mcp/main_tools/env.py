@@ -583,7 +583,7 @@ async def validate_environment() -> dict[str, Any]:
                 params={"per_page": 1},
             )
 
-            # 2) Can create PR? Use an invalid head ref to avoid side effects.
+            # 2) Can create PR? A deliberately invalid head ref avoids side effects.
             # If the endpoint is reachable and token has access, GitHub returns
             # 422 Validation Failed. Auth/permission failures return 401/403/404.
             bogus_head = f"mcp-capability-probe-{uuid.uuid4()}"

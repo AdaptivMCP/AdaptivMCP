@@ -1088,8 +1088,8 @@ async def replace_workspace_text(
 ) -> dict[str, Any]:
     """Replace text in a workspace file (single word/character or substring).
 
-    By default, replaces the Nth occurrence (1-indexed). Use replace_all=true
-    to replace all occurrences.
+    By default, replaces the Nth occurrence (1-indexed). When replace_all=true,
+    all occurrences are replaced.
     """
 
     try:

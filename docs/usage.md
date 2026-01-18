@@ -17,9 +17,9 @@ This document uses a small set of terms with specific meanings. See
 
 1) Repo mirror (persistent server-side git working copy)
 
-When you use any workspace-backed tool, the server maintains a persistent git copy of the target repository on the server filesystem. In this documentation, we call that copy the **repo mirror** to avoid confusion with the tool name `ensure_workspace_clone`. The repo mirror is what workspace tools operate on (editing files, running commands, committing, and pushing).
+Workspace-backed tools rely on a persistent git copy of the target repository stored on the server filesystem. In this documentation, that copy is referred to as the **repo mirror** to avoid confusion with the tool name `ensure_workspace_clone`. The repo mirror is the working directory for workspace operations (file edits, command execution, commits, and pushes).
 
-Important: the repo mirror is not the live GitHub state. It is a local copy that becomes “live” on GitHub after you push.
+Important: the repo mirror is not the live GitHub state. The remote branch reflects changes only after updates are pushed.
 
 2) Server execution environment
 
@@ -101,7 +101,7 @@ Notes:
 - The repo mirror is a persistent server-side working copy; it does not
   automatically match the remote GitHub state.
 - `workspace_sync_to_remote` updates the mirror from the remote.
-- `ensure_workspace_clone(reset=true)` rebuilds the mirror.
+- `ensure_workspace_clone(reset=true)` rebuilds the mirror from the selected remote ref.
 
 ## Behavior notes
 
@@ -180,27 +180,27 @@ Operational notes:
 - `create_render_deploy`: provide at most one of `commit_id` or `image_url`.
 - `get_render_logs`: `resource_type` is expected to be `service` or `job`. If both `start_time` and `end_time` are provided, start is validated to be <= end. Timestamps are validated as ISO8601 strings (for example `2026-01-14T12:34:56Z`).
 
-Example requests:
+Example tool invocation payloads:
 
-Discover owners/workspaces:
+Owners/workspaces discovery:
 
 ```json
 {"tool":"list_render_owners","args":{"limit":20}}
 ```
 
-List services for a specific owner:
+Services listing for a specific owner:
 
 ```json
 {"tool":"list_render_services","args":{"owner_id":"<owner-id>","limit":20}}
 ```
 
-Trigger a deploy:
+Deploy trigger:
 
 ```json
 {"tool":"create_render_deploy","args":{"service_id":"<service-id>","clear_cache":false,"commit_id":"<sha>"}}
 ```
 
-Fetch logs for a service:
+Service log query:
 
 ```json
 {"tool":"get_render_logs","args":{"resource_type":"service","resource_id":"<service-id>","start_time":"2026-01-14T12:34:56Z","end_time":"2026-01-14T13:34:56Z","limit":200}}
@@ -354,7 +354,7 @@ When `LOG_HTTP_REQUESTS` is enabled, unhandled exceptions inside the ASGI reques
 uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
 ```
 
-Once running, /sse serves the MCP transport and /healthz reports health.
+Once running, /sse serves the MCP transport and /healthz returns health.
 
 ## Troubleshooting tips
 
