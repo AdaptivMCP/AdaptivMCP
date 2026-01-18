@@ -29,7 +29,22 @@ command -v rg >/dev/null 2>&1
 rg --version
 
 UVICORN_WORKERS="${WEB_CONCURRENCY:-1}"
-UVICORN_LOG_LEVEL="${LOG_LEVEL:-info}"
+
+# Render env uses LOG_LEVEL=DETAILED for our app logs, but uvicorn only accepts:
+# critical|error|warning|info|debug|trace. Normalize to keep deploys healthy.
+RAW_LOG_LEVEL="${LOG_LEVEL:-info}"
+RAW_LOG_LEVEL_LC="$(printf '%s' "$RAW_LOG_LEVEL" | tr '[:upper:]' '[:lower:]')"
+case "$RAW_LOG_LEVEL_LC" in
+  detailed)
+    UVICORN_LOG_LEVEL="debug"
+    ;;
+  warn)
+    UVICORN_LOG_LEVEL="warning"
+    ;;
+  *)
+    UVICORN_LOG_LEVEL="$RAW_LOG_LEVEL_LC"
+    ;;
+esac
 
 exec uvicorn main:app \
   --host 0.0.0.0 \
