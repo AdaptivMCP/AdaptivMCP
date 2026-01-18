@@ -1448,6 +1448,54 @@ def _tool_annotations(
     }
 
 
+def _resolve_invocation_annotations(
+    func: Any,
+    *,
+    effective_write_action: bool,
+) -> dict[str, Any]:
+    """Return dynamic annotations for a specific invocation."""
+
+    open_world_hint = getattr(func, "__mcp_open_world_hint__", None)
+    destructive_hint = getattr(func, "__mcp_destructive_hint__", None)
+    read_only_hint = getattr(func, "__mcp_read_only_hint__", None)
+    return _tool_annotations(
+        write_action=bool(effective_write_action),
+        open_world_hint=open_world_hint,
+        destructive_hint=destructive_hint,
+        read_only_hint=read_only_hint,
+    )
+
+
+def _merge_invocation_metadata(
+    payload: Mapping[str, Any],
+    *,
+    func: Any,
+    base_write_action: bool,
+    effective_write_action: bool,
+) -> dict[str, Any]:
+    """Attach dynamic tool metadata to a mapping payload."""
+
+    out = dict(payload)
+    tool_metadata: dict[str, Any] = {
+        "base_write_action": bool(base_write_action),
+        "effective_write_action": bool(effective_write_action),
+    }
+    annotations = _resolve_invocation_annotations(
+        func, effective_write_action=effective_write_action
+    )
+    if annotations:
+        tool_metadata["annotations"] = annotations
+
+    existing = out.get("tool_metadata")
+    if isinstance(existing, Mapping):
+        merged = dict(existing)
+        merged.update(tool_metadata)
+        out["tool_metadata"] = merged
+    else:
+        out["tool_metadata"] = tool_metadata
+    return out
+
+
 def _schema_summary(schema: Mapping[str, Any], *, max_fields: int = 8) -> str:
     """Create a compact, UI-friendly parameter summary from a JSON schema."""
 
@@ -3115,19 +3163,15 @@ def mcp_tool(
                 client_payload: Any
                 if isinstance(result, Mapping):
                     client_payload = _strip_internal_log_fields(result)
-                    # Include invocation-level metadata when classification is dynamic.
-                    if callable(write_action_resolver):
-                        try:
-                            client_payload = dict(client_payload)
-                            client_payload.setdefault(
-                                "tool_metadata",
-                                {
-                                    "base_write_action": bool(write_action),
-                                    "effective_write_action": bool(effective_write_action),
-                                },
-                            )
-                        except Exception:
-                            pass
+                    try:
+                        client_payload = _merge_invocation_metadata(
+                            client_payload,
+                            func=wrapper,
+                            base_write_action=bool(write_action),
+                            effective_write_action=bool(effective_write_action),
+                        )
+                    except Exception:
+                        pass
                 else:
                     client_payload = result
                 if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
@@ -3156,6 +3200,9 @@ def mcp_tool(
             wrapper.__mcp_tool_name__ = tool_name
             wrapper.__mcp_write_action__ = bool(write_action)
             wrapper.__mcp_write_action_resolver__ = write_action_resolver
+            wrapper.__mcp_open_world_hint__ = open_world_hint
+            wrapper.__mcp_destructive_hint__ = destructive_hint
+            wrapper.__mcp_read_only_hint__ = read_only_hint
             wrapper.__mcp_visibility__ = visibility
             wrapper.__mcp_tags__ = tag_list
             wrapper.__mcp_ui__ = ui_meta or None
@@ -3390,18 +3437,15 @@ def mcp_tool(
             client_payload: Any
             if isinstance(result, Mapping):
                 client_payload = _strip_internal_log_fields(result)
-                if callable(write_action_resolver):
-                    try:
-                        client_payload = dict(client_payload)
-                        client_payload.setdefault(
-                            "tool_metadata",
-                            {
-                                "base_write_action": bool(write_action),
-                                "effective_write_action": bool(effective_write_action),
-                            },
-                        )
-                    except Exception:
-                        pass
+                try:
+                    client_payload = _merge_invocation_metadata(
+                        client_payload,
+                        func=wrapper,
+                        base_write_action=bool(write_action),
+                        effective_write_action=bool(effective_write_action),
+                    )
+                except Exception:
+                    pass
             else:
                 client_payload = result
             if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
@@ -3430,6 +3474,9 @@ def mcp_tool(
         wrapper.__mcp_tool_name__ = tool_name
         wrapper.__mcp_write_action__ = bool(write_action)
         wrapper.__mcp_write_action_resolver__ = write_action_resolver
+        wrapper.__mcp_open_world_hint__ = open_world_hint
+        wrapper.__mcp_destructive_hint__ = destructive_hint
+        wrapper.__mcp_read_only_hint__ = read_only_hint
         wrapper.__mcp_visibility__ = visibility
         wrapper.__mcp_tags__ = tag_list
         wrapper.__mcp_ui__ = ui_meta or None
