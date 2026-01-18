@@ -44,6 +44,40 @@ def test_fastmcp_signature_alignment_positional_name_fn_factory_fallback(monkeyp
     monkeypatch.setattr(decorators, "mcp", fake_mcp)
     monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
 
+    # Our wrapper erases the original signature (it becomes *args/**kwargs), which would
+    # prevent `_fastmcp_tool_params()` from detecting the positional `(name, fn, ...)` shape.
+    # Patch params directly to simulate the real FastMCP signature and ensure the factory
+    # fallback path is exercised.
+    monkeypatch.setattr(
+        decorators,
+        "_fastmcp_tool_params",
+        lambda: (
+            inspect.Parameter(
+                "name",
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ),
+            inspect.Parameter(
+                "fn",
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ),
+            inspect.Parameter(
+                "description",
+                inspect.Parameter.KEYWORD_ONLY,
+                default=None,
+            ),
+            inspect.Parameter(
+                "meta",
+                inspect.Parameter.KEYWORD_ONLY,
+                default=None,
+            ),
+            inspect.Parameter(
+                "annotations",
+                inspect.Parameter.KEYWORD_ONLY,
+                default=None,
+            ),
+        ),
+    )
+
     def aligned_tool():
         return "ok"
 
