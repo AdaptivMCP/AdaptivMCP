@@ -42,12 +42,8 @@ def test_provider_tool_success_logs_append_human_extras_block(monkeypatch):
     )
 
     out = stream.getvalue()
-    # Tool lifecycle events are appended as a YAML-like extras block when
-    # LOG_APPEND_EXTRAS=1 so provider logs are self-contained for debugging.
-    assert "extras:" in out
-    assert "foo: bar" in out
-    assert "nested:" in out
-    assert "a: 1" in out
+    # Tool lifecycle events should NOT append an "extras" block.
+    assert "extras:" not in out
     # No JSON blobs.
     assert "data=" not in out
     assert "{" not in out

@@ -768,6 +768,13 @@ class _StructuredFormatter(logging.Formatter):
             "render_http",
         }
         event = getattr(record, "event", None)
+
+        # Do not append an "extras" block for tool events.
+        # Tool logs already embed a scan-friendly summary (REQ/RES) and keeping
+        # an additional YAML-like block duplicates information and adds noise.
+        if isinstance(event, str) and event.startswith("tool_"):
+            return base
+
         should_append = bool(LOG_APPEND_EXTRAS) and (
             record.levelno >= logging.WARNING
             or (isinstance(event, str) and event in always_append_events)
