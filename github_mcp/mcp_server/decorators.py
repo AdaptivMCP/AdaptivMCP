@@ -686,6 +686,97 @@ def _preview_terminal_result(payload: Mapping[str, Any]) -> str:
     )
 
 
+def _format_stream_block(
+    text: str,
+    *,
+    label: str,
+    header_color: str,
+    max_lines: int,
+    max_chars: int,
+) -> str:
+    """Render a stdout/stderr block with line numbers and ANSI coloring."""
+
+    if not isinstance(text, str) or not text:
+        return ""
+
+    # Best-effort classification for highlighting.
+    kind = "text"
+    if "Traceback (most recent call last):" in text:
+        kind = "traceback"
+    elif _looks_like_unified_diff(text):
+        kind = "diff"
+    elif 'File "' in text and "line" in text and "Error" in text:
+        kind = "traceback"
+
+    highlighted = _highlight_code(text, kind=kind)
+    lines = highlighted.splitlines()
+    preview = lines[: max(1, max_lines)]
+    rendered: list[str] = []
+    for idx, line in enumerate(preview, start=1):
+        rendered.append(f"{_ansi(f'{idx:>4}│', ANSI_DIM)} {line}")
+    if len(lines) > max_lines:
+        rendered.append(_ansi(f"… ({len(lines) - max_lines} more lines)", ANSI_DIM))
+
+    header = _ansi(label, header_color)
+    return header + "\n" + _clip_text("\n".join(rendered), max_lines=max_lines, max_chars=max_chars)
+
+
+def _inject_stdout_stderr(out: dict[str, Any]) -> None:
+    """Attach stdout/stderr to ChatGPT-friendly responses.
+
+    Many tools return process outputs nested under `result`. ChatGPT UIs often
+    benefit from having these streams available at the top-level.
+
+    Adds:
+    - stdout / stderr (raw strings)
+    - stdout_colored / stderr_colored (ANSI + line numbers, clipped)
+    """
+
+    if not isinstance(out, dict):
+        return
+
+    # Accept both top-level and nested result envelopes.
+    result = out.get("result")
+    inner = result if isinstance(result, Mapping) else out
+
+    stdout = inner.get("stdout") if isinstance(inner, Mapping) else None
+    stderr = inner.get("stderr") if isinstance(inner, Mapping) else None
+
+    if isinstance(stdout, str) and stdout and "stdout" not in out:
+        out["stdout"] = stdout
+    if isinstance(stderr, str) and stderr and "stderr" not in out:
+        out["stderr"] = stderr
+
+    # Render colorized blocks (even when LOG_TOOL_COLOR is off) because this is
+    # explicitly requested for ChatGPT-facing payloads.
+    max_lines = max(1, LOG_TOOL_VISUAL_MAX_LINES)
+    max_chars = max(1, LOG_TOOL_VISUAL_MAX_CHARS)
+
+    if isinstance(stdout, str) and stdout.strip():
+        out.setdefault(
+            "stdout_colored",
+            _format_stream_block(
+                stdout,
+                label="stdout",
+                header_color=ANSI_GREEN,
+                max_lines=max_lines,
+                max_chars=max_chars,
+            ),
+        )
+
+    if isinstance(stderr, str) and stderr.strip():
+        out.setdefault(
+            "stderr_colored",
+            _format_stream_block(
+                stderr,
+                label="stderr",
+                header_color=ANSI_RED,
+                max_lines=max_lines,
+                max_chars=max_chars,
+            ),
+        )
+
+
 def _preview_changed_files(status_lines: list[str]) -> str:
     if not status_lines:
         return ""
@@ -1715,6 +1806,12 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
 
         # Add a compact snapshot for LLMs (does not replace the full payload).
         out.setdefault("summary", _result_snapshot(out))
+
+        # Surface stdout/stderr in ChatGPT-friendly payloads.
+        try:
+            _inject_stdout_stderr(out)
+        except Exception:
+            pass
 
         truncated_fields: list[str] = []
 
