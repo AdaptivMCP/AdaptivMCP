@@ -15,6 +15,8 @@ Design goals:
 from __future__ import annotations
 
 import json
+import time
+import uuid
 from typing import Any
 
 from github_mcp.server import mcp_tool
@@ -36,7 +38,7 @@ def _parse_marked_steps(stdout: str) -> list[dict[str, Any]]:
 
     The runner emits markers:
       __MCP_STEP_BEGIN__<name>
-      __MCP_STEP_END__<name>::<exit_code>
+      __MCP_STEP_END__<name>::<exit_code>[::<duration_ms>]
 
     Everything between BEGIN and END is treated as the step's combined output.
     """
@@ -58,16 +60,29 @@ def _parse_marked_steps(stdout: str) -> list[dict[str, Any]]:
 
         if line.startswith(end_prefix):
             tail = line[len(end_prefix) :].strip()
-            name_part, _, code_part = tail.partition("::")
+            name_part, _, rest = tail.partition("::")
+            code_part, _, dur_part = rest.partition("::")
             name = name_part.strip()
             exit_code: int | None
+            duration_ms: int | None
             try:
                 exit_code = int(code_part.strip())
             except Exception:
                 exit_code = None
+            try:
+                duration_ms = int(dur_part.strip()) if dur_part.strip() else None
+            except Exception:
+                duration_ms = None
 
             effective_name = current_name or name or "unknown"
-            steps.append({"name": effective_name, "exit_code": exit_code, "output": "".join(buf)})
+            steps.append(
+                {
+                    "name": effective_name,
+                    "exit_code": exit_code,
+                    "duration_ms": duration_ms,
+                    "output": "".join(buf),
+                }
+            )
             current_name = None
             buf = []
             continue
@@ -90,7 +105,7 @@ def _build_quality_suite_runner_command(*, steps: list[dict[str, Any]]) -> str:
     steps_json = json.dumps(steps, ensure_ascii=False)
     return (
         "python - <<'PY'\n"
-        "import json, subprocess, sys\n"
+        "import json, subprocess, sys, time\n"
         "steps = json.loads(" + repr(steps_json) + ")\n"
         "BEGIN = '__MCP_STEP_BEGIN__'\n"
         "END = '__MCP_STEP_END__'\n"
@@ -101,7 +116,9 @@ def _build_quality_suite_runner_command(*, steps: list[dict[str, Any]]) -> str:
         "    allow_missing = bool(step.get('allow_missing'))\n"
         "    sys.stdout.write(f'{BEGIN}{name}\\n')\n"
         "    sys.stdout.flush()\n"
+        "    t0 = time.monotonic()\n"
         "    p = subprocess.run(cmd, shell=True, text=True, capture_output=True)\n"
+        "    dt_ms = int((time.monotonic() - t0) * 1000)\n"
         "    # If a tool isn't installed, treat it as skipped when allow_missing is set.\n"
         "    rc = p.returncode\n"
         "    if allow_missing and rc == 127:\n"
@@ -110,7 +127,7 @@ def _build_quality_suite_runner_command(*, steps: list[dict[str, Any]]) -> str:
         "        sys.stdout.write(p.stdout)\n"
         "    if p.stderr:\n"
         "        sys.stdout.write(p.stderr)\n"
-        "    sys.stdout.write(f'\\n{END}{name}::{rc}\\n')\n"
+        "    sys.stdout.write(f'\\n{END}{name}::{rc}::{dt_ms}\\n')\n"
         "    sys.stdout.flush()\n"
         "    if stop_on_fail and rc != 0:\n"
         "        break\n"
@@ -176,6 +193,7 @@ async def _run_named_step(
     include_raw: bool,
     allow_missing_command: bool = False,
 ) -> dict[str, Any]:
+    t0 = time.monotonic()
     raw = await _tw().terminal_command(
         full_name=full_name,
         ref=ref,
@@ -185,6 +203,7 @@ async def _run_named_step(
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
     )
+    duration_ms = int((time.monotonic() - t0) * 1000)
 
     slim = _slim_terminal_command_payload(raw)
     exit_code = slim.get("exit_code")
@@ -197,7 +216,7 @@ async def _run_named_step(
     step: dict[str, Any] = {
         "name": name,
         "status": status,
-        "summary": slim,
+        "summary": {**slim, "duration_ms": duration_ms},
     }
     if include_raw:
         step["raw"] = raw
@@ -216,6 +235,7 @@ async def run_tests(
 ) -> dict[str, Any]:
     timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
 
+    t0 = time.monotonic()
     result = await _tw().terminal_command(
         full_name=full_name,
         ref=ref,
@@ -225,6 +245,7 @@ async def run_tests(
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
     )
+    duration_ms = int((time.monotonic() - t0) * 1000)
 
     if isinstance(result, dict) and "error" in result:
         err_obj = result.get("error")
@@ -266,11 +287,15 @@ async def run_tests(
 
     status = "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
 
+    slim = _slim_terminal_command_payload(result)
+    slim["duration_ms"] = duration_ms
+
     return {
         "status": status,
         "command": test_command,
         "exit_code": exit_code,
         "workdir": result.get("workdir"),
+        "summary": slim,
         "result": cmd_result,
         "controller_log": [
             "Completed test command in repo mirror:",
@@ -279,6 +304,7 @@ async def run_tests(
             f"- Command: {test_command}",
             f"- Status: {status}",
             f"- Exit code: {exit_code}",
+            f"- Duration (ms): {duration_ms}",
         ],
     }
 
@@ -295,7 +321,8 @@ async def run_lint_suite(
 ) -> dict[str, Any]:
     timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
 
-    return await _tw().terminal_command(
+    t0 = time.monotonic()
+    result = await _tw().terminal_command(
         full_name=full_name,
         ref=ref,
         command=lint_command,
@@ -304,6 +331,72 @@ async def run_lint_suite(
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
     )
+
+    duration_ms = int((time.monotonic() - t0) * 1000)
+
+    if isinstance(result, dict) and "error" in result:
+        err_obj = result.get("error")
+        err_msg = ""
+        if isinstance(err_obj, dict):
+            err_msg = str(err_obj.get("error") or err_obj.get("message") or "").strip()
+        else:
+            err_msg = str(err_obj or "").strip()
+        if not err_msg:
+            err_msg = "TerminalCommandError"
+        return {
+            "status": "failed",
+            "command": lint_command,
+            "error": result["error"],
+            "controller_log": [
+                "Lint suite failed due to a repo mirror or command error.",
+                f"- Repo: {full_name}",
+                f"- Ref: {ref}",
+                f"- Command: {lint_command}",
+                f"- Error: {err_msg}",
+            ],
+        }
+
+    if not isinstance(result, dict) or "result" not in result:
+        return {
+            "status": "failed",
+            "command": lint_command,
+            "error": {
+                "error": "UnexpectedResultShape",
+                "message": "terminal_command returned an unexpected result structure",
+                "raw_result": result,
+            },
+            "controller_log": [
+                "Lint suite failed because terminal_command returned an unexpected result shape.",
+                f"- Repo: {full_name}",
+                f"- Ref: {ref}",
+                f"- Command: {lint_command}",
+            ],
+        }
+
+    cmd_result = result.get("result") or {}
+    exit_code = cmd_result.get("exit_code")
+    status = "passed" if exit_code == 0 else "failed"
+
+    slim = _slim_terminal_command_payload(result)
+    slim["duration_ms"] = duration_ms
+
+    return {
+        "status": status,
+        "command": lint_command,
+        "exit_code": exit_code,
+        "workdir": result.get("workdir"),
+        "summary": slim,
+        "result": cmd_result,
+        "controller_log": [
+            "Completed lint command in repo mirror:",
+            f"- Repo: {full_name}",
+            f"- Ref: {ref}",
+            f"- Command: {lint_command}",
+            f"- Status: {status}",
+            f"- Exit code: {exit_code}",
+            f"- Duration (ms): {duration_ms}",
+        ],
+    }
 
 
 @mcp_tool(write_action=False)
@@ -329,6 +422,8 @@ async def run_quality_suite(
 ) -> dict[str, Any]:
     timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
 
+    run_id = uuid.uuid4().hex
+
     # Developer defaults are enabled by default for this self-hosted MCP server.
     # The intent is to provide a useful suite out-of-the-box, even when invoked
     # via automation.
@@ -352,6 +447,8 @@ async def run_quality_suite(
             lint_command = lint_command.replace("ruff check", "ruff check --fix")
 
     suite: dict[str, Any] = {
+        "schema_version": 1,
+        "run_id": run_id,
         "repo": full_name,
         "ref": ref,
         "workdir": workdir,
@@ -377,6 +474,7 @@ async def run_quality_suite(
         "Quality suite run:",
         f"- Repo: {full_name}",
         f"- Ref: {ref}",
+        f"- Run ID: {run_id}",
     ]
 
     steps: list[dict[str, Any]] = []
@@ -565,6 +663,18 @@ async def run_quality_suite(
                 allow_missing=False,
                 stop_on_fail=False,
             )
+            _add_runner_step(
+                name="ruff_version",
+                command="ruff --version",
+                allow_missing=True,
+                stop_on_fail=False,
+            )
+            _add_runner_step(
+                name="pytest_version",
+                command="pytest --version",
+                allow_missing=True,
+                stop_on_fail=False,
+            )
         else:
             # Diagnostics only; no gating.
             steps.append(
@@ -591,6 +701,34 @@ async def run_quality_suite(
                     use_temp_venv=use_temp_venv,
                     installing_dependencies=False,
                     include_raw=include_raw_step_outputs,
+                )
+            )
+            steps.append(
+                await _run_named_step(
+                    name="ruff_version",
+                    full_name=full_name,
+                    ref=ref,
+                    command="ruff --version",
+                    timeout_seconds=min(60, timeout_seconds_i),
+                    workdir=workdir,
+                    use_temp_venv=use_temp_venv,
+                    installing_dependencies=False,
+                    include_raw=include_raw_step_outputs,
+                    allow_missing_command=True,
+                )
+            )
+            steps.append(
+                await _run_named_step(
+                    name="pytest_version",
+                    full_name=full_name,
+                    ref=ref,
+                    command="pytest --version",
+                    timeout_seconds=min(60, timeout_seconds_i),
+                    workdir=workdir,
+                    use_temp_venv=use_temp_venv,
+                    installing_dependencies=False,
+                    include_raw=include_raw_step_outputs,
+                    allow_missing_command=True,
                 )
             )
 
@@ -685,6 +823,7 @@ async def run_quality_suite(
             allow_missing = bool(step_def.get("allow_missing"))
             p = parsed_by_name.get(name)
             exit_code = (p or {}).get("exit_code")
+            duration_ms = (p or {}).get("duration_ms")
             status = _step_status_from_exit_code(
                 exit_code=exit_code,
                 allow_missing_command=allow_missing,
@@ -700,6 +839,7 @@ async def run_quality_suite(
                     "timed_out": False,
                     "stdout_stats": {"chars": out_chars, "lines": out_lines},
                     "stderr_stats": {"chars": 0, "lines": 0},
+                    "duration_ms": duration_ms,
                     "stdout": step_out,
                     "stderr": "",
                 },
