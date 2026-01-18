@@ -169,11 +169,6 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALAR
 # decorator will wrap scalar outputs, add ok/status when missing, and truncate
 # very large nested "json" payloads.
 RESPONSE_MODE_DEFAULT = os.environ.get("GITHUB_MCP_RESPONSE_MODE", "raw").strip().lower()
-# NOTE: "token limits" in hosted connector environments typically translate to
-# payload-size caps rather than true model-context limits. Setting these to 0
-# disables truncation entirely.
-CHATGPT_RESPONSE_MAX_JSON_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_JSON_CHARS", default=0)
-CHATGPT_RESPONSE_MAX_TEXT_CHARS = _env_int("GITHUB_MCP_RESPONSE_MAX_TEXT_CHARS", default=0)
 CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int("GITHUB_MCP_RESPONSE_MAX_LIST_ITEMS", default=0)
 
 # In hosted LLM connector environments, returning token-like strings (even from
@@ -1535,30 +1530,6 @@ def _normalize_tool_result_envelope(result: Any) -> Any:
     return out
 
 
-def _safe_json_dumps(value: Any) -> str:
-    try:
-        return json.dumps(
-            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
-        )
-    except Exception:
-        try:
-            return json.dumps(value, ensure_ascii=False, default=str)
-        except Exception:
-            return str(value)
-
-
-def _truncate_string(value: str, *, limit: int) -> tuple[str, bool]:
-    if not isinstance(value, str):
-        return str(value), False
-    if limit <= 0:
-        # limit <= 0 means "no truncation".
-        return value, False
-    if len(value) <= limit:
-        return value, False
-    # Keep end-users aware of truncation while staying single-line friendly.
-    return value[: max(0, limit - 1)] + "…", True
-
-
 def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = None) -> Any:
     """Return a ChatGPT-friendly version of a tool result.
 
@@ -1566,7 +1537,6 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
 
     Goals:
     - consistent ok/status surface
-    - bounded payload sizes (truncate large text/json blobs)
     - include a compact summary to aid LLM planning
     """
 
@@ -1606,34 +1576,7 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
         # Add a compact snapshot for LLMs (does not replace the full payload).
         out.setdefault("summary", _result_snapshot(out))
 
-        # Truncate very large text surfaces.
         truncated_fields: list[str] = []
-        for key in ("text", "body", "message"):
-            val = out.get(key)
-            if isinstance(val, str) and val:
-                clipped, did = _truncate_string(val, limit=CHATGPT_RESPONSE_MAX_TEXT_CHARS)
-                if did:
-                    out[key] = clipped
-                    truncated_fields.append(key)
-
-        # Truncate large upstream JSON payloads (common on provider APIs).
-        j = out.get("json")
-        if isinstance(j, (Mapping, list)):
-            dumped = _safe_json_dumps(j)
-            if (
-                CHATGPT_RESPONSE_MAX_JSON_CHARS > 0
-                and len(dumped) > CHATGPT_RESPONSE_MAX_JSON_CHARS
-            ):
-                preview, _ = _truncate_string(dumped, limit=CHATGPT_RESPONSE_MAX_JSON_CHARS)
-                out["json"] = {
-                    "truncated": True,
-                    "preview": preview,
-                    "type": "list" if isinstance(j, list) else "dict",
-                    "len": len(j) if isinstance(j, list) else None,
-                    "keys": len(j) if isinstance(j, Mapping) else None,
-                }
-                out["json_truncated"] = True
-                truncated_fields.append("json")
 
         # Truncate common large lists to keep payload sizes manageable.
         for key in ("packages", "checks", "results", "items"):

@@ -132,9 +132,9 @@ Controls (environment variables):
   - When enabled alongside the envelope, scalar results may be wrapped into a
     mapping (`{"ok": true, "status": "success", "result": ...}`).
 
-- `GITHUB_MCP_RESPONSE_MAX_JSON_CHARS` and `GITHUB_MCP_RESPONSE_MAX_TEXT_CHARS`
-  - Bounds for truncating unusually large nested JSON/text fields in shaped
-    outputs.
+- `GITHUB_MCP_RESPONSE_MAX_LIST_ITEMS`
+  - Bounds for truncating common large list fields (e.g., `items`, `results`) in
+    shaped outputs.
 
 Workspace path handling: workspace file tools enforce that requested paths resolve inside the repository root. Relative traversal and absolute paths that point outside the repo are treated as invalid input. File tools also require non-empty paths; deletion helpers require a non-empty `paths` list. Directory deletion requires `allow_recursive=true` for non-empty directories.
 
