@@ -295,7 +295,7 @@ async def _send_request(
     method: str,
     path: str,
     params: Optional[Dict[str, Any]],
-    json_body: Optional[Dict[str, Any]],
+    json_body: Any | None,
     headers: Optional[Dict[str, str]],
 ) -> "httpx.Response":
     async with _get_concurrency_semaphore():
@@ -313,7 +313,7 @@ async def render_request(
     path: str,
     *,
     params: Optional[Dict[str, Any]] = None,
-    json_body: Optional[Dict[str, Any]] = None,
+    json_body: Any | None = None,
     headers: Optional[Dict[str, str]] = None,
     expect_json: bool = True,
     require_auth: bool = True,
