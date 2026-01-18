@@ -93,7 +93,6 @@ Structured errors:
   with `category`, `code`, `retryable`, `help`, and redacted `debug` fields.
 
 - Tool wrappers attach an `error_detail.trace` object with:
-  - `phase`: `preflight` or `execute`
   - `call_id`: shortened call identifier
 
 Tracebacks:
