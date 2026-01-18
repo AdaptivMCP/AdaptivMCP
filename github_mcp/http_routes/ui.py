@@ -76,6 +76,8 @@ def build_ui_json_endpoint() -> Any:
                     "tools": "/tools",
                     "resources": "/resources",
                     "stream": "/sse",
+                    "tools_ui": "/ui/tools",
+                    "tools_json": "/ui/tools.json",
                     "render": {
                         "owners": "/render/owners",
                         "services": "/render/services",
@@ -93,6 +95,7 @@ def build_ui_json_endpoint() -> Any:
                     "/healthz reports baseline health after deploy.",
                     "/tools supports discovery; POST /tools/{tool_name} invokes a tool.",
                     "Render endpoints require RENDER_API_KEY/RENDER_API_TOKEN configured.",
+                    "/ui/tools provides a developer-facing tool catalog (search/filter).",
                 ],
             }
         )
@@ -106,3 +109,157 @@ def register_ui_routes(app: Any) -> None:
     app.add_route("/", build_ui_index_endpoint(), methods=["GET"])
     app.add_route("/ui", build_ui_index_endpoint(), methods=["GET"])
     app.add_route("/ui.json", build_ui_json_endpoint(), methods=["GET"])
+    app.add_route("/ui/tools", build_ui_tools_endpoint(), methods=["GET"])
+    app.add_route("/ui/tools.json", build_ui_tools_json_endpoint(), methods=["GET"])
+
+
+def build_ui_tools_json_endpoint() -> Any:
+    async def _endpoint(_request) -> Response:
+        from github_mcp.main_tools.introspection import list_all_actions
+
+        catalog = list_all_actions(include_parameters=True, compact=False)
+        return JSONResponse(catalog)
+
+    return _endpoint
+
+
+def build_ui_tools_endpoint() -> Any:
+    async def _endpoint(_request) -> Response:
+        # Minimal, self-contained HTML. Avoids a build step.
+        html = """<!doctype html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"utf-8\" />
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+  <title>Adaptiv MCP – Tool Catalog</title>
+  <style>
+    body{font-family:ui-monospace,Menlo,Monaco,Consolas,monospace;margin:16px;}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+    input{padding:8px 10px;min-width:260px;}
+    select,button{padding:8px 10px;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;}
+    .card{border:1px solid #333;border-radius:10px;padding:12px;}
+    .name{font-size:14px;font-weight:700;margin-bottom:6px;}
+    .badges{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px;}
+    .badge{border:1px solid #555;border-radius:999px;padding:2px 8px;font-size:12px;}
+    .desc{font-size:12px;white-space:pre-wrap;opacity:.9;}
+    .meta{font-size:12px;opacity:.8;margin-top:10px;}
+    .kv{display:flex;gap:8px;flex-wrap:wrap;}
+    .kv span{border:1px dashed #555;border-radius:8px;padding:2px 8px;}
+    .small{font-size:11px;opacity:.85;}
+  </style>
+</head>
+<body>
+  <div class=\"row\">
+    <div><strong>Adaptiv MCP</strong> – Tool Catalog</div>
+    <div class=\"small\">Source: <a href=\"/ui/tools.json\">/ui/tools.json</a></div>
+  </div>
+  <div class=\"row\">
+    <input id=\"q\" placeholder=\"Search tools…\" />
+    <select id=\"mode\">
+      <option value=\"all\">All</option>
+      <option value=\"read\">Read</option>
+      <option value=\"write\">Write</option>
+      <option value=\"destructive\">Destructive</option>
+    </select>
+    <button id=\"refresh\">Refresh</button>
+  </div>
+  <div id=\"status\" class=\"small\"></div>
+  <div id=\"grid\" class=\"grid\"></div>
+
+<script>
+const elQ = document.getElementById('q');
+const elMode = document.getElementById('mode');
+const elGrid = document.getElementById('grid');
+const elStatus = document.getElementById('status');
+const elRefresh = document.getElementById('refresh');
+
+function badge(text){
+  const s = document.createElement('span');
+  s.className='badge';
+  s.textContent=text;
+  return s;
+}
+
+function toolBadges(t){
+  const b = document.createElement('div');
+  b.className='badges';
+  const ann = t.annotations || {};
+  const write = !!t.write_action;
+  b.appendChild(badge(write ? 'WRITE' : 'READ'));
+  if (ann.openWorldHint) b.appendChild(badge('OPEN WORLD'));
+  if (ann.destructiveHint) b.appendChild(badge('DESTRUCTIVE'));
+  if (t.visibility) b.appendChild(badge(String(t.visibility).toUpperCase()));
+  return b;
+}
+
+function card(t){
+  const c = document.createElement('div');
+  c.className='card';
+
+  const name = document.createElement('div');
+  name.className='name';
+  name.textContent = t.name;
+  c.appendChild(name);
+
+  c.appendChild(toolBadges(t));
+
+  const desc = document.createElement('div');
+  desc.className='desc';
+  desc.textContent = t.description || '';
+  c.appendChild(desc);
+
+  const meta = document.createElement('div');
+  meta.className='meta';
+  const kv = document.createElement('div');
+  kv.className='kv';
+
+  const ui = t.ui || {};
+  if (ui.group) kv.appendChild(Object.assign(document.createElement('span'), {textContent: 'group=' + ui.group}));
+  if (ui.icon) kv.appendChild(Object.assign(document.createElement('span'), {textContent: 'icon=' + ui.icon}));
+  if (Array.isArray(t.tags) && t.tags.length) kv.appendChild(Object.assign(document.createElement('span'), {textContent: 'tags=' + t.tags.join(',')}));
+  meta.appendChild(kv);
+  c.appendChild(meta);
+
+  return c;
+}
+
+function matchesMode(t){
+  const mode = elMode.value;
+  const ann = t.annotations || {};
+  if (mode === 'all') return true;
+  if (mode === 'read') return !t.write_action;
+  if (mode === 'write') return !!t.write_action;
+  if (mode === 'destructive') return !!ann.destructiveHint;
+  return true;
+}
+
+function matchesQuery(t){
+  const q = (elQ.value || '').trim().toLowerCase();
+  if (!q) return true;
+  const hay = [t.name, t.description, (t.tags||[]).join(' '), JSON.stringify(t.ui||{})].join(' ').toLowerCase();
+  return hay.includes(q);
+}
+
+async function load(){
+  elStatus.textContent = 'Loading…';
+  const resp = await fetch('/ui/tools.json', {cache: 'no-store'});
+  const data = await resp.json();
+  const tools = (data.tools || []).slice();
+  tools.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const filtered = tools.filter(t=>matchesMode(t) && matchesQuery(t));
+  elGrid.innerHTML = '';
+  filtered.forEach(t=>elGrid.appendChild(card(t)));
+  elStatus.textContent = `Showing ${filtered.length} / ${tools.length} tools.`;
+}
+
+elQ.addEventListener('input', ()=>load());
+elMode.addEventListener('change', ()=>load());
+elRefresh.addEventListener('click', ()=>load());
+load();
+</script>
+</body>
+</html>"""
+        return Response(html, media_type="text/html")
+
+    return _endpoint

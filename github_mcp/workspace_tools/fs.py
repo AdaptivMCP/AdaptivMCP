@@ -1170,7 +1170,17 @@ async def replace_workspace_text(
         )
 
 
-@mcp_tool(write_action=True, open_world_hint=True, destructive_hint=True)
+@mcp_tool(
+    write_action=True,
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={
+        "group": "workspace",
+        "icon": "🧩",
+        "label": "Apply Patch",
+        "danger": "high",
+    },
+)
 async def apply_patch(
     full_name: str,
     ref: str = "main",

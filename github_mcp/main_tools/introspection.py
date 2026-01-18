@@ -240,6 +240,17 @@ def list_all_actions(
             "approval_required": approval_required,
         }
 
+        # UI presentation hints.
+        ann = getattr(tool, "annotations", None)
+        if isinstance(ann, dict) and ann:
+            tool_info["annotations"] = ann
+
+        meta = getattr(tool, "meta", None)
+        if isinstance(meta, dict):
+            ui = meta.get("ui")
+            if isinstance(ui, dict) and ui:
+                tool_info["ui"] = ui
+
         if description:
             tool_info["description"] = description
 

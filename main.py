@@ -966,12 +966,20 @@ async def list_render_logs(
 # ------------------------------------------------------------------------------
 
 
-@mcp_tool(write_action=False, name="render_list_owners")
+@mcp_tool(
+    write_action=False,
+    name="render_list_owners",
+    ui={"group": "render", "icon": "🟦", "label": "List Owners", "danger": "low"},
+)
 async def render_list_owners(cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
     return await list_render_owners(cursor=cursor, limit=limit)
 
 
-@mcp_tool(write_action=False, name="render_list_services")
+@mcp_tool(
+    write_action=False,
+    name="render_list_services",
+    ui={"group": "render", "icon": "🟦", "label": "List Services", "danger": "low"},
+)
 async def render_list_services(
     owner_id: Optional[str] = None,
     cursor: Optional[str] = None,
@@ -980,12 +988,20 @@ async def render_list_services(
     return await list_render_services(owner_id=owner_id, cursor=cursor, limit=limit)
 
 
-@mcp_tool(write_action=False, name="render_get_service")
+@mcp_tool(
+    write_action=False,
+    name="render_get_service",
+    ui={"group": "render", "icon": "🟦", "label": "Get Service", "danger": "low"},
+)
 async def render_get_service(service_id: str) -> Dict[str, Any]:
     return await get_render_service(service_id=service_id)
 
 
-@mcp_tool(write_action=False, name="render_list_deploys")
+@mcp_tool(
+    write_action=False,
+    name="render_list_deploys",
+    ui={"group": "render", "icon": "🟦", "label": "List Deploys", "danger": "low"},
+)
 async def render_list_deploys(
     service_id: str,
     cursor: Optional[str] = None,
@@ -994,12 +1010,22 @@ async def render_list_deploys(
     return await list_render_deploys(service_id=service_id, cursor=cursor, limit=limit)
 
 
-@mcp_tool(write_action=False, name="render_get_deploy")
+@mcp_tool(
+    write_action=False,
+    name="render_get_deploy",
+    ui={"group": "render", "icon": "🟦", "label": "Get Deploy", "danger": "low"},
+)
 async def render_get_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
     return await get_render_deploy(service_id=service_id, deploy_id=deploy_id)
 
 
-@mcp_tool(write_action=True, name="render_create_deploy")
+@mcp_tool(
+    write_action=True,
+    name="render_create_deploy",
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={"group": "render", "icon": "🚀", "label": "Create Deploy", "danger": "high"},
+)
 async def render_create_deploy(
     service_id: str,
     clear_cache: bool = False,
@@ -1014,27 +1040,56 @@ async def render_create_deploy(
     )
 
 
-@mcp_tool(write_action=True, name="render_cancel_deploy")
+@mcp_tool(
+    write_action=True,
+    name="render_cancel_deploy",
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={"group": "render", "icon": "🛑", "label": "Cancel Deploy", "danger": "high"},
+)
 async def render_cancel_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
     return await cancel_render_deploy(service_id=service_id, deploy_id=deploy_id)
 
 
-@mcp_tool(write_action=True, name="render_rollback_deploy")
+@mcp_tool(
+    write_action=True,
+    name="render_rollback_deploy",
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={"group": "render", "icon": "⏪", "label": "Rollback Deploy", "danger": "high"},
+)
 async def render_rollback_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
     return await rollback_render_deploy(service_id=service_id, deploy_id=deploy_id)
 
 
-@mcp_tool(write_action=True, name="render_restart_service")
+@mcp_tool(
+    write_action=True,
+    name="render_restart_service",
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={"group": "render", "icon": "🔁", "label": "Restart Service", "danger": "high"},
+)
 async def render_restart_service(service_id: str) -> Dict[str, Any]:
     return await restart_render_service(service_id=service_id)
 
 
-@mcp_tool(write_action=True, name="render_create_service")
+@mcp_tool(
+    write_action=True,
+    name="render_create_service",
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={"group": "render", "icon": "🧱", "label": "Create Service", "danger": "high"},
+)
 async def render_create_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
     return await create_render_service(service_spec=service_spec)
 
 
-@mcp_tool(write_action=False, name="render_get_logs")
+@mcp_tool(
+    write_action=False,
+    name="render_get_logs",
+    open_world_hint=True,
+    ui={"group": "render", "icon": "📜", "label": "Get Logs", "danger": "low"},
+)
 async def render_get_logs(
     resource_type: str,
     resource_id: str,
@@ -1051,7 +1106,12 @@ async def render_get_logs(
     )
 
 
-@mcp_tool(write_action=False, name="render_list_logs")
+@mcp_tool(
+    write_action=False,
+    name="render_list_logs",
+    open_world_hint=True,
+    ui={"group": "render", "icon": "📜", "label": "List Logs", "danger": "low"},
+)
 async def render_list_logs(
     owner_id: str,
     resources: List[str],

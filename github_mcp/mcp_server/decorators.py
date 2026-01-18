@@ -1147,6 +1147,7 @@ def _apply_tool_metadata(
     *,
     write_action: Optional[bool] = None,  # noqa: ARG001
     write_allowed: Optional[bool] = None,  # noqa: ARG001
+    ui: Optional[Mapping[str, Any]] = None,
 ) -> None:
     """Attach metadata onto the registered tool object.
 
@@ -1156,6 +1157,20 @@ def _apply_tool_metadata(
 
     if tool_obj is None:
         return
+
+    meta = getattr(tool_obj, "meta", None)
+    if not isinstance(meta, dict):
+        if isinstance(tool_obj, dict):
+            meta = tool_obj.get("meta")
+            if not isinstance(meta, dict):
+                meta = {}
+                tool_obj["meta"] = meta
+        else:
+            try:
+                meta = {}
+                setattr(tool_obj, "meta", meta)
+            except Exception:
+                meta = None
 
     existing_schema = _normalize_input_schema(tool_obj)
     if not isinstance(existing_schema, Mapping):
@@ -1180,14 +1195,15 @@ def _apply_tool_metadata(
     try:
         setattr(tool_obj, "__mcp_visibility__", str(visibility))
     except Exception:
-        meta = getattr(tool_obj, "meta", None)
         if isinstance(meta, dict):
             meta.setdefault("visibility", str(visibility))
+
+    if isinstance(meta, dict) and isinstance(ui, Mapping) and ui:
+        meta["ui"] = dict(ui)
 
     if tags:
         tag_list = [str(t) for t in tags if t is not None and str(t).strip()]
         if tag_list:
-            meta = getattr(tool_obj, "meta", None)
             if isinstance(meta, dict):
                 meta["tags"] = tag_list
 
@@ -2564,6 +2580,7 @@ def mcp_tool(
     open_world_hint: Optional[bool] = None,
     destructive_hint: Optional[bool] = None,
     read_only_hint: Optional[bool] = None,
+    ui: Optional[Mapping[str, Any]] = None,
     tags: Optional[Iterable[str]] = None,
     description: str | None = None,
     visibility: str = "public",  # accepted, ignored
@@ -2592,6 +2609,31 @@ def mcp_tool(
             destructive_hint=destructive_hint,
             read_only_hint=read_only_hint,
         )
+
+        ui_meta = {}
+        if isinstance(ui, Mapping) and ui:
+            try:
+                ui_meta.update(dict(ui))
+            except Exception:
+                pass
+        if not ui_meta:
+            # Heuristic defaults for better tool discoverability in MCP clients.
+            # Individual tools can override via the `ui=` decorator argument.
+            group = "github"
+            icon = "🔧"
+            if tool_name.startswith("render_"):
+                group, icon = "render", "🟦"
+            elif tool_name in {"terminal_command", "run_python", "apply_patch", "apply_workspace_operations"}:
+                group, icon = "workspace", "🧩"
+            elif tool_name.startswith("workspace_"):
+                group, icon = "workspace", "🧩"
+            elif tool_name.startswith("list_") or tool_name.startswith("get_"):
+                group, icon = "github", "📖"
+            ui_meta = {
+                "group": group,
+                "icon": icon,
+                "label": tool_name.replace("_", " ").strip().title(),
+            }
         llm_level = "advanced" if write_action else "basic"
         normalized_description = description or _normalize_tool_description(
             func, signature, llm_level=llm_level
@@ -2815,6 +2857,7 @@ def mcp_tool(
             wrapper.__mcp_write_action_resolver__ = write_action_resolver
             wrapper.__mcp_visibility__ = visibility
             wrapper.__mcp_tags__ = tag_list
+            wrapper.__mcp_ui__ = ui_meta or None
             _apply_tool_metadata(
                 wrapper.__mcp_tool__,
                 schema,
@@ -2822,6 +2865,7 @@ def mcp_tool(
                 tags=tag_list,
                 write_action=bool(write_action),
                 write_allowed=_tool_write_allowed(write_action),
+                ui=ui_meta or None,
             )
 
             _attach_tool_annotations(wrapper.__mcp_tool__, annotations)
@@ -3057,6 +3101,7 @@ def mcp_tool(
         wrapper.__mcp_write_action_resolver__ = write_action_resolver
         wrapper.__mcp_visibility__ = visibility
         wrapper.__mcp_tags__ = tag_list
+        wrapper.__mcp_ui__ = ui_meta or None
         _apply_tool_metadata(
             wrapper.__mcp_tool__,
             schema,
@@ -3064,6 +3109,7 @@ def mcp_tool(
             tags=tag_list,
             write_action=bool(write_action),
             write_allowed=_tool_write_allowed(write_action),
+            ui=ui_meta or None,
         )
 
         _attach_tool_annotations(wrapper.__mcp_tool__, annotations)
@@ -3143,12 +3189,19 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 # Best-effort fallback; avoids crashing refresh.
                 schema = {"type": "object", "properties": {}}
 
+            ui = None
+            try:
+                ui = getattr(func, "__mcp_ui__", None)
+            except Exception:
+                ui = None
+
             _apply_tool_metadata(
                 tool_obj,
                 schema,
                 visibility,
                 write_action=base_write,
                 write_allowed=allowed,
+                ui=ui if isinstance(ui, Mapping) else None,
             )
         except Exception:
             continue

@@ -256,6 +256,12 @@ async def render_shell(
     # terminal commands execute in the workspace environment.
     open_world_hint=True,
     destructive_hint=True,
+    ui={
+        "group": "workspace",
+        "icon": "🖥️",
+        "label": "Terminal Command",
+        "danger": "high",
+    },
 )
 async def terminal_command(
     full_name: str,
@@ -391,7 +397,17 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
     return normalized
 
 
-@mcp_tool(write_action=True, write_action_resolver=_always_write, open_world_hint=True)
+@mcp_tool(
+    write_action=True,
+    write_action_resolver=_always_write,
+    open_world_hint=True,
+    ui={
+        "group": "workspace",
+        "icon": "🐍",
+        "label": "Run Python",
+        "danger": "medium",
+    },
+)
 async def run_python(
     full_name: str,
     ref: str = "main",
