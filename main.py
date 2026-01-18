@@ -64,6 +64,7 @@ from github_mcp.http_clients import (
 )
 from github_mcp.http_routes.healthz import register_healthz_route
 from github_mcp.http_routes.render import register_render_routes
+from github_mcp.http_routes.session import register_session_routes
 from github_mcp.http_routes.tool_registry import register_tool_registry_routes
 from github_mcp.http_routes.ui import register_ui_routes
 from github_mcp.mcp_server.context import (
@@ -76,6 +77,7 @@ from github_mcp.mcp_server.context import (
     REQUEST_SESSION_ID,
     _extract_chatgpt_metadata,
 )
+from github_mcp.session_anchor import get_server_anchor
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
     COMPACT_METADATA_DEFAULT,
@@ -227,6 +229,15 @@ class _RequestContextMiddleware:
                 headers = list(message.get("headers", []))
                 if not any((hk or b"").lower() == b"x-request-id" for hk, _ in headers):
                     headers.append((b"x-request-id", request_id.encode("utf-8")))
+
+                # Expose a stable "server anchor" so clients can detect redeploys
+                # and avoid "drift" when reconnecting.
+                try:
+                    anchor, _payload = get_server_anchor()
+                    if not any((hk or b"").lower() == b"x-server-anchor" for hk, _ in headers):
+                        headers.append((b"x-server-anchor", anchor.encode("utf-8")))
+                except Exception:
+                    pass
                 message["headers"] = headers
             await send(message)
 
@@ -638,6 +649,7 @@ register_healthz_route(app)
 register_tool_registry_routes(app)
 register_ui_routes(app)
 register_render_routes(app)
+register_session_routes(app)
 
 
 def _reset_file_cache_for_tests() -> None:
