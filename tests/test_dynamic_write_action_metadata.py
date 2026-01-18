@@ -55,6 +55,41 @@ def test_mcp_tool_dynamic_write_action_is_exposed_in_response(monkeypatch) -> No
     assert out_write.get("tool_metadata", {}).get("effective_write_action") is True
 
 
+def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) -> None:
+    """Invocation metadata should reflect dynamic read/write annotations."""
+
+    from github_mcp.mcp_server import decorators
+
+    class FakeMCP:
+        def tool(self, *, name=None, description=None, meta=None, annotations=None):
+            def decorator(fn):
+                return {"fn": fn, "name": name, "meta": meta, "annotations": annotations}
+
+            return decorator
+
+    monkeypatch.setattr(decorators, "mcp", FakeMCP())
+    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
+
+    def resolver(args: dict[str, Any]) -> bool:
+        return bool(args.get("mode") == "write")
+
+    @decorators.mcp_tool(name="dyn_ann_tool", write_action=False, write_action_resolver=resolver)
+    def dyn_ann_tool(mode: str = "read") -> dict:
+        return {"mode": mode}
+
+    out_read = dyn_ann_tool(mode="read")
+    ann_read = out_read.get("tool_metadata", {}).get("annotations", {})
+    assert ann_read.get("readOnlyHint") is True
+    assert ann_read.get("destructiveHint") is False
+    assert ann_read.get("openWorldHint") is True
+
+    out_write = dyn_ann_tool(mode="write")
+    ann_write = out_write.get("tool_metadata", {}).get("annotations", {})
+    assert ann_write.get("readOnlyHint") is False
+    assert ann_write.get("destructiveHint") is True
+    assert ann_write.get("openWorldHint") is True
+
+
 def test_http_tool_registry_uses_effective_write_action_for_retries(monkeypatch) -> None:
     """Read-classified invocations may retry; write-classified invocations must not."""
 
