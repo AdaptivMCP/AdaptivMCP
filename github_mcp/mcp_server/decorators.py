@@ -1093,7 +1093,7 @@ class _ToolStub:
     resolve names and descriptions consistently.
     """
 
-    __slots__ = ("name", "description", "input_schema", "meta")
+    __slots__ = ("name", "description", "input_schema", "meta", "annotations")
 
     def __init__(
         self,
@@ -1106,6 +1106,7 @@ class _ToolStub:
         self.description = description or ""
         self.input_schema = dict(input_schema) if input_schema else None
         self.meta: dict[str, Any] = {}
+        self.annotations: dict[str, Any] = {}
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<ToolStub name={self.name!r}>"
@@ -1189,6 +1190,74 @@ def _apply_tool_metadata(
             meta = getattr(tool_obj, "meta", None)
             if isinstance(meta, dict):
                 meta["tags"] = tag_list
+
+
+def _attach_tool_annotations(tool_obj: Any, annotations: Mapping[str, Any]) -> None:
+    """Attach annotations onto the registered tool object.
+
+    FastMCP variants and unit tests sometimes represent a tool object as a plain
+    dict. UIs typically look for either an `.annotations` attribute or an
+    `annotations` key.
+    """
+
+    if tool_obj is None:
+        return
+    if not isinstance(annotations, Mapping):
+        return
+
+    ann = dict(annotations)
+
+    # Object attribute (preferred)
+    try:
+        setattr(tool_obj, "annotations", ann)
+        return
+    except Exception:
+        pass
+
+    # Mapping style (used by tests / some stubs)
+    try:
+        if isinstance(tool_obj, Mapping):
+            try:
+                tool_obj["annotations"] = ann  # type: ignore[index]
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # As a final fallback, stash under meta.
+    meta = getattr(tool_obj, "meta", None)
+    if isinstance(meta, dict):
+        meta.setdefault("annotations", ann)
+
+
+def _tool_annotations(
+    *,
+    write_action: bool,
+    open_world_hint: Optional[bool] = None,
+    destructive_hint: Optional[bool] = None,
+    read_only_hint: Optional[bool] = None,
+) -> dict[str, Any]:
+    """Return MCP-style tool annotations used by UIs.
+
+    ChatGPT and other MCP clients commonly read these booleans to render badges
+    like READ/WRITE, OPEN WORLD, and DESTRUCTIVE.
+    """
+
+    # Defaults
+    if read_only_hint is None:
+        read_only_hint = not bool(write_action)
+    if destructive_hint is None:
+        destructive_hint = bool(write_action)
+    if open_world_hint is None:
+        # Tools represent actions that interact with something outside the model
+        # (filesystem/network/hosted provider). Default to True.
+        open_world_hint = True
+
+    return {
+        "readOnlyHint": bool(read_only_hint),
+        "destructiveHint": bool(destructive_hint),
+        "openWorldHint": bool(open_world_hint),
+    }
 
 
 def _tool_write_allowed(write_action: bool) -> bool:
@@ -2374,6 +2443,7 @@ def _register_with_fastmcp(
     name: str,
     description: Optional[str],
     tags: Optional[Iterable[str]] = None,
+    annotations: Optional[Mapping[str, Any]] = None,
 ) -> Any:
     """Register a tool with FastMCP across signature variants.
 
@@ -2399,6 +2469,11 @@ def _register_with_fastmcp(
         # FastMCP is not available (or explicitly missing). Still register a
         # stub tool object so HTTP routes and introspection can function.
         tool_obj: Any = _ToolStub(name=name, description=description)
+        if isinstance(annotations, Mapping):
+            try:
+                tool_obj.annotations = dict(annotations)
+            except Exception:
+                pass
         _REGISTERED_MCP_TOOLS[:] = [
             (t, f) for (t, f) in _REGISTERED_MCP_TOOLS if _registered_tool_name(t, f) != name
         ]
@@ -2416,6 +2491,8 @@ def _register_with_fastmcp(
         "description": description,
         "meta": {},
     }
+    if isinstance(annotations, Mapping) and annotations:
+        base_with_meta["annotations"] = dict(annotations)
     if tags:
         tag_list = [str(t) for t in tags if t is not None and str(t).strip()]
         if tag_list:
@@ -2484,6 +2561,9 @@ def mcp_tool(
     name: str | None = None,
     write_action: bool,
     write_action_resolver: Optional[Callable[[Mapping[str, Any]], bool]] = None,
+    open_world_hint: Optional[bool] = None,
+    destructive_hint: Optional[bool] = None,
+    read_only_hint: Optional[bool] = None,
     tags: Optional[Iterable[str]] = None,
     description: str | None = None,
     visibility: str = "public",  # accepted, ignored
@@ -2506,6 +2586,12 @@ def mcp_tool(
             signature = None
 
         tool_name = name or getattr(func, "__name__", "tool")
+        annotations = _tool_annotations(
+            write_action=bool(write_action),
+            open_world_hint=open_world_hint,
+            destructive_hint=destructive_hint,
+            read_only_hint=read_only_hint,
+        )
         llm_level = "advanced" if write_action else "basic"
         normalized_description = description or _normalize_tool_description(
             func, signature, llm_level=llm_level
@@ -2714,6 +2800,7 @@ def mcp_tool(
                 name=tool_name,
                 description=normalized_description,
                 tags=tag_list,
+                annotations=annotations,
             )
 
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
@@ -2736,6 +2823,8 @@ def mcp_tool(
                 write_action=bool(write_action),
                 write_allowed=_tool_write_allowed(write_action),
             )
+
+            _attach_tool_annotations(wrapper.__mcp_tool__, annotations)
 
             # Ensure every registered tool has a stable, detailed docstring surface.
             # Some clients show only func.__doc__.
@@ -2953,6 +3042,7 @@ def mcp_tool(
             name=tool_name,
             description=normalized_description,
             tags=tag_list,
+            annotations=annotations,
         )
 
         schema = _normalize_input_schema(wrapper.__mcp_tool__)
@@ -2975,6 +3065,8 @@ def mcp_tool(
             write_action=bool(write_action),
             write_allowed=_tool_write_allowed(write_action),
         )
+
+        _attach_tool_annotations(wrapper.__mcp_tool__, annotations)
 
         # Ensure every registered tool has a stable, detailed docstring surface.
         # Some clients show only func.__doc__.

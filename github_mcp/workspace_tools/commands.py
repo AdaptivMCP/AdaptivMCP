@@ -250,7 +250,13 @@ async def render_shell(
         return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
 
 
-@mcp_tool(write_action=True, write_action_resolver=_terminal_command_write_action)
+@mcp_tool(
+    write_action=True,
+    write_action_resolver=_terminal_command_write_action,
+    # terminal commands execute in the workspace environment.
+    open_world_hint=True,
+    destructive_hint=True,
+)
 async def terminal_command(
     full_name: str,
     ref: str = "main",
@@ -385,7 +391,7 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
     return normalized
 
 
-@mcp_tool(write_action=True, write_action_resolver=_always_write)
+@mcp_tool(write_action=True, write_action_resolver=_always_write, open_world_hint=True)
 async def run_python(
     full_name: str,
     ref: str = "main",

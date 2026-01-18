@@ -1170,7 +1170,7 @@ async def replace_workspace_text(
         )
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=True, open_world_hint=True, destructive_hint=True)
 async def apply_patch(
     full_name: str,
     ref: str = "main",
