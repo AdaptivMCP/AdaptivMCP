@@ -894,6 +894,36 @@ async def create_render_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
+async def list_render_service_env_vars(service_id: str) -> Dict[str, Any]:
+    """List environment variables configured for a Render service."""
+
+    from github_mcp.main_tools.render import list_render_service_env_vars as _impl
+
+    return await _impl(service_id=service_id)
+
+
+@mcp_tool(write_action=True)
+async def set_render_service_env_vars(
+    service_id: str,
+    env_vars: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Replace environment variables for a Render service."""
+
+    from github_mcp.main_tools.render import set_render_service_env_vars as _impl
+
+    return await _impl(service_id=service_id, env_vars=env_vars)
+
+
+@mcp_tool(write_action=True)
+async def patch_render_service(service_id: str, patch: Dict[str, Any]) -> Dict[str, Any]:
+    """Patch a Render service."""
+
+    from github_mcp.main_tools.render import patch_render_service as _impl
+
+    return await _impl(service_id=service_id, patch=patch)
+
+
+@mcp_tool(write_action=False)
 async def get_render_logs(
     resource_type: str,
     resource_id: str,
@@ -1083,6 +1113,37 @@ async def render_restart_service(service_id: str) -> Dict[str, Any]:
 )
 async def render_create_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
     return await create_render_service(service_spec=service_spec)
+
+
+@mcp_tool(
+    write_action=False,
+    name="render_list_env_vars",
+    ui={"group": "render", "icon": "🟦", "label": "List Env Vars", "danger": "low"},
+)
+async def render_list_env_vars(service_id: str) -> Dict[str, Any]:
+    return await list_render_service_env_vars(service_id=service_id)
+
+
+@mcp_tool(
+    write_action=True,
+    name="render_set_env_vars",
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={"group": "render", "icon": "🧪", "label": "Set Env Vars", "danger": "high"},
+)
+async def render_set_env_vars(service_id: str, env_vars: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return await set_render_service_env_vars(service_id=service_id, env_vars=env_vars)
+
+
+@mcp_tool(
+    write_action=True,
+    name="render_patch_service",
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={"group": "render", "icon": "🧩", "label": "Patch Service", "danger": "high"},
+)
+async def render_patch_service(service_id: str, patch: Dict[str, Any]) -> Dict[str, Any]:
+    return await patch_render_service(service_id=service_id, patch=patch)
 
 
 @mcp_tool(

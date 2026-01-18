@@ -433,6 +433,54 @@ async def get_render_logs(
     )
 
 
+async def list_render_service_env_vars(service_id: str) -> Dict[str, Any]:
+    """List environment variables configured for a Render service."""
+
+    service_id = _require_non_empty_str("service_id", service_id)
+    return await render_request("GET", f"/services/{service_id}/env-vars")
+
+
+async def set_render_service_env_vars(
+    service_id: str,
+    env_vars: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Set (replace) environment variables for a Render service.
+
+    This forwards a list payload to Render's env-vars endpoint. Callers should
+    pass the exact list shape expected by Render (for example, objects with
+    keys like `key`, `value`, and optional metadata). This tool validates the
+    list is non-empty and that each item is an object.
+    """
+
+    service_id = _require_non_empty_str("service_id", service_id)
+    if not isinstance(env_vars, list) or not env_vars:
+        raise ValueError("env_vars must be a non-empty list")
+    for idx, item in enumerate(env_vars):
+        if not isinstance(item, dict) or not item:
+            raise ValueError(f"env_vars[{idx}] must be a non-empty object")
+
+    return await render_request(
+        "PUT",
+        f"/services/{service_id}/env-vars",
+        json_body=env_vars,
+    )
+
+
+async def patch_render_service(
+    service_id: str,
+    patch: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Patch a Render service.
+
+    This forwards a partial update payload to Render's service endpoint. The
+    caller is responsible for using keys supported by Render.
+    """
+
+    service_id = _require_non_empty_str("service_id", service_id)
+    body = _require_non_empty_dict("patch", patch)
+    return await render_request("PATCH", f"/services/{service_id}", json_body=body)
+
+
 __all__ = [
     "cancel_render_deploy",
     "create_render_deploy",
@@ -444,6 +492,9 @@ __all__ = [
     "list_render_deploys",
     "list_render_owners",
     "list_render_services",
+    "list_render_service_env_vars",
     "restart_render_service",
+    "set_render_service_env_vars",
     "rollback_render_deploy",
+    "patch_render_service",
 ]
