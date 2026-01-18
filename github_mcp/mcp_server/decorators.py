@@ -114,6 +114,15 @@ def _is_render_runtime() -> bool:
 #   GITHUB_MCP_LOG_COLOR=0
 LOG_TOOL_VISUALS = _env_flag("GITHUB_MCP_LOG_VISUALS", default=True)
 LOG_TOOL_COLOR = _env_flag("GITHUB_MCP_LOG_COLOR", default=True)
+# Some provider log UIs (notably Render) do not reliably render 256-color ANSI
+# escape sequences. Default to basic ANSI colors on Render for correct visuals.
+#
+# Override via:
+#   GITHUB_MCP_LOG_COLOR_256=1
+LOG_TOOL_COLOR_256 = _env_flag(
+    "GITHUB_MCP_LOG_COLOR_256",
+    default=(not _is_render_runtime()),
+)
 LOG_TOOL_READ_SNIPPETS = _env_flag("GITHUB_MCP_LOG_READ_SNIPPETS", default=True)
 LOG_TOOL_DIFF_SNIPPETS = _env_flag("GITHUB_MCP_LOG_DIFF_SNIPPETS", default=True)
 LOG_TOOL_STYLE = os.environ.get("GITHUB_MCP_LOG_STYLE", "monokai")
@@ -241,7 +250,7 @@ def _highlight_code(
     *,
     kind: str = "text",
     enabled: bool | None = None,
-    use_256: bool = True,
+    use_256: bool | None = None,
 ) -> str:
     """Best-effort syntax highlighting for log visuals.
 
@@ -249,6 +258,7 @@ def _highlight_code(
     """
 
     color_enabled = LOG_TOOL_COLOR if enabled is None else bool(enabled)
+    use_256_enabled = LOG_TOOL_COLOR_256 if use_256 is None else bool(use_256)
     if not (color_enabled and _pygments_available() and isinstance(text, str) and text):
         return text
     try:
@@ -271,7 +281,7 @@ def _highlight_code(
             lexer = TextLexer()
         formatter = (
             Terminal256Formatter(style=LOG_TOOL_STYLE)
-            if use_256
+            if use_256_enabled
             else TerminalFormatter()
         )
         rendered = highlight(text, lexer, formatter).rstrip("\n")
@@ -289,11 +299,12 @@ def _highlight_file_text(
     text: str,
     *,
     enabled: bool | None = None,
-    use_256: bool = True,
+    use_256: bool | None = None,
 ) -> str:
     """Highlight file text by filename when possible."""
 
     color_enabled = LOG_TOOL_COLOR if enabled is None else bool(enabled)
+    use_256_enabled = LOG_TOOL_COLOR_256 if use_256 is None else bool(use_256)
     if not (color_enabled and _pygments_available() and isinstance(text, str) and text):
         return text
     try:
@@ -307,7 +318,7 @@ def _highlight_file_text(
             lexer = TextLexer()
         formatter = (
             Terminal256Formatter(style=LOG_TOOL_STYLE)
-            if use_256
+            if use_256_enabled
             else TerminalFormatter()
         )
         rendered = highlight(text, lexer, formatter).rstrip("\n")
@@ -323,11 +334,12 @@ def _highlight_line_for_filename(
     text: str,
     *,
     enabled: bool | None = None,
-    use_256: bool = True,
+    use_256: bool | None = None,
 ) -> str:
     """Syntax-highlight a single line of text using the filename for lexer selection."""
 
     color_enabled = LOG_TOOL_COLOR if enabled is None else bool(enabled)
+    use_256_enabled = LOG_TOOL_COLOR_256 if use_256 is None else bool(use_256)
     if not (color_enabled and _pygments_available() and isinstance(text, str) and text):
         return text
     try:
@@ -341,7 +353,7 @@ def _highlight_line_for_filename(
             lexer = TextLexer()
         formatter = (
             Terminal256Formatter(style=LOG_TOOL_STYLE)
-            if use_256
+            if use_256_enabled
             else TerminalFormatter()
         )
         rendered = highlight(text, lexer, formatter).rstrip("\n")
