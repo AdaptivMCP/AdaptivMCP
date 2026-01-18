@@ -11,6 +11,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
+from github_mcp import config
 from github_mcp.config import (
     GIT_AUTHOR_EMAIL,
     GIT_AUTHOR_NAME,
@@ -27,7 +28,9 @@ from github_mcp.render_api import _get_optional_render_token, render_request
 
 from ._main import _main
 
-_DISPATCH_PROBE_COOLDOWN_SECONDS = 300
+_DISPATCH_PROBE_COOLDOWN_SECONDS = int(
+    getattr(config, "GITHUB_MCP_DISPATCH_PROBE_COOLDOWN_SECONDS", 0) or 0
+)
 _dispatch_probe_state: dict[str, Any] = {
     "last_at": 0.0,
     "last_workflow_id": None,

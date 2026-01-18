@@ -28,8 +28,11 @@ def _build_range_header(
     max_bytes: int,
     tail_bytes: int | None,
 ) -> str:
-    if max_bytes <= 0:
-        raise ValueError("max_bytes must be > 0")
+    # max_bytes <= 0 disables byte caps.
+    # When disabled:
+    # - start_byte -> open-ended range "bytes=<start>-"
+    # - tail_bytes -> suffix range "bytes=-<tail>"
+    # - neither -> no Range header (caller may fetch full file)
 
     if start_byte is not None and start_byte < 0:
         raise ValueError("start_byte must be >= 0")
@@ -39,6 +42,13 @@ def _build_range_header(
 
     if start_byte is not None and tail_bytes is not None:
         raise ValueError("Provide only one of start_byte or tail_bytes")
+
+    if max_bytes <= 0:
+        if tail_bytes is not None:
+            return f"bytes=-{tail_bytes}"
+        if start_byte is not None:
+            return f"bytes={start_byte}-"
+        return ""
 
     # Default is a "head" read.
     if start_byte is None and tail_bytes is None:
@@ -90,10 +100,10 @@ async def get_file_excerpt(
     path: str,
     ref: str = "main",
     start_byte: int | None = None,
-    max_bytes: int = 65536,
+    max_bytes: int = 0,
     tail_bytes: int | None = None,
     as_text: bool = True,
-    max_text_chars: int = 200000,
+    max_text_chars: int = 0,
     numbered_lines: bool = True,
 ) -> dict[str, Any]:
     """Fetch a bounded excerpt of a repository file.
@@ -118,7 +128,9 @@ async def get_file_excerpt(
         tail_bytes=tail_bytes,
     )
 
-    headers = {"Accept": "application/vnd.github.raw", "Range": range_header}
+    headers = {"Accept": "application/vnd.github.raw"}
+    if range_header:
+        headers["Range"] = range_header
 
     client = _github_client_instance()
     body = bytearray()
@@ -152,14 +164,15 @@ async def get_file_excerpt(
             async for chunk in resp.aiter_bytes():
                 if not chunk:
                     continue
-                remaining = max_bytes - len(body)
-                if remaining <= 0:
-                    truncated = True
-                    break
-                if len(chunk) > remaining:
-                    body.extend(chunk[:remaining])
-                    truncated = True
-                    break
+                if max_bytes and max_bytes > 0:
+                    remaining = max_bytes - len(body)
+                    if remaining <= 0:
+                        truncated = True
+                        break
+                    if len(chunk) > remaining:
+                        body.extend(chunk[:remaining])
+                        truncated = True
+                        break
                 body.extend(chunk)
     except GitHubAPIError:
         raise

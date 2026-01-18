@@ -3,9 +3,10 @@ import os
 import shlex
 from typing import Any
 
+from github_mcp import config
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import CONTROLLER_REPO
-from github_mcp.utils import _get_main_module
+from github_mcp.utils import _get_main_module, _normalize_timeout_seconds
 from github_mcp.workspace import (
     _apply_patch_to_repo,
     _clone_repo,
@@ -97,18 +98,22 @@ async def _diagnose_workspace_branch(
 ) -> dict[str, Any]:
     """Return lightweight diagnostics used to detect a mangled repo mirror."""
     diag: dict[str, Any] = {"expected_branch": expected_branch}
+    t_default = _normalize_timeout_seconds(
+        config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS,
+        0,
+    )
     show_branch = await deps["run_shell"](
-        "git branch --show-current", cwd=repo_dir, timeout_seconds=60
+        "git branch --show-current", cwd=repo_dir, timeout_seconds=t_default
     )
     diag["show_current_exit_code"] = show_branch.get("exit_code")
     diag["current_branch"] = (show_branch.get("stdout", "") or "").strip() or None
 
-    status = await deps["run_shell"]("git status --porcelain", cwd=repo_dir, timeout_seconds=60)
+    status = await deps["run_shell"]("git status --porcelain", cwd=repo_dir, timeout_seconds=t_default)
     diag["status_exit_code"] = status.get("exit_code")
     diag["status_is_clean"] = not (status.get("stdout", "") or "").strip()
 
     conflicted = await deps["run_shell"](
-        "git diff --name-only --diff-filter=U", cwd=repo_dir, timeout_seconds=60
+        "git diff --name-only --diff-filter=U", cwd=repo_dir, timeout_seconds=t_default
     )
     conflicted_files = [
         line.strip() for line in (conflicted.get("stdout", "") or "").splitlines() if line.strip()
@@ -144,20 +149,24 @@ async def _delete_branch_via_workspace(
     effective_ref = _tw()._effective_ref_for_repo(full_name, default_branch)
     repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
     await deps["run_shell"](
-        f"git checkout {shlex.quote(effective_ref)}", cwd=repo_dir, timeout_seconds=120
+        f"git checkout {shlex.quote(effective_ref)}",
+        cwd=repo_dir,
+        timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
     )
 
     delete_remote = await deps["run_shell"](
         f"git push origin --delete {shlex.quote(branch)}",
         cwd=repo_dir,
-        timeout_seconds=300,
+        timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
     )
     if delete_remote.get("exit_code", 0) != 0:
         stderr = delete_remote.get("stderr", "") or delete_remote.get("stdout", "")
         raise GitHubAPIError(f"git push origin --delete failed: {stderr}")
 
     delete_local = await deps["run_shell"](
-        f"git branch -D {shlex.quote(branch)}", cwd=repo_dir, timeout_seconds=120
+        f"git branch -D {shlex.quote(branch)}",
+        cwd=repo_dir,
+        timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
     )
     return {
         "default_branch": default_branch,
@@ -184,9 +193,13 @@ def _workspace_deps() -> dict[str, Any]:
         cmd: str,
         *,
         cwd: str | None = None,
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 0,
         env: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        timeout_seconds = _normalize_timeout_seconds(
+            timeout_seconds,
+            config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS,
+        )
         merged: dict[str, str] = {}
         if env:
             merged.update(env)

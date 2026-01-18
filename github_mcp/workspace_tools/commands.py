@@ -6,6 +6,7 @@ import uuid
 from typing import Any
 
 from github_mcp.command_classification import infer_write_action_from_shell
+from github_mcp import config
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
@@ -172,7 +173,7 @@ async def render_shell(
     create_branch: str | None = None,
     push_new_branch: bool = True,
     ref: str = "main",
-    timeout_seconds: float = 300,
+    timeout_seconds: float = 0,
     workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -186,7 +187,7 @@ async def render_shell(
     the repo mirror.
     """
 
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
 
     try:
         requested_command, command_lines_out = _normalize_command_payload(
@@ -281,7 +282,7 @@ async def terminal_command(
     ref: str = "main",
     command: str = "pytest",
     command_lines: list[str] | None = None,
-    timeout_seconds: float = 300,
+    timeout_seconds: float = 0,
     workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -305,7 +306,7 @@ async def terminal_command(
     preserved until explicitly reset.
     """
 
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
 
     env: dict[str, str] | None = None
     requested_command, command_lines_out = _normalize_command_payload(
@@ -328,10 +329,14 @@ async def terminal_command(
         install_steps: list[dict[str, Any]] = []
         if installing_dependencies and use_temp_venv:
             install_cmd = "python -m pip install -r dev-requirements.txt"
+            dep_timeout = _normalize_timeout_seconds(
+                config.GITHUB_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
+                timeout_seconds,
+            )
             install_result = await deps["run_shell"](
                 install_cmd,
                 cwd=cwd,
-                timeout_seconds=max(600, timeout_seconds),
+                timeout_seconds=dep_timeout,
                 env=env,
             )
             install_steps.append({"command": install_cmd, "result": install_result})
@@ -437,7 +442,7 @@ async def run_python(
     script: str = "",
     filename: str | None = None,
     args: list[str] | None = None,
-    timeout_seconds: float = 300,
+    timeout_seconds: float = 0,
     workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -449,7 +454,7 @@ async def run_python(
     The tool exists to support multi-line scripts without relying on shell-special syntax.
     """
 
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
+    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
 
     if not isinstance(script, str) or not script.strip():
         raise ValueError("script must be a non-empty string")
@@ -483,10 +488,14 @@ async def run_python(
         install_steps: list[dict[str, Any]] = []
         if installing_dependencies and use_temp_venv:
             install_cmd = "python -m pip install -r dev-requirements.txt"
+            dep_timeout = _normalize_timeout_seconds(
+                config.GITHUB_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
+                timeout_seconds,
+            )
             install_result = await deps["run_shell"](
                 install_cmd,
                 cwd=cwd,
-                timeout_seconds=max(600, timeout_seconds),
+                timeout_seconds=dep_timeout,
                 env=env,
             )
             install_steps.append({"command": install_cmd, "result": install_result})
@@ -570,7 +579,7 @@ async def run_command_alias(
     ref: str = "main",
     command: str = "pytest",
     command_lines: list[str] | None = None,
-    timeout_seconds: float = 300,
+    timeout_seconds: float = 0,
     workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -604,7 +613,7 @@ async def run_shell_alias(
     ref: str = "main",
     command: str = "pytest",
     command_lines: list[str] | None = None,
-    timeout_seconds: float = 300,
+    timeout_seconds: float = 0,
     workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
@@ -638,7 +647,7 @@ async def run_terminal_commands_alias(
     ref: str = "main",
     command: str = "pytest",
     command_lines: list[str] | None = None,
-    timeout_seconds: float = 300,
+    timeout_seconds: float = 0,
     workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,

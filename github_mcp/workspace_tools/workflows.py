@@ -42,7 +42,7 @@ async def workspace_apply_ops_and_open_pr(
     sync_base_to_remote: bool = True,
     discard_local_changes: bool = True,
     run_quality: bool = True,
-    quality_timeout_seconds: float = 600,
+    quality_timeout_seconds: float = 0,
     test_command: str = "pytest",
     lint_command: str = "ruff check .",
 ) -> dict[str, Any]:

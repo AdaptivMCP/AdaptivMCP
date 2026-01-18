@@ -40,25 +40,37 @@ def _env_flag(name: str, default: bool = False) -> bool:
 def _normalize_timeout_seconds(value: object, default: int) -> int:
     """Normalize a timeout value to an integer number of seconds.
 
-    Accepts ints/floats/strings (including float-like strings) and ensures a
-    minimum value of 1 second. Any invalid values fall back to `default`.
+    Accepts ints/floats/strings (including float-like strings).
+
+    Semantics:
+    - A value of ``0`` (or any negative value) means "no timeout".
+    - ``None`` (or invalid inputs) fall back to ``default``.
     """
 
-    if value is None or isinstance(value, bool):
-        return max(1, int(default))
-    if isinstance(value, int):
-        return max(1, value)
-    if isinstance(value, float):
-        return max(1, int(value))
-    if isinstance(value, str):
-        s = value.strip()
-        if not s:
-            return max(1, int(default))
-        try:
-            return max(1, int(float(s)))
-        except Exception:
-            return max(1, int(default))
-    return max(1, int(default))
+    def _coerce(v: object) -> int:
+        if v is None or isinstance(v, bool):
+            return int(default)
+        if isinstance(v, int):
+            return v
+        if isinstance(v, float):
+            return int(v)
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return int(default)
+            try:
+                return int(float(s))
+            except Exception:
+                return int(default)
+        return int(default)
+
+    try:
+        coerced = _coerce(value)
+    except Exception:
+        coerced = int(default)
+
+    # 0 (or negative) disables timeouts.
+    return max(0, coerced)
 
 
 def _extract_hostname(value: str | None) -> str | None:
