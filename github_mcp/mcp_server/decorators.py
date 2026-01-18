@@ -1155,6 +1155,32 @@ def _truncate_text(value: Any, *, limit: int = 180) -> str:
     return s[: max(0, limit - 1)] + "…"
 
 
+def _clean_error_message(value: object, *, limit: int = 180) -> str:
+    """Normalize error strings for operator-facing logs.
+
+    This keeps messages single-line, removes common noisy prefixes, and
+    truncates to a sane length.
+    """
+
+    s = _truncate_text(value, limit=limit).strip()
+    if not s:
+        return ""
+
+    lowered = s.lower()
+    for prefix in ("error:", "exception:", "fatal:"):
+        if lowered.startswith(prefix):
+            s = s[len(prefix):].strip()
+            break
+
+    return s
+
+
+def _write_badge(write_action: bool) -> str:
+    if not write_action:
+        return ""
+    return " " + _ansi("[WRITE]", ANSI_YELLOW)
+
+
 _SENSITIVE_KEY_FRAGMENTS = (
     "token",
     "pat",
@@ -2014,7 +2040,7 @@ def _log_tool_warning(
     friendly = _friendly_tool_name(tool_name)
     bits = _friendly_arg_bits(all_args or {})
     suffix = (" - " + " - ".join(bits)) if bits else ""
-    prefix = _ansi("RES", ANSI_YELLOW) + " " + _ansi(friendly, ANSI_CYAN)
+    prefix = _ansi("RES", ANSI_YELLOW) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
     ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
     snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
     rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
@@ -2060,6 +2086,26 @@ def _log_tool_returned_error(
         payload["error_message"] = err
 
     payload["response"] = result if LOG_TOOL_PAYLOADS else _result_snapshot(result)
+
+    if HUMAN_LOGS:
+        friendly = _friendly_tool_name(tool_name)
+        bits = _friendly_arg_bits(all_args or {})
+        suffix = (" - " + " - ".join(bits)) if bits else ""
+        prefix = _ansi("RES", ANSI_RED) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
+        err_type = _ansi("ReturnedError", ANSI_YELLOW)
+        err_msg = _ansi(_clean_error_message(payload.get("error_message") or "", limit=180), ANSI_RED)
+        snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
+        rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
+        res_suffix = (" - " + " - ".join(rbits)) if rbits else ""
+        msg = f"{prefix} {ms}{suffix}{res_suffix} - {err_type}: {err_msg}"
+        if LOG_TOOL_LOG_IDS:
+            msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+        inline = payload.get("log_context")
+        if isinstance(inline, str) and inline:
+            msg = msg + " " + _ansi(inline, ANSI_DIM)
+        LOGGER.error(msg, extra={"event": "tool_call_failed", **payload})
+        return
 
     arg_summary = _args_summary(all_args)
     kv_map: dict[str, Any] = {
@@ -2379,7 +2425,7 @@ def _log_tool_start(
     friendly = _friendly_tool_name(tool_name)
     bits = _friendly_arg_bits(all_args)
     suffix = (" - " + " - ".join(bits)) if bits else ""
-    prefix = _ansi("REQ", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN)
+    prefix = _ansi("REQ", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
     msg = f"{prefix}{suffix}"
     if LOG_TOOL_LOG_IDS:
         msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
@@ -2428,7 +2474,7 @@ def _log_tool_success(
         friendly = _friendly_tool_name(tool_name)
         bits = _friendly_arg_bits(all_args or {})
         suffix = (" - " + " - ".join(bits)) if bits else ""
-        prefix = _ansi("RES", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN)
+        prefix = _ansi("RES", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
         rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
@@ -2608,6 +2654,32 @@ def _log_tool_failure(
             payload["response"] = structured_error
         else:
             payload["response"] = _result_snapshot(structured_error)
+
+    if HUMAN_LOGS:
+        friendly = _friendly_tool_name(tool_name)
+        bits = _friendly_arg_bits(all_args or {})
+        suffix = (" - " + " - ".join(bits)) if bits else ""
+        prefix = _ansi("RES", ANSI_RED) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
+        err_type_raw = payload.get("error_type") or exc.__class__.__name__
+        err_msg_raw = payload.get("error_message") or str(exc)
+        err_type = _ansi(str(err_type_raw), ANSI_YELLOW)
+        err_msg = _ansi(_clean_error_message(err_msg_raw, limit=180), ANSI_RED)
+        snap = payload.get("response") if not LOG_TOOL_PAYLOADS else payload.get("response")
+        rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
+        res_suffix = (" - " + " - ".join(rbits)) if rbits else ""
+        msg = f"{prefix} {ms}{suffix}{res_suffix} - {err_type}: {err_msg}"
+        if LOG_TOOL_LOG_IDS:
+            msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+        inline = payload.get("log_context")
+        if isinstance(inline, str) and inline:
+            msg = msg + " " + _ansi(inline, ANSI_DIM)
+        LOGGER.error(
+            msg,
+            extra={"event": "tool_call_failed", **payload},
+            exc_info=exc if LOG_TOOL_EXC_INFO else None,
+        )
+        return
 
     call_id_short = payload.get("call_id")
 
