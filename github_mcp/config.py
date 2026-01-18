@@ -476,7 +476,11 @@ LOG_INLINE_CONTEXT = _env_flag(
 )
 
 # When enabled, include outbound Render HTTP request/response details in logs.
-LOG_RENDER_HTTP = _env_flag("LOG_RENDER_HTTP", "false")
+#
+# Default to enabled when HUMAN_LOGS are enabled so developer-facing
+# deployments have immediate visibility into Render API calls.
+_log_render_http_default = "true" if HUMAN_LOGS else "false"
+LOG_RENDER_HTTP = _env_flag("LOG_RENDER_HTTP", _log_render_http_default)
 
 # When enabled, include response bodies for Render HTTP logs.
 # WARNING: This can be very large for log endpoints.
