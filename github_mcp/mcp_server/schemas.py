@@ -319,8 +319,16 @@ def _jsonable(value: Any) -> Any:
 
 
 def _single_line(s: str) -> str:
-    # Preserve content verbatim (no newline collapsing).
-    return s
+    """Return a stable single-line representation of a string.
+
+    Collapse all whitespace (including newlines and tabs) into single spaces so
+    values are safe to embed in log and UI previews without double-escaping.
+    """
+
+    if not s:
+        return ""
+    # split()/join() collapses all whitespace (spaces, tabs, newlines, etc.)
+    return " ".join(s.split())
 
 
 def _normalize_strings_for_logs(value: Any) -> Any:
@@ -337,7 +345,7 @@ def _normalize_strings_for_logs(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
-        return value
+        return _single_line(value)
     if isinstance(value, Mapping):
         out: Dict[str, Any] = {}
         for k, v in value.items():
@@ -350,6 +358,23 @@ def _normalize_strings_for_logs(value: Any) -> Any:
     if isinstance(value, (list, tuple, set, frozenset)):
         return [_normalize_strings_for_logs(v) for v in value]
     return value
+
+
+def _repr_for_docs(value: Any) -> str:
+    """Return a repr suitable for docs/log previews (avoid multiline escapes)."""
+
+    try:
+        value = _normalize_strings_for_logs(value)
+    except Exception:
+        pass
+
+    try:
+        return repr(value)
+    except Exception:
+        try:
+            return repr(str(value))
+        except Exception:
+            return f"<{type(value).__name__}>"
 
 
 def _title_from_tool_name(name: str) -> str:
@@ -535,7 +560,7 @@ def _build_tool_docstring(
             default = prop.get("default")
             suffix_parts = [req]
             if default is not None:
-                suffix_parts.append(f"default={default!r}")
+                suffix_parts.append(f"default={_repr_for_docs(default)}")
             suffix = ", ".join(suffix_parts)
             lines.append(f"- {name} ({type_str}; {suffix})")
 
@@ -545,7 +570,7 @@ def _build_tool_docstring(
 
             examples = prop.get("examples")
             if isinstance(examples, list) and examples:
-                rendered = ", ".join(repr(e) for e in examples[:3])
+                rendered = ", ".join(_repr_for_docs(e) for e in examples[:3])
                 lines.append(f"  Examples: {rendered}")
 
     lines += [
