@@ -32,8 +32,8 @@ Input validation and guardrails:
 
 Operational notes:
 
-- If the upstream branch diverged (rebases/force-push), use `ensure_workspace_clone` with `reset=true` to recreate the mirror.
-- If unified diff patches are inconvenient for your client, `delete_workspace_paths` provides a direct deletion path.
+- When the upstream branch diverges (rebases/force-push), `ensure_workspace_clone(reset=true)` recreates the mirror from the selected remote ref.
+- When unified diff patches are not a good fit for a client integration, `delete_workspace_paths` provides a direct deletion operation.
 
 Diagnostics:
 
@@ -112,8 +112,8 @@ Validation and safety controls:
 - Render ids are validated by expected prefixes (`srv-` for services, `dpl-` for deploys).
 - Pagination inputs are clamped to safe bounds (`limit` has a maximum; `cursor` is optional).
 - `create_render_deploy` enforces a mutually exclusive selection for deploy source:
-  - Provide `commit_id` for repo-backed services, or
-  - Provide `image_url` for image-backed services.
+  - `commit_id` is accepted for repo-backed services, or
+  - `image_url` is accepted for image-backed services.
 - `get_render_logs` validates timestamps as ISO8601 strings when provided, and clamps `limit`.
 
 Representative combinations:

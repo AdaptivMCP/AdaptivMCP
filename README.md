@@ -13,38 +13,40 @@ The code is the authoritative reference. Documentation is expected to track runt
 
 The server maintains a persistent server-side git working copy for workspace-backed tools. In this documentation we call that copy the **repo mirror** (created/reused via `ensure_workspace_clone`).
 
-The repo mirror is not automatically the live GitHub state. The remote branch reflects updates only after you push.
-If you need the repo mirror to exactly match a remote branch after merges/force-updates, rebuild it with `ensure_workspace_clone(reset=true)`.
+The repo mirror is not automatically the live GitHub state. The remote branch reflects updates only after changes are pushed.
+
+`ensure_workspace_clone(reset=true)` rebuilds the repo mirror from the selected remote ref. This operation is relevant after merges or force-updates on the remote branch, or when a fully clean working tree is required.
 
 For a glossary of terms used across docs and code, see `docs/terminology.md`.
 
-## Quickstart
+## Local execution profile
 
-Production deployment for Adaptiv MCP targets Render.com. The steps below are for local development.
+Production deployment targets Render.com. Local execution mirrors the same HTTP surface and environment-variable driven configuration.
 
-1. Export a GitHub token so the server can authenticate:
+Common environment variables:
 
-   ```bash
-   export GITHUB_TOKEN="YOUR_GITHUB_TOKEN"
-   ```
+```bash
+export GITHUB_TOKEN="..."  # GitHub authentication for API-backed tools
+export PORT=8000           # Optional; defaults to 8000 for local runs
+```
 
-2. Run the server locally:
+Example local server invocation:
 
-   ```bash
-   uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
-   ```
+```bash
+uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+```
 
-3. MCP clients connect to `/sse`, and `/healthz` reports service health.
+MCP clients connect via `/sse`. `/healthz` returns a compact health payload.
 
-## Render build and start commands (native Python)
+## Render build and start commands
 
 Some Render Python environments restrict installing OS packages during build. This repo vendors a prebuilt `rg` (ripgrep) binary and provides helper scripts.
 
-Build Command:
+Build command:
 
 - `./scripts/render-build.sh`
 
-Start Command:
+Start command:
 
 - `./scripts/render-start.sh`
 
@@ -61,19 +63,21 @@ Operational notes:
 - (Optional) Set `ALLOWED_HOSTS` to restrict which hostnames may access the MCP transport. If unset and no Render external hostname variables are present, host checks are disabled.
 - `/healthz` reports service health and token detection/config defaults.
 
-## Development
+## Development commands
 
 Vendored ripgrep (rg):
 
-- Start a shell with `rg` on PATH: `make rg-shell` (or `./scripts/dev-shell.sh`)
-- Or, in an existing shell: `. ./scripts/rg-path.sh`
+- Shell with `rg` on `PATH`: `make rg-shell` (or `./scripts/dev-shell.sh`)
+- Add `rg` to `PATH` in an existing shell: `. ./scripts/rg-path.sh`
 
-- Bootstrap a local venv: `make bootstrap` (or `python scripts/bootstrap.py`)
-- Install dev dependencies: `make install-dev`
+Common development commands:
+
+- Virtual environment bootstrap: `make bootstrap` (or `python scripts/bootstrap.py`)
+- Dev dependencies: `make install-dev`
 - Lint: `make lint`
 - Format: `make format`
 - Test: `make test`
-- (Optional) Install + run pre-commit: `make precommit`
+- Pre-commit hooks (optional): `make precommit`
 
 See `CONTRIBUTING.md` for additional details.
 

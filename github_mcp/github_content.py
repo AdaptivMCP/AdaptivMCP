@@ -92,8 +92,8 @@ async def _decode_github_content(
             "size": size if isinstance(size, int) else None,
             "large_file": True,
             "message": (
-                "GitHub did not return inline content for this file (likely due to size). "
-                "Use get_file_excerpt for range-based access."
+                "GitHub did not return inline content for this file (commonly due to size). "
+                "get_file_excerpt provides range-based access."
             ),
         }
 
@@ -140,7 +140,7 @@ async def _decode_github_content(
     if is_truncated:
         response["message"] = (
             "File content exceeded configured limits and was truncated. "
-            "Use get_file_excerpt for range-based access."
+            "get_file_excerpt provides range-based access."
         )
     return response
 
@@ -289,9 +289,9 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         return response.content
 
     sandbox_hint = (
-        "If you are running inside ChatGPT, ensure the file exists in the sandbox "
-        "and pass the full sandbox:/ path so the host can rewrite it to an "
-        "accessible URL."
+        "In ChatGPT-hosted environments, local files live in the runtime sandbox. "
+        "The sandbox:/ prefix allows the host to rewrite the local path into an "
+        "accessible URL when direct filesystem access is unavailable."
     )
 
     def _is_windows_absolute_path(path: str) -> bool:

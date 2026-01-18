@@ -6,19 +6,21 @@ Principle: runtime behavior is governed by the Python code. Documentation and te
 
 ## Local development
 
-1) Create a virtualenv and install dependencies
+Local development uses a standard Python virtual environment and the same HTTP entrypoint used in production.
+
+Environment bootstrap:
 
 - `make bootstrap` (or `python scripts/bootstrap.py`)
 
-If you prefer manual steps, you can still run `make install-dev` after creating your own virtualenv.
+Manual virtualenv flows are supported; `make install-dev` installs development dependencies into the active environment.
 
-2) Run the server
+Local server entrypoint:
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
 ```
 
-3) Run quality checks
+Quality checks:
 
 - `make format`
 - `make lint`
@@ -30,17 +32,17 @@ uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
 
 `Detailed_Tools.md` is generated from the running tool registry via `main.list_all_actions(...)`.
 
-If you add/remove tools or change tool signatures, regenerate it:
+Tool catalog updates track the registered tool set and their schemas. When tool registration changes, the catalog is regenerated with:
 
 ```bash
 python scripts/generate_detailed_tools.py > Detailed_Tools.md
 ```
 
-Then commit the updated file alongside code changes.
+The generated file is committed alongside the code change that modified the tool surface.
 
 ### Updating usage and safety docs
 
-- `docs/usage.md` should describe stable behavior and configuration.
-- `docs/architecture_safety.md` should describe safety boundaries and guardrails.
+- `docs/usage.md` describes stable behavior and configuration.
+- `docs/architecture_safety.md` describes safety boundaries and guardrails.
 
-When there is any mismatch, update the docs to align with code.
+Documentation reflects runtime behavior as implemented by the Python code.

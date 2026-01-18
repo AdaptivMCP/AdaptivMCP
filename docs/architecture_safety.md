@@ -32,9 +32,9 @@ Tools are labeled with `write_action: true` in the tool registry when they
 perform side effects (e.g., writing files, pushing commits, creating PRs,
 triggering deploys). Read-only tools omit this flag.
 
-The server does not hard-block write tools at runtime. Clients are expected to
-use `write_action` to implement confirmation UX and to ensure user intent is
-captured before invoking side-effectful operations.
+The server does not enforce write blocking at runtime. Client applications
+commonly implement confirmation UX based on `write_action`, capturing user
+intent prior to invoking side-effectful operations.
 
 ### Workspace path safety
 
@@ -81,6 +81,6 @@ The `validate_environment` tool provides an operator-friendly report including:
 - tool registry sanity checks
 - optional installed dependency snapshot
 
-Use `validate_environment` in production to confirm all tool surfaces are
-registered and that the service can reach GitHub/Render.
+`validate_environment` functions as an operator-oriented readiness report,
+covering tool registration and upstream reachability (GitHub/Render).
 

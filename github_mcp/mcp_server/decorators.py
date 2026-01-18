@@ -175,9 +175,9 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALAR
 # - avoid huge nested blobs (e.g., raw upstream JSON)
 # - are easy to scan without reading provider logs
 #
-# This is intentionally opt-in via env var. If you set it to "chatgpt", the
-# decorator will wrap scalar outputs, add ok/status when missing, and truncate
-# very large nested "json" payloads.
+# Response shaping is intentionally opt-in via env var. When set to "chatgpt",
+# the decorator can wrap scalar outputs, add ok/status when missing, and
+# truncate very large nested "json" payloads.
 RESPONSE_MODE_DEFAULT = os.environ.get("GITHUB_MCP_RESPONSE_MODE", "raw").strip().lower()
 CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int("GITHUB_MCP_RESPONSE_MAX_LIST_ITEMS", default=0)
 

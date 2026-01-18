@@ -3,11 +3,14 @@
 This module is the stable import surface for embedding or extending the MCP
 server. Most implementation details live under `github_mcp.mcp_server.*`.
 
-For tool authors:
-- Use `@mcp_tool(write_action=...)` to register tools with generated input
-  schemas and structured error payloads.
-- Prefer short, imperative first-line docstrings; the server expands them into
-  a full developer reference (parameters, errors, write semantics).
+Tool authorship notes:
+
+- Tool registration occurs via `@mcp_tool(write_action=...)`, which binds a
+  Python callable into the registry with a generated input schema and
+  structured error payloads.
+- Tool docstrings act as the primary human-readable description. The first
+  line is treated as a short summary and is expanded into a reference view
+  that includes parameters, errors, and write semantics.
 """
 
 from __future__ import annotations
