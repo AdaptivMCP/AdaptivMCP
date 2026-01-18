@@ -85,12 +85,6 @@ def main_cli(argv: list[str]) -> None:
         approval_required = bool(tool.get("approval_required"))
         write_enabled = bool(tool.get("write_enabled"))
         visibility = tool.get("visibility")
-        ui_prompt_val = tool.get("ui_prompt")
-        ui_prompt = ""
-        if isinstance(ui_prompt_val, str):
-            ui_prompt = ui_prompt_val.strip()
-        elif ui_prompt_val is not None and ui_prompt_val is not False:
-            ui_prompt = str(ui_prompt_val).strip()
         input_schema = tool.get("input_schema")
 
         lines.append(f"\n## {name}\n\n")
@@ -104,8 +98,6 @@ def main_cli(argv: list[str]) -> None:
         lines.append(f"- write_enabled: {write_enabled}\n")
         lines.append(f"- write_auto_approved: {write_auto_approved}\n")
         lines.append(f"- approval_required: {approval_required}\n")
-        if ui_prompt:
-            lines.append(f"- ui_prompt: {ui_prompt}\n")
 
         if input_schema is not None:
             lines.append("\nInput schema:\n\n```json\n")
