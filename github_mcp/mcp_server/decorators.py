@@ -2733,6 +2733,23 @@ def _register_with_fastmcp(
     params = _fastmcp_tool_params()
     style = _fastmcp_call_style(params)
 
+    def _supports_positional_name_and_fn(
+        _params: Optional[tuple[inspect.Parameter, ...]],
+    ) -> bool:
+        """Return True if FastMCP.tool likely supports tool(name, fn, **kw)."""
+        if not _params or len(_params) < 2:
+            return False
+        p0, p1 = _params[0], _params[1]
+        if p0.name != "name":
+            return False
+        if p1.name not in {"fn", "func", "callable", "handler", "tool"}:
+            return False
+        if p0.kind not in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
+            return False
+        if p1.kind not in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
+            return False
+        return True
+
     # Build kwargs in descending compatibility order.
 
     base: dict[str, Any] = {"name": name, "description": description}
@@ -2759,20 +2776,42 @@ def _register_with_fastmcp(
         if style in {"factory", "unknown"}:
             try:
                 decorator = mcp.tool(**kw2)
-                # FastMCP variants sometimes return a callable decorator object that already
-                # has `.name` (and other metadata). In that case we STILL need to invoke it
-                # with `fn` to actually register the tool.
-                if callable(decorator):
+                # FastMCP factory-style APIs typically return a decorator function/partial.
+                # Some versions return a callable Tool object (already registered). Avoid
+                # invoking arbitrary callables here, since doing so can double-register the
+                # tool or collide with the `name` argument.
+                if inspect.isfunction(decorator) or inspect.ismethod(decorator):
+                    tool_obj = decorator(fn)
+                elif isinstance(decorator, functools.partial):
+                    tool_obj = decorator(fn)
+                elif callable(decorator) and not getattr(decorator, "name", None) and not getattr(
+                    decorator, "meta", None
+                ):
+                    # Heuristic: callable but does not look like a Tool instance; attempt
+                    # decorator invocation, but fall back safely.
                     try:
                         tool_obj = decorator(fn)
                     except TypeError:
-                        # If it is not a decorator factory, treat it as an already-registered tool.
                         tool_obj = decorator
                 else:
                     tool_obj = decorator
                 break
             except TypeError as exc:
                 last_exc = exc
+                # Some FastMCP variants are positional for (name, fn, ...). When our keyword
+                # style triggers "multiple values for argument 'name'", retry positional.
+                if (
+                    _supports_positional_name_and_fn(params)
+                    and "multiple values" in str(exc)
+                    and "name" in str(exc)
+                ):
+                    try:
+                        kw_no_name = dict(kw2)
+                        kw_no_name.pop("name", None)
+                        tool_obj = mcp.tool(name, fn, **kw_no_name)
+                        break
+                    except TypeError as exc2:
+                        last_exc = exc2
                 # If factory failed, and signature indicates direct style, try direct below.
                 if style == "factory":
                     continue
@@ -2787,6 +2826,18 @@ def _register_with_fastmcp(
                 break
             except TypeError as exc:
                 last_exc = exc
+                if (
+                    _supports_positional_name_and_fn(params)
+                    and "multiple values" in str(exc)
+                    and "name" in str(exc)
+                ):
+                    try:
+                        kw_no_name = dict(kw2)
+                        kw_no_name.pop("name", None)
+                        tool_obj = mcp.tool(name, fn, **kw_no_name)
+                        break
+                    except TypeError as exc2:
+                        last_exc = exc2
                 continue
 
     if tool_obj is None:
