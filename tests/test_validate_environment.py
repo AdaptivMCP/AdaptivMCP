@@ -215,5 +215,10 @@ async def test_main_validate_environment_delegates(monkeypatch):
 
     monkeypatch.setattr("github_mcp.main_tools.env.validate_environment", fake_impl)
 
-    # The tool decorator may wrap results, so equality (not identity) is the correct assertion.
-    assert await main.validate_environment() == sentinel
+    # The tool decorator may wrap results; since PR #936 mapping returns include
+    # tool metadata, validate the payload while allowing the additional field.
+    out = await main.validate_environment()
+    assert out["status"] == sentinel["status"]
+    assert out["checks"] == sentinel["checks"]
+    assert out["summary"] == sentinel["summary"]
+    assert "tool_metadata" in out
