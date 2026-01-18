@@ -62,8 +62,10 @@ def _normalize_command_payload(
 def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
     """Resolve a working directory inside the repo mirror.
 
-    For consistency across tools, ``workdir`` must be repository-relative.
-    Absolute paths are rejected.
+    For consistency across tools, ``workdir`` is expected to be repository-relative.
+    However, some callers pass the absolute `workdir` returned by prior tool
+    invocations back into subsequent calls. To make this round-trip safe,
+    absolute paths are accepted when they resolve inside the repo mirror.
     """
 
     repo_real = os.path.realpath(repo_dir)
@@ -75,8 +77,15 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
     normalized = workdir.strip().replace("\\", "/")
     if not normalized or normalized in {".", "./"}:
         return repo_real
+
+    # Accept absolute paths that point inside the repo mirror.
     if os.path.isabs(normalized) or normalized.startswith("/"):
-        raise ValueError("workdir must be repository-relative (no leading '/')")
+        candidate_abs = os.path.realpath(normalized)
+        if candidate_abs != repo_real and not candidate_abs.startswith(repo_real + os.sep):
+            raise ValueError("workdir must resolve inside the workspace repository")
+        if not os.path.isdir(candidate_abs):
+            raise ValueError("workdir must point to a directory")
+        return candidate_abs
 
     candidate = os.path.realpath(os.path.join(repo_real, normalized))
     if candidate != repo_real and not candidate.startswith(repo_real + os.sep):
@@ -392,9 +401,19 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
     normalized = path.strip().replace("\\", "/")
     if not normalized:
         raise ValueError("path must be non-empty")
-    if normalized.startswith("/"):
-        raise ValueError("path must be repo-relative")
-    candidate = os.path.realpath(os.path.join(repo_dir, normalized))
+    repo_real = os.path.realpath(repo_dir)
+
+    # Accept absolute paths as long as they resolve inside the repo mirror.
+    if os.path.isabs(normalized) or normalized.startswith("/"):
+        candidate = os.path.realpath(normalized)
+        if candidate == repo_real or not candidate.startswith(repo_real + os.sep):
+            raise ValueError("path must resolve inside the repo mirror")
+        rel = os.path.relpath(candidate, repo_real).replace("\\", "/")
+        if not rel or rel in {".", "./"}:
+            raise ValueError("path must be repo-relative")
+        return rel
+
+    candidate = os.path.realpath(os.path.join(repo_real, normalized))
     repo_real = os.path.realpath(repo_dir)
     if candidate == repo_real or not candidate.startswith(repo_real + os.sep):
         raise ValueError("path must resolve inside the repo mirror")
