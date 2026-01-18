@@ -10,9 +10,26 @@ from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
+from github_mcp.command_classification import infer_write_action_from_shell
 from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import _tw
+
+
+def _terminal_command_write_action(args: Dict[str, Any]) -> bool:
+    """Infer the write/read classification for terminal_command invocations."""
+
+    command = str(args.get("command") or "")
+    command_lines = args.get("command_lines")
+    lines = command_lines if isinstance(command_lines, list) else None
+    installing = bool(args.get("installing_dependencies", False))
+    return infer_write_action_from_shell(command, command_lines=lines, installing_dependencies=installing)
+
+
+def _always_write(_args: Dict[str, Any]) -> bool:
+    """Resolver for tools that are inherently write actions."""
+
+    return True
 
 
 def _normalize_command_payload(
@@ -233,7 +250,7 @@ async def render_shell(
         return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=True, write_action_resolver=_terminal_command_write_action)
 async def terminal_command(
     full_name: str,
     ref: str = "main",
@@ -368,7 +385,7 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
     return normalized
 
 
-@mcp_tool(write_action=True)
+@mcp_tool(write_action=True, write_action_resolver=_always_write)
 async def run_python(
     full_name: str,
     ref: str = "main",

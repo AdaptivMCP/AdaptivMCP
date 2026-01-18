@@ -2483,6 +2483,7 @@ def mcp_tool(
     *,
     name: str | None = None,
     write_action: bool,
+    write_action_resolver: Optional[Callable[[Mapping[str, Any]], bool]] = None,
     tags: Optional[Iterable[str]] = None,
     description: str | None = None,
     visibility: str = "public",  # accepted, ignored
@@ -2522,13 +2523,23 @@ def mcp_tool(
                 req = get_request_context()
                 start = time.perf_counter()
 
+                effective_write_action = bool(write_action)
+                if callable(write_action_resolver):
+                    try:
+                        # Prefer bound args if available; otherwise use raw kwargs.
+                        basis = all_args if isinstance(all_args, Mapping) and all_args else clean_kwargs
+                        effective_write_action = bool(write_action_resolver(basis))
+                    except Exception:
+                        # Best-effort; preserve base classification.
+                        effective_write_action = bool(write_action)
+
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
                 schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
                 _log_tool_start(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -2536,7 +2547,7 @@ def mcp_tool(
                 )
                 try:
                     if _should_enforce_write_gate(req):
-                        _enforce_write_allowed(tool_name, write_action=write_action)
+                        _enforce_write_allowed(tool_name, write_action=effective_write_action)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -2544,7 +2555,7 @@ def mcp_tool(
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=write_action,
+                        write_action=effective_write_action,
                         start=start,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -2556,7 +2567,7 @@ def mcp_tool(
                     _log_tool_failure(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=write_action,
+                        write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -2574,7 +2585,9 @@ def mcp_tool(
                     # tool call (common when model-side planning loops happen).
                     result: Any
                     if _should_enforce_write_gate(req):
-                        ttl_s = _dedupe_ttl_seconds(write_action=bool(write_action), meta=meta)
+                        ttl_s = _dedupe_ttl_seconds(
+                            write_action=bool(effective_write_action), meta=meta
+                        )
                         if ttl_s > 0:
                             # Include all bound args for the key (positional + kwargs).
                             key_args = (
@@ -2584,7 +2597,7 @@ def mcp_tool(
                             )
                             dedupe_key = _dedupe_key(
                                 tool_name=tool_name,
-                                write_action=bool(write_action),
+                                write_action=bool(effective_write_action),
                                 req=req,
                                 args=key_args,
                             )
@@ -2602,7 +2615,7 @@ def mcp_tool(
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=write_action,
+                        write_action=effective_write_action,
                         start=start,
                         schema_hash=schema_hash,
                         schema_present=True,
@@ -2614,7 +2627,7 @@ def mcp_tool(
                     _log_tool_failure(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=write_action,
+                        write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash,
                         schema_present=True,
@@ -2637,7 +2650,7 @@ def mcp_tool(
                     _log_tool_returned_error(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=write_action,
+                        write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -2649,7 +2662,7 @@ def mcp_tool(
                     _log_tool_warning(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=write_action,
+                        write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -2661,7 +2674,7 @@ def mcp_tool(
                     _log_tool_success(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=write_action,
+                        write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -2673,6 +2686,19 @@ def mcp_tool(
                 client_payload: Any
                 if isinstance(result, Mapping):
                     client_payload = _strip_internal_log_fields(result)
+                    # Include invocation-level metadata when classification is dynamic.
+                    if callable(write_action_resolver):
+                        try:
+                            client_payload = dict(client_payload)
+                            client_payload.setdefault(
+                                "tool_metadata",
+                                {
+                                    "base_write_action": bool(write_action),
+                                    "effective_write_action": bool(effective_write_action),
+                                },
+                            )
+                        except Exception:
+                            pass
                 else:
                     client_payload = result
                 if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
@@ -2699,6 +2725,7 @@ def mcp_tool(
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_tool_name__ = tool_name
             wrapper.__mcp_write_action__ = bool(write_action)
+            wrapper.__mcp_write_action_resolver__ = write_action_resolver
             wrapper.__mcp_visibility__ = visibility
             wrapper.__mcp_tags__ = tag_list
             _apply_tool_metadata(
@@ -2746,13 +2773,21 @@ def mcp_tool(
             req = get_request_context()
             start = time.perf_counter()
 
+            effective_write_action = bool(write_action)
+            if callable(write_action_resolver):
+                try:
+                    basis = all_args if isinstance(all_args, Mapping) and all_args else clean_kwargs
+                    effective_write_action = bool(write_action_resolver(basis))
+                except Exception:
+                    effective_write_action = bool(write_action)
+
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
             schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
             _log_tool_start(
                 tool_name=tool_name,
                 call_id=call_id,
-                write_action=write_action,
+                write_action=effective_write_action,
                 req=req,
                 schema_hash=schema_hash if schema_present else None,
                 schema_present=schema_present,
@@ -2760,7 +2795,7 @@ def mcp_tool(
             )
             try:
                 if _should_enforce_write_gate(req):
-                    _enforce_write_allowed(tool_name, write_action=write_action)
+                    _enforce_write_allowed(tool_name, write_action=effective_write_action)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -2768,7 +2803,7 @@ def mcp_tool(
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     start=start,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -2780,7 +2815,7 @@ def mcp_tool(
                 _log_tool_failure(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -2796,7 +2831,9 @@ def mcp_tool(
                 # Best-effort idempotency for inbound requests.
                 result: Any
                 if _should_enforce_write_gate(req):
-                    ttl_s = _dedupe_ttl_seconds(write_action=bool(write_action), meta=meta)
+                    ttl_s = _dedupe_ttl_seconds(
+                        write_action=bool(effective_write_action), meta=meta
+                    )
                     if ttl_s > 0:
                         key_args = (
                             _bind_call_args(signature, args, clean_kwargs)
@@ -2805,7 +2842,7 @@ def mcp_tool(
                         )
                         dedupe_key = _dedupe_key(
                             tool_name=tool_name,
-                            write_action=bool(write_action),
+                            write_action=bool(effective_write_action),
                             req=req,
                             args=key_args,
                         )
@@ -2823,7 +2860,7 @@ def mcp_tool(
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     start=start,
                     schema_hash=schema_hash,
                     schema_present=True,
@@ -2835,7 +2872,7 @@ def mcp_tool(
                 _log_tool_failure(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash,
                     schema_present=True,
@@ -2854,7 +2891,7 @@ def mcp_tool(
                 _log_tool_returned_error(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -2866,7 +2903,7 @@ def mcp_tool(
                 _log_tool_warning(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -2878,7 +2915,7 @@ def mcp_tool(
                 _log_tool_success(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=write_action,
+                    write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -2889,6 +2926,18 @@ def mcp_tool(
             client_payload: Any
             if isinstance(result, Mapping):
                 client_payload = _strip_internal_log_fields(result)
+                if callable(write_action_resolver):
+                    try:
+                        client_payload = dict(client_payload)
+                        client_payload.setdefault(
+                            "tool_metadata",
+                            {
+                                "base_write_action": bool(write_action),
+                                "effective_write_action": bool(effective_write_action),
+                            },
+                        )
+                    except Exception:
+                        pass
             else:
                 client_payload = result
             if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
@@ -2915,6 +2964,7 @@ def mcp_tool(
         wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
         wrapper.__mcp_tool_name__ = tool_name
         wrapper.__mcp_write_action__ = bool(write_action)
+        wrapper.__mcp_write_action_resolver__ = write_action_resolver
         wrapper.__mcp_visibility__ = visibility
         wrapper.__mcp_tags__ = tag_list
         _apply_tool_metadata(

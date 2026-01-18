@@ -148,6 +148,25 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
     return bool(value)
 
 
+def _effective_write_action(tool_obj: Any, func: Any, args: Dict[str, Any]) -> bool:
+    """Compute the invocation-level write action classification.
+
+    Tools are registered with a base (inherent) write_action. Some tools (notably
+    command runners) can infer read vs write based on the command payload.
+
+    If a resolver exists, it is authoritative for this invocation.
+    """
+
+    base = _is_write_action(tool_obj, func)
+    resolver = getattr(func, "__mcp_write_action_resolver__", None)
+    if callable(resolver):
+        try:
+            return bool(resolver(args))
+        except Exception:
+            return bool(base)
+    return bool(base)
+
+
 def _looks_like_structured_error(payload: Any) -> Optional[Dict[str, Any]]:
     """Return the error object when payload matches our error shape."""
 
@@ -192,7 +211,7 @@ async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: in
         return JSONResponse({"error": f"Unknown tool {tool_name!r}."}, status_code=404)
 
     tool_obj, func = resolved
-    write_action = _is_write_action(tool_obj, func)
+    write_action = _effective_write_action(tool_obj, func, args)
 
     max_attempts = max(1, int(max_attempts))
     base_backoff_s = 0.25
