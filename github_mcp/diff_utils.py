@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from difflib import unified_diff
-from typing import List
 
 ANSI_RESET = "\x1b[0m"
 ANSI_RED = "\x1b[31m"
@@ -89,7 +88,7 @@ def colorize_unified_diff(diff_text: str) -> str:
     if not diff_text:
         return diff_text
 
-    out: List[str] = []
+    out: list[str] = []
     for line in diff_text.splitlines():
         if line.startswith("+++") or line.startswith("---"):
             out.append(f"{ANSI_DIM}{line}{ANSI_RESET}")

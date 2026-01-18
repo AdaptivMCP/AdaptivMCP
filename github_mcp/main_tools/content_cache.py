@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from github_mcp.config import FETCH_FILES_CONCURRENCY
 from github_mcp.exceptions import GitHubAPIError
@@ -12,7 +12,7 @@ from github_mcp.server import _github_request, _structured_tool_error
 from github_mcp.utils import _effective_ref_for_repo, _normalize_repo_path_for_repo
 
 
-async def _resolve_ref_snapshot(full_name: str, ref: str | None) -> Dict[str, Any]:
+async def _resolve_ref_snapshot(full_name: str, ref: str | None) -> dict[str, Any]:
     """Resolve a branch/tag/ref to an immutable commit SHA.
 
     The content cache is keyed by (repo, ref, path). If callers pass a moving
@@ -53,8 +53,8 @@ async def _resolve_ref_snapshot(full_name: str, ref: str | None) -> Dict[str, An
 
 
 def _cache_file_result(
-    *, full_name: str, path: str, ref: str, decoded: Dict[str, Any]
-) -> Dict[str, Any]:
+    *, full_name: str, path: str, ref: str, decoded: dict[str, Any]
+) -> dict[str, Any]:
     normalized_path = _normalize_repo_path_for_repo(full_name, path)
     effective_ref = _effective_ref_for_repo(full_name, ref)
     return cache_payload(
@@ -65,7 +65,7 @@ def _cache_file_result(
     )
 
 
-async def _decode(full_name: str, path: str, ref: str | None) -> Dict[str, Any]:
+async def _decode(full_name: str, path: str, ref: str | None) -> dict[str, Any]:
     """Resolve decode function, preferring monkeypatched main._decode_github_content."""
 
     main_mod = sys.modules.get("main") or sys.modules.get("__main__")
@@ -77,14 +77,14 @@ async def _decode(full_name: str, path: str, ref: str | None) -> Dict[str, Any]:
     return await fn(full_name, path, ref)
 
 
-async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Dict[str, Any]:
+async def fetch_files(full_name: str, paths: list[str], ref: str = "main") -> dict[str, Any]:
     """Fetch multiple files concurrently with per-file error isolation."""
 
     snapshot = await _resolve_ref_snapshot(full_name, ref)
     requested_ref = snapshot["requested_ref"]
     resolved_ref = snapshot["resolved_ref"]
 
-    results: Dict[str, Any] = {}
+    results: dict[str, Any] = {}
     sem = asyncio.Semaphore(FETCH_FILES_CONCURRENCY)
 
     async def _fetch_single(p: str) -> None:
@@ -116,7 +116,7 @@ async def fetch_files(full_name: str, paths: List[str], ref: str = "main") -> Di
     return {"ref": requested_ref, "resolved_ref": resolved_ref, "files": results}
 
 
-async def get_cached_files(full_name: str, paths: List[str], ref: str = "main") -> Dict[str, Any]:
+async def get_cached_files(full_name: str, paths: list[str], ref: str = "main") -> dict[str, Any]:
     """Return cached file entries and list any missing paths."""
 
     snapshot = await _resolve_ref_snapshot(full_name, ref)
@@ -138,19 +138,19 @@ async def get_cached_files(full_name: str, paths: List[str], ref: str = "main") 
 
 async def cache_files(
     full_name: str,
-    paths: List[str],
+    paths: list[str],
     ref: str = "main",
     refresh: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch files and store them in the in-process cache."""
 
-    results: Dict[str, Any] = {}
+    results: dict[str, Any] = {}
     snapshot = await _resolve_ref_snapshot(full_name, ref)
     effective_ref = snapshot["requested_ref"]
     resolved_ref = snapshot["resolved_ref"]
     normalized_paths = [_normalize_repo_path_for_repo(full_name, p) for p in paths]
 
-    cached_existing: Dict[str, Any] = {}
+    cached_existing: dict[str, Any] = {}
     if not refresh:
         cached_existing = bulk_get_cached(full_name, resolved_ref, normalized_paths)
 
@@ -187,12 +187,12 @@ async def cache_files(
 async def list_repository_tree(
     full_name: str,
     ref: str = "main",
-    path_prefix: Optional[str] = None,
+    path_prefix: str | None = None,
     recursive: bool = True,
-    max_entries: Optional[int] = None,
+    max_entries: int | None = None,
     include_blobs: bool = True,
     include_trees: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List files and folders in a repository tree with optional filtering."""
 
     snapshot = await _resolve_ref_snapshot(full_name, ref)
@@ -234,7 +234,7 @@ async def list_repository_tree(
         else:
             normalized_prefix = candidate.lstrip("/")
 
-    filtered_entries: List[Dict[str, Any]] = []
+    filtered_entries: list[dict[str, Any]] = []
     for entry in tree:
         if not isinstance(entry, dict):
             continue

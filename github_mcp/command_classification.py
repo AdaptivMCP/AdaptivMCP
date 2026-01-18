@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import re
 import shlex
-from typing import Iterable, Optional
-
+from collections.abc import Iterable
 
 _READ_ONLY_BINARIES: set[str] = {
     "cat",
@@ -104,7 +103,7 @@ def _first_non_empty(lines: Iterable[str]) -> str:
 def infer_write_action_from_shell(
     command: str,
     *,
-    command_lines: Optional[list[str]] = None,
+    command_lines: list[str] | None = None,
     installing_dependencies: bool = False,
 ) -> bool:
     """Infer whether a shell command is intended to be a write (mutating) action.

@@ -86,8 +86,8 @@ def test_http_tool_registry_uses_effective_write_action_for_retries(monkeypatch)
         return str(args.get("command") or "").strip() != "ls"
 
     # Attach MCP metadata so tool_registry can discover resolver/base classification.
-    setattr(flaky_cmd, "__mcp_write_action__", True)
-    setattr(flaky_cmd, "__mcp_write_action_resolver__", resolver)
+    flaky_cmd.__mcp_write_action__ = True
+    flaky_cmd.__mcp_write_action_resolver__ = resolver
 
     class ToolObj:
         write_action = True

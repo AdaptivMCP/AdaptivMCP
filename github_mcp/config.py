@@ -7,7 +7,8 @@ import os
 import re
 import tempfile
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from github_mcp.mcp_server.schemas import _jsonable
 
@@ -921,7 +922,7 @@ def _configure_logging() -> None:
     # Keep access logs off by default (they include request IDs / IPs and are very noisy).
     logging.getLogger("uvicorn.access").setLevel(logging.ERROR if QUIET_LOGS else logging.WARNING)
 
-    setattr(root, "_github_mcp_configured", True)
+    root._github_mcp_configured = True
 
 
 _configure_logging()

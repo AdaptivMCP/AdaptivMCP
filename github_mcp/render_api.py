@@ -15,7 +15,7 @@ import asyncio
 import importlib.util
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from github_mcp.config import (
     BASE_LOGGER,
@@ -36,7 +36,6 @@ from github_mcp.config import (
 from github_mcp.exceptions import RenderAPIError, RenderAuthError
 from github_mcp.http_clients import _get_concurrency_semaphore
 from github_mcp.mcp_server.context import get_request_context
-
 from github_mcp.mcp_server.decorators import (
     ANSI_CYAN,
     ANSI_DIM,
@@ -57,10 +56,10 @@ else:  # pragma: no cover
     httpx = None  # type: ignore[assignment]
 
 
-_http_client_render: Optional["httpx.AsyncClient"] = None
-_http_client_render_loop: Optional["asyncio.AbstractEventLoop"] = None
-_http_client_render_token: Optional[str] = None
-_http_client_render_base: Optional[str] = None
+_http_client_render: httpx.AsyncClient | None = None
+_http_client_render_loop: asyncio.AbstractEventLoop | None = None
+_http_client_render_token: str | None = None
+_http_client_render_base: str | None = None
 _render_api_version_prefix: str = "/v1"
 
 
@@ -131,7 +130,7 @@ def _get_render_token() -> str:
     return token
 
 
-def _get_optional_render_token() -> Optional[str]:
+def _get_optional_render_token() -> str | None:
     for env_var in RENDER_TOKEN_ENV_VARS:
         candidate = os.environ.get(env_var)
         if candidate is not None:
@@ -140,7 +139,7 @@ def _get_optional_render_token() -> Optional[str]:
     return None
 
 
-def _render_token_source() -> Optional[str]:
+def _render_token_source() -> str | None:
     """Return the env var name providing the Render token, if any."""
 
     for env_var in RENDER_TOKEN_ENV_VARS:
@@ -150,7 +149,7 @@ def _render_token_source() -> Optional[str]:
     return None
 
 
-def _safe_render_headers(headers: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+def _safe_render_headers(headers: dict[str, str] | None) -> dict[str, str] | None:
     if not headers:
         return None
     return {k: v for k, v in headers.items() if k and k.lower() != "authorization"}
@@ -176,7 +175,7 @@ def _log_render_http(
     *,
     level: str,
     msg: str,
-    extra: Dict[str, Any],
+    extra: dict[str, Any],
 ) -> None:
     if not LOG_RENDER_HTTP:
         return
@@ -193,9 +192,9 @@ def _log_render_http(
 
 
 def _refresh_async_client(
-    client: Optional["httpx.AsyncClient"],
+    client: httpx.AsyncClient | None,
     *,
-    client_loop: Optional[asyncio.AbstractEventLoop],
+    client_loop: asyncio.AbstractEventLoop | None,
     rebuild,
     force_refresh: bool = False,
 ):
@@ -218,7 +217,7 @@ def _refresh_async_client(
     return refreshed, loop
 
 
-def _render_client_instance() -> "httpx.AsyncClient":
+def _render_client_instance() -> httpx.AsyncClient:
     """Singleton async client for Render API requests."""
 
     global \
@@ -234,7 +233,7 @@ def _render_client_instance() -> "httpx.AsyncClient":
     normalized_base, _version_prefix = _normalize_render_api_base(RENDER_API_BASE)
     base_changed = normalized_base != _http_client_render_base
 
-    def _build_client() -> "httpx.AsyncClient":
+    def _build_client() -> httpx.AsyncClient:
         token = current_token or ""
         # Keep base/path composition stable regardless of whether RENDER_API_BASE includes /v1.
         nonlocal normalized_base, _version_prefix
@@ -265,7 +264,7 @@ def _render_client_instance() -> "httpx.AsyncClient":
     return _http_client_render
 
 
-def _parse_rate_limit_delay_seconds(resp: "httpx.Response") -> Optional[float]:
+def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> float | None:
     from .http_utils import parse_rate_limit_delay_seconds
 
     return parse_rate_limit_delay_seconds(
@@ -276,13 +275,13 @@ def _parse_rate_limit_delay_seconds(resp: "httpx.Response") -> Optional[float]:
     )
 
 
-def _extract_response_body(resp: "httpx.Response") -> Any | None:
+def _extract_response_body(resp: httpx.Response) -> Any | None:
     from .http_utils import extract_response_json
 
     return extract_response_json(resp)
 
 
-def _build_response_payload(resp: "httpx.Response", *, body: Any | None = None) -> Dict[str, Any]:
+def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> dict[str, Any]:
     # Backward-compatible wrapper for shared response payload builder.
     from github_mcp.http_utils import build_response_payload
 
@@ -290,14 +289,14 @@ def _build_response_payload(resp: "httpx.Response", *, body: Any | None = None) 
 
 
 async def _send_request(
-    client: "httpx.AsyncClient",
+    client: httpx.AsyncClient,
     *,
     method: str,
     path: str,
-    params: Optional[Dict[str, Any]],
+    params: dict[str, Any] | None,
     json_body: Any | None,
-    headers: Optional[Dict[str, str]],
-) -> "httpx.Response":
+    headers: dict[str, str] | None,
+) -> httpx.Response:
     async with _get_concurrency_semaphore():
         return await client.request(
             method,
@@ -312,12 +311,12 @@ async def render_request(
     method: str,
     path: str,
     *,
-    params: Optional[Dict[str, Any]] = None,
+    params: dict[str, Any] | None = None,
     json_body: Any | None = None,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
     expect_json: bool = True,
     require_auth: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Async Render request wrapper with structured errors and logging."""
 
     if require_auth:
@@ -520,7 +519,7 @@ async def render_request(
 
             msg = line if not body_lines else (line + "\n" + "\n".join(body_lines))
 
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "event": "render_http_completed",
                 "request": summarize_request_context(req) if isinstance(req, dict) else {},
                 "log_context": inline_ctx or None,

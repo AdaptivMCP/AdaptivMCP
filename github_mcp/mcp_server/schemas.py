@@ -22,7 +22,8 @@ import inspect
 import json
 import types
 import typing
-from typing import Any, Dict, Mapping, Optional, get_args, get_origin
+from collections.abc import Mapping, Sequence
+from typing import Any, get_args, get_origin
 
 # ---------------------------------------------------------------------------
 # Schema ergonomics
@@ -38,7 +39,7 @@ from typing import Any, Dict, Mapping, Optional, get_args, get_origin
 # ---------------------------------------------------------------------------
 
 
-_PARAM_DOCS: Dict[str, Dict[str, Any]] = {
+_PARAM_DOCS: dict[str, dict[str, Any]] = {
     "full_name": {
         "description": (
             "GitHub repository in 'owner/repo' format. If omitted, defaults to the server's "
@@ -160,11 +161,11 @@ _PARAM_DOCS: Dict[str, Dict[str, Any]] = {
 }
 
 
-def _apply_param_docs(schema: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_param_docs(schema: dict[str, Any]) -> dict[str, Any]:
     props = schema.get("properties")
     if not isinstance(props, dict):
         return schema
-    out_props: Dict[str, Any] = {}
+    out_props: dict[str, Any] = {}
     for name, prop in props.items():
         if not isinstance(prop, dict):
             out_props[name] = prop
@@ -190,7 +191,7 @@ def _apply_param_docs(schema: Dict[str, Any]) -> Dict[str, Any]:
     return schema
 
 
-def _simplify_schema_aliases(schema: Dict[str, Any]) -> Dict[str, Any]:
+def _simplify_schema_aliases(schema: dict[str, Any]) -> dict[str, Any]:
     """Hide legacy alias arguments from the *schema* while keeping runtime permissive.
 
     Many tools accept legacy aliases like (owner, repo) in addition to full_name,
@@ -227,11 +228,11 @@ def _simplify_schema_aliases(schema: Dict[str, Any]) -> Dict[str, Any]:
     return schema
 
 
-def _simplify_input_schema_for_tool(schema: Mapping[str, Any], *, tool_name: str) -> Dict[str, Any]:
+def _simplify_input_schema_for_tool(schema: Mapping[str, Any], *, tool_name: str) -> dict[str, Any]:
     """Return a cleaned-up schema intended for external tool consumption."""
     if not isinstance(schema, Mapping):
         return {}
-    normalized: Dict[str, Any] = dict(schema)
+    normalized: dict[str, Any] = dict(schema)
 
     # Only object input schemas are supported.
     if normalized.get("type") != "object":
@@ -248,7 +249,7 @@ def _simplify_input_schema_for_tool(schema: Mapping[str, Any], *, tool_name: str
 # ---------------------------------------------------------------------------
 
 
-def _log_preview_max_chars() -> Optional[int]:
+def _log_preview_max_chars() -> int | None:
     # Truncation is disabled.
     return None
 
@@ -273,7 +274,7 @@ def _jsonable(value: Any) -> Any:
 
     # Mappings: coerce keys to strings.
     if isinstance(value, Mapping):
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for k, v in value.items():
             try:
                 key = k if isinstance(k, str) else str(k)
@@ -347,7 +348,7 @@ def _normalize_strings_for_logs(value: Any) -> Any:
     if isinstance(value, str):
         return _single_line(value)
     if isinstance(value, Mapping):
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for k, v in value.items():
             try:
                 key = k if isinstance(k, str) else str(k)
@@ -398,7 +399,7 @@ def _title_from_tool_name(name: str) -> str:
 
 def _normalize_tool_description(
     func: Any,
-    signature: Optional[inspect.Signature],
+    signature: inspect.Signature | None,
     *,
     llm_level: str = "basic",
 ) -> str:
@@ -427,12 +428,12 @@ def _build_tool_docstring(
     *,
     tool_name: str,
     description: str,
-    input_schema: Optional[Mapping[str, Any]],
+    input_schema: Mapping[str, Any] | None,
     write_action: bool,
     visibility: str,
-    write_allowed: Optional[bool] = None,
-    tags: Optional[Sequence[str]] = None,
-    ui: Optional[Mapping[str, Any]] = None,
+    write_allowed: bool | None = None,
+    tags: Sequence[str] | None = None,
+    ui: Mapping[str, Any] | None = None,
 ) -> str:
     """Build a developer-oriented MCP tool docstring.
 
@@ -585,7 +586,7 @@ def _build_tool_docstring(
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
+def _normalize_input_schema(tool_obj: Any) -> dict[str, Any] | None:
     """
     Best-effort extraction of an input schema from an MCP tool object.
 
@@ -596,7 +597,7 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
     adding default properties entries (type=string). This matches existing expectations in tests.
     """
 
-    def _normalize_required_properties(schema: Mapping[str, Any]) -> Dict[str, Any]:
+    def _normalize_required_properties(schema: Mapping[str, Any]) -> dict[str, Any]:
         required = schema.get("required")
         if not required:
             return dict(schema)
@@ -643,7 +644,7 @@ def _normalize_input_schema(tool_obj: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
+def _annotation_to_schema(annotation: Any) -> dict[str, Any]:
     if annotation is inspect.Signature.empty:
         return {}
     if annotation is None or annotation is type(None):
@@ -674,7 +675,7 @@ def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
         json_vals = [_jsonable(v) for v in vals]
         type_set = {type(v) for v in vals}
 
-        schema: Dict[str, Any] = {"enum": json_vals}
+        schema: dict[str, Any] = {"enum": json_vals}
 
         # If all literal values are the same primitive type, emit an explicit JSON Schema type.
         if type_set == {str}:
@@ -723,9 +724,9 @@ def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
 
 
 def _schema_from_signature(
-    signature: Optional[inspect.Signature], *, tool_name: str = "tool"
-) -> Dict[str, Any]:
-    properties: Dict[str, Any] = {}
+    signature: inspect.Signature | None, *, tool_name: str = "tool"
+) -> dict[str, Any]:
+    properties: dict[str, Any] = {}
     required: list[str] = []
 
     if signature is None:
@@ -739,7 +740,7 @@ def _schema_from_signature(
             inspect.Parameter.VAR_KEYWORD,
         ):
             continue
-        param_schema: Dict[str, Any] = _annotation_to_schema(param.annotation)
+        param_schema: dict[str, Any] = _annotation_to_schema(param.annotation)
         if param.default is inspect.Parameter.empty:
             required.append(param.name)
         else:
@@ -747,7 +748,7 @@ def _schema_from_signature(
             param_schema["default"] = _jsonable(param.default)
         properties[param.name] = param_schema
 
-    schema: Dict[str, Any] = {
+    schema: dict[str, Any] = {
         "type": "object",
         "properties": properties,
         # Contract policy:
@@ -789,7 +790,7 @@ def _preflight_tool_args(
     args: Mapping[str, Any],
     *,
     compact: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Prepare tool args for display/logging.
 
     Policy:

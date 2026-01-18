@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Any, Dict, Optional
+from typing import Any
 
 from github_mcp.config import BASE_LOGGER
 from github_mcp.github_content import _perform_github_commit as _default_commit
@@ -19,8 +19,8 @@ async def _perform_github_commit_and_refresh_workspace(
     message: str,
     branch: str,
     body_bytes: bytes,
-    sha: Optional[str],
-) -> Dict[str, Any]:
+    sha: str | None,
+) -> dict[str, Any]:
     """Perform a Contents API commit and then refresh the repo mirror.
 
     This keeps the long-lived repo mirror (workspace clone) in sync with the branch when

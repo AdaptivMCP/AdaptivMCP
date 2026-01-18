@@ -1,7 +1,7 @@
 # Split from github_mcp.tools_workspace (generated).
 import os
 import shlex
-from typing import Any, Dict, Optional
+from typing import Any
 
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import CONTROLLER_REPO
@@ -72,8 +72,8 @@ def _safe_branch_slug(value: str) -> str:
 
 
 async def _run_shell_ok(
-    deps: Dict[str, Any], cmd: str, *, cwd: str, timeout_seconds: int
-) -> Dict[str, Any]:
+    deps: dict[str, Any], cmd: str, *, cwd: str, timeout_seconds: int
+) -> dict[str, Any]:
     res = await deps["run_shell"](cmd, cwd=cwd, timeout_seconds=timeout_seconds)
     if res.get("exit_code", 0) != 0:
         stderr = res.get("stderr", "") or res.get("stdout", "")
@@ -81,7 +81,7 @@ async def _run_shell_ok(
     return res
 
 
-def _git_state_markers(repo_dir: str) -> Dict[str, bool]:
+def _git_state_markers(repo_dir: str) -> dict[str, bool]:
     git_dir = os.path.join(repo_dir, ".git")
     return {
         "merge_in_progress": os.path.exists(os.path.join(git_dir, "MERGE_HEAD")),
@@ -93,10 +93,10 @@ def _git_state_markers(repo_dir: str) -> Dict[str, bool]:
 
 
 async def _diagnose_workspace_branch(
-    deps: Dict[str, Any], *, repo_dir: str, expected_branch: str
-) -> Dict[str, Any]:
+    deps: dict[str, Any], *, repo_dir: str, expected_branch: str
+) -> dict[str, Any]:
     """Return lightweight diagnostics used to detect a mangled repo mirror."""
-    diag: Dict[str, Any] = {"expected_branch": expected_branch}
+    diag: dict[str, Any] = {"expected_branch": expected_branch}
     show_branch = await deps["run_shell"](
         "git branch --show-current", cwd=repo_dir, timeout_seconds=60
     )
@@ -134,8 +134,8 @@ async def _diagnose_workspace_branch(
 
 
 async def _delete_branch_via_workspace(
-    deps: Dict[str, Any], *, full_name: str, branch: str
-) -> Dict[str, Any]:
+    deps: dict[str, Any], *, full_name: str, branch: str
+) -> dict[str, Any]:
     """Delete a branch via git push (remote) + best-effort local deletion."""
     default_branch = _tw()._default_branch_for_repo(full_name)
     if branch == default_branch:
@@ -167,7 +167,7 @@ async def _delete_branch_via_workspace(
     }
 
 
-def _workspace_deps() -> Dict[str, Any]:
+def _workspace_deps() -> dict[str, Any]:
     """
     Return workspace dependencies.
 
@@ -183,11 +183,11 @@ def _workspace_deps() -> Dict[str, Any]:
     async def run_shell_with_git_auth(
         cmd: str,
         *,
-        cwd: Optional[str] = None,
+        cwd: str | None = None,
         timeout_seconds: int = 300,
-        env: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
-        merged: Dict[str, str] = {}
+        env: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        merged: dict[str, str] = {}
         if env:
             merged.update(env)
 
@@ -212,7 +212,7 @@ def _workspace_deps() -> Dict[str, Any]:
 
 
 def _resolve_full_name(
-    full_name: Optional[str], *, owner: Optional[str] = None, repo: Optional[str] = None
+    full_name: str | None, *, owner: str | None = None, repo: str | None = None
 ) -> str:
     """Resolve a repository identifier.
 
@@ -233,7 +233,7 @@ def _resolve_full_name(
     return CONTROLLER_REPO
 
 
-def _resolve_ref(ref: str, *, branch: Optional[str] = None) -> str:
+def _resolve_ref(ref: str, *, branch: str | None = None) -> str:
     """Return the git ref to operate on.
 
     Canonical selector is `ref`.

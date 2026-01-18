@@ -8,7 +8,6 @@ the server and tests.
 from __future__ import annotations
 
 import asyncio
-import inspect
 import functools
 import hashlib
 import importlib
@@ -18,7 +17,8 @@ import os
 import re
 import time
 import uuid
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any
 
 from github_mcp.config import (
     BASE_LOGGER,
@@ -41,13 +41,13 @@ from github_mcp.mcp_server.context import (
 )
 from github_mcp.mcp_server.error_handling import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
-from github_mcp.redaction import redact_any
 from github_mcp.mcp_server.schemas import (
     _build_tool_docstring,
     _normalize_input_schema,
     _normalize_tool_description,
     _schema_from_signature,
 )
+from github_mcp.redaction import redact_any
 
 # Intentionally short logger name; config's formatter further shortens/colorizes.
 LOGGER = BASE_LOGGER.getChild("mcp")
@@ -609,8 +609,8 @@ def _preview_unified_diff(diff_text: str) -> str:
 
 def _render_rich_unified_diff(diff_text: str) -> str:
     current_path = ""
-    old_ln: Optional[int] = None
-    new_ln: Optional[int] = None
+    old_ln: int | None = None
+    new_ln: int | None = None
 
     out: list[str] = []
     for raw in (diff_text or "").splitlines():
@@ -1132,7 +1132,7 @@ def _truncate_text(value: Any, *, limit: int = 180) -> str:
                 if key in value and value.get(key) is not None:
                     parts.append(f"{key}={scalar(value.get(key))}")
             if not parts:
-                for k in sorted(list(value.keys()))[:6]:
+                for k in sorted(value.keys())[:6]:
                     if value.get(k) is None:
                         continue
                     parts.append(f"{k}={scalar(value.get(k))}")
@@ -1227,9 +1227,7 @@ def _args_summary(all_args: Mapping[str, Any]) -> dict[str, Any]:
         if val is None:
             continue
         # Avoid massive payloads.
-        if key in {"patch"}:
-            out[key] = _truncate_text(val, limit=160)
-        elif key in {"command"}:
+        if key in {"patch"} or key in {"command"}:
             out[key] = _truncate_text(val, limit=160)
         elif key in {"command_lines"}:
             # Keep only first few command lines.
@@ -1273,8 +1271,8 @@ class _ToolStub:
         self,
         *,
         name: str,
-        description: Optional[str] = None,
-        input_schema: Optional[Mapping[str, Any]] = None,
+        description: str | None = None,
+        input_schema: Mapping[str, Any] | None = None,
     ) -> None:
         self.name = name
         self.description = description or ""
@@ -1293,18 +1291,18 @@ def _usage_error(
     category: str = "validation",
     origin: str = "tool",
     retryable: bool = False,
-    details: Optional[Dict[str, Any]] = None,
-    hint: Optional[str] = None,
+    details: dict[str, Any] | None = None,
+    hint: str | None = None,
 ) -> UsageError:
     exc = UsageError(message)
-    setattr(exc, "code", code)
-    setattr(exc, "category", category)
-    setattr(exc, "origin", origin)
-    setattr(exc, "retryable", bool(retryable))
+    exc.code = code
+    exc.category = category
+    exc.origin = origin
+    exc.retryable = bool(retryable)
     if isinstance(details, dict) and details:
-        setattr(exc, "details", details)
+        exc.details = details
     if hint:
-        setattr(exc, "hint", hint)
+        exc.hint = hint
     return exc
 
 
@@ -1317,11 +1315,11 @@ def _apply_tool_metadata(
     tool_obj: Any,
     schema: Mapping[str, Any],
     visibility: str,  # noqa: ARG001
-    tags: Optional[Iterable[str]] = None,
+    tags: Iterable[str] | None = None,
     *,
-    write_action: Optional[bool] = None,  # noqa: ARG001
-    write_allowed: Optional[bool] = None,  # noqa: ARG001
-    ui: Optional[Mapping[str, Any]] = None,
+    write_action: bool | None = None,  # noqa: ARG001
+    write_allowed: bool | None = None,  # noqa: ARG001
+    ui: Mapping[str, Any] | None = None,
 ) -> None:
     """Attach metadata onto the registered tool object.
 
@@ -1342,17 +1340,17 @@ def _apply_tool_metadata(
         else:
             try:
                 meta = {}
-                setattr(tool_obj, "meta", meta)
+                tool_obj.meta = meta
             except Exception:
                 meta = None
 
     existing_schema = _normalize_input_schema(tool_obj)
     if not isinstance(existing_schema, Mapping):
         try:
-            setattr(tool_obj, "input_schema", schema)
+            tool_obj.input_schema = schema
             # Some clients/framework versions prefer camelCase.
             try:
-                setattr(tool_obj, "inputSchema", schema)
+                tool_obj.inputSchema = schema
             except Exception:
                 pass
         except Exception:
@@ -1367,7 +1365,7 @@ def _apply_tool_metadata(
     # the registered tool object (and not the wrapper function) can still render
     # it. Visibility remains non-authoritative (the wrapper enforces behavior).
     try:
-        setattr(tool_obj, "__mcp_visibility__", str(visibility))
+        tool_obj.__mcp_visibility__ = str(visibility)
     except Exception:
         if isinstance(meta, dict):
             meta.setdefault("visibility", str(visibility))
@@ -1399,7 +1397,7 @@ def _attach_tool_annotations(tool_obj: Any, annotations: Mapping[str, Any]) -> N
 
     # Object attribute (preferred)
     try:
-        setattr(tool_obj, "annotations", ann)
+        tool_obj.annotations = ann
         return
     except Exception:
         pass
@@ -1423,9 +1421,9 @@ def _attach_tool_annotations(tool_obj: Any, annotations: Mapping[str, Any]) -> N
 def _tool_annotations(
     *,
     write_action: bool,
-    open_world_hint: Optional[bool] = None,
-    destructive_hint: Optional[bool] = None,
-    read_only_hint: Optional[bool] = None,
+    open_world_hint: bool | None = None,
+    destructive_hint: bool | None = None,
+    read_only_hint: bool | None = None,
 ) -> dict[str, Any]:
     """Return MCP-style tool annotations used by UIs.
 
@@ -1490,7 +1488,7 @@ def _schema_summary(schema: Mapping[str, Any], *, max_fields: int = 8) -> str:
 def _invocation_messages(
     tool_name: str,
     *,
-    ui: Optional[Mapping[str, Any]] = None,
+    ui: Mapping[str, Any] | None = None,
 ) -> tuple[str, str]:
     """Compute default 'invoking' and 'invoked' messages for a tool."""
 
@@ -1536,12 +1534,12 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
 # -----------------------------------------------------------------------------
 
 # Async dedupe cache is scoped per loop so futures/tasks are never shared across loops.
-_DEDUPE_LOCKS: Dict[int, asyncio.Lock] = {}
-_DEDUPE_ASYNC_CACHE: Dict[Tuple[int, str], Tuple[float, asyncio.Future]] = {}
+_DEDUPE_LOCKS: dict[int, asyncio.Lock] = {}
+_DEDUPE_ASYNC_CACHE: dict[tuple[int, str], tuple[float, asyncio.Future]] = {}
 
 # Sync dedupe cache is process-global.
 _DEDUPE_SYNC_MUTEX = __import__("threading").Lock()
-_DEDUPE_SYNC_CACHE: Dict[str, Tuple[float, Any]] = {}
+_DEDUPE_SYNC_CACHE: dict[str, tuple[float, Any]] = {}
 
 
 def _loop_id(loop: asyncio.AbstractEventLoop) -> int:
@@ -1681,10 +1679,10 @@ def _maybe_dedupe_call_sync(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> A
 
 
 def _bind_call_args(
-    signature: Optional[inspect.Signature],
+    signature: inspect.Signature | None,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if signature is None:
         return dict(kwargs)
     try:
@@ -1694,13 +1692,13 @@ def _bind_call_args(
         return dict(kwargs)
 
 
-def _strip_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
+def _strip_tool_meta(kwargs: Mapping[str, Any]) -> dict[str, Any]:
     if not kwargs:
         return {}
     return {k: v for k, v in kwargs.items() if k != "_meta"}
 
 
-def _strip_internal_log_fields(payload: Mapping[str, Any]) -> Dict[str, Any]:
+def _strip_internal_log_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Remove internal log-only keys from a tool result before returning.
 
     Tool implementations may include keys prefixed with ``__log_`` to pass
@@ -1835,9 +1833,7 @@ def _normalize_tool_result_envelope(result: Any) -> Any:
 
     # Success
     out.setdefault("ok", True)
-    if not raw_status_str:
-        out["status"] = "success"
-    elif raw_status_str.lower() in {"ok", "success", "succeeded", "passed"}:
+    if not raw_status_str or raw_status_str.lower() in {"ok", "success", "succeeded", "passed"}:
         out["status"] = "success"
     # Otherwise, preserve the original status value.
     return out
@@ -1939,7 +1935,7 @@ def _log_tool_warning(
     call_id: str,
     write_action: bool,
     req: Mapping[str, Any],
-    schema_hash: Optional[str],
+    schema_hash: str | None,
     schema_present: bool,
     duration_ms: float,
     result: Any,
@@ -1990,7 +1986,7 @@ def _log_tool_returned_error(
     call_id: str,
     write_action: bool,
     req: Mapping[str, Any],
-    schema_hash: Optional[str],
+    schema_hash: str | None,
     schema_present: bool,
     duration_ms: float,
     result: Mapping[str, Any],
@@ -2021,7 +2017,7 @@ def _log_tool_returned_error(
     kv_map: dict[str, Any] = {
         "phase": "execute",
         "ms": f"{duration_ms:.2f}",
-        **{k: v for k, v in arg_summary.items()},
+        **arg_summary,
     }
     err_msg = payload.get("error_message")
     if isinstance(err_msg, str) and err_msg.strip():
@@ -2050,7 +2046,7 @@ def _log_tool_returned_error(
     LOGGER.error(msg, extra={"event": "tool_call_failed", **payload})
 
 
-def _extract_tool_meta(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
+def _extract_tool_meta(kwargs: Mapping[str, Any]) -> dict[str, Any]:
     """Extract the optional _meta payload without mutating kwargs."""
 
     if not kwargs:
@@ -2289,7 +2285,7 @@ def _tool_log_payload(
     call_id: str,
     write_action: bool,
     req: Mapping[str, Any],
-    schema_hash: Optional[str],
+    schema_hash: str | None,
     schema_present: bool,
     all_args: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -2316,7 +2312,7 @@ def _log_tool_start(
     call_id: str,
     write_action: bool,
     req: Mapping[str, Any],
-    schema_hash: Optional[str],
+    schema_hash: str | None,
     schema_present: bool,
     all_args: Mapping[str, Any],
 ) -> None:
@@ -2352,7 +2348,7 @@ def _log_tool_success(
     call_id: str,
     write_action: bool,
     req: Mapping[str, Any],
-    schema_hash: Optional[str],
+    schema_hash: str | None,
     schema_present: bool,
     duration_ms: float,
     result: Any,
@@ -2530,7 +2526,7 @@ def _log_tool_failure(
     call_id: str,
     write_action: bool,
     req: Mapping[str, Any],
-    schema_hash: Optional[str],
+    schema_hash: str | None,
     schema_present: bool,
     duration_ms: float,
     phase: str,
@@ -2582,7 +2578,7 @@ def _log_tool_failure(
     kv_map: dict[str, Any] = {
         "phase": phase,
         "ms": f"{duration_ms:.2f}",
-        **{k: v for k, v in arg_summary.items()},
+        **arg_summary,
     }
     err_msg = payload.get("error_message")
     if isinstance(err_msg, str) and err_msg.strip():
@@ -2623,12 +2619,12 @@ def _emit_tool_error(
     call_id: str,
     write_action: bool,
     start: float,
-    schema_hash: Optional[str],
+    schema_hash: str | None,
     schema_present: bool,
     req: Mapping[str, Any],
     exc: BaseException,
     phase: str,
-    all_args: Optional[Mapping[str, Any]] = None,
+    all_args: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     structured_error = _structured_tool_error(
         exc,
@@ -2642,7 +2638,7 @@ def _emit_tool_error(
     return structured_error
 
 
-def _fastmcp_tool_params() -> Optional[tuple[inspect.Parameter, ...]]:
+def _fastmcp_tool_params() -> tuple[inspect.Parameter, ...] | None:
     try:
         signature = inspect.signature(mcp.tool)
     except (TypeError, ValueError):
@@ -2655,7 +2651,7 @@ def _fastmcp_tool_params() -> Optional[tuple[inspect.Parameter, ...]]:
 
 
 def _filter_kwargs_for_signature(
-    params: Optional[tuple[inspect.Parameter, ...]], kwargs: dict[str, Any]
+    params: tuple[inspect.Parameter, ...] | None, kwargs: dict[str, Any]
 ) -> dict[str, Any]:
     if params is None:
         return kwargs
@@ -2670,7 +2666,7 @@ def _filter_kwargs_for_signature(
     return {k: v for k, v in kwargs.items() if k in allowed}
 
 
-def _fastmcp_call_style(params: Optional[tuple[inspect.Parameter, ...]]) -> str:
+def _fastmcp_call_style(params: tuple[inspect.Parameter, ...] | None) -> str:
     """
     Determine safest call style:
     - If first param is name: needs to use decorator factory style (tool(name=...)(fn)).
@@ -2691,9 +2687,9 @@ def _register_with_fastmcp(
     fn: Callable[..., Any],
     *,
     name: str,
-    description: Optional[str],
-    tags: Optional[Iterable[str]] = None,
-    annotations: Optional[Mapping[str, Any]] = None,
+    description: str | None,
+    tags: Iterable[str] | None = None,
+    annotations: Mapping[str, Any] | None = None,
 ) -> Any:
     """Register a tool with FastMCP across signature variants.
 
@@ -2734,7 +2730,7 @@ def _register_with_fastmcp(
     style = _fastmcp_call_style(params)
 
     def _supports_positional_name_and_fn(
-        _params: Optional[tuple[inspect.Parameter, ...]],
+        _params: tuple[inspect.Parameter, ...] | None,
     ) -> bool:
         """Return True if FastMCP.tool likely supports tool(name, fn, **kw)."""
         if not _params or len(_params) < 2:
@@ -2744,9 +2740,15 @@ def _register_with_fastmcp(
             return False
         if p1.name not in {"fn", "func", "callable", "handler", "tool"}:
             return False
-        if p0.kind not in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
+        if p0.kind not in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ):
             return False
-        if p1.kind not in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
+        if p1.kind not in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ):
             return False
         return True
 
@@ -2766,7 +2768,7 @@ def _register_with_fastmcp(
             base_with_meta["meta"]["tags"] = tag_list
     attempts = [base_with_meta, base, {"name": name}]
 
-    last_exc: Optional[Exception] = None
+    last_exc: Exception | None = None
     tool_obj: Any = None
 
     for kw in attempts:
@@ -2780,12 +2782,16 @@ def _register_with_fastmcp(
                 # Some versions return a callable Tool object (already registered). Avoid
                 # invoking arbitrary callables here, since doing so can double-register the
                 # tool or collide with the `name` argument.
-                if inspect.isfunction(decorator) or inspect.ismethod(decorator):
+                if (
+                    inspect.isfunction(decorator)
+                    or inspect.ismethod(decorator)
+                    or isinstance(decorator, functools.partial)
+                ):
                     tool_obj = decorator(fn)
-                elif isinstance(decorator, functools.partial):
-                    tool_obj = decorator(fn)
-                elif callable(decorator) and not getattr(decorator, "name", None) and not getattr(
-                    decorator, "meta", None
+                elif (
+                    callable(decorator)
+                    and not getattr(decorator, "name", None)
+                    and not getattr(decorator, "meta", None)
                 ):
                     # Heuristic: callable but does not look like a Tool instance; attempt
                     # decorator invocation, but fall back safely.
@@ -2861,13 +2867,13 @@ def mcp_tool(
     *,
     name: str | None = None,
     write_action: bool,
-    write_action_resolver: Optional[Callable[[Mapping[str, Any]], bool]] = None,
-    open_world_hint: Optional[bool] = None,
-    destructive_hint: Optional[bool] = None,
-    read_only_hint: Optional[bool] = None,
-    ui: Optional[Mapping[str, Any]] = None,
+    write_action_resolver: Callable[[Mapping[str, Any]], bool] | None = None,
+    open_world_hint: bool | None = None,
+    destructive_hint: bool | None = None,
+    read_only_hint: bool | None = None,
+    ui: Mapping[str, Any] | None = None,
     show_schema_in_description: bool = True,
-    tags: Optional[Iterable[str]] = None,
+    tags: Iterable[str] | None = None,
     description: str | None = None,
     visibility: str = "public",  # accepted, ignored
     **_ignored: Any,
@@ -2884,7 +2890,7 @@ def mcp_tool(
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         try:
-            signature: Optional[inspect.Signature] = inspect.signature(func)
+            signature: inspect.Signature | None = inspect.signature(func)
         except Exception:
             signature = None
 
@@ -2914,9 +2920,7 @@ def mcp_tool(
                 "run_python",
                 "apply_patch",
                 "apply_workspace_operations",
-            }:
-                group, icon = "workspace", "🧩"
-            elif tool_name.startswith("workspace_"):
+            } or tool_name.startswith("workspace_"):
                 group, icon = "workspace", "🧩"
             elif tool_name.startswith("list_") or tool_name.startswith("get_"):
                 group, icon = "github", "📖"
@@ -3218,9 +3222,7 @@ def mcp_tool(
 
             # Keep the tool registry description aligned with the docstring.
             try:
-                setattr(
-                    wrapper.__mcp_tool__, "description", wrapper.__doc__ or normalized_description
-                )
+                wrapper.__mcp_tool__.description = wrapper.__doc__ or normalized_description
             except Exception:
                 pass
 
@@ -3491,7 +3493,7 @@ def mcp_tool(
 
         # Keep the tool registry description aligned with the docstring.
         try:
-            setattr(wrapper.__mcp_tool__, "description", wrapper.__doc__ or normalized_description)
+            wrapper.__mcp_tool__.description = wrapper.__doc__ or normalized_description
         except Exception:
             pass
 
@@ -3572,7 +3574,7 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                         if schema_inline and "Schema:" not in desc.splitlines()[0]:
                             first, *rest = desc.splitlines()
                             first = (first or "").strip() + f"  Schema: {schema_inline}"
-                            setattr(tool_obj, "description", "\n".join([first] + rest).strip())
+                            tool_obj.description = "\n".join([first] + rest).strip()
                 except Exception:
                     pass
         except Exception:

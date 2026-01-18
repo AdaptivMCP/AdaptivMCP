@@ -3,14 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any
 
 from github_mcp.config import SERVER_GIT_COMMIT
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
 
-
 _ANCHOR_LOCK = threading.Lock()
-_ANCHOR_CACHE: Optional[Tuple[str, Dict[str, Any]]] = None
+_ANCHOR_CACHE: tuple[str, dict[str, Any]] | None = None
 
 
 def _registered_tool_name(tool: Any, func: Any) -> str:
@@ -36,7 +35,7 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
     return bool(value)
 
 
-def build_server_anchor_payload() -> Dict[str, Any]:
+def build_server_anchor_payload() -> dict[str, Any]:
     """Return a deterministic payload that identifies the deployed tool surface.
 
     This is designed to help clients detect "drift" (server redeploys / tool
@@ -63,7 +62,7 @@ def build_server_anchor_payload() -> Dict[str, Any]:
     }
 
 
-def get_server_anchor(*, refresh: bool = False) -> Tuple[str, Dict[str, Any]]:
+def get_server_anchor(*, refresh: bool = False) -> tuple[str, dict[str, Any]]:
     """Return (anchor, payload) for the current process.
 
     Anchor is a stable SHA-256 hash over a canonical JSON representation of the
@@ -93,7 +92,7 @@ def anchor_matches(value: str | None) -> bool:
     return str(value).strip() == anchor
 
 
-def normalize_anchor(value: object) -> Optional[str]:
+def normalize_anchor(value: object) -> str | None:
     if value is None:
         return None
     raw = str(value).strip()

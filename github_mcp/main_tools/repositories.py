@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from ._main import _main
 
 
-async def get_rate_limit() -> Dict[str, Any]:
+async def get_rate_limit() -> dict[str, Any]:
     """Return the authenticated token's GitHub rate-limit document."""
 
     m = _main()
     return await m._github_request("GET", "/rate_limit")
 
 
-async def get_user_login() -> Dict[str, Any]:
+async def get_user_login() -> dict[str, Any]:
     """Return the login for the authenticated GitHub user."""
 
     m = _main()
@@ -29,16 +29,16 @@ async def get_user_login() -> Dict[str, Any]:
 
 
 async def list_repositories(
-    affiliation: Optional[str] = None,
-    visibility: Optional[str] = None,
+    affiliation: str | None = None,
+    visibility: str | None = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List repositories accessible to the authenticated user."""
 
     m = _main()
 
-    params: Dict[str, Any] = {"per_page": per_page, "page": page}
+    params: dict[str, Any] = {"per_page": per_page, "page": page}
     if affiliation:
         params["affiliation"] = affiliation
     if visibility:
@@ -50,7 +50,7 @@ async def list_repositories_by_installation(
     installation_id: int,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List repositories accessible via a specific GitHub App installation."""
 
     m = _main()
@@ -65,30 +65,30 @@ async def list_repositories_by_installation(
 
 async def create_repository(
     name: str,
-    owner: Optional[str] = None,
+    owner: str | None = None,
     owner_type: Literal["auto", "user", "org"] = "auto",
-    description: Optional[str] = None,
-    homepage: Optional[str] = None,
-    visibility: Optional[Literal["public", "private", "internal"]] = None,
-    private: Optional[bool] = None,
+    description: str | None = None,
+    homepage: str | None = None,
+    visibility: Literal["public", "private", "internal"] | None = None,
+    private: bool | None = None,
     auto_init: bool = True,
-    gitignore_template: Optional[str] = None,
-    license_template: Optional[str] = None,
+    gitignore_template: str | None = None,
+    license_template: str | None = None,
     is_template: bool = False,
     has_issues: bool = True,
-    has_projects: Optional[bool] = None,
+    has_projects: bool | None = None,
     has_wiki: bool = True,
-    has_discussions: Optional[bool] = None,
-    team_id: Optional[int] = None,
-    security_and_analysis: Optional[Dict[str, Any]] = None,
-    template_full_name: Optional[str] = None,
+    has_discussions: bool | None = None,
+    team_id: int | None = None,
+    security_and_analysis: dict[str, Any] | None = None,
+    template_full_name: str | None = None,
     include_all_branches: bool = False,
-    topics: Optional[List[str]] = None,
-    create_payload_overrides: Optional[Dict[str, Any]] = None,
-    update_payload_overrides: Optional[Dict[str, Any]] = None,
+    topics: list[str] | None = None,
+    create_payload_overrides: dict[str, Any] | None = None,
+    update_payload_overrides: dict[str, Any] | None = None,
     clone_to_workspace: bool = False,
-    clone_ref: Optional[str] = None,
-) -> Dict[str, Any]:
+    clone_ref: str | None = None,
+) -> dict[str, Any]:
     """Create a new GitHub repository for the authenticated user or an organization.
 
     Designed to match GitHub's "New repository" UI with a safe escape hatch:
@@ -103,8 +103,8 @@ async def create_repository(
 
     m = _main()
 
-    steps: List[str] = []
-    warnings: List[str] = []
+    steps: list[str] = []
+    warnings: list[str] = []
 
     try:
         if not isinstance(name, str) or not name.strip():
@@ -124,7 +124,7 @@ async def create_repository(
             effective_private = False
 
         target_owner = owner.strip() if isinstance(owner, str) and owner.strip() else None
-        authenticated_login: Optional[str] = None
+        authenticated_login: str | None = None
 
         # Resolve the authenticated user (needed for auto owner and template generation).
         if owner_type != "org" or template_full_name:
@@ -156,14 +156,14 @@ async def create_repository(
         )
 
         def _apply_overrides(
-            base: Dict[str, Any], overrides: Optional[Dict[str, Any]]
-        ) -> Dict[str, Any]:
+            base: dict[str, Any], overrides: dict[str, Any] | None
+        ) -> dict[str, Any]:
             if overrides and isinstance(overrides, dict):
                 base.update(overrides)
             return base
 
-        created_resp: Dict[str, Any]
-        create_payload: Dict[str, Any]
+        created_resp: dict[str, Any]
+        create_payload: dict[str, Any]
 
         if template_full_name:
             if not isinstance(template_full_name, str) or "/" not in template_full_name:

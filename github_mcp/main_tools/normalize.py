@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
-def normalize_issue_payload(raw_issue: Any) -> Optional[Dict[str, Any]]:
+def normalize_issue_payload(raw_issue: Any) -> dict[str, Any] | None:
     """Normalize issue payloads returned by GitHub APIs into a compact shape."""
 
     issue = raw_issue
@@ -25,7 +25,7 @@ def normalize_issue_payload(raw_issue: Any) -> Optional[Dict[str, Any]]:
     }
 
 
-def normalize_pr_payload(raw_pr: Any) -> Optional[Dict[str, Any]]:
+def normalize_pr_payload(raw_pr: Any) -> dict[str, Any] | None:
     """Normalize PR payloads returned by GitHub APIs into a compact shape."""
 
     pr = raw_pr
@@ -51,7 +51,7 @@ def normalize_pr_payload(raw_pr: Any) -> Optional[Dict[str, Any]]:
     }
 
 
-def normalize_branch_summary(summary: Any) -> Optional[Dict[str, Any]]:
+def normalize_branch_summary(summary: Any) -> dict[str, Any] | None:
     """Normalize get_branch_summary output into a compact shape.
 
     Diff/compare data has been removed from the server; this helper focuses on PRs
@@ -61,8 +61,8 @@ def normalize_branch_summary(summary: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(summary, dict):
         return None
 
-    def _simplify_prs(prs: Any) -> list[Dict[str, Any]]:
-        simplified: list[Dict[str, Any]] = []
+    def _simplify_prs(prs: Any) -> list[dict[str, Any]]:
+        simplified: list[dict[str, Any]] = []
         if not isinstance(prs, list):
             return simplified
         for pr in prs:

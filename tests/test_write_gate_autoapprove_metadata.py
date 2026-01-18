@@ -27,20 +27,20 @@ def test_registered_tool_wrappers_always_carry_write_gate_metadata():
         assert name, "Every registered tool must have a stable name"
 
         assert hasattr(func, "__mcp_write_action__"), f"{name} missing __mcp_write_action__"
-        assert isinstance(getattr(func, "__mcp_write_action__"), bool)
+        assert isinstance(func.__mcp_write_action__, bool)
 
         assert hasattr(func, "__mcp_visibility__"), f"{name} missing __mcp_visibility__"
-        assert isinstance(getattr(func, "__mcp_visibility__"), str)
+        assert isinstance(func.__mcp_visibility__, str)
 
         assert hasattr(func, "__mcp_input_schema__"), f"{name} missing __mcp_input_schema__"
-        schema = getattr(func, "__mcp_input_schema__")
+        schema = func.__mcp_input_schema__
         assert isinstance(schema, dict), f"{name} input schema must be a dict"
         assert schema.get("type") == "object", f"{name} schema must be an object schema"
 
         assert hasattr(func, "__mcp_input_schema_hash__"), (
             f"{name} missing __mcp_input_schema_hash__"
         )
-        schema_hash = getattr(func, "__mcp_input_schema_hash__")
+        schema_hash = func.__mcp_input_schema_hash__
         assert isinstance(schema_hash, str) and schema_hash, f"{name} schema hash must be non-empty"
 
 

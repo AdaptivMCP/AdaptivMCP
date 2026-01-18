@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from github_mcp.render_api import render_request
 
@@ -21,7 +21,7 @@ def _unwrap_json_payload(resp: Any) -> Any:
     return resp
 
 
-def _normalize_direction(value: Optional[str]) -> str:
+def _normalize_direction(value: str | None) -> str:
     if value is None:
         return "backward"
     if not isinstance(value, str):
@@ -40,13 +40,13 @@ def _require_non_empty_str(name: str, value: Any) -> str:
     return value.strip()
 
 
-def _require_non_empty_dict(name: str, value: Any) -> Dict[str, Any]:
+def _require_non_empty_dict(name: str, value: Any) -> dict[str, Any]:
     if not isinstance(value, dict) or not value:
         raise ValueError(f"{name} must be a non-empty object")
     return value
 
 
-def _normalize_optional_str(value: Optional[str]) -> Optional[str]:
+def _normalize_optional_str(value: str | None) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
@@ -104,21 +104,21 @@ def _parse_iso8601(ts: str, *, name: str) -> datetime:
 
     # Make naive datetimes explicit UTC for downstream comparisons.
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed
 
 
-def _normalize_iso8601(ts: Optional[str], *, name: str) -> Optional[str]:
+def _normalize_iso8601(ts: str | None, *, name: str) -> str | None:
     if ts is None:
         return None
     parsed = _parse_iso8601(ts, name=name)
     # Emit RFC3339 with "Z" when UTC.
-    if parsed.tzinfo is not None and parsed.utcoffset() == timezone.utc.utcoffset(parsed):
-        return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    if parsed.tzinfo is not None and parsed.utcoffset() == UTC.utcoffset(parsed):
+        return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
     return parsed.isoformat()
 
 
-async def list_render_owners(cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
+async def list_render_owners(cursor: str | None = None, limit: int = 20) -> dict[str, Any]:
     """List Render owners (workspaces + personal owners).
 
     Render's API exposes workspaces via the "owners" collection.
@@ -128,7 +128,7 @@ async def list_render_owners(cursor: Optional[str] = None, limit: int = 20) -> D
       limit: Page size (clamped to [1, 100]).
     """
 
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "limit": _normalize_limit(limit, default=20, min_value=1, max_value=100)
     }
     cursor = _normalize_optional_str(cursor)
@@ -138,10 +138,10 @@ async def list_render_owners(cursor: Optional[str] = None, limit: int = 20) -> D
 
 
 async def list_render_services(
-    owner_id: Optional[str] = None,
-    cursor: Optional[str] = None,
+    owner_id: str | None = None,
+    cursor: str | None = None,
     limit: int = 20,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List Render services.
 
     Supports optional filtering by ownerId when provided.
@@ -152,7 +152,7 @@ async def list_render_services(
       limit: Page size (clamped to [1, 100]).
     """
 
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "limit": _normalize_limit(limit, default=20, min_value=1, max_value=100)
     }
     cursor = _normalize_optional_str(cursor)
@@ -164,7 +164,7 @@ async def list_render_services(
     return await render_request("GET", "/services", params=params)
 
 
-async def get_render_service(service_id: str) -> Dict[str, Any]:
+async def get_render_service(service_id: str) -> dict[str, Any]:
     """Fetch a single Render service by id."""
 
     service_id = _require_non_empty_str("service_id", service_id)
@@ -173,9 +173,9 @@ async def get_render_service(service_id: str) -> Dict[str, Any]:
 
 async def list_render_deploys(
     service_id: str,
-    cursor: Optional[str] = None,
+    cursor: str | None = None,
     limit: int = 20,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List deploys for a Render service.
 
     Args:
@@ -185,7 +185,7 @@ async def list_render_deploys(
     """
 
     service_id = _require_non_empty_str("service_id", service_id)
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "limit": _normalize_limit(limit, default=20, min_value=1, max_value=100)
     }
     cursor = _normalize_optional_str(cursor)
@@ -194,7 +194,7 @@ async def list_render_deploys(
     return await render_request("GET", f"/services/{service_id}/deploys", params=params)
 
 
-async def get_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+async def get_render_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     """Fetch a specific deploy for a Render service."""
 
     service_id = _require_non_empty_str("service_id", service_id)
@@ -205,9 +205,9 @@ async def get_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
 async def create_render_deploy(
     service_id: str,
     clear_cache: bool = False,
-    commit_id: Optional[str] = None,
-    image_url: Optional[str] = None,
-) -> Dict[str, Any]:
+    commit_id: str | None = None,
+    image_url: str | None = None,
+) -> dict[str, Any]:
     """Trigger a new deploy for a Render service.
 
     You may optionally set one of:
@@ -228,7 +228,7 @@ async def create_render_deploy(
     # Some services (and/or API versions) appear to reject a body containing
     # only falsey defaults (observed as 400 {"message":"invalid JSON"}).
     # Avoid sending a body unless we are explicitly setting a deploy option.
-    body: Optional[Dict[str, Any]] = None
+    body: dict[str, Any] | None = None
     if clear_cache or commit_id or image_url:
         body = {}
         if clear_cache:
@@ -241,7 +241,7 @@ async def create_render_deploy(
     return await render_request("POST", f"/services/{service_id}/deploys", json_body=body)
 
 
-async def cancel_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+async def cancel_render_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     """Cancel an in-progress deploy."""
 
     service_id = _require_non_empty_str("service_id", service_id)
@@ -253,7 +253,7 @@ async def cancel_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any
     )
 
 
-async def rollback_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+async def rollback_render_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     """Roll back a service to a previous deploy."""
 
     service_id = _require_non_empty_str("service_id", service_id)
@@ -265,14 +265,14 @@ async def rollback_render_deploy(service_id: str, deploy_id: str) -> Dict[str, A
     )
 
 
-async def restart_render_service(service_id: str) -> Dict[str, Any]:
+async def restart_render_service(service_id: str) -> dict[str, Any]:
     """Restart a running service."""
 
     service_id = _require_non_empty_str("service_id", service_id)
     return await render_request("POST", f"/services/{service_id}/restart")
 
 
-async def create_render_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
+async def create_render_service(service_spec: dict[str, Any]) -> dict[str, Any]:
     """Create a new Render service.
 
     Render service creation supports multiple service types and payload shapes.
@@ -289,21 +289,21 @@ async def create_render_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
 
 async def list_render_logs(
     owner_id: str,
-    resources: List[str],
+    resources: list[str],
     *,
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
     direction: str = "backward",
     limit: int = 200,
-    instance: Optional[str] = None,
-    host: Optional[str] = None,
-    level: Optional[str] = None,
-    method: Optional[str] = None,
-    status_code: Optional[int] = None,
-    path: Optional[str] = None,
-    text: Optional[str] = None,
-    log_type: Optional[str] = None,
-) -> Dict[str, Any]:
+    instance: str | None = None,
+    host: str | None = None,
+    level: str | None = None,
+    method: str | None = None,
+    status_code: int | None = None,
+    path: str | None = None,
+    text: str | None = None,
+    log_type: str | None = None,
+) -> dict[str, Any]:
     """List logs for one or more Render resources.
 
     This maps directly onto Render's public `/v1/logs` API, which requires an
@@ -322,7 +322,7 @@ async def list_render_logs(
     owner_id = _require_non_empty_str("owner_id", owner_id)
     if not isinstance(resources, list) or not resources:
         raise ValueError("resources must be a non-empty list of resource ids")
-    cleaned_resources: List[str] = []
+    cleaned_resources: list[str] = []
     for idx, rid in enumerate(resources):
         cleaned_resources.append(_require_non_empty_str(f"resources[{idx}]", rid))
 
@@ -335,7 +335,7 @@ async def list_render_logs(
         if start_dt > end_dt:
             raise ValueError("start_time must be <= end_time")
 
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "ownerId": owner_id,
         # httpx will serialize list values as repeated query parameters.
         "resource": cleaned_resources,
@@ -374,10 +374,10 @@ async def get_render_logs(
     resource_type: str,
     resource_id: str,
     *,
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
     limit: int = 200,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch logs for a Render resource.
 
     Backwards-compatible wrapper for older callers that provided
@@ -409,7 +409,7 @@ async def get_render_logs(
     if resource_type == "service":
         svc_resp = await get_render_service(service_id=resource_id)
         svc = _unwrap_json_payload(svc_resp)
-        owner_id: Optional[str] = None
+        owner_id: str | None = None
         if isinstance(svc, dict):
             owner_id = (
                 svc.get("ownerId") or svc.get("owner_id") or svc.get("owner") or svc.get("ownerID")
@@ -433,7 +433,7 @@ async def get_render_logs(
     )
 
 
-async def list_render_service_env_vars(service_id: str) -> Dict[str, Any]:
+async def list_render_service_env_vars(service_id: str) -> dict[str, Any]:
     """List environment variables configured for a Render service."""
 
     service_id = _require_non_empty_str("service_id", service_id)
@@ -442,8 +442,8 @@ async def list_render_service_env_vars(service_id: str) -> Dict[str, Any]:
 
 async def set_render_service_env_vars(
     service_id: str,
-    env_vars: List[Dict[str, Any]],
-) -> Dict[str, Any]:
+    env_vars: list[dict[str, Any]],
+) -> dict[str, Any]:
     """Set (replace) environment variables for a Render service.
 
     This forwards a list payload to Render's env-vars endpoint. Callers should
@@ -468,8 +468,8 @@ async def set_render_service_env_vars(
 
 async def patch_render_service(
     service_id: str,
-    patch: Dict[str, Any],
-) -> Dict[str, Any]:
+    patch: dict[str, Any],
+) -> dict[str, Any]:
     """Patch a Render service.
 
     This forwards a partial update payload to Render's service endpoint. The

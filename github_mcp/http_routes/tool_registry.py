@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from typing import Any, Callable, Dict, Iterable, Optional
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -10,7 +11,7 @@ from starlette.responses import JSONResponse, Response
 from github_mcp.server import _find_registered_tool
 
 
-def _parse_bool(value: Optional[str]) -> Optional[bool]:
+def _parse_bool(value: str | None) -> bool | None:
     if value is None:
         return None
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
@@ -24,7 +25,7 @@ def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool = True) -> 
     return jitter_sleep_seconds(delay_seconds, respect_min=respect_min, cap_seconds=0.25)
 
 
-def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[str, Any]:
+def _tool_catalog(*, include_parameters: bool, compact: bool | None) -> dict[str, Any]:
     """Build a stable tool/resources catalog for HTTP clients.
 
     This endpoint is intentionally best-effort: callers use it for discovery.
@@ -38,7 +39,7 @@ def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[
 
         catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
         tools = list(catalog.get("tools") or [])
-        catalog_error: Optional[str] = None
+        catalog_error: str | None = None
     except Exception as exc:
         tools = []
         catalog_error = str(exc) or "Failed to build tool catalog."
@@ -57,13 +58,13 @@ def _tool_catalog(*, include_parameters: bool, compact: Optional[bool]) -> Dict[
             }
         )
 
-    payload: Dict[str, Any] = {"tools": tools, "resources": resources, "finite": True}
+    payload: dict[str, Any] = {"tools": tools, "resources": resources, "finite": True}
     if catalog_error is not None:
         payload["error"] = catalog_error
     return payload
 
 
-def _normalize_payload(payload: Any) -> Dict[str, Any]:
+def _normalize_payload(payload: Any) -> dict[str, Any]:
     if isinstance(payload, dict) and "args" in payload:
         args = payload.get("args")
     else:
@@ -73,7 +74,7 @@ def _normalize_payload(payload: Any) -> Dict[str, Any]:
     if isinstance(args, dict):
         return {k: v for k, v in args.items() if k != "_meta"}
     if isinstance(args, (list, tuple)):
-        normalized: Dict[str, Any] = {}
+        normalized: dict[str, Any] = {}
         for entry in args:
             if isinstance(entry, dict):
                 if "name" in entry:
@@ -97,7 +98,7 @@ def _normalize_payload(payload: Any) -> Dict[str, Any]:
     return {}
 
 
-def _status_code_for_error(error: Dict[str, Any]) -> int:
+def _status_code_for_error(error: dict[str, Any]) -> int:
     """Map structured error payloads to HTTP status codes."""
 
     code = str(error.get("code") or "")
@@ -125,7 +126,7 @@ def _status_code_for_error(error: Dict[str, Any]) -> int:
     return 500
 
 
-def _response_headers_for_error(error: Dict[str, Any]) -> Dict[str, str]:
+def _response_headers_for_error(error: dict[str, Any]) -> dict[str, str]:
     details = error.get("details")
     if not isinstance(details, dict):
         return {}
@@ -148,7 +149,7 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
     return bool(value)
 
 
-def _effective_write_action(tool_obj: Any, func: Any, args: Dict[str, Any]) -> bool:
+def _effective_write_action(tool_obj: Any, func: Any, args: dict[str, Any]) -> bool:
     """Compute the invocation-level write action classification.
 
     Tools are registered with a base (inherent) write_action. Some tools (notably
@@ -167,7 +168,7 @@ def _effective_write_action(tool_obj: Any, func: Any, args: Dict[str, Any]) -> b
     return bool(base)
 
 
-def _looks_like_structured_error(payload: Any) -> Optional[Dict[str, Any]]:
+def _looks_like_structured_error(payload: Any) -> dict[str, Any] | None:
     """Return the error object when payload matches our error shape."""
 
     if not isinstance(payload, dict):
@@ -190,7 +191,7 @@ def _looks_like_structured_error(payload: Any) -> Optional[Dict[str, Any]]:
     return err
 
 
-def _coerce_error_detail(structured: Dict[str, Any]) -> Dict[str, Any]:
+def _coerce_error_detail(structured: dict[str, Any]) -> dict[str, Any]:
     """Return a dict-like error detail from our structured error envelope."""
 
     detail = structured.get("error_detail")
@@ -205,7 +206,7 @@ def _coerce_error_detail(structured: Dict[str, Any]) -> Dict[str, Any]:
     return {}
 
 
-async def _invoke_tool(tool_name: str, args: Dict[str, Any], *, max_attempts: int = 1) -> Response:
+async def _invoke_tool(tool_name: str, args: dict[str, Any], *, max_attempts: int = 1) -> Response:
     resolved = _find_registered_tool(tool_name)
     if not resolved:
         return JSONResponse({"error": f"Unknown tool {tool_name!r}."}, status_code=404)
@@ -294,7 +295,7 @@ def build_resources_endpoint() -> Callable[[Request], Response]:
         include_parameters = _parse_bool(request.query_params.get("include_parameters")) or False
         compact = _parse_bool(request.query_params.get("compact"))
         catalog = _tool_catalog(include_parameters=include_parameters, compact=compact)
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "resources": list(catalog.get("resources") or []),
             "finite": True,
         }

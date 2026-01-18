@@ -4,7 +4,8 @@ import hashlib
 import os
 import shutil
 import subprocess
-from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
+from collections.abc import Mapping
+from typing import Any, Literal
 
 from github_mcp.diff_utils import build_unified_diff, diff_stats
 from github_mcp.server import (
@@ -121,7 +122,7 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     return candidate
 
 
-def _workspace_read_text(repo_dir: str, path: str) -> Dict[str, Any]:
+def _workspace_read_text(repo_dir: str, path: str) -> dict[str, Any]:
     abs_path = _workspace_safe_join(repo_dir, path)
     if not os.path.exists(abs_path):
         return {
@@ -157,7 +158,7 @@ def _workspace_read_text_limited(
     path: str,
     *,
     max_chars: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Read a workspace file as text, returning at most max_chars characters.
 
     Intended for multi-file examination workflows where returning full file
@@ -238,7 +239,7 @@ def _sanitize_git_path(path: str) -> str:
     return p
 
 
-def _git_show_text(repo_dir: str, git_ref: str, path: str) -> Dict[str, Any]:
+def _git_show_text(repo_dir: str, git_ref: str, path: str) -> dict[str, Any]:
     """Read a file as text from a git object (ref:path) without checkout."""
 
     ref = _sanitize_git_ref(git_ref)
@@ -288,7 +289,7 @@ def _workspace_write_text(
     text: str,
     *,
     create_parents: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     abs_path = _workspace_safe_join(repo_dir, path)
     parent = os.path.dirname(abs_path)
     if create_parents:
@@ -310,7 +311,7 @@ def _workspace_write_text(
     }
 
 
-def _infer_eol_from_lines(lines: List[str]) -> str:
+def _infer_eol_from_lines(lines: list[str]) -> str:
     """Infer an EOL sequence from an existing file.
 
     Defaults to \n, but prefers \r\n when detected.
@@ -328,12 +329,12 @@ def _infer_eol_from_lines(lines: List[str]) -> str:
     return "\n"
 
 
-def _split_lines_keepends(text: str) -> List[str]:
+def _split_lines_keepends(text: str) -> list[str]:
     # splitlines(True) returns [] for empty strings; keep that behavior.
     return (text or "").splitlines(True)
 
 
-def _line_content_and_eol(raw_line: str) -> Tuple[str, str]:
+def _line_content_and_eol(raw_line: str) -> tuple[str, str]:
     if raw_line.endswith("\r\n"):
         return raw_line[:-2], "\r\n"
     if raw_line.endswith("\n"):
@@ -343,7 +344,7 @@ def _line_content_and_eol(raw_line: str) -> Tuple[str, str]:
     return raw_line, ""
 
 
-def _pos_to_offset(lines: List[str], line: int, col: int) -> int:
+def _pos_to_offset(lines: list[str], line: int, col: int) -> int:
     """Convert a 1-indexed (line, col) position to a 0-indexed absolute offset.
 
     Semantics:
@@ -383,10 +384,10 @@ def _pos_to_offset(lines: List[str], line: int, col: int) -> int:
 async def delete_workspace_paths(
     full_name: str,
     ref: str = "main",
-    paths: List[str] | None = None,
+    paths: list[str] | None = None,
     allow_missing: bool = True,
     allow_recursive: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Delete one or more paths from the repo mirror.
 
     This tool exists because some environments can block patch-based file deletions.
@@ -409,9 +410,9 @@ async def delete_workspace_paths(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        removed: List[str] = []
-        missing: List[str] = []
-        failed: List[Dict[str, Any]] = []
+        removed: list[str] = []
+        missing: list[str] = []
+        failed: list[dict[str, Any]] = []
 
         for rel_path in paths:
             try:
@@ -452,7 +453,7 @@ async def get_workspace_file_contents(
     full_name: str,
     ref: str = "main",
     path: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Read a file from the persistent repo mirror (no shell).
 
     Args:
@@ -481,13 +482,13 @@ async def get_workspace_file_contents(
 async def get_workspace_files_contents(
     full_name: str,
     ref: str = "main",
-    paths: List[str] | None = None,
+    paths: list[str] | None = None,
     *,
     expand_globs: bool = True,
     max_chars_per_file: int = 20000,
     max_total_chars: int = 120000,
     include_missing: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Read multiple files from the persistent repo mirror in one call.
 
     This tool is optimized for examination workflows where a client wants to
@@ -517,7 +518,7 @@ async def get_workspace_files_contents(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        expanded: List[str] = []
+        expanded: list[str] = []
         for raw in paths:
             p = (raw or "").strip().replace("\\", "/")
             if not p:
@@ -537,16 +538,16 @@ async def get_workspace_files_contents(
                 expanded.append(p.lstrip("/"))
 
         seen: set[str] = set()
-        normalized_paths: List[str] = []
+        normalized_paths: list[str] = []
         for p in expanded:
             if p in seen:
                 continue
             seen.add(p)
             normalized_paths.append(p)
 
-        files: List[Dict[str, Any]] = []
-        missing: List[str] = []
-        errors: List[Dict[str, Any]] = []
+        files: list[dict[str, Any]] = []
+        missing: list[str] = []
+        errors: list[dict[str, Any]] = []
         total_chars = 0
         truncated_any = False
 
@@ -600,13 +601,13 @@ async def get_workspace_files_contents(
 async def compare_workspace_files(
     full_name: str,
     ref: str = "main",
-    comparisons: List[Dict[str, Any]] | None = None,
+    comparisons: list[dict[str, Any]] | None = None,
     *,
     context_lines: int = 3,
     max_chars_per_side: int = 200000,
     max_diff_chars: int = 200000,
     include_stats: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Compare multiple file pairs or ref/path variants and return diffs.
 
     Each entry in `comparisons` supports one of the following shapes:
@@ -644,8 +645,8 @@ async def compare_workspace_files(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        out: List[Dict[str, Any]] = []
-        errors: List[Dict[str, Any]] = []
+        out: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
 
         for idx, spec in enumerate(comparisons):
             try:
@@ -727,7 +728,7 @@ async def compare_workspace_files(
                 if not diff_full:
                     diff_full = ""
 
-                stats_obj: Dict[str, int] | None = None
+                stats_obj: dict[str, int] | None = None
                 if include_stats:
                     if diff_full:
                         ds = diff_stats(diff_full)
@@ -781,7 +782,7 @@ async def set_workspace_file_contents(
     path: str = "",
     content: str = "",
     create_parents: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Replace a workspace file's contents by writing the full file text.
 
     This is a good fit for repo-mirror edits when you want to replace the full
@@ -837,7 +838,7 @@ async def edit_workspace_text_range(
     end_col: int = 1,
     replacement: str = "",
     create_parents: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Edit a file by replacing a precise (line, column) text range.
 
     This is the most granular edit primitive:
@@ -920,7 +921,7 @@ async def edit_workspace_line(
     line_number: int = 1,
     text: str = "",
     create_parents: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Edit a single line in a workspace file.
 
     Operations:
@@ -1084,7 +1085,7 @@ async def replace_workspace_text(
     occurrence: int = 1,
     replace_all: bool = False,
     create_parents: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Replace text in a workspace file (single word/character or substring).
 
     By default, replaces the Nth occurrence (1-indexed). Use replace_all=true
@@ -1187,7 +1188,7 @@ async def apply_patch(
     full_name: str,
     ref: str = "main",
     patch: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Apply a unified diff patch to the persistent repo mirror."""
 
     try:
@@ -1207,10 +1208,10 @@ async def apply_patch(
 async def move_workspace_paths(
     full_name: str,
     ref: str = "main",
-    moves: List[Dict[str, Any]] | None = None,
+    moves: list[dict[str, Any]] | None = None,
     overwrite: bool = False,
     create_parents: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Move (rename) one or more workspace paths inside the repo mirror.
 
     Args:
@@ -1230,8 +1231,8 @@ async def move_workspace_paths(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        moved: List[Dict[str, str]] = []
-        failed: List[Dict[str, Any]] = []
+        moved: list[dict[str, str]] = []
+        failed: list[dict[str, Any]] = []
 
         for m in moves:
             src = m.get("src")
@@ -1280,12 +1281,12 @@ async def move_workspace_paths(
 async def apply_workspace_operations(
     full_name: str,
     ref: str = "main",
-    operations: List[Dict[str, Any]] | None = None,
+    operations: list[dict[str, Any]] | None = None,
     fail_fast: bool = True,
     rollback_on_error: bool = True,
     preview_only: bool = False,
     create_parents: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Apply multiple file operations in a single workspace clone.
 
     This is a higher-level, multi-file alternative to calling the single-file
@@ -1317,7 +1318,7 @@ async def apply_workspace_operations(
             f.write(data)
 
     # Best-effort rollback by restoring prior file bytes.
-    backups: Dict[str, Optional[bytes]] = {}
+    backups: dict[str, bytes | None] = {}
 
     def _backup_path(abs_path: str) -> None:
         if abs_path in backups:
@@ -1347,8 +1348,8 @@ async def apply_workspace_operations(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        results: List[Dict[str, Any]] = []
-        diffs: List[str] = []
+        results: list[dict[str, Any]] = []
+        diffs: list[str] = []
 
         for idx, op in enumerate(operations):
             op_name = op.get("op")

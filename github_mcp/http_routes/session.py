@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -10,7 +11,7 @@ from github_mcp.mcp_server.context import get_request_context
 from github_mcp.session_anchor import get_server_anchor, normalize_anchor
 
 
-def _effective_session_id(request: Request) -> Optional[str]:
+def _effective_session_id(request: Request) -> str | None:
     # Prefer query param to align with existing /messages?session_id=... behavior.
     sid = request.query_params.get("session_id")
     if sid:

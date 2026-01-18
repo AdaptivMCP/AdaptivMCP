@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import string
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from github_mcp.exceptions import GitHubAPIError
 
@@ -12,12 +12,12 @@ from ._main import _main
 
 async def list_workflow_runs(
     full_name: str,
-    branch: Optional[str] = None,
-    status: Optional[str] = None,
-    event: Optional[str] = None,
+    branch: str | None = None,
+    status: str | None = None,
+    event: str | None = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List recent GitHub Actions workflow runs with optional filters."""
 
     if "/" not in full_name:
@@ -29,7 +29,7 @@ async def list_workflow_runs(
 
     m = _main()
 
-    params: Dict[str, Any] = {"per_page": per_page, "page": page}
+    params: dict[str, Any] = {"per_page": per_page, "page": page}
     if branch:
         params["branch"] = branch
     if status:
@@ -46,9 +46,9 @@ async def list_workflow_runs(
 
 async def list_recent_failures(
     full_name: str,
-    branch: Optional[str] = None,
+    branch: str | None = None,
     limit: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List recent failed or cancelled GitHub Actions workflow runs."""
 
     if limit <= 0:
@@ -76,18 +76,21 @@ async def list_recent_failures(
         "startup_failure",
     }
 
-    failures: List[Dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
     for run in raw_runs:
         status = run.get("status")
         conclusion = run.get("conclusion")
 
-        if conclusion in failure_conclusions:
-            include = True
-        elif status == "completed" and conclusion not in (
-            None,
-            "success",
-            "neutral",
-            "skipped",
+        if (
+            conclusion in failure_conclusions
+            or status == "completed"
+            and conclusion
+            not in (
+                None,
+                "success",
+                "neutral",
+                "skipped",
+            )
         ):
             include = True
         else:
@@ -122,7 +125,7 @@ async def list_recent_failures(
     }
 
 
-async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
+async def get_workflow_run(full_name: str, run_id: int) -> dict[str, Any]:
     """Retrieve a specific workflow run including timing and conclusion."""
 
     m = _main()
@@ -137,7 +140,7 @@ async def list_workflow_run_jobs(
     run_id: int,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List jobs within a workflow run, useful for troubleshooting failures."""
 
     if "/" not in full_name:
@@ -161,7 +164,7 @@ async def get_workflow_run_overview(
     full_name: str,
     run_id: int,
     max_jobs: int = 500,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Summarize a GitHub Actions workflow run for CI triage.
 
     Aggregates run metadata, jobs (with pagination up to ``max_jobs``), failed
@@ -178,7 +181,7 @@ async def get_workflow_run_overview(
     if not isinstance(run_json, dict):
         run_json = {}
 
-    run_summary: Dict[str, Any] = {
+    run_summary: dict[str, Any] = {
         "id": run_json.get("id"),
         "name": run_json.get("name"),
         "event": run_json.get("event"),
@@ -192,7 +195,7 @@ async def get_workflow_run_overview(
         "html_url": run_json.get("html_url"),
     }
 
-    def _parse_timestamp(value: Any) -> Optional[datetime]:
+    def _parse_timestamp(value: Any) -> datetime | None:
         if not isinstance(value, str):
             return None
         try:
@@ -202,9 +205,9 @@ async def get_workflow_run_overview(
         except Exception:
             return None
 
-    jobs: List[Dict[str, Any]] = []
-    failed_jobs: List[Dict[str, Any]] = []
-    jobs_with_duration: List[Dict[str, Any]] = []
+    jobs: list[dict[str, Any]] = []
+    failed_jobs: list[dict[str, Any]] = []
+    jobs_with_duration: list[dict[str, Any]] = []
 
     failure_conclusions = {
         "failure",
@@ -217,7 +220,7 @@ async def get_workflow_run_overview(
     per_page = 100
     page = 1
     fetched = 0
-    last_page_job_ids: Optional[List[Any]] = None
+    last_page_job_ids: list[Any] | None = None
 
     while fetched < max_jobs:
         remaining = max_jobs - fetched
@@ -248,7 +251,7 @@ async def get_workflow_run_overview(
 
             start_dt = _parse_timestamp(started_at)
             end_dt = _parse_timestamp(completed_at)
-            duration_seconds: Optional[float] = None
+            duration_seconds: float | None = None
             if start_dt and end_dt:
                 duration_seconds = max(0.0, (end_dt - start_dt).total_seconds())
 
@@ -269,13 +272,16 @@ async def get_workflow_run_overview(
                 jobs_with_duration.append(normalized)
 
             include_failure = False
-            if conclusion in failure_conclusions:
-                include_failure = True
-            elif status == "completed" and conclusion not in (
-                None,
-                "success",
-                "neutral",
-                "skipped",
+            if (
+                conclusion in failure_conclusions
+                or status == "completed"
+                and conclusion
+                not in (
+                    None,
+                    "success",
+                    "neutral",
+                    "skipped",
+                )
             ):
                 include_failure = True
             if include_failure:
@@ -327,7 +333,7 @@ async def get_workflow_run_overview(
     }
 
 
-async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
+async def get_job_logs(full_name: str, job_id: int) -> dict[str, Any]:
     """Fetch raw logs for a GitHub Actions job without truncation."""
 
     m = _main()
@@ -362,7 +368,7 @@ async def wait_for_workflow_run(
     run_id: int,
     timeout_seconds: float = 900,
     poll_interval_seconds: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Poll a workflow run until completion or timeout."""
 
     m = _main()
@@ -431,13 +437,13 @@ async def trigger_workflow_dispatch(
     full_name: str,
     workflow: str,
     ref: str,
-    inputs: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    inputs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Trigger a workflow dispatch event on the given ref."""
 
     m = _main()
 
-    payload: Dict[str, Any] = {"ref": ref}
+    payload: dict[str, Any] = {"ref": ref}
     if inputs:
         payload["inputs"] = inputs
 
@@ -469,10 +475,10 @@ async def trigger_and_wait_for_workflow(
     full_name: str,
     workflow: str,
     ref: str,
-    inputs: Optional[Dict[str, Any]] = None,
+    inputs: dict[str, Any] | None = None,
     timeout_seconds: float = 900,
     poll_interval_seconds: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Trigger a workflow and block until it completes or hits timeout."""
 
     m = _main()
@@ -480,15 +486,15 @@ async def trigger_and_wait_for_workflow(
     await trigger_workflow_dispatch(full_name, workflow, ref, inputs)
 
     # The dispatch API does not return a run id. Poll for the run we just triggered.
-    dispatched_at = datetime.now(timezone.utc)
+    dispatched_at = datetime.now(UTC)
 
     # Branch filter only works for branch names. For tags/SHAs we must query without the branch param.
     ref_str = (ref or "").strip()
     is_sha = len(ref_str) == 40 and all(c in string.hexdigits for c in ref_str)
-    branch_filter: Optional[str] = None if is_sha else ref
+    branch_filter: str | None = None if is_sha else ref
 
     poll_deadline = asyncio.get_running_loop().time() + 60
-    run_id: Optional[int] = None
+    run_id: int | None = None
 
     while asyncio.get_running_loop().time() < poll_deadline and run_id is None:
         runs = await m.list_workflow_runs(
@@ -503,7 +509,7 @@ async def trigger_and_wait_for_workflow(
         # Prefer runs created after we dispatched (allow small clock skew).
         cutoff = dispatched_at - timedelta(seconds=10)
 
-        def _parse_created(value: Any) -> Optional[datetime]:
+        def _parse_created(value: Any) -> datetime | None:
             if not isinstance(value, str):
                 return None
             try:
@@ -511,12 +517,12 @@ async def trigger_and_wait_for_workflow(
                     value = value[:-1] + "+00:00"
                 dt = datetime.fromisoformat(value)
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                return dt.astimezone(timezone.utc)
+                    dt = dt.replace(tzinfo=UTC)
+                return dt.astimezone(UTC)
             except Exception:
                 return None
 
-        candidates: List[Dict[str, Any]] = []
+        candidates: list[dict[str, Any]] = []
         for run in workflow_runs or []:
             if not isinstance(run, dict):
                 continue
@@ -542,7 +548,7 @@ async def trigger_and_wait_for_workflow(
             # Pick the most recent matching run.
             candidates.sort(
                 key=lambda r: _parse_created(r.get("created_at"))
-                or datetime.min.replace(tzinfo=timezone.utc),
+                or datetime.min.replace(tzinfo=UTC),
                 reverse=True,
             )
             run_id = candidates[0].get("id")

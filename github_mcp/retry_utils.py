@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import secrets
 
-
 # Expose an object with a ``uniform`` method for both production usage and
 # easy monkeypatching in tests.
 random = secrets.SystemRandom()

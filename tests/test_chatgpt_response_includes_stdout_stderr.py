@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import github_mcp.mcp_server.decorators as dec
 
-
 _chatgpt_friendly_result = dec._chatgpt_friendly_result
 
 

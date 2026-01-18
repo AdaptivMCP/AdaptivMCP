@@ -3,7 +3,7 @@ import os
 import shlex
 import shutil
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
@@ -21,11 +21,11 @@ from ._shared import (
 
 
 async def _workspace_sync_snapshot(
-    deps: Dict[str, Any],
+    deps: dict[str, Any],
     *,
     repo_dir: str,
     branch: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     fetch = await _run_shell_ok(
         deps,
         "git fetch --prune origin",
@@ -81,7 +81,7 @@ async def workspace_create_branch(
     base_ref: str = "main",
     new_branch: str = "",
     push: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a branch using the repo mirror (workspace clone), optionally pushing to origin.
 
     This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
@@ -130,7 +130,7 @@ async def workspace_create_branch(
 async def workspace_delete_branch(
     full_name: str,
     branch: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Delete a non-default branch using the repo mirror (workspace clone).
 
     This is the workspace counterpart to branch-creation helpers and is intended
@@ -198,13 +198,13 @@ async def workspace_self_heal_branch(
     branch: str = "",
     *,
     base_ref: str = "main",
-    new_branch: Optional[str] = None,
+    new_branch: str | None = None,
     discard_uncommitted_changes: bool = True,
     delete_mangled_branch: bool = True,
     reset_base: bool = True,
     enumerate_repo: bool = True,
     dry_run: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Detect a mangled repo mirror branch and recover to a fresh branch.
 
     This tool targets cases where a repo mirror (workspace clone) becomes inconsistent (wrong
@@ -228,10 +228,10 @@ async def workspace_self_heal_branch(
         branch = branch.strip()
 
         effective_base = _tw()._effective_ref_for_repo(full_name, base_ref)
-        steps: List[Dict[str, Any]] = []
+        steps: list[dict[str, Any]] = []
 
         def step(action: str, detail: str, *, status: str = "ok", **extra: Any) -> None:
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "ts": time.time(),
                 "action": action,
                 "detail": detail,
@@ -390,7 +390,7 @@ async def workspace_self_heal_branch(
             repo_dir=new_repo_dir,
         )
 
-        snapshot: Dict[str, Any] = {}
+        snapshot: dict[str, Any] = {}
         if enumerate_repo:
             log_res = await deps["run_shell"](
                 "git log -n 1 --oneline", cwd=new_repo_dir, timeout_seconds=60
@@ -409,7 +409,7 @@ async def workspace_self_heal_branch(
 
             # Count files excluding .git and .venv-mcp.
             file_count = 0
-            for root, dirs, files in os.walk(new_repo_dir):
+            for _root, dirs, files in os.walk(new_repo_dir):
                 dirs[:] = [d for d in dirs if d not in {".git", ".venv-mcp"}]
                 file_count += len(files)
 
@@ -445,7 +445,7 @@ async def workspace_self_heal_branch(
 async def workspace_sync_status(
     full_name: str,
     ref: str = "main",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Report how a repo mirror (workspace clone) differs from its remote branch."""
     try:
         deps = _tw()._workspace_deps()
@@ -470,7 +470,7 @@ async def workspace_sync_to_remote(
     ref: str = "main",
     *,
     discard_local_changes: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Reset a repo mirror (workspace clone) to match the remote branch."""
     try:
         deps = _tw()._workspace_deps()
@@ -521,14 +521,14 @@ async def workspace_sync_bidirectional(
     push: bool = True,
     *,
     discard_local_changes: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Sync repo mirror changes to the remote and refresh local state from GitHub."""
     try:
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        actions: List[str] = []
+        actions: list[str] = []
         before = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
         snapshot = before
 

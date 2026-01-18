@@ -99,9 +99,9 @@ terminal_command = _commands.terminal_command
 run_python = _commands.run_python
 
 # Backward-compatible aliases for older callers/tool catalogs.
-run_command = getattr(_commands, "run_command_alias")
-run_shell = getattr(_commands, "run_shell_alias")
-run_terminal_commands = getattr(_commands, "run_terminal_commands_alias")
+run_command = _commands.run_command_alias
+run_shell = _commands.run_shell_alias
+run_terminal_commands = _commands.run_terminal_commands_alias
 
 workspace_create_branch = _git_ops.workspace_create_branch
 workspace_delete_branch = _git_ops.workspace_delete_branch

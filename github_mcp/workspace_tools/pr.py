@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from github_mcp.server import _structured_tool_error, mcp_tool
 
@@ -14,15 +14,15 @@ async def commit_and_open_pr_from_workspace(
     full_name: str,
     ref: str = "main",
     base: str = "main",
-    title: Optional[str] = None,
-    body: Optional[str] = None,
+    title: str | None = None,
+    body: str | None = None,
     draft: bool = False,
     commit_message: str = "Commit workspace changes",
     run_quality: bool = False,
     quality_timeout_seconds: float = 600,
     test_command: str = "pytest",
     lint_command: str = "ruff check .",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Commit repo mirror changes on `ref` and open a PR into `base`.
 
     This helper is intended for the common "edit in repo mirror -> commit/push -> open PR" flow.
@@ -37,7 +37,7 @@ async def commit_and_open_pr_from_workspace(
         effective_ref = tw._effective_ref_for_repo(full_name, ref)
         effective_base = tw._effective_ref_for_repo(full_name, base)
 
-        quality: Optional[Dict[str, Any]] = None
+        quality: dict[str, Any] | None = None
         if run_quality:
             quality = await tw.run_quality_suite(
                 full_name=full_name,

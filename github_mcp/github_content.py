@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .config import (
     GITHUB_MCP_INCLUDE_BASE64_CONTENT,
@@ -30,7 +30,7 @@ async def _verify_file_on_branch(
     full_name: str,
     path: str,
     branch: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Verify that a file exists on a specific branch after a write."""
 
     try:
@@ -53,8 +53,8 @@ async def _verify_file_on_branch(
 async def _decode_github_content(
     full_name: str,
     path: str,
-    ref: Optional[str] = None,
-) -> Dict[str, Any]:
+    ref: str | None = None,
+) -> dict[str, Any]:
     main_mod = _get_main_module()
     effective_ref_fn = getattr(main_mod, "_effective_ref_for_repo", _effective_ref_for_repo)
     effective_ref = effective_ref_fn(full_name, ref)
@@ -104,13 +104,13 @@ async def _decode_github_content(
 
     decoded_len = len(decoded)
     is_truncated = False
-    stored_bytes: Optional[bytes] = decoded
+    stored_bytes: bytes | None = decoded
     if GITHUB_MCP_MAX_FILE_CONTENT_BYTES > 0 and decoded_len > GITHUB_MCP_MAX_FILE_CONTENT_BYTES:
         # Do not retain large blobs in memory or return them to the client.
         stored_bytes = None
         is_truncated = True
 
-    text: Optional[str] = None
+    text: str | None = None
     if stored_bytes is not None:
         try:
             text = stored_bytes.decode("utf-8")
@@ -127,7 +127,7 @@ async def _decode_github_content(
             preview = preview[:GITHUB_MCP_MAX_FILE_TEXT_CHARS]
         text = preview
 
-    response: Dict[str, Any] = {
+    response: dict[str, Any] = {
         "json": j,
         "content": content if (GITHUB_MCP_INCLUDE_BASE64_CONTENT and not is_truncated) else None,
         "encoding": encoding if (GITHUB_MCP_INCLUDE_BASE64_CONTENT and not is_truncated) else None,
@@ -155,7 +155,7 @@ async def _get_branch_sha(full_name: str, branch: str) -> str:
     return sha
 
 
-async def _resolve_file_sha(full_name: str, path: str, branch: str) -> Optional[str]:
+async def _resolve_file_sha(full_name: str, path: str, branch: str) -> str | None:
     try:
         decoded = await _decode_github_content(full_name, path, branch)
         sha = decoded.get("json", {}).get("sha")
@@ -167,8 +167,8 @@ async def _resolve_file_sha(full_name: str, path: str, branch: str) -> Optional[
 
 
 def _strip_large_fields_from_commit_response(
-    response_json: Dict[str, Any],
-) -> Dict[str, Any]:
+    response_json: dict[str, Any],
+) -> dict[str, Any]:
     """Remove large fields from GitHub Contents API responses.
 
     The GitHub Contents write endpoints often return base64-encoded file bodies in
@@ -181,7 +181,7 @@ def _strip_large_fields_from_commit_response(
     if not isinstance(response_json, dict):
         return response_json
 
-    cleaned: Dict[str, Any] = dict(response_json)
+    cleaned: dict[str, Any] = dict(response_json)
     content = cleaned.get("content")
     if isinstance(content, dict):
         content_clean = dict(content)
@@ -199,16 +199,16 @@ async def _perform_github_commit(
     path: str,
     message: str,
     body_bytes: bytes,
-    sha: Optional[str],
-    committer: Optional[Dict[str, str]] = None,
-    author: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    sha: str | None,
+    committer: dict[str, str] | None = None,
+    author: dict[str, str] | None = None,
+) -> dict[str, Any]:
     if not isinstance(body_bytes, (bytes, bytearray)):
         raise TypeError("body_bytes must be bytes")
 
     normalized_path = _normalize_repo_path_for_repo(full_name, path)
     content_b64 = base64.b64encode(body_bytes).decode("ascii")
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "message": message,
         "content": content_b64,
         "branch": branch,
@@ -269,12 +269,12 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         try:
             with open(local_path, "rb") as f:
                 return f.read()
-        except FileNotFoundError:
+        except FileNotFoundError as exc:
             raise GitHubAPIError(
                 f"{context} content_url path not found at {local_path}. {missing_hint}"
-            )
-        except OSError as e:
-            raise GitHubAPIError(f"Failed to read content_url from {local_path}: {e}")
+            ) from exc
+        except OSError as exc:
+            raise GitHubAPIError(f"Failed to read content_url from {local_path}: {exc}") from exc
 
     async def _fetch_rewritten_path(local_path: str, *, base_url: str) -> bytes:
         rewritten_url = base_url.rstrip("/") + "/" + local_path.lstrip("/")
@@ -313,7 +313,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         rewrite_base = SANDBOX_CONTENT_BASE_URL
         try:
             return _read_local(local_path, sandbox_hint)
-        except GitHubAPIError:
+        except GitHubAPIError as exc:
             if rewrite_base and (
                 rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
             ):
@@ -323,7 +323,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
                 "Provide an http(s) URL that already points to the sandbox file "
                 "or configure SANDBOX_CONTENT_BASE_URL so the server can fetch it "
                 "when direct filesystem access is unavailable."
-            )
+            ) from exc
 
     if content_url.startswith("/") or _is_windows_absolute_path(content_url):
         rewrite_base = SANDBOX_CONTENT_BASE_URL
@@ -333,7 +333,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         )
         try:
             return _read_local(content_url, missing_hint)
-        except GitHubAPIError:
+        except GitHubAPIError as exc:
             if rewrite_base and (
                 rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
             ):
@@ -343,7 +343,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
                 f"{missing_hint} Configure SANDBOX_CONTENT_BASE_URL or provide an "
                 "absolute http(s) URL so the server can fetch the sandbox file when "
                 "it is not mounted locally."
-            )
+            ) from exc
 
     if content_url.startswith("http://") or content_url.startswith("https://"):
         client = _external_client_instance()

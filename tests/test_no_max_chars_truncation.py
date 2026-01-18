@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -25,9 +24,9 @@ def _iter_source_files() -> list[Path]:
             continue
         if any(part in ex_dirs for part in p.parts):
             continue
-        if p.suffix.lower() in {".py", ".md", ".txt", ".toml", ".yml", ".yaml"}:
-            out.append(p)
-        elif p.name.endswith(".env.example"):
+        if p.suffix.lower() in {".py", ".md", ".txt", ".toml", ".yml", ".yaml"} or p.name.endswith(
+            ".env.example"
+        ):
             out.append(p)
     return out
 

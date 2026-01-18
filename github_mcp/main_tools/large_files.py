@@ -10,7 +10,7 @@ large files safely.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.http_clients import _github_client_instance
@@ -24,9 +24,9 @@ from github_mcp.utils import (
 
 def _build_range_header(
     *,
-    start_byte: Optional[int],
+    start_byte: int | None,
     max_bytes: int,
-    tail_bytes: Optional[int],
+    tail_bytes: int | None,
 ) -> str:
     if max_bytes <= 0:
         raise ValueError("max_bytes must be > 0")
@@ -57,7 +57,7 @@ async def _get_content_metadata(
     full_name: str,
     path: str,
     ref: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Best-effort fetch of file metadata without returning the full body."""
 
     try:
@@ -89,13 +89,13 @@ async def get_file_excerpt(
     full_name: str,
     path: str,
     ref: str = "main",
-    start_byte: Optional[int] = None,
+    start_byte: int | None = None,
     max_bytes: int = 65536,
-    tail_bytes: Optional[int] = None,
+    tail_bytes: int | None = None,
     as_text: bool = True,
     max_text_chars: int = 200000,
     numbered_lines: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch a bounded excerpt of a repository file.
 
     The excerpt is fetched using the GitHub Contents endpoint with
@@ -123,7 +123,7 @@ async def get_file_excerpt(
     client = _github_client_instance()
     body = bytearray()
     truncated = False
-    response_headers: Dict[str, Any] = {}
+    response_headers: dict[str, Any] = {}
 
     # Stream to avoid loading large responses into memory.
     try:
@@ -144,11 +144,9 @@ async def get_file_excerpt(
                     message = None
                 suffix = f" - {message}" if message else ""
                 raise GitHubAPIError(
-                    (
-                        "Failed to fetch raw content for "
-                        f"{full_name}/{normalized_path}@{effective_ref}: "
-                        f"HTTP {resp.status_code}{suffix}"
-                    )
+                    "Failed to fetch raw content for "
+                    f"{full_name}/{normalized_path}@{effective_ref}: "
+                    f"HTTP {resp.status_code}{suffix}"
                 )
 
             async for chunk in resp.aiter_bytes():
@@ -171,8 +169,8 @@ async def get_file_excerpt(
         ) from exc
 
     content_bytes = bytes(body)
-    text: Optional[str] = None
-    numbered: Optional[str] = None
+    text: str | None = None
+    numbered: str | None = None
     if as_text:
         text = content_bytes.decode("utf-8", errors="replace")
         if max_text_chars > 0 and len(text) > max_text_chars:

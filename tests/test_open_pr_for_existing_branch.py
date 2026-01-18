@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
 from github_mcp.main_tools import pull_requests
 
 
-def _make_structured_422(message: str, *, error_entry_message: str) -> Dict[str, Any]:
+def _make_structured_422(message: str, *, error_entry_message: str) -> dict[str, Any]:
     return {
         "json": {},
         "error": {
@@ -42,13 +42,13 @@ async def test_open_pr_for_existing_branch_returns_noop_on_no_commits(
         raising=False,
     )
 
-    async def fake_create_pull_request(**_kwargs: Any) -> Dict[str, Any]:
+    async def fake_create_pull_request(**_kwargs: Any) -> dict[str, Any]:
         return _make_structured_422(
             "Validation Failed",
             error_entry_message="No commits between main and feature/test",
         )
 
-    async def fake_list_pull_requests(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
+    async def fake_list_pull_requests(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         return {"json": []}
 
     monkeypatch.setattr(pull_requests, "create_pull_request", fake_create_pull_request)
@@ -81,13 +81,13 @@ async def test_open_pr_for_existing_branch_reuses_existing_pr_on_conflict(
         raising=False,
     )
 
-    async def fake_create_pull_request(**_kwargs: Any) -> Dict[str, Any]:
+    async def fake_create_pull_request(**_kwargs: Any) -> dict[str, Any]:
         return _make_structured_422(
             "Validation Failed",
             error_entry_message="A pull request already exists for octo-org:feature/test",
         )
 
-    async def fake_list_pull_requests(*_args: Any, **kwargs: Any) -> Dict[str, Any]:
+    async def fake_list_pull_requests(*_args: Any, **kwargs: Any) -> dict[str, Any]:
         # Ensure the list filter is correctly constructed.
         assert kwargs.get("head") == "octo-org:feature/test"
         assert kwargs.get("base") == "main"

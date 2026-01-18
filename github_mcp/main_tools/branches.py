@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ._main import _main
 
@@ -9,7 +9,7 @@ async def create_branch(
     full_name: str,
     branch: str,
     from_ref: str = "main",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a new branch from a base ref."""
 
     m = _main()
@@ -23,7 +23,7 @@ async def create_branch(
 
     client = m._github_client_instance()
 
-    base_sha: Optional[str] = None
+    base_sha: str | None = None
     async with m._get_concurrency_semaphore():
         resp = await client.get(f"/repos/{full_name}/git/ref/heads/{base_ref}")
     if resp.status_code == 200:
@@ -65,7 +65,7 @@ async def ensure_branch(
     full_name: str,
     branch: str,
     from_ref: str = "main",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Idempotently ensure a branch exists, creating it from ``from_ref``."""
 
     m = _main()
@@ -80,7 +80,7 @@ async def ensure_branch(
     return {"status_code": resp.status_code, "json": resp.json()}
 
 
-async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
+async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> dict[str, Any]:
     """Return PRs and latest workflow run for a branch."""
 
     m = _main()
@@ -88,14 +88,14 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
     effective_branch = m._effective_ref_for_repo(full_name, branch)
     effective_base = m._effective_ref_for_repo(full_name, base)
 
-    compare_error: Optional[str] = None
+    compare_error: str | None = None
 
-    owner: Optional[str] = None
+    owner: str | None = None
     if "/" in full_name:
         owner = full_name.split("/", 1)[0]
     head_param = f"{owner}:{effective_branch}" if owner else None
 
-    async def _safe_list_prs(state: str) -> Dict[str, Any]:
+    async def _safe_list_prs(state: str) -> dict[str, Any]:
         try:
             return await m.list_pull_requests(
                 full_name, state=state, head=head_param, base=effective_base
@@ -109,8 +109,8 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
     open_prs = open_prs_resp.get("json") or []
     closed_prs = closed_prs_resp.get("json") or []
 
-    workflow_error: Optional[str] = None
-    latest_workflow_run: Optional[Dict[str, Any]] = None
+    workflow_error: str | None = None
+    latest_workflow_run: dict[str, Any] | None = None
     try:
         runs_resp = await m.list_workflow_runs(full_name, branch=effective_branch, per_page=1)
         runs_json = runs_resp.get("json") or {}
@@ -134,7 +134,7 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
 
 async def get_latest_branch_status(
     full_name: str, branch: str, base: str = "main"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return normalized status for a branch (PRs + latest workflow)."""
 
     m = _main()

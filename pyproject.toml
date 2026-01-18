@@ -2,9 +2,48 @@
 target-version = "py311"
 line-length = 100
 
+# Keep linting deterministic across environments.
+exclude = [
+    ".venv",
+    "build",
+    "dist",
+    "__pycache__",
+]
+
 [tool.ruff.lint]
-# Lint rules disabled (formatting can still be enforced via `ruff format`).
-select = []
+# Production-grade baseline linting.
+#
+# This rule set is intentionally high-signal and broadly adopted across modern
+# Python services. It focuses on correctness, import hygiene, and common
+# footguns without imposing heavy stylistic rewrites.
+select = [
+    # pycodestyle (subset)
+    "E4",
+    "E7",
+    "E9",
+    # Pyflakes
+    "F",
+    # isort
+    "I",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-comprehensions (lightweight, mostly mechanical)
+    "C4",
+]
+
+# Avoid stylistic churn that overlaps with formatting.
+ignore = [
+    # Line length is handled by the formatter.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    # Tests often intentionally use broad asserts/fixtures.
+    "B018",
+]
 
 [tool.black]
 line-length = 100

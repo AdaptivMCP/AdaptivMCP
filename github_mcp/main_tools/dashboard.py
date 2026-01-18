@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from github_mcp.utils import _normalize_repo_path_for_repo
 
 from ._main import _main
 
 
-async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Dict[str, Any]:
+async def get_repo_dashboard(full_name: str, branch: str | None = None) -> dict[str, Any]:
     """Return a compact, multi-signal dashboard for a repository.
 
     Implementation moved out of `main.py` to keep the main registration surface
@@ -32,8 +32,8 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
         effective_branch = m._effective_ref_for_repo(full_name, branch)
 
     # --- Repository metadata ---
-    repo_info: Optional[Dict[str, Any]] = None
-    repo_error: Optional[str] = None
+    repo_info: dict[str, Any] | None = None
+    repo_error: str | None = None
     try:
         repo_resp = await m.get_repository(full_name)
         repo_info = repo_resp.get("json") or {}
@@ -41,8 +41,8 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
         repo_error = str(exc)
 
     # --- Open pull requests (small window) ---
-    pr_error: Optional[str] = None
-    open_prs: list[Dict[str, Any]] = []
+    pr_error: str | None = None
+    open_prs: list[dict[str, Any]] = []
     try:
         pr_resp = await m.list_pull_requests(
             full_name,
@@ -55,8 +55,8 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
         pr_error = str(exc)
 
     # --- Open issues (excluding PRs) ---
-    issues_error: Optional[str] = None
-    open_issues: list[Dict[str, Any]] = []
+    issues_error: str | None = None
+    open_issues: list[dict[str, Any]] = []
     try:
         issues_resp = await m.list_repository_issues(
             full_name,
@@ -73,8 +73,8 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
         issues_error = str(exc)
 
     # --- Recent workflow runs on this branch ---
-    workflows_error: Optional[str] = None
-    workflow_runs: list[Dict[str, Any]] = []
+    workflows_error: str | None = None
+    workflow_runs: list[dict[str, Any]] = []
     try:
         runs_resp = await m.list_workflow_runs(
             full_name,
@@ -88,8 +88,8 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
         workflows_error = str(exc)
 
     # --- Top-level tree entries on the branch ---
-    tree_error: Optional[str] = None
-    top_level_tree: list[Dict[str, Any]] = []
+    tree_error: str | None = None
+    top_level_tree: list[dict[str, Any]] = []
     try:
         tree_resp = await m.list_repository_tree(
             full_name,

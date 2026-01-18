@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import re
 from contextvars import ContextVar
-from typing import Any, Optional
+from typing import Any
 
 try:
     # Optional dependency: FastMCP and its transport security helpers.
@@ -17,26 +17,26 @@ except Exception:  # pragma: no cover
 # Request-scoped context (used for correlation/logging/dedupe)
 # ------------------------------------------------------------------------------
 
-REQUEST_MESSAGE_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_MESSAGE_ID", default=None)
-REQUEST_SESSION_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_SESSION_ID", default=None)
+REQUEST_MESSAGE_ID: ContextVar[str | None] = ContextVar("REQUEST_MESSAGE_ID", default=None)
+REQUEST_SESSION_ID: ContextVar[str | None] = ContextVar("REQUEST_SESSION_ID", default=None)
 # Optional idempotency/dedupe keys for correlating retries across transport boundaries.
 # These are intentionally kept separate from REQUEST_ID (per-HTTP-request) and
 # MESSAGE_ID (per JSON-RPC message) because upstream clients may choose to
 # retry a request with a new request id but the same idempotency key.
-REQUEST_IDEMPOTENCY_KEY: ContextVar[Optional[str]] = ContextVar(
+REQUEST_IDEMPOTENCY_KEY: ContextVar[str | None] = ContextVar(
     "REQUEST_IDEMPOTENCY_KEY", default=None
 )
-REQUEST_CHATGPT_METADATA: ContextVar[Optional[dict[str, str]]] = ContextVar(
+REQUEST_CHATGPT_METADATA: ContextVar[dict[str, str] | None] = ContextVar(
     "REQUEST_CHATGPT_METADATA", default=None
 )
 
 # End-to-end correlation identifier for each HTTP request.
 # Derived from the incoming X-Request-Id header when present; otherwise generated server-side.
-REQUEST_ID: ContextVar[Optional[str]] = ContextVar("REQUEST_ID", default=None)
+REQUEST_ID: ContextVar[str | None] = ContextVar("REQUEST_ID", default=None)
 
 # These are imported by main.py in your repo; keep names stable.
-REQUEST_PATH: ContextVar[Optional[str]] = ContextVar("REQUEST_PATH", default=None)
-REQUEST_RECEIVED_AT: ContextVar[Optional[float]] = ContextVar("REQUEST_RECEIVED_AT", default=None)
+REQUEST_PATH: ContextVar[str | None] = ContextVar("REQUEST_PATH", default=None)
+REQUEST_RECEIVED_AT: ContextVar[float | None] = ContextVar("REQUEST_RECEIVED_AT", default=None)
 
 
 def get_request_context() -> dict[str, Any]:
@@ -51,7 +51,7 @@ def get_request_context() -> dict[str, Any]:
     }
 
 
-def get_request_id() -> Optional[str]:
+def get_request_id() -> str | None:
     return REQUEST_ID.get()
 
 
@@ -104,7 +104,7 @@ def _extract_chatgpt_metadata(headers: list[tuple[bytes, bytes]]) -> dict[str, s
 # ------------------------------------------------------------------------------
 
 
-def _parse_bool(value: Optional[str]) -> bool:
+def _parse_bool(value: str | None) -> bool:
     v = (value or "").strip().lower()
     return v in ("1", "true", "t", "yes", "y", "on")
 

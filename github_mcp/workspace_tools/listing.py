@@ -3,7 +3,7 @@
 import os
 import posixpath
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 from github_mcp.server import (
     _structured_tool_error,
@@ -56,19 +56,19 @@ def _resolve_workspace_start(repo_dir: str, path: str) -> tuple[str, str]:
 
 @mcp_tool(write_action=False)
 async def list_workspace_files(
-    full_name: Optional[str] = None,
+    full_name: str | None = None,
     ref: str = "main",
     path: str = "",
-    max_files: Optional[int] = None,
-    max_results: Optional[int] = None,
-    max_depth: Optional[int] = None,
+    max_files: int | None = None,
+    max_results: int | None = None,
+    max_depth: int | None = None,
     include_hidden: bool = False,
     include_dirs: bool = False,
     *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
+) -> dict[str, Any]:
     """List files in the repo mirror (workspace clone)."""
 
     # Alias: some clients use max_results instead of max_files.
@@ -150,20 +150,20 @@ async def list_workspace_files(
 
 @mcp_tool(write_action=False)
 async def search_workspace(
-    full_name: Optional[str] = None,
+    full_name: str | None = None,
     ref: str = "main",
     query: str = "",
     path: str = "",
     case_sensitive: bool = False,
-    max_results: Optional[int] = None,
-    regex: Optional[bool] = None,
-    max_file_bytes: Optional[int] = None,
+    max_results: int | None = None,
+    regex: bool | None = None,
+    max_file_bytes: int | None = None,
     include_hidden: bool = False,
     *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
+) -> dict[str, Any]:
     """Search text files in the repo mirror (workspace clone) (bounded, no shell).
 
     Behavior for `query`:
@@ -284,7 +284,7 @@ async def search_workspace(
                 rel_path = os.path.relpath(abs_path, root)
 
                 try:
-                    with open(abs_path, "r", encoding="utf-8", errors="ignore") as tf:
+                    with open(abs_path, encoding="utf-8", errors="ignore") as tf:
                         for i, line in enumerate(tf, start=1):
                             if not _match_line(line):
                                 continue

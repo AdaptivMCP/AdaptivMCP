@@ -22,7 +22,6 @@ class DummyMainNoNetwork:
 @pytest.mark.anyio
 async def test_validate_environment_missing_tokens_marks_error(monkeypatch):
     import github_mcp.main_tools.env as env
-
     from github_mcp.config import GITHUB_TOKEN_ENV_VARS, RENDER_TOKEN_ENV_VARS
 
     # Force a deterministic "no token" environment even when running in CI.

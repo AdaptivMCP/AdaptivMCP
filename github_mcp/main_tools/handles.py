@@ -12,22 +12,21 @@ Design goals
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
 class ParsedHandle:
     raw: str
-    number: Optional[int]
+    number: int | None
     # The canonical "handle" form we surface in tool outputs.
     canonical: str
 
 
-def _strip(s: Optional[str]) -> str:
+def _strip(s: str | None) -> str:
     return (s or "").strip()
 
 
-def _extract_trailing_int(text: str) -> Optional[int]:
+def _extract_trailing_int(text: str) -> int | None:
     """Extract a trailing integer from the string without regex.
 
     Examples:
@@ -58,7 +57,7 @@ def _extract_trailing_int(text: str) -> Optional[int]:
         return None
 
 
-def parse_handle(handle: Optional[str]) -> ParsedHandle:
+def parse_handle(handle: str | None) -> ParsedHandle:
     """Parse a user-provided handle into a best-effort numeric ID.
 
     Accepted examples (best-effort):
@@ -97,7 +96,7 @@ def parse_handle(handle: Optional[str]) -> ParsedHandle:
     return ParsedHandle(raw=raw, number=None, canonical=raw)
 
 
-def coerce_issue_or_pr_number(handle: Optional[str]) -> Optional[int]:
+def coerce_issue_or_pr_number(handle: str | None) -> int | None:
     """Return a numeric issue/PR number if it can be inferred, else None."""
 
     return parse_handle(handle).number

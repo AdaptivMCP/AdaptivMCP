@@ -142,9 +142,7 @@ def main() -> int:
     vpy = _create_or_repair_venv(args.python, venv_dir=venv_dir, cwd=root)
     _ensure_pip(vpy, cwd=root)
 
-    if args.deps == "prod":
-        _run([str(vpy), "-m", "pip", "install", "-r", "dev-requirements.txt"], cwd=root)
-    elif args.deps == "dev":
+    if args.deps == "prod" or args.deps == "dev":
         _run([str(vpy), "-m", "pip", "install", "-r", "dev-requirements.txt"], cwd=root)
 
     if args.run_tests:

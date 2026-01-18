@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from github_mcp.server import _structured_tool_error, mcp_tool
 
@@ -11,14 +11,14 @@ from ._shared import _safe_branch_slug, _tw
 
 
 def _step(
-    steps: List[Dict[str, Any]],
+    steps: list[dict[str, Any]],
     action: str,
     detail: str,
     *,
     status: str = "ok",
     **extra: Any,
 ) -> None:
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "ts": time.time(),
         "action": action,
         "detail": detail,
@@ -33,10 +33,10 @@ async def workspace_apply_ops_and_open_pr(
     full_name: str,
     *,
     base_ref: str = "main",
-    feature_ref: Optional[str] = None,
-    operations: Optional[List[Dict[str, Any]]] = None,
-    pr_title: Optional[str] = None,
-    pr_body: Optional[str] = None,
+    feature_ref: str | None = None,
+    operations: list[dict[str, Any]] | None = None,
+    pr_title: str | None = None,
+    pr_body: str | None = None,
     draft: bool = False,
     commit_message: str = "Apply workspace operations",
     sync_base_to_remote: bool = True,
@@ -45,7 +45,7 @@ async def workspace_apply_ops_and_open_pr(
     quality_timeout_seconds: float = 600,
     test_command: str = "pytest",
     lint_command: str = "ruff check .",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Apply workspace operations on a new branch and open a PR.
 
     This is a convenience workflow that chains together the common sequence:
@@ -73,7 +73,7 @@ async def workspace_apply_ops_and_open_pr(
             raise ValueError("operations must contain at least one operation")
 
         tw = _tw()
-        steps: List[Dict[str, Any]] = []
+        steps: list[dict[str, Any]] = []
 
         effective_base = tw._effective_ref_for_repo(full_name, base_ref)
 

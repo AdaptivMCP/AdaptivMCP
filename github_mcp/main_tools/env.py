@@ -9,7 +9,7 @@ import time
 import uuid
 from importlib import metadata
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from github_mcp.config import (
     GIT_AUTHOR_EMAIL,
@@ -28,7 +28,7 @@ from github_mcp.render_api import _get_optional_render_token, render_request
 from ._main import _main
 
 _DISPATCH_PROBE_COOLDOWN_SECONDS = 300
-_dispatch_probe_state: Dict[str, Any] = {
+_dispatch_probe_state: dict[str, Any] = {
     "last_at": 0.0,
     "last_workflow_id": None,
     "last_workflow_name": None,
@@ -46,13 +46,13 @@ def _find_repo_root(start: Path) -> Path | None:
     return None
 
 
-def _get_controller_revision_info() -> Dict[str, Any]:
+def _get_controller_revision_info() -> dict[str, Any]:
     """Return best-effort controller revision metadata.
 
     In some deploy environments, the `.git` directory may not exist.
     """
 
-    info: Dict[str, Any] = {}
+    info: dict[str, Any] = {}
 
     try:
         repo_root = _find_repo_root(Path(__file__).resolve())
@@ -73,7 +73,7 @@ def _get_controller_revision_info() -> Dict[str, Any]:
     return info
 
 
-async def validate_environment() -> Dict[str, Any]:
+async def validate_environment() -> dict[str, Any]:
     """Validate the running environment and return an operator-friendly report.
 
     The output is a structured list of checks with levels (ok/warning/error).
@@ -83,11 +83,11 @@ async def validate_environment() -> Dict[str, Any]:
 
     m = _main()
 
-    checks: List[Dict[str, Any]] = []
+    checks: list[dict[str, Any]] = []
     status = "ok"
 
     def add_check(
-        name: str, level: str, message: str, details: Optional[Dict[str, Any]] = None
+        name: str, level: str, message: str, details: dict[str, Any] | None = None
     ) -> None:
         nonlocal status
         if details is None:
@@ -155,7 +155,7 @@ async def validate_environment() -> Dict[str, Any]:
     )
 
     # Render/host environment signals (best-effort; do not assume Render)
-    env_signals: Dict[str, Any] = {}
+    env_signals: dict[str, Any] = {}
     for key in (
         "RENDER",
         "RENDER_SERVICE_ID",
@@ -196,7 +196,7 @@ async def validate_environment() -> Dict[str, Any]:
             max_pkgs = 0
 
         deps_level = "ok"
-        deps_details: Dict[str, Any] = {
+        deps_details: dict[str, Any] = {
             "python": sys.version.split("\n")[0],
             "executable": sys.executable,
             "package_count": None,
@@ -206,7 +206,7 @@ async def validate_environment() -> Dict[str, Any]:
         }
         try:
             dists = list(metadata.distributions())
-            pkgs: List[Dict[str, str]] = []
+            pkgs: list[dict[str, str]] = []
             for dist in dists:
                 name = dist.metadata.get("Name") if hasattr(dist, "metadata") else None
                 version = getattr(dist, "version", None)
@@ -409,7 +409,7 @@ async def validate_environment() -> Dict[str, Any]:
         # ------------------------------------------------------------------
         # GitHub exposes OAuth/PAT scopes in response headers for classic tokens.
         # Fine-grained PATs typically do not include X-OAuth-Scopes.
-        def _get_header_ci(headers: Any, key: str) -> Optional[str]:
+        def _get_header_ci(headers: Any, key: str) -> str | None:
             if not isinstance(headers, dict):
                 return None
             for k, v in headers.items():
@@ -417,13 +417,13 @@ async def validate_environment() -> Dict[str, Any]:
                     return str(v)
             return None
 
-        token_details: Dict[str, Any] = {
+        token_details: dict[str, Any] = {
             "env_var": token_env_var,
             "length": len(raw_token or "") if raw_token is not None else None,
             "authorization_scheme": "Bearer",
         }
 
-        scope_list: List[str] = []
+        scope_list: list[str] = []
         token_type_inferred: str = "unknown"
 
         try:
@@ -525,7 +525,7 @@ async def validate_environment() -> Dict[str, Any]:
                 {"core": core, "graphql": graphql, "search": search},
             )
 
-        repo_payload: Dict[str, Any] = {}
+        repo_payload: dict[str, Any] = {}
         try:
             repo_response = await m._github_request("GET", f"/repos/{controller_repo}")
             if isinstance(repo_response.get("json"), dict):
@@ -559,9 +559,9 @@ async def validate_environment() -> Dict[str, Any]:
             # These probes are designed to be safe: they avoid creating/modifying
             # resources. Where a capability cannot be confirmed without side
             # effects (e.g. workflow dispatch), we provide an inferred result.
-            probes: List[Dict[str, Any]] = []
+            probes: list[dict[str, Any]] = []
 
-            async def _probe_get(name: str, path: str, *, params: Optional[Dict[str, Any]] = None):
+            async def _probe_get(name: str, path: str, *, params: dict[str, Any] | None = None):
                 try:
                     await m._github_request("GET", path, params=params)
                 except Exception as exc:
@@ -636,7 +636,7 @@ async def validate_environment() -> Dict[str, Any]:
             # This creates a workflow run as a side effect. We keep it best-effort
             # and try a small set of candidate workflows until one accepts a
             # workflow_dispatch event.
-            dispatch_details: Dict[str, Any] = {
+            dispatch_details: dict[str, Any] = {
                 "token_type_inferred": token_type_inferred,
                 "ref": controller_branch,
                 "cooldown_seconds": _DISPATCH_PROBE_COOLDOWN_SECONDS,
@@ -677,13 +677,13 @@ async def validate_environment() -> Dict[str, Any]:
                 )
             else:
                 wf_json = wf_list.get("json")
-                workflows: List[Dict[str, Any]] = []
+                workflows: list[dict[str, Any]] = []
                 if isinstance(wf_json, dict) and isinstance(wf_json.get("workflows"), list):
                     workflows = [w for w in wf_json.get("workflows") if isinstance(w, dict)]
 
                 # Prefer common CI-like workflows first.
-                preferred: List[Dict[str, Any]] = []
-                other: List[Dict[str, Any]] = []
+                preferred: list[dict[str, Any]] = []
+                other: list[dict[str, Any]] = []
                 for w in workflows:
                     name = w.get("name")
                     name_lower = str(name).lower() if isinstance(name, str) else ""
@@ -694,10 +694,10 @@ async def validate_environment() -> Dict[str, Any]:
                 candidates = preferred + other
 
                 dispatched = False
-                chosen_id: Optional[int] = None
-                chosen_name: Optional[str] = None
-                chosen_path: Optional[str] = None
-                last_error: Optional[Dict[str, Any]] = None
+                chosen_id: int | None = None
+                chosen_name: str | None = None
+                chosen_path: str | None = None
+                last_error: dict[str, Any] | None = None
 
                 for w in candidates[:10]:
                     wid = w.get("id")
@@ -937,7 +937,7 @@ async def validate_environment() -> Dict[str, Any]:
             )
         else:
             owners_json = owners_resp.get("json") if isinstance(owners_resp, dict) else None
-            owners: List[Dict[str, Any]] = []
+            owners: list[dict[str, Any]] = []
             cursor = None
             if isinstance(owners_json, dict):
                 # Some Render API responses are paginated objects.
@@ -958,7 +958,7 @@ async def validate_environment() -> Dict[str, Any]:
                     if isinstance(last_cursor, str) and last_cursor:
                         cursor = last_cursor
 
-            owner_samples: List[Dict[str, Any]] = []
+            owner_samples: list[dict[str, Any]] = []
             for o in owners[:5]:
                 owner_obj = o
                 # Handle wrapper shape {"cursor": "...", "owner": {...}}

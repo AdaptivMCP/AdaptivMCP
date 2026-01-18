@@ -10,7 +10,8 @@ import os
 import sys
 import time
 import weakref
-from typing import Any, Callable, Dict, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 
 def _get_main_module_for_patching():
@@ -31,8 +32,8 @@ else:
         def __init__(
             self,
             *,
-            max_connections: Optional[int] = None,
-            max_keepalive_connections: Optional[int] = None,
+            max_connections: int | None = None,
+            max_keepalive_connections: int | None = None,
         ) -> None:
             self.max_connections = max_connections
             self.max_keepalive_connections = max_keepalive_connections
@@ -42,9 +43,9 @@ else:
             self,
             status_code: int = 200,
             *,
-            headers: Optional[Dict[str, str]] = None,
+            headers: dict[str, str] | None = None,
             text: str = "",
-            json_data: Optional[Dict[str, Any]] = None,
+            json_data: dict[str, Any] | None = None,
         ) -> None:
             self.status_code = status_code
             self.headers = headers or {}
@@ -55,7 +56,7 @@ else:
         def is_error(self) -> bool:
             return self.status_code >= 400
 
-        def json(self) -> Dict[str, Any]:
+        def json(self) -> dict[str, Any]:
             return dict(self._json_data)
 
     class Timeout:
@@ -67,13 +68,13 @@ else:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.is_closed = False
 
-        def request(self, *args: Any, **kwargs: Any) -> "Response":
+        def request(self, *args: Any, **kwargs: Any) -> Response:
             raise HTTPError("httpx is not installed")
 
-        def get(self, *args: Any, **kwargs: Any) -> "Response":
+        def get(self, *args: Any, **kwargs: Any) -> Response:
             return self.request(*args, **kwargs)
 
-        def post(self, *args: Any, **kwargs: Any) -> "Response":
+        def post(self, *args: Any, **kwargs: Any) -> Response:
             return self.request(*args, **kwargs)
 
         def close(self) -> None:
@@ -83,13 +84,13 @@ else:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.is_closed = False
 
-        async def request(self, *args: Any, **kwargs: Any) -> "Response":
+        async def request(self, *args: Any, **kwargs: Any) -> Response:
             raise HTTPError("httpx is not installed")
 
-        async def get(self, *args: Any, **kwargs: Any) -> "Response":
+        async def get(self, *args: Any, **kwargs: Any) -> Response:
             return await self.request(*args, **kwargs)
 
-        async def post(self, *args: Any, **kwargs: Any) -> "Response":
+        async def post(self, *args: Any, **kwargs: Any) -> Response:
             return await self.request(*args, **kwargs)
 
         async def aclose(self) -> None:
@@ -112,7 +113,6 @@ else:
 from github_mcp.mcp_server.context import get_request_context  # noqa: E402
 
 from .async_utils import active_event_loop  # noqa: E402
-
 from .config import (  # noqa: E402
     GITHUB_API_BASE,
     GITHUB_API_BASE_URL,
@@ -134,15 +134,17 @@ from .config import (  # noqa: E402
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
 from .utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO  # noqa: E402
 
-_loop_semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
+_loop_semaphores: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
     weakref.WeakKeyDictionary()
 )
-_search_rate_limit_states: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, Dict[str, Any]]" = weakref.WeakKeyDictionary()
-_http_client_github: Optional[httpx.AsyncClient] = None
-_http_client_github_loop: Optional[asyncio.AbstractEventLoop] = None
-_http_client_github_token: Optional[str] = None
-_http_client_external: Optional[httpx.AsyncClient] = None
-_http_client_external_loop: Optional[asyncio.AbstractEventLoop] = None
+_search_rate_limit_states: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, Any]] = (
+    weakref.WeakKeyDictionary()
+)
+_http_client_github: httpx.AsyncClient | None = None
+_http_client_github_loop: asyncio.AbstractEventLoop | None = None
+_http_client_github_token: str | None = None
+_http_client_external: httpx.AsyncClient | None = None
+_http_client_external_loop: asyncio.AbstractEventLoop | None = None
 
 
 class _GitHubClientProtocol:
@@ -194,7 +196,7 @@ def _get_github_token() -> str:
     return token
 
 
-def _get_optional_github_token() -> Optional[str]:
+def _get_optional_github_token() -> str | None:
     """Return a trimmed GitHub token or None when missing/empty."""
 
     for env_var in GITHUB_TOKEN_ENV_VARS:
@@ -233,7 +235,7 @@ def _get_concurrency_semaphore() -> asyncio.Semaphore:
     return semaphore
 
 
-def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> Optional[float]:
+def _parse_rate_limit_delay_seconds(resp: httpx.Response) -> float | None:
     from .http_utils import parse_rate_limit_delay_seconds
 
     return parse_rate_limit_delay_seconds(
@@ -272,7 +274,7 @@ def _is_rate_limit_response(*, resp: httpx.Response, message_lower: str, error_f
     return False
 
 
-def _get_search_rate_limit_state() -> Dict[str, Any]:
+def _get_search_rate_limit_state() -> dict[str, Any]:
     """Return per-event-loop search throttle state."""
 
     loop = active_event_loop()
@@ -301,12 +303,12 @@ async def _throttle_search_requests() -> None:
 
 
 def _refresh_async_client(
-    client: Optional[httpx.AsyncClient],
+    client: httpx.AsyncClient | None,
     *,
-    client_loop: Optional[asyncio.AbstractEventLoop],
+    client_loop: asyncio.AbstractEventLoop | None,
     rebuild: Callable[[], httpx.AsyncClient],
     force_refresh: bool = False,
-) -> Tuple[httpx.AsyncClient, asyncio.AbstractEventLoop]:
+) -> tuple[httpx.AsyncClient, asyncio.AbstractEventLoop]:
     """Backward-compatible wrapper for shared AsyncClient refresher."""
 
     from .async_utils import refresh_async_client
@@ -410,7 +412,7 @@ def _extract_response_body(resp: httpx.Response) -> Any | None:
     return extract_response_json(resp)
 
 
-def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> Dict[str, Any]:
+def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> dict[str, Any]:
     """Backward-compatible wrapper for shared response payload builder."""
 
     from .http_utils import build_response_payload
@@ -423,9 +425,9 @@ async def _send_request(
     *,
     method: str,
     path: str,
-    params: Optional[Dict[str, Any]],
-    json_body: Optional[Dict[str, Any]],
-    headers: Optional[Dict[str, str]],
+    params: dict[str, Any] | None,
+    json_body: dict[str, Any] | None,
+    headers: dict[str, str] | None,
 ) -> httpx.Response:
     if path.lstrip("/").startswith("search/"):
         await _throttle_search_requests()
@@ -443,12 +445,12 @@ async def _github_request(
     method: str,
     path: str,
     *,
-    params: Optional[Dict[str, Any]] = None,
-    json_body: Optional[Dict[str, Any]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    params: dict[str, Any] | None = None,
+    json_body: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
     expect_json: bool = True,
-    client_factory: Optional[callable] = None,
-) -> Dict[str, Any]:
+    client_factory: callable | None = None,
+) -> dict[str, Any]:
     """Async GitHub request wrapper with structured errors."""
     client_factory = client_factory or _github_client_instance
     # Unit tests may run without live GitHub network access. Provide deterministic
@@ -559,7 +561,7 @@ async def _github_request(
             # Correlate outbound GitHub calls with the inbound tool call.
             req = get_request_context()
             duration_ms = (time.perf_counter() - started) * 1000
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "event": "github_http",
                 "request": summarize_request_context(req) if isinstance(req, dict) else {},
                 "method": str(method).upper(),
@@ -600,11 +602,9 @@ async def _github_request(
                 continue
 
             raise GitHubRateLimitError(
-                (
-                    f"GitHub rate limit exceeded; retry after {reset_hint}"
-                    if reset_hint
-                    else "GitHub rate limit exceeded"
-                )
+                f"GitHub rate limit exceeded; retry after {reset_hint}"
+                if reset_hint
+                else "GitHub rate limit exceeded"
             )
 
         if resp.status_code in (401, 403):

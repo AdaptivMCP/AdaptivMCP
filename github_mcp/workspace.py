@@ -9,7 +9,7 @@ import shlex
 import shutil
 import sys
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from . import config
 from .exceptions import GitHubAPIError, GitHubAuthError
@@ -37,10 +37,10 @@ async def _run_git_with_retry(
     run_shell,
     cmd: str,
     *,
-    cwd: Optional[str],
+    cwd: str | None,
     timeout_seconds: int,
-    env: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
     attempt = 0
     max_attempts = max(0, config.GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS)
 
@@ -67,10 +67,10 @@ async def _run_git_with_retry(
 
 async def _run_shell(
     cmd: str,
-    cwd: Optional[str] = None,
+    cwd: str | None = None,
     timeout_seconds: int = 300,
-    env: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Execute a shell command with author/committer env vars injected."""
     shell_executable = os.environ.get("SHELL")
     if os.name == "nt":
@@ -127,7 +127,7 @@ async def _run_shell(
             proc.communicate(), timeout=timeout_seconds
         )
         timed_out = False
-    except asyncio.TimeoutError:
+    except TimeoutError:
         timed_out = True
         # Best-effort termination: kill the whole process group on POSIX so
         # child processes (e.g. pytest workers) don't keep pipes open.
@@ -179,7 +179,7 @@ async def _run_shell(
     }
 
 
-def _append_git_config_env(env: Dict[str, str], key: str, value: str) -> None:
+def _append_git_config_env(env: dict[str, str], key: str, value: str) -> None:
     """
     Append a git config entry via environment variables (GIT_CONFIG_COUNT, etc.).
     This avoids putting secrets on the command line.
@@ -196,15 +196,15 @@ def _append_git_config_env(env: Dict[str, str], key: str, value: str) -> None:
     env[f"GIT_CONFIG_VALUE_{idx}"] = value
 
 
-def _git_auth_env() -> Dict[str, str]:
-    env: Dict[str, str] = {"GIT_TERMINAL_PROMPT": "0"}
+def _git_auth_env() -> dict[str, str]:
+    env: dict[str, str] = {"GIT_TERMINAL_PROMPT": "0"}
     try:
         token = _get_github_token()
     except GitHubAuthError:
         return env
 
     # GitHub supports basic auth with username "x-access-token" and the token as password.
-    basic_token = base64.b64encode(f"x-access-token:{token}".encode("utf-8")).decode("utf-8")
+    basic_token = base64.b64encode(f"x-access-token:{token}".encode()).decode("utf-8")
     header_value = f"Authorization: Basic {basic_token}"
 
     # Correct name (no extra underscore).
@@ -216,7 +216,7 @@ def _git_auth_env() -> Dict[str, str]:
     return env
 
 
-def _git_env_has_auth_header(env: Dict[str, str]) -> bool:
+def _git_env_has_auth_header(env: dict[str, str]) -> bool:
     if env.get("GIT_HTTP_EXTRAHEADER"):
         return True
     for key, value in env.items():
@@ -225,7 +225,7 @@ def _git_env_has_auth_header(env: Dict[str, str]) -> bool:
     return False
 
 
-def _git_no_auth_env() -> Dict[str, str]:
+def _git_no_auth_env() -> dict[str, str]:
     return {"GIT_TERMINAL_PROMPT": "0"}
 
 
@@ -323,7 +323,7 @@ def _sanitize_workspace_ref(ref: str) -> str:
 
 
 async def _clone_repo(
-    full_name: str, ref: Optional[str] = None, *, preserve_changes: bool = False
+    full_name: str, ref: str | None = None, *, preserve_changes: bool = False
 ) -> str:
     """Clone or return a persistent repo mirror (workspace clone) for ``full_name``/``ref``."""
     from .utils import _effective_ref_for_repo  # Local import to avoid cycles
@@ -500,7 +500,7 @@ async def _clone_repo(
     return workspace_dir
 
 
-async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
+async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
     """Create an isolated virtualenv and return env vars that activate it.
 
     The hosted execution environments backing these tools can vary:
@@ -521,7 +521,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> Dict[str, str]:
         exe = "python.exe" if os.name == "nt" else "python"
         return os.path.join(venv_root, bin_dir, exe)
 
-    def _activation_env(venv_root: str) -> Dict[str, str]:
+    def _activation_env(venv_root: str) -> dict[str, str]:
         bin_dir = _venv_bin_dir()
         bin_path = os.path.join(venv_root, bin_dir)
         return {
@@ -711,17 +711,17 @@ def _looks_like_rangeless_git_patch(patch: str) -> bool:
     return saw_rangeless_hunk
 
 
-def _parse_rangeless_git_patch(patch: str) -> List[Dict[str, Any]]:
+def _parse_rangeless_git_patch(patch: str) -> list[dict[str, Any]]:
     """Parse a minimal git-style diff that uses bare `@@` hunk separators.
 
     Supports update diffs (including simple rename via a/b paths).
     """
 
     lines = patch.splitlines()
-    blocks: List[Dict[str, Any]] = []
+    blocks: list[dict[str, Any]] = []
     idx = 0
 
-    def _parse_diff_header(line: str) -> Optional[tuple[str, str]]:
+    def _parse_diff_header(line: str) -> tuple[str, str] | None:
         if not line.startswith("diff --git "):
             return None
         rest = line[len("diff --git ") :]
@@ -764,8 +764,8 @@ def _parse_rangeless_git_patch(patch: str) -> List[Dict[str, Any]]:
             raise GitHubAPIError("Malformed patch: missing +++ file header")
         idx += 1
 
-        hunks: List[List[str]] = []
-        current: List[str] = []
+        hunks: list[list[str]] = []
+        current: list[str] = []
 
         while idx < len(lines) and not lines[idx].startswith("diff --git "):
             pline = lines[idx]
@@ -825,7 +825,7 @@ def _apply_rangeless_git_patch(repo_dir: str, patch: str) -> None:
         if not os.path.exists(abs_path):
             raise GitHubAPIError(f"File does not exist: {path}")
 
-        with open(abs_path, "r", encoding="utf-8") as f:
+        with open(abs_path, encoding="utf-8") as f:
             text = f.read()
 
         lines, ends_with_newline = _split_text_lines(text)
@@ -857,20 +857,20 @@ def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
     return candidate
 
 
-def _split_text_lines(text: str) -> Tuple[List[str], bool]:
+def _split_text_lines(text: str) -> tuple[list[str], bool]:
     ends_with_newline = text.endswith("\n")
     lines = text.splitlines()
     return lines, ends_with_newline
 
 
-def _join_text_lines(lines: List[str], ends_with_newline: bool) -> str:
+def _join_text_lines(lines: list[str], ends_with_newline: bool) -> str:
     text = "\n".join(lines)
     if ends_with_newline and (text or lines):
         text = text + "\n"
     return text
 
 
-def _find_subsequence(lines: List[str], subseq: List[str], start: int) -> Optional[int]:
+def _find_subsequence(lines: list[str], subseq: list[str], start: int) -> int | None:
     if not subseq:
         return start
     max_idx = len(lines) - len(subseq)
@@ -880,7 +880,7 @@ def _find_subsequence(lines: List[str], subseq: List[str], start: int) -> Option
     return None
 
 
-def _apply_patch_hunks(lines: List[str], hunks: List[List[str]], path: str) -> List[str]:
+def _apply_patch_hunks(lines: list[str], hunks: list[list[str]], path: str) -> list[str]:
     search_start = 0
     for hunk in hunks:
         old_seq = [line[1:] for line in hunk if line[:1] in (" ", "-")]
@@ -901,12 +901,12 @@ def _apply_patch_hunks(lines: List[str], hunks: List[List[str]], path: str) -> L
     return lines
 
 
-def _parse_apply_patch_blocks(patch: str) -> List[Dict[str, Any]]:
+def _parse_apply_patch_blocks(patch: str) -> list[dict[str, Any]]:
     lines = patch.splitlines()
     if not lines or lines[0].strip() != "*** Begin Patch":
         raise GitHubAPIError("Patch missing Begin Patch header")
 
-    blocks: List[Dict[str, Any]] = []
+    blocks: list[dict[str, Any]] = []
     idx = 1
     while idx < len(lines):
         line = lines[idx]
@@ -915,7 +915,7 @@ def _parse_apply_patch_blocks(patch: str) -> List[Dict[str, Any]]:
         if line.startswith("*** Add File: "):
             path = line[len("*** Add File: ") :].strip()
             idx += 1
-            content_lines: List[str] = []
+            content_lines: list[str] = []
             while idx < len(lines) and not lines[idx].startswith("*** "):
                 patch_line = lines[idx]
                 if not patch_line.startswith("+"):
@@ -937,8 +937,8 @@ def _parse_apply_patch_blocks(patch: str) -> List[Dict[str, Any]]:
                 move_to = lines[idx][len("*** Move to: ") :].strip()
                 idx += 1
 
-            hunks: List[List[str]] = []
-            current_hunk: List[str] = []
+            hunks: list[list[str]] = []
+            current_hunk: list[str] = []
             while idx < len(lines) and not lines[idx].startswith("*** "):
                 patch_line = lines[idx]
                 if patch_line == "*** End of File":
@@ -994,7 +994,7 @@ def _apply_tool_patch(repo_dir: str, patch: str) -> None:
             abs_path = _safe_repo_path(repo_dir, path)
             if not os.path.exists(abs_path):
                 raise GitHubAPIError(f"File does not exist: {path}")
-            with open(abs_path, "r", encoding="utf-8") as f:
+            with open(abs_path, encoding="utf-8") as f:
                 text = f.read()
             lines, ends_with_newline = _split_text_lines(text)
             hunks = block["hunks"]

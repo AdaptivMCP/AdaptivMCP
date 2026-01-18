@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from ._main import _main
 
@@ -10,7 +10,7 @@ async def list_recent_issues(
     state: str = "open",
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return recent issues the user can access (includes PRs)."""
 
     m = _main()
@@ -22,16 +22,16 @@ async def list_recent_issues(
 async def list_repository_issues(
     full_name: str,
     state: str = "open",
-    labels: Optional[List[str]] = None,
-    assignee: Optional[str] = None,
+    labels: list[str] | None = None,
+    assignee: str | None = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List issues for a specific repository (includes PRs)."""
 
     m = _main()
 
-    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
+    params: dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
     if labels:
         params["labels"] = ",".join(labels)
     if assignee is not None:
@@ -40,7 +40,7 @@ async def list_repository_issues(
     return await m._github_request("GET", f"/repos/{full_name}/issues", params=params)
 
 
-async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
+async def fetch_issue(full_name: str, issue_number: int) -> dict[str, Any]:
     """Fetch a GitHub issue."""
 
     m = _main()
@@ -49,7 +49,7 @@ async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
 
 async def fetch_issue_comments(
     full_name: str, issue_number: int, per_page: int = 30, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch comments for a GitHub issue."""
 
     m = _main()
@@ -64,7 +64,7 @@ async def fetch_issue_comments(
 
 async def get_issue_comment_reactions(
     full_name: str, comment_id: int, per_page: int = 30, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch reactions for an issue comment."""
 
     m = _main()
@@ -81,10 +81,10 @@ async def get_issue_comment_reactions(
 async def create_issue(
     full_name: str,
     title: str,
-    body: Optional[str] = None,
-    labels: Optional[List[str]] = None,
-    assignees: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    body: str | None = None,
+    labels: list[str] | None = None,
+    assignees: list[str] | None = None,
+) -> dict[str, Any]:
     """Create a GitHub issue in the given repository."""
 
     m = _main()
@@ -92,7 +92,7 @@ async def create_issue(
     if "/" not in full_name:
         raise ValueError("full_name must be in owner/repo format")
 
-    payload: Dict[str, Any] = {"title": title}
+    payload: dict[str, Any] = {"title": title}
     if body is not None:
         payload["body"] = body
     if labels is not None:
@@ -110,12 +110,12 @@ async def create_issue(
 async def update_issue(
     full_name: str,
     issue_number: int,
-    title: Optional[str] = None,
-    body: Optional[str] = None,
-    state: Optional[Literal["open", "closed"]] = None,
-    labels: Optional[List[str]] = None,
-    assignees: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    title: str | None = None,
+    body: str | None = None,
+    state: Literal["open", "closed"] | None = None,
+    labels: list[str] | None = None,
+    assignees: list[str] | None = None,
+) -> dict[str, Any]:
     """Update fields on an existing GitHub issue."""
 
     m = _main()
@@ -123,7 +123,7 @@ async def update_issue(
     if "/" not in full_name:
         raise ValueError("full_name must be in owner/repo format")
 
-    payload: Dict[str, Any] = {}
+    payload: dict[str, Any] = {}
     if title is not None:
         payload["title"] = title
     if body is not None:
@@ -152,7 +152,7 @@ async def comment_on_issue(
     full_name: str,
     issue_number: int,
     body: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Post a comment on an issue."""
 
     m = _main()
@@ -167,7 +167,7 @@ async def comment_on_issue(
     )
 
 
-async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any]:
+async def open_issue_context(full_name: str, issue_number: int) -> dict[str, Any]:
     """Return an issue plus related branches and pull requests."""
 
     m = _main()
@@ -182,9 +182,9 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
     issue_str = str(issue_number)
     seps = ("-", "_", "/")
 
-    def _tokenize(name: str) -> List[str]:
-        parts: List[str] = []
-        cur: List[str] = []
+    def _tokenize(name: str) -> list[str]:
+        parts: list[str] = []
+        cur: list[str] = []
         for ch in name:
             if ch in seps:
                 if cur:
@@ -196,7 +196,7 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
             parts.append("".join(cur))
         return parts
 
-    candidate_branches: List[str] = []
+    candidate_branches: list[str] = []
     for name in branch_names:
         if not isinstance(name, str):
             continue
@@ -207,8 +207,8 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
     prs_resp = await m.list_pull_requests(full_name, state="all")
     prs = prs_resp.get("json") or []
 
-    open_prs: List[Dict[str, Any]] = []
-    closed_prs: List[Dict[str, Any]] = []
+    open_prs: list[dict[str, Any]] = []
+    closed_prs: list[dict[str, Any]] = []
     for pr in prs:
         if not isinstance(pr, dict):
             continue
@@ -236,7 +236,7 @@ async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any
     }
 
 
-async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any]:
+async def get_issue_overview(full_name: str, issue_number: int) -> dict[str, Any]:
     """Summarize a GitHub issue for navigation and planning.
 
     This helper is intentionally read-only.
@@ -251,8 +251,8 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
     if not isinstance(issue, dict):
         issue = {}
 
-    def _normalize_labels(raw: Any) -> List[Dict[str, Any]]:
-        labels: List[Dict[str, Any]] = []
+    def _normalize_labels(raw: Any) -> list[dict[str, Any]]:
+        labels: list[dict[str, Any]] = []
         if isinstance(raw, list):
             for item in raw:
                 if isinstance(item, dict):
@@ -266,7 +266,7 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
                     labels.append({"name": item})
         return labels
 
-    def _normalize_user(raw: Any) -> Optional[Dict[str, Any]]:
+    def _normalize_user(raw: Any) -> dict[str, Any] | None:
         if not isinstance(raw, dict):
             return None
         login = raw.get("login")
@@ -274,8 +274,8 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
             return None
         return {"login": login, "html_url": raw.get("html_url")}
 
-    def _normalize_assignees(raw: Any) -> List[Dict[str, Any]]:
-        assignees: List[Dict[str, Any]] = []
+    def _normalize_assignees(raw: Any) -> list[dict[str, Any]]:
+        assignees: list[dict[str, Any]] = []
         if isinstance(raw, list):
             for user in raw:
                 normalized = _normalize_user(user)
@@ -284,7 +284,7 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
         return assignees
 
     # Core issue fields
-    normalized_issue: Dict[str, Any] = {
+    normalized_issue: dict[str, Any] = {
         "number": issue.get("number"),
         "title": issue.get("title"),
         "state": issue.get("state"),
@@ -299,8 +299,8 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
 
     body_text = issue.get("body") or ""
 
-    def _extract_checklist_items(text: str, source: str) -> List[Dict[str, Any]]:
-        items: List[Dict[str, Any]] = []
+    def _extract_checklist_items(text: str, source: str) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
         for raw_line in text.splitlines():
             line = raw_line.lstrip()
             if line.startswith("- [ ") or line.startswith("- [") or line.startswith("* ["):
@@ -318,7 +318,7 @@ async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any
                     )
         return items
 
-    checklist_items: List[Dict[str, Any]] = []
+    checklist_items: list[dict[str, Any]] = []
     if body_text:
         checklist_items.extend(_extract_checklist_items(body_text, source="issue_body"))
 

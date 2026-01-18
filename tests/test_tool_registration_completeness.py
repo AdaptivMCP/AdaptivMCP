@@ -1,7 +1,7 @@
 import importlib
 import pkgutil
+from collections.abc import Callable, Iterable
 from types import ModuleType
-from typing import Callable, Iterable, Set
 
 
 def _iter_mcp_wrapped_callables(module: ModuleType) -> Iterable[Callable]:
@@ -28,7 +28,7 @@ def test_all_mcp_wrapped_tools_are_registered() -> None:
     import main  # noqa: F401
     from github_mcp.server import _REGISTERED_MCP_TOOLS
 
-    registered_names: Set[str] = set()
+    registered_names: set[str] = set()
     for tool_obj, func in _REGISTERED_MCP_TOOLS:
         name = getattr(tool_obj, "name", None) or getattr(func, "__name__", None)
         if name:
@@ -37,7 +37,7 @@ def test_all_mcp_wrapped_tools_are_registered() -> None:
     assert registered_names, "Expected at least one registered tool."
 
     # Collect every callable decorated with @mcp_tool across modules that define tools.
-    expected_names: Set[str] = set()
+    expected_names: set[str] = set()
 
     # Root entrypoint tools.
     expected_names.update(

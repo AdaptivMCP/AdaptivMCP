@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -9,7 +9,7 @@ from github_mcp.mcp_server.error_handling import _structured_tool_error
 
 
 def _parse_int(
-    value: Optional[str], *, default: int, min_value: int, max_value: int, name: str
+    value: str | None, *, default: int, min_value: int, max_value: int, name: str
 ) -> int:
     if value is None:
         return default
@@ -27,7 +27,7 @@ def _parse_int(
     return parsed
 
 
-def _parse_str(value: Optional[str]) -> Optional[str]:
+def _parse_str(value: str | None) -> str | None:
     if value is None:
         return None
     cleaned = value.strip()
@@ -53,7 +53,7 @@ def _error_response(exc: Exception, *, context: str) -> Response:
     return JSONResponse(structured, status_code=status_code, headers=headers)
 
 
-async def _json_body(request: Request) -> Dict[str, Any]:
+async def _json_body(request: Request) -> dict[str, Any]:
     try:
         payload = await request.json()
     except Exception:

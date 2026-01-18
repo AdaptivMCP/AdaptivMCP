@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ._main import _main
 
 
 async def pr_smoke_test(
-    full_name: Optional[str] = None,
-    base_branch: Optional[str] = None,
+    full_name: str | None = None,
+    base_branch: str | None = None,
     draft: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a trivial branch with a one-line change and open a draft PR.
 
     This is intended for diagnostics of PR tooling in the live environment.

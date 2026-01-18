@@ -3,20 +3,20 @@ import asyncio
 import os
 import shlex
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any
 
+from github_mcp.command_classification import infer_write_action_from_shell
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
-from github_mcp.command_classification import infer_write_action_from_shell
 from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import _tw
 
 
-def _terminal_command_write_action(args: Dict[str, Any]) -> bool:
+def _terminal_command_write_action(args: dict[str, Any]) -> bool:
     """Infer the write/read classification for terminal_command invocations."""
 
     command = str(args.get("command") or "")
@@ -28,7 +28,7 @@ def _terminal_command_write_action(args: Dict[str, Any]) -> bool:
     )
 
 
-def _always_write(_args: Dict[str, Any]) -> bool:
+def _always_write(_args: dict[str, Any]) -> bool:
     """Resolver for tools that are inherently write actions."""
 
     return True
@@ -36,7 +36,7 @@ def _always_write(_args: Dict[str, Any]) -> bool:
 
 def _normalize_command_payload(
     command: str,
-    command_lines: Optional[list[str]],
+    command_lines: list[str] | None,
 ) -> tuple[str, list[str]]:
     """Normalize command inputs.
 
@@ -59,7 +59,7 @@ def _normalize_command_payload(
     return requested, lines_out
 
 
-def _resolve_workdir(repo_dir: str, workdir: Optional[str]) -> str:
+def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
     """Resolve a working directory inside the repo mirror.
 
     For consistency across tools, ``workdir`` must be repository-relative.
@@ -159,15 +159,15 @@ async def render_shell(
     full_name: str,
     *,
     command: str = "echo hello Render",
-    command_lines: Optional[list[str]] = None,
-    create_branch: Optional[str] = None,
+    command_lines: list[str] | None = None,
+    create_branch: str | None = None,
     push_new_branch: bool = True,
     ref: str = "main",
     timeout_seconds: float = 300,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Render-focused shell entry point for interacting with GitHub workspaces.
 
     This helper mirrors the Render deployment model by operating through the
@@ -189,7 +189,7 @@ async def render_shell(
         command = requested_command
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
-        branch_creation: Optional[Dict[str, Any]] = None
+        branch_creation: dict[str, Any] | None = None
         target_ref = effective_ref
 
         if create_branch:
@@ -222,7 +222,7 @@ async def render_shell(
         cleaned_command = command_result
 
         # logic can report exit code/stdout/stderr for render_shell as well.
-        out: Dict[str, Any] = {
+        out: dict[str, Any] = {
             "full_name": full_name,
             "base_ref": effective_ref,
             "target_ref": target_ref,
@@ -271,12 +271,12 @@ async def terminal_command(
     full_name: str,
     ref: str = "main",
     command: str = "pytest",
-    command_lines: Optional[list[str]] = None,
+    command_lines: list[str] | None = None,
     timeout_seconds: float = 300,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run a shell command inside the repo mirror and return its result.
 
     This supports tests, linters, and project scripts that need the real working
@@ -298,7 +298,7 @@ async def terminal_command(
 
     timeout_seconds = _normalize_timeout_seconds(timeout_seconds, 300)
 
-    env: Optional[Dict[str, str]] = None
+    env: dict[str, str] | None = None
     requested_command, command_lines_out = _normalize_command_payload(
         command,
         command_lines,
@@ -316,7 +316,7 @@ async def terminal_command(
         command = requested_command
 
         install_result = None
-        install_steps: list[Dict[str, Any]] = []
+        install_steps: list[dict[str, Any]] = []
         if installing_dependencies and use_temp_venv:
             install_cmd = "python -m pip install -r dev-requirements.txt"
             install_result = await deps["run_shell"](
@@ -352,13 +352,13 @@ async def terminal_command(
         ok = (exit_code == 0) and (not timed_out)
         status = "ok" if ok else "failed"
 
-        error: Optional[str] = None
-        error_detail: Optional[Dict[str, Any]] = None
+        error: str | None = None
+        error_detail: dict[str, Any] | None = None
         if not ok:
             error = "Command timed out" if timed_out else f"Command exited with code {exit_code}"
             error_detail = {"exit_code": exit_code, "timed_out": timed_out}
 
-        out: Dict[str, Any] = {
+        out: dict[str, Any] = {
             "status": status,
             "ok": ok,
             **({"error": error, "error_detail": error_detail} if error else {}),
@@ -416,14 +416,14 @@ async def run_python(
     full_name: str,
     ref: str = "main",
     script: str = "",
-    filename: Optional[str] = None,
-    args: Optional[list[str]] = None,
+    filename: str | None = None,
+    args: list[str] | None = None,
     timeout_seconds: float = 300,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
     cleanup: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run an inline Python script inside the repo mirror.
 
     The script content is written to a file within the workspace mirror and executed.
@@ -439,7 +439,7 @@ async def run_python(
         if not isinstance(args, list) or any(not isinstance(a, str) for a in args):
             raise ValueError("args must be a list[str]")
 
-    env: Optional[Dict[str, str]] = None
+    env: dict[str, str] | None = None
 
     try:
         deps = _tw()._workspace_deps()
@@ -461,7 +461,7 @@ async def run_python(
             handle.write(script)
 
         install_result = None
-        install_steps: list[Dict[str, Any]] = []
+        install_steps: list[dict[str, Any]] = []
         if installing_dependencies and use_temp_venv:
             install_cmd = "python -m pip install -r dev-requirements.txt"
             install_result = await deps["run_shell"](
@@ -540,12 +540,12 @@ async def run_command_alias(
     full_name: str,
     ref: str = "main",
     command: str = "pytest",
-    command_lines: Optional[list[str]] = None,
+    command_lines: list[str] | None = None,
     timeout_seconds: float = 300,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Backward-compatible alias for :func:`terminal_command`.
 
     This exists for older MCP clients that still invoke `run_command`.
@@ -568,12 +568,12 @@ async def run_shell_alias(
     full_name: str,
     ref: str = "main",
     command: str = "pytest",
-    command_lines: Optional[list[str]] = None,
+    command_lines: list[str] | None = None,
     timeout_seconds: float = 300,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Backward-compatible alias for :func:`terminal_command`.
 
     Some integrations refer to the workspace command runner as `run_shell`.
@@ -596,12 +596,12 @@ async def run_terminal_commands_alias(
     full_name: str,
     ref: str = "main",
     command: str = "pytest",
-    command_lines: Optional[list[str]] = None,
+    command_lines: list[str] | None = None,
     timeout_seconds: float = 300,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Backward-compatible alias for :func:`terminal_command`.
 
     This name appears in some older controller-side tool catalogs.

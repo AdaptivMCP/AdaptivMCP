@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
+from typing import Any
 
 from github_mcp.server import _structured_tool_error, mcp_tool
 
@@ -15,7 +15,7 @@ async def ensure_workspace_clone(
     full_name: str,
     ref: str = "main",
     reset: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Ensure a persistent repo mirror (workspace clone) exists for a repo/ref."""
 
     try:

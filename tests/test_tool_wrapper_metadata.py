@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 
-def _get_tool_annotations(tool_obj: Any) -> Optional[Mapping[str, Any]]:
+def _get_tool_annotations(tool_obj: Any) -> Mapping[str, Any] | None:
     ann = getattr(tool_obj, "annotations", None)
     if isinstance(ann, Mapping):
         return ann
@@ -20,7 +21,7 @@ def _get_tool_annotations(tool_obj: Any) -> Optional[Mapping[str, Any]]:
     return None
 
 
-def _normalize_input_schema(tool_obj: Any) -> Optional[Mapping[str, Any]]:
+def _normalize_input_schema(tool_obj: Any) -> Mapping[str, Any] | None:
     # Import lazily to avoid import cycles during test collection.
     from github_mcp.mcp_server.schemas import _normalize_input_schema as _norm
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
 
@@ -17,28 +17,28 @@ class _FakeTW:
             return _U()
 
     def __init__(self) -> None:
-        self.calls: List[Dict[str, Any]] = []
+        self.calls: list[dict[str, Any]] = []
 
     def _effective_ref_for_repo(self, _full_name: str, ref: str) -> str:
         return ref
 
-    async def workspace_sync_to_remote(self, **kwargs: Any) -> Dict[str, Any]:
+    async def workspace_sync_to_remote(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "workspace_sync_to_remote", "kwargs": kwargs})
         return {"status": "success"}
 
-    async def workspace_create_branch(self, **kwargs: Any) -> Dict[str, Any]:
+    async def workspace_create_branch(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "workspace_create_branch", "kwargs": kwargs})
         return {"ok": True, "new_branch": kwargs.get("new_branch")}
 
-    async def apply_workspace_operations(self, **kwargs: Any) -> Dict[str, Any]:
+    async def apply_workspace_operations(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "apply_workspace_operations", "kwargs": kwargs})
         return {"status": "ok", "ok": True}
 
-    async def run_quality_suite(self, **kwargs: Any) -> Dict[str, Any]:
+    async def run_quality_suite(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "run_quality_suite", "kwargs": kwargs})
         return {"status": "success"}
 
-    async def commit_and_open_pr_from_workspace(self, **kwargs: Any) -> Dict[str, Any]:
+    async def commit_and_open_pr_from_workspace(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "commit_and_open_pr_from_workspace", "kwargs": kwargs})
         return {"status": "ok", "pr_url": "https://example.invalid/pull/1", "pr_number": 1}
 
@@ -122,7 +122,7 @@ async def test_workspace_apply_ops_and_open_pr_quality_failure_short_circuits(
     from github_mcp.workspace_tools import workflows
 
     class _FailQuality(_FakeTW):
-        async def run_quality_suite(self, **kwargs: Any) -> Dict[str, Any]:
+        async def run_quality_suite(self, **kwargs: Any) -> dict[str, Any]:
             self.calls.append({"fn": "run_quality_suite", "kwargs": kwargs})
             return {"status": "failed"}
 

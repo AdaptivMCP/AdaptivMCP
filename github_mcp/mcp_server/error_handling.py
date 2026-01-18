@@ -7,7 +7,7 @@ This module intentionally centralizes error normalization so:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from github_mcp.exceptions import (
     GitHubAuthError,
@@ -21,22 +21,22 @@ from github_mcp.exceptions import (
 def _structured_tool_error(
     exc: BaseException,
     *,
-    context: Optional[str] = None,
-    path: Optional[str] = None,
-    tool_descriptor: Optional[Dict[str, Any]] = None,
-    tool_descriptor_text: Optional[str] = None,
-    tool_surface: Optional[str] = None,
-    routing_hint: Optional[Dict[str, Any]] = None,
-    request: Optional[Dict[str, Any]] = None,
-    trace: Optional[Dict[str, Any]] = None,
-    args: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    context: str | None = None,
+    path: str | None = None,
+    tool_descriptor: dict[str, Any] | None = None,
+    tool_descriptor_text: str | None = None,
+    tool_surface: str | None = None,
+    routing_hint: dict[str, Any] | None = None,
+    request: dict[str, Any] | None = None,
+    trace: dict[str, Any] | None = None,
+    args: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     message = str(exc) or exc.__class__.__name__
 
     # Best-effort categorization for consistent HTTP status mapping.
     category = "internal"
-    code: Optional[str] = None
-    details: Dict[str, Any] = {}
+    code: str | None = None
+    details: dict[str, Any] = {}
 
     if isinstance(exc, (GitHubAuthError, RenderAuthError)):
         category = "auth"
@@ -51,7 +51,7 @@ def _structured_tool_error(
     elif isinstance(exc, (ValueError, TypeError)):
         category = "validation"
 
-    error_detail: Dict[str, Any] = {
+    error_detail: dict[str, Any] = {
         "message": message,
         "category": category,
     }
@@ -67,7 +67,7 @@ def _structured_tool_error(
     if args is not None:
         error_detail["debug"] = {"args": args}
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "status": "error",
         "error": message,
         "error_detail": error_detail,

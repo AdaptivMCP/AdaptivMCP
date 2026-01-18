@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Iterable, Mapping, Optional
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 
-def build_response_payload(resp: Any, *, body: Any | None = None) -> Dict[str, Any]:
+def build_response_payload(resp: Any, *, body: Any | None = None) -> dict[str, Any]:
     """Build a stable response payload.
 
     This helper intentionally accepts a duck-typed response object so it can be
     reused in multiple integration clients without creating import cycles.
     """
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "status_code": getattr(resp, "status_code", None),
         "headers": dict(getattr(resp, "headers", {}) or {}),
     }
@@ -45,7 +46,7 @@ def parse_rate_limit_delay_seconds(
     reset_header_names: Iterable[str],
     allow_epoch_millis: bool = False,
     allow_duration_seconds: bool = False,
-    now: Optional[float] = None,
+    now: float | None = None,
 ) -> float | None:
     """Parse a retry delay from standard rate-limit headers.
 

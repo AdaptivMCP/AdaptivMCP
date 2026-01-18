@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ._main import _main
 
@@ -16,7 +16,7 @@ def _strip_heads_prefix(ref: str) -> str:
     return cleaned
 
 
-def _parse_head_ref(head: str) -> tuple[Optional[str], str]:
+def _parse_head_ref(head: str) -> tuple[str | None, str]:
     """Parse a PR head ref.
 
     Returns (owner, branch). Owner is None when the head is unqualified.
@@ -48,11 +48,11 @@ def _head_branch_only(head: str) -> str:
 async def list_pull_requests(
     full_name: str,
     state: str = "open",
-    head: Optional[str] = None,
-    base: Optional[str] = None,
+    head: str | None = None,
+    base: str | None = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List pull requests with optional head/base filters."""
 
     allowed_states = {"open", "closed", "all"}
@@ -64,7 +64,7 @@ async def list_pull_requests(
         raise ValueError("page must be > 0")
 
     m = _main()
-    params: Dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
+    params: dict[str, Any] = {"state": state, "per_page": per_page, "page": page}
     if head:
         params["head"] = head
     if base:
@@ -76,9 +76,9 @@ async def merge_pull_request(
     full_name: str,
     number: int,
     merge_method: str = "squash",
-    commit_title: Optional[str] = None,
-    commit_message: Optional[str] = None,
-) -> Dict[str, Any]:
+    commit_title: str | None = None,
+    commit_message: str | None = None,
+) -> dict[str, Any]:
     """Merge a pull request."""
 
     allowed_methods = {"merge", "squash", "rebase"}
@@ -86,7 +86,7 @@ async def merge_pull_request(
         raise ValueError("merge_method must be 'merge', 'squash', or 'rebase'")
 
     m = _main()
-    payload: Dict[str, Any] = {"merge_method": merge_method}
+    payload: dict[str, Any] = {"merge_method": merge_method}
     if commit_title is not None:
         payload["commit_title"] = commit_title
     if commit_message is not None:
@@ -98,7 +98,7 @@ async def merge_pull_request(
     )
 
 
-async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
+async def close_pull_request(full_name: str, number: int) -> dict[str, Any]:
     """Close a pull request without merging."""
 
     m = _main()
@@ -109,7 +109,7 @@ async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
     )
 
 
-async def comment_on_pull_request(full_name: str, number: int, body: str) -> Dict[str, Any]:
+async def comment_on_pull_request(full_name: str, number: int, body: str) -> dict[str, Any]:
     """Post a comment on a pull request (issue API under the hood)."""
 
     m = _main()
@@ -120,14 +120,14 @@ async def comment_on_pull_request(full_name: str, number: int, body: str) -> Dic
     )
 
 
-async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
+async def fetch_pr(full_name: str, pull_number: int) -> dict[str, Any]:
     """Fetch pull request details."""
 
     m = _main()
     return await m._github_request("GET", f"/repos/{full_name}/pulls/{pull_number}")
 
 
-async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
+async def get_pr_info(full_name: str, pull_number: int) -> dict[str, Any]:
     """Get metadata for a pull request."""
 
     data = await fetch_pr(full_name, pull_number)
@@ -149,7 +149,7 @@ async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
 
 async def fetch_pr_comments(
     full_name: str, pull_number: int, per_page: int = 30, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch issue-style comments for a pull request."""
 
     m = _main()
@@ -161,7 +161,7 @@ async def fetch_pr_comments(
 
 async def list_pr_changed_filenames(
     full_name: str, pull_number: int, per_page: int = 100, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List files changed in a pull request."""
 
     m = _main()
@@ -171,7 +171,7 @@ async def list_pr_changed_filenames(
     )
 
 
-async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
+async def get_commit_combined_status(full_name: str, ref: str) -> dict[str, Any]:
     """Get combined status for a commit or ref."""
 
     m = _main()
@@ -193,7 +193,7 @@ async def _build_default_pr_body(
     of raising and breaking the overall tool call.
     """
 
-    lines: List[str] = []
+    lines: list[str] = []
     head_branch = _head_branch_only(head)
 
     # Summary
@@ -250,9 +250,9 @@ async def create_pull_request(
     title: str,
     head: str,
     base: str = "main",
-    body: Optional[str] = None,
+    body: str | None = None,
     draft: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Open a pull request from ``head`` into ``base``.
 
     The base branch is normalized via ``_effective_ref_for_repo`` so that
@@ -282,7 +282,7 @@ async def create_pull_request(
                 # creation entirely.
                 effective_body = body
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "title": title,
             "head": normalized_head,
             "base": effective_base,
@@ -311,10 +311,10 @@ async def open_pr_for_existing_branch(
     full_name: str,
     branch: str,
     base: str = "main",
-    title: Optional[str] = None,
-    body: Optional[str] = None,
+    title: str | None = None,
+    body: str | None = None,
     draft: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Open a pull request for an existing branch into a base branch.
 
     This helper is intentionally idempotent: if there is already an open PR for
@@ -369,7 +369,7 @@ async def open_pr_for_existing_branch(
     if isinstance(raw_resp, dict):
         status_code = raw_resp.get("status_code")
 
-    error_hint_parts: List[str] = []
+    error_hint_parts: list[str] = []
     if raw_message:
         error_hint_parts.append(raw_message)
     if isinstance(raw_resp, dict):
@@ -458,17 +458,17 @@ async def open_pr_for_existing_branch(
 async def update_files_and_open_pr(
     full_name: str,
     title: str,
-    files: List[Dict[str, Any]],
+    files: list[dict[str, Any]],
     base_branch: str = "main",
-    new_branch: Optional[str] = None,
-    body: Optional[str] = None,
+    new_branch: str | None = None,
+    body: str | None = None,
     draft: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Commit multiple files, verify each, then open a PR in one call."""
 
     m = _main()
 
-    current_path: Optional[str] = None
+    current_path: str | None = None
     try:
         effective_base = m._effective_ref_for_repo(full_name, base_branch)
 
@@ -479,8 +479,8 @@ async def update_files_and_open_pr(
         branch = new_branch or f"ally-{os.urandom(4).hex()}"
         await m.ensure_branch(full_name, branch, from_ref=effective_base)
 
-        commit_results: List[Dict[str, Any]] = []
-        verifications: List[Dict[str, Any]] = []
+        commit_results: list[dict[str, Any]] = []
+        verifications: list[dict[str, Any]] = []
 
         # 2) Commit each file, with verification
         for f in files:
@@ -583,7 +583,7 @@ async def update_files_and_open_pr(
         return m._structured_tool_error(exc, context="update_files_and_open_pr", path=current_path)
 
 
-async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
+async def get_pr_overview(full_name: str, pull_number: int) -> dict[str, Any]:
     """Return a compact overview of a pull request, including files and CI status."""
 
     m = _main()
@@ -593,7 +593,7 @@ async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
     if not isinstance(pr_json, dict):
         pr_json = {}
 
-    def _get_user(raw: Any) -> Optional[Dict[str, Any]]:
+    def _get_user(raw: Any) -> dict[str, Any] | None:
         if not isinstance(raw, dict):
             return None
         login = raw.get("login")
@@ -601,7 +601,7 @@ async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
             return None
         return {"login": login, "html_url": raw.get("html_url")}
 
-    pr_summary: Dict[str, Any] = {
+    pr_summary: dict[str, Any] = {
         "number": pr_json.get("number"),
         "title": pr_json.get("title"),
         "state": pr_json.get("state"),
@@ -615,7 +615,7 @@ async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
         "merged_at": pr_json.get("merged_at"),
     }
 
-    files: List[Dict[str, Any]] = []
+    files: list[dict[str, Any]] = []
     try:
         files_resp = await m.list_pr_changed_filenames(full_name, pull_number, per_page=100)
         files_json = files_resp.get("json") or []
@@ -635,7 +635,7 @@ async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
     except Exception:
         files = []
 
-    status_checks: Optional[Dict[str, Any]] = None
+    status_checks: dict[str, Any] | None = None
     head = pr_json.get("head")
     head_sha = head.get("sha") if isinstance(head, dict) else None
     if isinstance(head_sha, str):
@@ -645,7 +645,7 @@ async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
         except Exception:
             status_checks = None
 
-    workflow_runs: List[Dict[str, Any]] = []
+    workflow_runs: list[dict[str, Any]] = []
     head_ref = head.get("ref") if isinstance(head, dict) else None
     if isinstance(head_ref, str):
         try:
@@ -693,7 +693,7 @@ async def recent_prs_for_branch(
     include_closed: bool = False,
     per_page_open: int = 20,
     per_page_closed: int = 5,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return recent pull requests associated with a branch, grouped by state."""
 
     m = _main()
@@ -723,7 +723,7 @@ async def recent_prs_for_branch(
         open_prs = [pr for pr in open_raw if isinstance(pr, dict)]
     open_prs = [pr for pr in open_prs if pr is not None]
 
-    closed_prs: List[Dict[str, Any]] = []
+    closed_prs: list[dict[str, Any]] = []
     if include_closed:
         closed_resp = await m.list_pull_requests(
             full_name=full_name,

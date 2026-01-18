@@ -11,7 +11,7 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 from urllib.parse import parse_qs
 
 import anyio
@@ -78,7 +78,6 @@ from github_mcp.mcp_server.context import (
     REQUEST_SESSION_ID,
     _extract_chatgpt_metadata,
 )
-from github_mcp.session_anchor import get_server_anchor
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
     COMPACT_METADATA_DEFAULT,
@@ -91,6 +90,7 @@ from github_mcp.server import (
     mcp_tool,
     register_extra_tools_if_available,
 )
+from github_mcp.session_anchor import get_server_anchor
 from github_mcp.utils import (
     _effective_ref_for_repo,  # noqa: F401
     _with_numbered_lines,
@@ -187,8 +187,8 @@ class _RequestContextMiddleware:
         REQUEST_CHATGPT_METADATA.set(None)
 
         # Correlation id: honor upstream X-Request-Id if provided, else generate.
-        request_id: Optional[str] = None
-        idempotency_key: Optional[str] = None
+        request_id: str | None = None
+        idempotency_key: str | None = None
         try:
             for k, v in scope.get("headers") or []:
                 if (k or b"").lower() == b"x-request-id":
@@ -261,7 +261,7 @@ class _RequestContextMiddleware:
         # POST /messages.
         access_started_at = time.perf_counter()
         access_logged = False
-        captured_body: Optional[bytes] = None
+        captured_body: bytes | None = None
 
         async def send_access_wrapper(message):
             nonlocal access_logged
@@ -307,7 +307,7 @@ class _RequestContextMiddleware:
                     )
             return await send_wrapper(message)
 
-        def _extract_idempotency_from_payload(payload: Any) -> Optional[str]:
+        def _extract_idempotency_from_payload(payload: Any) -> str | None:
             if not isinstance(payload, dict):
                 return None
             for key in ("idempotency_key", "dedupe_key"):
@@ -508,8 +508,8 @@ async def _perform_github_commit_and_refresh_workspace(
     message: str,
     branch: str,
     body_bytes: bytes,
-    sha: Optional[str],
-) -> Dict[str, Any]:
+    sha: str | None,
+) -> dict[str, Any]:
     """Perform a Contents API commit and then refresh the repo mirror."""
     from github_mcp.main_tools.workspace_sync import (
         _perform_github_commit_and_refresh_workspace as _impl,
@@ -532,10 +532,10 @@ async def _perform_github_commit(
     path: str,
     message: str,
     body_bytes: bytes,
-    sha: Optional[str],
-    committer: Optional[Dict[str, str]] = None,
-    author: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    sha: str | None,
+    committer: dict[str, str] | None = None,
+    author: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Compat wrapper for github_mcp.github_content._perform_github_commit."""
     from github_mcp.github_content import _perform_github_commit as _impl
 
@@ -662,10 +662,10 @@ async def terminal_command(
     ref: str = "main",
     command: str = "pytest",
     timeout_seconds: int = 300,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run a shell command in the persistent repo mirror (terminal gateway).
 
     This is a thin wrapper around github_mcp.tools_workspace.terminal_command.
@@ -686,10 +686,10 @@ async def run_command(
     ref: str = "main",
     command: str = "pytest",
     timeout_seconds: int = 300,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Legacy shim retained for tests/backwards-compat.
 
     The MCP tool name `run_command` has been removed from the server tool
@@ -716,10 +716,10 @@ async def run_tests(
     ref: str = "main",
     test_command: str = "pytest",
     timeout_seconds: int = 600,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Forward run_tests calls to the repo mirror helper for test surfaces."""
 
     return await tools_workspace.run_tests(
@@ -735,11 +735,11 @@ async def run_tests(
 
 async def commit_workspace_files(
     full_name: str,
-    files: List[str],
+    files: list[str],
     ref: str = "main",
     message: str = "Commit selected workspace changes",
     push: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Forward commit_workspace_files calls to the repo mirror tool.
 
     Keeping this shim in main preserves the test-oriented API surface
@@ -762,7 +762,7 @@ async def commit_workspace_files(
 
 
 @mcp_tool(write_action=False)
-async def get_server_config() -> Dict[str, Any]:
+async def get_server_config() -> dict[str, Any]:
     from github_mcp.main_tools.server_config import get_server_config as _impl
 
     return await _impl()
@@ -770,15 +770,15 @@ async def get_server_config() -> Dict[str, Any]:
 
 @mcp_tool(write_action=False)
 async def get_repo_defaults(
-    full_name: Optional[str] = None,
-) -> Dict[str, Any]:
+    full_name: str | None = None,
+) -> dict[str, Any]:
     from github_mcp.main_tools.server_config import get_repo_defaults as _impl
 
     return await _impl(full_name=full_name)
 
 
 @mcp_tool(write_action=False)
-async def validate_environment() -> Dict[str, Any]:
+async def validate_environment() -> dict[str, Any]:
     """Check GitHub-related environment settings and report problems."""
     from github_mcp.main_tools.env import validate_environment as _impl
 
@@ -786,7 +786,7 @@ async def validate_environment() -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
-async def list_render_owners(cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
+async def list_render_owners(cursor: str | None = None, limit: int = 20) -> dict[str, Any]:
     """List Render owners (workspaces + personal owners)."""
 
     from github_mcp.main_tools.render import list_render_owners as _impl
@@ -796,10 +796,10 @@ async def list_render_owners(cursor: Optional[str] = None, limit: int = 20) -> D
 
 @mcp_tool(write_action=False)
 async def list_render_services(
-    owner_id: Optional[str] = None,
-    cursor: Optional[str] = None,
+    owner_id: str | None = None,
+    cursor: str | None = None,
     limit: int = 20,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List Render services (optionally filtered by owner_id)."""
 
     from github_mcp.main_tools.render import list_render_services as _impl
@@ -808,7 +808,7 @@ async def list_render_services(
 
 
 @mcp_tool(write_action=False)
-async def get_render_service(service_id: str) -> Dict[str, Any]:
+async def get_render_service(service_id: str) -> dict[str, Any]:
     """Fetch a Render service by id."""
 
     from github_mcp.main_tools.render import get_render_service as _impl
@@ -819,9 +819,9 @@ async def get_render_service(service_id: str) -> Dict[str, Any]:
 @mcp_tool(write_action=False)
 async def list_render_deploys(
     service_id: str,
-    cursor: Optional[str] = None,
+    cursor: str | None = None,
     limit: int = 20,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List deploys for a Render service."""
 
     from github_mcp.main_tools.render import list_render_deploys as _impl
@@ -830,7 +830,7 @@ async def list_render_deploys(
 
 
 @mcp_tool(write_action=False)
-async def get_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+async def get_render_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     """Fetch a specific deploy for a service."""
 
     from github_mcp.main_tools.render import get_render_deploy as _impl
@@ -842,9 +842,9 @@ async def get_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
 async def create_render_deploy(
     service_id: str,
     clear_cache: bool = False,
-    commit_id: Optional[str] = None,
-    image_url: Optional[str] = None,
-) -> Dict[str, Any]:
+    commit_id: str | None = None,
+    image_url: str | None = None,
+) -> dict[str, Any]:
     """Trigger a new deploy for a Render service."""
 
     from github_mcp.main_tools.render import create_render_deploy as _impl
@@ -858,7 +858,7 @@ async def create_render_deploy(
 
 
 @mcp_tool(write_action=True)
-async def cancel_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+async def cancel_render_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     """Cancel an in-progress Render deploy."""
 
     from github_mcp.main_tools.render import cancel_render_deploy as _impl
@@ -867,7 +867,7 @@ async def cancel_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any
 
 
 @mcp_tool(write_action=True)
-async def rollback_render_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+async def rollback_render_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     """Roll back a service to the specified deploy."""
 
     from github_mcp.main_tools.render import rollback_render_deploy as _impl
@@ -876,7 +876,7 @@ async def rollback_render_deploy(service_id: str, deploy_id: str) -> Dict[str, A
 
 
 @mcp_tool(write_action=True)
-async def restart_render_service(service_id: str) -> Dict[str, Any]:
+async def restart_render_service(service_id: str) -> dict[str, Any]:
     """Restart a Render service."""
 
     from github_mcp.main_tools.render import restart_render_service as _impl
@@ -885,7 +885,7 @@ async def restart_render_service(service_id: str) -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=True)
-async def create_render_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
+async def create_render_service(service_spec: dict[str, Any]) -> dict[str, Any]:
     """Create a new Render service."""
 
     from github_mcp.main_tools.render import create_render_service as _impl
@@ -894,7 +894,7 @@ async def create_render_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
-async def list_render_service_env_vars(service_id: str) -> Dict[str, Any]:
+async def list_render_service_env_vars(service_id: str) -> dict[str, Any]:
     """List environment variables configured for a Render service."""
 
     from github_mcp.main_tools.render import list_render_service_env_vars as _impl
@@ -905,8 +905,8 @@ async def list_render_service_env_vars(service_id: str) -> Dict[str, Any]:
 @mcp_tool(write_action=True)
 async def set_render_service_env_vars(
     service_id: str,
-    env_vars: List[Dict[str, Any]],
-) -> Dict[str, Any]:
+    env_vars: list[dict[str, Any]],
+) -> dict[str, Any]:
     """Replace environment variables for a Render service."""
 
     from github_mcp.main_tools.render import set_render_service_env_vars as _impl
@@ -915,7 +915,7 @@ async def set_render_service_env_vars(
 
 
 @mcp_tool(write_action=True)
-async def patch_render_service(service_id: str, patch: Dict[str, Any]) -> Dict[str, Any]:
+async def patch_render_service(service_id: str, patch: dict[str, Any]) -> dict[str, Any]:
     """Patch a Render service."""
 
     from github_mcp.main_tools.render import patch_render_service as _impl
@@ -927,10 +927,10 @@ async def patch_render_service(service_id: str, patch: Dict[str, Any]) -> Dict[s
 async def get_render_logs(
     resource_type: str,
     resource_id: str,
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
     limit: int = 200,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch logs for a Render resource."""
 
     from github_mcp.main_tools.render import get_render_logs as _impl
@@ -947,20 +947,20 @@ async def get_render_logs(
 @mcp_tool(write_action=False)
 async def list_render_logs(
     owner_id: str,
-    resources: List[str],
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
+    resources: list[str],
+    start_time: str | None = None,
+    end_time: str | None = None,
     direction: str = "backward",
     limit: int = 200,
-    instance: Optional[str] = None,
-    host: Optional[str] = None,
-    level: Optional[str] = None,
-    method: Optional[str] = None,
-    status_code: Optional[int] = None,
-    path: Optional[str] = None,
-    text: Optional[str] = None,
-    log_type: Optional[str] = None,
-) -> Dict[str, Any]:
+    instance: str | None = None,
+    host: str | None = None,
+    level: str | None = None,
+    method: str | None = None,
+    status_code: int | None = None,
+    path: str | None = None,
+    text: str | None = None,
+    log_type: str | None = None,
+) -> dict[str, Any]:
     """List logs for one or more Render resources.
 
     This maps to Render's public /v1/logs API which requires an owner_id and one
@@ -1002,7 +1002,7 @@ async def list_render_logs(
     name="render_list_owners",
     ui={"group": "render", "icon": "🟦", "label": "List Owners", "danger": "low"},
 )
-async def render_list_owners(cursor: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
+async def render_list_owners(cursor: str | None = None, limit: int = 20) -> dict[str, Any]:
     return await list_render_owners(cursor=cursor, limit=limit)
 
 
@@ -1012,10 +1012,10 @@ async def render_list_owners(cursor: Optional[str] = None, limit: int = 20) -> D
     ui={"group": "render", "icon": "🟦", "label": "List Services", "danger": "low"},
 )
 async def render_list_services(
-    owner_id: Optional[str] = None,
-    cursor: Optional[str] = None,
+    owner_id: str | None = None,
+    cursor: str | None = None,
     limit: int = 20,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return await list_render_services(owner_id=owner_id, cursor=cursor, limit=limit)
 
 
@@ -1024,7 +1024,7 @@ async def render_list_services(
     name="render_get_service",
     ui={"group": "render", "icon": "🟦", "label": "Get Service", "danger": "low"},
 )
-async def render_get_service(service_id: str) -> Dict[str, Any]:
+async def render_get_service(service_id: str) -> dict[str, Any]:
     return await get_render_service(service_id=service_id)
 
 
@@ -1035,9 +1035,9 @@ async def render_get_service(service_id: str) -> Dict[str, Any]:
 )
 async def render_list_deploys(
     service_id: str,
-    cursor: Optional[str] = None,
+    cursor: str | None = None,
     limit: int = 20,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return await list_render_deploys(service_id=service_id, cursor=cursor, limit=limit)
 
 
@@ -1046,7 +1046,7 @@ async def render_list_deploys(
     name="render_get_deploy",
     ui={"group": "render", "icon": "🟦", "label": "Get Deploy", "danger": "low"},
 )
-async def render_get_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+async def render_get_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     return await get_render_deploy(service_id=service_id, deploy_id=deploy_id)
 
 
@@ -1060,9 +1060,9 @@ async def render_get_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
 async def render_create_deploy(
     service_id: str,
     clear_cache: bool = False,
-    commit_id: Optional[str] = None,
-    image_url: Optional[str] = None,
-) -> Dict[str, Any]:
+    commit_id: str | None = None,
+    image_url: str | None = None,
+) -> dict[str, Any]:
     return await create_render_deploy(
         service_id=service_id,
         clear_cache=clear_cache,
@@ -1078,7 +1078,7 @@ async def render_create_deploy(
     destructive_hint=True,
     ui={"group": "render", "icon": "🛑", "label": "Cancel Deploy", "danger": "high"},
 )
-async def render_cancel_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+async def render_cancel_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     return await cancel_render_deploy(service_id=service_id, deploy_id=deploy_id)
 
 
@@ -1089,7 +1089,7 @@ async def render_cancel_deploy(service_id: str, deploy_id: str) -> Dict[str, Any
     destructive_hint=True,
     ui={"group": "render", "icon": "⏪", "label": "Rollback Deploy", "danger": "high"},
 )
-async def render_rollback_deploy(service_id: str, deploy_id: str) -> Dict[str, Any]:
+async def render_rollback_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     return await rollback_render_deploy(service_id=service_id, deploy_id=deploy_id)
 
 
@@ -1100,7 +1100,7 @@ async def render_rollback_deploy(service_id: str, deploy_id: str) -> Dict[str, A
     destructive_hint=True,
     ui={"group": "render", "icon": "🔁", "label": "Restart Service", "danger": "high"},
 )
-async def render_restart_service(service_id: str) -> Dict[str, Any]:
+async def render_restart_service(service_id: str) -> dict[str, Any]:
     return await restart_render_service(service_id=service_id)
 
 
@@ -1111,7 +1111,7 @@ async def render_restart_service(service_id: str) -> Dict[str, Any]:
     destructive_hint=True,
     ui={"group": "render", "icon": "🧱", "label": "Create Service", "danger": "high"},
 )
-async def render_create_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
+async def render_create_service(service_spec: dict[str, Any]) -> dict[str, Any]:
     return await create_render_service(service_spec=service_spec)
 
 
@@ -1120,7 +1120,7 @@ async def render_create_service(service_spec: Dict[str, Any]) -> Dict[str, Any]:
     name="render_list_env_vars",
     ui={"group": "render", "icon": "🟦", "label": "List Env Vars", "danger": "low"},
 )
-async def render_list_env_vars(service_id: str) -> Dict[str, Any]:
+async def render_list_env_vars(service_id: str) -> dict[str, Any]:
     return await list_render_service_env_vars(service_id=service_id)
 
 
@@ -1131,7 +1131,7 @@ async def render_list_env_vars(service_id: str) -> Dict[str, Any]:
     destructive_hint=True,
     ui={"group": "render", "icon": "🧪", "label": "Set Env Vars", "danger": "high"},
 )
-async def render_set_env_vars(service_id: str, env_vars: List[Dict[str, Any]]) -> Dict[str, Any]:
+async def render_set_env_vars(service_id: str, env_vars: list[dict[str, Any]]) -> dict[str, Any]:
     return await set_render_service_env_vars(service_id=service_id, env_vars=env_vars)
 
 
@@ -1142,7 +1142,7 @@ async def render_set_env_vars(service_id: str, env_vars: List[Dict[str, Any]]) -
     destructive_hint=True,
     ui={"group": "render", "icon": "🧩", "label": "Patch Service", "danger": "high"},
 )
-async def render_patch_service(service_id: str, patch: Dict[str, Any]) -> Dict[str, Any]:
+async def render_patch_service(service_id: str, patch: dict[str, Any]) -> dict[str, Any]:
     return await patch_render_service(service_id=service_id, patch=patch)
 
 
@@ -1155,10 +1155,10 @@ async def render_patch_service(service_id: str, patch: Dict[str, Any]) -> Dict[s
 async def render_get_logs(
     resource_type: str,
     resource_id: str,
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
     limit: int = 200,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return await get_render_logs(
         resource_type=resource_type,
         resource_id=resource_id,
@@ -1176,20 +1176,20 @@ async def render_get_logs(
 )
 async def render_list_logs(
     owner_id: str,
-    resources: List[str],
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
+    resources: list[str],
+    start_time: str | None = None,
+    end_time: str | None = None,
     direction: str = "backward",
     limit: int = 200,
-    instance: Optional[str] = None,
-    host: Optional[str] = None,
-    level: Optional[str] = None,
-    method: Optional[str] = None,
-    status_code: Optional[int] = None,
-    path: Optional[str] = None,
-    text: Optional[str] = None,
-    log_type: Optional[str] = None,
-) -> Dict[str, Any]:
+    instance: str | None = None,
+    host: str | None = None,
+    level: str | None = None,
+    method: str | None = None,
+    status_code: int | None = None,
+    path: str | None = None,
+    text: str | None = None,
+    log_type: str | None = None,
+) -> dict[str, Any]:
     return await list_render_logs(
         owner_id=owner_id,
         resources=resources,
@@ -1210,24 +1210,24 @@ async def render_list_logs(
 
 @mcp_tool(write_action=True)
 async def pr_smoke_test(
-    full_name: Optional[str] = None,
-    base_branch: Optional[str] = None,
+    full_name: str | None = None,
+    base_branch: str | None = None,
     draft: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.diagnostics import pr_smoke_test as _impl
 
     return await _impl(full_name=full_name, base_branch=base_branch, draft=draft)
 
 
 @mcp_tool(write_action=False)
-async def get_rate_limit() -> Dict[str, Any]:
+async def get_rate_limit() -> dict[str, Any]:
     from github_mcp.main_tools.repositories import get_rate_limit as _impl
 
     return await _impl()
 
 
 @mcp_tool(write_action=False)
-async def get_user_login() -> Dict[str, Any]:
+async def get_user_login() -> dict[str, Any]:
     from github_mcp.main_tools.repositories import get_user_login as _impl
 
     return await _impl()
@@ -1235,11 +1235,11 @@ async def get_user_login() -> Dict[str, Any]:
 
 @mcp_tool(write_action=False)
 async def list_repositories(
-    affiliation: Optional[str] = None,
-    visibility: Optional[str] = None,
+    affiliation: str | None = None,
+    visibility: str | None = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.repositories import list_repositories as _impl
 
     return await _impl(affiliation=affiliation, visibility=visibility, per_page=per_page, page=page)
@@ -1248,7 +1248,7 @@ async def list_repositories(
 @mcp_tool(write_action=False)
 async def list_repositories_by_installation(
     installation_id: int, per_page: int = 30, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.repositories import (
         list_repositories_by_installation as _impl,
     )
@@ -1259,30 +1259,30 @@ async def list_repositories_by_installation(
 @mcp_tool(write_action=True)
 async def create_repository(
     name: str,
-    owner: Optional[str] = None,
+    owner: str | None = None,
     owner_type: Literal["auto", "user", "org"] = "auto",
-    description: Optional[str] = None,
-    homepage: Optional[str] = None,
-    visibility: Optional[Literal["public", "private", "internal"]] = None,
-    private: Optional[bool] = None,
+    description: str | None = None,
+    homepage: str | None = None,
+    visibility: Literal["public", "private", "internal"] | None = None,
+    private: bool | None = None,
     auto_init: bool = True,
-    gitignore_template: Optional[str] = None,
-    license_template: Optional[str] = None,
+    gitignore_template: str | None = None,
+    license_template: str | None = None,
     is_template: bool = False,
     has_issues: bool = True,
-    has_projects: Optional[bool] = None,
+    has_projects: bool | None = None,
     has_wiki: bool = True,
-    has_discussions: Optional[bool] = None,
-    team_id: Optional[int] = None,
-    security_and_analysis: Optional[Dict[str, Any]] = None,
-    template_full_name: Optional[str] = None,
+    has_discussions: bool | None = None,
+    team_id: int | None = None,
+    security_and_analysis: dict[str, Any] | None = None,
+    template_full_name: str | None = None,
     include_all_branches: bool = False,
-    topics: Optional[List[str]] = None,
-    create_payload_overrides: Optional[Dict[str, Any]] = None,
-    update_payload_overrides: Optional[Dict[str, Any]] = None,
+    topics: list[str] | None = None,
+    create_payload_overrides: dict[str, Any] | None = None,
+    update_payload_overrides: dict[str, Any] | None = None,
     clone_to_workspace: bool = False,
-    clone_ref: Optional[str] = None,
-) -> Dict[str, Any]:
+    clone_ref: str | None = None,
+) -> dict[str, Any]:
     from github_mcp.main_tools.repositories import create_repository as _impl
 
     return await _impl(
@@ -1319,7 +1319,7 @@ async def list_recent_issues(
     state: str = "open",
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.issues import list_recent_issues as _impl
 
     return await _impl(filter=filter, state=state, per_page=per_page, page=page)
@@ -1329,11 +1329,11 @@ async def list_recent_issues(
 async def list_repository_issues(
     full_name: str,
     state: str = "open",
-    labels: Optional[List[str]] = None,
-    assignee: Optional[str] = None,
+    labels: list[str] | None = None,
+    assignee: str | None = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.issues import list_repository_issues as _impl
 
     return await _impl(
@@ -1351,8 +1351,8 @@ async def list_open_issues_graphql(
     full_name: str,
     state: Literal["open", "closed", "all"] = "open",
     per_page: int = 30,
-    cursor: Optional[str] = None,
-) -> Dict[str, Any]:
+    cursor: str | None = None,
+) -> dict[str, Any]:
     """List issues (excluding PRs) using GraphQL, with cursor-based pagination."""
     from github_mcp.main_tools.graphql_dashboard import (
         list_open_issues_graphql as _impl,
@@ -1367,7 +1367,7 @@ async def list_open_issues_graphql(
 
 
 @mcp_tool(write_action=False)
-async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
+async def fetch_issue(full_name: str, issue_number: int) -> dict[str, Any]:
     from github_mcp.main_tools.issues import fetch_issue as _impl
 
     return await _impl(full_name=full_name, issue_number=issue_number)
@@ -1376,21 +1376,21 @@ async def fetch_issue(full_name: str, issue_number: int) -> Dict[str, Any]:
 @mcp_tool(write_action=False)
 async def fetch_issue_comments(
     full_name: str, issue_number: int, per_page: int = 30, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.issues import fetch_issue_comments as _impl
 
     return await _impl(full_name=full_name, issue_number=issue_number, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
-async def fetch_pr(full_name: str, pull_number: int) -> Dict[str, Any]:
+async def fetch_pr(full_name: str, pull_number: int) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import fetch_pr as _impl
 
     return await _impl(full_name=full_name, pull_number=pull_number)
 
 
 @mcp_tool(write_action=False)
-async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
+async def get_pr_info(full_name: str, pull_number: int) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import get_pr_info as _impl
 
     return await _impl(full_name=full_name, pull_number=pull_number)
@@ -1399,7 +1399,7 @@ async def get_pr_info(full_name: str, pull_number: int) -> Dict[str, Any]:
 @mcp_tool(write_action=False)
 async def fetch_pr_comments(
     full_name: str, pull_number: int, per_page: int = 30, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import fetch_pr_comments as _impl
 
     return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
@@ -1408,14 +1408,14 @@ async def fetch_pr_comments(
 @mcp_tool(write_action=False)
 async def list_pr_changed_filenames(
     full_name: str, pull_number: int, per_page: int = 100, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import list_pr_changed_filenames as _impl
 
     return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
 
 
 @mcp_tool(write_action=False)
-async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]:
+async def get_commit_combined_status(full_name: str, ref: str) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import get_commit_combined_status as _impl
 
     return await _impl(full_name=full_name, ref=ref)
@@ -1424,7 +1424,7 @@ async def get_commit_combined_status(full_name: str, ref: str) -> Dict[str, Any]
 @mcp_tool(write_action=False)
 async def get_issue_comment_reactions(
     full_name: str, comment_id: int, per_page: int = 30, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.issues import get_issue_comment_reactions as _impl
 
     return await _impl(full_name=full_name, comment_id=comment_id, per_page=per_page, page=page)
@@ -1433,7 +1433,7 @@ async def get_issue_comment_reactions(
 @mcp_tool(write_action=False)
 async def get_pr_reactions(
     full_name: str, pull_number: int, per_page: int = 30, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch reactions for a GitHub pull request."""
 
     params = {"per_page": per_page, "page": page}
@@ -1448,7 +1448,7 @@ async def get_pr_reactions(
 @mcp_tool(write_action=False)
 async def get_pr_review_comment_reactions(
     full_name: str, comment_id: int, per_page: int = 30, page: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch reactions for a pull request review comment."""
 
     params = {"per_page": per_page, "page": page}
@@ -1461,7 +1461,7 @@ async def get_pr_review_comment_reactions(
 
 
 @mcp_tool(write_action=False)
-def list_write_tools() -> Dict[str, Any]:
+def list_write_tools() -> dict[str, Any]:
     """Describe write-capable tools exposed by this server.
 
     This provides a concise summary without requiring a scan of the full module.
@@ -1476,8 +1476,8 @@ def list_write_tools() -> Dict[str, Any]:
     description="Enumerate write-capable MCP tools with optional schemas.",
 )
 def list_write_actions(
-    include_parameters: bool = False, compact: Optional[bool] = None
-) -> Dict[str, Any]:
+    include_parameters: bool = False, compact: bool | None = None
+) -> dict[str, Any]:
     """Enumerate write-capable MCP tools with optional schemas."""
     from github_mcp.main_tools.introspection import list_write_actions as _impl
 
@@ -1485,7 +1485,7 @@ def list_write_actions(
 
 
 @mcp_tool(write_action=False)
-async def get_repository(full_name: str) -> Dict[str, Any]:
+async def get_repository(full_name: str) -> dict[str, Any]:
     """Look up repository metadata (topics, default branch, permissions)."""
 
     if "/" not in full_name:
@@ -1498,7 +1498,7 @@ async def list_branches(
     full_name: str,
     per_page: int = 100,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Enumerate branches for a repository with GitHub-style pagination."""
 
     if "/" not in full_name:
@@ -1518,8 +1518,8 @@ async def move_file(
     from_path: str,
     to_path: str,
     branch: str = "main",
-    message: Optional[str] = None,
-) -> Dict[str, Any]:
+    message: str | None = None,
+) -> dict[str, Any]:
     from github_mcp.main_tools.files import move_file as _impl
 
     return await _impl(
@@ -1536,7 +1536,7 @@ async def get_file_contents(
     full_name: str,
     path: str,
     ref: str = "main",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch a single file from GitHub and decode base64 to UTF-8 text."""
 
     # Resolve moving refs (like branch names) to an immutable commit SHA so the
@@ -1563,13 +1563,13 @@ async def get_file_excerpt(
     full_name: str,
     path: str,
     ref: str = "main",
-    start_byte: Optional[int] = None,
+    start_byte: int | None = None,
     max_bytes: int = 65536,
-    tail_bytes: Optional[int] = None,
+    tail_bytes: int | None = None,
     as_text: bool = True,
     max_text_chars: int = 200000,
     numbered_lines: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.large_files import get_file_excerpt as _impl
 
     return await _impl(
@@ -1588,9 +1588,9 @@ async def get_file_excerpt(
 @mcp_tool(write_action=False)
 async def fetch_files(
     full_name: str,
-    paths: List[str],
+    paths: list[str],
     ref: str = "main",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.content_cache import fetch_files as _impl
 
     return await _impl(full_name=full_name, paths=paths, ref=ref)
@@ -1607,9 +1607,9 @@ async def fetch_files(
 )
 async def get_cached_files(
     full_name: str,
-    paths: List[str],
+    paths: list[str],
     ref: str = "main",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.content_cache import get_cached_files as _impl
 
     return await _impl(full_name=full_name, paths=paths, ref=ref)
@@ -1626,10 +1626,10 @@ async def get_cached_files(
 )
 async def cache_files(
     full_name: str,
-    paths: List[str],
+    paths: list[str],
     ref: str = "main",
     refresh: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.content_cache import cache_files as _impl
 
     return await _impl(full_name=full_name, paths=paths, ref=ref, refresh=refresh)
@@ -1639,12 +1639,12 @@ async def cache_files(
 async def list_repository_tree(
     full_name: str,
     ref: str = "main",
-    path_prefix: Optional[str] = None,
+    path_prefix: str | None = None,
     recursive: bool = True,
     max_entries: int = 1000,
     include_blobs: bool = True,
     include_trees: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.content_cache import list_repository_tree as _impl
 
     return await _impl(
@@ -1661,15 +1661,15 @@ async def list_repository_tree(
 @mcp_tool(write_action=False)
 async def graphql_query(
     query: str,
-    variables: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    variables: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     from github_mcp.main_tools.querying import graphql_query as _impl
 
     return await _impl(query=query, variables=variables)
 
 
 @mcp_tool(write_action=False)
-async def fetch_url(url: str) -> Dict[str, Any]:
+async def fetch_url(url: str) -> dict[str, Any]:
     from github_mcp.main_tools.querying import fetch_url as _impl
 
     return await _impl(url=url)
@@ -1681,9 +1681,9 @@ async def search(
     search_type: Literal["code", "repositories", "issues", "commits", "users"] = "code",
     per_page: int = 30,
     page: int = 1,
-    sort: Optional[str] = None,
-    order: Optional[Literal["asc", "desc"]] = None,
-) -> Dict[str, Any]:
+    sort: str | None = None,
+    order: Literal["asc", "desc"] | None = None,
+) -> dict[str, Any]:
     from github_mcp.main_tools.querying import search as _impl
 
     return await _impl(
@@ -1697,11 +1697,11 @@ async def search(
 
 
 @mcp_tool(write_action=False)
-async def download_user_content(content_url: str) -> Dict[str, Any]:
+async def download_user_content(content_url: str) -> dict[str, Any]:
     """Download user-provided content (sandbox/local/http) with base64 encoding."""
 
     body_bytes = await _load_body_from_content_url(content_url, context="download_user_content")
-    text: Optional[str]
+    text: str | None
     try:
         text = body_bytes.decode("utf-8")
     except UnicodeDecodeError:
@@ -1730,12 +1730,12 @@ def _decode_zipped_job_logs(content: bytes) -> str:
 @mcp_tool(write_action=False)
 async def list_workflow_runs(
     full_name: str,
-    branch: Optional[str] = None,
-    status: Optional[str] = None,
-    event: Optional[str] = None,
+    branch: str | None = None,
+    status: str | None = None,
+    event: str | None = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List recent GitHub Actions workflow runs with optional filters."""
     from github_mcp.main_tools.workflows import list_workflow_runs as _impl
 
@@ -1753,9 +1753,9 @@ async def list_workflow_runs(
 async def list_workflow_runs_graphql(
     full_name: str,
     per_page: int = 30,
-    cursor: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
+    cursor: str | None = None,
+    branch: str | None = None,
+) -> dict[str, Any]:
     """List recent workflow runs using GraphQL with cursor-based pagination."""
     from github_mcp.main_tools.graphql_dashboard import (
         list_workflow_runs_graphql as _impl,
@@ -1772,9 +1772,9 @@ async def list_workflow_runs_graphql(
 @mcp_tool(write_action=False)
 async def list_recent_failures(
     full_name: str,
-    branch: Optional[str] = None,
+    branch: str | None = None,
     limit: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List recent failed or cancelled GitHub Actions workflow runs.
 
     This helper composes ``list_workflow_runs`` and filters to runs whose
@@ -1790,9 +1790,9 @@ async def list_recent_failures(
 @mcp_tool(write_action=False)
 async def list_recent_failures_graphql(
     full_name: str,
-    branch: Optional[str] = None,
+    branch: str | None = None,
     limit: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List recent workflow failures using GraphQL as a fallback."""
     from github_mcp.main_tools.graphql_dashboard import (
         list_recent_failures_graphql as _impl,
@@ -1811,8 +1811,8 @@ async def list_recent_failures_graphql(
 async def list_tools(
     only_write: bool = False,
     only_read: bool = False,
-    name_prefix: Optional[str] = None,
-) -> Dict[str, Any]:
+    name_prefix: str | None = None,
+) -> dict[str, Any]:
     """Lightweight tool catalog."""
     from github_mcp.main_tools.introspection import list_tools as _impl
 
@@ -1821,8 +1821,8 @@ async def list_tools(
 
 @mcp_tool(write_action=False)
 def list_all_actions(
-    include_parameters: bool = False, compact: Optional[bool] = None
-) -> Dict[str, Any]:
+    include_parameters: bool = False, compact: bool | None = None
+) -> dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
     This helper exposes a structured catalog of all tools so clients can see
@@ -1849,10 +1849,10 @@ def list_all_actions(
     ),
 )
 async def describe_tool(
-    name: Optional[str] = None,
-    names: Optional[List[str]] = None,
+    name: str | None = None,
+    names: list[str] | None = None,
     include_parameters: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Inspect one or more registered MCP tools by name.
 
     This is a convenience wrapper around list_all_actions: it lets callers
@@ -1873,7 +1873,7 @@ async def describe_tool(
 
 
 @mcp_tool(write_action=False)
-async def get_workflow_run(full_name: str, run_id: int) -> Dict[str, Any]:
+async def get_workflow_run(full_name: str, run_id: int) -> dict[str, Any]:
     """Retrieve a specific workflow run including timing and conclusion."""
     from github_mcp.main_tools.workflows import get_workflow_run as _impl
 
@@ -1886,7 +1886,7 @@ async def list_workflow_run_jobs(
     run_id: int,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List jobs within a workflow run, useful for troubleshooting failures."""
     from github_mcp.main_tools.workflows import list_workflow_run_jobs as _impl
 
@@ -1898,7 +1898,7 @@ async def get_workflow_run_overview(
     full_name: str,
     run_id: int,
     max_jobs: int = 500,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Summarize a GitHub Actions workflow run for CI triage.
 
     This helper is read-only and safe to call before any write actions. It
@@ -1912,7 +1912,7 @@ async def get_workflow_run_overview(
 
 
 @mcp_tool(write_action=False)
-async def get_job_logs(full_name: str, job_id: int) -> Dict[str, Any]:
+async def get_job_logs(full_name: str, job_id: int) -> dict[str, Any]:
     """Fetch raw logs for a GitHub Actions job without truncation."""
     from github_mcp.main_tools.workflows import get_job_logs as _impl
 
@@ -1925,7 +1925,7 @@ async def wait_for_workflow_run(
     run_id: int,
     timeout_seconds: int = 900,
     poll_interval_seconds: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Poll a workflow run until completion or timeout."""
     from github_mcp.main_tools.workflows import wait_for_workflow_run as _impl
 
@@ -1944,7 +1944,7 @@ async def wait_for_workflow_run(
         "pull requests, and checklist items."
     ),
 )
-async def get_issue_overview(full_name: str, issue_number: int) -> Dict[str, Any]:
+async def get_issue_overview(full_name: str, issue_number: int) -> dict[str, Any]:
     """Summarize a GitHub issue for navigation and planning.
 
     This helper is intentionally read-only.
@@ -1960,8 +1960,8 @@ async def trigger_workflow_dispatch(
     full_name: str,
     workflow: str,
     ref: str,
-    inputs: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    inputs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Trigger a workflow dispatch event on the given ref.
 
     Args:
@@ -1980,10 +1980,10 @@ async def trigger_and_wait_for_workflow(
     full_name: str,
     workflow: str,
     ref: str,
-    inputs: Optional[Dict[str, Any]] = None,
+    inputs: dict[str, Any] | None = None,
     timeout_seconds: int = 900,
     poll_interval_seconds: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Trigger a workflow and block until it completes or hits timeout."""
     from github_mcp.main_tools.workflows import trigger_and_wait_for_workflow as _impl
 
@@ -2006,11 +2006,11 @@ async def trigger_and_wait_for_workflow(
 async def list_pull_requests(
     full_name: str,
     state: Literal["open", "closed", "all"] = "open",
-    head: Optional[str] = None,
-    base: Optional[str] = None,
+    head: str | None = None,
+    base: str | None = None,
     per_page: int = 30,
     page: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import list_pull_requests as _impl
 
     return await _impl(
@@ -2028,9 +2028,9 @@ async def merge_pull_request(
     full_name: str,
     number: int,
     merge_method: Literal["merge", "squash", "rebase"] = "squash",
-    commit_title: Optional[str] = None,
-    commit_message: Optional[str] = None,
-) -> Dict[str, Any]:
+    commit_title: str | None = None,
+    commit_message: str | None = None,
+) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import merge_pull_request as _impl
 
     return await _impl(
@@ -2043,7 +2043,7 @@ async def merge_pull_request(
 
 
 @mcp_tool(write_action=True)
-async def close_pull_request(full_name: str, number: int) -> Dict[str, Any]:
+async def close_pull_request(full_name: str, number: int) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import close_pull_request as _impl
 
     return await _impl(full_name=full_name, number=number)
@@ -2054,7 +2054,7 @@ async def comment_on_pull_request(
     full_name: str,
     number: int,
     body: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import comment_on_pull_request as _impl
 
     return await _impl(full_name=full_name, number=number, body=body)
@@ -2064,10 +2064,10 @@ async def comment_on_pull_request(
 async def create_issue(
     full_name: str,
     title: str,
-    body: Optional[str] = None,
-    labels: Optional[List[str]] = None,
-    assignees: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    body: str | None = None,
+    labels: list[str] | None = None,
+    assignees: list[str] | None = None,
+) -> dict[str, Any]:
     """Create a GitHub issue in the given repository."""
     from github_mcp.main_tools.issues import create_issue as _impl
 
@@ -2080,12 +2080,12 @@ async def create_issue(
 async def update_issue(
     full_name: str,
     issue_number: int,
-    title: Optional[str] = None,
-    body: Optional[str] = None,
-    state: Optional[Literal["open", "closed"]] = None,
-    labels: Optional[List[str]] = None,
-    assignees: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    title: str | None = None,
+    body: str | None = None,
+    state: Literal["open", "closed"] | None = None,
+    labels: list[str] | None = None,
+    assignees: list[str] | None = None,
+) -> dict[str, Any]:
     """Update fields on an existing GitHub issue."""
     from github_mcp.main_tools.issues import update_issue as _impl
 
@@ -2105,7 +2105,7 @@ async def comment_on_issue(
     full_name: str,
     issue_number: int,
     body: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Post a comment on an issue."""
     from github_mcp.main_tools.issues import comment_on_issue as _impl
 
@@ -2113,33 +2113,33 @@ async def comment_on_issue(
 
 
 @mcp_tool(write_action=False)
-async def open_issue_context(full_name: str, issue_number: int) -> Dict[str, Any]:
+async def open_issue_context(full_name: str, issue_number: int) -> dict[str, Any]:
     """Return an issue plus related branches and pull requests."""
     from github_mcp.main_tools.issues import open_issue_context as _impl
 
     return await _impl(full_name=full_name, issue_number=issue_number)
 
 
-def _normalize_issue_payload(raw_issue: Any) -> Optional[Dict[str, Any]]:
+def _normalize_issue_payload(raw_issue: Any) -> dict[str, Any] | None:
     from github_mcp.main_tools.normalize import normalize_issue_payload as _impl
 
     return _impl(raw_issue=raw_issue)
 
 
-def _normalize_pr_payload(raw_pr: Any) -> Optional[Dict[str, Any]]:
+def _normalize_pr_payload(raw_pr: Any) -> dict[str, Any] | None:
     from github_mcp.main_tools.normalize import normalize_pr_payload as _impl
 
     return _impl(raw_pr=raw_pr)
 
 
-def _normalize_branch_summary(summary: Any) -> Optional[Dict[str, Any]]:
+def _normalize_branch_summary(summary: Any) -> dict[str, Any] | None:
     from github_mcp.main_tools.normalize import normalize_branch_summary as _impl
 
     return _impl(summary=summary)
 
 
 @mcp_tool(write_action=False)
-async def resolve_handle(full_name: str, handle: str) -> Dict[str, Any]:
+async def resolve_handle(full_name: str, handle: str) -> dict[str, Any]:
     from github_mcp.main_tools.handles import resolve_handle as _impl
 
     return await _impl(full_name=full_name, handle=handle)
@@ -2155,7 +2155,7 @@ async def create_branch(
     full_name: str,
     branch: str,
     from_ref: str = "main",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.branches import create_branch as _impl
 
     return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
@@ -2166,14 +2166,14 @@ async def ensure_branch(
     full_name: str,
     branch: str,
     from_ref: str = "main",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.branches import ensure_branch as _impl
 
     return await _impl(full_name=full_name, branch=branch, from_ref=from_ref)
 
 
 @mcp_tool(write_action=False)
-async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> Dict[str, Any]:
+async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> dict[str, Any]:
     from github_mcp.main_tools.branches import get_branch_summary as _impl
 
     return await _impl(full_name=full_name, branch=branch, base=base)
@@ -2182,14 +2182,14 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
 @mcp_tool(write_action=False)
 async def get_latest_branch_status(
     full_name: str, branch: str, base: str = "main"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.branches import get_latest_branch_status as _impl
 
     return await _impl(full_name=full_name, branch=branch, base=base)
 
 
 @mcp_tool(write_action=False)
-async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Dict[str, Any]:
+async def get_repo_dashboard(full_name: str, branch: str | None = None) -> dict[str, Any]:
     """Return a compact, multi-signal dashboard for a repository.
 
     This helper aggregates several lower-level tools into a single call so
@@ -2228,9 +2228,7 @@ async def get_repo_dashboard(full_name: str, branch: Optional[str] = None) -> Di
 
 
 @mcp_tool(write_action=False)
-async def get_repo_dashboard_graphql(
-    full_name: str, branch: Optional[str] = None
-) -> Dict[str, Any]:
+async def get_repo_dashboard_graphql(full_name: str, branch: str | None = None) -> dict[str, Any]:
     """Return a compact dashboard using GraphQL as a fallback."""
     from github_mcp.main_tools.graphql_dashboard import (
         get_repo_dashboard_graphql as _impl,
@@ -2270,9 +2268,9 @@ async def create_pull_request(
     title: str,
     head: str,
     base: str = "main",
-    body: Optional[str] = None,
+    body: str | None = None,
     draft: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Open a pull request from ``head`` into ``base``.
 
     The base branch is normalized via ``_effective_ref_for_repo`` so that
@@ -2291,10 +2289,10 @@ async def open_pr_for_existing_branch(
     full_name: str,
     branch: str,
     base: str = "main",
-    title: Optional[str] = None,
-    body: Optional[str] = None,
+    title: str | None = None,
+    body: str | None = None,
     draft: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Open a pull request for an existing branch into a base branch.
 
     This helper is intentionally idempotent: if there is already an open PR for
@@ -2317,12 +2315,12 @@ async def open_pr_for_existing_branch(
 async def update_files_and_open_pr(
     full_name: str,
     title: str,
-    files: List[Dict[str, Any]],
+    files: list[dict[str, Any]],
     base_branch: str = "main",
-    new_branch: Optional[str] = None,
-    body: Optional[str] = None,
+    new_branch: str | None = None,
+    body: str | None = None,
     draft: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Commit multiple files, verify each, then open a PR in one call."""
     from github_mcp.main_tools.pull_requests import update_files_and_open_pr as _impl
 
@@ -2344,8 +2342,8 @@ async def create_file(
     content: str,
     *,
     branch: str = "main",
-    message: Optional[str] = None,
-) -> Dict[str, Any]:
+    message: str | None = None,
+) -> dict[str, Any]:
     from github_mcp.main_tools.files import create_file as _impl
 
     return await _impl(
@@ -2360,9 +2358,9 @@ async def apply_text_update_and_commit(
     updated_content: str,
     *,
     branch: str = "main",
-    message: Optional[str] = None,
+    message: str | None = None,
     return_diff: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from github_mcp.main_tools.files import apply_text_update_and_commit as _impl
 
     return await _impl(
@@ -2379,7 +2377,7 @@ async def apply_text_update_and_commit(
     write_action=False,
     description=("Return a compact overview of a pull request, including files and CI status."),
 )
-async def get_pr_overview(full_name: str, pull_number: int) -> Dict[str, Any]:
+async def get_pr_overview(full_name: str, pull_number: int) -> dict[str, Any]:
     # Summarize a pull request for quick review.
     #
     # This helper is read-only and safe to call before any write actions.
@@ -2400,7 +2398,7 @@ async def recent_prs_for_branch(
     include_closed: bool = False,
     per_page_open: int = 20,
     per_page_closed: int = 5,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     # Return recent pull requests whose head matches the given branch.
     #
     # This is a composite navigation helper built on top of list_pull_requests.

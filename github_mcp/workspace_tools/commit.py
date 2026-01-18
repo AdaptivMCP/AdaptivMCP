@@ -1,6 +1,6 @@
 # Split from github_mcp.tools_workspace (generated).
 import shlex
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
@@ -11,7 +11,7 @@ from github_mcp.server import (
 from ._shared import _tw
 
 
-def _slim_shell_result(result: Any) -> Dict[str, Any]:
+def _slim_shell_result(result: Any) -> dict[str, Any]:
     """Return a connector-safe view of a run_shell result without truncation."""
     if not isinstance(result, dict):
         return {"raw": str(result)}
@@ -27,16 +27,16 @@ def _slim_shell_result(result: Any) -> Dict[str, Any]:
 
 @mcp_tool(write_action=True)
 async def commit_workspace(
-    full_name: Optional[str] = None,
+    full_name: str | None = None,
     ref: str = "main",
     message: str = "Commit workspace changes",
     add_all: bool = True,
     push: bool = True,
     *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
+) -> dict[str, Any]:
     """Commit repo mirror changes and optionally push them."""
 
     try:
@@ -95,16 +95,16 @@ async def commit_workspace(
 
 @mcp_tool(write_action=True)
 async def commit_workspace_files(
-    full_name: Optional[str],
-    files: List[str],
+    full_name: str | None,
+    files: list[str],
     ref: str = "main",
     message: str = "Commit selected workspace changes",
     push: bool = True,
     *,
-    owner: Optional[str] = None,
-    repo: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
+) -> dict[str, Any]:
     """Commit and optionally push specific files from the persistent repo mirror."""
 
     if not files:
@@ -168,9 +168,9 @@ async def commit_workspace_files(
 async def get_workspace_changes_summary(
     full_name: str,
     ref: str = "main",
-    path_prefix: Optional[str] = None,
+    path_prefix: str | None = None,
     max_files: int = 200,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Summarize modified, added, deleted, renamed, and untracked files in the repo mirror."""
 
     deps = _tw()._workspace_deps()
@@ -189,7 +189,7 @@ async def get_workspace_changes_summary(
         prefix = path_prefix.rstrip("/")
         return path == prefix or path.startswith(prefix + "/")
 
-    changes: List[Dict[str, Any]] = []
+    changes: list[dict[str, Any]] = []
     summary = {
         "modified": 0,
         "added": 0,
@@ -257,11 +257,11 @@ async def build_pr_summary(
     ref: str,
     title: str,
     body: str,
-    changed_files: Optional[List[str]] = None,
-    tests_status: Optional[str] = None,
-    lint_status: Optional[str] = None,
-    breaking_changes: Optional[bool] = None,
-) -> Dict[str, Any]:
+    changed_files: list[str] | None = None,
+    tests_status: str | None = None,
+    lint_status: str | None = None,
+    breaking_changes: bool | None = None,
+) -> dict[str, Any]:
     """Build a normalized JSON summary for a pull request description."""
     return {
         "repo": full_name,

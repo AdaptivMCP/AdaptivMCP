@@ -14,7 +14,7 @@ Design goals:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from github_mcp.server import mcp_tool
 from github_mcp.utils import _normalize_timeout_seconds
@@ -22,13 +22,13 @@ from github_mcp.utils import _normalize_timeout_seconds
 from ._shared import _tw
 
 
-def _text_stats(text: str) -> Tuple[int, int]:
+def _text_stats(text: str) -> tuple[int, int]:
     if not text:
         return (0, 0)
     return (len(text), text.count("\n") + 1)
 
 
-def _slim_terminal_command_payload(payload: Any) -> Dict[str, Any]:
+def _slim_terminal_command_payload(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {"raw": str(payload)}
 
@@ -56,12 +56,12 @@ async def _run_named_step(
     ref: str,
     command: str,
     timeout_seconds: int,
-    workdir: Optional[str],
+    workdir: str | None,
     use_temp_venv: bool,
     installing_dependencies: bool,
     include_raw: bool,
     allow_missing_command: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     raw = await _tw().terminal_command(
         full_name=full_name,
         ref=ref,
@@ -82,7 +82,7 @@ async def _run_named_step(
     else:
         status = "passed" if exit_code == 0 else "failed"
 
-    step: Dict[str, Any] = {
+    step: dict[str, Any] = {
         "name": name,
         "status": status,
         "summary": slim,
@@ -98,10 +98,10 @@ async def run_tests(
     ref: str = "main",
     test_command: str = "pytest",
     timeout_seconds: float = 600,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = False,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
 
     result = await _tw().terminal_command(
@@ -177,10 +177,10 @@ async def run_lint_suite(
     ref: str = "main",
     lint_command: str = "ruff check .",
     timeout_seconds: float = 600,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = False,
     installing_dependencies: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
 
     return await _tw().terminal_command(
@@ -200,13 +200,13 @@ async def run_quality_suite(
     ref: str = "main",
     test_command: str = "pytest -q",
     timeout_seconds: float = 600,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = True,
     lint_command: str = "ruff check .",
-    format_command: Optional[str] = None,
-    typecheck_command: Optional[str] = None,
-    security_command: Optional[str] = None,
+    format_command: str | None = None,
+    typecheck_command: str | None = None,
+    security_command: str | None = None,
     preflight: bool = True,
     fail_fast: bool = True,
     include_raw_step_outputs: bool = False,
@@ -214,7 +214,7 @@ async def run_quality_suite(
     developer_defaults: bool = True,
     auto_fix: bool = False,
     gate_optional_steps: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, 600)
 
     # Developer defaults are enabled by default for this self-hosted MCP server.
@@ -239,7 +239,7 @@ async def run_quality_suite(
         if lint_command.startswith("ruff check") and "--fix" not in lint_command:
             lint_command = lint_command.replace("ruff check", "ruff check --fix")
 
-    suite: Dict[str, Any] = {
+    suite: dict[str, Any] = {
         "repo": full_name,
         "ref": ref,
         "workdir": workdir,
@@ -261,17 +261,17 @@ async def run_quality_suite(
         },
     }
 
-    controller_log: List[str] = [
+    controller_log: list[str] = [
         "Quality suite run:",
         f"- Repo: {full_name}",
         f"- Ref: {ref}",
     ]
 
-    steps: List[Dict[str, Any]] = []
+    steps: list[dict[str, Any]] = []
 
-    optional_failures: List[str] = []
+    optional_failures: list[str] = []
 
-    async def run_optional(name: str, command: Optional[str]) -> Optional[Dict[str, Any]]:
+    async def run_optional(name: str, command: str | None) -> dict[str, Any] | None:
         if not command:
             return None
         step = await _run_named_step(

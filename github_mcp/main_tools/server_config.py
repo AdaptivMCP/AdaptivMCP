@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import github_mcp.server as server
 from github_mcp.config import (
@@ -31,7 +31,7 @@ from github_mcp.server import (
 from github_mcp.utils import REPO_DEFAULTS, REPO_DEFAULTS_PARSE_ERROR, _get_main_module
 
 
-async def get_server_config() -> Dict[str, Any]:
+async def get_server_config() -> dict[str, Any]:
     """Return a safe summary of MCP connector and runtime settings."""
 
     config_payload = {
@@ -72,7 +72,7 @@ async def get_server_config() -> Dict[str, Any]:
     return config_payload
 
 
-async def get_repo_defaults(full_name: Optional[str] = None) -> Dict[str, Any]:
+async def get_repo_defaults(full_name: str | None = None) -> dict[str, Any]:
     """Return default configuration for a GitHub repository."""
 
     main_mod = _get_main_module()

@@ -9,8 +9,9 @@ import re
 import subprocess
 import sys
 import zipfile
+from collections.abc import Mapping
 from types import SimpleNamespace
-from typing import Any, Dict, Mapping
+from typing import Any
 from urllib.parse import unquote, urlparse
 
 from .exceptions import GitHubAPIError, ToolPreflightValidationError
@@ -349,7 +350,7 @@ def require_text(
     return text
 
 
-def _with_numbered_lines(text: str) -> list[Dict[str, Any]]:
+def _with_numbered_lines(text: str) -> list[dict[str, Any]]:
     return [{"line": idx, "text": line} for idx, line in enumerate(text.splitlines(), 1)]
 
 
@@ -381,7 +382,7 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
         return ""
 
 
-def _load_repo_defaults() -> tuple[Dict[str, Dict[str, str]], str | None]:
+def _load_repo_defaults() -> tuple[dict[str, dict[str, str]], str | None]:
     raw_value = os.environ.get("GITHUB_REPO_DEFAULTS")
     if raw_value is None:
         return {}, None
@@ -401,7 +402,7 @@ def _load_repo_defaults() -> tuple[Dict[str, Dict[str, str]], str | None]:
     # Normalize and validate defaults. The server expects a mapping
     # {"owner/repo": {"default_branch": "main"}}.
     # For backwards compatibility, also accept {"owner/repo": "main"}.
-    normalized: Dict[str, Dict[str, str]] = {}
+    normalized: dict[str, dict[str, str]] = {}
     dropped: list[str] = []
     for key, value in parsed.items():
         if not isinstance(key, str) or not key.strip():

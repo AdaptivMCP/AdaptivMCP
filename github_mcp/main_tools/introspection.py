@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.mcp_server.schemas import _jsonable
@@ -8,7 +9,7 @@ from github_mcp.mcp_server.schemas import _jsonable
 from ._main import _main
 
 
-def list_write_tools() -> Dict[str, Any]:
+def list_write_tools() -> dict[str, Any]:
     """Describe write-capable tools exposed by this server.
 
     This is a lightweight summary that avoids scanning the full module.
@@ -158,7 +159,7 @@ def _clean_description(text: str) -> str:
     return str(text).strip()
 
 
-def _write_gate_state() -> Dict[str, bool]:
+def _write_gate_state() -> dict[str, bool]:
     m = _main()
     write_allowed = bool(getattr(m, "WRITE_ALLOWED", True))
     return {
@@ -182,8 +183,8 @@ def _tool_registry() -> list[tuple[Any, Any]]:
 
 
 def list_all_actions(
-    include_parameters: bool = False, compact: Optional[bool] = None
-) -> Dict[str, Any]:
+    include_parameters: bool = False, compact: bool | None = None
+) -> dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
     Canonical “schema registry” used by clients.
@@ -193,7 +194,7 @@ def list_all_actions(
     m = _main()
     compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
 
-    tools: List[Dict[str, Any]] = []
+    tools: list[dict[str, Any]] = []
     gate = _write_gate_state()
     write_auto_approved = gate["write_auto_approved"]
     seen_names: set[str] = set()
@@ -227,7 +228,7 @@ def list_all_actions(
 
         base_write_action = bool(_tool_attr(tool, func, "write_action", False))
         approval_required = _approval_required(base_write_action, write_auto_approved)
-        tool_info: Dict[str, Any] = {
+        tool_info: dict[str, Any] = {
             "name": name_str,
             "visibility": str(visibility),
             # Correct semantic classification:
@@ -284,7 +285,7 @@ def list_all_actions(
 
     if "list_all_actions" not in seen_names:
         approval_required = _approval_required(False, write_auto_approved)
-        synthetic: Dict[str, Any] = {
+        synthetic: dict[str, Any] = {
             "name": "list_all_actions",
             "description": "Enumerate every available MCP tool with optional schemas.",
             "visibility": "public",
@@ -316,8 +317,8 @@ def list_all_actions(
 
 
 def list_write_actions(
-    include_parameters: bool = False, compact: Optional[bool] = None
-) -> Dict[str, Any]:
+    include_parameters: bool = False, compact: bool | None = None
+) -> dict[str, Any]:
     """Enumerate write-capable MCP tools with optional schemas."""
 
     catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
@@ -331,15 +332,15 @@ def list_write_actions(
 async def list_tools(
     only_write: bool = False,
     only_read: bool = False,
-    name_prefix: Optional[str] = None,
-) -> Dict[str, Any]:
+    name_prefix: str | None = None,
+) -> dict[str, Any]:
     """Lightweight tool catalog."""
 
     if only_write and only_read:
         raise ValueError("only_write and only_read cannot both be true")
 
     catalog = list_all_actions(include_parameters=False, compact=True)
-    tools: List[Dict[str, Any]] = []
+    tools: list[dict[str, Any]] = []
     for entry in catalog.get("tools", []) or []:
         name = entry.get("name")
         if not isinstance(name, str):
@@ -373,10 +374,10 @@ async def list_tools(
 
 
 async def describe_tool(
-    name: Optional[str] = None,
-    names: Optional[List[str]] = None,
+    name: str | None = None,
+    names: list[str] | None = None,
     include_parameters: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Inspect one or more registered MCP tools by name."""
 
     if names is None or len(names) == 0:
@@ -385,7 +386,7 @@ async def describe_tool(
         names = [name]
     else:
         seen = set()
-        normalized: List[str] = []
+        normalized: list[str] = []
         for candidate in names:
             if not isinstance(candidate, str):
                 raise TypeError("names must be a list of strings.")
@@ -404,8 +405,8 @@ async def describe_tool(
     catalog = list_all_actions(include_parameters=include_parameters, compact=False)
     tools_index = {entry.get("name"): entry for entry in catalog.get("tools", [])}
 
-    found: List[Dict[str, Any]] = []
-    missing: List[str] = []
+    found: list[dict[str, Any]] = []
+    missing: list[str] = []
 
     for tool_name2 in names:
         entry = tools_index.get(tool_name2)
@@ -417,7 +418,7 @@ async def describe_tool(
     if not found:
         raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
 
-    result: Dict[str, Any] = {"tools": found}
+    result: dict[str, Any] = {"tools": found}
     first = found[0]
     for key, value in first.items():
         result.setdefault(key, value)
@@ -428,7 +429,7 @@ async def describe_tool(
     return result
 
 
-def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+def _validate_single_tool_args(tool_name: str, args: Mapping[str, Any] | None) -> dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
 
     if args is not None and not isinstance(args, Mapping):
@@ -443,11 +444,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
             break
     if tool is None or func is None:
         available = sorted(
-            set(
-                _registered_tool_name(tool, func)
-                for tool, func in _tool_registry()
-                if _registered_tool_name(tool, func)
-            )
+            {name for tool, func in _tool_registry() if (name := _registered_tool_name(tool, func))}
         )
         raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
 
@@ -458,7 +455,7 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
     # Schema validation has been intentionally removed. This helper now performs
     # only minimal shape checks (payload must be an object) and returns the
     # tool's published schema (when available) so clients can self-validate.
-    errors: List[Dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
 
     if args is not None and not isinstance(args, Mapping):
         errors.append(
@@ -492,6 +489,6 @@ def _validate_single_tool_args(tool_name: str, args: Optional[Mapping[str, Any]]
     }
 
 
-async def validate_tool_args(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+async def validate_tool_args(*args: Any, **kwargs: Any) -> dict[str, Any]:
     """Deprecated. Schema validation has been removed."""
     raise NotImplementedError("validate_tool_args has been removed")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Literal
 
 from github_mcp.utils import _normalize_repo_path_for_repo
 
@@ -215,7 +215,7 @@ query(
 """
 
 
-def _split_full_name(full_name: str) -> Tuple[str, str]:
+def _split_full_name(full_name: str) -> tuple[str, str]:
     if "/" not in full_name:
         raise ValueError("full_name must be in owner/repo format")
     owner, repo = full_name.split("/", 1)
@@ -224,13 +224,13 @@ def _split_full_name(full_name: str) -> Tuple[str, str]:
     return owner, repo
 
 
-def _lower_enum(value: Any) -> Optional[str]:
+def _lower_enum(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
     return value.lower()
 
 
-def _normalize_actor(actor: Any) -> Optional[Dict[str, Any]]:
+def _normalize_actor(actor: Any) -> dict[str, Any] | None:
     if not isinstance(actor, dict):
         return None
     login = actor.get("login")
@@ -243,11 +243,11 @@ def _normalize_actor(actor: Any) -> Optional[Dict[str, Any]]:
     }
 
 
-def _normalize_user_nodes(connection: Any) -> List[Dict[str, Any]]:
+def _normalize_user_nodes(connection: Any) -> list[dict[str, Any]]:
     nodes = connection.get("nodes") if isinstance(connection, dict) else None
     if not isinstance(nodes, list):
         return []
-    normalized: List[Dict[str, Any]] = []
+    normalized: list[dict[str, Any]] = []
     for node in nodes:
         user = _normalize_actor(node)
         if user is not None:
@@ -255,11 +255,11 @@ def _normalize_user_nodes(connection: Any) -> List[Dict[str, Any]]:
     return normalized
 
 
-def _normalize_label_nodes(connection: Any) -> List[Dict[str, Any]]:
+def _normalize_label_nodes(connection: Any) -> list[dict[str, Any]]:
     nodes = connection.get("nodes") if isinstance(connection, dict) else None
     if not isinstance(nodes, list):
         return []
-    labels: List[Dict[str, Any]] = []
+    labels: list[dict[str, Any]] = []
     for node in nodes:
         if not isinstance(node, dict):
             continue
@@ -276,7 +276,7 @@ def _normalize_label_nodes(connection: Any) -> List[Dict[str, Any]]:
     return labels
 
 
-def _normalize_issue(node: Any) -> Dict[str, Any]:
+def _normalize_issue(node: Any) -> dict[str, Any]:
     if not isinstance(node, dict):
         return {}
     milestone = node.get("milestone")
@@ -312,7 +312,7 @@ def _normalize_issue(node: Any) -> Dict[str, Any]:
     }
 
 
-def _normalize_pull_request(node: Any) -> Dict[str, Any]:
+def _normalize_pull_request(node: Any) -> dict[str, Any]:
     if not isinstance(node, dict):
         return {}
     return {
@@ -345,7 +345,7 @@ def _normalize_pull_request(node: Any) -> Dict[str, Any]:
     }
 
 
-def _normalize_workflow_run(node: Any) -> Dict[str, Any]:
+def _normalize_workflow_run(node: Any) -> dict[str, Any]:
     if not isinstance(node, dict):
         return {}
     workflow = node.get("workflow") if isinstance(node.get("workflow"), dict) else {}
@@ -365,7 +365,7 @@ def _normalize_workflow_run(node: Any) -> Dict[str, Any]:
     }
 
 
-def _format_graphql_errors(errors: Any) -> Optional[str]:
+def _format_graphql_errors(errors: Any) -> str | None:
     if not errors:
         return None
     if isinstance(errors, list):
@@ -386,8 +386,8 @@ async def list_open_issues_graphql(
     full_name: str,
     state: Literal["open", "closed", "all"] = "open",
     per_page: int = 30,
-    cursor: Optional[str] = None,
-) -> Dict[str, Any]:
+    cursor: str | None = None,
+) -> dict[str, Any]:
     """List issues using GraphQL, excluding pull requests."""
 
     if per_page <= 0:
@@ -399,7 +399,7 @@ async def list_open_issues_graphql(
     if state not in {"open", "closed", "all"}:
         raise ValueError("state must be 'open', 'closed', or 'all'")
 
-    states: List[str]
+    states: list[str]
     if state == "all":
         states = ["OPEN", "CLOSED"]
     else:
@@ -445,9 +445,9 @@ async def list_open_issues_graphql(
 async def list_workflow_runs_graphql(
     full_name: str,
     per_page: int = 30,
-    cursor: Optional[str] = None,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
+    cursor: str | None = None,
+    branch: str | None = None,
+) -> dict[str, Any]:
     """List recent GitHub Actions workflow runs using GraphQL."""
 
     if per_page <= 0:
@@ -497,9 +497,9 @@ async def list_workflow_runs_graphql(
 
 async def list_recent_failures_graphql(
     full_name: str,
-    branch: Optional[str] = None,
+    branch: str | None = None,
     limit: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List recent failed/cancelled workflow runs using GraphQL."""
 
     if limit <= 0:
@@ -527,20 +527,23 @@ async def list_recent_failures_graphql(
         "startup_failure",
     }
 
-    failures: List[Dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
     for run in raw_runs:
         if not isinstance(run, dict):
             continue
         status = run.get("status")
         conclusion = run.get("conclusion")
 
-        if conclusion in failure_conclusions:
-            include = True
-        elif status == "completed" and conclusion not in (
-            None,
-            "success",
-            "neutral",
-            "skipped",
+        if (
+            conclusion in failure_conclusions
+            or status == "completed"
+            and conclusion
+            not in (
+                None,
+                "success",
+                "neutral",
+                "skipped",
+            )
         ):
             include = True
         else:
@@ -563,8 +566,8 @@ async def list_recent_failures_graphql(
 
 async def get_repo_dashboard_graphql(
     full_name: str,
-    branch: Optional[str] = None,
-) -> Dict[str, Any]:
+    branch: str | None = None,
+) -> dict[str, Any]:
     """Return a compact dashboard using GraphQL as a fallback."""
 
     owner, repo = _split_full_name(full_name)
@@ -651,7 +654,7 @@ async def get_repo_dashboard_graphql(
 
     tree_object = repo_data.get("object") if isinstance(repo_data, dict) else {}
     entries = tree_object.get("entries") if isinstance(tree_object, dict) else []
-    top_level_tree: List[Dict[str, Any]] = []
+    top_level_tree: list[dict[str, Any]] = []
     if isinstance(entries, list):
         for entry in entries:
             if not isinstance(entry, dict):

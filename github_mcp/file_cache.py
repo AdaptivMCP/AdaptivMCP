@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict
-from typing import Dict, Iterable, Optional
+from collections.abc import Iterable
 
 from . import config
 
@@ -21,7 +21,7 @@ class FileCache:
     def __init__(self, max_entries: int, max_bytes: int):
         self.max_entries = max_entries
         self.max_bytes = max_bytes
-        self._cache: "OrderedDict[str, Dict]" = OrderedDict()
+        self._cache: OrderedDict[str, dict] = OrderedDict()
         self._current_bytes = 0
 
     def _evict_if_needed(self) -> None:
@@ -33,7 +33,7 @@ class FileCache:
             _, evicted = self._cache.popitem(last=False)
             self._current_bytes -= evicted.get("size_bytes", 0)
 
-    def put(self, key: str, value: Dict) -> None:
+    def put(self, key: str, value: dict) -> None:
         """Insert ``value`` keyed by ``key`` and evict if over caps."""
 
         if key in self._cache:
@@ -45,15 +45,15 @@ class FileCache:
         self._current_bytes += value.get("size_bytes", 0)
         self._evict_if_needed()
 
-    def get(self, key: str) -> Optional[Dict]:
+    def get(self, key: str) -> dict | None:
         item = self._cache.get(key)
         if item is None:
             return None
         self._cache.move_to_end(key)
         return item
 
-    def bulk_get(self, keys: Iterable[str]) -> Dict[str, Dict]:
-        results: Dict[str, Dict] = {}
+    def bulk_get(self, keys: Iterable[str]) -> dict[str, dict]:
+        results: dict[str, dict] = {}
         for key in keys:
             item = self.get(key)
             if item is not None:
@@ -64,7 +64,7 @@ class FileCache:
         self._cache.clear()
         self._current_bytes = 0
 
-    def stats(self) -> Dict[str, int]:
+    def stats(self) -> dict[str, int]:
         return {
             "entries": len(self._cache),
             "bytes": self._current_bytes,
@@ -88,8 +88,8 @@ def cache_payload(
     full_name: str,
     ref: str,
     path: str,
-    decoded: Dict,
-) -> Dict:
+    decoded: dict,
+) -> dict:
     size_bytes = 0
     decoded_bytes = decoded.get("decoded_bytes")
     if isinstance(decoded_bytes, (bytes, bytearray)):
@@ -108,11 +108,11 @@ def cache_payload(
     return entry
 
 
-def get_cached(full_name: str, ref: str, path: str) -> Optional[Dict]:
+def get_cached(full_name: str, ref: str, path: str) -> dict | None:
     return FILE_CACHE.get(cache_key(full_name, ref, path))
 
 
-def bulk_get_cached(full_name: str, ref: str, paths: Iterable[str]) -> Dict[str, Dict]:
+def bulk_get_cached(full_name: str, ref: str, paths: Iterable[str]) -> dict[str, dict]:
     keys = [cache_key(full_name, ref, path) for path in paths]
     entries = FILE_CACHE.bulk_get(keys)
     # Map back to paths for easier consumption by callers.
@@ -124,5 +124,5 @@ def clear_cache() -> None:
     FILE_CACHE.clear()
 
 
-def cache_stats() -> Dict[str, int]:
+def cache_stats() -> dict[str, int]:
     return FILE_CACHE.stats()

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import sys
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 
+from github_mcp.config import (
+    GITHUB_MCP_MAX_FETCH_URL_BYTES,
+    GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS,
+)
 from github_mcp.http_clients import (
     _external_client_instance as _default_external_client_instance,
 )
@@ -15,11 +19,6 @@ from github_mcp.server import (
 )
 from github_mcp.server import (
     _structured_tool_error as _default_structured_tool_error,
-)
-
-from github_mcp.config import (
-    GITHUB_MCP_MAX_FETCH_URL_BYTES,
-    GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS,
 )
 
 
@@ -39,7 +38,7 @@ def _resolve_main_helper(name: str, default):
     return default
 
 
-async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def graphql_query(query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
     """Execute a GitHub GraphQL query using the shared HTTP client."""
 
     github_request = _resolve_main_helper("_github_request", _default_github_request)
@@ -70,7 +69,7 @@ async def graphql_query(query: str, variables: Optional[Dict[str, Any]] = None) 
     )
 
 
-async def fetch_url(url: str) -> Dict[str, Any]:
+async def fetch_url(url: str) -> dict[str, Any]:
     """Fetch an arbitrary HTTP/HTTPS URL via the shared external client."""
 
     external_client_instance = _resolve_main_helper(
@@ -96,8 +95,8 @@ async def fetch_url(url: str) -> Dict[str, Any]:
 
     body = bytearray()
     truncated = False
-    status_code: Optional[int] = None
-    response_headers: Dict[str, Any] = {}
+    status_code: int | None = None
+    response_headers: dict[str, Any] = {}
 
     async with get_concurrency_semaphore():
         try:
@@ -141,7 +140,7 @@ async def fetch_url(url: str) -> Dict[str, Any]:
         content = content[:max_text_chars]
         truncated = True
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "status_code": status_code,
         "headers": headers,
         "content_type": headers.get("content-type"),
@@ -159,9 +158,9 @@ async def search(
     search_type: Literal["code", "repositories", "issues", "commits", "users"] = "code",
     per_page: int = 30,
     page: int = 1,
-    sort: Optional[str] = None,
-    order: Optional[Literal["asc", "desc"]] = None,
-) -> Dict[str, Any]:
+    sort: str | None = None,
+    order: Literal["asc", "desc"] | None = None,
+) -> dict[str, Any]:
     """Perform GitHub search queries (code, repos, issues, commits, or users)."""
 
     github_request = _resolve_main_helper("_github_request", _default_github_request)
@@ -194,7 +193,7 @@ async def search(
             context="search",
         )
 
-    params: Dict[str, Any] = {"q": query, "per_page": per_page, "page": page}
+    params: dict[str, Any] = {"q": query, "per_page": per_page, "page": page}
     if sort:
         params["sort"] = sort
     if order is not None:
