@@ -587,8 +587,7 @@ def _build_tool_docstring(
 
 
 def _normalize_input_schema(tool_obj: Any) -> dict[str, Any] | None:
-    """
-    Best-effort extraction of an input schema from an MCP tool object.
+    """Best-effort extraction of an input schema from an MCP tool object.
 
     We support multiple likely attribute names to avoid tight coupling to one framework version.
 

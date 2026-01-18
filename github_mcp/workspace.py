@@ -180,8 +180,7 @@ async def _run_shell(
 
 
 def _append_git_config_env(env: dict[str, str], key: str, value: str) -> None:
-    """
-    Append a git config entry via environment variables (GIT_CONFIG_COUNT, etc.).
+    """Append a git config entry via environment variables (GIT_CONFIG_COUNT, etc.).
     This avoids putting secrets on the command line.
     """
     # Git reads these: GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>

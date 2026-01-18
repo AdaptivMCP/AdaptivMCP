@@ -1520,8 +1520,7 @@ def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
 
 
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
-    """
-    Legacy enforcement hook.
+    """Legacy enforcement hook.
 
     This function is intentionally a no-op for compatibility.
     """
@@ -2667,8 +2666,7 @@ def _filter_kwargs_for_signature(
 
 
 def _fastmcp_call_style(params: tuple[inspect.Parameter, ...] | None) -> str:
-    """
-    Determine safest call style:
+    """Determine safest call style:
     - If first param is name: needs to use decorator factory style (tool(name=...)(fn)).
     - If first param is fn/func/etc: can use direct call tool(fn, ...).
     - Unknown: try factory first, then direct.

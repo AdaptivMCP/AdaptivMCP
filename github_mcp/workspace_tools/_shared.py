@@ -168,8 +168,7 @@ async def _delete_branch_via_workspace(
 
 
 def _workspace_deps() -> dict[str, Any]:
-    """
-    Return workspace dependencies.
+    """Return workspace dependencies.
 
     Important change: wrap run_shell so that any git command automatically
     receives the GitHub auth header env (GIT_HTTP_EXTRAHEADER + config-env),

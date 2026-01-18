@@ -110,8 +110,7 @@ def _parse_bool(value: str | None) -> bool:
 
 
 class _WriteAllowedFlag:
-    """
-    Drop-in compatible:
+    """Drop-in compatible:
     - bool(WRITE_ALLOWED)
     - WRITE_ALLOWED.value
     - WRITE_ALLOWED.value = True/False
@@ -138,8 +137,7 @@ WRITE_ALLOWED = _WriteAllowedFlag()
 
 
 def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
-    """
-    Compatibility shim returning True.
+    """Compatibility shim returning True.
 
     refresh_after_seconds is ignored but kept for backwards compatibility.
     """
@@ -149,8 +147,7 @@ def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
 
 
 def set_write_allowed(approved: bool) -> bool:
-    """
-    Compatibility shim for legacy callers.
+    """Compatibility shim for legacy callers.
     """
     del approved
     WRITE_ALLOWED._cache_value = True
