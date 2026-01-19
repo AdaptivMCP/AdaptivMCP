@@ -1340,6 +1340,22 @@ def _schema_hash(schema: Mapping[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
 
 
+def _schema_needs_update(existing: Mapping[str, Any], desired: Mapping[str, Any]) -> bool:
+    existing_required = existing.get("required")
+    desired_required = desired.get("required")
+    existing_set = (
+        {name for name in existing_required if isinstance(name, str)}
+        if isinstance(existing_required, list)
+        else set()
+    )
+    desired_set = (
+        {name for name in desired_required if isinstance(name, str)}
+        if isinstance(desired_required, list)
+        else set()
+    )
+    return bool(desired_set - existing_set)
+
+
 def _apply_tool_metadata(
     tool_obj: Any,
     schema: Mapping[str, Any],
@@ -1374,7 +1390,10 @@ def _apply_tool_metadata(
                 meta = None
 
     existing_schema = _normalize_input_schema(tool_obj)
-    if not isinstance(existing_schema, Mapping):
+    should_set_schema = not isinstance(existing_schema, Mapping)
+    if isinstance(existing_schema, Mapping):
+        should_set_schema = _schema_needs_update(existing_schema, schema)
+    if should_set_schema:
         try:
             tool_obj.input_schema = schema
             # Some clients/framework versions prefer camelCase.
@@ -3256,9 +3275,9 @@ exc=exc,
                 annotations=annotations,
             )
 
-            schema = _normalize_input_schema(wrapper.__mcp_tool__)
+            schema = _schema_from_signature(signature, tool_name=tool_name)
             if not isinstance(schema, Mapping):
-                schema = _schema_from_signature(signature, tool_name=tool_name)
+                schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
                 raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
             wrapper.__mcp_input_schema__ = schema
@@ -3526,9 +3545,9 @@ exc=exc,
             annotations=annotations,
         )
 
-        schema = _normalize_input_schema(wrapper.__mcp_tool__)
+        schema = _schema_from_signature(signature, tool_name=tool_name)
         if not isinstance(schema, Mapping):
-            schema = _schema_from_signature(signature, tool_name=tool_name)
+            schema = _normalize_input_schema(wrapper.__mcp_tool__)
         if not isinstance(schema, Mapping):
             raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
         wrapper.__mcp_input_schema__ = schema
