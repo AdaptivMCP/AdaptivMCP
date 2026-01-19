@@ -1600,6 +1600,29 @@ def _merge_invocation_metadata(
     return out
 
 
+def _refresh_tool_annotations_for_invocation(
+    func: Any, *, effective_write_action: bool
+) -> None:
+    """Best-effort update of tool annotations for the current invocation."""
+
+    try:
+        tool_obj = getattr(func, "__mcp_tool__", None)
+    except Exception:
+        tool_obj = None
+    if tool_obj is None:
+        return
+
+    try:
+        annotations = _resolve_invocation_annotations(
+            func, effective_write_action=effective_write_action
+        )
+        if annotations:
+            _attach_tool_annotations(tool_obj, annotations)
+    except Exception:
+        # Best-effort: do not interfere with tool execution.
+        return
+
+
 def _schema_summary(schema: Mapping[str, Any], *, max_fields: int = 8) -> str:
     """Create a compact, UI-friendly parameter summary from a JSON schema."""
 
@@ -3173,6 +3196,10 @@ def mcp_tool(
                         # Best-effort; preserve base classification.
                         effective_write_action = bool(write_action)
 
+                _refresh_tool_annotations_for_invocation(
+                    wrapper, effective_write_action=effective_write_action
+                )
+
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
                 schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
@@ -3456,6 +3483,10 @@ def mcp_tool(
                     effective_write_action = bool(write_action_resolver(basis))
                 except Exception:
                     effective_write_action = bool(write_action)
+
+            _refresh_tool_annotations_for_invocation(
+                wrapper, effective_write_action=effective_write_action
+            )
 
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
@@ -3768,15 +3799,30 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 ui = getattr(func, "__mcp_ui__", None)
             except Exception:
                 ui = None
+            tags = None
+            try:
+                tags = getattr(func, "__mcp_tags__", None)
+            except Exception:
+                tags = None
 
             _apply_tool_metadata(
                 tool_obj,
                 schema,
                 visibility,
+                tags=tags,
                 write_action=base_write,
                 write_allowed=allowed,
                 ui=ui if isinstance(ui, Mapping) else None,
             )
+
+            try:
+                annotations = _resolve_invocation_annotations(
+                    func, effective_write_action=bool(base_write)
+                )
+                if annotations:
+                    _attach_tool_annotations(tool_obj, annotations)
+            except Exception:
+                pass
 
             # Keep the tool description aligned (for UIs that only render description).
             if isinstance(schema, Mapping):
