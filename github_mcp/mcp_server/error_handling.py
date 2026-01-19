@@ -27,6 +27,22 @@ from github_mcp.exceptions import (
 _HIGH_ENTROPY_RE = re.compile(r"^[A-Za-z0-9_\-]{48,}$")
 
 
+def _preview_text(text: str, *, head: int = 32, tail: int = 24) -> tuple[str, str]:
+    """Return (head, tail) previews for long strings.
+
+    This intentionally preserves a small amount of context while keeping values
+    bounded for logs and tool outputs.
+    """
+
+    if not isinstance(text, str) or not text:
+        return ("", "")
+    head = max(0, int(head))
+    tail = max(0, int(tail))
+    if len(text) <= head + tail:
+        return (text, "")
+    return (text[:head], text[-tail:] if tail else "")
+
+
 def _sanitize_debug_value(value: Any, *, max_depth: int = 6, _depth: int = 0) -> Any:
     """Return a debug-safe version of arbitrary values.
 
@@ -52,10 +68,15 @@ def _sanitize_debug_value(value: Any, *, max_depth: int = 6, _depth: int = 0) ->
             return "<REDACTED_TOKEN>"
         # Redact high-entropy / token-like strings entirely.
         if len(s) >= 48 and _HIGH_ENTROPY_RE.match(s):
-            return "<REDACTED_VALUE>"
+            return f"<REDACTED_VALUE len={len(s)}>"
         # Avoid emitting very long strings (diffs, blobs, etc.).
         if len(s) > 200:
-            return "<TRUNCATED_TEXT>"
+            h, t = _preview_text(s)
+            # Keep previews single-line.
+            h = h.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+            t = t.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+            # NOTE: redact_any() runs later on the whole payload.
+            return f"<TRUNCATED_TEXT len={len(s)} head={h!r} tail={t!r}>"
         return s
 
     if isinstance(value, (bytes, bytearray)):

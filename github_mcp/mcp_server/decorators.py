@@ -12,6 +12,7 @@ import functools
 import hashlib
 import importlib
 import inspect
+import logging
 import json
 import os
 import re
@@ -51,6 +52,33 @@ from github_mcp.redaction import redact_any
 
 # Intentionally short logger name; config's formatter further shortens/colorizes.
 LOGGER = BASE_LOGGER.getChild("mcp")
+
+# Best-effort helpers sometimes swallow exceptions to preserve tool behavior.
+# To avoid masking information (and to keep logs from becoming noisy), we emit
+# a single log line per unique key.
+_LOG_ONCE_KEYS: set[str] = set()
+
+
+def _log_once(
+    key: str,
+    level: int,
+    message: str,
+    *,
+    exc: BaseException | None = None,
+    extra: Mapping[str, Any] | None = None,
+) -> None:
+    if not isinstance(key, str) or not key:
+        key = "<unknown>"
+    if key in _LOG_ONCE_KEYS:
+        return
+    _LOG_ONCE_KEYS.add(key)
+    payload: dict[str, Any] = dict(extra) if isinstance(extra, Mapping) else {}
+    payload.setdefault("event", "best_effort_exception")
+    payload.setdefault("key", key)
+    try:
+        LOGGER.log(level, message, extra=payload, exc_info=exc if (exc and LOG_TOOL_EXC_INFO) else None)
+    except Exception:
+        return
 
 
 def _env_flag(name: str, *, default: bool = False) -> bool:
@@ -1965,8 +1993,14 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
         # Surface stdout/stderr in ChatGPT-friendly payloads.
         try:
             _inject_stdout_stderr(out)
-        except Exception:
-            pass
+        except Exception as exc:
+            _log_once(
+                "stdout_stderr_injection_failed",
+                logging.DEBUG,
+                "Failed to inject stdout/stderr into shaped tool result",
+                exc=exc,
+                extra={"event": "stdout_stderr_injection_failed"},
+            )
 
         truncated_fields: list[str] = []
 
@@ -3255,9 +3289,15 @@ def mcp_tool(
                 if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
                     try:
                         client_payload = redact_any(client_payload)
-                    except Exception:
-                        # Best-effort: never break tool behavior.
-                        pass
+                    except Exception as exc:
+                        # Best-effort: never break tool behavior, but do not hide failures.
+                        _log_once(
+                            "tool_output_redaction_failed",
+                            logging.WARNING,
+                            "Tool output redaction failed; returning unredacted payload",
+                            exc=exc,
+                            extra={"event": "tool_output_redaction_failed"},
+                        )
                 return _chatgpt_friendly_result(client_payload, req=req)
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -3525,9 +3565,14 @@ def mcp_tool(
             if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
                 try:
                     client_payload = redact_any(client_payload)
-                except Exception:
-                    # Best-effort: never break tool behavior.
-                    pass
+                except Exception as exc:
+                    _log_once(
+                        "tool_output_redaction_failed",
+                        logging.WARNING,
+                        "Tool output redaction failed; returning unredacted payload",
+                        exc=exc,
+                        extra={"event": "tool_output_redaction_failed"},
+                    )
             return _chatgpt_friendly_result(client_payload, req=req)
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -3698,5 +3743,18 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                             tool_obj.description = "\n".join([first] + rest).strip()
                 except Exception:
                     pass
-        except Exception:
+        except Exception as exc:
+            name = None
+            try:
+                name = _registered_tool_name(tool_obj, func)
+            except Exception:
+                name = getattr(tool_obj, "name", None) or getattr(func, "__name__", None)
+            key = f"tool_metadata_refresh_failed:{name or 'unknown'}"
+            _log_once(
+                key,
+                logging.WARNING,
+                "Failed to refresh registered tool metadata",
+                exc=exc,
+                extra={"event": "tool_metadata_refresh_failed", "tool": name},
+            )
             continue
