@@ -64,12 +64,18 @@ async def list_workspace_files(
     max_depth: int | None = None,
     include_hidden: bool = False,
     include_dirs: bool = False,
+    cursor: int = 0,
     *,
     owner: str | None = None,
     repo: str | None = None,
     branch: str | None = None,
 ) -> dict[str, Any]:
-    """List files in the repo mirror (workspace clone)."""
+    """List files in the repo mirror (workspace clone).
+
+    This endpoint is designed to work for very large repos:
+    - Enforces `max_files` and `max_depth` (unlike earlier versions).
+    - Supports simple pagination via `cursor` (an integer offset).
+    """
 
     # Alias: some clients use max_results instead of max_files.
     if max_results is not None:
@@ -112,40 +118,252 @@ async def list_workspace_files(
                 "max_depth": max_depth,
             }
 
+        # Output limits.
+        if max_files is None:
+            max_files = 5000
+        if not isinstance(max_files, int) or max_files < 1:
+            raise ValueError("max_files must be an int >= 1")
+        if max_depth is None:
+            max_depth = 25
+        if not isinstance(max_depth, int) or max_depth < 0:
+            raise ValueError("max_depth must be an int >= 0")
+
+        # Cursor is a simple offset in the ordered result stream.
+        if not isinstance(cursor, int) or cursor < 0:
+            raise ValueError("cursor must be an int >= 0")
+        cursor = int(cursor)
+
         out: list[str] = []
+        skipped = 0
+        yielded = 0
+        next_cursor: int | None = None
+        truncated = False
+
+        def _depth_for_dir(cur_dir: str) -> int:
+            rel = os.path.relpath(cur_dir, start)
+            if rel in {".", ""}:
+                return 0
+            return rel.count(os.sep) + 1
 
         for cur_dir, dirnames, filenames in os.walk(start):
-            # max_depth is accepted for compatibility/observability but is not
-            # enforced as an output limit.
+            # Enforce depth by pruning traversal.
+            depth = _depth_for_dir(cur_dir)
+            if depth >= max_depth:
+                dirnames[:] = []
 
             dirnames[:] = [d for d in dirnames if d != ".git"]
             if not include_hidden:
                 dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+            dirnames.sort()
+            filenames.sort()
 
             if include_dirs:
                 for d in dirnames:
                     rp = os.path.relpath(os.path.join(cur_dir, d), root)
                     if not include_hidden and os.path.basename(rp).startswith("."):
                         continue
+                    if skipped < cursor:
+                        skipped += 1
+                        continue
+                    if yielded >= max_files:
+                        truncated = True
+                        next_cursor = cursor + yielded
+                        break
                     out.append(rp)
+                    yielded += 1
+                if truncated:
+                    break
 
             for f in filenames:
                 if not include_hidden and f.startswith("."):
                     continue
                 rp = os.path.relpath(os.path.join(cur_dir, f), root)
+                if skipped < cursor:
+                    skipped += 1
+                    continue
+                if yielded >= max_files:
+                    truncated = True
+                    next_cursor = cursor + yielded
+                    break
                 out.append(rp)
+                yielded += 1
+            if truncated:
+                break
 
         return {
             "full_name": full_name,
             "ref": effective_ref,
             "path": normalized_path if path else "",
             "files": out,
-            "truncated": False,
+            "truncated": bool(truncated),
+            "cursor": int(cursor),
+            "next_cursor": next_cursor,
             "max_files": max_files,
             "max_depth": max_depth,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="list_workspace_files")
+
+
+@mcp_tool(write_action=False)
+async def find_workspace_paths(
+    full_name: str | None = None,
+    ref: str = "main",
+    path: str = "",
+    *,
+    pattern: str = "",
+    pattern_type: str = "glob",
+    include_files: bool = True,
+    include_dirs: bool = True,
+    include_hidden: bool = False,
+    max_results: int = 500,
+    max_depth: int = 25,
+    cursor: int = 0,
+    include_metadata: bool = False,
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
+) -> dict[str, Any]:
+    """Find paths in the workspace by matching names.
+
+    `pattern_type`:
+      - "glob" (default): fnmatch-style glob applied to the basename.
+      - "regex": Python regex applied to the repo-relative path.
+      - "substring": simple substring match applied to the repo-relative path.
+
+    Returns paths in a stable lexicographic traversal order and supports offset
+    pagination via `cursor`.
+    """
+
+    try:
+        import fnmatch
+
+        deps = _tw()._workspace_deps()
+        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _tw()._resolve_ref(ref, branch=branch)
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        if not isinstance(pattern, str) or not pattern:
+            raise ValueError("pattern must be a non-empty string")
+        if pattern_type not in {"glob", "regex", "substring"}:
+            raise ValueError("pattern_type must be glob/regex/substring")
+        if not isinstance(max_results, int) or max_results < 1:
+            raise ValueError("max_results must be an int >= 1")
+        if not isinstance(max_depth, int) or max_depth < 0:
+            raise ValueError("max_depth must be an int >= 0")
+        if not isinstance(cursor, int) or cursor < 0:
+            raise ValueError("cursor must be an int >= 0")
+
+        root = os.path.realpath(repo_dir)
+        normalized_path, start = _resolve_workspace_start(repo_dir, path)
+        if os.path.isfile(start):
+            start = os.path.dirname(start)
+
+        rex = None
+        needle = None
+        if pattern_type == "regex":
+            rex = re.compile(pattern)
+        elif pattern_type == "substring":
+            needle = pattern
+
+        def _depth_for_dir(cur_dir: str) -> int:
+            rel = os.path.relpath(cur_dir, start)
+            if rel in {".", ""}:
+                return 0
+            return rel.count(os.sep) + 1
+
+        def _match(rel_path: str) -> bool:
+            if pattern_type == "glob":
+                return fnmatch.fnmatch(os.path.basename(rel_path), pattern)
+            if rex is not None:
+                return rex.search(rel_path) is not None
+            return needle in rel_path
+
+        results: list[Any] = []
+        scanned = 0
+        skipped = 0
+        truncated = False
+        next_cursor: int | None = None
+
+        for cur_dir, dirnames, filenames in os.walk(start):
+            depth = _depth_for_dir(cur_dir)
+            if depth >= max_depth:
+                dirnames[:] = []
+            dirnames[:] = [d for d in dirnames if d != ".git"]
+            if not include_hidden:
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+            dirnames.sort()
+            filenames.sort()
+
+            if include_dirs:
+                for d in dirnames:
+                    rp = os.path.relpath(os.path.join(cur_dir, d), root).replace("\\", "/")
+                    if not include_hidden and os.path.basename(rp).startswith("."):
+                        continue
+                    scanned += 1
+                    if not _match(rp):
+                        continue
+                    if skipped < cursor:
+                        skipped += 1
+                        continue
+                    if len(results) >= max_results:
+                        truncated = True
+                        next_cursor = cursor + len(results)
+                        break
+                    if include_metadata:
+                        abs_path = os.path.join(root, rp)
+                        st = os.stat(abs_path)
+                        results.append({"path": rp, "type": "dir", "size_bytes": int(st.st_size)})
+                    else:
+                        results.append(rp)
+                if truncated:
+                    break
+
+            if include_files:
+                for f in filenames:
+                    if not include_hidden and f.startswith("."):
+                        continue
+                    rp = os.path.relpath(os.path.join(cur_dir, f), root).replace("\\", "/")
+                    scanned += 1
+                    if not _match(rp):
+                        continue
+                    if skipped < cursor:
+                        skipped += 1
+                        continue
+                    if len(results) >= max_results:
+                        truncated = True
+                        next_cursor = cursor + len(results)
+                        break
+                    if include_metadata:
+                        abs_path = os.path.join(root, rp)
+                        st = os.stat(abs_path)
+                        results.append({"path": rp, "type": "file", "size_bytes": int(st.st_size)})
+                    else:
+                        results.append(rp)
+                if truncated:
+                    break
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": normalized_path if path else "",
+            "pattern": pattern,
+            "pattern_type": pattern_type,
+            "cursor": int(cursor),
+            "next_cursor": next_cursor,
+            "max_results": int(max_results),
+            "max_depth": int(max_depth),
+            "include_files": bool(include_files),
+            "include_dirs": bool(include_dirs),
+            "include_metadata": bool(include_metadata),
+            "results": results,
+            "truncated": bool(truncated),
+            "scanned": int(scanned),
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="find_workspace_paths")
 
 
 @mcp_tool(write_action=False)
@@ -159,6 +377,7 @@ async def search_workspace(
     regex: bool | None = None,
     max_file_bytes: int | None = None,
     include_hidden: bool = False,
+    cursor: int = 0,
     *,
     owner: str | None = None,
     repo: str | None = None,
@@ -169,8 +388,9 @@ async def search_workspace(
     Behavior for `query`:
     - When regex=true, `query` is treated as a Python regular expression.
     - Otherwise `query` is treated as a literal substring match.
-    - max_results and max_file_bytes are accepted for compatibility/observability
-      but are not enforced as output limits.
+    - max_results is enforced as an output limit and supports offset pagination
+      via `cursor` (cursor is the offset in the global match stream).
+    - max_file_bytes is enforced as a per-file safety limit.
     """
 
     if not isinstance(query, str) or not query:
@@ -182,6 +402,13 @@ async def search_workspace(
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        if max_results is None:
+            max_results = 200
+        if not isinstance(max_results, int) or max_results < 1:
+            raise ValueError("max_results must be an int >= 1")
+        if not isinstance(cursor, int) or cursor < 0:
+            raise ValueError("cursor must be an int >= 0")
 
         root = os.path.realpath(repo_dir)
         normalized_path, start = _resolve_workspace_start(repo_dir, path)
@@ -198,6 +425,8 @@ async def search_workspace(
                 "used_regex": False,
                 "results": [],
                 "truncated": False,
+                "cursor": int(cursor),
+                "next_cursor": None,
                 "files_scanned": 0,
                 "files_skipped": 1,
                 "max_results": max_results,
@@ -234,6 +463,9 @@ async def search_workspace(
         results: list[dict[str, Any]] = []
         files_scanned = 0
         files_skipped = 0
+        matches_seen = 0
+        truncated = False
+        next_cursor: int | None = None
         walk_iter = (
             [(os.path.dirname(start), [], [os.path.basename(start)])]
             if single_file
@@ -243,6 +475,10 @@ async def search_workspace(
             dirnames[:] = [d for d in dirnames if d != ".git"]
             if not include_hidden:
                 dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+            # Keep results deterministic (important for cursor pagination).
+            dirnames.sort()
+            filenames.sort()
 
             for fname in filenames:
                 if not include_hidden and fname.startswith("."):
@@ -264,9 +500,6 @@ async def search_workspace(
                         files_skipped += 1
                         continue
 
-                # max_file_bytes is accepted for compatibility/observability but is not
-                # enforced as an output limit.
-
                 # Skip probable binaries.
                 try:
                     with open(abs_path, "rb") as bf:
@@ -287,6 +520,12 @@ async def search_workspace(
                             if not _match_line(line):
                                 continue
 
+                            # Offset pagination across the global match stream.
+                            if matches_seen < cursor:
+                                matches_seen += 1
+                                continue
+                            matches_seen += 1
+
                             results.append(
                                 {
                                     "file": rel_path,
@@ -294,9 +533,20 @@ async def search_workspace(
                                     "text": line.rstrip("\n"),
                                 }
                             )
+
+                            if len(results) >= max_results:
+                                truncated = True
+                                next_cursor = cursor + len(results)
+                                break
                 except OSError:
                     files_skipped += 1
                     continue
+
+                if truncated:
+                    break
+
+            if truncated:
+                break
 
         # Return after scanning the full walk.
         return {
@@ -307,7 +557,9 @@ async def search_workspace(
             "case_sensitive": case_sensitive,
             "used_regex": used_regex,
             "results": results,
-            "truncated": False,
+            "truncated": bool(truncated),
+            "cursor": int(cursor),
+            "next_cursor": next_cursor,
             "files_scanned": files_scanned,
             "files_skipped": files_skipped,
             "max_results": max_results,
