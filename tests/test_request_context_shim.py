@@ -8,4 +8,3 @@ def test_request_context_shim_exports_canonical_function() -> None:
     # The shim should remain a stable import target while delegating to the
     # canonical implementation.
     assert get_request_context is canonical_get_request_context
-

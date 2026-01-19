@@ -24,7 +24,6 @@ from github_mcp.exceptions import (
     WriteNotAuthorizedError,
 )
 
-
 _HIGH_ENTROPY_RE = re.compile(r"^[A-Za-z0-9_\-]{48,}$")
 
 

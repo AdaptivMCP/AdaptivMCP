@@ -9,7 +9,7 @@ import pytest
 
 TestClient = pytest.importorskip("starlette.testclient").TestClient
 
-import main
+import main  # noqa: E402
 
 
 def _wait_for_status(client: TestClient, invocation_id: str, target: str) -> dict[str, Any]:

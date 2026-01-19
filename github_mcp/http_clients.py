@@ -631,7 +631,11 @@ async def _github_request(
             if retry_delay is None:
                 retry_delay = GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
 
-            if retry_enabled and attempt < max_attempts and retry_delay <= GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS:
+            if (
+                retry_enabled
+                and attempt < max_attempts
+                and retry_delay <= GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS
+            ):
                 await asyncio.sleep(
                     _jitter_sleep_seconds(retry_delay, respect_min=header_delay is not None)
                 )
@@ -640,11 +644,9 @@ async def _github_request(
 
             if not retry_enabled:
                 raise GitHubRateLimitError(
-                    (
-                        f"GitHub rate limit exceeded; retry after {reset_hint} (retries disabled for non-idempotent request)"
-                        if reset_hint
-                        else "GitHub rate limit exceeded (retries disabled for non-idempotent request)"
-                    )
+                    f"GitHub rate limit exceeded; retry after {reset_hint} (retries disabled for non-idempotent request)"
+                    if reset_hint
+                    else "GitHub rate limit exceeded (retries disabled for non-idempotent request)"
                 )
 
             raise GitHubRateLimitError(

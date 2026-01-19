@@ -108,7 +108,9 @@ async def _diagnose_workspace_branch(
     diag["show_current_exit_code"] = show_branch.get("exit_code")
     diag["current_branch"] = (show_branch.get("stdout", "") or "").strip() or None
 
-    status = await deps["run_shell"]("git status --porcelain", cwd=repo_dir, timeout_seconds=t_default)
+    status = await deps["run_shell"](
+        "git status --porcelain", cwd=repo_dir, timeout_seconds=t_default
+    )
     diag["status_exit_code"] = status.get("exit_code")
     diag["status_is_clean"] = not (status.get("stdout", "") or "").strip()
 

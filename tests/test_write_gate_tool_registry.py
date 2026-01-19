@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import datetime
 import typing
-
-from typing_extensions import NotRequired
+from typing import NotRequired
 
 if not hasattr(typing, "NotRequired"):
     typing.NotRequired = NotRequired
 
 if not hasattr(datetime, "UTC"):
-    datetime.UTC = datetime.timezone.utc
+    datetime.UTC = datetime.UTC
 
 import main
 from github_mcp.main_tools import introspection
