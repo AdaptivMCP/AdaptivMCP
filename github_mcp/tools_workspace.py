@@ -140,6 +140,9 @@ commit_and_open_pr_from_workspace = _pr.commit_and_open_pr_from_workspace
 
 workspace_apply_ops_and_open_pr = _workflows.workspace_apply_ops_and_open_pr
 
+# Read-only "what changed" aggregator.
+workspace_change_report = _workflows.workspace_change_report
+
 # Virtualenv lifecycle tools
 workspace_venv_start = _venv.workspace_venv_start
 workspace_venv_stop = _venv.workspace_venv_stop
@@ -204,6 +207,7 @@ __all__ = [
     "build_pr_summary",
     "commit_and_open_pr_from_workspace",
     "workspace_apply_ops_and_open_pr",
+    "workspace_change_report",
     "workspace_venv_start",
     "workspace_venv_stop",
     "workspace_venv_status",
