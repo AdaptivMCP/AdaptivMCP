@@ -9,7 +9,9 @@ class _FakeTW:
     def __init__(self, repo_dir: str) -> None:
         self.repo_dir = repo_dir
 
-    def _resolve_full_name(self, full_name: str | None, *, owner: str | None, repo: str | None) -> str:
+    def _resolve_full_name(
+        self, full_name: str | None, *, owner: str | None, repo: str | None
+    ) -> str:
         return full_name or f"{owner}/{repo}"  # pragma: no cover
 
     def _resolve_ref(self, ref: str, *, branch: str | None) -> str:
@@ -72,4 +74,3 @@ async def test_scan_workspace_tree_basic(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert b["is_binary"] is True
     assert "line_count" not in b
     assert "head" not in b
-

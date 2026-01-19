@@ -20,7 +20,7 @@ async def commit_and_open_pr_from_workspace(
     commit_message: str = "Commit workspace changes",
     run_quality: bool = False,
     quality_timeout_seconds: float = 0,
-    test_command: str = "pytest",
+    test_command: str = "pytest -q",
     lint_command: str = "ruff check .",
 ) -> dict[str, Any]:
     """Commit repo mirror changes on `ref` and open a PR into `base`.
@@ -46,7 +46,7 @@ async def commit_and_open_pr_from_workspace(
                 lint_command=lint_command,
                 timeout_seconds=quality_timeout_seconds,
                 fail_fast=True,
-                developer_defaults=False,
+                developer_defaults=True,
             )
             if isinstance(quality, dict) and quality.get("status") in {
                 "failed",

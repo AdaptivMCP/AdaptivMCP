@@ -76,4 +76,3 @@ async def test_workspace_git_diff_truncates_and_parses_numstat(
     assert numstat[1]["added"] is None
     assert numstat[1]["removed"] is None
     assert numstat[1]["is_binary"] is True
-

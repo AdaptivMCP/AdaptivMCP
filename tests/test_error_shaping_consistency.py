@@ -38,4 +38,3 @@ def test_mcp_tool_error_is_shaped_and_includes_tool_metadata(monkeypatch):
     tool_meta = shaped.get("tool_metadata")
     assert isinstance(tool_meta, dict)
     assert tool_meta.get("effective_write_action") is False
-
