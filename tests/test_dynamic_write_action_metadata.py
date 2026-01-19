@@ -90,6 +90,43 @@ def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) ->
     assert ann_write.get("openWorldHint") is True
 
 
+def test_registered_tool_annotations_update_on_invocation(monkeypatch) -> None:
+    """Tool registry annotations should reflect the latest invocation classification."""
+
+    from github_mcp.mcp_server import decorators
+
+    class FakeMCP:
+        def tool(self, *, name=None, description=None, meta=None, annotations=None):
+            def decorator(fn):
+                return {"fn": fn, "name": name, "meta": meta, "annotations": annotations}
+
+            return decorator
+
+    monkeypatch.setattr(decorators, "mcp", FakeMCP())
+    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
+
+    def resolver(args: dict[str, Any]) -> bool:
+        return bool(args.get("mode") == "write")
+
+    @decorators.mcp_tool(name="dyn_tool_obj", write_action=True, write_action_resolver=resolver)
+    def dyn_tool_obj(mode: str = "read") -> dict:
+        return {"mode": mode}
+
+    tool_obj = dyn_tool_obj.__mcp_tool__
+
+    out_read = dyn_tool_obj(mode="read")
+    assert out_read.get("tool_metadata", {}).get("effective_write_action") is False
+    ann_read = tool_obj.get("annotations", {})
+    assert ann_read.get("readOnlyHint") is True
+    assert ann_read.get("destructiveHint") is False
+
+    out_write = dyn_tool_obj(mode="write")
+    assert out_write.get("tool_metadata", {}).get("effective_write_action") is True
+    ann_write = tool_obj.get("annotations", {})
+    assert ann_write.get("readOnlyHint") is False
+    assert ann_write.get("destructiveHint") is True
+
+
 def test_http_tool_registry_uses_effective_write_action_for_retries(monkeypatch) -> None:
     """Read-classified invocations may retry; write-classified invocations must not."""
 
