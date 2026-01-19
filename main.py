@@ -711,6 +711,58 @@ async def run_command(
     )
 
 
+async def run_shell(
+    full_name: str,
+    ref: str = "main",
+    command: str = "pytest",
+    timeout_seconds: int = 300,
+    workdir: str | None = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+) -> dict[str, Any]:
+    """Legacy shim retained for tests/backwards-compat.
+
+    Some integrations historically called the workspace terminal runner
+    `run_shell`. This Python-level helper forwards to terminal_command.
+    """
+
+    return await terminal_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+    )
+
+
+async def terminal_commands(
+    full_name: str,
+    ref: str = "main",
+    command: str = "pytest",
+    timeout_seconds: int = 300,
+    workdir: str | None = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+) -> dict[str, Any]:
+    """Legacy shim retained for tests/backwards-compat.
+
+    Some integrations referred to the workspace terminal runner as
+    `terminal_commands`. This Python-level helper forwards to terminal_command.
+    """
+
+    return await terminal_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+    )
+
+
 async def run_tests(
     full_name: str,
     ref: str = "main",

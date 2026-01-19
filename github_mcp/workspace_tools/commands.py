@@ -631,9 +631,9 @@ async def run_python(
 # `terminal_command` replaces it.
 #
 # However, several downstream clients (and prompt templates) still call
-# `run_command`, `run_shell`, or `run_terminal_commands`. To avoid breaking
-# those callers, we keep lightweight MCP-tool aliases that forward to
-# `terminal_command`.
+# `run_command`, `run_shell`, `terminal_commands`, or `run_terminal_commands`.
+# To avoid breaking those callers, we keep lightweight MCP-tool aliases that
+# forward to `terminal_command`.
 
 
 # NOTE: These aliases must preserve the same write/read classification behavior
@@ -694,6 +694,40 @@ async def run_shell_alias(
     """Backward-compatible alias for :func:`terminal_command`.
 
     Some integrations refer to the workspace command runner as `run_shell`.
+    """
+
+    return await terminal_command(
+        full_name=full_name,
+        ref=ref,
+        command=command,
+        command_lines=command_lines,
+        timeout_seconds=timeout_seconds,
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
+        installing_dependencies=installing_dependencies,
+    )
+
+
+@mcp_tool(
+    write_action=True,
+    name="terminal_commands",
+    write_action_resolver=_terminal_command_write_action,
+    open_world_hint=True,
+    destructive_hint=True,
+)
+async def terminal_commands_alias(
+    full_name: str,
+    ref: str = "main",
+    command: str = "pytest",
+    command_lines: list[str] | None = None,
+    timeout_seconds: float = 0,
+    workdir: str | None = None,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = False,
+) -> dict[str, Any]:
+    """Backward-compatible alias for :func:`terminal_command`.
+
+    Some older tool catalogs refer to the terminal runner as `terminal_commands`.
     """
 
     return await terminal_command(
