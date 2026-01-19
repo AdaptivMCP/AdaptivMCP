@@ -29,7 +29,41 @@ from .fs import _is_probably_binary, _read_lines_excerpt, _workspace_safe_join
 
 
 def _rg_available() -> bool:
-    return shutil.which("rg") is not None
+    path = shutil.which("rg")
+    if not path:
+        return False
+    try:
+        return os.access(path, os.X_OK)
+    except Exception:
+        return False
+
+
+def _safe_communicate(proc: subprocess.Popen, *, timeout: float = 5.0) -> tuple[str, str]:
+    """Best-effort communicate that never leaves a child process running.
+
+    Some environments (or unexpected child process states) can cause
+    `proc.communicate()` to block for longer than we want. When a timeout
+    happens, we kill the process and try again to ensure the child is reaped.
+    """
+
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        return out or "", err or ""
+    except subprocess.TimeoutExpired:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            out, err = proc.communicate(timeout=timeout)
+            return out or "", err or ""
+        except Exception:
+            # Final fallback: best-effort drain without a timeout.
+            try:
+                out, err = proc.communicate()
+                return out or "", err or ""
+            except Exception:
+                return "", ""
 
 
 def _normalize_globs(glob: str | list[str] | None) -> list[str]:
@@ -314,94 +348,106 @@ async def rg_search_workspace(
         engine = "python"
 
         if _rg_available():
-            engine = "rg"
-            cmd = ["rg", "--json", "--line-number", "--column"]
-            if not regex:
-                cmd.append("-F")
-            if not case_sensitive:
-                cmd.append("-i")
-            if include_hidden:
-                cmd.append("--hidden")
-            if max_bytes is not None:
-                # rg accepts bytes when passed as an integer string.
-                cmd.extend(["--max-filesize", str(int(max_bytes))])
-            for g in globs:
-                cmd.extend(["--glob", g])
-            cmd.append("--")
-            cmd.append(query)
-
-            proc = subprocess.Popen(
-                cmd,
-                cwd=base_abs,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            assert proc.stdout is not None
             try:
-                for raw in proc.stdout:
-                    raw = raw.strip()
-                    if not raw:
-                        continue
-                    try:
-                        evt = json.loads(raw)
-                    except Exception:
-                        continue
-                    if evt.get("type") != "match":
-                        continue
-                    data = evt.get("data") or {}
-                    rel = data.get("path", {}).get("text")
-                    if not isinstance(rel, str) or not rel:
-                        continue
-                    # Normalize to repo-root relative path.
-                    rel_norm = os.path.normpath(os.path.join(base_rel, rel)).replace("\\", "/")
-                    if not _passes_globs(rel_norm, globs):
-                        continue
-                    line_no = int(data.get("line_number") or 0)
-                    sub = data.get("submatches") or []
-                    col = 1
-                    if sub and isinstance(sub, list) and isinstance(sub[0], dict):
+                engine = "rg"
+                cmd = ["rg", "--json", "--line-number", "--column"]
+                if not regex:
+                    cmd.append("-F")
+                if not case_sensitive:
+                    cmd.append("-i")
+                if include_hidden:
+                    cmd.append("--hidden")
+                if max_bytes is not None:
+                    # rg accepts bytes when passed as an integer string.
+                    cmd.extend(["--max-filesize", str(int(max_bytes))])
+                for g in globs:
+                    cmd.extend(["--glob", g])
+                cmd.append("--")
+                cmd.append(query)
+
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=base_abs,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                assert proc.stdout is not None
+                try:
+                    for raw in proc.stdout:
+                        raw = raw.strip()
+                        if not raw:
+                            continue
                         try:
-                            col = int(sub[0].get("start", 0)) + 1
+                            evt = json.loads(raw)
                         except Exception:
-                            col = 1
-                    text_line = (data.get("lines", {}) or {}).get("text")
-                    if not isinstance(text_line, str):
-                        text_line = ""
-                    text_line = text_line.rstrip("\n")
-                    matches.append(
-                        {
-                            "path": rel_norm,
-                            "line": int(line_no),
-                            "column": int(col),
-                            "text": text_line,
-                        }
-                    )
-                    if len(matches) >= max_results:
-                        truncated = True
-                        break
-            finally:
-                try:
-                    if truncated:
-                        proc.kill()
-                except Exception:
-                    pass
-                try:
-                    _out, _err = proc.communicate(timeout=5)
-                except Exception:
+                            continue
+                        if evt.get("type") != "match":
+                            continue
+                        data = evt.get("data") or {}
+                        rel = data.get("path", {}).get("text")
+                        if not isinstance(rel, str) or not rel:
+                            continue
+                        # Normalize to repo-root relative path.
+                        rel_norm = os.path.normpath(os.path.join(base_rel, rel)).replace("\\", "/")
+                        if not _passes_globs(rel_norm, globs):
+                            continue
+                        line_no = int(data.get("line_number") or 0)
+                        sub = data.get("submatches") or []
+                        col = 1
+                        if sub and isinstance(sub, list) and isinstance(sub[0], dict):
+                            try:
+                                col = int(sub[0].get("start", 0)) + 1
+                            except Exception:
+                                col = 1
+                        text_line = (data.get("lines", {}) or {}).get("text")
+                        if not isinstance(text_line, str):
+                            text_line = ""
+                        text_line = text_line.rstrip("\n")
+                        matches.append(
+                            {
+                                "path": rel_norm,
+                                "line": int(line_no),
+                                "column": int(col),
+                                "text": text_line,
+                            }
+                        )
+                        if len(matches) >= max_results:
+                            truncated = True
+                            break
+                finally:
                     try:
-                        proc.kill()
+                        if truncated and proc.poll() is None:
+                            proc.kill()
                     except Exception:
                         pass
+                    _safe_communicate(proc, timeout=5)
 
-            # rg returns 1 when no matches.
-            if proc.returncode not in (0, 1, None):
-                stderr = ""
-                try:
-                    stderr = proc.stderr.read() if proc.stderr else ""
-                except Exception:
+                # rg returns 1 when no matches.
+                if proc.returncode not in (0, 1, None):
                     stderr = ""
-                raise RuntimeError((stderr or "rg failed").strip())
+                    try:
+                        stderr = proc.stderr.read() if proc.stderr else ""
+                    except Exception:
+                        stderr = ""
+                    raise RuntimeError((stderr or "rg failed").strip())
+
+            except Exception:
+                # If rg is present but fails to execute (PATH issues, permission,
+                # incompatible binary, etc.), fall back to Python so the tool
+                # never hard-fails or wedges on a stuck subprocess.
+                matches, truncated = _python_search(
+                    repo_dir,
+                    base_rel,
+                    query.strip(),
+                    regex=bool(regex),
+                    case_sensitive=bool(case_sensitive),
+                    include_hidden=bool(include_hidden),
+                    globs=globs,
+                    max_results=int(max_results),
+                    max_file_bytes=max_bytes,
+                )
+                engine = "python"
 
         else:
             matches, truncated = _python_search(
