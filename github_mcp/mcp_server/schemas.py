@@ -160,6 +160,12 @@ _PARAM_DOCS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Parameters that should remain required in the public schema even if the
+# Python signature supplies a default for backwards compatibility.
+_REQUIRED_PARAM_OVERRIDES: dict[str, set[str]] = {
+    "search_workspace": {"query"},
+}
+
 
 def _apply_param_docs(schema: dict[str, Any]) -> dict[str, Any]:
     props = schema.get("properties")
@@ -732,6 +738,8 @@ def _schema_from_signature(
     if signature is None:
         return {"type": "object", "properties": {}}
 
+    required_overrides = _REQUIRED_PARAM_OVERRIDES.get(tool_name, set())
+
     for param in signature.parameters.values():
         if param.name == "self":
             continue
@@ -741,7 +749,8 @@ def _schema_from_signature(
         ):
             continue
         param_schema: dict[str, Any] = _annotation_to_schema(param.annotation)
-        if param.default is inspect.Parameter.empty:
+        force_required = param.name in required_overrides
+        if force_required or param.default is inspect.Parameter.empty:
             required.append(param.name)
         else:
             param_schema = dict(param_schema)
