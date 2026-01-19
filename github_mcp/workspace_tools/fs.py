@@ -1764,18 +1764,49 @@ async def replace_workspace_text(
 async def apply_patch(
     full_name: str,
     ref: str = "main",
-    patch: str | list[str] = "",
     *,
+    patch: str | list[str],
     add: bool = False,
     commit: bool = False,
     commit_message: str = "Apply patch",
     push: bool = False,
     check_changes: bool = False,
 ) -> dict[str, Any]:
-    """Apply one or more unified diff patches to the persistent repo mirror."""
+    """Apply one or more unified diff patches to the persistent repo mirror.
+
+    Args:
+      patch: a unified diff string or a list of unified diff strings.
+      add: if true, stage changes after applying.
+      commit: if true, create a local commit after applying (requires changes).
+      push: if true, push the created commit to origin (requires commit=true and a branch ref).
+      check_changes: if true, include `status_output` (git status porcelain) in the response.
+
+    Returns:
+      A dict with stable keys: ref, status, ok, patches_applied (+ optional diff_stats/status_output).
+
+    Notes:
+      - Visual tool logs look for `__log_diff` in the *raw* tool payload. The decorator wrapper
+        strips `__log_*` fields from the client-facing response.
+      - To avoid leaking patch contents in error responses, we only include short digests.
+    """
+
+    debug_args: dict[str, Any] = {
+        "full_name": full_name,
+        "ref": ref,
+        "add": bool(add),
+        "commit": bool(commit),
+        "push": bool(push),
+        "check_changes": bool(check_changes),
+    }
 
     try:
-        patches: list[str] = []
+        if push and not commit:
+            raise ValueError("push=true requires commit=true")
+
+        # Normalize patch input.
+        patches: list[str]
+        if patch is None:
+            raise ValueError("patch must be provided")
         if isinstance(patch, str):
             if not patch.strip():
                 raise ValueError("patch must be a non-empty string")
@@ -1789,15 +1820,30 @@ async def apply_patch(
         else:
             raise ValueError("patch must be a non-empty string or list of strings")
 
+        # Record patch digests for safe debugging.
+        from github_mcp.diff_utils import diff_stats as _diff_stats, sha1_8
+
+        patch_digests = [sha1_8(p) for p in patches]
+        debug_args.update({"patches": len(patches), "patch_digests": patch_digests})
+
+        # Only surface unified diffs for visual logs.
+        diff_blobs = [p for p in patches if isinstance(p, str) and _looks_like_diff(p)]
+        combined_diff = "\n".join(x.rstrip("\n") for x in diff_blobs).strip() if diff_blobs else ""
+        if combined_diff and not combined_diff.endswith("\n"):
+            combined_diff += "\n"
+
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        debug_args["effective_ref"] = effective_ref
+
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
         for patch_entry in patches:
             await deps["apply_patch_to_repo"](repo_dir, patch_entry)
 
         if add or commit:
             add_result = await deps["run_shell"]("git add -A", cwd=repo_dir)
-            if add_result["exit_code"] != 0:
+            if add_result.get("exit_code") != 0:
                 stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
                 raise ValueError(f"git add failed: {stderr}")
 
@@ -1810,26 +1856,47 @@ async def apply_patch(
         if commit:
             if not isinstance(commit_message, str) or not commit_message.strip():
                 raise ValueError("commit_message must be a non-empty string when commit is true")
+
             status_lines = (status_result.get("stdout", "") if status_result else "").strip()
             if not status_lines:
                 raise ValueError("No changes to commit after applying patch")
+
             commit_cmd = f"git commit -m {shlex.quote(commit_message)}"
             commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir)
-            if commit_result["exit_code"] != 0:
+            if commit_result.get("exit_code") != 0:
                 stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
                 raise ValueError(f"git commit failed: {stderr}")
+
             if push:
-                push_cmd = f"git push origin HEAD:{effective_ref}"
+                # Disallow pushing from detached HEAD (e.g., when ref is a tag or commit SHA).
+                head_ref = await deps["run_shell"](
+                    "git symbolic-ref --quiet --short HEAD", cwd=repo_dir
+                )
+                branch_name = (head_ref.get("stdout", "") or "").strip()
+                if head_ref.get("exit_code") != 0 or not branch_name:
+                    raise ValueError(
+                        "Cannot push from detached HEAD. Provide a branch ref (e.g. ref='main' or a feature branch)."
+                    )
+
+                # Push to the requested ref name.
+                push_cmd = f"git push origin {shlex.quote(f"HEAD:{effective_ref}")}"
                 push_result = await deps["run_shell"](push_cmd, cwd=repo_dir)
-                if push_result["exit_code"] != 0:
+                if push_result.get("exit_code") != 0:
                     stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                     raise ValueError(f"git push failed: {stderr}")
 
         response: dict[str, Any] = {
             "ref": effective_ref,
             "status": "patched",
+            "ok": True,
             "patches_applied": len(patches),
         }
+
+        if combined_diff:
+            stats = _diff_stats(combined_diff)
+            response["diff_stats"] = {"added": stats.added, "removed": stats.removed}
+            response["__log_diff"] = combined_diff
+
         if status_result is not None:
             response["status_output"] = (status_result.get("stdout", "") or "").strip()
         if commit_result is not None:
@@ -1837,8 +1904,9 @@ async def apply_patch(
         if push_result is not None:
             response["push"] = push_result
         return response
+
     except Exception as exc:
-        return _structured_tool_error(exc, context="apply_patch")
+        return _structured_tool_error(exc, context="apply_patch", args=debug_args)
 
 
 @mcp_tool(write_action=True)

@@ -10,7 +10,17 @@ from github_mcp.server import _structured_tool_error, mcp_tool
 from ._shared import _tw
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(
+    write_action=True,
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={
+        "group": "workspace",
+        "icon": "📦",
+        "label": "Ensure Workspace Clone",
+        "danger": "high",
+    },
+)
 async def ensure_workspace_clone(
     full_name: str,
     ref: str = "main",
