@@ -3,6 +3,7 @@ import glob
 import hashlib
 import re
 import os
+import shlex
 import shutil
 import subprocess
 from collections.abc import Mapping
@@ -1454,19 +1455,79 @@ async def replace_workspace_text(
 async def apply_patch(
     full_name: str,
     ref: str = "main",
-    patch: str = "",
+    patch: str | list[str] = "",
+    *,
+    add: bool = False,
+    commit: bool = False,
+    commit_message: str = "Apply patch",
+    push: bool = False,
+    check_changes: bool = False,
 ) -> dict[str, Any]:
-    """Apply a unified diff patch to the persistent repo mirror."""
+    """Apply one or more unified diff patches to the persistent repo mirror."""
 
     try:
-        if not isinstance(patch, str) or not patch.strip():
-            raise ValueError("patch must be a non-empty string")
+        patches: list[str] = []
+        if isinstance(patch, str):
+            if not patch.strip():
+                raise ValueError("patch must be a non-empty string")
+            patches = [patch]
+        elif isinstance(patch, list):
+            if not patch:
+                raise ValueError("patch must be a non-empty string or list of strings")
+            if any(not isinstance(item, str) or not item.strip() for item in patch):
+                raise ValueError("patch list entries must be non-empty strings")
+            patches = patch
+        else:
+            raise ValueError("patch must be a non-empty string or list of strings")
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        await deps["apply_patch_to_repo"](repo_dir, patch)
-        return {"ref": effective_ref, "status": "patched"}
+        for patch_entry in patches:
+            await deps["apply_patch_to_repo"](repo_dir, patch_entry)
+
+        if add or commit:
+            add_result = await deps["run_shell"]("git add -A", cwd=repo_dir)
+            if add_result["exit_code"] != 0:
+                stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
+                raise ValueError(f"git add failed: {stderr}")
+
+        status_result = None
+        if check_changes or commit:
+            status_result = await deps["run_shell"]("git status --porcelain", cwd=repo_dir)
+
+        commit_result = None
+        push_result = None
+        if commit:
+            if not isinstance(commit_message, str) or not commit_message.strip():
+                raise ValueError("commit_message must be a non-empty string when commit is true")
+            status_lines = (status_result.get("stdout", "") if status_result else "").strip()
+            if not status_lines:
+                raise ValueError("No changes to commit after applying patch")
+            commit_cmd = f"git commit -m {shlex.quote(commit_message)}"
+            commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir)
+            if commit_result["exit_code"] != 0:
+                stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
+                raise ValueError(f"git commit failed: {stderr}")
+            if push:
+                push_cmd = f"git push origin HEAD:{effective_ref}"
+                push_result = await deps["run_shell"](push_cmd, cwd=repo_dir)
+                if push_result["exit_code"] != 0:
+                    stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
+                    raise ValueError(f"git push failed: {stderr}")
+
+        response: dict[str, Any] = {
+            "ref": effective_ref,
+            "status": "patched",
+            "patches_applied": len(patches),
+        }
+        if status_result is not None:
+            response["status_output"] = (status_result.get("stdout", "") or "").strip()
+        if commit_result is not None:
+            response["commit"] = commit_result
+        if push_result is not None:
+            response["push"] = push_result
+        return response
     except Exception as exc:
         return _structured_tool_error(exc, context="apply_patch")
 
