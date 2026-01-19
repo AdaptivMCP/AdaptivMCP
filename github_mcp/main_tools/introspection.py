@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+import inspect
+
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
-from github_mcp.mcp_server.schemas import _jsonable
+from github_mcp.mcp_server.schemas import _jsonable, _schema_from_signature
 
 from ._main import _main
 
@@ -268,11 +270,27 @@ def list_all_actions(
         # Tool classification is expressed via write_action plus the gating fields.
 
         if include_parameters:
-            schema = getattr(func, "__mcp_input_schema__", None)
+            # IMPORTANT: compute schemas dynamically from the live callable.
+            #
+            # Many downstream clients treat input schemas as a hard contract.
+            # When running in dev environments (hot reload / editable installs)
+            # the decorator-attached schema can become stale if the underlying
+            # signature changes. Prefer recomputing from the current signature
+            # each time the catalog is requested.
+            schema: Any = None
+            try:
+                schema = _schema_from_signature(inspect.signature(func), tool_name=name_str)
+            except Exception:
+                schema = None
+
+            # Fall back to any decorator-attached schema or tool-provided schema.
+            if not isinstance(schema, Mapping):
+                schema = getattr(func, "__mcp_input_schema__", None)
             if not isinstance(schema, Mapping):
                 schema = m._normalize_input_schema(tool)
             if schema is None:
                 schema = {"type": "object", "properties": {}}
+
             safe_schema = _jsonable(schema)
             if not isinstance(safe_schema, Mapping):
                 safe_schema = {"type": "object", "properties": {}}
@@ -448,7 +466,14 @@ def _validate_single_tool_args(tool_name: str, args: Mapping[str, Any] | None) -
         )
         raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
 
-    schema = getattr(func, "__mcp_input_schema__", None)
+    # Keep this consistent with list_all_actions: prefer a dynamically-derived schema.
+    schema: Any = None
+    try:
+        schema = _schema_from_signature(inspect.signature(func), tool_name=tool_name)
+    except Exception:
+        schema = None
+    if not isinstance(schema, Mapping):
+        schema = getattr(func, "__mcp_input_schema__", None)
     if not isinstance(schema, Mapping):
         schema = m._normalize_input_schema(tool)
 
