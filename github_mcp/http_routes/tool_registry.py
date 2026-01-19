@@ -321,7 +321,7 @@ async def _execute_tool(
     tool_name: str,
     args: dict[str, Any],
     *,
-    max_attempts: int = 1,
+    max_attempts: int | None = None,
 ) -> tuple[Any, int, dict[str, str]]:
     resolved = _find_registered_tool(tool_name)
     if not resolved:
@@ -330,7 +330,8 @@ async def _execute_tool(
     tool_obj, func = resolved
     write_action = _effective_write_action(tool_obj, func, args)
 
-    max_attempts = max(1, int(max_attempts))
+    if max_attempts is not None:
+        max_attempts = max(1, int(max_attempts))
     base_backoff_s = 0.25
 
     attempt = 0
@@ -351,7 +352,9 @@ async def _execute_tool(
                     status_code = _status_code_for_error(err)
                     headers = _response_headers_for_error(err)
 
-                    if (not write_action) and retryable and attempt < max_attempts:
+                    if (not write_action) and retryable and (
+                        max_attempts is None or attempt < max_attempts
+                    ):
                         delay = min(base_backoff_s * (2 ** (attempt - 1)), 2.0)
                         details = err.get("details")
                         if isinstance(details, dict):
@@ -378,7 +381,9 @@ async def _execute_tool(
             headers = _response_headers_for_error(err)
 
             # Retry only for read tools, and only when explicitly marked retryable.
-            if (not write_action) and retryable and attempt < max_attempts:
+            if (not write_action) and retryable and (
+                max_attempts is None or attempt < max_attempts
+            ):
                 delay = min(base_backoff_s * (2 ** (attempt - 1)), 2.0)
                 details = err.get("details")
                 if isinstance(details, dict):
@@ -407,7 +412,7 @@ def _invocation_payload(invocation: ToolInvocation) -> dict[str, Any]:
 
 
 async def _create_invocation(
-    tool_name: str, args: dict[str, Any], *, max_attempts: int = 1
+    tool_name: str, args: dict[str, Any], *, max_attempts: int | None = None
 ) -> ToolInvocation:
     invocation_id = uuid.uuid4().hex
     task = asyncio.create_task(_execute_tool(tool_name, args, max_attempts=max_attempts))
@@ -461,7 +466,9 @@ async def _cancel_invocation(invocation: ToolInvocation) -> None:
     invocation.task.cancel()
 
 
-async def _invoke_tool(tool_name: str, args: dict[str, Any], *, max_attempts: int = 1) -> Response:
+async def _invoke_tool(
+    tool_name: str, args: dict[str, Any], *, max_attempts: int | None = None
+) -> Response:
     payload, status_code, headers = await _execute_tool(
         tool_name,
         args,
@@ -538,11 +545,12 @@ def build_tool_invoke_endpoint() -> Callable[[Request], Response]:
             return JSONResponse({"error": "tool_name is required"}, status_code=400)
 
         try:
-            # Default to a single attempt to avoid unexpected mid-workflow retries.
-            # Callers may opt in to retries by passing max_attempts>1.
-            max_attempts = int(request.query_params.get("max_attempts") or "1")
+            # By default, allow unlimited retries; callers may set max_attempts.
+            max_attempts = request.query_params.get("max_attempts")
+            if max_attempts is not None:
+                max_attempts = int(max_attempts)
         except Exception:
-            max_attempts = 1
+            max_attempts = None
 
         payload: Any = {}
         if request.method in {"POST", "PUT", "PATCH"}:
@@ -563,9 +571,11 @@ def build_tool_invoke_async_endpoint() -> Callable[[Request], Response]:
             return JSONResponse({"error": "tool_name is required"}, status_code=400)
 
         try:
-            max_attempts = int(request.query_params.get("max_attempts") or "1")
+            max_attempts = request.query_params.get("max_attempts")
+            if max_attempts is not None:
+                max_attempts = int(max_attempts)
         except Exception:
-            max_attempts = 1
+            max_attempts = None
 
         payload: Any = {}
         if request.method in {"POST", "PUT", "PATCH"}:
