@@ -398,6 +398,7 @@ async def open_pr_for_existing_branch(
     if not (is_existing_pr_conflict or is_no_commits_conflict):
         return {
             "status": "error",
+            "ok": False,
             "raw_response": pr,
             "message": "create_pull_request did not return a PR document with a number",
         }
@@ -433,6 +434,7 @@ async def open_pr_for_existing_branch(
             }
         return {
             "status": "error",
+            "ok": False,
             "message": "Existing PR listing returned a non-dict entry",
             "raw_entry": pr_obj,
         }
@@ -450,6 +452,7 @@ async def open_pr_for_existing_branch(
 
     return {
         "status": "error",
+        "ok": False,
         "message": "PR creation reported an existing-PR conflict, but no matching open PR was found.",
         "raw_response": pr,
     }

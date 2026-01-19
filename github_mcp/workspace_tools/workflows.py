@@ -118,7 +118,7 @@ def _error_return(
     """
 
     _step(steps, action, detail, status="error", reason=reason)
-    return {"status": "error", "reason": reason, "steps": steps, **payload}
+    return {"status": "error", "ok": False, "reason": reason, "steps": steps, **payload}
 
 
 @mcp_tool(write_action=True)

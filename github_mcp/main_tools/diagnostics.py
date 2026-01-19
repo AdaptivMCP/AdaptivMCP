@@ -53,6 +53,7 @@ async def pr_smoke_test(
     if not isinstance(pr_json, dict) or not pr_json.get("number"):
         return {
             "status": "error",
+            "ok": False,
             "repository": repo,
             "base": base,
             "branch": branch,

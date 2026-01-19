@@ -264,6 +264,7 @@ def _structured_tool_error(
 
     payload: dict[str, Any] = {
         "status": "error",
+        "ok": False,
         "error": message,
         "error_detail": error_detail,
     }

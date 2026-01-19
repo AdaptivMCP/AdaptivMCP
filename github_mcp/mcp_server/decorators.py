@@ -1170,8 +1170,22 @@ def _log_tool_visual(
     inline = _inline_context(req)
     if inline:
         header = header + " " + _ansi(inline, ANSI_DIM)
+    # Provider logs are line-oriented. Keep the message single-line and stash
+    # the full visual preview in structured fields.
+    preview = _truncate_text(visual, limit=240)
+    msg = header
+    if preview:
+        msg = msg + " " + _ansi(f"preview={preview}", ANSI_DIM)
+
+    try:
+        visual_lines = len(str(visual).splitlines()) if str(visual) else 0
+        visual_chars = len(str(visual))
+    except Exception:
+        visual_lines = 0
+        visual_chars = 0
+
     LOGGER.info(
-        f"{header}\n{visual}",
+        msg,
         extra={
             "event": "tool_visual",
             "tool": tool_name,
@@ -1179,8 +1193,13 @@ def _log_tool_visual(
             "call_id": shorten_token(call_id),
             "request": snapshot_request_context(req),
             "log_context": inline or None,
+            "visual": visual,
+            "visual_preview": preview,
+            "visual_lines": visual_lines,
+            "visual_chars": visual_chars,
         },
     )
+
 
 
 def _truncate_text(value: Any, *, limit: int = 180) -> str:

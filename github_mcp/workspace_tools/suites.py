@@ -154,19 +154,29 @@ def _looks_like_mocked_terminal_command(slim: dict[str, Any]) -> bool:
     return (stdout.strip() == "") and (stderr.strip() == "")
 
 
-def _text_stats(text: str) -> tuple[int, int]:
-    if not text:
-        return (0, 0)
-    return (len(text), text.count("\n") + 1)
+def _normalize_stream_text(text: str) -> str:
+    """Normalize newlines for stable rendering and counting.
 
+    Some commands emit carriage returns ("\r") for progress bars. In JSON/logs
+    these can render poorly, so normalize them to "\n".
+    """
+
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _text_stats(text: str) -> tuple[int, int]:
+    normalized = _normalize_stream_text(text or "")
+    if not normalized:
+        return (0, 0)
+    return (len(normalized), normalized.count("\n") + 1)
 
 def _slim_terminal_command_payload(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {"raw": str(payload)}
 
     res = payload.get("result") if isinstance(payload.get("result"), dict) else {}
-    stdout = (res.get("stdout") or "") if isinstance(res, dict) else ""
-    stderr = (res.get("stderr") or "") if isinstance(res, dict) else ""
+    stdout = _normalize_stream_text((res.get("stdout") or "") if isinstance(res, dict) else "")
+    stderr = _normalize_stream_text((res.get("stderr") or "") if isinstance(res, dict) else "")
     out_chars, out_lines = _text_stats(stdout)
     err_chars, err_lines = _text_stats(stderr)
 
