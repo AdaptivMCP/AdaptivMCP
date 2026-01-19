@@ -515,17 +515,35 @@ async def _clone_repo(
 
 
 async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
-    """Create an isolated virtualenv and return env vars that activate it.
+    """Ensure the workspace virtualenv exists and return env vars that activate it.
 
-    The hosted execution environments backing these tools can vary:
-    - Some Python builds omit pip in newly-created venvs (or ship a broken pip).
-    - Cached venv directories can become partially deleted.
+    Despite the historical name ("temp"), this virtualenv is **persistent** per
+    workspace repo mirror: it lives at ``<repo_dir>/.venv-mcp`` and is reused
+    across tool calls until explicitly removed.
 
-    This helper treats the venv as a cache: if it looks unhealthy, it is
-    recreated. After creation, it ensures pip is present and usable.
+    Lifecycle:
+    - "Start": create/repair the venv as needed (this function).
+    - "Use": pass the returned env into :func:`_run_shell`.
+    - "Stop": remove the venv via :func:`_stop_workspace_virtualenv`.
+
+    To avoid doing expensive bootstrapping on every call, a small marker file
+    is written after the venv is successfully initialized.
     """
+
     main_module = _get_main_module()
     run_shell = getattr(main_module, "_run_shell", _run_shell)
+
+    venv_dir = os.path.join(repo_dir, ".venv-mcp")
+    ready_marker = os.path.join(venv_dir, ".mcp_ready")
+
+    # Per-repo lock so concurrent tool calls don't fight over the venv.
+    if not hasattr(_prepare_temp_virtualenv, "_locks"):
+        setattr(_prepare_temp_virtualenv, "_locks", {})
+    locks: dict[str, asyncio.Lock] = getattr(_prepare_temp_virtualenv, "_locks")
+    lock = locks.get(repo_dir)
+    if lock is None:
+        lock = asyncio.Lock()
+        locks[repo_dir] = lock
 
     def _venv_bin_dir() -> str:
         return "Scripts" if os.name == "nt" else "bin"
@@ -593,42 +611,91 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
             stderr = upgrade2.get("stderr", "") or upgrade2.get("stdout", "")
             raise GitHubAPIError(f"Failed to upgrade pip tooling: {stderr}")
 
-    venv_dir = os.path.join(repo_dir, ".venv-mcp")
+    async with lock:
+        # Fast path: venv is ready.
+        if os.path.isdir(venv_dir) and os.path.isfile(_venv_python_path(venv_dir)):
+            if os.path.isfile(ready_marker):
+                return _activation_env(venv_dir)
 
-    # If a venv exists, validate it isn't partially deleted.
-    if os.path.isdir(venv_dir):
-        vpy = _venv_python_path(venv_dir)
-        if not os.path.isfile(vpy):
-            shutil.rmtree(venv_dir, ignore_errors=True)
-        else:
+            # Legacy venvs (or partially initialized ones) are repaired once.
             try:
                 await _ensure_pip(venv_dir)
+                os.makedirs(venv_dir, exist_ok=True)
+                with open(ready_marker, "w", encoding="utf-8") as handle:
+                    handle.write("ok\n")
                 return _activation_env(venv_dir)
             except Exception:
-                # Treat as cache corruption and recreate.
                 shutil.rmtree(venv_dir, ignore_errors=True)
 
-    # Create venv. Prefer --upgrade-deps when supported.
-    create_cmd = f"{shlex.quote(sys.executable)} -m venv --upgrade-deps {shlex.quote(venv_dir)}"
-    result = await run_shell(
-        create_cmd,
-        cwd=repo_dir,
-        timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
-    )
-    if result.get("exit_code", 0) != 0:
-        # Fallback for older/stripped venv modules.
-        create_cmd2 = f"{shlex.quote(sys.executable)} -m venv {shlex.quote(venv_dir)}"
-        result2 = await run_shell(
-            create_cmd2,
+        # If a venv exists but is partially deleted, remove it.
+        if os.path.isdir(venv_dir):
+            vpy = _venv_python_path(venv_dir)
+            if not os.path.isfile(vpy):
+                shutil.rmtree(venv_dir, ignore_errors=True)
+
+        # Create venv. Prefer --upgrade-deps when supported.
+        create_cmd = (
+            f"{shlex.quote(sys.executable)} -m venv --upgrade-deps {shlex.quote(venv_dir)}"
+        )
+        result = await run_shell(
+            create_cmd,
             cwd=repo_dir,
             timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
-        if result2.get("exit_code", 0) != 0:
-            stderr = result2.get("stderr", "") or result2.get("stdout", "")
-            raise GitHubAPIError(f"Failed to create temp virtualenv: {stderr}")
+        if result.get("exit_code", 0) != 0:
+            # Fallback for older/stripped venv modules.
+            create_cmd2 = f"{shlex.quote(sys.executable)} -m venv {shlex.quote(venv_dir)}"
+            result2 = await run_shell(
+                create_cmd2,
+                cwd=repo_dir,
+                timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+            )
+            if result2.get("exit_code", 0) != 0:
+                stderr = result2.get("stderr", "") or result2.get("stdout", "")
+                raise GitHubAPIError(f"Failed to create workspace virtualenv: {stderr}")
 
-    await _ensure_pip(venv_dir)
-    return _activation_env(venv_dir)
+        await _ensure_pip(venv_dir)
+        os.makedirs(venv_dir, exist_ok=True)
+        with open(ready_marker, "w", encoding="utf-8") as handle:
+            handle.write("ok\n")
+        return _activation_env(venv_dir)
+
+
+async def _workspace_virtualenv_status(repo_dir: str) -> dict[str, Any]:
+    """Return lightweight status for the workspace virtualenv."""
+
+    venv_dir = os.path.join(repo_dir, ".venv-mcp")
+    bin_dir = "Scripts" if os.name == "nt" else "bin"
+    exe = "python.exe" if os.name == "nt" else "python"
+    python_path = os.path.join(venv_dir, bin_dir, exe)
+    return {
+        "venv_dir": venv_dir,
+        "exists": os.path.isdir(venv_dir),
+        "python_exists": os.path.isfile(python_path),
+        "ready": os.path.isfile(os.path.join(venv_dir, ".mcp_ready")),
+        "python_path": python_path,
+    }
+
+
+async def _stop_workspace_virtualenv(repo_dir: str) -> dict[str, Any]:
+    """Remove the workspace virtualenv ("stop" the venv)."""
+
+    venv_dir = os.path.join(repo_dir, ".venv-mcp")
+
+    # Use the same lock map as _prepare_temp_virtualenv to avoid races.
+    if not hasattr(_prepare_temp_virtualenv, "_locks"):
+        setattr(_prepare_temp_virtualenv, "_locks", {})
+    locks: dict[str, asyncio.Lock] = getattr(_prepare_temp_virtualenv, "_locks")
+    lock = locks.get(repo_dir)
+    if lock is None:
+        lock = asyncio.Lock()
+        locks[repo_dir] = lock
+
+    async with lock:
+        existed = os.path.isdir(venv_dir)
+        if existed:
+            shutil.rmtree(venv_dir, ignore_errors=True)
+        return {"venv_dir": venv_dir, "existed": existed, "deleted": existed and not os.path.exists(venv_dir)}
 
 
 def _maybe_unescape_unified_diff(patch: str) -> str:
@@ -1107,6 +1174,8 @@ __all__ = [
     "_apply_patch_to_repo",
     "_clone_repo",
     "_prepare_temp_virtualenv",
+    "_stop_workspace_virtualenv",
+    "_workspace_virtualenv_status",
     "_run_shell",
     "_workspace_path",
 ]

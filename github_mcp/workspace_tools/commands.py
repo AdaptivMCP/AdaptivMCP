@@ -302,11 +302,16 @@ async def terminal_command(
 
     - The command runs within the server-side repo mirror (a persistent git
       working copy).
-    - If ``use_temp_venv=true`` (default), the server creates an ephemeral
-      virtualenv for the duration of the command.
+    - If ``use_temp_venv=true`` (default), the server ensures a **persistent**
+      workspace virtualenv exists at ``<repo_dir>/.venv-mcp`` and runs the
+      command inside it.
     - If ``installing_dependencies=true`` and ``use_temp_venv=true``, the tool
       will run a best-effort `pip install -r dev-requirements.txt` before
       executing the command.
+
+    The venv lifecycle can be managed explicitly via the workspace venv tools
+    (start/stop/status), but it is also safe to rely on this implicit
+    preparation.
 
     The repo mirror persists across calls so file edits and git state are
     preserved until explicitly reset.
