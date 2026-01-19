@@ -883,6 +883,152 @@ async def read_workspace_file_excerpt(
         return _structured_tool_error(exc, context="read_workspace_file_excerpt", path=path)
 
 
+def _git_show_lines_excerpt_limited(
+    repo_dir: str,
+    *,
+    git_ref: str,
+    path: str,
+    start_line: int,
+    max_lines: int,
+    max_chars: int,
+) -> tuple[bool, list[dict[str, Any]], bool, str | None]:
+    """Stream `git show <git_ref>:<path>` and return a line-numbered excerpt.
+
+    Returns:
+      (exists, lines, truncated, error)
+    """
+    if start_line < 1:
+        start_line = 1
+    if max_lines < 1:
+        max_lines = 1
+    if max_chars < 1:
+        max_chars = 1
+
+    cmd = ["git", "show", f"{git_ref}:{path}"]
+    proc = subprocess.Popen(
+        cmd,
+        cwd=repo_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        errors="replace",
+    )
+
+    lines: list[dict[str, Any]] = []
+    truncated = False
+    chars = 0
+    line_no = 0
+    try:
+        assert proc.stdout is not None
+        for raw in proc.stdout:
+            line_no += 1
+            if line_no < start_line:
+                continue
+            text = raw.rstrip("\n")
+            next_chars = chars + len(text) + 1
+            if next_chars > max_chars:
+                truncated = True
+                break
+            lines.append({"line": line_no, "text": text})
+            chars = next_chars
+            if len(lines) >= max_lines:
+                truncated = True
+                break
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+        try:
+            _, stderr = proc.communicate(timeout=2)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            _, stderr = proc.communicate()
+
+    if proc.returncode != 0:
+        err = (stderr or "").strip() or None
+        return False, [], False, err
+    return True, lines, truncated, None
+
+
+@mcp_tool(write_action=False)
+async def read_git_file_excerpt(
+    full_name: str,
+    ref: str = "main",
+    path: str = "",
+    *,
+    git_ref: str = "HEAD",
+    start_line: int = 1,
+    max_lines: int = 200,
+    max_chars: int = 80_000,
+) -> dict[str, Any]:
+    """Read an excerpt of a file as it exists at a git ref, with line numbers.
+
+    Uses the local workspace mirror and `git show` so callers can inspect
+    historical versions without changing the checkout.
+
+    Line numbers are 1-indexed and correspond to the file at `git_ref`.
+    """
+
+    try:
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("path must be a non-empty string")
+        if not isinstance(git_ref, str) or not git_ref.strip():
+            raise ValueError("git_ref must be a non-empty string")
+        if not isinstance(start_line, int) or start_line < 1:
+            raise ValueError("start_line must be an int >= 1")
+        if not isinstance(max_lines, int) or max_lines < 1:
+            raise ValueError("max_lines must be an int >= 1")
+        if not isinstance(max_chars, int) or max_chars < 1:
+            raise ValueError("max_chars must be an int >= 1")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        exists, lines, truncated, error = _git_show_lines_excerpt_limited(
+            repo_dir,
+            git_ref=git_ref.strip(),
+            path=path.strip(),
+            start_line=int(start_line),
+            max_lines=int(max_lines),
+            max_chars=int(max_chars),
+        )
+        if not exists:
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": path,
+                "git_ref": git_ref,
+                "exists": False,
+                "error": error,
+            }
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": path,
+            "git_ref": git_ref,
+            "exists": True,
+            "excerpt": {
+                "start_line": int(start_line),
+                "end_line": (lines[-1]["line"] if lines else int(start_line)),
+                "lines": lines,
+                "truncated": bool(truncated),
+                "max_lines": int(max_lines),
+                "max_chars": int(max_chars),
+            },
+        }
+    except Exception as exc:
+        return _structured_tool_error(
+            exc,
+            context="read_git_file_excerpt",
+            path=path,
+            git_ref=git_ref,
+        )
+
+
 @mcp_tool(write_action=False)
 async def compare_workspace_files(
     full_name: str,

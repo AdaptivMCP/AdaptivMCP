@@ -1,5 +1,6 @@
 # Split from github_mcp.tools_workspace (generated).
 
+import hashlib
 import os
 import posixpath
 import re
@@ -11,6 +12,96 @@ from github_mcp.server import (
 )
 
 from ._shared import _tw
+
+
+def _is_probably_binary(path: str) -> bool:
+    try:
+        with open(path, "rb") as bf:
+            sample = bf.read(4096)
+        return b"\x00" in sample
+    except OSError:
+        return False
+
+
+def _sha256_limited(path: str, *, max_bytes: int) -> tuple[str | None, bool]:
+    """Return (sha256_hex, truncated) for the first max_bytes of a file."""
+    h = hashlib.sha256()
+    read = 0
+    try:
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(min(65536, max_bytes - read))
+                if not chunk:
+                    break
+                h.update(chunk)
+                read += len(chunk)
+                if read >= max_bytes:
+                    break
+        truncated = False
+        try:
+            truncated = os.path.getsize(path) > max_bytes
+        except Exception:
+            truncated = False
+        return h.hexdigest(), truncated
+    except OSError:
+        return None, False
+
+
+def _count_lines_limited(path: str, *, max_bytes: int) -> tuple[int | None, bool]:
+    """Return (line_count, truncated).
+
+    Counts lines from the first max_bytes bytes (UTF-8 decode with replacement).
+    """
+    read = 0
+    lines = 0
+    try:
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(min(65536, max_bytes - read))
+                if not chunk:
+                    break
+                read += len(chunk)
+                lines += chunk.count(b"\n")
+                if read >= max_bytes:
+                    break
+        truncated = False
+        try:
+            truncated = os.path.getsize(path) > max_bytes
+        except Exception:
+            truncated = False
+        # If file does not end with newline, approximate by +1 when non-empty.
+        if lines == 0:
+            try:
+                if os.path.getsize(path) > 0:
+                    lines = 1
+            except Exception:
+                pass
+        return int(lines), truncated
+    except OSError:
+        return None, False
+
+
+def _read_first_lines(path: str, *, max_lines: int, max_chars: int) -> tuple[list[dict[str, Any]], bool]:
+    """Return (lines, truncated) where lines are {line, text} starting at 1."""
+    out: list[dict[str, Any]] = []
+    truncated = False
+    chars = 0
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for i, raw in enumerate(f, start=1):
+                if i > max_lines:
+                    truncated = True
+                    break
+                text = raw.rstrip("\n")
+                next_chars = chars + len(text) + 1
+                if next_chars > max_chars:
+                    truncated = True
+                    break
+                out.append({"line": i, "text": text})
+                chars = next_chars
+    except OSError:
+        return [], False
+    return out, truncated
 
 
 def _normalize_workspace_path(path: str) -> str:
@@ -567,3 +658,161 @@ async def search_workspace(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="search_workspace")
+
+
+@mcp_tool(write_action=False)
+async def scan_workspace_tree(
+    full_name: str | None = None,
+    ref: str = "main",
+    path: str = "",
+    *,
+    include_hidden: bool = False,
+    include_dirs: bool = False,
+    max_entries: int = 2000,
+    max_depth: int = 25,
+    cursor: int = 0,
+    include_hash: bool = True,
+    hash_max_bytes: int = 200_000,
+    include_line_count: bool = True,
+    line_count_max_bytes: int = 200_000,
+    include_head: bool = False,
+    head_max_lines: int = 20,
+    head_max_chars: int = 10_000,
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
+) -> dict[str, Any]:
+    """Scan the workspace tree and return bounded metadata for files."""
+
+    try:
+        deps = _tw()._workspace_deps()
+        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _tw()._resolve_ref(ref, branch=branch)
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        if not isinstance(max_entries, int) or max_entries < 1:
+            raise ValueError("max_entries must be an int >= 1")
+        if not isinstance(max_depth, int) or max_depth < 0:
+            raise ValueError("max_depth must be an int >= 0")
+        if not isinstance(cursor, int) or cursor < 0:
+            raise ValueError("cursor must be an int >= 0")
+        if not isinstance(hash_max_bytes, int) or hash_max_bytes < 1:
+            raise ValueError("hash_max_bytes must be an int >= 1")
+        if not isinstance(line_count_max_bytes, int) or line_count_max_bytes < 1:
+            raise ValueError("line_count_max_bytes must be an int >= 1")
+        if not isinstance(head_max_lines, int) or head_max_lines < 1:
+            raise ValueError("head_max_lines must be an int >= 1")
+        if not isinstance(head_max_chars, int) or head_max_chars < 1:
+            raise ValueError("head_max_chars must be an int >= 1")
+
+        root = os.path.realpath(repo_dir)
+        normalized_path, start = _resolve_workspace_start(repo_dir, path)
+        if os.path.isfile(start):
+            start = os.path.dirname(start)
+
+        def _depth_for_dir(cur_dir: str) -> int:
+            rel = os.path.relpath(cur_dir, start)
+            if rel in {".", ""}:
+                return 0
+            return rel.count(os.sep) + 1
+
+        results: list[dict[str, Any]] = []
+        skipped = 0
+        yielded = 0
+        truncated = False
+        next_cursor: int | None = None
+
+        for cur_dir, dirnames, filenames in os.walk(start):
+            if _depth_for_dir(cur_dir) >= max_depth:
+                dirnames[:] = []
+            dirnames[:] = [d for d in dirnames if d != ".git"]
+            if not include_hidden:
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+            dirnames.sort(); filenames.sort()
+
+            if include_dirs:
+                for d in dirnames:
+                    rp = os.path.relpath(os.path.join(cur_dir, d), root).replace("\\", "/")
+                    if not include_hidden and os.path.basename(rp).startswith("."):
+                        continue
+                    if skipped < cursor:
+                        skipped += 1; continue
+                    if yielded >= max_entries:
+                        truncated = True; next_cursor = cursor + yielded; break
+                    abs_p = os.path.join(root, rp)
+                    try:
+                        st = os.stat(abs_p)
+                        results.append({"path": rp, "type": "dir", "size_bytes": int(st.st_size)})
+                    except Exception:
+                        results.append({"path": rp, "type": "dir", "size_bytes": None})
+                    yielded += 1
+                if truncated:
+                    break
+
+            for fname in filenames:
+                if not include_hidden and fname.startswith("."):
+                    continue
+                rp = os.path.relpath(os.path.join(cur_dir, fname), root).replace("\\", "/")
+                if skipped < cursor:
+                    skipped += 1; continue
+                if yielded >= max_entries:
+                    truncated = True; next_cursor = cursor + yielded; break
+                abs_p = os.path.join(root, rp)
+                try:
+                    st = os.stat(abs_p)
+                except OSError:
+                    results.append({"path": rp, "type": "file", "error": "stat_failed"})
+                    yielded += 1; continue
+                is_bin = _is_probably_binary(abs_p)
+                entry: dict[str, Any] = {
+                    "path": rp,
+                    "type": "file",
+                    "size_bytes": int(st.st_size),
+                    "is_binary": bool(is_bin),
+                }
+                if include_hash:
+                    sha, sha_trunc = _sha256_limited(abs_p, max_bytes=int(hash_max_bytes))
+                    entry["sha256"] = sha
+                    entry["sha256_truncated"] = bool(sha_trunc)
+                if include_line_count and (not is_bin):
+                    lc, lc_trunc = _count_lines_limited(abs_p, max_bytes=int(line_count_max_bytes))
+                    entry["line_count"] = lc
+                    entry["line_count_truncated"] = bool(lc_trunc)
+                if include_head and (not is_bin):
+                    head, head_trunc = _read_first_lines(
+                        abs_p, max_lines=int(head_max_lines), max_chars=int(head_max_chars)
+                    )
+                    entry["head"] = {
+                        "lines": head,
+                        "truncated": bool(head_trunc),
+                        "max_lines": int(head_max_lines),
+                        "max_chars": int(head_max_chars),
+                    }
+                results.append(entry)
+                yielded += 1
+            if truncated:
+                break
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": normalized_path if path else "",
+            "cursor": int(cursor),
+            "next_cursor": next_cursor,
+            "max_entries": int(max_entries),
+            "max_depth": int(max_depth),
+            "include_hidden": bool(include_hidden),
+            "include_dirs": bool(include_dirs),
+            "include_hash": bool(include_hash),
+            "hash_max_bytes": int(hash_max_bytes),
+            "include_line_count": bool(include_line_count),
+            "line_count_max_bytes": int(line_count_max_bytes),
+            "include_head": bool(include_head),
+            "head_max_lines": int(head_max_lines),
+            "head_max_chars": int(head_max_chars),
+            "results": results,
+            "truncated": bool(truncated),
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="scan_workspace_tree")

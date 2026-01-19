@@ -78,6 +78,138 @@ async def _workspace_sync_snapshot(
     }
 
 
+def _parse_git_numstat(stdout: str) -> list[dict[str, Any]]:
+    """Parse `git diff --numstat` output into a structured list."""
+    out: list[dict[str, Any]] = []
+    for raw in (stdout or "").splitlines():
+        if not raw.strip():
+            continue
+        # Format: <added>\t<removed>\t<path>
+        parts = raw.split("\t")
+        if len(parts) < 3:
+            continue
+        added_s, removed_s = parts[0].strip(), parts[1].strip()
+        path = "\t".join(parts[2:]).strip()
+        def _to_int(v: str) -> int | None:
+            if v == "-":
+                return None
+            try:
+                return int(v)
+            except Exception:
+                return None
+
+        out.append({
+            "path": path,
+            "added": _to_int(added_s),
+            "removed": _to_int(removed_s),
+            "is_binary": (added_s == "-" or removed_s == "-"),
+        })
+    return out
+
+
+@mcp_tool(write_action=False)
+async def workspace_git_diff(
+    full_name: str,
+    ref: str = "main",
+    *,
+    left_ref: str | None = None,
+    right_ref: str | None = None,
+    staged: bool = False,
+    paths: list[str] | None = None,
+    context_lines: int = 3,
+    max_chars: int = 200_000,
+) -> dict[str, Any]:
+    """Return a git diff from the workspace mirror.
+
+    Supports:
+      - comparing two refs (left_ref vs right_ref)
+      - comparing a ref vs working tree (set one side)
+      - comparing staged changes vs HEAD (staged=true)
+
+    The returned diff is unified and includes hunk headers with line ranges.
+    """
+
+    try:
+        if not isinstance(context_lines, int) or context_lines < 0:
+            raise ValueError("context_lines must be an int >= 0")
+        if not isinstance(max_chars, int) or max_chars < 1:
+            raise ValueError("max_chars must be an int >= 1")
+        if paths is None:
+            paths = []
+        if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
+            raise TypeError("paths must be a list of strings")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        left = (left_ref.strip() if isinstance(left_ref, str) and left_ref.strip() else None)
+        right = (right_ref.strip() if isinstance(right_ref, str) and right_ref.strip() else None)
+        path_args = ""
+        if paths:
+            quoted = " ".join(shlex.quote(p.strip()) for p in paths if p.strip())
+            if quoted:
+                path_args = f" -- {quoted}"
+
+        base = f"git diff --no-color --unified={int(context_lines)}"
+        numstat_base = "git diff --numstat"
+        if staged:
+            diff_cmd = f"{base} --cached{path_args}"
+            numstat_cmd = f"{numstat_base} --cached{path_args}"
+        else:
+            if left and right:
+                diff_cmd = f"{base} {shlex.quote(left)} {shlex.quote(right)}{path_args}"
+                numstat_cmd = (
+                    f"{numstat_base} {shlex.quote(left)} {shlex.quote(right)}{path_args}"
+                )
+            elif left and not right:
+                diff_cmd = f"{base} {shlex.quote(left)}{path_args}"
+                numstat_cmd = f"{numstat_base} {shlex.quote(left)}{path_args}"
+            elif right and not left:
+                # Compare working tree to a right ref by swapping order.
+                diff_cmd = f"{base} {shlex.quote(right)}{path_args}"
+                numstat_cmd = f"{numstat_base} {shlex.quote(right)}{path_args}"
+            else:
+                diff_cmd = f"{base}{path_args}"
+                numstat_cmd = f"{numstat_base}{path_args}"
+
+        diff_res = await deps["run_shell"](
+            diff_cmd,
+            cwd=repo_dir,
+            timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+        )
+        if diff_res.get("exit_code", 0) != 0:
+            stderr = diff_res.get("stderr", "") or diff_res.get("stdout", "")
+            raise GitHubAPIError(f"git diff failed: {stderr}")
+        diff_text = diff_res.get("stdout", "") or ""
+        truncated = False
+        if len(diff_text) > int(max_chars):
+            diff_text = diff_text[: int(max_chars)]
+            truncated = True
+
+        numstat_res = await deps["run_shell"](
+            numstat_cmd,
+            cwd=repo_dir,
+            timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+        )
+        numstat = _parse_git_numstat(numstat_res.get("stdout", "") or "")
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "left_ref": left,
+            "right_ref": right,
+            "staged": bool(staged),
+            "paths": paths,
+            "context_lines": int(context_lines),
+            "diff": diff_text,
+            "truncated": bool(truncated),
+            "numstat": numstat,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="workspace_git_diff")
+
+
 @mcp_tool(write_action=True)
 async def workspace_create_branch(
     full_name: str,

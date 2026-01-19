@@ -84,6 +84,7 @@ _workspace_write_text = _fs._workspace_write_text
 get_workspace_file_contents = _fs.get_workspace_file_contents
 get_workspace_files_contents = _fs.get_workspace_files_contents
 read_workspace_file_excerpt = _fs.read_workspace_file_excerpt
+read_git_file_excerpt = _fs.read_git_file_excerpt
 set_workspace_file_contents = _fs.set_workspace_file_contents
 edit_workspace_text_range = _fs.edit_workspace_text_range
 delete_workspace_lines = _fs.delete_workspace_lines
@@ -100,6 +101,9 @@ compare_workspace_files = _fs.compare_workspace_files
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace
 find_workspace_paths = _listing.find_workspace_paths
+
+# Metadata scan (bounded) helper.
+scan_workspace_tree = _listing.scan_workspace_tree
 
 # Fast search (ripgrep-backed) tools
 rg_list_workspace_files = _rg.rg_list_workspace_files
@@ -118,6 +122,7 @@ run_terminal_commands = _commands.run_terminal_commands_alias
 workspace_create_branch = _git_ops.workspace_create_branch
 workspace_delete_branch = _git_ops.workspace_delete_branch
 workspace_self_heal_branch = _git_ops.workspace_self_heal_branch
+workspace_git_diff = _git_ops.workspace_git_diff
 workspace_sync_status = _git_ops.workspace_sync_status
 workspace_sync_to_remote = _git_ops.workspace_sync_to_remote
 workspace_sync_bidirectional = _git_ops.workspace_sync_bidirectional
