@@ -2051,9 +2051,12 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
         out: dict[str, Any] = _inject_adaptiv_mcp_metadata(result)
 
         # Ensure stable status/ok.
+        #
+        # Some legacy tools return a payload with conflicting signals
+        # (e.g. ok=True alongside status=error or an error field). In
+        # ChatGPT/compact response modes, we prefer a consistent surface.
         outcome = _tool_result_outcome(out)
-        if "ok" not in out:
-            out["ok"] = outcome != "error"
+        out["ok"] = outcome != "error"
         status = out.get("status")
         status_str = str(status).strip().lower() if status is not None else ""
         if not status_str or status_str in {"ok", "passed", "succeeded", "success"}:
@@ -3250,7 +3253,35 @@ def mcp_tool(
                         all_args=all_args,
                         structured_error=structured_error,
                     )
-                    return structured_error
+                    # Return errors through the same client-facing shaping path
+                    # as successful results so callers always see a consistent
+                    # envelope (redaction, tool_metadata, ok/status normalization).
+                    client_payload: Any
+                    if isinstance(structured_error, Mapping):
+                        client_payload = _strip_internal_log_fields(structured_error)
+                        try:
+                            client_payload = _merge_invocation_metadata(
+                                client_payload,
+                                func=wrapper,
+                                base_write_action=bool(write_action),
+                                effective_write_action=bool(effective_write_action),
+                            )
+                        except Exception:
+                            pass
+                    else:
+                        client_payload = structured_error
+                    if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                        try:
+                            client_payload = redact_any(client_payload)
+                        except Exception as exc2:
+                            _log_once(
+                                "tool_output_redaction_failed",
+                                logging.WARNING,
+                                "Tool output redaction failed; returning unredacted payload",
+                                exc=exc2,
+                                extra={"event": "tool_output_redaction_failed"},
+                            )
+                    return _chatgpt_friendly_result(client_payload, req=req)
 
                 try:
                     # Best-effort idempotency for inbound requests. This prevents
@@ -3308,7 +3339,32 @@ def mcp_tool(
                         all_args=all_args,
                         structured_error=structured_error,
                     )
-                    return structured_error
+                    client_payload: Any
+                    if isinstance(structured_error, Mapping):
+                        client_payload = _strip_internal_log_fields(structured_error)
+                        try:
+                            client_payload = _merge_invocation_metadata(
+                                client_payload,
+                                func=wrapper,
+                                base_write_action=bool(write_action),
+                                effective_write_action=bool(effective_write_action),
+                            )
+                        except Exception:
+                            pass
+                    else:
+                        client_payload = structured_error
+                    if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                        try:
+                            client_payload = redact_any(client_payload)
+                        except Exception as exc2:
+                            _log_once(
+                                "tool_output_redaction_failed",
+                                logging.WARNING,
+                                "Tool output redaction failed; returning unredacted payload",
+                                exc=exc2,
+                                extra={"event": "tool_output_redaction_failed"},
+                            )
+                    return _chatgpt_friendly_result(client_payload, req=req)
 
                 # Preserve scalar return types for tools that naturally return scalars.
                 # Some clients/servers already wrap tool outputs under a top-level
@@ -3538,7 +3594,32 @@ def mcp_tool(
                     all_args=all_args,
                     structured_error=structured_error,
                 )
-                return structured_error
+                client_payload: Any
+                if isinstance(structured_error, Mapping):
+                    client_payload = _strip_internal_log_fields(structured_error)
+                    try:
+                        client_payload = _merge_invocation_metadata(
+                            client_payload,
+                            func=wrapper,
+                            base_write_action=bool(write_action),
+                            effective_write_action=bool(effective_write_action),
+                        )
+                    except Exception:
+                        pass
+                else:
+                    client_payload = structured_error
+                if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                    try:
+                        client_payload = redact_any(client_payload)
+                    except Exception as exc2:
+                        _log_once(
+                            "tool_output_redaction_failed",
+                            logging.WARNING,
+                            "Tool output redaction failed; returning unredacted payload",
+                            exc=exc2,
+                            extra={"event": "tool_output_redaction_failed"},
+                        )
+                return _chatgpt_friendly_result(client_payload, req=req)
 
             try:
                 # Best-effort idempotency for inbound requests.
@@ -3593,7 +3674,32 @@ def mcp_tool(
                     all_args=all_args,
                     structured_error=structured_error,
                 )
-                return structured_error
+                client_payload: Any
+                if isinstance(structured_error, Mapping):
+                    client_payload = _strip_internal_log_fields(structured_error)
+                    try:
+                        client_payload = _merge_invocation_metadata(
+                            client_payload,
+                            func=wrapper,
+                            base_write_action=bool(write_action),
+                            effective_write_action=bool(effective_write_action),
+                        )
+                    except Exception:
+                        pass
+                else:
+                    client_payload = structured_error
+                if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                    try:
+                        client_payload = redact_any(client_payload)
+                    except Exception as exc2:
+                        _log_once(
+                            "tool_output_redaction_failed",
+                            logging.WARNING,
+                            "Tool output redaction failed; returning unredacted payload",
+                            exc=exc2,
+                            extra={"event": "tool_output_redaction_failed"},
+                        )
+                return _chatgpt_friendly_result(client_payload, req=req)
 
             # Preserve scalar return types for tools that naturally return scalars.
             duration_ms = (time.perf_counter() - start) * 1000
