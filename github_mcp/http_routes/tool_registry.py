@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import time
+import uuid
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from typing import Any
 
 from starlette.requests import Request
@@ -235,10 +238,33 @@ def _coerce_error_detail(structured: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-async def _invoke_tool(tool_name: str, args: dict[str, Any], *, max_attempts: int = 1) -> Response:
+@dataclass
+class ToolInvocation:
+    invocation_id: str
+    tool_name: str
+    args: dict[str, Any]
+    started_at: float
+    task: asyncio.Task
+    status: str = "running"
+    finished_at: float | None = None
+    result: Any | None = None
+    status_code: int | None = None
+    headers: dict[str, str] | None = None
+
+
+_INVOCATIONS: dict[str, ToolInvocation] = {}
+_INVOCATIONS_LOCK = asyncio.Lock()
+
+
+async def _execute_tool(
+    tool_name: str,
+    args: dict[str, Any],
+    *,
+    max_attempts: int = 1,
+) -> tuple[Any, int, dict[str, str]]:
     resolved = _find_registered_tool(tool_name)
     if not resolved:
-        return JSONResponse({"error": f"Unknown tool {tool_name!r}."}, status_code=404)
+        return {"error": f"Unknown tool {tool_name!r}."}, 404, {}
 
     tool_obj, func = resolved
     write_action = _effective_write_action(tool_obj, func, args)
@@ -274,10 +300,10 @@ async def _invoke_tool(tool_name: str, args: dict[str, Any], *, max_attempts: in
                         await asyncio.sleep(_jitter_sleep_seconds(delay, respect_min=True))
                         continue
 
-                    return JSONResponse(result, status_code=status_code, headers=headers)
+                    return result, status_code, headers
 
             payload = result if isinstance(result, dict) else result
-            return JSONResponse(payload)
+            return payload, 200, {}
         except Exception as exc:
             from github_mcp.mcp_server.error_handling import _structured_tool_error
 
@@ -301,7 +327,86 @@ async def _invoke_tool(tool_name: str, args: dict[str, Any], *, max_attempts: in
                 await asyncio.sleep(_jitter_sleep_seconds(delay, respect_min=True))
                 continue
 
-            return JSONResponse(structured, status_code=status_code, headers=headers)
+            return structured, status_code, headers
+
+
+def _invocation_payload(invocation: ToolInvocation) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "invocation_id": invocation.invocation_id,
+        "tool_name": invocation.tool_name,
+        "status": invocation.status,
+        "started_at": invocation.started_at,
+        "finished_at": invocation.finished_at,
+    }
+    if invocation.status in {"succeeded", "failed"}:
+        payload["result"] = invocation.result
+        payload["status_code"] = invocation.status_code
+        payload["headers"] = invocation.headers or {}
+    return payload
+
+
+async def _create_invocation(
+    tool_name: str, args: dict[str, Any], *, max_attempts: int = 1
+) -> ToolInvocation:
+    invocation_id = uuid.uuid4().hex
+    task = asyncio.create_task(_execute_tool(tool_name, args, max_attempts=max_attempts))
+    invocation = ToolInvocation(
+        invocation_id=invocation_id,
+        tool_name=tool_name,
+        args=args,
+        started_at=time.time(),
+        task=task,
+    )
+
+    async with _INVOCATIONS_LOCK:
+        _INVOCATIONS[invocation_id] = invocation
+
+    loop = asyncio.get_running_loop()
+
+    def _finalize(fut: asyncio.Future) -> None:
+        async def _update() -> None:
+            invocation.finished_at = time.time()
+            if fut.cancelled():
+                invocation.status = "cancelled"
+                return
+            try:
+                payload, status_code, headers = fut.result()
+            except Exception as exc:  # pragma: no cover - defensive
+                invocation.status = "failed"
+                invocation.result = {"error": str(exc)}
+                invocation.status_code = 500
+                invocation.headers = {}
+                return
+            invocation.status_code = int(status_code)
+            invocation.headers = dict(headers)
+            invocation.result = payload
+            invocation.status = "succeeded" if status_code < 400 else "failed"
+
+        loop.create_task(_update())
+
+    task.add_done_callback(_finalize)
+    return invocation
+
+
+async def _get_invocation(invocation_id: str) -> ToolInvocation | None:
+    async with _INVOCATIONS_LOCK:
+        return _INVOCATIONS.get(invocation_id)
+
+
+async def _cancel_invocation(invocation: ToolInvocation) -> None:
+    if invocation.task.done():
+        return
+    invocation.status = "cancelling"
+    invocation.task.cancel()
+
+
+async def _invoke_tool(tool_name: str, args: dict[str, Any], *, max_attempts: int = 1) -> Response:
+    payload, status_code, headers = await _execute_tool(
+        tool_name,
+        args,
+        max_attempts=max_attempts,
+    )
+    return JSONResponse(payload, status_code=status_code, headers=headers)
 
 
 def build_tool_registry_endpoint() -> Callable[[Request], Response]:
@@ -386,16 +491,81 @@ def build_tool_invoke_endpoint() -> Callable[[Request], Response]:
     return _endpoint
 
 
+def build_tool_invoke_async_endpoint() -> Callable[[Request], Response]:
+    async def _endpoint(request: Request) -> Response:
+        tool_name = request.path_params.get("tool_name")
+        if not tool_name:
+            return JSONResponse({"error": "tool_name is required"}, status_code=400)
+
+        try:
+            max_attempts = int(request.query_params.get("max_attempts") or "1")
+        except Exception:
+            max_attempts = 1
+
+        payload: Any = {}
+        if request.method in {"POST", "PUT", "PATCH"}:
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+        args = _normalize_payload(payload)
+        invocation = await _create_invocation(tool_name, args, max_attempts=max_attempts)
+        return JSONResponse(_invocation_payload(invocation), status_code=202)
+
+    return _endpoint
+
+
+def build_tool_invocation_status_endpoint() -> Callable[[Request], Response]:
+    async def _endpoint(request: Request) -> Response:
+        invocation_id = request.path_params.get("invocation_id")
+        if not invocation_id:
+            return JSONResponse({"error": "invocation_id is required"}, status_code=400)
+        invocation = await _get_invocation(str(invocation_id))
+        if invocation is None:
+            return JSONResponse({"error": "Unknown invocation id"}, status_code=404)
+        return JSONResponse(_invocation_payload(invocation))
+
+    return _endpoint
+
+
+def build_tool_invocation_cancel_endpoint() -> Callable[[Request], Response]:
+    async def _endpoint(request: Request) -> Response:
+        invocation_id = request.path_params.get("invocation_id")
+        if not invocation_id:
+            return JSONResponse({"error": "invocation_id is required"}, status_code=400)
+        invocation = await _get_invocation(str(invocation_id))
+        if invocation is None:
+            return JSONResponse({"error": "Unknown invocation id"}, status_code=404)
+        await _cancel_invocation(invocation)
+        return JSONResponse(_invocation_payload(invocation))
+
+    return _endpoint
+
+
 def register_tool_registry_routes(app: Any) -> None:
     registry_endpoint = build_tool_registry_endpoint()
     resources_endpoint = build_resources_endpoint()
     detail_endpoint = build_tool_detail_endpoint()
     invoke_endpoint = build_tool_invoke_endpoint()
+    invoke_async_endpoint = build_tool_invoke_async_endpoint()
+    invocation_status_endpoint = build_tool_invocation_status_endpoint()
+    invocation_cancel_endpoint = build_tool_invocation_cancel_endpoint()
 
     app.add_route("/tools", registry_endpoint, methods=["GET"])
     app.add_route("/resources", resources_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", detail_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", invoke_endpoint, methods=["POST"])
+    app.add_route("/tools/{tool_name:str}/invocations", invoke_async_endpoint, methods=["POST"])
+    app.add_route(
+        "/tool_invocations/{invocation_id:str}",
+        invocation_status_endpoint,
+        methods=["GET"],
+    )
+    app.add_route(
+        "/tool_invocations/{invocation_id:str}/cancel",
+        invocation_cancel_endpoint,
+        methods=["POST"],
+    )
     _prioritize_tool_registry_routes(
         app,
         [
@@ -403,6 +573,9 @@ def register_tool_registry_routes(app: Any) -> None:
             resources_endpoint,
             detail_endpoint,
             invoke_endpoint,
+            invoke_async_endpoint,
+            invocation_status_endpoint,
+            invocation_cancel_endpoint,
         ],
     )
 

@@ -38,10 +38,6 @@ class _DummyExternalClient:
 async def test_fetch_url_caps_and_sanitizes_headers(monkeypatch):
     import github_mcp.main_tools.querying as querying
 
-    # Force small caps to ensure truncation paths are exercised.
-    monkeypatch.setattr(querying, "GITHUB_MCP_MAX_FETCH_URL_BYTES", 5)
-    monkeypatch.setattr(querying, "GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS", 10)
-
     body = b"hello world"  # 11 bytes
     resp = _DummyStreamResponse(
         status_code=200,
@@ -64,8 +60,8 @@ async def test_fetch_url_caps_and_sanitizes_headers(monkeypatch):
     out = await querying.fetch_url("https://example.com")
 
     assert out["status_code"] == 200
-    assert out["truncated"] is True
-    assert out["size_bytes"] == 5
+    assert out["size_bytes"] == len(body)
+    assert out["content"] == "hello world"
 
     # Only allowlisted headers are returned.
     headers = out["headers"]

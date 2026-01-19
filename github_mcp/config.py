@@ -376,26 +376,6 @@ FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "80"))
 FILE_CACHE_MAX_ENTRIES = int(os.environ.get("FILE_CACHE_MAX_ENTRIES", "0"))
 FILE_CACHE_MAX_BYTES = int(os.environ.get("FILE_CACHE_MAX_BYTES", "0"))
 
-# ---------------------------------------------------------------------------
-# Large file handling
-# ---------------------------------------------------------------------------
-#
-# GitHub's Contents API can refuse to return base64 payloads for large files.
-# Additionally, returning very large decoded payloads to MCP clients is
-# counterproductive because it can exceed message limits and inflate memory.
-#
-# These caps apply to decoded bytes and decoded UTF-8 text returned by
-# get_file_contents/fetch_files and related helpers. For precise navigation
-# within large files, prefer the range-based tools (get_file_excerpt).
-
-# Tool output caps (decoded bytes / decoded UTF-8 text).
-# Set to 0 (or negative) to disable.
-GITHUB_MCP_MAX_FILE_CONTENT_BYTES = int(os.environ.get("GITHUB_MCP_MAX_FILE_CONTENT_BYTES", "0"))
-GITHUB_MCP_MAX_FILE_TEXT_CHARS = int(os.environ.get("GITHUB_MCP_MAX_FILE_TEXT_CHARS", "0"))
-
-GITHUB_MCP_MAX_FETCH_URL_BYTES = int(os.environ.get("GITHUB_MCP_MAX_FETCH_URL_BYTES", "0"))
-GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS = int(os.environ.get("GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS", "0"))
-
 # Workspace / command timeouts.
 # Semantics: 0 (or negative) disables timeouts.
 GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS = int(os.environ.get("GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", "0"))
@@ -1033,8 +1013,6 @@ __all__ = [
     "SERVER_START_TIME",
     "WORKSPACE_BASE_DIR",
     "SANDBOX_CONTENT_BASE_URL",
-    "GITHUB_MCP_MAX_FETCH_URL_BYTES",
-    "GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS",
     "git_identity_warnings",
     "format_log_context",
     "shorten_token",

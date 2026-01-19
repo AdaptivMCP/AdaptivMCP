@@ -1119,50 +1119,31 @@ def _truncate_text(value: Any, *, limit: int = 180) -> str:
         if isinstance(value, str):
             s = value
         elif isinstance(value, Mapping):
-            preferred = [
-                "id",
-                "name",
-                "full_name",
-                "path",
-                "status",
-                "state",
-                "type",
-                "message",
-                "url",
-            ]
             parts: list[str] = []
-            for key in preferred:
-                if key in value and value.get(key) is not None:
-                    parts.append(f"{key}={scalar(value.get(key))}")
-            if not parts:
-                for k in sorted(value.keys())[:6]:
-                    if value.get(k) is None:
-                        continue
-                    parts.append(f"{k}={scalar(value.get(k))}")
+            for k in sorted(value.keys()):
+                if value.get(k) is None:
+                    continue
+                parts.append(f"{k}={scalar(value.get(k))}")
             s = ", ".join(parts) if parts else "(object)"
         elif isinstance(value, list):
             if not value:
                 s = "(empty list)"
             else:
-                head = ", ".join(scalar(v) for v in value[:6])
-                tail = f" (+{len(value) - 6} more)" if len(value) > 6 else ""
-                s = f"[{head}{tail}]"
+                items = ", ".join(scalar(v) for v in value)
+                s = f"[{items}]"
         else:
             s = str(value)
     except Exception:
         s = str(value)
     s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
     s = " ".join(s.split())
-    if len(s) <= limit:
-        return s
-    return s[: max(0, limit - 1)] + "…"
+    return s
 
 
 def _clean_error_message(value: object, *, limit: int = 180) -> str:
     """Normalize error strings for operator-facing logs.
 
-    This keeps messages single-line, removes common noisy prefixes, and
-    truncates to a sane length.
+    This keeps messages single-line and removes common noisy prefixes.
     """
 
     s = _truncate_text(value, limit=limit).strip()

@@ -7,8 +7,6 @@ from typing import Any
 
 from .config import (
     GITHUB_MCP_INCLUDE_BASE64_CONTENT,
-    GITHUB_MCP_MAX_FILE_CONTENT_BYTES,
-    GITHUB_MCP_MAX_FILE_TEXT_CHARS,
     SANDBOX_CONTENT_BASE_URL,
 )
 from .exceptions import GitHubAPIError
@@ -103,12 +101,7 @@ async def _decode_github_content(
         raise GitHubAPIError("Failed to decode GitHub content") from exc
 
     decoded_len = len(decoded)
-    is_truncated = False
     stored_bytes: bytes | None = decoded
-    if GITHUB_MCP_MAX_FILE_CONTENT_BYTES > 0 and decoded_len > GITHUB_MCP_MAX_FILE_CONTENT_BYTES:
-        # Do not retain large blobs in memory or return them to the client.
-        stored_bytes = None
-        is_truncated = True
 
     text: str | None = None
     if stored_bytes is not None:
@@ -116,32 +109,16 @@ async def _decode_github_content(
             text = stored_bytes.decode("utf-8")
         except Exception:
             text = None
-    else:
-        # Best-effort preview when the decoded content is too large.
-        try:
-            preview = decoded[: max(0, min(decoded_len, 65536))].decode("utf-8", errors="replace")
-        except Exception:
-            preview = None
-
-        if isinstance(preview, str) and GITHUB_MCP_MAX_FILE_TEXT_CHARS > 0:
-            preview = preview[:GITHUB_MCP_MAX_FILE_TEXT_CHARS]
-        text = preview
 
     response: dict[str, Any] = {
         "json": j,
-        "content": content if (GITHUB_MCP_INCLUDE_BASE64_CONTENT and not is_truncated) else None,
-        "encoding": encoding if (GITHUB_MCP_INCLUDE_BASE64_CONTENT and not is_truncated) else None,
+        "content": content if GITHUB_MCP_INCLUDE_BASE64_CONTENT else None,
+        "encoding": encoding if GITHUB_MCP_INCLUDE_BASE64_CONTENT else None,
         "sha": j.get("sha"),
         "text": text,
         "decoded_bytes": stored_bytes,
         "size": decoded_len,
-        "truncated": is_truncated,
     }
-    if is_truncated:
-        response["message"] = (
-            "File content exceeded configured limits and was truncated. "
-            "get_file_excerpt provides range-based access."
-        )
     return response
 
 
