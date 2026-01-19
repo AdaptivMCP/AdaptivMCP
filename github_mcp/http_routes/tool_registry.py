@@ -71,9 +71,11 @@ def _tool_catalog(
         catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
         tools = list(catalog.get("tools") or [])
         catalog_error: str | None = None
+        catalog_errors = catalog.get("errors")
     except Exception as exc:
         tools = []
         catalog_error = str(exc) or "Failed to build tool catalog."
+        catalog_errors = None
 
     resources = []
     base_path = _normalize_base_path(base_path)
@@ -93,6 +95,8 @@ def _tool_catalog(
     payload: dict[str, Any] = {"tools": tools, "resources": resources, "finite": True}
     if catalog_error is not None:
         payload["error"] = catalog_error
+    if isinstance(catalog_errors, list) and catalog_errors:
+        payload["errors"] = catalog_errors
     return payload
 
 

@@ -23,7 +23,12 @@ def test_list_all_actions_includes_introspection_tools():
     catalog = introspection.list_all_actions(include_parameters=False, compact=True)
     names = {tool.get("name") for tool in catalog.get("tools", [])}
 
-    assert {"list_tools", "list_all_actions", "list_write_actions"}.issubset(names)
+    assert {
+        "list_resources",
+        "list_tools",
+        "list_all_actions",
+        "list_write_actions",
+    }.issubset(names)
 
 
 def test_list_write_actions_filters_write_action(monkeypatch):
@@ -78,3 +83,28 @@ def test_list_tools_write_allowed_true(monkeypatch):
 
     assert idx["write_tool"]["write_action"] is True
     assert idx["write_tool"]["write_allowed"] is True
+
+
+def test_list_introspection_reports_registry_errors(monkeypatch):
+    registry = [
+        {"name": "bad_entry"},
+        (_make_tool("bad_callable", False), "not_callable"),
+        (_make_tool("good_tool", False), _make_fn("good_tool")),
+    ]
+    monkeypatch.setattr(main, "_REGISTERED_MCP_TOOLS", registry)
+
+    catalog = introspection.list_all_actions(include_parameters=False, compact=True)
+    assert "errors" in catalog
+    assert any(error.get("entry_index") == 0 for error in catalog["errors"])
+    assert any(error.get("entry_index") == 1 for error in catalog["errors"])
+
+    tools = {tool.get("name") for tool in catalog.get("tools", [])}
+    assert "good_tool" in tools
+
+    listed = asyncio.run(introspection.list_tools())
+    assert "errors" in listed
+
+    resources = introspection.list_resources(base_path="/api")
+    assert "errors" in resources
+    uris = {resource.get("uri") for resource in resources.get("resources", [])}
+    assert "/api/tools/good_tool" in uris
