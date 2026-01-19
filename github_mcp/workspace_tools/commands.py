@@ -14,7 +14,11 @@ from github_mcp.server import (
 )
 from github_mcp.utils import _normalize_timeout_seconds
 
-from ._shared import _tw
+from ._shared import _cmd_invokes_git, _tw
+
+
+def _parse_branch_list(stdout: str) -> set[str]:
+    return {line.strip() for line in (stdout or "").splitlines() if line.strip()}
 
 
 def _terminal_command_write_action(args: dict[str, Any]) -> bool:
@@ -354,6 +358,74 @@ async def terminal_command(
             env=env,
         )
 
+        # Best-effort: if the caller created a new local branch (e.g. via
+        # `git checkout -b foo` / `git switch -c foo`) ensure the corresponding
+        # branch exists on origin so subsequent tool calls that rely on
+        # `origin/<branch>` do not fail.
+        auto_push: dict[str, Any] | None = None
+        if _cmd_invokes_git(command):
+            try:
+                t_default = _normalize_timeout_seconds(
+                    config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS,
+                    timeout_seconds,
+                )
+                # Only attempt when we are on a named branch (not detached).
+                cur = await deps["run_shell"](
+                    "git symbolic-ref --quiet --short HEAD",
+                    cwd=cwd,
+                    timeout_seconds=t_default,
+                    env=env,
+                )
+                current_branch = (cur.get("stdout", "") or "").strip() if isinstance(cur, dict) else ""
+                if current_branch:
+                    default_branch = _tw()._default_branch_for_repo(full_name)
+                    if current_branch != default_branch:
+                        # If upstream is already configured, do nothing.
+                        upstream = await deps["run_shell"](
+                            "git rev-parse --abbrev-ref --symbolic-full-name @{u}",
+                            cwd=cwd,
+                            timeout_seconds=t_default,
+                            env=env,
+                        )
+                        has_upstream = bool(
+                            isinstance(upstream, dict)
+                            and upstream.get("exit_code", 0) == 0
+                            and (upstream.get("stdout", "") or "").strip()
+                        )
+                        if not has_upstream:
+                            # Check whether the branch exists on origin.
+                            await deps["run_shell"](
+                                "git fetch --prune origin",
+                                cwd=cwd,
+                                timeout_seconds=t_default,
+                                env=env,
+                            )
+                            remote_check = await deps["run_shell"](
+                                f"git ls-remote --heads origin {shlex.quote(current_branch)}",
+                                cwd=cwd,
+                                timeout_seconds=t_default,
+                                env=env,
+                            )
+                            remote_exists = bool(
+                                isinstance(remote_check, dict)
+                                and (remote_check.get("stdout", "") or "").strip()
+                            )
+                            if not remote_exists:
+                                push_res = await deps["run_shell"](
+                                    f"git push -u origin {shlex.quote(current_branch)}",
+                                    cwd=cwd,
+                                    timeout_seconds=t_default,
+                                    env=env,
+                                )
+                                auto_push = {
+                                    "current_branch": current_branch,
+                                    "remote_check": remote_check,
+                                    "push": push_res,
+                                }
+            except Exception as _auto_exc:
+                # Do not fail the user's command if auto-push encounters issues.
+                auto_push = {"error": str(_auto_exc)}
+
         exit_code = 0
         timed_out = False
         if isinstance(result, dict):
@@ -384,6 +456,7 @@ async def terminal_command(
             "install": install_result,
             "install_steps": install_steps,
             "result": result,
+            **({"auto_push_branch": auto_push} if auto_push is not None else {}),
         }
 
         return out
