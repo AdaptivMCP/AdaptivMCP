@@ -28,6 +28,25 @@ def _step(
     steps.append(payload)
 
 
+def _error_return(
+    *,
+    steps: list[dict[str, Any]],
+    action: str,
+    detail: str,
+    reason: str,
+    **payload: Any,
+) -> dict[str, Any]:
+    """Append a terminal error step and return a stable error envelope.
+
+    This workflow is UI-oriented: callers rely on the returned `steps` list to
+    render what happened. Historically we returned early on failure without
+    recording a step, which made errors look "skipped" in clients.
+    """
+
+    _step(steps, action, detail, status="error", reason=reason)
+    return {"status": "error", "reason": reason, "steps": steps, **payload}
+
+
 @mcp_tool(write_action=True)
 async def workspace_apply_ops_and_open_pr(
     full_name: str,
@@ -64,6 +83,8 @@ async def workspace_apply_ops_and_open_pr(
       - If `run_quality` is true and the quality suite fails, no commit/PR is created.
     """
 
+    steps: list[dict[str, Any]] = []
+
     try:
         if operations is None:
             operations = []
@@ -73,7 +94,6 @@ async def workspace_apply_ops_and_open_pr(
             raise ValueError("operations must contain at least one operation")
 
         tw = _tw()
-        steps: list[dict[str, Any]] = []
 
         effective_base = tw._effective_ref_for_repo(full_name, base_ref)
 
@@ -84,7 +104,7 @@ async def workspace_apply_ops_and_open_pr(
             base_ref=effective_base,
         )
 
-        sync_res = None
+        sync_res: Any = None
         if sync_base_to_remote:
             _step(
                 steps,
@@ -97,16 +117,20 @@ async def workspace_apply_ops_and_open_pr(
                 discard_local_changes=discard_local_changes,
             )
             if isinstance(sync_res, dict) and sync_res.get("status") == "error":
-                return {
-                    "status": "error",
-                    "reason": "sync_base_failed",
-                    "steps": steps,
-                    "sync": sync_res,
-                }
+                return _error_return(
+                    steps=steps,
+                    action="Sync base",
+                    detail="Failed to sync base workspace clone.",
+                    reason="sync_base_failed",
+                    sync=sync_res,
+                )
             _step(steps, "Sync base", "Base workspace clone is ready.", sync=sync_res)
         else:
             _step(
-                steps, "Sync base", "Skipped base sync (sync_base_to_remote=false).", status="skip"
+                steps,
+                "Sync base",
+                "Skipped base sync (sync_base_to_remote=false).",
+                status="skip",
             )
 
         # Create a unique feature branch if none was provided.
@@ -127,13 +151,14 @@ async def workspace_apply_ops_and_open_pr(
             push=True,
         )
         if isinstance(branch_res, dict) and branch_res.get("status") == "error":
-            return {
-                "status": "error",
-                "reason": "create_branch_failed",
-                "steps": steps,
-                "sync": sync_res,
-                "branch": branch_res,
-            }
+            return _error_return(
+                steps=steps,
+                action="Create branch",
+                detail="Failed to create feature branch.",
+                reason="create_branch_failed",
+                sync=sync_res,
+                branch=branch_res,
+            )
         _step(steps, "Create branch", "Feature branch ready.", branch=branch_res)
 
         _step(steps, "Apply operations", f"Applying {len(operations)} operation(s).")
@@ -146,26 +171,28 @@ async def workspace_apply_ops_and_open_pr(
             preview_only=False,
         )
         if isinstance(ops_res, dict) and ops_res.get("status") == "error":
-            return {
-                "status": "error",
-                "reason": "apply_operations_failed",
-                "steps": steps,
-                "sync": sync_res,
-                "branch": branch_res,
-                "operations": ops_res,
-            }
+            return _error_return(
+                steps=steps,
+                action="Apply operations",
+                detail="Failed to apply workspace operations.",
+                reason="apply_operations_failed",
+                sync=sync_res,
+                branch=branch_res,
+                operations=ops_res,
+            )
         if isinstance(ops_res, dict) and ops_res.get("ok") is False:
-            return {
-                "status": "error",
-                "reason": "apply_operations_partial",
-                "steps": steps,
-                "sync": sync_res,
-                "branch": branch_res,
-                "operations": ops_res,
-            }
+            return _error_return(
+                steps=steps,
+                action="Apply operations",
+                detail="Operations applied partially; at least one operation failed.",
+                reason="apply_operations_partial",
+                sync=sync_res,
+                branch=branch_res,
+                operations=ops_res,
+            )
         _step(steps, "Apply operations", "Operations applied.", operations=ops_res)
 
-        quality_res = None
+        quality_res: Any = None
         if run_quality:
             _step(steps, "Quality suite", "Running lint/tests before commit.")
             quality_res = await tw.run_quality_suite(
@@ -178,20 +205,23 @@ async def workspace_apply_ops_and_open_pr(
                 developer_defaults=False,
             )
             if isinstance(quality_res, dict) and quality_res.get("status") in {"failed", "error"}:
-                return {
-                    "status": "error",
-                    "reason": "quality_suite_failed",
-                    "steps": steps,
-                    "sync": sync_res,
-                    "branch": branch_res,
-                    "operations": ops_res,
-                    "quality": quality_res,
-                    "message": "Quality suite failed; changes were not committed and no PR was opened.",
-                }
+                return _error_return(
+                    steps=steps,
+                    action="Quality suite",
+                    detail="Quality suite failed; changes were not committed and no PR was opened.",
+                    reason="quality_suite_failed",
+                    sync=sync_res,
+                    branch=branch_res,
+                    operations=ops_res,
+                    quality=quality_res,
+                )
             _step(steps, "Quality suite", "Quality suite passed.", quality=quality_res)
         else:
             _step(
-                steps, "Quality suite", "Skipped quality suite (run_quality=false).", status="skip"
+                steps,
+                "Quality suite",
+                "Skipped quality suite (run_quality=false).",
+                status="skip",
             )
 
         title = pr_title or f"{feature_ref} -> {effective_base}"
@@ -207,16 +237,17 @@ async def workspace_apply_ops_and_open_pr(
             run_quality=False,
         )
         if isinstance(pr_res, dict) and pr_res.get("status") == "error":
-            return {
-                "status": "error",
-                "reason": "commit_or_pr_failed",
-                "steps": steps,
-                "sync": sync_res,
-                "branch": branch_res,
-                "operations": ops_res,
-                "quality": quality_res,
-                "pr": pr_res,
-            }
+            return _error_return(
+                steps=steps,
+                action="Commit + PR",
+                detail="Failed to commit and/or open PR.",
+                reason="commit_or_pr_failed",
+                sync=sync_res,
+                branch=branch_res,
+                operations=ops_res,
+                quality=quality_res,
+                pr=pr_res,
+            )
 
         _step(
             steps,
@@ -241,4 +272,14 @@ async def workspace_apply_ops_and_open_pr(
             "steps": steps,
         }
     except Exception as exc:
-        return _structured_tool_error(exc, context="workspace_apply_ops_and_open_pr")
+        # Always return steps so UIs can render what happened.
+        _step(
+            steps,
+            "Error",
+            f"Unhandled exception: {exc.__class__.__name__}: {exc}",
+            status="error",
+        )
+        payload = _structured_tool_error(exc, context="workspace_apply_ops_and_open_pr")
+        if isinstance(payload, dict) and "steps" not in payload:
+            payload["steps"] = steps
+        return payload
