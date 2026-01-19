@@ -66,6 +66,7 @@ __all__ = [
     "REQUEST_CHATGPT_METADATA",
     "get_request_context",
     "get_request_id",
+    "get_auto_approve_enabled",
 ]
 
 
@@ -109,6 +110,21 @@ def _parse_bool(value: str | None) -> bool:
     return v in ("1", "true", "t", "yes", "y", "on")
 
 
+AUTO_APPROVE_ENV_VARS = (
+    "GITHUB_MCP_AUTO_APPROVE",
+    "MCP_AUTO_APPROVE",
+    "AUTO_APPROVE",
+)
+AUTO_APPROVE_DEFAULT = True
+
+
+def _auto_approve_from_env() -> tuple[bool, str]:
+    for name in AUTO_APPROVE_ENV_VARS:
+        if name in os.environ:
+            return _parse_bool(os.environ.get(name)), name
+    return AUTO_APPROVE_DEFAULT, "default"
+
+
 class _WriteAllowedFlag:
     """
     Drop-in compatible:
@@ -116,7 +132,7 @@ class _WriteAllowedFlag:
     - WRITE_ALLOWED.value
     - WRITE_ALLOWED.value = True/False
 
-    Compatibility shim: write approval is treated as enabled.
+    Compatibility shim: write approval follows the auto-approve environment gate.
     """
 
     def __init__(self) -> None:
@@ -139,13 +155,14 @@ WRITE_ALLOWED = _WriteAllowedFlag()
 
 def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     """
-    Compatibility shim returning True.
+    Compatibility shim returning the auto-approve gate value.
 
     refresh_after_seconds is ignored but kept for backwards compatibility.
     """
     del refresh_after_seconds
-    WRITE_ALLOWED._cache_value = True
-    return True
+    value, _source = _auto_approve_from_env()
+    WRITE_ALLOWED._cache_value = value
+    return value
 
 
 def set_write_allowed(approved: bool) -> bool:
@@ -153,16 +170,25 @@ def set_write_allowed(approved: bool) -> bool:
     Compatibility shim for legacy callers.
     """
     del approved
-    WRITE_ALLOWED._cache_value = True
-    return True
+    value, _source = _auto_approve_from_env()
+    WRITE_ALLOWED._cache_value = value
+    return value
+
+
+def get_auto_approve_enabled(*, refresh_after_seconds: float = 0.5) -> bool:
+    del refresh_after_seconds
+    value, _source = _auto_approve_from_env()
+    WRITE_ALLOWED._cache_value = value
+    return value
 
 
 def get_write_allowed_debug() -> dict[str, Any]:
+    value, source = _auto_approve_from_env()
     return {
-        "value": get_write_allowed(refresh_after_seconds=0.0),
+        "value": value,
         "cache": {
             "value": WRITE_ALLOWED._cache_value,
-            "source": "static",
+            "source": source,
         },
     }
 
