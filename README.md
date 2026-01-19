@@ -19,22 +19,6 @@ The repo mirror is not automatically the live GitHub state. The remote branch re
 
 For a glossary of terms used across docs and code, see `docs/terminology.md`.
 
-## Local execution profile
-
-Production deployment targets Render.com. Local execution mirrors the same HTTP surface and environment-variable driven configuration.
-
-Common environment variables:
-
-```bash
-export GITHUB_TOKEN="..."  # GitHub authentication for API-backed tools
-export PORT=8000           # Optional; defaults to 8000 for local runs
-```
-
-Example local server invocation:
-
-```bash
-uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
-```
 
 MCP clients connect via `/sse`. `/healthz` returns a compact health payload.
 
