@@ -83,6 +83,9 @@ get_workspace_file_contents = _fs.get_workspace_file_contents
 get_workspace_files_contents = _fs.get_workspace_files_contents
 set_workspace_file_contents = _fs.set_workspace_file_contents
 edit_workspace_text_range = _fs.edit_workspace_text_range
+delete_workspace_lines = _fs.delete_workspace_lines
+delete_workspace_char = _fs.delete_workspace_char
+delete_workspace_word = _fs.delete_workspace_word
 edit_workspace_line = _fs.edit_workspace_line
 replace_workspace_text = _fs.replace_workspace_text
 apply_patch = _fs.apply_patch
@@ -144,6 +147,9 @@ __all__ = [
     "get_workspace_files_contents",
     "set_workspace_file_contents",
     "edit_workspace_text_range",
+    "delete_workspace_lines",
+    "delete_workspace_char",
+    "delete_workspace_word",
     "edit_workspace_line",
     "replace_workspace_text",
     "apply_patch",

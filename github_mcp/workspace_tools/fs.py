@@ -1,6 +1,7 @@
 # Split from github_mcp.tools_workspace (generated).
 import glob
 import hashlib
+import re
 import os
 import shutil
 import subprocess
@@ -913,6 +914,272 @@ async def edit_workspace_text_range(
 
 
 @mcp_tool(write_action=True)
+async def delete_workspace_lines(
+    full_name: str,
+    ref: str = "main",
+    path: str = "",
+    start_line: int = 1,
+    end_line: int = 1,
+    create_parents: bool = True,
+) -> dict[str, Any]:
+    """Delete one or more whole lines from a workspace file.
+
+    Line numbers are 1-indexed and inclusive. Deleting a single line is the same
+    as setting start_line=end_line.
+
+    This is a convenience wrapper over edit_workspace_text_range where the range
+    spans complete lines (including their newline when present).
+    """
+
+    try:
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("path must be a non-empty string")
+        if not isinstance(start_line, int) or start_line < 1:
+            raise ValueError("start_line must be an int >= 1")
+        if not isinstance(end_line, int) or end_line < 1:
+            raise ValueError("end_line must be an int >= 1")
+        if end_line < start_line:
+            raise ValueError("end_line must be >= start_line")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        info = _workspace_read_text(repo_dir, path)
+        if not info.get("exists"):
+            raise FileNotFoundError(path)
+
+        original = info.get("text") or ""
+        lines = _split_lines_keepends(original)
+        if not lines:
+            raise ValueError("cannot delete lines from an empty file")
+        if start_line > len(lines) or end_line > len(lines):
+            raise ValueError("line range out of bounds")
+
+        start_offset = _pos_to_offset(lines, int(start_line), 1)
+        if end_line < len(lines):
+            end_offset = _pos_to_offset(lines, int(end_line) + 1, 1)
+        else:
+            end_offset = _pos_to_offset(lines, len(lines) + 1, 1)
+
+        removed = original[start_offset:end_offset]
+        updated = original[:start_offset] + original[end_offset:]
+
+        write_info = _workspace_write_text(
+            repo_dir,
+            path,
+            updated,
+            create_parents=create_parents,
+        )
+
+        return {
+            "ref": effective_ref,
+            "status": "edited",
+            "path": path,
+            "operation": "delete_lines",
+            "start_line": int(start_line),
+            "end_line": int(end_line),
+            "removed": removed,
+            "line_count_before": len(lines),
+            "line_count_after": len(_split_lines_keepends(updated)),
+            "__log_diff": _maybe_diff_for_log(
+                path=path,
+                before=original,
+                after=updated,
+                before_exists=True,
+            ),
+            **write_info,
+        }
+    except Exception as exc:
+        return _structured_tool_error(
+            exc,
+            context="delete_workspace_lines",
+            path=path,
+            start_line=start_line,
+            end_line=end_line,
+        )
+
+
+@mcp_tool(write_action=True)
+async def delete_workspace_char(
+    full_name: str,
+    ref: str = "main",
+    path: str = "",
+    line: int = 1,
+    col: int = 1,
+    count: int = 1,
+    create_parents: bool = True,
+) -> dict[str, Any]:
+    """Delete one or more characters starting at a (line, col) position.
+
+    Positions are 1-indexed. `count` is measured in Python string characters.
+    """
+
+    try:
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("path must be a non-empty string")
+        if not isinstance(line, int) or line < 1:
+            raise ValueError("line must be an int >= 1")
+        if not isinstance(col, int) or col < 1:
+            raise ValueError("col must be an int >= 1")
+        if not isinstance(count, int) or count < 1:
+            raise ValueError("count must be an int >= 1")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        info = _workspace_read_text(repo_dir, path)
+        if not info.get("exists"):
+            raise FileNotFoundError(path)
+
+        original = info.get("text") or ""
+        lines = _split_lines_keepends(original)
+        start_offset = _pos_to_offset(lines, int(line), int(col))
+        end_offset = start_offset + int(count)
+        if end_offset > len(original):
+            raise ValueError("delete range extends beyond end of file")
+
+        removed = original[start_offset:end_offset]
+        updated = original[:start_offset] + original[end_offset:]
+
+        write_info = _workspace_write_text(
+            repo_dir,
+            path,
+            updated,
+            create_parents=create_parents,
+        )
+
+        return {
+            "ref": effective_ref,
+            "status": "edited",
+            "path": path,
+            "operation": "delete_char",
+            "start": {"line": int(line), "col": int(col)},
+            "count": int(count),
+            "removed": removed,
+            "bytes_before": len(original.encode("utf-8")),
+            "bytes_after": len(updated.encode("utf-8")),
+            "__log_diff": _maybe_diff_for_log(
+                path=path,
+                before=original,
+                after=updated,
+                before_exists=True,
+            ),
+            **write_info,
+        }
+    except Exception as exc:
+        return _structured_tool_error(
+            exc,
+            context="delete_workspace_char",
+            path=path,
+            line=line,
+            col=col,
+            count=count,
+        )
+
+
+@mcp_tool(write_action=True)
+async def delete_workspace_word(
+    full_name: str,
+    ref: str = "main",
+    path: str = "",
+    word: str = "",
+    occurrence: int = 1,
+    replace_all: bool = False,
+    case_sensitive: bool = True,
+    whole_word: bool = True,
+    create_parents: bool = True,
+) -> dict[str, Any]:
+    """Delete a word (or substring) from a workspace file.
+
+    - occurrence is 1-indexed (ignored when replace_all=True)
+    - when whole_word=True, word boundaries (\b) are used
+    """
+
+    try:
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("path must be a non-empty string")
+        if not isinstance(word, str) or word == "":
+            raise ValueError("word must be a non-empty string")
+        if not isinstance(occurrence, int) or occurrence < 1:
+            raise ValueError("occurrence must be an int >= 1")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        info = _workspace_read_text(repo_dir, path)
+        if not info.get("exists"):
+            raise FileNotFoundError(path)
+
+        original = info.get("text") or ""
+        flags = 0 if case_sensitive else re.IGNORECASE
+        pat = re.escape(word)
+        if whole_word:
+            pat = r"\b" + pat + r"\b"
+
+        matches = list(re.finditer(pat, original, flags))
+        if not matches:
+            updated = original
+            removed = ""
+            removed_span = None
+        elif replace_all:
+            removed = ""  # potentially multiple
+            removed_span = None
+            updated = re.sub(pat, "", original, flags=flags)
+        else:
+            idx = min(len(matches), occurrence) - 1
+            if idx < 0 or idx >= len(matches):
+                updated = original
+                removed = ""
+                removed_span = None
+            else:
+                m = matches[idx]
+                removed = m.group(0)
+                removed_span = {"start": m.start(), "end": m.end()}
+                updated = original[: m.start()] + original[m.end() :]
+
+        write_info = _workspace_write_text(
+            repo_dir,
+            path,
+            updated,
+            create_parents=create_parents,
+        )
+
+        status = "edited" if updated != original else "noop"
+        return {
+            "ref": effective_ref,
+            "status": status,
+            "path": path,
+            "operation": "delete_word",
+            "word": word,
+            "occurrence": int(occurrence),
+            "replace_all": bool(replace_all),
+            "case_sensitive": bool(case_sensitive),
+            "whole_word": bool(whole_word),
+            "removed": removed,
+            "removed_span": removed_span,
+            "__log_diff": _maybe_diff_for_log(
+                path=path,
+                before=original,
+                after=updated,
+                before_exists=True,
+            ),
+            **write_info,
+        }
+    except Exception as exc:
+        return _structured_tool_error(
+            exc,
+            context="delete_workspace_word",
+            path=path,
+            word=word,
+            occurrence=occurrence,
+            replace_all=replace_all,
+        )
+
+
+@mcp_tool(write_action=True)
 async def edit_workspace_line(
     full_name: str,
     ref: str = "main",
@@ -1296,6 +1563,9 @@ async def apply_workspace_operations(
       - {"op": "write", "path": "...", "content": "..."}
       - {"op": "replace_text", "path": "...", "old": "...", "new": "...", "replace_all": bool, "occurrence": int}
       - {"op": "edit_range", "path": "...", "start": {"line": int, "col": int}, "end": {"line": int, "col": int}, "replacement": "..."}
+      - {"op": "delete_lines", "path": "...", "start_line": int, "end_line": int}
+      - {"op": "delete_word", "path": "...", "word": "...", "occurrence": int, "replace_all": bool, "case_sensitive": bool, "whole_word": bool}
+      - {"op": "delete_chars", "path": "...", "line": int, "col": int, "count": int}
       - {"op": "delete", "path": "...", "allow_missing": bool}
       - {"op": "move", "src": "...", "dst": "...", "overwrite": bool}
       - {"op": "apply_patch", "patch": "..."}
@@ -1501,6 +1771,165 @@ async def apply_workspace_operations(
                     )
                     continue
 
+
+
+                if op_name == "delete_lines":
+                    path = op.get("path")
+                    start_line = int(op.get("start_line", 1) or 1)
+                    end_line = int(op.get("end_line", start_line) or start_line)
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("delete_lines.path must be a non-empty string")
+                    if start_line < 1 or end_line < 1:
+                        raise ValueError("delete_lines.start_line/end_line must be >= 1")
+                    if end_line < start_line:
+                        raise ValueError("delete_lines.end_line must be >= start_line")
+
+                    abs_path = _workspace_safe_join(repo_dir, path)
+                    if not os.path.exists(abs_path):
+                        raise FileNotFoundError(path)
+                    _backup_path(abs_path)
+                    before = (
+                        backups[abs_path].decode("utf-8", errors="replace")
+                        if backups[abs_path]
+                        else ""
+                    )
+                    lines = _split_lines_keepends(before)
+                    if not lines:
+                        raise ValueError("cannot delete lines from an empty file")
+                    if start_line > len(lines) or end_line > len(lines):
+                        raise ValueError("delete_lines range out of bounds")
+
+                    start_offset = _pos_to_offset(lines, start_line, 1)
+                    if end_line < len(lines):
+                        end_offset = _pos_to_offset(lines, end_line + 1, 1)
+                    else:
+                        end_offset = _pos_to_offset(lines, len(lines) + 1, 1)
+
+                    after = before[:start_offset] + before[end_offset:]
+                    if not preview_only and after != before:
+                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    if isinstance(d, str) and d:
+                        diffs.append(d)
+                    results.append(
+                        {
+                            "index": idx,
+                            "op": "delete_lines",
+                            "path": path,
+                            "status": "ok" if after != before else "noop",
+                            "start_line": start_line,
+                            "end_line": end_line,
+                        }
+                    )
+                    continue
+
+                if op_name == "delete_chars":
+                    path = op.get("path")
+                    line = int(op.get("line", 1) or 1)
+                    col = int(op.get("col", 1) or 1)
+                    count = int(op.get("count", 1) or 1)
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("delete_chars.path must be a non-empty string")
+                    if line < 1 or col < 1:
+                        raise ValueError("delete_chars.line/col must be >= 1")
+                    if count < 1:
+                        raise ValueError("delete_chars.count must be >= 1")
+
+                    abs_path = _workspace_safe_join(repo_dir, path)
+                    if not os.path.exists(abs_path):
+                        raise FileNotFoundError(path)
+                    _backup_path(abs_path)
+                    before = (
+                        backups[abs_path].decode("utf-8", errors="replace")
+                        if backups[abs_path]
+                        else ""
+                    )
+                    lines = _split_lines_keepends(before)
+                    start_offset = _pos_to_offset(lines, line, col)
+                    end_offset = start_offset + count
+                    if end_offset > len(before):
+                        raise ValueError("delete_chars range extends beyond end of file")
+                    after = before[:start_offset] + before[end_offset:]
+
+                    if not preview_only and after != before:
+                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    if isinstance(d, str) and d:
+                        diffs.append(d)
+                    results.append(
+                        {
+                            "index": idx,
+                            "op": "delete_chars",
+                            "path": path,
+                            "status": "ok" if after != before else "noop",
+                            "line": line,
+                            "col": col,
+                            "count": count,
+                        }
+                    )
+                    continue
+
+                if op_name == "delete_word":
+                    path = op.get("path")
+                    word = op.get("word")
+                    occurrence = int(op.get("occurrence", 1) or 1)
+                    replace_all = bool(op.get("replace_all", False))
+                    case_sensitive = bool(op.get("case_sensitive", True))
+                    whole_word = bool(op.get("whole_word", True))
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("delete_word.path must be a non-empty string")
+                    if not isinstance(word, str) or word == "":
+                        raise ValueError("delete_word.word must be a non-empty string")
+                    if occurrence < 1:
+                        raise ValueError("delete_word.occurrence must be >= 1")
+
+                    abs_path = _workspace_safe_join(repo_dir, path)
+                    if not os.path.exists(abs_path):
+                        raise FileNotFoundError(path)
+                    _backup_path(abs_path)
+                    before = (
+                        backups[abs_path].decode("utf-8", errors="replace")
+                        if backups[abs_path]
+                        else ""
+                    )
+
+                    flags = 0 if case_sensitive else re.IGNORECASE
+                    pat = re.escape(word)
+                    if whole_word:
+                        pat = r"\b" + pat + r"\b"
+
+                    matches = list(re.finditer(pat, before, flags))
+                    if not matches:
+                        after = before
+                    elif replace_all:
+                        after = re.sub(pat, "", before, flags=flags)
+                    else:
+                        mi = min(len(matches), occurrence) - 1
+                        if mi < 0 or mi >= len(matches):
+                            after = before
+                        else:
+                            m = matches[mi]
+                            after = before[: m.start()] + before[m.end() :]
+
+                    if not preview_only and after != before:
+                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    if isinstance(d, str) and d:
+                        diffs.append(d)
+                    results.append(
+                        {
+                            "index": idx,
+                            "op": "delete_word",
+                            "path": path,
+                            "status": "ok" if after != before else "noop",
+                            "word": word,
+                            "occurrence": occurrence,
+                            "replace_all": replace_all,
+                            "case_sensitive": case_sensitive,
+                            "whole_word": whole_word,
+                        }
+                    )
+                    continue
                 if op_name == "delete":
                     path = op.get("path")
                     allow_missing = bool(op.get("allow_missing", True))
