@@ -25,6 +25,13 @@ _LOG_WRITE_DIFFS = os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS", "1").strip().low
 }
 
 
+# Default read limits to avoid loading multi-megabyte files into memory.
+# These are used by the single-file and multi-file read tools unless callers
+# override them.
+_DEFAULT_MAX_READ_BYTES = 2_000_000
+_DEFAULT_MAX_READ_CHARS = 300_000
+
+
 def _maybe_diff_for_log(
     *,
     path: str,
@@ -144,11 +151,23 @@ def _workspace_read_text_limited(
     path: str,
     *,
     max_chars: int,
+    max_bytes: int | None = None,
 ) -> dict[str, Any]:
-    """Read a workspace file as text (max_chars accepted but not enforced)."""
+    """Read a workspace file as text with hard truncation limits.
+
+    - max_bytes limits the number of raw bytes read from disk.
+    - max_chars limits the number of decoded characters returned.
+
+    The returned payload includes a `truncated` boolean.
+    """
 
     if not isinstance(max_chars, int) or max_chars < 1:
         raise ValueError("max_chars must be an int >= 1")
+    if max_bytes is None:
+        # Heuristic: assume up to ~4 bytes per char for UTF-8.
+        max_bytes = max(_DEFAULT_MAX_READ_BYTES, max_chars * 4)
+    if not isinstance(max_bytes, int) or max_bytes < 1:
+        raise ValueError("max_bytes must be an int >= 1")
 
     abs_path = _workspace_safe_join(repo_dir, path)
     if not os.path.exists(abs_path):
@@ -162,8 +181,10 @@ def _workspace_read_text_limited(
         }
 
     size_bytes = os.path.getsize(abs_path)
+    truncated_bytes = size_bytes > max_bytes
+    to_read = min(size_bytes, max_bytes)
     with open(abs_path, "rb") as f:
-        data = f.read()
+        data = f.read(to_read)
 
     had_errors = False
     try:
@@ -171,6 +192,10 @@ def _workspace_read_text_limited(
     except UnicodeDecodeError:
         had_errors = True
         text = data.decode("utf-8", errors="replace")
+
+    truncated_chars = len(text) > max_chars
+    if truncated_chars:
+        text = text[:max_chars]
 
     digest = hashlib.blake2s(text.encode("utf-8", errors="replace"), digest_size=4).hexdigest()
 
@@ -181,8 +206,80 @@ def _workspace_read_text_limited(
         "encoding": "utf-8",
         "had_decoding_errors": had_errors,
         "size_bytes": size_bytes,
-        "truncated": False,
+        "truncated": bool(truncated_bytes or truncated_chars),
+        "truncated_bytes": bool(truncated_bytes),
+        "truncated_chars": bool(truncated_chars),
+        "max_bytes": int(max_bytes),
+        "max_chars": int(max_chars),
         "text_digest": digest,
+    }
+
+
+def _is_probably_binary(abs_path: str) -> bool:
+    try:
+        with open(abs_path, "rb") as bf:
+            sample = bf.read(4096)
+        return b"\x00" in sample
+    except Exception:
+        return False
+
+
+def _read_lines_excerpt(
+    abs_path: str,
+    *,
+    start_line: int,
+    max_lines: int,
+    max_chars: int,
+) -> dict[str, Any]:
+    """Read a subset of lines from a text file without loading the full file."""
+
+    if start_line < 1:
+        raise ValueError("start_line must be >= 1")
+    if max_lines < 1:
+        raise ValueError("max_lines must be >= 1")
+    if max_chars < 1:
+        raise ValueError("max_chars must be >= 1")
+
+    lines_out: list[dict[str, Any]] = []
+    current = 0
+    collected_chars = 0
+    truncated = False
+    had_decoding_errors = False
+
+    try:
+        with open(abs_path, "r", encoding="utf-8", errors="replace") as tf:
+            for current, raw in enumerate(tf, start=1):
+                if current < start_line:
+                    continue
+                if len(lines_out) >= max_lines:
+                    truncated = True
+                    break
+                # Strip trailing newline for display while keeping content readable.
+                text = raw.rstrip("\n")
+                # Hard cap total chars.
+                if collected_chars + len(text) > max_chars:
+                    remaining = max_chars - collected_chars
+                    if remaining > 0:
+                        text = text[:remaining]
+                        lines_out.append({"line": current, "text": text, "truncated": True})
+                    truncated = True
+                    break
+                lines_out.append({"line": current, "text": text})
+                collected_chars += len(text)
+    except UnicodeDecodeError:
+        had_decoding_errors = True
+    except Exception as exc:
+        raise exc
+
+    end_line = start_line + len(lines_out) - 1 if lines_out else start_line
+    return {
+        "start_line": int(start_line),
+        "end_line": int(end_line),
+        "lines": lines_out,
+        "truncated": bool(truncated),
+        "had_decoding_errors": bool(had_decoding_errors),
+        "max_lines": int(max_lines),
+        "max_chars": int(max_chars),
     }
 
 
@@ -251,6 +348,124 @@ def _git_show_text(repo_dir: str, git_ref: str, path: str) -> dict[str, Any]:
         "encoding": "utf-8",
         "had_decoding_errors": had_errors,
         "size_bytes": len(data),
+    }
+
+
+def _git_show_text_limited(
+    repo_dir: str,
+    git_ref: str,
+    path: str,
+    *,
+    max_chars: int,
+    max_bytes: int | None = None,
+) -> dict[str, Any]:
+    """Like _git_show_text, but reads at most max_bytes and returns at most max_chars.
+
+    This avoids holding very large blobs in memory.
+    """
+
+    if not isinstance(max_chars, int) or max_chars < 1:
+        raise ValueError("max_chars must be an int >= 1")
+    if max_bytes is None:
+        max_bytes = max(_DEFAULT_MAX_READ_BYTES, max_chars * 4)
+    if not isinstance(max_bytes, int) or max_bytes < 1:
+        raise ValueError("max_bytes must be an int >= 1")
+
+    ref = _sanitize_git_ref(git_ref)
+    rel = _sanitize_git_path(path)
+    _workspace_safe_join(repo_dir, rel)
+
+    proc = subprocess.Popen(
+        ["git", "show", f"{ref}:{rel}"],
+        cwd=repo_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout = b""
+    stderr = b""
+    truncated_bytes = False
+    try:
+        if proc.stdout is None or proc.stderr is None:
+            raise RuntimeError("failed to spawn git show")
+        # Read up to max_bytes from stdout.
+        while len(stdout) < max_bytes:
+            chunk = proc.stdout.read(min(65536, max_bytes - len(stdout)))
+            if not chunk:
+                break
+            stdout += chunk
+        if len(stdout) >= max_bytes:
+            truncated_bytes = True
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        try:
+            _out, _err = proc.communicate(timeout=10)
+            # If we didn't hit truncation, stdout may be fully captured by communicate.
+            if not truncated_bytes:
+                stdout = _out or b""
+            stderr = _err or b""
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            try:
+                _out, _err = proc.communicate(timeout=5)
+                if not truncated_bytes:
+                    stdout = _out or b""
+                stderr = _err or b""
+            except Exception:
+                pass
+    finally:
+        try:
+            proc.stdout.close() if proc.stdout else None
+        except Exception:
+            pass
+        try:
+            proc.stderr.close() if proc.stderr else None
+        except Exception:
+            pass
+
+    if proc.returncode not in (0, None):
+        return {
+            "exists": False,
+            "ref": ref,
+            "path": rel,
+            "text": "",
+            "encoding": "utf-8",
+            "had_decoding_errors": False,
+            "truncated": False,
+            "error": (stderr or b"").decode("utf-8", errors="replace").strip() or None,
+        }
+
+    had_errors = False
+    try:
+        text = (stdout or b"").decode("utf-8")
+    except UnicodeDecodeError:
+        had_errors = True
+        text = (stdout or b"").decode("utf-8", errors="replace")
+
+    truncated_chars = len(text) > max_chars
+    if truncated_chars:
+        text = text[:max_chars]
+
+    digest = hashlib.blake2s(text.encode("utf-8", errors="replace"), digest_size=4).hexdigest()
+
+    return {
+        "exists": True,
+        "ref": ref,
+        "path": rel,
+        "text": text,
+        "encoding": "utf-8",
+        "had_decoding_errors": had_errors,
+        "size_bytes": len(stdout or b""),
+        "truncated": bool(truncated_bytes or truncated_chars),
+        "truncated_bytes": bool(truncated_bytes),
+        "truncated_chars": bool(truncated_chars),
+        "max_bytes": int(max_bytes),
+        "max_chars": int(max_chars),
+        "text_digest": digest,
     }
 
 
@@ -424,6 +639,9 @@ async def get_workspace_file_contents(
     full_name: str,
     ref: str = "main",
     path: str = "",
+    *,
+    max_chars: int = _DEFAULT_MAX_READ_CHARS,
+    max_bytes: int = _DEFAULT_MAX_READ_BYTES,
 ) -> dict[str, Any]:
     """Read a file from the persistent repo mirror (no shell).
 
@@ -442,7 +660,12 @@ async def get_workspace_file_contents(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        info = _workspace_read_text(repo_dir, path)
+        info = _workspace_read_text_limited(
+            repo_dir,
+            path,
+            max_chars=int(max_chars),
+            max_bytes=int(max_bytes),
+        )
         info.update({"full_name": full_name, "ref": effective_ref})
         return info
     except Exception as exc:
@@ -520,11 +743,25 @@ async def get_workspace_files_contents(
         files: list[dict[str, Any]] = []
         missing: list[str] = []
         errors: list[dict[str, Any]] = []
+        truncated = False
+        remaining_total = int(max_total_chars)
         for p in normalized_paths:
             try:
-                info = _workspace_read_text_limited(repo_dir, p, max_chars=max_chars_per_file)
+                if remaining_total <= 0:
+                    truncated = True
+                    break
+                per_file = min(int(max_chars_per_file), remaining_total)
+                info = _workspace_read_text_limited(
+                    repo_dir,
+                    p,
+                    max_chars=per_file,
+                    max_bytes=max(_DEFAULT_MAX_READ_BYTES, per_file * 4),
+                )
                 if info.get("exists"):
                     files.append(info)
+                    remaining_total -= len(info.get("text") or "")
+                    if info.get("truncated"):
+                        truncated = True
                 else:
                     if include_missing:
                         files.append(info)
@@ -550,7 +787,7 @@ async def get_workspace_files_contents(
                 "missing": len(missing),
                 "errors": len(errors),
                 "total_chars": sum(len(f.get("text") or "") for f in files),
-                "truncated": False,
+                "truncated": bool(truncated),
             },
             "files": files,
             "missing_paths": missing,
@@ -558,6 +795,92 @@ async def get_workspace_files_contents(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="get_workspace_files_contents")
+
+
+@mcp_tool(write_action=False)
+async def read_workspace_file_excerpt(
+    full_name: str,
+    ref: str = "main",
+    path: str = "",
+    *,
+    start_line: int = 1,
+    max_lines: int = 200,
+    max_chars: int = 80_000,
+) -> dict[str, Any]:
+    """Read an excerpt of a file with line numbers (safe for very large files).
+
+    Unlike get_workspace_file_contents, this reads only the requested line range
+    and returns a structured list of {line, text} entries.
+    """
+
+    try:
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("path must be a non-empty string")
+        if not isinstance(start_line, int) or start_line < 1:
+            raise ValueError("start_line must be an int >= 1")
+        if not isinstance(max_lines, int) or max_lines < 1:
+            raise ValueError("max_lines must be an int >= 1")
+        if not isinstance(max_chars, int) or max_chars < 1:
+            raise ValueError("max_chars must be an int >= 1")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        abs_path = _workspace_safe_join(repo_dir, path)
+        if not os.path.exists(abs_path):
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": path,
+                "exists": False,
+                "excerpt": {
+                    "start_line": int(start_line),
+                    "end_line": int(start_line),
+                    "lines": [],
+                    "truncated": False,
+                    "max_lines": int(max_lines),
+                    "max_chars": int(max_chars),
+                },
+            }
+
+        if os.path.isdir(abs_path):
+            raise IsADirectoryError(path)
+        if _is_probably_binary(abs_path):
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": path,
+                "exists": True,
+                "is_binary": True,
+                "size_bytes": os.path.getsize(abs_path),
+                "excerpt": {
+                    "start_line": int(start_line),
+                    "end_line": int(start_line),
+                    "lines": [],
+                    "truncated": False,
+                    "max_lines": int(max_lines),
+                    "max_chars": int(max_chars),
+                },
+            }
+
+        excerpt = _read_lines_excerpt(
+            abs_path,
+            start_line=int(start_line),
+            max_lines=int(max_lines),
+            max_chars=int(max_chars),
+        )
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": path,
+            "exists": True,
+            "is_binary": False,
+            "size_bytes": os.path.getsize(abs_path),
+            "excerpt": excerpt,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="read_workspace_file_excerpt", path=path)
 
 
 @mcp_tool(write_action=False)
@@ -612,6 +935,8 @@ async def compare_workspace_files(
 
         for idx, spec in enumerate(comparisons):
             try:
+                left_truncated = False
+                right_truncated = False
                 left_ref = spec.get("left_ref")
                 right_ref = spec.get("right_ref")
                 left_path = spec.get("left_path") or spec.get("path")
@@ -628,11 +953,18 @@ async def compare_workspace_files(
                     ws = _workspace_read_text_limited(
                         repo_dir, left_path, max_chars=max_chars_per_side
                     )
-                    base = _git_show_text(repo_dir, base_ref, left_path)
+                    base = _git_show_text_limited(
+                        repo_dir,
+                        base_ref,
+                        left_path,
+                        max_chars=max_chars_per_side,
+                    )
                     if not base.get("exists"):
                         raise FileNotFoundError(f"missing at {base_ref}:{left_path}")
                     left_text = base.get("text") or ""
                     right_text = ws.get("text") or ""
+                    left_truncated = bool(base.get("truncated"))
+                    right_truncated = bool(ws.get("truncated"))
                     fromfile = f"a/{left_path} ({_sanitize_git_ref(base_ref)})"
                     tofile = f"b/{left_path} ({effective_ref})"
                     partial = False
@@ -647,14 +979,26 @@ async def compare_workspace_files(
                     if not isinstance(right_path, str) or not right_path.strip():
                         raise ValueError("right_path must be a non-empty string")
 
-                    left_info = _git_show_text(repo_dir, left_ref, left_path)
-                    right_info = _git_show_text(repo_dir, right_ref, right_path)
+                    left_info = _git_show_text_limited(
+                        repo_dir,
+                        left_ref,
+                        left_path,
+                        max_chars=max_chars_per_side,
+                    )
+                    right_info = _git_show_text_limited(
+                        repo_dir,
+                        right_ref,
+                        right_path,
+                        max_chars=max_chars_per_side,
+                    )
                     if not left_info.get("exists"):
                         raise FileNotFoundError(f"missing at {left_ref}:{left_path}")
                     if not right_info.get("exists"):
                         raise FileNotFoundError(f"missing at {right_ref}:{right_path}")
                     left_text = left_info.get("text") or ""
                     right_text = right_info.get("text") or ""
+                    left_truncated = bool(left_info.get("truncated"))
+                    right_truncated = bool(right_info.get("truncated"))
                     fromfile = f"a/{left_path} ({_sanitize_git_ref(left_ref)})"
                     tofile = f"b/{right_path} ({_sanitize_git_ref(right_ref)})"
                     partial = False
@@ -676,6 +1020,8 @@ async def compare_workspace_files(
                         raise FileNotFoundError(right_path)
                     left_text = left_info.get("text") or ""
                     right_text = right_info.get("text") or ""
+                    left_truncated = bool(left_info.get("truncated"))
+                    right_truncated = bool(right_info.get("truncated"))
                     fromfile = f"a/{left_path}"
                     tofile = f"b/{right_path}"
                     partial = False
@@ -690,6 +1036,15 @@ async def compare_workspace_files(
                 if not diff_full:
                     diff_full = ""
 
+                # Mark partial when either side was truncated.
+                partial = bool(partial) or bool(left_truncated or right_truncated)
+
+                truncated = False
+                if diff_full and len(diff_full) > int(max_diff_chars):
+                    diff_full = diff_full[: int(max_diff_chars)]
+                    truncated = True
+                    partial = True
+
                 stats_obj: dict[str, int] | None = None
                 if include_stats:
                     if diff_full:
@@ -703,7 +1058,7 @@ async def compare_workspace_files(
                         "index": idx,
                         "status": "ok",
                         "partial": bool(partial),
-                        "truncated": False,
+                        "truncated": bool(truncated),
                         **({"stats": stats_obj} if include_stats else {}),
                         "diff": diff_full,
                     }

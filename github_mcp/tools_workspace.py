@@ -82,6 +82,7 @@ _workspace_read_text = _fs._workspace_read_text
 _workspace_write_text = _fs._workspace_write_text
 get_workspace_file_contents = _fs.get_workspace_file_contents
 get_workspace_files_contents = _fs.get_workspace_files_contents
+read_workspace_file_excerpt = _fs.read_workspace_file_excerpt
 set_workspace_file_contents = _fs.set_workspace_file_contents
 edit_workspace_text_range = _fs.edit_workspace_text_range
 delete_workspace_lines = _fs.delete_workspace_lines
@@ -97,6 +98,7 @@ compare_workspace_files = _fs.compare_workspace_files
 
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace
+find_workspace_paths = _listing.find_workspace_paths
 
 render_shell = _commands.render_shell
 terminal_command = _commands.terminal_command
@@ -152,6 +154,7 @@ __all__ = [
     "ensure_workspace_clone",
     "get_workspace_file_contents",
     "get_workspace_files_contents",
+    "read_workspace_file_excerpt",
     "set_workspace_file_contents",
     "edit_workspace_text_range",
     "delete_workspace_lines",
@@ -166,6 +169,7 @@ __all__ = [
     "compare_workspace_files",
     "list_workspace_files",
     "search_workspace",
+    "find_workspace_paths",
     "render_shell",
     "terminal_command",
     "run_command",
