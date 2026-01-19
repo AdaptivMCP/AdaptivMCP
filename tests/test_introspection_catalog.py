@@ -108,3 +108,27 @@ def test_list_introspection_reports_registry_errors(monkeypatch):
     assert "errors" in resources
     uris = {resource.get("uri") for resource in resources.get("resources", [])}
     assert "/api/tools/good_tool" in uris
+
+
+def test_list_write_tools_tracks_registry_and_categories(monkeypatch):
+    custom_fn = _make_fn("custom_write_tool")
+    custom_fn.__mcp_ui__ = {"group": "workspace"}
+
+    workflow_fn = _make_fn("trigger_workflow_dispatch")
+    registry = [
+        (_make_tool("custom_write_tool", True), custom_fn),
+        (_make_tool("read_tool", False), _make_fn("read_tool")),
+        (_make_tool("trigger_workflow_dispatch", True), workflow_fn),
+    ]
+    monkeypatch.setattr(main, "_REGISTERED_MCP_TOOLS", registry)
+
+    result = introspection.list_write_tools()
+    tools_by_name = {tool["name"]: tool for tool in result["tools"]}
+
+    assert "custom_write_tool" in tools_by_name
+    assert tools_by_name["custom_write_tool"]["category"] == "workspace"
+
+    assert "trigger_workflow_dispatch" in tools_by_name
+    assert tools_by_name["trigger_workflow_dispatch"]["category"] == "workflow"
+
+    assert "read_tool" not in tools_by_name
