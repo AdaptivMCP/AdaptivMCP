@@ -3483,8 +3483,8 @@ def mcp_tool(
             wrapper.__mcp_tags__ = tag_list
             wrapper.__mcp_ui__ = ui_meta or None
 
-            # Ensure schema + invocation messages are visible in clients that only render
-            # the tool description (e.g., Actions list). Keep it compact.
+            # Ensure the schema is visible in clients that only render the tool
+            # description (e.g., Actions list). Keep it compact.
             if show_schema_in_description:
                 try:
                     schema_inline = _schema_summary(schema)
@@ -3502,15 +3502,6 @@ def mcp_tool(
                         first = f"Schema: {schema_inline}"
                     normalized_description = "\n".join([first] + rest).strip()
 
-            try:
-                inv_line = str(ui_meta.get("invoking") or "").strip()
-                done_line = str(ui_meta.get("invoked") or "").strip()
-                if inv_line and inv_line not in normalized_description:
-                    normalized_description = (normalized_description + f"\n\n{inv_line}").strip()
-                if done_line and done_line not in normalized_description:
-                    normalized_description = (normalized_description + f"\n{done_line}").strip()
-            except Exception:
-                pass
             _apply_tool_metadata(
                 wrapper.__mcp_tool__,
                 schema,
@@ -3829,15 +3820,6 @@ def mcp_tool(
                     first = f"Schema: {schema_inline}"
                 normalized_description = "\n".join([first] + rest).strip()
 
-        try:
-            inv_line = str(ui_meta.get("invoking") or "").strip()
-            done_line = str(ui_meta.get("invoked") or "").strip()
-            if inv_line and inv_line not in normalized_description:
-                normalized_description = (normalized_description + f"\n\n{inv_line}").strip()
-            if done_line and done_line not in normalized_description:
-                normalized_description = (normalized_description + f"\n{done_line}").strip()
-        except Exception:
-            pass
         _apply_tool_metadata(
             wrapper.__mcp_tool__,
             schema,
