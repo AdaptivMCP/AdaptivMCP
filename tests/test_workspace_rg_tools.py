@@ -1,6 +1,5 @@
 import asyncio
 
-
 from github_mcp.workspace_tools import rg as workspace_rg
 
 
@@ -83,4 +82,3 @@ def test_rg_search_workspace_returns_line_numbers_and_context(tmp_path, monkeypa
     assert ex["start_line"] == 1
     assert ex["end_line"] == 3
     assert [ln["line"] for ln in ex["lines"]] == [1, 2, 3]
-

@@ -130,8 +130,7 @@ def _sanitize_debug_value(
 
     if isinstance(value, (list, tuple)):
         seq = [
-            _sanitize_debug_value(v, key=key, max_depth=max_depth, _depth=_depth + 1)
-            for v in value
+            _sanitize_debug_value(v, key=key, max_depth=max_depth, _depth=_depth + 1) for v in value
         ]
         return seq if isinstance(value, list) else tuple(seq)
 

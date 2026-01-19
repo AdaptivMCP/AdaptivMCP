@@ -45,6 +45,14 @@ async def test_run_quality_suite_defaults_use_temp_venv_true(
     )
 
     assert out.get("status") == "passed"
+
+    suite = out.get("suite") or {}
+    commands = suite.get("commands") or {}
+    assert commands.get("typecheck") == "mypy ."
+    security_cmd = str(commands.get("security") or "")
+    assert "pip-audit" in security_cmd
+    assert "bandit" in security_cmd
+
     assert calls, "expected run_quality_suite to invoke terminal_command"
 
     # Every terminal_command call should receive use_temp_venv=True by default.

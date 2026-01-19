@@ -140,7 +140,7 @@ def _python_search(
             continue
 
         try:
-            with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
+            with open(abs_path, encoding="utf-8", errors="replace") as f:
                 for line_no, raw in enumerate(f, start=1):
                     line = raw.rstrip("\n")
                     if pattern is not None:
@@ -358,7 +358,7 @@ async def rg_search_workspace(
                     if not _passes_globs(rel_norm, globs):
                         continue
                     line_no = int(data.get("line_number") or 0)
-                    sub = (data.get("submatches") or [])
+                    sub = data.get("submatches") or []
                     col = 1
                     if sub and isinstance(sub, list) and isinstance(sub[0], dict):
                         try:
@@ -398,7 +398,7 @@ async def rg_search_workspace(
             if proc.returncode not in (0, 1, None):
                 stderr = ""
                 try:
-                    stderr = (proc.stderr.read() if proc.stderr else "")
+                    stderr = proc.stderr.read() if proc.stderr else ""
                 except Exception:
                     stderr = ""
                 raise RuntimeError((stderr or "rg failed").strip())
@@ -454,4 +454,3 @@ async def rg_search_workspace(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="rg_search_workspace")
-

@@ -12,9 +12,9 @@ from github_mcp.workspace import (
     _clone_repo,
     _git_auth_env,
     _prepare_temp_virtualenv,
+    _run_shell,
     _stop_workspace_virtualenv,
     _workspace_virtualenv_status,
-    _run_shell,
 )
 
 

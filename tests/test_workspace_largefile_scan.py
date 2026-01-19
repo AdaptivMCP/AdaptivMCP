@@ -220,4 +220,3 @@ def test_find_workspace_paths_glob_and_pagination(tmp_path, monkeypatch):
     assert len(page2["results"]) == 1
     assert page2["truncated"] is False
     assert page2["next_cursor"] is None
-

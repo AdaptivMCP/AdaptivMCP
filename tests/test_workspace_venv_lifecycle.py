@@ -52,9 +52,8 @@ async def test_prepare_virtualenv_creates_marker_and_is_reused(monkeypatch, tmp_
 
     # Ensure the marker is written and python exists.
     assert os.path.isfile(os.path.join(venv_dir, ".mcp_ready"))
-    assert (
-        os.path.isfile(os.path.join(venv_dir, "bin", "python"))
-        or os.path.isfile(os.path.join(venv_dir, "Scripts", "python.exe"))
+    assert os.path.isfile(os.path.join(venv_dir, "bin", "python")) or os.path.isfile(
+        os.path.join(venv_dir, "Scripts", "python.exe")
     )
 
     calls_after_first = list(calls)

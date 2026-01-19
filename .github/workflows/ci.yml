@@ -21,7 +21,7 @@ env:
 
 jobs:
   quality:
-    name: Quality (ruff + mypy)
+    name: Quality (format + lint + type + security)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -58,8 +58,11 @@ jobs:
       - name: Typecheck (mypy)
         run: mypy .
 
-      - name: Dependency sanity (pip check)
-        run: python -m pip check
+      - name: Security (pip check + pip-audit + bandit)
+        run: |
+          python -m pip check
+          pip-audit -r dev-requirements.txt
+          bandit -q -r github_mcp
 
       - name: Compile
         run: python -m compileall -q github_mcp main.py
@@ -99,4 +102,4 @@ jobs:
           pip install -r dev-requirements.txt
 
       - name: Run tests
-        run: pytest -q
+        run: pytest -q --cov=github_mcp --cov-report=term-missing:skip-covered --cov-fail-under=45

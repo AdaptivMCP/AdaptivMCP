@@ -247,7 +247,7 @@ def _read_lines_excerpt(
     had_decoding_errors = False
 
     try:
-        with open(abs_path, "r", encoding="utf-8", errors="replace") as tf:
+        with open(abs_path, encoding="utf-8", errors="replace") as tf:
             for current, raw in enumerate(tf, start=1):
                 if current < start_line:
                     continue

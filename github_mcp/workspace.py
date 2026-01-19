@@ -538,8 +538,8 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
 
     # Per-repo lock so concurrent tool calls don't fight over the venv.
     if not hasattr(_prepare_temp_virtualenv, "_locks"):
-        setattr(_prepare_temp_virtualenv, "_locks", {})
-    locks: dict[str, asyncio.Lock] = getattr(_prepare_temp_virtualenv, "_locks")
+        _prepare_temp_virtualenv._locks = {}
+    locks: dict[str, asyncio.Lock] = _prepare_temp_virtualenv._locks
     lock = locks.get(repo_dir)
     if lock is None:
         lock = asyncio.Lock()
@@ -634,9 +634,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
                 shutil.rmtree(venv_dir, ignore_errors=True)
 
         # Create venv. Prefer --upgrade-deps when supported.
-        create_cmd = (
-            f"{shlex.quote(sys.executable)} -m venv --upgrade-deps {shlex.quote(venv_dir)}"
-        )
+        create_cmd = f"{shlex.quote(sys.executable)} -m venv --upgrade-deps {shlex.quote(venv_dir)}"
         result = await run_shell(
             create_cmd,
             cwd=repo_dir,
@@ -684,8 +682,8 @@ async def _stop_workspace_virtualenv(repo_dir: str) -> dict[str, Any]:
 
     # Use the same lock map as _prepare_temp_virtualenv to avoid races.
     if not hasattr(_prepare_temp_virtualenv, "_locks"):
-        setattr(_prepare_temp_virtualenv, "_locks", {})
-    locks: dict[str, asyncio.Lock] = getattr(_prepare_temp_virtualenv, "_locks")
+        _prepare_temp_virtualenv._locks = {}
+    locks: dict[str, asyncio.Lock] = _prepare_temp_virtualenv._locks
     lock = locks.get(repo_dir)
     if lock is None:
         lock = asyncio.Lock()
@@ -695,7 +693,11 @@ async def _stop_workspace_virtualenv(repo_dir: str) -> dict[str, Any]:
         existed = os.path.isdir(venv_dir)
         if existed:
             shutil.rmtree(venv_dir, ignore_errors=True)
-        return {"venv_dir": venv_dir, "existed": existed, "deleted": existed and not os.path.exists(venv_dir)}
+        return {
+            "venv_dir": venv_dir,
+            "existed": existed,
+            "deleted": existed and not os.path.exists(venv_dir),
+        }
 
 
 def _maybe_unescape_unified_diff(patch: str) -> str:

@@ -446,12 +446,21 @@ async def run_quality_suite(
             # Ruff is already the canonical formatter in this repo.
             format_command = "ruff format --check ."
         if typecheck_command is None:
-            # Prefer a universally-available type/compile sanity check.
-            # Projects can override this with mypy/pyright/pyre if desired.
-            typecheck_command = "python -m compileall -q ."
+            # Prefer a production-grade type check by default.
+            # mypy.ini can scope strictness for the repository.
+            typecheck_command = "mypy ."
         if security_command is None:
-            # pip check is cheap and catches incompatible dependency constraints.
-            security_command = "python -m pip check"
+            # Supply-chain + basic security checks.
+            # - pip check: dependency consistency
+            # - pip-audit: known vulnerability scan
+            # - bandit: common Python security footguns
+            #
+            # Optional steps allow tool absence (exit 127) to be treated as "skipped".
+            security_command = (
+                "python -m pip check"
+                " && pip-audit -r dev-requirements.txt"
+                " && bandit -q -r github_mcp"
+            )
 
     # If auto-fix is enabled, prefer fix-capable commands.
     if auto_fix:

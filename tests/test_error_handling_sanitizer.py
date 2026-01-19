@@ -39,4 +39,3 @@ def test_sanitize_debug_value_truncates_very_long_strings(monkeypatch):
     out = eh._sanitize_debug_value({"message": v})
     assert isinstance(out["message"], str)
     assert out["message"].startswith("<TRUNCATED_TEXT")
-

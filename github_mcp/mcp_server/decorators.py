@@ -12,8 +12,8 @@ import functools
 import hashlib
 import importlib
 import inspect
-import logging
 import json
+import logging
 import os
 import re
 import time
@@ -76,7 +76,9 @@ def _log_once(
     payload.setdefault("event", "best_effort_exception")
     payload.setdefault("key", key)
     try:
-        LOGGER.log(level, message, extra=payload, exc_info=exc if (exc and LOG_TOOL_EXC_INFO) else None)
+        LOGGER.log(
+            level, message, extra=payload, exc_info=exc if (exc and LOG_TOOL_EXC_INFO) else None
+        )
     except Exception:
         return
 
@@ -1600,9 +1602,7 @@ def _merge_invocation_metadata(
     return out
 
 
-def _refresh_tool_annotations_for_invocation(
-    func: Any, *, effective_write_action: bool
-) -> None:
+def _refresh_tool_annotations_for_invocation(func: Any, *, effective_write_action: bool) -> None:
     """Best-effort update of tool annotations for the current invocation."""
 
     try:

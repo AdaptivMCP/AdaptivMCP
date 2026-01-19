@@ -1,4 +1,4 @@
-.PHONY: bootstrap install install-dev format format-check lint typecheck security test precommit rg-shell
+.PHONY: bootstrap install install-dev format format-check lint typecheck security test test-cov precommit rg-shell
 
 bootstrap:
 	python scripts/bootstrap.py --deps dev
@@ -23,9 +23,14 @@ typecheck:
 
 security:
 	python -m pip check
+	pip-audit -r dev-requirements.txt
+	bandit -q -r github_mcp
 
 test:
 	pytest -q
+
+test-cov:
+	pytest -q --cov=github_mcp --cov-report=term-missing:skip-covered --cov-fail-under=45
 
 precommit:
 	pre-commit install
