@@ -12,6 +12,8 @@ from github_mcp.workspace import (
     _clone_repo,
     _git_auth_env,
     _prepare_temp_virtualenv,
+    _stop_workspace_virtualenv,
+    _workspace_virtualenv_status,
     _run_shell,
 )
 
@@ -190,6 +192,10 @@ def _workspace_deps() -> dict[str, Any]:
     clone_repo_fn = getattr(main_module, "_clone_repo", _clone_repo)
     base_run_shell = getattr(main_module, "_run_shell", _run_shell)
     prepare_venv_fn = getattr(main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv)
+    stop_venv_fn = getattr(main_module, "_stop_workspace_virtualenv", _stop_workspace_virtualenv)
+    venv_status_fn = getattr(
+        main_module, "_workspace_virtualenv_status", _workspace_virtualenv_status
+    )
 
     async def run_shell_with_git_auth(
         cmd: str,
@@ -222,6 +228,8 @@ def _workspace_deps() -> dict[str, Any]:
         "clone_repo": clone_repo_fn,
         "run_shell": run_shell_with_git_auth,
         "prepare_temp_virtualenv": prepare_venv_fn,
+        "stop_virtualenv": stop_venv_fn,
+        "virtualenv_status": venv_status_fn,
         "apply_patch_to_repo": _apply_patch_to_repo,
     }
 
