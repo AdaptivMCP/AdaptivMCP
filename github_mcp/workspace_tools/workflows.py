@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Any
-
-import re
 
 from github_mcp.server import _structured_tool_error, mcp_tool
 
 from ._shared import _safe_branch_slug, _tw
-
 
 _HUNK_RE = re.compile(r"^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@")
 
@@ -136,7 +134,7 @@ async def workspace_apply_ops_and_open_pr(
     discard_local_changes: bool = True,
     run_quality: bool = True,
     quality_timeout_seconds: float = 0,
-    test_command: str = "pytest",
+    test_command: str = "pytest -q",
     lint_command: str = "ruff check .",
 ) -> dict[str, Any]:
     """Apply workspace operations on a new branch and open a PR.
@@ -276,7 +274,7 @@ async def workspace_apply_ops_and_open_pr(
                 lint_command=lint_command,
                 timeout_seconds=quality_timeout_seconds,
                 fail_fast=True,
-                developer_defaults=False,
+                developer_defaults=True,
             )
             if isinstance(quality_res, dict) and quality_res.get("status") in {"failed", "error"}:
                 return _error_return(
@@ -534,7 +532,9 @@ async def workspace_change_report(
             out["diff"] = diff_text
         return out
     except Exception as exc:
-        _step(steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error")
+        _step(
+            steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error"
+        )
         payload = _structured_tool_error(exc, context="workspace_change_report")
         if isinstance(payload, dict) and "steps" not in payload:
             payload["steps"] = steps

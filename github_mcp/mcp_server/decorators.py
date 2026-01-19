@@ -1201,7 +1201,6 @@ def _log_tool_visual(
     )
 
 
-
 def _truncate_text(value: Any, *, limit: int = 180) -> str:
     def scalar(v: Any) -> str:
         if v is None:
@@ -1722,12 +1721,8 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
         return
     if get_auto_approve_enabled():
         return
-    exc = WriteApprovalRequiredError(
-        f"Write approval required to run tool {tool_name!r}."
-    )
-    exc.hint = (
-        "Approve the action in ChatGPT or enable auto-approve to allow write tools."
-    )
+    exc = WriteApprovalRequiredError(f"Write approval required to run tool {tool_name!r}.")
+    exc.hint = "Approve the action in ChatGPT or enable auto-approve to allow write tools."
     raise exc
 
 
@@ -3289,7 +3284,10 @@ def mcp_tool(
                             pass
                     else:
                         client_payload = structured_error
-                    if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                    if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {
+                        "chatgpt",
+                        "compact",
+                    }:
                         try:
                             client_payload = redact_any(client_payload)
                         except Exception as exc2:
@@ -3372,7 +3370,10 @@ def mcp_tool(
                             pass
                     else:
                         client_payload = structured_error
-                    if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                    if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {
+                        "chatgpt",
+                        "compact",
+                    }:
                         try:
                             client_payload = redact_any(client_payload)
                         except Exception as exc2:

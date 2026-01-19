@@ -34,7 +34,9 @@ async def test_read_git_file_excerpt_happy_path(monkeypatch: pytest.MonkeyPatch)
     fake = _FakeTW()
     monkeypatch.setattr(fs, "_tw", lambda: fake)
 
-    def _fake_git_show(*args: Any, **kwargs: Any) -> tuple[bool, list[dict[str, Any]], bool, str | None]:
+    def _fake_git_show(
+        *args: Any, **kwargs: Any
+    ) -> tuple[bool, list[dict[str, Any]], bool, str | None]:
         # Return 3 lines starting at 10.
         return (
             True,
@@ -65,7 +67,7 @@ async def test_read_git_file_excerpt_happy_path(monkeypatch: pytest.MonkeyPatch)
     excerpt = res["excerpt"]
     assert excerpt["start_line"] == 10
     assert excerpt["end_line"] == 12
-    assert [l["text"] for l in excerpt["lines"]] == ["a", "b", "c"]
+    assert [ln["text"] for ln in excerpt["lines"]] == ["a", "b", "c"]
 
     assert fake.calls and fake.calls[0]["fn"] == "clone_repo"
 
@@ -77,7 +79,9 @@ async def test_read_git_file_excerpt_missing(monkeypatch: pytest.MonkeyPatch) ->
     fake = _FakeTW()
     monkeypatch.setattr(fs, "_tw", lambda: fake)
 
-    def _fake_git_show(*args: Any, **kwargs: Any) -> tuple[bool, list[dict[str, Any]], bool, str | None]:
+    def _fake_git_show(
+        *args: Any, **kwargs: Any
+    ) -> tuple[bool, list[dict[str, Any]], bool, str | None]:
         return (False, [], False, "no such path")
 
     monkeypatch.setattr(fs, "_git_show_lines_excerpt_limited", _fake_git_show)
@@ -94,4 +98,3 @@ async def test_read_git_file_excerpt_missing(monkeypatch: pytest.MonkeyPatch) ->
 
     assert res["exists"] is False
     assert res["error"] == "no such path"
-

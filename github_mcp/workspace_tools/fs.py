@@ -1967,7 +1967,8 @@ async def apply_patch(
             raise ValueError("patch must be a non-empty string or list of strings")
 
         # Record patch digests for safe debugging.
-        from github_mcp.diff_utils import diff_stats as _diff_stats, sha1_8
+        from github_mcp.diff_utils import diff_stats as _diff_stats
+        from github_mcp.diff_utils import sha1_8
 
         patch_digests = [sha1_8(p) for p in patches]
         debug_args.update({"patches": len(patches), "patch_digests": patch_digests})
@@ -2025,7 +2026,7 @@ async def apply_patch(
                     )
 
                 # Push to the requested ref name.
-                push_cmd = f"git push origin {shlex.quote(f"HEAD:{effective_ref}")}"
+                push_cmd = f"git push origin {shlex.quote(f'HEAD:{effective_ref}')}"
                 push_result = await deps["run_shell"](push_cmd, cwd=repo_dir)
                 if push_result.get("exit_code") != 0:
                     stderr = push_result.get("stderr", "") or push_result.get("stdout", "")

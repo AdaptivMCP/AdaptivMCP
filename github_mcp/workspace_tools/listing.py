@@ -81,7 +81,9 @@ def _count_lines_limited(path: str, *, max_bytes: int) -> tuple[int | None, bool
         return None, False
 
 
-def _read_first_lines(path: str, *, max_lines: int, max_chars: int) -> tuple[list[dict[str, Any]], bool]:
+def _read_first_lines(
+    path: str, *, max_lines: int, max_chars: int
+) -> tuple[list[dict[str, Any]], bool]:
     """Return (lines, truncated) where lines are {line, text} starting at 1."""
     out: list[dict[str, Any]] = []
     truncated = False
@@ -729,7 +731,8 @@ async def scan_workspace_tree(
             dirnames[:] = [d for d in dirnames if d != ".git"]
             if not include_hidden:
                 dirnames[:] = [d for d in dirnames if not d.startswith(".")]
-            dirnames.sort(); filenames.sort()
+            dirnames.sort()
+            filenames.sort()
 
             if include_dirs:
                 for d in dirnames:
@@ -737,9 +740,12 @@ async def scan_workspace_tree(
                     if not include_hidden and os.path.basename(rp).startswith("."):
                         continue
                     if skipped < cursor:
-                        skipped += 1; continue
+                        skipped += 1
+                        continue
                     if yielded >= max_entries:
-                        truncated = True; next_cursor = cursor + yielded; break
+                        truncated = True
+                        next_cursor = cursor + yielded
+                        break
                     abs_p = os.path.join(root, rp)
                     try:
                         st = os.stat(abs_p)
@@ -755,15 +761,19 @@ async def scan_workspace_tree(
                     continue
                 rp = os.path.relpath(os.path.join(cur_dir, fname), root).replace("\\", "/")
                 if skipped < cursor:
-                    skipped += 1; continue
+                    skipped += 1
+                    continue
                 if yielded >= max_entries:
-                    truncated = True; next_cursor = cursor + yielded; break
+                    truncated = True
+                    next_cursor = cursor + yielded
+                    break
                 abs_p = os.path.join(root, rp)
                 try:
                     st = os.stat(abs_p)
                 except OSError:
                     results.append({"path": rp, "type": "file", "error": "stat_failed"})
-                    yielded += 1; continue
+                    yielded += 1
+                    continue
                 is_bin = _is_probably_binary(abs_p)
                 entry: dict[str, Any] = {
                     "path": rp,

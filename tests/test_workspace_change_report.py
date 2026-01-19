@@ -54,7 +54,9 @@ class _FakeTW:
 
 
 @pytest.mark.anyio
-async def test_workspace_change_report_builds_hunks_and_excerpts(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_change_report_builds_hunks_and_excerpts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import workflows
 
     fake = _FakeTW()
@@ -111,4 +113,3 @@ async def test_workspace_change_report_omits_diff(monkeypatch: pytest.MonkeyPatc
     )
     assert res["status"] == "ok"
     assert "diff" not in res
-

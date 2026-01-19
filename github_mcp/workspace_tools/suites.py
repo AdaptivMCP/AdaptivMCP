@@ -170,6 +170,7 @@ def _text_stats(text: str) -> tuple[int, int]:
         return (0, 0)
     return (len(normalized), normalized.count("\n") + 1)
 
+
 def _slim_terminal_command_payload(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {"raw": str(payload)}
@@ -238,18 +239,24 @@ async def _run_named_step(
 async def run_tests(
     full_name: str,
     ref: str = "main",
-    test_command: str = "pytest",
+    test_command: str = "pytest -q",
     timeout_seconds: float = 0,
     workdir: str | None = None,
-    use_temp_venv: bool = False,
-    installing_dependencies: bool = False,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = True,
 ) -> dict[str, Any]:
+    """Run tests in the repo mirror.
+
+    Refactor note: uses the same step executor as the quality suite so outputs
+    (duration, stdout/stderr stats, etc.) are consistent across tools.
+    """
+
     timeout_seconds_i = _normalize_timeout_seconds(
         timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
     )
 
-    t0 = time.monotonic()
-    result = await _tw().terminal_command(
+    step = await _run_named_step(
+        name="tests",
         full_name=full_name,
         ref=ref,
         command=test_command,
@@ -257,59 +264,24 @@ async def run_tests(
         workdir=workdir,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
+        include_raw=False,
+        allow_missing_command=False,
     )
-    duration_ms = int((time.monotonic() - t0) * 1000)
 
-    if isinstance(result, dict) and "error" in result:
-        err_obj = result.get("error")
-        err_msg = ""
-        if isinstance(err_obj, dict):
-            err_msg = str(err_obj.get("error") or err_obj.get("message") or "").strip()
-        else:
-            err_msg = str(err_obj or "").strip()
-        if not err_msg:
-            err_msg = "TerminalCommandError"
-        return {
-            "status": "failed",
-            "command": test_command,
-            "error": result["error"],
-            "controller_log": [
-                "Test run failed due to a repo mirror or command error.",
-                f"- Command: {test_command}",
-                f"- Error: {err_msg}",
-            ],
-        }
-
-    if not isinstance(result, dict) or "result" not in result:
-        return {
-            "status": "failed",
-            "command": test_command,
-            "error": {
-                "error": "UnexpectedResultShape",
-                "message": "terminal_command returned an unexpected result structure",
-                "raw_result": result,
-            },
-            "controller_log": [
-                "Test run failed because terminal_command returned an unexpected result shape.",
-                f"- Command: {test_command}",
-            ],
-        }
-
-    cmd_result = result.get("result") or {}
-    exit_code = cmd_result.get("exit_code")
-
-    status = "passed" if exit_code == 0 else ("no_tests" if exit_code == 5 else "failed")
-
-    slim = _slim_terminal_command_payload(result)
-    slim["duration_ms"] = duration_ms
+    summary = step.get("summary") if isinstance(step, dict) else {}
+    exit_code = (summary or {}).get("exit_code")
+    status = (
+        "no_tests" if exit_code == 5 else ("passed" if step.get("status") == "passed" else "failed")
+    )
 
     return {
         "status": status,
         "command": test_command,
         "exit_code": exit_code,
-        "workdir": result.get("workdir"),
-        "summary": slim,
-        "result": cmd_result,
+        "workdir": workdir,
+        "summary": summary,
+        "result": {"exit_code": exit_code, "timed_out": (summary or {}).get("timed_out")},
+        "steps": [step],
         "controller_log": [
             "Completed test command in repo mirror:",
             f"- Repo: {full_name}",
@@ -317,7 +289,7 @@ async def run_tests(
             f"- Command: {test_command}",
             f"- Status: {status}",
             f"- Exit code: {exit_code}",
-            f"- Duration (ms): {duration_ms}",
+            f"- Duration (ms): {(summary or {}).get('duration_ms')}",
         ],
     }
 
@@ -327,17 +299,61 @@ async def run_lint_suite(
     full_name: str,
     ref: str = "main",
     lint_command: str = "ruff check .",
+    format_command: str | None = "ruff format --check .",
+    include_format_check: bool = True,
     timeout_seconds: float = 0,
     workdir: str | None = None,
-    use_temp_venv: bool = False,
-    installing_dependencies: bool = False,
+    use_temp_venv: bool = True,
+    installing_dependencies: bool = True,
+    fail_fast: bool = True,
+    include_raw_step_outputs: bool = False,
 ) -> dict[str, Any]:
+    """Run formatting + lint checks.
+
+    Industry-standard default: include a formatting check alongside lint.
+    """
+
     timeout_seconds_i = _normalize_timeout_seconds(
         timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
     )
 
-    t0 = time.monotonic()
-    result = await _tw().terminal_command(
+    steps: list[dict[str, Any]] = []
+    controller_log: list[str] = [
+        "Lint suite run:",
+        f"- Repo: {full_name}",
+        f"- Ref: {ref}",
+    ]
+
+    combined_command = lint_command
+
+    if include_format_check and format_command:
+        combined_command = f"{format_command} && {lint_command}"
+        fmt_step = await _run_named_step(
+            name="format",
+            full_name=full_name,
+            ref=ref,
+            command=format_command,
+            timeout_seconds=timeout_seconds_i,
+            workdir=workdir,
+            use_temp_venv=use_temp_venv,
+            installing_dependencies=installing_dependencies,
+            include_raw=include_raw_step_outputs,
+            allow_missing_command=False,
+        )
+        steps.append(fmt_step)
+        if fmt_step.get("status") == "failed" and fail_fast:
+            controller_log.append("- Aborted: format failed")
+            return {
+                "status": "failed",
+                "command": combined_command,
+                "exit_code": (fmt_step.get("summary") or {}).get("exit_code"),
+                "workdir": workdir,
+                "steps": steps,
+                "controller_log": controller_log,
+            }
+
+    lint_step = await _run_named_step(
+        name="lint",
         full_name=full_name,
         ref=ref,
         command=lint_command,
@@ -345,72 +361,28 @@ async def run_lint_suite(
         workdir=workdir,
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
+        include_raw=include_raw_step_outputs,
+        allow_missing_command=False,
     )
+    steps.append(lint_step)
 
-    duration_ms = int((time.monotonic() - t0) * 1000)
+    exit_code = (lint_step.get("summary") or {}).get("exit_code")
+    status = "passed" if lint_step.get("status") == "passed" else "failed"
+    controller_log.append(f"- Status: {status}")
 
-    if isinstance(result, dict) and "error" in result:
-        err_obj = result.get("error")
-        err_msg = ""
-        if isinstance(err_obj, dict):
-            err_msg = str(err_obj.get("error") or err_obj.get("message") or "").strip()
-        else:
-            err_msg = str(err_obj or "").strip()
-        if not err_msg:
-            err_msg = "TerminalCommandError"
-        return {
-            "status": "failed",
-            "command": lint_command,
-            "error": result["error"],
-            "controller_log": [
-                "Lint suite failed due to a repo mirror or command error.",
-                f"- Repo: {full_name}",
-                f"- Ref: {ref}",
-                f"- Command: {lint_command}",
-                f"- Error: {err_msg}",
-            ],
-        }
-
-    if not isinstance(result, dict) or "result" not in result:
-        return {
-            "status": "failed",
-            "command": lint_command,
-            "error": {
-                "error": "UnexpectedResultShape",
-                "message": "terminal_command returned an unexpected result structure",
-                "raw_result": result,
-            },
-            "controller_log": [
-                "Lint suite failed because terminal_command returned an unexpected result shape.",
-                f"- Repo: {full_name}",
-                f"- Ref: {ref}",
-                f"- Command: {lint_command}",
-            ],
-        }
-
-    cmd_result = result.get("result") or {}
-    exit_code = cmd_result.get("exit_code")
-    status = "passed" if exit_code == 0 else "failed"
-
-    slim = _slim_terminal_command_payload(result)
-    slim["duration_ms"] = duration_ms
-
+    # Keep backward-compatible fields while also returning structured steps.
     return {
         "status": status,
-        "command": lint_command,
+        "command": combined_command,
         "exit_code": exit_code,
-        "workdir": result.get("workdir"),
-        "summary": slim,
-        "result": cmd_result,
-        "controller_log": [
-            "Completed lint command in repo mirror:",
-            f"- Repo: {full_name}",
-            f"- Ref: {ref}",
-            f"- Command: {lint_command}",
-            f"- Status: {status}",
-            f"- Exit code: {exit_code}",
-            f"- Duration (ms): {duration_ms}",
-        ],
+        "workdir": workdir,
+        "summary": (lint_step.get("summary") if isinstance(lint_step, dict) else {}),
+        "result": {
+            "exit_code": exit_code,
+            "timed_out": ((lint_step.get("summary") or {}).get("timed_out")),
+        },
+        "steps": steps,
+        "controller_log": controller_log,
     }
 
 
@@ -935,61 +907,3 @@ async def run_quality_suite(
         }
 
     return await _run_multi_command_suite()
-
-    # Lint is required.
-    lint_step = await _run_named_step(
-        name="lint",
-        full_name=full_name,
-        ref=ref,
-        command=lint_command,
-        timeout_seconds=timeout_seconds_i,
-        workdir=workdir,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        include_raw=include_raw_step_outputs,
-    )
-    steps.append(lint_step)
-    if lint_step.get("status") == "failed":
-        controller_log.append("- Aborted: lint failed")
-        return {
-            "status": "failed",
-            "suite": suite,
-            "steps": steps,
-            "controller_log": controller_log,
-        }
-
-    # Tests are required.
-    tests_step = await _run_named_step(
-        name="tests",
-        full_name=full_name,
-        ref=ref,
-        command=test_command,
-        timeout_seconds=timeout_seconds_i,
-        workdir=workdir,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        include_raw=include_raw_step_outputs,
-    )
-    steps.append(tests_step)
-
-    tests_exit = (tests_step.get("summary") or {}).get("exit_code")
-    if tests_exit == 5:
-        status = "no_tests"
-    else:
-        status = "passed" if tests_step.get("status") == "passed" else "failed"
-
-    if status in {"passed", "no_tests"} and optional_failures:
-        controller_log.append(
-            "- Warnings: optional steps failed: " + ", ".join(sorted(set(optional_failures)))
-        )
-        if status == "passed":
-            status = "passed_with_warnings"
-
-    controller_log.append(f"- Status: {status}")
-
-    return {
-        "status": status,
-        "suite": suite,
-        "steps": steps,
-        "controller_log": controller_log,
-    }

@@ -11,8 +11,8 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from github_mcp.server import _find_registered_tool
 from github_mcp.mcp_server.context import REQUEST_CHATGPT_METADATA
+from github_mcp.server import _find_registered_tool
 
 
 def _normalize_base_path(base_path: str | None) -> str:

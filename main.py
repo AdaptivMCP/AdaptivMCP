@@ -766,7 +766,7 @@ async def terminal_commands(
 async def run_tests(
     full_name: str,
     ref: str = "main",
-    test_command: str = "pytest",
+    test_command: str = "pytest -q",
     timeout_seconds: int = 600,
     workdir: str | None = None,
     use_temp_venv: bool = True,

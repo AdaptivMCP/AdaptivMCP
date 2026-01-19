@@ -90,6 +90,7 @@ def _parse_git_numstat(stdout: str) -> list[dict[str, Any]]:
             continue
         added_s, removed_s = parts[0].strip(), parts[1].strip()
         path = "\t".join(parts[2:]).strip()
+
         def _to_int(v: str) -> int | None:
             if v == "-":
                 return None
@@ -98,12 +99,14 @@ def _parse_git_numstat(stdout: str) -> list[dict[str, Any]]:
             except Exception:
                 return None
 
-        out.append({
-            "path": path,
-            "added": _to_int(added_s),
-            "removed": _to_int(removed_s),
-            "is_binary": (added_s == "-" or removed_s == "-"),
-        })
+        out.append(
+            {
+                "path": path,
+                "added": _to_int(added_s),
+                "removed": _to_int(removed_s),
+                "is_binary": (added_s == "-" or removed_s == "-"),
+            }
+        )
     return out
 
 
@@ -143,8 +146,8 @@ async def workspace_git_diff(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        left = (left_ref.strip() if isinstance(left_ref, str) and left_ref.strip() else None)
-        right = (right_ref.strip() if isinstance(right_ref, str) and right_ref.strip() else None)
+        left = left_ref.strip() if isinstance(left_ref, str) and left_ref.strip() else None
+        right = right_ref.strip() if isinstance(right_ref, str) and right_ref.strip() else None
         path_args = ""
         if paths:
             quoted = " ".join(shlex.quote(p.strip()) for p in paths if p.strip())
@@ -159,9 +162,7 @@ async def workspace_git_diff(
         else:
             if left and right:
                 diff_cmd = f"{base} {shlex.quote(left)} {shlex.quote(right)}{path_args}"
-                numstat_cmd = (
-                    f"{numstat_base} {shlex.quote(left)} {shlex.quote(right)}{path_args}"
-                )
+                numstat_cmd = f"{numstat_base} {shlex.quote(left)} {shlex.quote(right)}{path_args}"
             elif left and not right:
                 diff_cmd = f"{base} {shlex.quote(left)}{path_args}"
                 numstat_cmd = f"{numstat_base} {shlex.quote(left)}{path_args}"
@@ -176,7 +177,9 @@ async def workspace_git_diff(
         diff_res = await deps["run_shell"](
             diff_cmd,
             cwd=repo_dir,
-            timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+            timeout_seconds=_normalize_timeout_seconds(
+                config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+            ),
         )
         if diff_res.get("exit_code", 0) != 0:
             stderr = diff_res.get("stderr", "") or diff_res.get("stdout", "")
@@ -190,7 +193,9 @@ async def workspace_git_diff(
         numstat_res = await deps["run_shell"](
             numstat_cmd,
             cwd=repo_dir,
-            timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+            timeout_seconds=_normalize_timeout_seconds(
+                config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+            ),
         )
         numstat = _parse_git_numstat(numstat_res.get("stdout", "") or "")
 
