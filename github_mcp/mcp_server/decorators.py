@@ -561,9 +561,68 @@ def _clip_text(
             ANSI_DIM,
             enabled=enabled,
         )
-    if len(out) > max_chars:
-        out = out[: max(0, max_chars - 1)] + "…"
+    if max_chars > 0 and len(out) > max_chars:
+        if max_chars < 12:
+            out = out[: max(0, max_chars - 1)] + "…"
+        else:
+            omitted = len(out) - max_chars
+            marker = _ansi(
+                f"… ({omitted} chars omitted)",
+                ANSI_DIM,
+                enabled=enabled,
+            )
+            head = max(1, (max_chars - len(marker)) // 2)
+            tail = max(1, max_chars - len(marker) - head)
+            if head + tail + len(marker) >= max_chars and tail > 1:
+                tail -= 1
+            out = out[:head] + marker + out[-tail:]
     return out
+
+
+def _preview_line_indices(total: int, max_lines: int) -> tuple[list[int], int, int]:
+    if max_lines <= 0 or total <= 0:
+        return ([], 0, 0)
+    if total <= max_lines:
+        return (list(range(total)), 0, total)
+    if max_lines == 1:
+        return ([0], total - 1, 1)
+
+    available = max_lines - 1
+    if available <= 1:
+        head = 1
+        tail = max(0, available - head)
+    else:
+        head = available // 2
+        if head <= 0:
+            head = 1
+        tail = available - head
+    skipped = max(0, total - head - tail)
+    indices = list(range(head)) + list(range(total - tail, total))
+    return (indices, skipped, head)
+
+
+def _render_numbered_preview(
+    lines: list[str],
+    *,
+    max_lines: int,
+    ansi_enabled: bool | None = None,
+    include_reset: bool = False,
+) -> str:
+    indices, skipped, head_count = _preview_line_indices(len(lines), max_lines)
+    rendered: list[str] = []
+    for pos, idx in enumerate(indices):
+        if skipped and pos == head_count:
+            rendered.append(
+                _ansi(
+                    f"… ({skipped} more lines)",
+                    ANSI_DIM,
+                    enabled=ansi_enabled,
+                )
+            )
+        ln = _ansi(f"{idx + 1:>4}│", ANSI_DIM, enabled=ansi_enabled)
+        suffix = ANSI_RESET if include_reset else ""
+        rendered.append(f"{ln} {lines[idx]}{suffix}")
+    return "\n".join(rendered)
 
 
 _DIFF_HEADER_RE = re.compile(r"^(diff --git|\+\+\+ |--- |@@ )")
@@ -758,13 +817,7 @@ def _preview_terminal_result(payload: Mapping[str, Any]) -> str:
     highlighted = _highlight_code(combined, kind=kind)
     lines = highlighted.splitlines()
     max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
-    preview = lines[:max_lines]
-    rendered: list[str] = []
-    for idx, line in enumerate(preview, start=1):
-        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
-        rendered.append(f"{ln} {line}")
-    if len(lines) > max_lines:
-        rendered.append(_ansi(f"… ({len(lines) - max_lines} more lines)", ANSI_DIM))
+    rendered = _render_numbered_preview(lines, max_lines=max_lines, ansi_enabled=LOG_TOOL_COLOR)
 
     header_bits = ["terminal"]
     if exit_code is not None:
@@ -774,7 +827,7 @@ def _preview_terminal_result(payload: Mapping[str, Any]) -> str:
         _ansi(header, ANSI_CYAN)
         + "\n"
         + _clip_text(
-            "\n".join(rendered),
+            rendered,
             max_lines=LOG_TOOL_VISUAL_MAX_LINES,
             max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
         )
@@ -808,25 +861,19 @@ def _format_stream_block(
     # compatibility (some clients do not render 256-color sequences correctly).
     highlighted = _highlight_code(text, kind=kind, enabled=True, use_256=False)
     lines = highlighted.splitlines()
-    preview = lines[: max(1, max_lines)]
-    rendered: list[str] = []
-    for idx, line in enumerate(preview, start=1):
-        rendered.append(f"{_ansi(f'{idx:>4}│', ANSI_DIM, enabled=True)} {line}{ANSI_RESET}")
-    if len(lines) > max_lines:
-        rendered.append(
-            _ansi(
-                f"… ({len(lines) - max_lines} more lines)",
-                ANSI_DIM,
-                enabled=True,
-            )
-        )
+    rendered = _render_numbered_preview(
+        lines,
+        max_lines=max(1, max_lines),
+        ansi_enabled=True,
+        include_reset=True,
+    )
 
     header = _ansi(label, header_color, enabled=True)
     return (
         header
         + "\n"
         + _clip_text(
-            "\n".join(rendered),
+            rendered,
             max_lines=max_lines,
             max_chars=max_chars,
             enabled=True,
