@@ -1872,6 +1872,18 @@ async def list_tools(
 
 
 @mcp_tool(write_action=False)
+def list_resources(
+    base_path: str | None = None,
+    include_parameters: bool = False,
+    compact: bool | None = None,
+) -> dict[str, Any]:
+    """Return a resource catalog derived from registered tools."""
+    from github_mcp.main_tools.introspection import list_resources as _impl
+
+    return _impl(base_path=base_path, include_parameters=include_parameters, compact=compact)
+
+
+@mcp_tool(write_action=False)
 def list_all_actions(
     include_parameters: bool = False, compact: bool | None = None
 ) -> dict[str, Any]:

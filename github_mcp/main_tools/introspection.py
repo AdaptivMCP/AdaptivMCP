@@ -183,6 +183,58 @@ def _tool_registry() -> list[tuple[Any, Any]]:
     return _REGISTERED_MCP_TOOLS
 
 
+def _iter_tool_registry() -> tuple[list[tuple[Any, Any]], list[dict[str, Any]]]:
+    """Return validated registry entries plus structured errors."""
+
+    entries: list[tuple[Any, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    registry = _tool_registry()
+    try:
+        iterator = iter(registry)
+    except TypeError as exc:
+        errors.append(
+            {
+                "error": "tool registry is not iterable",
+                "details": str(exc),
+            }
+        )
+        return entries, errors
+
+    for idx, entry in enumerate(iterator):
+        if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+            errors.append(
+                {
+                    "entry_index": idx,
+                    "error": "registry entry is not a (tool, func) pair",
+                    "details": str(type(entry)),
+                }
+            )
+            continue
+        tool, func = entry
+        name = _registered_tool_name(tool, func)
+        if not callable(func):
+            errors.append(
+                {
+                    "entry_index": idx,
+                    "name": name,
+                    "error": "registry entry callable is missing or not callable",
+                }
+            )
+            continue
+        if not name:
+            errors.append(
+                {
+                    "entry_index": idx,
+                    "error": "registry entry missing tool name",
+                }
+            )
+            continue
+        entries.append((tool, func))
+
+    return entries, errors
+
+
 def list_all_actions(
     include_parameters: bool = False, compact: bool | None = None
 ) -> dict[str, Any]:
@@ -199,7 +251,8 @@ def list_all_actions(
     gate = _write_gate_state()
     write_auto_approved = gate["write_auto_approved"]
     seen_names: set[str] = set()
-    for tool, func in _tool_registry():
+    registry_entries, registry_errors = _iter_tool_registry()
+    for tool, func in registry_entries:
         name = _registered_tool_name(tool, func)
         if not name:
             continue
@@ -327,10 +380,13 @@ def list_all_actions(
 
     tools.sort(key=lambda entry: entry["name"])
 
-    return {
+    payload: dict[str, Any] = {
         "compact": compact_mode,
         "tools": tools,
     }
+    if registry_errors:
+        payload["errors"] = registry_errors
+    return payload
 
 
 def list_write_actions(
@@ -385,9 +441,51 @@ async def list_tools(
 
     tools.sort(key=lambda t: t["name"])
 
-    return {
-        "tools": tools,
-    }
+    payload: dict[str, Any] = {"tools": tools}
+    errors = catalog.get("errors")
+    if isinstance(errors, list) and errors:
+        payload["errors"] = errors
+    return payload
+
+
+def _normalize_base_path(base_path: str | None) -> str:
+    if not base_path:
+        return ""
+    cleaned = base_path.strip()
+    if cleaned in {"", "/"}:
+        return ""
+    return "/" + cleaned.strip("/")
+
+
+def list_resources(
+    base_path: str | None = None,
+    include_parameters: bool = False,
+    compact: bool | None = None,
+) -> dict[str, Any]:
+    """Return a resource catalog derived from registered tools."""
+
+    catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
+    tools = list(catalog.get("tools") or [])
+    resources: list[dict[str, Any]] = []
+    prefix = _normalize_base_path(base_path)
+    for entry in tools:
+        name = entry.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        resources.append(
+            {
+                "uri": f"{prefix}/tools/{name}",
+                "name": name,
+                "description": entry.get("description"),
+                "mimeType": "application/json",
+            }
+        )
+
+    payload: dict[str, Any] = {"resources": resources, "finite": True}
+    errors = catalog.get("errors")
+    if isinstance(errors, list) and errors:
+        payload["errors"] = errors
+    return payload
 
 
 async def describe_tool(
