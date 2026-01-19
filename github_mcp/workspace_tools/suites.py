@@ -234,7 +234,9 @@ async def run_tests(
     use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
-    timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
+    timeout_seconds_i = _normalize_timeout_seconds(
+        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+    )
 
     t0 = time.monotonic()
     result = await _tw().terminal_command(
@@ -320,7 +322,9 @@ async def run_lint_suite(
     use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
-    timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
+    timeout_seconds_i = _normalize_timeout_seconds(
+        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+    )
 
     t0 = time.monotonic()
     result = await _tw().terminal_command(
@@ -421,12 +425,16 @@ async def run_quality_suite(
     auto_fix: bool = False,
     gate_optional_steps: bool = False,
 ) -> dict[str, Any]:
-    timeout_seconds_i = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
+    timeout_seconds_i = _normalize_timeout_seconds(
+        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+    )
     preflight_timeout = _normalize_timeout_seconds(
         config.GITHUB_MCP_PREFLIGHT_TIMEOUT_SECONDS,
         timeout_seconds_i,
     )
-    preflight_step_timeout = preflight_timeout if (preflight_timeout and preflight_timeout > 0) else timeout_seconds_i
+    preflight_step_timeout = (
+        preflight_timeout if (preflight_timeout and preflight_timeout > 0) else timeout_seconds_i
+    )
 
     run_id = uuid.uuid4().hex
 

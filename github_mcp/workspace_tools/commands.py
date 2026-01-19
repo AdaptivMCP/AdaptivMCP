@@ -5,8 +5,8 @@ import shlex
 import uuid
 from typing import Any
 
-from github_mcp.command_classification import infer_write_action_from_shell
 from github_mcp import config
+from github_mcp.command_classification import infer_write_action_from_shell
 from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
@@ -191,7 +191,9 @@ async def render_shell(
     the repo mirror.
     """
 
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
+    timeout_seconds = _normalize_timeout_seconds(
+        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+    )
 
     try:
         requested_command, command_lines_out = _normalize_command_payload(
@@ -310,7 +312,9 @@ async def terminal_command(
     preserved until explicitly reset.
     """
 
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
+    timeout_seconds = _normalize_timeout_seconds(
+        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+    )
 
     env: dict[str, str] | None = None
     requested_command, command_lines_out = _normalize_command_payload(
@@ -376,7 +380,9 @@ async def terminal_command(
                     timeout_seconds=t_default,
                     env=env,
                 )
-                current_branch = (cur.get("stdout", "") or "").strip() if isinstance(cur, dict) else ""
+                current_branch = (
+                    (cur.get("stdout", "") or "").strip() if isinstance(cur, dict) else ""
+                )
                 if current_branch:
                     default_branch = _tw()._default_branch_for_repo(full_name)
                     if current_branch != default_branch:
@@ -527,7 +533,9 @@ async def run_python(
     The tool exists to support multi-line scripts without relying on shell-special syntax.
     """
 
-    timeout_seconds = _normalize_timeout_seconds(timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS)
+    timeout_seconds = _normalize_timeout_seconds(
+        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+    )
 
     if not isinstance(script, str) or not script.strip():
         raise ValueError("script must be a non-empty string")

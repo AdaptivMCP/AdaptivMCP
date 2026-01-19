@@ -44,4 +44,3 @@ def test_infer_write_action_uses_command_lines_when_command_empty() -> None:
         )
         is False
     )
-

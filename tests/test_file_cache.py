@@ -83,4 +83,3 @@ def test_bulk_get_cached_maps_back_to_paths(monkeypatch: pytest.MonkeyPatch) -> 
     assert set(hits) == {"a.txt", "b.txt"}
     assert hits["a.txt"]["decoded_bytes"] == b"a"
     assert hits["b.txt"]["decoded_bytes"] == b"b"
-

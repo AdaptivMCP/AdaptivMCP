@@ -1,8 +1,8 @@
 # Split from github_mcp.tools_workspace (generated).
 import glob
 import hashlib
-import re
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -1786,8 +1786,6 @@ async def apply_workspace_operations(
                     )
                     continue
 
-
-
                 if op_name == "delete_lines":
                     path = op.get("path")
                     start_line = int(op.get("start_line", 1) or 1)
@@ -1823,7 +1821,9 @@ async def apply_workspace_operations(
                     after = before[:start_offset] + before[end_offset:]
                     if not preview_only and after != before:
                         _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
-                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    d = _maybe_diff_for_log(
+                        path=path, before=before, after=after, before_exists=True
+                    )
                     if isinstance(d, str) and d:
                         diffs.append(d)
                     results.append(
@@ -1868,7 +1868,9 @@ async def apply_workspace_operations(
 
                     if not preview_only and after != before:
                         _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
-                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    d = _maybe_diff_for_log(
+                        path=path, before=before, after=after, before_exists=True
+                    )
                     if isinstance(d, str) and d:
                         diffs.append(d)
                     results.append(
@@ -1928,7 +1930,9 @@ async def apply_workspace_operations(
 
                     if not preview_only and after != before:
                         _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
-                    d = _maybe_diff_for_log(path=path, before=before, after=after, before_exists=True)
+                    d = _maybe_diff_for_log(
+                        path=path, before=before, after=after, before_exists=True
+                    )
                     if isinstance(d, str) and d:
                         diffs.append(d)
                     results.append(

@@ -67,4 +67,3 @@ def test_colorize_unified_diff_wraps_expected_lines() -> None:
 
 def test_colorize_unified_diff_is_noop_for_empty() -> None:
     assert diff_utils.colorize_unified_diff("") == ""
-

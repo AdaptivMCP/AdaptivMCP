@@ -600,9 +600,7 @@ async def workspace_sync_bidirectional(
 
         if push and snapshot["ahead"] > 0:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](
-                push_cmd, cwd=repo_dir, timeout_seconds=t_default
-            )
+            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=t_default)
             if push_result.get("exit_code", 0) != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")

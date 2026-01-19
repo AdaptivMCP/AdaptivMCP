@@ -4,8 +4,8 @@ import base64
 
 import pytest
 
-from github_mcp.exceptions import GitHubAPIError
 from github_mcp import github_content
+from github_mcp.exceptions import GitHubAPIError
 
 
 @pytest.mark.anyio
@@ -26,7 +26,9 @@ async def test_decode_github_content_large_file_shape(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.anyio
-async def test_decode_github_content_raises_on_invalid_base64(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_decode_github_content_raises_on_invalid_base64(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def _fake_request(*_args, **_kwargs):
         return {"json": {"content": "not-valid-base64", "encoding": "base64", "sha": "abc"}}
 
@@ -37,7 +39,9 @@ async def test_decode_github_content_raises_on_invalid_base64(monkeypatch: pytes
 
 
 @pytest.mark.anyio
-async def test_decode_github_content_non_utf8_text_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_decode_github_content_non_utf8_text_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     raw = b"\xff\xfe\xfd"
     payload = base64.b64encode(raw).decode("ascii")
 

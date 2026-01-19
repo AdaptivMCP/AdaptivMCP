@@ -66,9 +66,7 @@ async def commit_workspace(
             raise GitHubAPIError("No changes to commit in repo mirror")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](
-            commit_cmd, cwd=repo_dir, timeout_seconds=t_default
-        )
+        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=t_default)
         if commit_result["exit_code"] != 0:
             stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
@@ -76,17 +74,13 @@ async def commit_workspace(
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](
-                push_cmd, cwd=repo_dir, timeout_seconds=t_default
-            )
+            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=t_default)
             if push_result["exit_code"] != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         # Collect commit metadata.
-        rev = await deps["run_shell"](
-            "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=t_default
-        )
+        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=t_default)
         head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
         oneline = await deps["run_shell"](
             "git log -1 --oneline", cwd=repo_dir, timeout_seconds=t_default
@@ -146,9 +140,7 @@ async def commit_workspace_files(
             raise GitHubAPIError("No staged changes to commit for provided files")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](
-            commit_cmd, cwd=repo_dir, timeout_seconds=t_default
-        )
+        commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir, timeout_seconds=t_default)
         if commit_result["exit_code"] != 0:
             stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
@@ -156,17 +148,13 @@ async def commit_workspace_files(
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](
-                push_cmd, cwd=repo_dir, timeout_seconds=t_default
-            )
+            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=t_default)
             if push_result["exit_code"] != 0:
                 stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
 
         # Collect commit metadata.
-        rev = await deps["run_shell"](
-            "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=t_default
-        )
+        rev = await deps["run_shell"]("git rev-parse HEAD", cwd=repo_dir, timeout_seconds=t_default)
         head_sha = rev.get("stdout", "").strip() if isinstance(rev, dict) else ""
         oneline = await deps["run_shell"](
             "git log -1 --oneline", cwd=repo_dir, timeout_seconds=t_default

@@ -1153,7 +1153,7 @@ def _clean_error_message(value: object, *, limit: int = 180) -> str:
     lowered = s.lower()
     for prefix in ("error:", "exception:", "fatal:"):
         if lowered.startswith(prefix):
-            s = s[len(prefix):].strip()
+            s = s[len(prefix) :].strip()
             break
 
     return s
@@ -2043,7 +2043,9 @@ def _log_tool_warning(
     friendly = _friendly_tool_name(tool_name)
     bits = _friendly_arg_bits(all_args or {})
     suffix = (" - " + " - ".join(bits)) if bits else ""
-    prefix = _ansi("RES", ANSI_YELLOW) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+    prefix = (
+        _ansi("RES", ANSI_YELLOW) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+    )
     ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
     snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
     rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
@@ -2094,10 +2096,14 @@ def _log_tool_returned_error(
         friendly = _friendly_tool_name(tool_name)
         bits = _friendly_arg_bits(all_args or {})
         suffix = (" - " + " - ".join(bits)) if bits else ""
-        prefix = _ansi("RES", ANSI_RED) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        prefix = (
+            _ansi("RES", ANSI_RED) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         err_type = _ansi("ReturnedError", ANSI_YELLOW)
-        err_msg = _ansi(_clean_error_message(payload.get("error_message") or "", limit=180), ANSI_RED)
+        err_msg = _ansi(
+            _clean_error_message(payload.get("error_message") or "", limit=180), ANSI_RED
+        )
         snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
         rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
         res_suffix = (" - " + " - ".join(rbits)) if rbits else ""
@@ -2428,7 +2434,9 @@ def _log_tool_start(
     friendly = _friendly_tool_name(tool_name)
     bits = _friendly_arg_bits(all_args)
     suffix = (" - " + " - ".join(bits)) if bits else ""
-    prefix = _ansi("REQ", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+    prefix = (
+        _ansi("REQ", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+    )
     msg = f"{prefix}{suffix}"
     if LOG_TOOL_LOG_IDS:
         msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
@@ -2477,7 +2485,9 @@ def _log_tool_success(
         friendly = _friendly_tool_name(tool_name)
         bits = _friendly_arg_bits(all_args or {})
         suffix = (" - " + " - ".join(bits)) if bits else ""
-        prefix = _ansi("RES", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        prefix = (
+            _ansi("RES", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
         rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
@@ -2662,7 +2672,9 @@ def _log_tool_failure(
         friendly = _friendly_tool_name(tool_name)
         bits = _friendly_arg_bits(all_args or {})
         suffix = (" - " + " - ".join(bits)) if bits else ""
-        prefix = _ansi("RES", ANSI_RED) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        prefix = (
+            _ansi("RES", ANSI_RED) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         err_type_raw = payload.get("error_type") or exc.__class__.__name__
         err_msg_raw = payload.get("error_message") or str(exc)
@@ -3108,7 +3120,7 @@ def mcp_tool(
                         schema_present=schema_present,
                         req=req,
                         exc=exc,
-all_args=all_args,
+                        all_args=all_args,
                     )
                     _log_tool_failure(
                         tool_name=tool_name,
@@ -3118,7 +3130,7 @@ all_args=all_args,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
                         duration_ms=duration_ms,
-exc=exc,
+                        exc=exc,
                         all_args=all_args,
                         structured_error=structured_error,
                     )
@@ -3166,7 +3178,7 @@ exc=exc,
                         schema_present=True,
                         req=req,
                         exc=exc,
-all_args=all_args,
+                        all_args=all_args,
                     )
                     _log_tool_failure(
                         tool_name=tool_name,
@@ -3176,7 +3188,7 @@ all_args=all_args,
                         schema_hash=schema_hash,
                         schema_present=True,
                         duration_ms=duration_ms,
-exc=exc,
+                        exc=exc,
                         all_args=all_args,
                         structured_error=structured_error,
                     )
@@ -3386,7 +3398,7 @@ exc=exc,
                     schema_present=schema_present,
                     req=req,
                     exc=exc,
-all_args=all_args,
+                    all_args=all_args,
                 )
                 _log_tool_failure(
                     tool_name=tool_name,
@@ -3396,7 +3408,7 @@ all_args=all_args,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
                     duration_ms=duration_ms,
-exc=exc,
+                    exc=exc,
                     all_args=all_args,
                     structured_error=structured_error,
                 )
@@ -3441,7 +3453,7 @@ exc=exc,
                     schema_present=True,
                     req=req,
                     exc=exc,
-all_args=all_args,
+                    all_args=all_args,
                 )
                 _log_tool_failure(
                     tool_name=tool_name,
@@ -3451,7 +3463,7 @@ all_args=all_args,
                     schema_hash=schema_hash,
                     schema_present=True,
                     duration_ms=duration_ms,
-exc=exc,
+                    exc=exc,
                     all_args=all_args,
                     structured_error=structured_error,
                 )

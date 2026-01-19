@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import inspect
 from collections.abc import Mapping
 from typing import Any
-
-import inspect
 
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.mcp_server.schemas import _jsonable, _schema_from_signature
