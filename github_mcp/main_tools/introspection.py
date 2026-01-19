@@ -15,115 +15,22 @@ def list_write_tools() -> dict[str, Any]:
 
     This is a lightweight summary that avoids scanning the full module.
     """
-
-    tools = [
-        {
-            "name": "create_branch",
-            "category": "branch",
-            "description": "Create a new branch from a base ref.",
-        },
-        {
-            "name": "ensure_branch",
-            "category": "branch",
-            "description": "Ensure a branch exists, creating it from a base ref if needed.",
-        },
-        {
-            "name": "update_file_and_open_pr",
-            "category": "pr",
-            "description": "Fast path: commit one file and open a PR without cloning.",
-        },
-        {
-            "name": "create_pull_request",
-            "category": "pr",
-            "description": "Open a GitHub pull request between two branches.",
-        },
-        {
-            "name": "update_files_and_open_pr",
-            "category": "pr",
-            "description": "Commit multiple files and open a PR in one call.",
-        },
-        {
-            "name": "ensure_workspace_clone",
-            "category": "workspace",
-            "description": "Ensure a persistent repo mirror (workspace clone) exists for a repo/ref.",
-        },
-        {
-            "name": "commit_workspace",
-            "category": "workspace",
-            "description": "Commit and optionally push changes from the persistent repo mirror.",
-        },
-        {
-            "name": "apply_patch",
-            "category": "workspace",
-            "description": "Apply a unified diff patch inside the persistent repo mirror (workspace clone).",
-        },
-        {
-            "name": "move_workspace_paths",
-            "category": "workspace",
-            "description": "Move (rename) paths inside the persistent repo mirror (workspace clone).",
-        },
-        {
-            "name": "apply_workspace_operations",
-            "category": "workspace",
-            "description": "Apply multiple file operations in one call inside the persistent repo mirror.",
-        },
-        {
-            "name": "commit_workspace_files",
-            "category": "workspace",
-            "description": "Commit a specific list of files from the persistent repo mirror.",
-        },
-        {
-            "name": "run_tests",
-            "category": "workspace",
-            "description": "Run tests (default: pytest) inside the persistent repo mirror (workspace clone).",
-        },
-        {
-            "name": "run_python",
-            "category": "workspace",
-            "description": "Run a Python script inside the persistent repo mirror without heredoc.",
-        },
-        {
-            "name": "trigger_workflow_dispatch",
-            "category": "workflow",
-            "description": "Trigger a GitHub Actions workflow via workflow_dispatch.",
-        },
-        {
-            "name": "trigger_and_wait_for_workflow",
-            "category": "workflow",
-            "description": "Trigger a workflow and poll until completion or timeout.",
-        },
-        {
-            "name": "create_issue",
-            "category": "issue",
-            "description": "Open a GitHub issue with optional body, labels, and assignees.",
-        },
-        {
-            "name": "update_issue",
-            "category": "issue",
-            "description": "Update fields on an existing GitHub issue.",
-        },
-        {
-            "name": "comment_on_issue",
-            "category": "issue",
-            "description": "Post a comment on an existing GitHub issue.",
-        },
-        {
-            "name": "merge_pull_request",
-            "category": "pr",
-            "description": "Merge an existing PR using the chosen method.",
-        },
-        {
-            "name": "close_pull_request",
-            "category": "pr",
-            "description": "Close an existing PR without merging.",
-        },
-        {
-            "name": "comment_on_pull_request",
-            "category": "pr",
-            "description": "Post a comment on an existing PR.",
-        },
-    ]
-
+    catalog = list_all_actions(include_parameters=False, compact=True)
+    tools: list[dict[str, Any]] = []
+    for entry in catalog.get("tools", []) or []:
+        if not entry.get("write_action"):
+            continue
+        name = entry.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        tools.append(
+            {
+                "name": name,
+                "category": _write_tool_category(name, entry),
+                "description": _clean_description(entry.get("description") or ""),
+            }
+        )
+    tools.sort(key=lambda t: t["name"])
     return {"tools": tools}
 
 
@@ -154,10 +61,55 @@ def _tool_tags(tool: Any, func: Any) -> list[str]:
     return []
 
 
+def _tool_ui(tool: Any, func: Any) -> dict[str, Any] | None:
+    """Return UI metadata for a tool."""
+
+    ui = getattr(func, "__mcp_ui__", None)
+    if isinstance(ui, Mapping):
+        return dict(ui)
+
+    meta = getattr(tool, "meta", None)
+    if isinstance(meta, dict):
+        ui = meta.get("ui")
+        if isinstance(ui, dict):
+            return dict(ui)
+
+    return None
+
+
 def _clean_description(text: str) -> str:
     if not text:
         return text
     return str(text).strip()
+
+
+def _write_tool_category(name: str, entry: Mapping[str, Any]) -> str:
+    ui = entry.get("ui")
+    ui_group = None
+    if isinstance(ui, Mapping):
+        group = ui.get("group")
+        if isinstance(group, str) and group.strip():
+            ui_group = group.strip()
+            if ui_group != "github":
+                return ui_group
+
+    lowered = name.lower()
+    if "workflow" in lowered:
+        return "workflow"
+    if "issue" in lowered:
+        return "issue"
+    if "pull_request" in lowered or lowered.startswith("pr_") or "_pr_" in lowered:
+        return "pr"
+    if "branch" in lowered:
+        return "branch"
+    if (
+        "workspace" in lowered
+        or lowered in {"apply_patch", "run_tests", "run_python", "terminal_command"}
+        or lowered.startswith(("apply_workspace", "commit_workspace", "move_workspace"))
+    ):
+        return "workspace"
+
+    return ui_group or "github"
 
 
 def _write_gate_state() -> dict[str, bool]:
@@ -300,11 +252,9 @@ def list_all_actions(
         if isinstance(ann, dict) and ann:
             tool_info["annotations"] = ann
 
-        meta = getattr(tool, "meta", None)
-        if isinstance(meta, dict):
-            ui = meta.get("ui")
-            if isinstance(ui, dict) and ui:
-                tool_info["ui"] = ui
+        ui_meta = _tool_ui(tool, func)
+        if isinstance(ui_meta, Mapping) and ui_meta:
+            tool_info["ui"] = ui_meta
 
         # Convenience fields for UIs that want stable text labels.
         if "ui" in tool_info and isinstance(tool_info.get("ui"), dict):
