@@ -30,6 +30,7 @@ from github_mcp.workspace_tools import fs as _fs
 from github_mcp.workspace_tools import git_ops as _git_ops
 from github_mcp.workspace_tools import listing as _listing
 from github_mcp.workspace_tools import pr as _pr
+from github_mcp.workspace_tools import rg as _rg
 from github_mcp.workspace_tools import suites as _suites
 from github_mcp.workspace_tools import venv as _venv
 from github_mcp.workspace_tools import workflows as _workflows
@@ -99,6 +100,10 @@ compare_workspace_files = _fs.compare_workspace_files
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace
 find_workspace_paths = _listing.find_workspace_paths
+
+# Fast search (ripgrep-backed) tools
+rg_list_workspace_files = _rg.rg_list_workspace_files
+rg_search_workspace = _rg.rg_search_workspace
 
 render_shell = _commands.render_shell
 terminal_command = _commands.terminal_command
@@ -170,6 +175,8 @@ __all__ = [
     "list_workspace_files",
     "search_workspace",
     "find_workspace_paths",
+    "rg_list_workspace_files",
+    "rg_search_workspace",
     "render_shell",
     "terminal_command",
     "run_command",
