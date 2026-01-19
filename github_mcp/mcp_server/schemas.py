@@ -409,25 +409,87 @@ def _normalize_tool_description(
     *,
     llm_level: str = "basic",
 ) -> str:
-    # Prefer docstring; fall back to signature-based description.
+    """Return a user-facing description for a tool.
+
+    The primary source of truth is the callable's docstring. When the tool
+    implementation omits a docstring, we generate a compact, truthful fallback
+    based on the function name and signature.
+
+    Note: tool descriptions are reference material for clients; they should not
+    be treated as behavioral constraints.
+    """
+
+    # Prefer docstring.
     doc = (inspect.getdoc(func) or "").strip()
     if doc:
         return doc
 
+    name = getattr(func, "__name__", "tool")
+
+    def _expand_token(tok: str) -> str:
+        mapping = {
+            "pr": "pull request",
+            "prs": "pull requests",
+            "repo": "repository",
+            "repos": "repositories",
+            "env": "environment",
+            "vars": "variables",
+            "gql": "GraphQL",
+            "url": "URL",
+            "sha": "SHA",
+            "id": "ID",
+        }
+        return mapping.get(tok, tok)
+
+    tokens = [t for t in name.strip().split("_") if t]
+    verb = tokens[0] if tokens else "tool"
+    rest_tokens = [_expand_token(t) for t in tokens[1:]]
+    rest = " ".join(rest_tokens).strip()
+
+    # Heuristic verb phrasing.
+    verb_phrases = {
+        "get": "Get",
+        "list": "List",
+        "fetch": "Fetch",
+        "search": "Search",
+        "create": "Create",
+        "update": "Update",
+        "patch": "Patch",
+        "set": "Set",
+        "delete": "Delete",
+        "move": "Move",
+        "merge": "Merge",
+        "close": "Close",
+        "open": "Open",
+        "trigger": "Trigger",
+        "wait": "Wait for",
+        "ensure": "Ensure",
+        "resolve": "Resolve",
+        "rollback": "Rollback",
+        "restart": "Restart",
+        "cancel": "Cancel",
+        "run": "Run",
+        "validate": "Validate",
+    }
+
+    if verb in verb_phrases and rest:
+        summary = f"{verb_phrases[verb]} {rest}."
+    else:
+        summary = f"{_title_from_tool_name(name)}."
+
+    # Signature detail (best-effort).
     sig = ""
     try:
         sig = str(signature) if signature is not None else ""
     except Exception:
         sig = ""
 
-    # Keep fallback descriptions non-prescriptive; clients and agents should not
-    # treat tool descriptions as behavioral constraints.
-    base = f"{_title_from_tool_name(getattr(func, '__name__', 'tool'))}."
     if sig:
-        base += f" Signature: {getattr(func, '__name__', 'tool')}{sig}."
+        summary += f" Signature: {name}{sig}."
+
     # llm_level retained for backward compatibility but not emitted.
     _ = llm_level
-    return base
+    return summary
 
 
 def _build_tool_docstring(
