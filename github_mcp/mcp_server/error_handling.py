@@ -11,6 +11,7 @@ Contract notes:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from github_mcp.exceptions import (
@@ -22,6 +23,60 @@ from github_mcp.exceptions import (
     WriteApprovalRequiredError,
     WriteNotAuthorizedError,
 )
+
+
+_HIGH_ENTROPY_RE = re.compile(r"^[A-Za-z0-9_\-]{48,}$")
+
+
+def _sanitize_debug_value(value: Any, *, max_depth: int = 6, _depth: int = 0) -> Any:
+    """Return a debug-safe version of arbitrary values.
+
+    Validation failures often contain user-provided values. In hosted connector
+    environments, returning token-like / high-entropy strings can trigger
+    upstream safety blocks. This sanitizer preserves basic shape while
+    removing risky payloads.
+    """
+
+    if _depth > max_depth:
+        return value
+
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+
+    if isinstance(value, str):
+        s = value
+        if not s:
+            return s
+        # Do not surface Authorization/Bearer content.
+        lowered = s.strip().lower()
+        if lowered.startswith("bearer ") or lowered.startswith("authorization:"):
+            return "<REDACTED_TOKEN>"
+        # Redact high-entropy / token-like strings entirely.
+        if len(s) >= 48 and _HIGH_ENTROPY_RE.match(s):
+            return "<REDACTED_VALUE>"
+        # Avoid emitting very long strings (diffs, blobs, etc.).
+        if len(s) > 200:
+            return "<TRUNCATED_TEXT>"
+        return s
+
+    if isinstance(value, (bytes, bytearray)):
+        return "<BYTES>"
+
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for k, v in value.items():
+            try:
+                key = k if isinstance(k, str) else str(k)
+            except Exception:
+                key = "<unprintable_key>"
+            out[key] = _sanitize_debug_value(v, max_depth=max_depth, _depth=_depth + 1)
+        return out
+
+    if isinstance(value, (list, tuple)):
+        seq = [_sanitize_debug_value(v, max_depth=max_depth, _depth=_depth + 1) for v in value]
+        return seq if isinstance(value, list) else tuple(seq)
+
+    return value
 
 
 def _structured_tool_error(
@@ -133,8 +188,21 @@ def _structured_tool_error(
     # Keep trace/debug nested under error_detail for stable downstream consumers.
     if trace is not None:
         error_detail["trace"] = trace
+
+    # Validation errors frequently include the *original* values (sometimes
+    # including tokens or other high-entropy strings). To avoid upstream safety
+    # blocks in hosted connector environments, sanitize these argument values.
     if args is not None:
-        error_detail["debug"] = {"args": args}
+        if category == "validation":
+            try:
+                error_detail["debug"] = {
+                    "args": _sanitize_debug_value(args),
+                    "arg_keys": sorted(str(k) for k in args.keys()),
+                }
+            except Exception:
+                error_detail["debug"] = {"args": {}, "arg_keys": ["<unavailable>"]}
+        else:
+            error_detail["debug"] = {"args": args}
 
     payload: dict[str, Any] = {
         "status": "error",
@@ -155,5 +223,15 @@ def _structured_tool_error(
         payload["tool_descriptor"] = tool_descriptor
     if tool_descriptor_text is not None:
         payload["tool_descriptor_text"] = tool_descriptor_text
+
+    # Final pass: redact secrets anywhere in the payload. This reduces the
+    # likelihood of incorrect safety blocks caused by token-like strings in
+    # error messages, upstream payloads, or request debug context.
+    try:
+        from github_mcp.redaction import redact_any
+
+        payload = redact_any(payload)
+    except Exception:
+        pass
 
     return payload
