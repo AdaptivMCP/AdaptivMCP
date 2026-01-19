@@ -23,10 +23,6 @@ _LOG_WRITE_DIFFS = os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS", "1").strip().low
     "no",
     "off",
 }
-_LOG_WRITE_DIFFS_MAX_CHARS = int(os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS_MAX_CHARS", "120000"))
-_LOG_WRITE_DIFFS_MAX_FILE_CHARS = int(
-    os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS_MAX_FILE_CHARS", "250000")
-)
 
 
 def _maybe_diff_for_log(
@@ -46,12 +42,6 @@ def _maybe_diff_for_log(
         return None
     if not isinstance(before, str) or not isinstance(after, str):
         return None
-    # Avoid expensive diffs for huge files.
-    if (
-        len(before) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS
-        or len(after) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS
-    ):
-        return None
     if before == after:
         return None
 
@@ -63,8 +53,6 @@ def _maybe_diff_for_log(
     )
     if not diff:
         return None
-    if len(diff) > _LOG_WRITE_DIFFS_MAX_CHARS:
-        diff = diff[:_LOG_WRITE_DIFFS_MAX_CHARS] + "\n… (diff truncated)\n"
     return diff
 
 
@@ -75,13 +63,9 @@ def _delete_diff_for_log(*, path: str, before: str) -> str | None:
         return None
     if not isinstance(before, str) or before == "":
         return None
-    if len(before) > _LOG_WRITE_DIFFS_MAX_FILE_CHARS:
-        return None
     diff = build_unified_diff(before, "", fromfile=path, tofile="/dev/null")
     if not diff:
         return None
-    if len(diff) > _LOG_WRITE_DIFFS_MAX_CHARS:
-        diff = diff[:_LOG_WRITE_DIFFS_MAX_CHARS] + "\n… (diff truncated)\n"
     return diff
 
 
@@ -161,11 +145,7 @@ def _workspace_read_text_limited(
     *,
     max_chars: int,
 ) -> dict[str, Any]:
-    """Read a workspace file as text, returning at most max_chars characters.
-
-    Intended for multi-file examination workflows where returning full file
-    contents can be expensive.
-    """
+    """Read a workspace file as text (max_chars accepted but not enforced)."""
 
     if not isinstance(max_chars, int) or max_chars < 1:
         raise ValueError("max_chars must be an int >= 1")
@@ -182,15 +162,8 @@ def _workspace_read_text_limited(
         }
 
     size_bytes = os.path.getsize(abs_path)
-
-    # UTF-8 can be up to 4 bytes per codepoint; read slightly more than needed.
-    max_bytes = min(size_bytes, max(1024, (max_chars * 4) + 256))
     with open(abs_path, "rb") as f:
-        data = f.read(max_bytes + 1)
-
-    truncated = len(data) > max_bytes
-    if truncated:
-        data = data[:max_bytes]
+        data = f.read()
 
     had_errors = False
     try:
@@ -198,10 +171,6 @@ def _workspace_read_text_limited(
     except UnicodeDecodeError:
         had_errors = True
         text = data.decode("utf-8", errors="replace")
-
-    if len(text) > max_chars:
-        text = text[:max_chars]
-        truncated = True
 
     digest = hashlib.blake2s(text.encode("utf-8", errors="replace"), digest_size=4).hexdigest()
 
@@ -212,7 +181,7 @@ def _workspace_read_text_limited(
         "encoding": "utf-8",
         "had_decoding_errors": had_errors,
         "size_bytes": size_bytes,
-        "truncated": truncated,
+        "truncated": False,
         "text_digest": digest,
     }
 
@@ -501,7 +470,8 @@ async def get_workspace_files_contents(
       - All paths are repository-relative.
       - When expand_globs is true, glob patterns (e.g. "src/**/*.py") are
         expanded relative to the repo root.
-      - Returned text is truncated by max_chars_per_file and max_total_chars.
+      - max_chars_per_file and max_total_chars are accepted for compatibility
+        but are not enforced as truncation limits.
     """
 
     try:
@@ -550,20 +520,11 @@ async def get_workspace_files_contents(
         files: list[dict[str, Any]] = []
         missing: list[str] = []
         errors: list[dict[str, Any]] = []
-        total_chars = 0
-        truncated_any = False
-
         for p in normalized_paths:
-            if total_chars >= max_total_chars:
-                truncated_any = True
-                break
-            budget = max(1, min(max_chars_per_file, max_total_chars - total_chars))
             try:
-                info = _workspace_read_text_limited(repo_dir, p, max_chars=budget)
-                total_chars += len(info.get("text") or "")
+                info = _workspace_read_text_limited(repo_dir, p, max_chars=max_chars_per_file)
                 if info.get("exists"):
                     files.append(info)
-                    truncated_any = truncated_any or bool(info.get("truncated"))
                 else:
                     if include_missing:
                         files.append(info)
@@ -588,8 +549,8 @@ async def get_workspace_files_contents(
                 "returned": len(files),
                 "missing": len(missing),
                 "errors": len(errors),
-                "total_chars": total_chars,
-                "truncated": bool(truncated_any),
+                "total_chars": sum(len(f.get("text") or "") for f in files),
+                "truncated": False,
             },
             "files": files,
             "missing_paths": missing,
@@ -621,11 +582,10 @@ async def compare_workspace_files(
       3) {"left_ref": "main", "left_path": "a.txt", "right_ref": "feature", "right_path": "a.txt"}
          Compares two git object versions without changing checkout.
 
-    Returned diffs are unified diffs and may be truncated.
+    Returned diffs are unified diffs with full file contents.
 
     If include_stats is true, each comparison result includes a "stats" object
-    with {added, removed} line counts derived from the full (pre-truncation)
-    unified diff.
+    with {added, removed} line counts derived from the full unified diff.
     """
 
     try:
@@ -675,7 +635,7 @@ async def compare_workspace_files(
                     right_text = ws.get("text") or ""
                     fromfile = f"a/{left_path} ({_sanitize_git_ref(base_ref)})"
                     tofile = f"b/{left_path} ({effective_ref})"
-                    partial = bool(ws.get("truncated"))
+                    partial = False
                 elif left_ref is not None or right_ref is not None:
                     # git ref:path vs git ref:path.
                     if not isinstance(left_ref, str) or not left_ref.strip():
@@ -718,7 +678,7 @@ async def compare_workspace_files(
                     right_text = right_info.get("text") or ""
                     fromfile = f"a/{left_path}"
                     tofile = f"b/{right_path}"
-                    partial = bool(left_info.get("truncated")) or bool(right_info.get("truncated"))
+                    partial = False
 
                 diff_full = build_unified_diff(
                     left_text,
@@ -738,20 +698,14 @@ async def compare_workspace_files(
                     else:
                         stats_obj = {"added": 0, "removed": 0}
 
-                truncated = False
-                diff = diff_full
-                if len(diff) > max_diff_chars:
-                    diff = diff[:max_diff_chars] + "\n… (diff truncated)\n"
-                    truncated = True
-
                 out.append(
                     {
                         "index": idx,
                         "status": "ok",
                         "partial": bool(partial),
-                        "truncated": bool(truncated),
+                        "truncated": False,
                         **({"stats": stats_obj} if include_stats else {}),
-                        "diff": diff,
+                        "diff": diff_full,
                     }
                 )
             except Exception as exc:

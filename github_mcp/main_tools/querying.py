@@ -3,10 +3,6 @@ from __future__ import annotations
 import sys
 from typing import Any, Literal
 
-from github_mcp.config import (
-    GITHUB_MCP_MAX_FETCH_URL_BYTES,
-    GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS,
-)
 from github_mcp.http_clients import (
     _external_client_instance as _default_external_client_instance,
 )
@@ -84,17 +80,7 @@ async def fetch_url(url: str) -> dict[str, Any]:
 
     client = external_client_instance()
 
-    max_bytes = int(GITHUB_MCP_MAX_FETCH_URL_BYTES) if GITHUB_MCP_MAX_FETCH_URL_BYTES else 0
-    max_text_chars = (
-        int(GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS) if GITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS else 0
-    )
-    if max_bytes < 0:
-        max_bytes = 0
-    if max_text_chars < 0:
-        max_text_chars = 0
-
     body = bytearray()
-    truncated = False
     status_code: int | None = None
     response_headers: dict[str, Any] = {}
 
@@ -107,15 +93,6 @@ async def fetch_url(url: str) -> dict[str, Any]:
                 async for chunk in resp.aiter_bytes():
                     if not chunk:
                         continue
-                    if max_bytes:
-                        remaining = max_bytes - len(body)
-                        if remaining <= 0:
-                            truncated = True
-                            break
-                        if len(chunk) > remaining:
-                            body.extend(chunk[:remaining])
-                            truncated = True
-                            break
                     body.extend(chunk)
         except Exception as exc:  # noqa: BLE001
             return structured_tool_error(
@@ -136,20 +113,13 @@ async def fetch_url(url: str) -> dict[str, Any]:
     except Exception:
         content = ""
 
-    if max_text_chars and len(content) > max_text_chars:
-        content = content[:max_text_chars]
-        truncated = True
-
     payload: dict[str, Any] = {
         "status_code": status_code,
         "headers": headers,
         "content_type": headers.get("content-type"),
         "size_bytes": len(body),
-        "truncated": truncated,
         "content": content,
     }
-    if truncated:
-        payload["note"] = "Response body truncated to configured limits."
     return redact_any(payload)
 
 

@@ -169,8 +169,8 @@ async def search_workspace(
     Behavior for `query`:
     - When regex=true, `query` is treated as a Python regular expression.
     - Otherwise `query` is treated as a literal substring match.
-    - Results can be bounded via max_results and files can be bounded via
-      max_file_bytes to keep searches responsive on large repositories.
+    - max_results and max_file_bytes are accepted for compatibility/observability
+      but are not enforced as output limits.
     """
 
     if not isinstance(query, str) or not query:
@@ -234,8 +234,6 @@ async def search_workspace(
         results: list[dict[str, Any]] = []
         files_scanned = 0
         files_skipped = 0
-        truncated = False
-
         walk_iter = (
             [(os.path.dirname(start), [], [os.path.basename(start)])]
             if single_file
@@ -296,28 +294,11 @@ async def search_workspace(
                                     "text": line.rstrip("\n"),
                                 }
                             )
-
-                            if (
-                                max_results is not None
-                                and max_results > 0
-                                and len(results) >= max_results
-                            ):
-                                truncated = True
-                                break
                 except OSError:
                     files_skipped += 1
                     continue
 
-                if truncated:
-                    break
-
-                # max_results is accepted for compatibility/observability but is not
-                # enforced as an output limit.
-
-            if truncated:
-                break
-
-        # Return after scanning the full walk (or truncation).
+        # Return after scanning the full walk.
         return {
             "full_name": full_name,
             "ref": effective_ref,
@@ -326,7 +307,7 @@ async def search_workspace(
             "case_sensitive": case_sensitive,
             "used_regex": used_regex,
             "results": results,
-            "truncated": truncated,
+            "truncated": False,
             "files_scanned": files_scanned,
             "files_skipped": files_skipped,
             "max_results": max_results,

@@ -37,29 +37,6 @@ async def test_decode_github_content_raises_on_invalid_base64(monkeypatch: pytes
 
 
 @pytest.mark.anyio
-async def test_decode_github_content_truncates_when_over_byte_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    payload = base64.b64encode(b"hello").decode("ascii")
-
-    async def _fake_request(*_args, **_kwargs):
-        return {"json": {"content": payload, "encoding": "base64", "sha": "abc"}}
-
-    monkeypatch.setattr(github_content, "_request", _fake_request)
-    monkeypatch.setattr(github_content, "GITHUB_MCP_INCLUDE_BASE64_CONTENT", True)
-    monkeypatch.setattr(github_content, "GITHUB_MCP_MAX_FILE_CONTENT_BYTES", 3)
-    monkeypatch.setattr(github_content, "GITHUB_MCP_MAX_FILE_TEXT_CHARS", 2)
-
-    decoded = await github_content._decode_github_content("o/r", "README.md", "main")
-
-    assert decoded["truncated"] is True
-    assert decoded["decoded_bytes"] is None
-    assert decoded["text"] == "he"
-    assert decoded["size"] == 5
-    assert decoded["content"] is None
-    assert decoded["encoding"] is None
-    assert "truncated" in decoded.get("message", "")
-
-
-@pytest.mark.anyio
 async def test_decode_github_content_non_utf8_text_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     raw = b"\xff\xfe\xfd"
     payload = base64.b64encode(raw).decode("ascii")
@@ -69,12 +46,28 @@ async def test_decode_github_content_non_utf8_text_returns_none(monkeypatch: pyt
 
     monkeypatch.setattr(github_content, "_request", _fake_request)
     monkeypatch.setattr(github_content, "GITHUB_MCP_INCLUDE_BASE64_CONTENT", False)
-    monkeypatch.setattr(github_content, "GITHUB_MCP_MAX_FILE_CONTENT_BYTES", 0)
 
     decoded = await github_content._decode_github_content("o/r", "bin.dat", "main")
 
     assert decoded["decoded_bytes"] == raw
     assert decoded["text"] is None
     assert decoded["size"] == len(raw)
-    assert decoded["truncated"] is False
 
+
+@pytest.mark.anyio
+async def test_decode_github_content_returns_full_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    body = b"hello world"
+    payload = base64.b64encode(body).decode("ascii")
+
+    async def _fake_request(*_args, **_kwargs):
+        return {"json": {"content": payload, "encoding": "base64", "sha": "abc"}}
+
+    monkeypatch.setattr(github_content, "_request", _fake_request)
+    monkeypatch.setattr(github_content, "GITHUB_MCP_INCLUDE_BASE64_CONTENT", True)
+
+    decoded = await github_content._decode_github_content("o/r", "README.md", "main")
+
+    assert decoded["decoded_bytes"] == body
+    assert decoded["text"] == "hello world"
+    assert decoded["content"] == payload
+    assert decoded["encoding"] == "base64"
