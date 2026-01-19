@@ -1,0 +1,457 @@
+"""Fast repo search helpers (ripgrep-backed) with safe fallbacks.
+
+Why this exists
+--------------
+The workspace mirror can contain very large repositories and very large files.
+The pure-Python search tools are correct but can be slow for big repos.
+
+These tools:
+  - Use `rg` (ripgrep) when available for speed.
+  - Fall back to a streaming Python walker when rg is not installed.
+  - Always return line numbers, and optionally a structured excerpt around each
+    match using the same large-file-safe reader used elsewhere.
+"""
+
+from __future__ import annotations
+
+import fnmatch
+import json
+import os
+import re
+import shutil
+import subprocess
+from typing import Any
+
+from github_mcp.server import _structured_tool_error, mcp_tool
+
+from ._shared import _tw
+from .fs import _is_probably_binary, _read_lines_excerpt, _workspace_safe_join
+
+
+def _rg_available() -> bool:
+    return shutil.which("rg") is not None
+
+
+def _normalize_globs(glob: str | list[str] | None) -> list[str]:
+    if glob is None:
+        return []
+    if isinstance(glob, str):
+        g = glob.strip()
+        return [g] if g else []
+    if isinstance(glob, list):
+        out: list[str] = []
+        for item in glob:
+            if not isinstance(item, str):
+                continue
+            s = item.strip()
+            if s:
+                out.append(s)
+        return out
+    raise TypeError("glob must be a string, list of strings, or null")
+
+
+def _passes_globs(rel_path: str, globs: list[str]) -> bool:
+    if not globs:
+        return True
+    # Match against POSIX-ish paths.
+    p = rel_path.replace("\\", "/")
+    return any(fnmatch.fnmatch(p, g) for g in globs)
+
+
+def _python_walk_files(
+    repo_dir: str,
+    base_rel: str,
+    *,
+    include_hidden: bool,
+    globs: list[str],
+    max_results: int,
+) -> list[str]:
+    base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
+    base_abs = os.path.realpath(base_abs)
+
+    out: list[str] = []
+    for root, dirs, files in os.walk(base_abs):
+        # Skip .git and optionally hidden directories.
+        rel_root = os.path.relpath(root, repo_dir).replace("\\", "/")
+        if rel_root == ".git" or rel_root.startswith(".git/"):
+            dirs[:] = []
+            continue
+        if not include_hidden:
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+
+        for f in files:
+            if not include_hidden and f.startswith("."):
+                continue
+            abs_path = os.path.join(root, f)
+            try:
+                rel_path = os.path.relpath(abs_path, repo_dir).replace("\\", "/")
+            except Exception:
+                continue
+            if rel_path == "." or rel_path.startswith(".."):
+                continue
+            if not _passes_globs(rel_path, globs):
+                continue
+            out.append(rel_path)
+            if len(out) >= max_results:
+                return out
+    return out
+
+
+def _python_search(
+    repo_dir: str,
+    base_rel: str,
+    query: str,
+    *,
+    regex: bool,
+    case_sensitive: bool,
+    include_hidden: bool,
+    globs: list[str],
+    max_results: int,
+    max_file_bytes: int | None,
+) -> tuple[list[dict[str, Any]], bool]:
+    if not isinstance(query, str) or not query:
+        raise ValueError("query must be a non-empty string")
+    if not isinstance(max_results, int) or max_results < 1:
+        raise ValueError("max_results must be an int >= 1")
+
+    flags = 0 if case_sensitive else re.IGNORECASE
+    pattern = re.compile(query, flags) if regex else None
+    needle = query if case_sensitive else query.lower()
+
+    matches: list[dict[str, Any]] = []
+    truncated = False
+
+    for rel_path in _python_walk_files(
+        repo_dir,
+        base_rel,
+        include_hidden=include_hidden,
+        globs=globs,
+        max_results=50_000,
+    ):
+        try:
+            abs_path = _workspace_safe_join(repo_dir, rel_path)
+            if os.path.isdir(abs_path):
+                continue
+            if max_file_bytes is not None and os.path.getsize(abs_path) > max_file_bytes:
+                continue
+            if _is_probably_binary(abs_path):
+                continue
+        except Exception:
+            continue
+
+        try:
+            with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
+                for line_no, raw in enumerate(f, start=1):
+                    line = raw.rstrip("\n")
+                    if pattern is not None:
+                        m = pattern.search(line)
+                        if not m:
+                            continue
+                        col = int(m.start()) + 1
+                    else:
+                        hay = line if case_sensitive else line.lower()
+                        idx = hay.find(needle)
+                        if idx == -1:
+                            continue
+                        col = int(idx) + 1
+
+                    matches.append(
+                        {
+                            "path": rel_path,
+                            "line": int(line_no),
+                            "column": int(col),
+                            "text": line,
+                        }
+                    )
+                    if len(matches) >= max_results:
+                        truncated = True
+                        return matches, truncated
+        except Exception:
+            continue
+
+    return matches, truncated
+
+
+def _parse_max_file_bytes(value: int | str | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if not isinstance(value, str):
+        raise TypeError("max_file_bytes must be an int, string, or null")
+    s = value.strip()
+    if not s:
+        return None
+    # Accept common suffixes.
+    m = re.fullmatch(r"(\d+)([KMG]?)", s, flags=re.IGNORECASE)
+    if not m:
+        raise ValueError("max_file_bytes must look like 123, 10K, 5M, 1G")
+    n = int(m.group(1))
+    suf = (m.group(2) or "").upper()
+    mult = {"": 1, "K": 1024, "M": 1024**2, "G": 1024**3}[suf]
+    return n * mult
+
+
+@mcp_tool(write_action=False)
+async def rg_list_workspace_files(
+    full_name: str,
+    ref: str = "main",
+    path: str = "",
+    *,
+    include_hidden: bool = False,
+    glob: str | list[str] | None = None,
+    max_results: int = 5000,
+) -> dict[str, Any]:
+    """List files quickly (ripgrep `--files`) with an os.walk fallback."""
+
+    try:
+        if not isinstance(max_results, int) or max_results < 1:
+            raise ValueError("max_results must be an int >= 1")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        globs = _normalize_globs(glob)
+
+        files: list[str] = []
+        truncated = False
+        engine = "python"
+
+        if _rg_available():
+            engine = "rg"
+            cmd = ["rg", "--files"]
+            if include_hidden:
+                cmd.append("--hidden")
+            for g in globs:
+                cmd.extend(["--glob", g])
+
+            base_rel = (path or "").strip().lstrip("/")
+            base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
+            proc = subprocess.run(cmd, cwd=base_abs, capture_output=True, text=True, timeout=30)
+            if proc.returncode not in (0, 1):
+                raise RuntimeError((proc.stderr or proc.stdout or "rg failed").strip())
+            for line in (proc.stdout or "").splitlines():
+                if not line:
+                    continue
+                # rg emits paths relative to cwd; normalize to repo root.
+                rel = os.path.normpath(os.path.join(base_rel, line)).replace("\\", "/")
+                if not _passes_globs(rel, globs):
+                    continue
+                files.append(rel)
+                if len(files) >= max_results:
+                    truncated = True
+                    break
+        else:
+            files = _python_walk_files(
+                repo_dir,
+                (path or "").strip().lstrip("/"),
+                include_hidden=bool(include_hidden),
+                globs=globs,
+                max_results=int(max_results),
+            )
+            truncated = len(files) >= max_results
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "status": "ok",
+            "ok": True,
+            "engine": engine,
+            "path": (path or "").strip().lstrip("/"),
+            "include_hidden": bool(include_hidden),
+            "glob": globs,
+            "files": files,
+            "truncated": bool(truncated),
+            "max_results": int(max_results),
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="rg_list_workspace_files")
+
+
+@mcp_tool(write_action=False)
+async def rg_search_workspace(
+    full_name: str,
+    ref: str = "main",
+    query: str = "",
+    path: str = "",
+    *,
+    regex: bool = False,
+    case_sensitive: bool = True,
+    include_hidden: bool = False,
+    glob: str | list[str] | None = None,
+    max_results: int = 200,
+    context_lines: int = 0,
+    max_file_bytes: int | str | None = None,
+) -> dict[str, Any]:
+    """Search repository content and return match line numbers.
+
+    Returns structured matches with {path, line, column, text}. When
+    context_lines > 0, each match includes an `excerpt` object with surrounding
+    lines and line numbers.
+    """
+
+    try:
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be a non-empty string")
+        if not isinstance(max_results, int) or max_results < 1:
+            raise ValueError("max_results must be an int >= 1")
+        if not isinstance(context_lines, int) or context_lines < 0:
+            raise ValueError("context_lines must be an int >= 0")
+
+        max_bytes = _parse_max_file_bytes(max_file_bytes)
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        base_rel = (path or "").strip().lstrip("/")
+        base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
+        globs = _normalize_globs(glob)
+
+        matches: list[dict[str, Any]] = []
+        truncated = False
+        engine = "python"
+
+        if _rg_available():
+            engine = "rg"
+            cmd = ["rg", "--json", "--line-number", "--column"]
+            if not regex:
+                cmd.append("-F")
+            if not case_sensitive:
+                cmd.append("-i")
+            if include_hidden:
+                cmd.append("--hidden")
+            if max_bytes is not None:
+                # rg accepts bytes when passed as an integer string.
+                cmd.extend(["--max-filesize", str(int(max_bytes))])
+            for g in globs:
+                cmd.extend(["--glob", g])
+            cmd.append("--")
+            cmd.append(query)
+
+            proc = subprocess.Popen(
+                cmd,
+                cwd=base_abs,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            assert proc.stdout is not None
+            try:
+                for raw in proc.stdout:
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        evt = json.loads(raw)
+                    except Exception:
+                        continue
+                    if evt.get("type") != "match":
+                        continue
+                    data = evt.get("data") or {}
+                    rel = data.get("path", {}).get("text")
+                    if not isinstance(rel, str) or not rel:
+                        continue
+                    # Normalize to repo-root relative path.
+                    rel_norm = os.path.normpath(os.path.join(base_rel, rel)).replace("\\", "/")
+                    if not _passes_globs(rel_norm, globs):
+                        continue
+                    line_no = int(data.get("line_number") or 0)
+                    sub = (data.get("submatches") or [])
+                    col = 1
+                    if sub and isinstance(sub, list) and isinstance(sub[0], dict):
+                        try:
+                            col = int(sub[0].get("start", 0)) + 1
+                        except Exception:
+                            col = 1
+                    text_line = (data.get("lines", {}) or {}).get("text")
+                    if not isinstance(text_line, str):
+                        text_line = ""
+                    text_line = text_line.rstrip("\n")
+                    matches.append(
+                        {
+                            "path": rel_norm,
+                            "line": int(line_no),
+                            "column": int(col),
+                            "text": text_line,
+                        }
+                    )
+                    if len(matches) >= max_results:
+                        truncated = True
+                        break
+            finally:
+                try:
+                    if truncated:
+                        proc.kill()
+                except Exception:
+                    pass
+                try:
+                    _out, _err = proc.communicate(timeout=5)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+
+            # rg returns 1 when no matches.
+            if proc.returncode not in (0, 1, None):
+                stderr = ""
+                try:
+                    stderr = (proc.stderr.read() if proc.stderr else "")
+                except Exception:
+                    stderr = ""
+                raise RuntimeError((stderr or "rg failed").strip())
+
+        else:
+            matches, truncated = _python_search(
+                repo_dir,
+                base_rel,
+                query.strip(),
+                regex=bool(regex),
+                case_sensitive=bool(case_sensitive),
+                include_hidden=bool(include_hidden),
+                globs=globs,
+                max_results=int(max_results),
+                max_file_bytes=max_bytes,
+            )
+
+        if context_lines > 0 and matches:
+            for m in matches:
+                try:
+                    rel_path = m.get("path")
+                    line_no = int(m.get("line") or 1)
+                    abs_path = _workspace_safe_join(repo_dir, str(rel_path))
+                    start = max(1, line_no - int(context_lines))
+                    excerpt = _read_lines_excerpt(
+                        abs_path,
+                        start_line=int(start),
+                        max_lines=int(context_lines) * 2 + 1,
+                        max_chars=80_000,
+                    )
+                    m["excerpt"] = excerpt
+                except Exception:
+                    # Best-effort; omit excerpt if anything fails.
+                    pass
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "status": "ok",
+            "ok": True,
+            "engine": engine,
+            "query": query,
+            "path": base_rel,
+            "regex": bool(regex),
+            "case_sensitive": bool(case_sensitive),
+            "include_hidden": bool(include_hidden),
+            "glob": globs,
+            "max_results": int(max_results),
+            "context_lines": int(context_lines),
+            "max_file_bytes": max_bytes,
+            "matches": matches,
+            "truncated": bool(truncated),
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="rg_search_workspace")
+

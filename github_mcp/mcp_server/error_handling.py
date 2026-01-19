@@ -11,6 +11,7 @@ Contract notes:
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
@@ -25,6 +26,19 @@ from github_mcp.exceptions import (
 )
 
 _HIGH_ENTROPY_RE = re.compile(r"^[A-Za-z0-9_\-]{48,}$")
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return int(default)
+    try:
+        return int(raw.strip())
+    except Exception:
+        return int(default)
+
+
+_DEBUG_TRUNCATE_CHARS = max(200, _env_int("GITHUB_MCP_ERROR_DEBUG_TRUNCATE_CHARS", 4000))
 
 
 def _preview_text(text: str, *, head: int = 32, tail: int = 24) -> tuple[str, str]:
@@ -43,7 +57,18 @@ def _preview_text(text: str, *, head: int = 32, tail: int = 24) -> tuple[str, st
     return (text[:head], text[-tail:] if tail else "")
 
 
-def _sanitize_debug_value(value: Any, *, max_depth: int = 6, _depth: int = 0) -> Any:
+_SECRET_KEY_RE = re.compile(
+    r"(?i)(?:token|secret|api[_-]?key|password|passwd|private[_-]?key|authorization|bearer)"
+)
+
+
+def _sanitize_debug_value(
+    value: Any,
+    *,
+    key: str | None = None,
+    max_depth: int = 6,
+    _depth: int = 0,
+) -> Any:
     """Return a debug-safe version of arbitrary values.
 
     Validation failures often contain user-provided values. In hosted connector
@@ -62,21 +87,27 @@ def _sanitize_debug_value(value: Any, *, max_depth: int = 6, _depth: int = 0) ->
         s = value
         if not s:
             return s
-        # Do not surface Authorization/Bearer content.
+
         lowered = s.strip().lower()
         if lowered.startswith("bearer ") or lowered.startswith("authorization:"):
             return "<REDACTED_TOKEN>"
-        # Redact high-entropy / token-like strings entirely.
-        if len(s) >= 48 and _HIGH_ENTROPY_RE.match(s):
-            return f"<REDACTED_VALUE len={len(s)}>"
-        # Avoid emitting very long strings (diffs, blobs, etc.).
-        if len(s) > 200:
+
+        key_is_secret = bool(key) and _SECRET_KEY_RE.search(str(key)) is not None
+
+        # Avoid over-redaction: only apply the high-entropy heuristic when the
+        # value is clearly associated with a secret-bearing key.
+        if key_is_secret and len(s) >= 48 and _HIGH_ENTROPY_RE.match(s):
             h, t = _preview_text(s)
-            # Keep previews single-line.
             h = h.replace("\r", " ").replace("\n", " ").replace("\t", " ")
             t = t.replace("\r", " ").replace("\n", " ").replace("\t", " ")
-            # NOTE: redact_any() runs later on the whole payload.
+            return f"<REDACTED_VALUE len={len(s)} head={h!r} tail={t!r}>"
+
+        # Avoid emitting very long strings (diffs, blobs, etc.) while keeping
+        # enough context for debugging.
+        if len(s) > _DEBUG_TRUNCATE_CHARS:
+            h, t = _preview_text(s, head=256, tail=256)
             return f"<TRUNCATED_TEXT len={len(s)} head={h!r} tail={t!r}>"
+
         return s
 
     if isinstance(value, (bytes, bytearray)):
@@ -89,11 +120,19 @@ def _sanitize_debug_value(value: Any, *, max_depth: int = 6, _depth: int = 0) ->
                 key = k if isinstance(k, str) else str(k)
             except Exception:
                 key = "<unprintable_key>"
-            out[key] = _sanitize_debug_value(v, max_depth=max_depth, _depth=_depth + 1)
+            out[key] = _sanitize_debug_value(
+                v,
+                key=key,
+                max_depth=max_depth,
+                _depth=_depth + 1,
+            )
         return out
 
     if isinstance(value, (list, tuple)):
-        seq = [_sanitize_debug_value(v, max_depth=max_depth, _depth=_depth + 1) for v in value]
+        seq = [
+            _sanitize_debug_value(v, key=key, max_depth=max_depth, _depth=_depth + 1)
+            for v in value
+        ]
         return seq if isinstance(value, list) else tuple(seq)
 
     return value
