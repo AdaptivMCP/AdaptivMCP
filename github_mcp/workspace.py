@@ -870,12 +870,15 @@ def _apply_rangeless_git_patch(repo_dir: str, patch: str) -> None:
 def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
         raise GitHubAPIError("path must be a non-empty string")
-    raw_path = rel_path.strip()
-    if os.path.isabs(raw_path):
+    raw_path = rel_path.strip().replace("\\", "/")
+    repo_root = os.path.realpath(repo_dir)
+    if os.path.isabs(raw_path) or raw_path.startswith("/"):
         candidate = os.path.realpath(raw_path)
     else:
         rel_path = raw_path.lstrip("/\\")
-        candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
+        candidate = os.path.realpath(os.path.join(repo_root, rel_path))
+    if candidate == repo_root or not candidate.startswith(repo_root + os.sep):
+        raise GitHubAPIError("path must resolve inside the workspace repository")
     return candidate
 
 
