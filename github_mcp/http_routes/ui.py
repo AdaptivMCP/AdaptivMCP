@@ -46,8 +46,17 @@ def build_ui_index_endpoint() -> Any:
 
 
 def build_ui_json_endpoint() -> Any:
-    async def _endpoint(_request) -> Response:
+    async def _endpoint(request) -> Response:
         # Avoid guessing hostnames. This endpoint is purely descriptive.
+        base_path = request.headers.get("x-forwarded-prefix") or request.headers.get(
+            "x-forwarded-path"
+        )
+        if not base_path:
+            path = request.url.path or ""
+            if path.endswith("/ui.json"):
+                base_path = path[: -len("/ui.json")]
+        base_path = base_path.strip("/") if isinstance(base_path, str) else ""
+        base_prefix = f"/{base_path}" if base_path else ""
         now = time.time()
         uptime_seconds = max(0, int(now - float(SERVER_START_TIME)))
 
@@ -72,23 +81,29 @@ def build_ui_json_endpoint() -> Any:
                     "uptime_seconds": uptime_seconds,
                 },
                 "endpoints": {
-                    "health": "/healthz",
-                    "tools": "/tools",
-                    "resources": "/resources",
-                    "stream": "/sse",
-                    "tools_ui": "/ui/tools",
-                    "tools_json": "/ui/tools.json",
+                    "health": f"{base_prefix}/healthz",
+                    "tools": f"{base_prefix}/tools",
+                    "resources": f"{base_prefix}/resources",
+                    "stream": f"{base_prefix}/sse",
+                    "tools_ui": f"{base_prefix}/ui/tools",
+                    "tools_json": f"{base_prefix}/ui/tools.json",
                     "render": {
-                        "owners": "/render/owners",
-                        "services": "/render/services",
-                        "service": "/render/services/<service_id>",
-                        "deploys": "/render/services/<service_id>/deploys",
-                        "deploy": "/render/services/<service_id>/deploys/<deploy_id>",
-                        "deploy_create": "POST /render/services/<service_id>/deploys",
-                        "deploy_cancel": "POST /render/services/<service_id>/deploys/<deploy_id>/cancel",
-                        "deploy_rollback": "POST /render/services/<service_id>/deploys/<deploy_id>/rollback",
-                        "restart": "POST /render/services/<service_id>/restart",
-                        "logs": "/render/logs",
+                        "owners": f"{base_prefix}/render/owners",
+                        "services": f"{base_prefix}/render/services",
+                        "service": f"{base_prefix}/render/services/<service_id>",
+                        "deploys": f"{base_prefix}/render/services/<service_id>/deploys",
+                        "deploy": f"{base_prefix}/render/services/<service_id>/deploys/<deploy_id>",
+                        "deploy_create": (
+                            f"POST {base_prefix}/render/services/<service_id>/deploys"
+                        ),
+                        "deploy_cancel": (
+                            f"POST {base_prefix}/render/services/<service_id>/deploys/<deploy_id>/cancel"
+                        ),
+                        "deploy_rollback": (
+                            f"POST {base_prefix}/render/services/<service_id>/deploys/<deploy_id>/rollback"
+                        ),
+                        "restart": f"POST {base_prefix}/render/services/<service_id>/restart",
+                        "logs": f"{base_prefix}/render/logs",
                     },
                 },
                 "notes": [
@@ -152,7 +167,7 @@ def build_ui_tools_endpoint() -> Any:
 <body>
   <div class=\"row\">
     <div><strong>Adaptiv MCP</strong> – Tool Catalog</div>
-    <div class=\"small\">Source: <a href=\"/ui/tools.json\">/ui/tools.json</a></div>
+    <div class=\"small\">Source: <a href=\"tools.json\">tools.json</a></div>
   </div>
   <div class=\"row\">
     <input id=\"q\" placeholder=\"Search tools…\" />
@@ -246,7 +261,7 @@ function matchesQuery(t){
 
 async function load(){
   elStatus.textContent = 'Loading…';
-  const resp = await fetch('/ui/tools.json', {cache: 'no-store'});
+  const resp = await fetch('tools.json', {cache: 'no-store'});
   const data = await resp.json();
   const tools = (data.tools || []).slice();
   tools.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
