@@ -15,9 +15,17 @@ from github_mcp.main_tools import introspection
 from github_mcp.mcp_server.registry import _registered_tool_name
 
 
-def test_every_registered_tool_reports_write_gate_metadata():
+def _set_auto_approve(monkeypatch, enabled: bool | None) -> None:
+    if enabled is None:
+        monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
+    else:
+        monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true" if enabled else "false")
+
+
+def test_every_registered_tool_reports_write_gate_metadata(monkeypatch):
     """Ensure each registered tool surfaces write gate metadata via introspection."""
 
+    _set_auto_approve(monkeypatch, True)
     catalog = introspection.list_all_actions(include_parameters=True, compact=False)
     tools = catalog.get("tools", []) or []
     idx = {str(t.get("name")): t for t in tools if t.get("name")}
@@ -48,3 +56,21 @@ def test_every_registered_tool_reports_write_gate_metadata():
 
     assert not missing, f"Catalog missing registered tools: {sorted(missing)}"
     assert not mismatched, f"Catalog write_action mismatch for tools: {sorted(mismatched)}"
+
+    _set_auto_approve(monkeypatch, False)
+    catalog = introspection.list_all_actions(include_parameters=True, compact=False)
+    tools = catalog.get("tools", []) or []
+    idx = {str(t.get("name")): t for t in tools if t.get("name")}
+
+    for tool_obj, func in getattr(main, "_REGISTERED_MCP_TOOLS", []):
+        name = _registered_tool_name(tool_obj, func)
+        if not name:
+            continue
+        entry = idx.get(str(name))
+        if entry is None:
+            continue
+        assert entry.get("write_auto_approved") is False
+        if bool(entry.get("write_action")):
+            assert entry.get("approval_required") is True
+        else:
+            assert entry.get("approval_required") is False

@@ -33,10 +33,11 @@ from github_mcp.config import (
     snapshot_request_context,
     summarize_request_context,
 )
-from github_mcp.exceptions import UsageError
+from github_mcp.exceptions import UsageError, WriteApprovalRequiredError
 from github_mcp.mcp_server.context import (
     FASTMCP_AVAILABLE,
     WRITE_ALLOWED,
+    get_auto_approve_enabled,
     get_request_context,
     mcp,
 )
@@ -1680,7 +1681,7 @@ def _invocation_messages(
 def _tool_write_allowed(write_action: bool) -> bool:
     # Used for metadata/introspection.
     del write_action
-    return bool(WRITE_ALLOWED)
+    return bool(get_auto_approve_enabled())
 
 
 def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
@@ -1696,12 +1697,19 @@ def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
 
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
-    Legacy enforcement hook.
-
-    This function is intentionally a no-op for compatibility.
+    Enforce write approvals when auto-approve is disabled.
     """
-    del tool_name, write_action
-    return
+    if not write_action:
+        return
+    if get_auto_approve_enabled():
+        return
+    exc = WriteApprovalRequiredError(
+        f"Write approval required to run tool {tool_name!r}."
+    )
+    exc.hint = (
+        "Approve the action in ChatGPT or enable auto-approve to allow write tools."
+    )
+    raise exc
 
 
 # -----------------------------------------------------------------------------

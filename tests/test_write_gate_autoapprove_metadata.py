@@ -4,6 +4,13 @@ import main
 from github_mcp.main_tools import introspection
 
 
+def _set_auto_approve(monkeypatch, enabled: bool | None) -> None:
+    if enabled is None:
+        monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
+    else:
+        monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true" if enabled else "false")
+
+
 def _catalog_index(*, include_parameters: bool) -> dict[str, dict]:
     catalog = introspection.list_all_actions(
         include_parameters=include_parameters,
@@ -44,9 +51,10 @@ def test_registered_tool_wrappers_always_carry_write_gate_metadata():
         assert isinstance(schema_hash, str) and schema_hash, f"{name} schema hash must be non-empty"
 
 
-def test_introspection_catalog_always_reports_gate_and_approval_fields():
+def test_introspection_catalog_always_reports_gate_and_approval_fields(monkeypatch):
     """Regression guard: catalog entries must include stable metadata fields."""
 
+    _set_auto_approve(monkeypatch, True)
     idx = _catalog_index(include_parameters=True)
     assert "list_all_actions" in idx
 
@@ -77,8 +85,7 @@ def test_introspection_catalog_always_reports_gate_and_approval_fields():
         assert isinstance(schema, dict), f"{name} input_schema must be a dict"
         assert schema.get("type") == "object", f"{name} input_schema must be an object schema"
 
-    # Spot-check: at least one known write tool must require approval when gated.
-    # (If tools are renamed in the future, this assertion will force updating the regression list.)
+    # Spot-check: known write tool entries should be auto-approved when enabled.
     write_candidates = [
         "create_branch",
         "ensure_branch",
@@ -91,3 +98,11 @@ def test_introspection_catalog_always_reports_gate_and_approval_fields():
     )
     assert any(idx[n]["write_action"] is True for n in found_write)
     assert all(idx[n]["approval_required"] is False for n in found_write)
+
+    _set_auto_approve(monkeypatch, False)
+    idx = _catalog_index(include_parameters=True)
+    found_write = [n for n in write_candidates if n in idx]
+    assert found_write
+    assert any(idx[n]["write_action"] is True for n in found_write)
+    assert all(idx[n]["write_auto_approved"] is False for n in found_write)
+    assert all(idx[n]["approval_required"] is True for n in found_write)

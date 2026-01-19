@@ -4,6 +4,7 @@ import inspect
 from collections.abc import Mapping
 from typing import Any
 
+from github_mcp.mcp_server.context import get_auto_approve_enabled
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.mcp_server.schemas import _jsonable, _schema_from_signature
 
@@ -113,18 +114,17 @@ def _write_tool_category(name: str, entry: Mapping[str, Any]) -> str:
 
 
 def _write_gate_state() -> dict[str, bool]:
-    m = _main()
-    write_allowed = bool(getattr(m, "WRITE_ALLOWED", True))
+    auto_approved = bool(get_auto_approve_enabled())
     return {
-        "write_auto_approved": True,
+        "write_auto_approved": auto_approved,
         "write_actions_enabled": True,
-        "write_enabled": write_allowed,
+        "write_enabled": True,
+        "write_allowed": auto_approved,
     }
 
 
 def _approval_required(write_action: bool, write_auto_approved: bool) -> bool:
-    del write_action, write_auto_approved
-    return False
+    return bool(write_action) and not bool(write_auto_approved)
 
 
 def _tool_registry() -> list[tuple[Any, Any]]:
@@ -240,7 +240,7 @@ def list_all_actions(
             # Correct semantic classification:
             "write_action": base_write_action,
             "tags": _tool_tags(tool, func),
-            "write_allowed": gate["write_enabled"],
+            "write_allowed": gate["write_allowed"],
             "write_enabled": gate["write_enabled"],
             "write_auto_approved": write_auto_approved,
             "write_actions_enabled": gate["write_actions_enabled"],
@@ -310,7 +310,7 @@ def list_all_actions(
             "description": "Enumerate every available MCP tool with optional schemas.",
             "visibility": "public",
             "write_action": False,
-            "write_allowed": gate["write_enabled"],
+            "write_allowed": gate["write_allowed"],
             "write_enabled": gate["write_enabled"],
             "write_auto_approved": write_auto_approved,
             "write_actions_enabled": gate["write_actions_enabled"],
@@ -553,7 +553,7 @@ def _validate_single_tool_args(tool_name: str, args: Mapping[str, Any] | None) -
             or "public"
         ),
         "write_action": base_write_action,
-        "write_allowed": gate["write_enabled"],
+        "write_allowed": gate["write_allowed"],
         "write_enabled": gate["write_enabled"],
         "write_auto_approved": write_auto_approved,
         "write_actions_enabled": gate["write_actions_enabled"],

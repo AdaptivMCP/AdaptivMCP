@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
+from github_mcp.exceptions import WriteApprovalRequiredError
+
 
 def _reload_context():
     """Reload github_mcp.mcp_server.context to refresh module state."""
@@ -10,22 +14,31 @@ def _reload_context():
     return importlib.reload(context)
 
 
-def test_write_gate_always_enabled():
+def test_write_gate_follows_auto_approve_env(monkeypatch):
     context = _reload_context()
+    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
     assert context.get_write_allowed(refresh_after_seconds=0.0) is True
     assert bool(context.WRITE_ALLOWED) is True
 
+    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "false")
+    assert context.get_write_allowed(refresh_after_seconds=0.0) is False
+    assert bool(context.WRITE_ALLOWED) is False
 
-def test_decorators_do_not_block_write_tools_when_gate_is_false():
+
+def test_decorators_enforce_auto_approve_gate(monkeypatch):
     _reload_context()
 
     from github_mcp.mcp_server.decorators import _enforce_write_allowed
 
-    # Read tool is always allowed.
+    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
     _enforce_write_allowed("read_tool", write_action=False)
-
-    # Write tool should not be blocked; clients are expected to prompt.
     _enforce_write_allowed("write_tool", write_action=True)
+
+    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "false")
+    _enforce_write_allowed("read_tool", write_action=False)
+    with pytest.raises(WriteApprovalRequiredError) as excinfo:
+        _enforce_write_allowed("write_tool", write_action=True)
+    assert "Write approval required" in str(excinfo.value)
 
 
 def test_no_write_gate_env_var_in_ci():
