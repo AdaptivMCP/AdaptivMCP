@@ -11,6 +11,32 @@ from starlette.responses import JSONResponse, Response
 from github_mcp.server import _find_registered_tool
 
 
+def _normalize_base_path(base_path: str | None) -> str:
+    if not base_path:
+        return ""
+    cleaned = base_path.strip()
+    if cleaned in {"", "/"}:
+        return ""
+    return "/" + cleaned.strip("/")
+
+
+def _request_base_path(request: Request, suffixes: Iterable[str]) -> str:
+    forwarded_prefix = request.headers.get("x-forwarded-prefix") or request.headers.get(
+        "x-forwarded-path"
+    )
+    if forwarded_prefix:
+        return _normalize_base_path(forwarded_prefix)
+
+    path = request.url.path or ""
+    for suffix in suffixes:
+        if path.endswith(suffix):
+            candidate = path[: -len(suffix)]
+            return _normalize_base_path(candidate)
+
+    root_path = request.scope.get("root_path") if isinstance(request.scope, dict) else None
+    return _normalize_base_path(root_path)
+
+
 def _parse_bool(value: str | None) -> bool | None:
     if value is None:
         return None
@@ -25,7 +51,9 @@ def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool = True) -> 
     return jitter_sleep_seconds(delay_seconds, respect_min=respect_min, cap_seconds=0.25)
 
 
-def _tool_catalog(*, include_parameters: bool, compact: bool | None) -> dict[str, Any]:
+def _tool_catalog(
+    *, include_parameters: bool, compact: bool | None, base_path: str = ""
+) -> dict[str, Any]:
     """Build a stable tool/resources catalog for HTTP clients.
 
     This endpoint is intentionally best-effort: callers use it for discovery.
@@ -45,13 +73,14 @@ def _tool_catalog(*, include_parameters: bool, compact: bool | None) -> dict[str
         catalog_error = str(exc) or "Failed to build tool catalog."
 
     resources = []
+    base_path = _normalize_base_path(base_path)
     for entry in tools:
         name = entry.get("name")
         if not name:
             continue
         resources.append(
             {
-                "uri": f"/tools/{name}",
+                "uri": f"{base_path}/tools/{name}",
                 "name": name,
                 "description": entry.get("description"),
                 "mimeType": "application/json",
@@ -279,7 +308,14 @@ def build_tool_registry_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
         include_parameters = _parse_bool(request.query_params.get("include_parameters")) or False
         compact = _parse_bool(request.query_params.get("compact"))
-        return JSONResponse(_tool_catalog(include_parameters=include_parameters, compact=compact))
+        base_path = _request_base_path(request, ("/tools",))
+        return JSONResponse(
+            _tool_catalog(
+                include_parameters=include_parameters,
+                compact=compact,
+                base_path=base_path,
+            )
+        )
 
     return _endpoint
 
@@ -294,7 +330,12 @@ def build_resources_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
         include_parameters = _parse_bool(request.query_params.get("include_parameters")) or False
         compact = _parse_bool(request.query_params.get("compact"))
-        catalog = _tool_catalog(include_parameters=include_parameters, compact=compact)
+        base_path = _request_base_path(request, ("/resources",))
+        catalog = _tool_catalog(
+            include_parameters=include_parameters,
+            compact=compact,
+            base_path=base_path,
+        )
         payload: dict[str, Any] = {
             "resources": list(catalog.get("resources") or []),
             "finite": True,
