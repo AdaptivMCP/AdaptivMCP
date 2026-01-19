@@ -492,11 +492,6 @@ def _build_tool_docstring(
             return "false"
         return "unknown"
 
-    def _ui_get(key: str) -> Any:
-        if not isinstance(ui, Mapping):
-            return None
-        return ui.get(key)
-
     clean_desc = (description or "").strip()
     summary = clean_desc.splitlines()[0].strip() if clean_desc else ""
     if not summary:
@@ -523,26 +518,6 @@ def _build_tool_docstring(
         tag_list = [t for t in tags if isinstance(t, str) and t.strip()]
         if tag_list:
             lines.append(f"- tags: {', '.join(sorted(dict.fromkeys(tag_list)))}")
-
-    # Optional UI hints: advisory and not displayed by all clients.
-    if isinstance(ui, Mapping) and ui:
-        group = _ui_get("group")
-        icon = _ui_get("icon")
-        prompt = _ui_get("prompt")
-        inv_msg = _ui_get("invoking")
-        done_msg = _ui_get("invoked")
-
-        lines += ["", "UI hints (optional):"]
-        if isinstance(group, str) and group.strip():
-            lines.append(f"- group: {group.strip()}")
-        if isinstance(icon, str) and icon.strip():
-            lines.append(f"- icon: {icon.strip()}")
-        if isinstance(prompt, str) and prompt.strip():
-            lines.append(f"- prompt: {prompt.strip()}")
-        if isinstance(inv_msg, str) and inv_msg.strip():
-            lines.append(f"- invoking: {inv_msg.strip()}")
-        if isinstance(done_msg, str) and done_msg.strip():
-            lines.append(f"- invoked: {done_msg.strip()}")
 
     # Parameters (from the attached JSON schema).
     schema = input_schema if isinstance(input_schema, Mapping) else None
