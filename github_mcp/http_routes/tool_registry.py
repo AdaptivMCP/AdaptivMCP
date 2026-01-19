@@ -12,6 +12,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from github_mcp.server import _find_registered_tool
+from github_mcp.mcp_server.context import REQUEST_CHATGPT_METADATA
 
 
 def _normalize_base_path(base_path: str | None) -> str:
@@ -101,10 +102,33 @@ def _tool_catalog(
 
 
 def _normalize_payload(payload: Any) -> dict[str, Any]:
-    if isinstance(payload, dict) and "args" in payload:
-        args = payload.get("args")
-    else:
-        args = payload
+    """Normalize incoming tool invocation payloads.
+
+    Clients vary in how they wrap arguments. Common shapes include:
+      - {"args": {...}} (legacy)
+      - {"arguments": {...}} (JSON-RPC/MCP style)
+      - {"params": {"arguments": {...}}} (JSON-RPC envelope)
+      - raw dict of arguments
+
+    We normalize to a plain dict of tool kwargs and strip private metadata.
+    """
+
+    args: Any = payload
+    if isinstance(payload, dict):
+        # JSON-RPC envelope: {"id": ..., "params": {"arguments": {...}}}
+        params = payload.get("params")
+        if isinstance(params, dict):
+            if "arguments" in params:
+                args = params.get("arguments")
+            elif "args" in params:
+                args = params.get("args")
+            else:
+                # Some clients send args directly under params.
+                args = params
+        elif "arguments" in payload:
+            args = payload.get("arguments")
+        elif "args" in payload:
+            args = payload.get("args")
     if args is None:
         return {}
     if isinstance(args, dict):
@@ -132,6 +156,39 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
                 normalized[key_str] = value
         return normalized
     return {}
+
+
+def _default_include_parameters(request: Request) -> bool:
+    """Decide whether to include tool schemas by default.
+
+    LLM clients (including ChatGPT-hosted connectors) typically require the
+    input schema to reliably invoke tools. When we detect ChatGPT metadata,
+    default include_parameters=True even if the query parameter is omitted.
+    """
+
+    # Prefer the request-scoped context var, which is set by main.py middleware.
+    try:
+        if REQUEST_CHATGPT_METADATA.get():
+            return True
+    except Exception:
+        pass
+
+    # Fallback: detect headers directly (in case middleware is disabled).
+    try:
+        for hdr in (
+            "x-openai-assistant-id",
+            "x-openai-conversation-id",
+            "x-openai-organization-id",
+            "x-openai-project-id",
+            "x-openai-session-id",
+            "x-openai-user-id",
+        ):
+            if request.headers.get(hdr):
+                return True
+    except Exception:
+        pass
+
+    return False
 
 
 def _status_code_for_error(error: dict[str, Any]) -> int:
@@ -415,7 +472,9 @@ async def _invoke_tool(tool_name: str, args: dict[str, Any], *, max_attempts: in
 
 def build_tool_registry_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
-        include_parameters = _parse_bool(request.query_params.get("include_parameters")) or False
+        include_parameters = _parse_bool(request.query_params.get("include_parameters"))
+        if include_parameters is None:
+            include_parameters = _default_include_parameters(request)
         compact = _parse_bool(request.query_params.get("compact"))
         base_path = _request_base_path(request, ("/tools",))
         return JSONResponse(
@@ -437,7 +496,9 @@ def build_resources_endpoint() -> Callable[[Request], Response]:
     """
 
     async def _endpoint(request: Request) -> Response:
-        include_parameters = _parse_bool(request.query_params.get("include_parameters")) or False
+        include_parameters = _parse_bool(request.query_params.get("include_parameters"))
+        if include_parameters is None:
+            include_parameters = _default_include_parameters(request)
         compact = _parse_bool(request.query_params.get("compact"))
         base_path = _request_base_path(request, ("/resources",))
         catalog = _tool_catalog(
