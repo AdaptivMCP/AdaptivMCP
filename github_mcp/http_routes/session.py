@@ -60,22 +60,6 @@ def build_session_anchor_endpoint() -> Callable[[Request], Response]:
     return _endpoint
 
 
-def build_session_ping_endpoint() -> Callable[[Request], Response]:
-    async def _endpoint(request: Request) -> Response:
-        anchor, _payload = get_server_anchor()
-        return JSONResponse(
-            {
-                "ok": True,
-                "anchor": anchor,
-                "server_time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "session_id": _effective_session_id(request),
-                "request": get_request_context(),
-            }
-        )
-
-    return _endpoint
-
-
 def build_session_assert_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
         expected = normalize_anchor(
@@ -120,7 +104,6 @@ def register_session_routes(app: Any) -> None:
     """Register session / drift diagnostics routes."""
 
     app.add_route("/session/anchor", build_session_anchor_endpoint(), methods=["GET"])
-    app.add_route("/session/ping", build_session_ping_endpoint(), methods=["GET"])
     app.add_route("/session/assert", build_session_assert_endpoint(), methods=["GET"])
 
 
