@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 
@@ -25,6 +27,7 @@ async def test_validate_environment_missing_tokens_marks_error(monkeypatch):
     from github_mcp.config import GITHUB_TOKEN_ENV_VARS, RENDER_TOKEN_ENV_VARS
 
     # Force a deterministic "no token" environment even when running in CI.
+    monkeypatch.setattr(env.sys, "version_info", SimpleNamespace(major=3, minor=12, micro=0))
     for name in GITHUB_TOKEN_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     for name in RENDER_TOKEN_ENV_VARS:
@@ -41,6 +44,25 @@ async def test_validate_environment_missing_tokens_marks_error(monkeypatch):
     assert checks["github_token"]["level"] == "error"
     assert checks["controller_remote_checks"]["level"] == "warning"
     assert checks["render_token"]["level"] == "warning"
+
+
+@pytest.mark.anyio
+async def test_validate_environment_flags_unsupported_python(monkeypatch):
+    import github_mcp.main_tools.env as env
+    from github_mcp.config import GITHUB_TOKEN_ENV_VARS, RENDER_TOKEN_ENV_VARS
+
+    monkeypatch.setattr(env.sys, "version_info", SimpleNamespace(major=3, minor=11, micro=9))
+    for name in GITHUB_TOKEN_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    for name in RENDER_TOKEN_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
+    monkeypatch.setattr(env, "_main", lambda: DummyMainNoNetwork())
+
+    payload = await env.validate_environment()
+
+    checks = {c["name"]: c for c in payload["checks"]}
+    assert checks["python_version"]["level"] == "error"
 
 
 class DummyMainAllGreen:
@@ -125,6 +147,7 @@ async def test_validate_environment_happy_path_ok(monkeypatch):
     import github_mcp.main_tools.env as env
 
     # Avoid identity placeholder warnings in this unit test.
+    monkeypatch.setattr(env.sys, "version_info", SimpleNamespace(major=3, minor=12, micro=0))
     monkeypatch.setattr(env, "GIT_IDENTITY_PLACEHOLDER_ACTIVE", False)
 
     # Ensure the env tool registry sanity check does not fail due to import-order
@@ -209,6 +232,7 @@ async def test_validate_environment_skips_empty_github_pat(monkeypatch):
     import github_mcp.main_tools.env as env
 
     # Avoid identity placeholder warnings in this unit test.
+    monkeypatch.setattr(env.sys, "version_info", SimpleNamespace(major=3, minor=12, micro=0))
     monkeypatch.setattr(env, "GIT_IDENTITY_PLACEHOLDER_ACTIVE", False)
 
     expected_tool_names = {

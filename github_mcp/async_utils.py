@@ -15,7 +15,7 @@ from typing import Any
 def active_event_loop() -> asyncio.AbstractEventLoop:
     """Return a usable asyncio event loop.
 
-    In Python 3.11+, ``asyncio.get_event_loop()`` may raise when no loop has been
+    In Python 3.12+, ``asyncio.get_event_loop()`` may raise when no loop has been
     set for the current thread. This helper prefers the running loop (when in an
     async context) and otherwise ensures a loop exists for sync contexts.
     """

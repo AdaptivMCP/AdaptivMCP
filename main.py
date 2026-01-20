@@ -457,7 +457,7 @@ class _SuppressClientDisconnectMiddleware:
         except (anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream):
             return
         except Exception as exc:
-            # Python 3.11+ introduces ExceptionGroup / BaseExceptionGroup.
+            # Python 3.12+ includes ExceptionGroup / BaseExceptionGroup.
             # Some runtimes (or dependency sets) may not expose these names at
             # import time. To remain compatible, detect "exception group" shape
             # via duck-typing rather than referencing ExceptionGroup directly.
