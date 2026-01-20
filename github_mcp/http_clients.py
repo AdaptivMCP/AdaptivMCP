@@ -350,9 +350,7 @@ def _github_client_instance() -> httpx.AsyncClient:
     current_token = _get_optional_github_token()
     token_changed = current_token != _http_client_github_token
 
-    def _build_client() -> httpx.AsyncClient:
-        token = current_token
-
+    def _build_client_with_token(token: str | None) -> httpx.AsyncClient:
         http_limits = httpx.Limits(
             max_connections=HTTPX_MAX_CONNECTIONS,
             max_keepalive_connections=HTTPX_MAX_KEEPALIVE,
@@ -371,7 +369,7 @@ def _github_client_instance() -> httpx.AsyncClient:
     _http_client_github, _http_client_github_loop = _refresh_async_client(
         _http_client_github,
         client_loop=_http_client_github_loop,
-        rebuild=_build_client,
+        rebuild=lambda: _build_client_with_token(current_token),
         force_refresh=token_changed,
     )
     _http_client_github_token = current_token
