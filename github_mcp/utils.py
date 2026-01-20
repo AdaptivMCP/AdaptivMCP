@@ -152,8 +152,8 @@ def _normalize_repo_path(path: str) -> str:
     # prefer to be permissive and avoid hard-failing on common client mistakes.
     #
     # Strict mode can be re-enabled via:
-    #   GITHUB_MCP_STRICT_CONTRACTS=1
-    strict = _env_flag("GITHUB_MCP_STRICT_CONTRACTS", default=False)
+    #   ADAPTIV_MCP_STRICT_CONTRACTS=1
+    strict = _env_flag("ADAPTIV_MCP_STRICT_CONTRACTS", default=False)
 
     if not isinstance(path, str):
         if strict:
@@ -192,7 +192,7 @@ def _normalize_repo_path(path: str) -> str:
 def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
     """Normalize a repo-relative path while forgiving common URL prefixes."""
 
-    strict = _env_flag("GITHUB_MCP_STRICT_CONTRACTS", default=False)
+    strict = _env_flag("ADAPTIV_MCP_STRICT_CONTRACTS", default=False)
 
     if not isinstance(path, str):
         if strict:
@@ -298,7 +298,7 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
 def _normalize_branch(full_name: str, branch: str | None) -> str:
     """Normalize a branch name while honoring controller defaults."""
 
-    strict = _env_flag("GITHUB_MCP_STRICT_CONTRACTS", default=False)
+    strict = _env_flag("ADAPTIV_MCP_STRICT_CONTRACTS", default=False)
 
     normalized_branch = branch.strip() if isinstance(branch, str) else None
     effective = _effective_ref_for_repo(full_name, normalized_branch)
@@ -479,14 +479,14 @@ def _detect_controller_repo(*, fallback: str) -> str:
     """Resolve the controller repo slug (owner/repo) with best-effort inference.
 
     Resolution order:
-    1) Explicit override via GITHUB_MCP_CONTROLLER_REPO
+    1) Explicit override via ADAPTIV_MCP_CONTROLLER_REPO
     2) GitHub Actions-style env vars (GITHUB_REPOSITORY)
     3) Render-style env vars (if present)
     4) Local git remote.origin.url (if available)
     5) Provided fallback
     """
 
-    explicit = (os.environ.get("GITHUB_MCP_CONTROLLER_REPO") or "").strip()
+    explicit = (os.environ.get("ADAPTIV_MCP_CONTROLLER_REPO") or "").strip()
     if explicit:
         return explicit
 
@@ -530,7 +530,7 @@ def _detect_controller_repo(*, fallback: str) -> str:
 def _detect_controller_branch(*, fallback: str) -> str:
     """Resolve the controller default branch with best-effort inference."""
 
-    explicit = (os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") or "").strip()
+    explicit = (os.environ.get("ADAPTIV_MCP_CONTROLLER_BRANCH") or "").strip()
     if explicit:
         return explicit
 

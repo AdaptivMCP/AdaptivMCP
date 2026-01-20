@@ -157,7 +157,7 @@ async def _run_shell(
 
         # Best-effort output collection after timeout. Keep configurable.
         try:
-            collect_timeout = getattr(config, "GITHUB_MCP_TIMEOUT_COLLECT_SECONDS", 0)
+            collect_timeout = getattr(config, "ADAPTIV_MCP_TIMEOUT_COLLECT_SECONDS", 0)
             if collect_timeout and int(collect_timeout) > 0:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
                     proc.communicate(), timeout=int(collect_timeout)
@@ -357,7 +357,7 @@ async def _clone_repo(
             # existing repo mirror. When preserving changes we avoid destructive
             # resets, but we still enforce the requested branch when the repo mirror
             # is clean.
-            git_timeout = int(getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
+            git_timeout = int(getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
             fetch_result = await _run_git_with_retry(
                 run_shell,
                 "git fetch origin --prune",
@@ -435,7 +435,7 @@ async def _clone_repo(
         q_ref = shlex.quote(effective_ref)
         # When not preserving changes, ensure we are on the requested branch/ref and
         # hard-reset to match origin.
-        git_timeout = int(getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
+        git_timeout = int(getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
         refresh_steps = [
             ("git fetch origin --prune", git_timeout),
             (f"git checkout -B {q_ref} origin/{q_ref}", git_timeout),
@@ -481,7 +481,7 @@ async def _clone_repo(
     q_url = shlex.quote(url)
     q_tmpdir = shlex.quote(tmpdir)
     cmd = f"git clone --depth 1 --branch {q_ref} {q_url} {q_tmpdir}"
-    git_timeout = int(getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
+    git_timeout = int(getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
     result = await _run_git_with_retry(
         run_shell,
         cmd,
@@ -568,14 +568,14 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         check = await run_shell(
             f"{vpy} -m pip --version",
             cwd=repo_dir,
-            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+            timeout_seconds=getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
         if check.get("exit_code", 0) == 0:
             # Upgrade tooling for more reliable installs.
             upgrade = await run_shell(
                 f"{vpy} -m pip install --upgrade pip setuptools wheel",
                 cwd=repo_dir,
-                timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+                timeout_seconds=getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
             )
             if upgrade.get("exit_code", 0) != 0:
                 stderr = upgrade.get("stderr", "") or upgrade.get("stdout", "")
@@ -586,7 +586,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         ensure = await run_shell(
             f"{vpy} -m ensurepip --upgrade",
             cwd=repo_dir,
-            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+            timeout_seconds=getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
         if ensure.get("exit_code", 0) != 0:
             stderr = ensure.get("stderr", "") or ensure.get("stdout", "")
@@ -596,7 +596,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         check2 = await run_shell(
             f"{vpy} -m pip --version",
             cwd=repo_dir,
-            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+            timeout_seconds=getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
         if check2.get("exit_code", 0) != 0:
             stderr = check2.get("stderr", "") or check2.get("stdout", "")
@@ -605,7 +605,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         upgrade2 = await run_shell(
             f"{vpy} -m pip install --upgrade pip setuptools wheel",
             cwd=repo_dir,
-            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+            timeout_seconds=getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
         if upgrade2.get("exit_code", 0) != 0:
             stderr = upgrade2.get("stderr", "") or upgrade2.get("stdout", "")
@@ -638,7 +638,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         result = await run_shell(
             create_cmd,
             cwd=repo_dir,
-            timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+            timeout_seconds=getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
         )
         if result.get("exit_code", 0) != 0:
             # Fallback for older/stripped venv modules.
@@ -646,7 +646,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
             result2 = await run_shell(
                 create_cmd2,
                 cwd=repo_dir,
-                timeout_seconds=getattr(config, "GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+                timeout_seconds=getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
             )
             if result2.get("exit_code", 0) != 0:
                 stderr = result2.get("stderr", "") or result2.get("stdout", "")

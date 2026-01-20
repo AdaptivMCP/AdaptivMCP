@@ -142,21 +142,21 @@ def _is_render_runtime() -> bool:
 #
 # ANSI color is enabled by default for developer-facing usage.
 # If your log UI does not interpret escape sequences, disable via:
-#   GITHUB_MCP_LOG_COLOR=0
-LOG_TOOL_VISUALS = _env_flag("GITHUB_MCP_LOG_VISUALS", default=True)
-LOG_TOOL_COLOR = _env_flag("GITHUB_MCP_LOG_COLOR", default=True)
+#   ADAPTIV_MCP_LOG_COLOR=0
+LOG_TOOL_VISUALS = _env_flag("ADAPTIV_MCP_LOG_VISUALS", default=True)
+LOG_TOOL_COLOR = _env_flag("ADAPTIV_MCP_LOG_COLOR", default=True)
 # Some provider log UIs (notably Render) do not reliably render 256-color ANSI
 # escape sequences. Default to basic ANSI colors on Render for correct visuals.
 #
 # Override via:
-#   GITHUB_MCP_LOG_COLOR_256=1
+#   ADAPTIV_MCP_LOG_COLOR_256=1
 LOG_TOOL_COLOR_256 = _env_flag(
-    "GITHUB_MCP_LOG_COLOR_256",
+    "ADAPTIV_MCP_LOG_COLOR_256",
     default=(not _is_render_runtime()),
 )
-LOG_TOOL_READ_SNIPPETS = _env_flag("GITHUB_MCP_LOG_READ_SNIPPETS", default=True)
-LOG_TOOL_DIFF_SNIPPETS = _env_flag("GITHUB_MCP_LOG_DIFF_SNIPPETS", default=True)
-LOG_TOOL_STYLE = os.environ.get("GITHUB_MCP_LOG_STYLE", "monokai")
+LOG_TOOL_READ_SNIPPETS = _env_flag("ADAPTIV_MCP_LOG_READ_SNIPPETS", default=True)
+LOG_TOOL_DIFF_SNIPPETS = _env_flag("ADAPTIV_MCP_LOG_DIFF_SNIPPETS", default=True)
+LOG_TOOL_STYLE = os.environ.get("ADAPTIV_MCP_LOG_STYLE", "monokai")
 
 # Whether to include Python tracebacks in provider logs for tool failures.
 #
@@ -164,23 +164,23 @@ LOG_TOOL_STYLE = os.environ.get("GITHUB_MCP_LOG_STYLE", "monokai")
 # `exc_info` can create extremely verbose log streams. Default to disabling
 # exception tracebacks on Render unless explicitly enabled.
 LOG_TOOL_EXC_INFO = _env_flag(
-    "GITHUB_MCP_LOG_EXC_INFO",
+    "ADAPTIV_MCP_LOG_EXC_INFO",
     default=(not _is_render_runtime()),
 )
 
 # Reduce log noise by omitting correlation IDs from INFO/WARN message strings.
 # Structured extras (appended by the provider log formatter) still include the
 # full request context.
-LOG_TOOL_LOG_IDS = _env_flag("GITHUB_MCP_LOG_IDS", default=False)
+LOG_TOOL_LOG_IDS = _env_flag("ADAPTIV_MCP_LOG_IDS", default=False)
 
 # Emit one request snapshot line and one response snapshot line per tool call.
 # This is enabled by default because provider log UIs are optimized for
 # scan-friendly summaries.
-LOG_TOOL_SNAPSHOTS = _env_flag("GITHUB_MCP_LOG_SNAPSHOTS", default=True)
+LOG_TOOL_SNAPSHOTS = _env_flag("ADAPTIV_MCP_LOG_SNAPSHOTS", default=True)
 
 # When enabled, include deeper diagnostic fields in provider extras.
 # This is intentionally off by default to keep logs scan-friendly.
-LOG_TOOL_VERBOSE_EXTRAS = _env_flag("GITHUB_MCP_LOG_VERBOSE_EXTRAS", default=False)
+LOG_TOOL_VERBOSE_EXTRAS = _env_flag("ADAPTIV_MCP_LOG_VERBOSE_EXTRAS", default=False)
 
 # Tool result envelope
 #
@@ -195,8 +195,8 @@ LOG_TOOL_VERBOSE_EXTRAS = _env_flag("GITHUB_MCP_LOG_VERBOSE_EXTRAS", default=Fal
 # Scalar/list results are preserved by default for backward compatibility.
 # IMPORTANT: default is False to preserve the repo's compatibility contract:
 # tool return values must not be mutated by the wrapper.
-TOOL_RESULT_ENVELOPE = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE", default=False)
-TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALARS", default=False)
+TOOL_RESULT_ENVELOPE = _env_flag("ADAPTIV_MCP_TOOL_RESULT_ENVELOPE", default=False)
+TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("ADAPTIV_MCP_TOOL_RESULT_ENVELOPE_SCALARS", default=False)
 
 # Tool response shaping
 #
@@ -209,19 +209,19 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("GITHUB_MCP_TOOL_RESULT_ENVELOPE_SCALAR
 # Response shaping is intentionally opt-in via env var. When set to "chatgpt",
 # the decorator can wrap scalar outputs, add ok/status when missing, and
 # truncate very large nested "json" payloads.
-RESPONSE_MODE_DEFAULT = os.environ.get("GITHUB_MCP_RESPONSE_MODE", "raw").strip().lower()
-CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int("GITHUB_MCP_RESPONSE_MAX_LIST_ITEMS", default=0)
+RESPONSE_MODE_DEFAULT = os.environ.get("ADAPTIV_MCP_RESPONSE_MODE", "raw").strip().lower()
+CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int("ADAPTIV_MCP_RESPONSE_MAX_LIST_ITEMS", default=0)
 
 # In hosted LLM connector environments, returning token-like strings (even from
 # test fixtures or diffs) can trigger upstream safety filters and block tool
 # outputs. Redaction is therefore enabled by default, with an escape hatch.
-REDACT_TOOL_OUTPUTS = _env_flag("GITHUB_MCP_REDACT_TOOL_OUTPUTS", default=True)
+REDACT_TOOL_OUTPUTS = _env_flag("ADAPTIV_MCP_REDACT_TOOL_OUTPUTS", default=True)
 
 
 def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
     """Determine response shaping mode.
 
-    - If GITHUB_MCP_RESPONSE_MODE is set to a non-raw value, honor it.
+    - If ADAPTIV_MCP_RESPONSE_MODE is set to a non-raw value, honor it.
     - Otherwise, if the inbound request includes ChatGPT metadata, default to
       'chatgpt' (ChatGPT-hosted connectors benefit from consistent, compact outputs).
     """
@@ -238,9 +238,9 @@ def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
     return "raw"
 
 
-LOG_TOOL_VISUAL_MAX_LINES = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_LINES", default=80)
-LOG_TOOL_READ_MAX_LINES = _env_int("GITHUB_MCP_LOG_READ_MAX_LINES", default=40)
-LOG_TOOL_VISUAL_MAX_CHARS = _env_int("GITHUB_MCP_LOG_VISUAL_MAX_CHARS", default=8000)
+LOG_TOOL_VISUAL_MAX_LINES = _env_int("ADAPTIV_MCP_LOG_VISUAL_MAX_LINES", default=80)
+LOG_TOOL_READ_MAX_LINES = _env_int("ADAPTIV_MCP_LOG_READ_MAX_LINES", default=40)
+LOG_TOOL_VISUAL_MAX_CHARS = _env_int("ADAPTIV_MCP_LOG_VISUAL_MAX_CHARS", default=8000)
 
 
 ANSI_RESET = "\x1b[0m"
@@ -1287,13 +1287,13 @@ def _args_summary(all_args: Mapping[str, Any]) -> dict[str, Any]:
     secret-like keys.
 
     Sensitive fields can be included by setting:
-      GITHUB_MCP_LOG_SENSITIVE=1
+      ADAPTIV_MCP_LOG_SENSITIVE=1
     """
 
     if not isinstance(all_args, Mapping) or not all_args:
         return {}
 
-    allow_sensitive = _env_flag("GITHUB_MCP_LOG_SENSITIVE", default=False)
+    allow_sensitive = _env_flag("ADAPTIV_MCP_LOG_SENSITIVE", default=False)
     candidates = (
         # Repo identity
         "full_name",
@@ -2039,7 +2039,7 @@ def _normalize_tool_result_envelope(result: Any) -> Any:
 def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = None) -> Any:
     """Return a ChatGPT-friendly version of a tool result.
 
-    This is opt-in via GITHUB_MCP_RESPONSE_MODE=chatgpt.
+    This is opt-in via ADAPTIV_MCP_RESPONSE_MODE=chatgpt.
 
     Goals:
     - consistent ok/status surface
@@ -2319,9 +2319,9 @@ def _dedupe_ttl_seconds(*, write_action: bool, meta: Mapping[str, Any]) -> float
     # - If the env var is UNSET, we use conservative defaults.
     # - If the env var is SET (including to "0"), we honor it exactly.
     env_name = (
-        "GITHUB_MCP_TOOL_DEDUPE_TTL_WRITE_S"
+        "ADAPTIV_MCP_TOOL_DEDUPE_TTL_WRITE_S"
         if write_action
-        else "GITHUB_MCP_TOOL_DEDUPE_TTL_READ_S"
+        else "ADAPTIV_MCP_TOOL_DEDUPE_TTL_READ_S"
     )
     raw = os.environ.get(env_name)
 

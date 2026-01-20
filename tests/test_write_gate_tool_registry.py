@@ -17,9 +17,9 @@ from github_mcp.mcp_server.registry import _registered_tool_name
 
 def _set_auto_approve(monkeypatch, enabled: bool | None) -> None:
     if enabled is None:
-        monkeypatch.delenv("GITHUB_MCP_AUTO_APPROVE", raising=False)
+        monkeypatch.delenv("ADAPTIV_MCP_AUTO_APPROVE", raising=False)
     else:
-        monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true" if enabled else "false")
+        monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true" if enabled else "false")
 
 
 def test_every_registered_tool_reports_write_gate_metadata(monkeypatch):

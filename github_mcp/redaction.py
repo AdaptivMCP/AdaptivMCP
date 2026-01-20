@@ -8,7 +8,7 @@ These helpers implement conservative, best-effort redaction for common secret
 formats while minimizing false positives.
 
 Redaction can be disabled via:
-  GITHUB_MCP_REDACT_SECRETS=0
+  ADAPTIV_MCP_REDACT_SECRETS=0
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ def _env_flag(name: str, *, default: bool = True) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-REDACT_SECRETS = _env_flag("GITHUB_MCP_REDACT_SECRETS", default=True)
+REDACT_SECRETS = _env_flag("ADAPTIV_MCP_REDACT_SECRETS", default=True)
 
 
 _PATTERNS: list[tuple[re.Pattern[str], str]] = [

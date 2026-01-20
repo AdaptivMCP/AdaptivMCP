@@ -28,7 +28,7 @@ async def _workspace_sync_snapshot(
     repo_dir: str,
     branch: str,
 ) -> dict[str, Any]:
-    t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+    t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
     fetch = await _run_shell_ok(
         deps,
         "git fetch --prune origin",
@@ -178,7 +178,7 @@ async def workspace_git_diff(
             diff_cmd,
             cwd=repo_dir,
             timeout_seconds=_normalize_timeout_seconds(
-                config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+                config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
             ),
         )
         if diff_res.get("exit_code", 0) != 0:
@@ -194,7 +194,7 @@ async def workspace_git_diff(
             numstat_cmd,
             cwd=repo_dir,
             timeout_seconds=_normalize_timeout_seconds(
-                config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+                config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
             ),
         )
         numstat = _parse_git_numstat(numstat_res.get("stdout", "") or "")
@@ -228,7 +228,7 @@ async def workspace_create_branch(
     """
 
     try:
-        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
         effective_base = _tw()._effective_ref_for_repo(full_name, base_ref)
 
@@ -279,7 +279,7 @@ async def workspace_delete_branch(
     """
 
     try:
-        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
 
         if not isinstance(branch, str) or not branch.strip():
@@ -363,7 +363,7 @@ async def workspace_self_heal_branch(
     """
 
     try:
-        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
 
         if not isinstance(branch, str) or not branch.strip():
@@ -616,7 +616,7 @@ async def workspace_sync_to_remote(
 ) -> dict[str, Any]:
     """Reset a repo mirror (workspace clone) to match the remote branch."""
     try:
-        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -668,7 +668,7 @@ async def workspace_sync_bidirectional(
 ) -> dict[str, Any]:
     """Sync repo mirror changes to the remote and refresh local state from GitHub."""
     try:
-        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)

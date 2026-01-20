@@ -38,7 +38,7 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
 
 
-_DEBUG_TRUNCATE_CHARS = max(200, _env_int("GITHUB_MCP_ERROR_DEBUG_TRUNCATE_CHARS", 4000))
+_DEBUG_TRUNCATE_CHARS = max(200, _env_int("ADAPTIV_MCP_ERROR_DEBUG_TRUNCATE_CHARS", 4000))
 
 
 def _preview_text(text: str, *, head: int = 32, tail: int = 24) -> tuple[str, str]:

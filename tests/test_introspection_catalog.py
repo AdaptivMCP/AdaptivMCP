@@ -32,7 +32,7 @@ def test_list_all_actions_includes_introspection_tools():
 
 
 def test_list_write_actions_filters_write_action(monkeypatch):
-    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
     registry = [
         (_make_tool("read_tool", False), _make_fn("read_tool")),
         (_make_tool("write_tool", True), _make_fn("write_tool")),
@@ -47,7 +47,7 @@ def test_list_write_actions_filters_write_action(monkeypatch):
 
 
 def test_list_tools_filters_and_prefix(monkeypatch):
-    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
     registry = [
         (_make_tool("read_tool", False), _make_fn("read_tool")),
         (_make_tool("write_tool", True), _make_fn("write_tool")),
@@ -71,7 +71,7 @@ def test_list_tools_filters_and_prefix(monkeypatch):
 
 
 def test_list_tools_write_allowed_true(monkeypatch):
-    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
     registry = [
         (_make_tool("read_tool", False), _make_fn("read_tool")),
         (_make_tool("write_tool", True), _make_fn("write_tool")),

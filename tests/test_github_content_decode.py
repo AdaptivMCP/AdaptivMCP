@@ -49,7 +49,7 @@ async def test_decode_github_content_non_utf8_text_returns_none(
         return {"json": {"content": payload, "encoding": "base64", "sha": "abc"}}
 
     monkeypatch.setattr(github_content, "_request", _fake_request)
-    monkeypatch.setattr(github_content, "GITHUB_MCP_INCLUDE_BASE64_CONTENT", False)
+    monkeypatch.setattr(github_content, "ADAPTIV_MCP_INCLUDE_BASE64_CONTENT", False)
 
     decoded = await github_content._decode_github_content("o/r", "bin.dat", "main")
 
@@ -67,7 +67,7 @@ async def test_decode_github_content_returns_full_body(monkeypatch: pytest.Monke
         return {"json": {"content": payload, "encoding": "base64", "sha": "abc"}}
 
     monkeypatch.setattr(github_content, "_request", _fake_request)
-    monkeypatch.setattr(github_content, "GITHUB_MCP_INCLUDE_BASE64_CONTENT", True)
+    monkeypatch.setattr(github_content, "ADAPTIV_MCP_INCLUDE_BASE64_CONTENT", True)
 
     decoded = await github_content._decode_github_content("o/r", "README.md", "main")
 

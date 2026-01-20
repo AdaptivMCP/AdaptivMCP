@@ -3,7 +3,7 @@ import importlib
 
 def test_sanitize_debug_value_does_not_over_redact_high_entropy(monkeypatch):
     # Ensure default threshold isn't artificially small.
-    monkeypatch.delenv("GITHUB_MCP_ERROR_DEBUG_TRUNCATE_CHARS", raising=False)
+    monkeypatch.delenv("ADAPTIV_MCP_ERROR_DEBUG_TRUNCATE_CHARS", raising=False)
 
     import github_mcp.mcp_server.error_handling as eh
 
@@ -15,7 +15,7 @@ def test_sanitize_debug_value_does_not_over_redact_high_entropy(monkeypatch):
 
 
 def test_sanitize_debug_value_redacts_when_key_is_secret(monkeypatch):
-    monkeypatch.delenv("GITHUB_MCP_ERROR_DEBUG_TRUNCATE_CHARS", raising=False)
+    monkeypatch.delenv("ADAPTIV_MCP_ERROR_DEBUG_TRUNCATE_CHARS", raising=False)
 
     import github_mcp.mcp_server.error_handling as eh
 
@@ -28,7 +28,7 @@ def test_sanitize_debug_value_redacts_when_key_is_secret(monkeypatch):
 def test_sanitize_debug_value_truncates_very_long_strings(monkeypatch):
     # The implementation enforces a safety floor of 200 chars for operator
     # debugging, so set the env var to the minimum and exceed it.
-    monkeypatch.setenv("GITHUB_MCP_ERROR_DEBUG_TRUNCATE_CHARS", "200")
+    monkeypatch.setenv("ADAPTIV_MCP_ERROR_DEBUG_TRUNCATE_CHARS", "200")
 
     import github_mcp.mcp_server.error_handling as eh
 
