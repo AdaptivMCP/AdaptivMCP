@@ -1530,6 +1530,12 @@ def _apply_tool_metadata(
             if isinstance(meta, dict):
                 meta["tags"] = tag_list
 
+    if isinstance(meta, dict):
+        if write_action is not None:
+            meta["write_action"] = bool(write_action)
+        if write_allowed is not None:
+            meta["write_allowed"] = bool(write_allowed)
+
 
 def _attach_tool_annotations(tool_obj: Any, annotations: Mapping[str, Any]) -> None:
     """Attach annotations onto the registered tool object.
@@ -3508,6 +3514,7 @@ def mcp_tool(
             wrapper.__mcp_visibility__ = visibility
             wrapper.__mcp_tags__ = tag_list
             wrapper.__mcp_ui__ = ui_meta or None
+            wrapper.__mcp_description__ = normalized_description
 
             # Ensure the schema is visible in clients that only render the tool
             # description (e.g., Actions list). Keep it compact.
@@ -3828,6 +3835,7 @@ def mcp_tool(
         wrapper.__mcp_visibility__ = visibility
         wrapper.__mcp_tags__ = tag_list
         wrapper.__mcp_ui__ = ui_meta or None
+        wrapper.__mcp_description__ = normalized_description
 
         if show_schema_in_description:
             try:
@@ -3963,6 +3971,33 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 )
                 if annotations:
                     _attach_tool_annotations(tool_obj, annotations)
+            except Exception:
+                pass
+
+            description = getattr(func, "__mcp_description__", None)
+            if not isinstance(description, str) or not description.strip():
+                description = getattr(tool_obj, "description", None) or (func.__doc__ or "")
+
+            try:
+                func.__doc__ = _build_tool_docstring(
+                    tool_name=_registered_tool_name(tool_obj, func) or getattr(
+                        tool_obj, "name", None
+                    )
+                    or getattr(func, "__name__", "unknown"),
+                    description=str(description or "").strip(),
+                    input_schema=schema if isinstance(schema, Mapping) else None,
+                    write_action=bool(base_write),
+                    visibility=str(visibility),
+                    write_allowed=allowed,
+                    tags=tags if isinstance(tags, (list, tuple)) else None,
+                    ui=ui if isinstance(ui, Mapping) else None,
+                )
+            except Exception:
+                pass
+
+            try:
+                if getattr(func, "__doc__", None):
+                    tool_obj.description = func.__doc__
             except Exception:
                 pass
 

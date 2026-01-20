@@ -5,6 +5,7 @@ import importlib
 import pytest
 
 from github_mcp.exceptions import WriteApprovalRequiredError
+from github_mcp.mcp_server.registry import _registered_tool_name
 
 
 def _reload_context():
@@ -49,3 +50,42 @@ def test_no_write_gate_env_var_in_ci():
 
     assert re.search(r"(^|\s)MCP_WRITE_ALLOWED\s*:", ci, flags=re.MULTILINE) is None
     assert re.search(r"(^|\s)WRITE_ALLOWED\s*:", ci, flags=re.MULTILINE) is None
+
+
+def _pick_registered_write_tool():
+    import main
+
+    for tool_obj, func in getattr(main, "_REGISTERED_MCP_TOOLS", []):
+        if getattr(func, "__mcp_write_action__", False):
+            return tool_obj, func
+    pytest.skip("No registered write tools found to validate write gate metadata.")
+
+
+def test_write_gate_metadata_refreshes_when_auto_approve_changes(monkeypatch):
+    context = _reload_context()
+    tool_obj, func = _pick_registered_write_tool()
+    tool_name = _registered_tool_name(tool_obj, func) or getattr(tool_obj, "name", "unknown")
+
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "false")
+    assert context.get_auto_approve_enabled() is False
+    doc = func.__doc__ or ""
+    assert "write_allowed: false" in doc, f"{tool_name} docstring not updated for gate off"
+    description = getattr(tool_obj, "description", "") or ""
+    assert "write_allowed: false" in description
+
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
+    assert context.get_auto_approve_enabled() is True
+    doc = func.__doc__ or ""
+    assert "write_allowed: true" in doc, f"{tool_name} docstring not updated for gate on"
+    description = getattr(tool_obj, "description", "") or ""
+    assert "write_allowed: true" in description
+
+
+def test_auto_approve_env_not_overridden_by_manual_write_allowed(monkeypatch):
+    context = _reload_context()
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
+    assert context.get_auto_approve_enabled() is True
+
+    context.set_write_allowed(False)
+    assert context.get_auto_approve_enabled() is True
+    assert bool(context.WRITE_ALLOWED) is True

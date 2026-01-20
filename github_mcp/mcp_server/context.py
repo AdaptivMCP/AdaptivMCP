@@ -151,6 +151,28 @@ class _WriteAllowedFlag:
 
 
 WRITE_ALLOWED = _WriteAllowedFlag()
+_LAST_AUTO_APPROVE_VALUE: bool | None = None
+
+
+def _update_write_gate_cache(value: bool) -> None:
+    global _LAST_AUTO_APPROVE_VALUE
+
+    previous = _LAST_AUTO_APPROVE_VALUE
+    _LAST_AUTO_APPROVE_VALUE = value
+    WRITE_ALLOWED._cache_value = value
+
+    if previous is None:
+        from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS
+
+        if not _REGISTERED_MCP_TOOLS:
+            return
+
+    if previous == value:
+        return
+
+    from github_mcp.mcp_server.decorators import refresh_registered_tool_metadata
+
+    refresh_registered_tool_metadata(_write_allowed=value)
 
 
 def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
@@ -161,7 +183,7 @@ def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     """
     del refresh_after_seconds
     value, _source = _auto_approve_from_env()
-    WRITE_ALLOWED._cache_value = value
+    _update_write_gate_cache(value)
     return value
 
 
@@ -171,14 +193,14 @@ def set_write_allowed(approved: bool) -> bool:
     """
     del approved
     value, _source = _auto_approve_from_env()
-    WRITE_ALLOWED._cache_value = value
+    _update_write_gate_cache(value)
     return value
 
 
 def get_auto_approve_enabled(*, refresh_after_seconds: float = 0.5) -> bool:
     del refresh_after_seconds
     value, _source = _auto_approve_from_env()
-    WRITE_ALLOWED._cache_value = value
+    _update_write_gate_cache(value)
     return value
 
 
