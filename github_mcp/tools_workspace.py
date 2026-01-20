@@ -96,6 +96,8 @@ replace_workspace_text = _fs.replace_workspace_text
 apply_patch = _fs.apply_patch
 apply_workspace_diff = _fs.apply_workspace_diff
 delete_workspace_paths = _fs.delete_workspace_paths
+create_workspace_folders = _fs.create_workspace_folders
+delete_workspace_folders = _fs.delete_workspace_folders
 move_workspace_paths = _fs.move_workspace_paths
 apply_workspace_operations = _fs.apply_workspace_operations
 compare_workspace_files = _fs.compare_workspace_files
@@ -143,6 +145,7 @@ run_lint_suite = _suites.run_lint_suite
 commit_and_open_pr_from_workspace = _pr.commit_and_open_pr_from_workspace
 
 workspace_apply_ops_and_open_pr = _workflows.workspace_apply_ops_and_open_pr
+workspace_manage_folders_and_open_pr = _workflows.workspace_manage_folders_and_open_pr
 
 # Read-only "what changed" aggregator.
 workspace_change_report = _workflows.workspace_change_report
@@ -185,6 +188,8 @@ __all__ = [
     "apply_patch",
     "apply_workspace_diff",
     "delete_workspace_paths",
+    "create_workspace_folders",
+    "delete_workspace_folders",
     "move_workspace_paths",
     "apply_workspace_operations",
     "compare_workspace_files",
@@ -217,6 +222,7 @@ __all__ = [
     "build_pr_summary",
     "commit_and_open_pr_from_workspace",
     "workspace_apply_ops_and_open_pr",
+    "workspace_manage_folders_and_open_pr",
     "workspace_change_report",
     "workspace_batch",
     "workspace_venv_start",

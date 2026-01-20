@@ -508,8 +508,8 @@ LOG_RENDER_HTTP_BODIES = _env_flag("LOG_RENDER_HTTP_BODIES", "false")
 # extras as a YAML-like block (no JSON) when appended.
 #
 # Defaults:
-# - When HUMAN_LOGS=true: append extras for tool events (tool_call_* and tool_visual)
-#   and for WARNING/ERROR.
+# - When HUMAN_LOGS=true: append extras for tool events (tool_call_*) and for
+#   WARNING/ERROR.
 # - When HUMAN_LOGS=false: keep extras off by default.
 LOG_APPEND_EXTRAS = _env_flag(
     "LOG_APPEND_EXTRAS",
@@ -769,8 +769,6 @@ class _StructuredFormatter(logging.Formatter):
         # These are intentionally limited to high-signal events so enabling
         # LOG_APPEND_EXTRAS does not explode log volume.
         always_append_events = {
-            # Visual previews are intentionally multi-line (diffs/snippets).
-            "tool_visual",
             # Tool lifecycle events (INFO).
             "tool_call_started",
             "tool_call_completed",

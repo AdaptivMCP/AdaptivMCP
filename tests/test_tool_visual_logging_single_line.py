@@ -18,23 +18,25 @@ class _FakeLogger:
         self._sink.append((msg, extra or {}, kwargs))
 
 
-def test_log_tool_visual_emits_single_line_message(monkeypatch) -> None:
+def test_log_tool_summary_emits_single_line_message(monkeypatch) -> None:
     decorators = _reload_decorators_with_env(
         ADAPTIV_MCP_LOG_TOOL_CALLS="1",
         ADAPTIV_MCP_HUMAN_LOGS="1",
-        ADAPTIV_MCP_LOG_VISUALS="1",
         ADAPTIV_MCP_LOG_COLOR="0",
     )
 
     calls = []
     monkeypatch.setattr(decorators, "LOGGER", _FakeLogger(calls))
 
-    decorators._log_tool_visual(
-        tool_name="terminal_command",
+    decorators._log_tool_summary(
+        tool_name="create_workspace_folders",
         call_id="abc123",
+        write_action=True,
         req={"headers": {}, "client": {"host": "127.0.0.1"}},
-        kind="terminal",
-        visual="stdout\n   1│ hello\n   2│ world\n",
+        schema_hash=None,
+        schema_present=False,
+        result={"status": "created", "created": ["docs", "tests"], "failed": []},
+        all_args={"paths": ["docs", "tests"]},
     )
 
     assert calls, "expected a log call"
@@ -43,11 +45,8 @@ def test_log_tool_visual_emits_single_line_message(monkeypatch) -> None:
     # Provider logs are line-oriented; keep message single line.
     assert "\n" not in msg
 
-    # Full visual is preserved in structured fields.
-    assert extra.get("event") == "tool_visual"
-    assert "stdout" in str(extra.get("visual") or "")
-    assert isinstance(extra.get("visual_preview"), str)
-    assert int(extra.get("visual_lines") or 0) >= 1
+    assert extra.get("event") == "tool_call_summary"
+    assert "Created 2 items" in str(extra.get("summary") or "")
 
 
 def test_suites_normalizes_carriage_returns() -> None:

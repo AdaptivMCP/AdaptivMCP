@@ -357,6 +357,90 @@ async def workspace_apply_ops_and_open_pr(
         return payload
 
 
+@mcp_tool(write_action=True)
+async def workspace_manage_folders_and_open_pr(
+    full_name: str,
+    *,
+    base_ref: str = "main",
+    feature_ref: str | None = None,
+    create_paths: list[str] | None = None,
+    delete_paths: list[str] | None = None,
+    allow_recursive: bool = False,
+    allow_missing: bool = True,
+    pr_title: str | None = None,
+    pr_body: str | None = None,
+    draft: bool = False,
+    commit_message: str = "Manage workspace folders",
+    sync_base_to_remote: bool = True,
+    discard_local_changes: bool = True,
+    run_quality: bool = True,
+    quality_timeout_seconds: float = 0,
+    test_command: str = "pytest -q",
+    lint_command: str = "ruff check .",
+) -> dict[str, Any]:
+    """Create/remove folders on a branch and open a PR.
+
+    This workflow converts folder operations into `apply_workspace_operations`
+    steps, then delegates to `workspace_apply_ops_and_open_pr`.
+    """
+
+    try:
+        operations: list[dict[str, Any]] = []
+        if create_paths is None:
+            create_paths = []
+        if delete_paths is None:
+            delete_paths = []
+
+        if not isinstance(create_paths, list) or any(
+            not isinstance(p, str) for p in create_paths
+        ):
+            raise TypeError("create_paths must be a list of strings")
+        if not isinstance(delete_paths, list) or any(
+            not isinstance(p, str) for p in delete_paths
+        ):
+            raise TypeError("delete_paths must be a list of strings")
+
+        for path in create_paths:
+            if not path.strip():
+                raise ValueError("create_paths must contain non-empty strings")
+            operations.append({"op": "mkdir", "path": path})
+
+        for path in delete_paths:
+            if not path.strip():
+                raise ValueError("delete_paths must contain non-empty strings")
+            operations.append(
+                {
+                    "op": "rmdir",
+                    "path": path,
+                    "allow_recursive": bool(allow_recursive),
+                    "allow_missing": bool(allow_missing),
+                }
+            )
+
+        if not operations:
+            raise ValueError("At least one create_paths or delete_paths entry is required")
+
+        tw = _tw()
+        return await tw.workspace_apply_ops_and_open_pr(
+            full_name=full_name,
+            base_ref=base_ref,
+            feature_ref=feature_ref,
+            operations=operations,
+            pr_title=pr_title,
+            pr_body=pr_body,
+            draft=draft,
+            commit_message=commit_message,
+            sync_base_to_remote=sync_base_to_remote,
+            discard_local_changes=discard_local_changes,
+            run_quality=run_quality,
+            quality_timeout_seconds=quality_timeout_seconds,
+            test_command=test_command,
+            lint_command=lint_command,
+        )
+    except Exception as exc:
+        return _structured_tool_error(exc, context="workspace_manage_folders_and_open_pr")
+
+
 @mcp_tool(write_action=False)
 async def workspace_change_report(
     full_name: str,
