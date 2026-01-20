@@ -15,6 +15,12 @@ from starlette.responses import JSONResponse, Response
 from github_mcp.mcp_server.context import REQUEST_CHATGPT_METADATA
 from github_mcp.server import _find_registered_tool
 
+from github_mcp.mcp_server import registry as mcp_registry
+from github_mcp.mcp_server.suggestions import (
+    augment_structured_error_for_bad_args,
+    build_unknown_tool_payload,
+)
+
 
 def _normalize_base_path(base_path: str | None) -> str:
     if not base_path:
@@ -346,10 +352,24 @@ async def _execute_tool(
 ) -> tuple[Any, int, dict[str, str]]:
     resolved = _find_registered_tool(tool_name)
     if not resolved:
-        return {"error": f"Unknown tool {tool_name!r}."}, 404, {}
+        available: list[str] = []
+        try:
+            for tool_obj, func in list(getattr(mcp_registry, "_REGISTERED_MCP_TOOLS", []) or []):
+                name = mcp_registry._registered_tool_name(tool_obj, func)
+                if name:
+                    available.append(name)
+        except Exception:
+            available = []
+        payload = build_unknown_tool_payload(tool_name, available)
+        return payload, 404, {}
 
     tool_obj, func = resolved
     write_action = _effective_write_action(tool_obj, func, args)
+
+    try:
+        signature: inspect.Signature | None = inspect.signature(func)
+    except Exception:
+        signature = None
 
     if max_attempts is not None:
         max_attempts = max(1, int(max_attempts))
@@ -394,7 +414,18 @@ async def _execute_tool(
         except Exception as exc:
             from github_mcp.mcp_server.error_handling import _structured_tool_error
 
-            structured = _structured_tool_error(exc, context=f"tool_http:{tool_name}")
+            structured = _structured_tool_error(
+                exc,
+                context=f"tool_http:{tool_name}",
+                args=args,
+            )
+            structured = augment_structured_error_for_bad_args(
+                structured,
+                tool_name=tool_name,
+                signature=signature,
+                provided_kwargs=args,
+                exc=exc,
+            )
 
             # Prefer structured error details when available.
             err = _coerce_error_detail(structured)
