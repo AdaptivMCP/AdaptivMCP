@@ -22,7 +22,7 @@ from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import _structured_tool_error, mcp_tool
 from github_mcp.utils import _normalize_timeout_seconds
 
-from ._shared import _tw
+from ._shared import _filter_kwargs_for_callable, _tw
 from .commit import commit_workspace, commit_workspace_files, get_workspace_changes_summary
 from .fs import apply_workspace_operations, delete_workspace_paths, move_workspace_paths
 from .git_ops import workspace_create_branch, workspace_git_diff
@@ -207,11 +207,20 @@ async def workspace_batch(
                 exists = await _remote_branch_exists(full_name, base_ref=base_ref, branch=ref)
                 steps["branch_exists"] = {"ref": ref, "exists": exists}
                 if not exists:
+                    extra_branch = plan.get("create_branch_args")
+                    extra_branch = extra_branch if isinstance(extra_branch, dict) else {}
+                    extra_branch = dict(extra_branch)
+                    for k in ("full_name", "base_ref", "new_branch"):
+                        extra_branch.pop(k, None)
+                    branch_call = {
+                        "full_name": full_name,
+                        "base_ref": base_ref,
+                        "new_branch": ref,
+                        "push": True,
+                        **extra_branch,
+                    }
                     steps["create_branch"] = await workspace_create_branch(
-                        full_name=full_name,
-                        base_ref=base_ref,
-                        new_branch=ref,
-                        push=True,
+                        **_filter_kwargs_for_callable(workspace_create_branch, branch_call)
                     )
 
             if isinstance(plan.get("apply_ops"), dict):
@@ -219,14 +228,16 @@ async def workspace_batch(
                 operations = ao.get("operations")
                 if operations is None:
                     raise ValueError("apply_ops.operations is required when apply_ops is provided")
+                extra = dict(ao)
+                for k in ("full_name", "ref"):
+                    extra.pop(k, None)
+                extra.setdefault("fail_fast", True)
+                extra.setdefault("rollback_on_error", True)
+                extra.setdefault("preview_only", _as_bool(ao.get("preview_only"), False))
+                extra.setdefault("create_parents", True)
+                call = {"full_name": full_name, "ref": ref, **extra}
                 steps["apply_ops"] = await apply_workspace_operations(
-                    full_name=full_name,
-                    ref=ref,
-                    operations=operations,
-                    fail_fast=True,
-                    rollback_on_error=True,
-                    preview_only=_as_bool(ao.get("preview_only"), False),
-                    create_parents=True,
+                    **_filter_kwargs_for_callable(apply_workspace_operations, call)
                 )
 
             if isinstance(plan.get("delete_paths"), dict):
@@ -234,12 +245,15 @@ async def workspace_batch(
                 paths = _as_list_str(dp.get("paths"))
                 if not paths:
                     raise ValueError("delete_paths.paths must be a non-empty list")
+                extra = dict(dp)
+                for k in ("full_name", "ref"):
+                    extra.pop(k, None)
+                extra["paths"] = paths
+                extra.setdefault("allow_missing", _as_bool(dp.get("allow_missing"), True))
+                extra.setdefault("allow_recursive", _as_bool(dp.get("allow_recursive"), True))
+                call = {"full_name": full_name, "ref": ref, **extra}
                 steps["delete_paths"] = await delete_workspace_paths(
-                    full_name=full_name,
-                    ref=ref,
-                    paths=paths,
-                    allow_missing=_as_bool(dp.get("allow_missing"), True),
-                    allow_recursive=_as_bool(dp.get("allow_recursive"), True),
+                    **_filter_kwargs_for_callable(delete_workspace_paths, call)
                 )
 
             if isinstance(plan.get("move_paths"), dict):
@@ -257,12 +271,15 @@ async def workspace_batch(
                         raise ValueError("move_paths.moves entries must include src and dst")
                     moves.append({"src": src, "dst": dst})
 
+                extra = dict(mp)
+                for k in ("full_name", "ref"):
+                    extra.pop(k, None)
+                extra["moves"] = moves
+                extra.setdefault("overwrite", _as_bool(mp.get("overwrite"), False))
+                extra.setdefault("create_parents", _as_bool(mp.get("create_parents"), True))
+                call = {"full_name": full_name, "ref": ref, **extra}
                 steps["move_paths"] = await move_workspace_paths(
-                    full_name=full_name,
-                    ref=ref,
-                    moves=moves,
-                    overwrite=_as_bool(mp.get("overwrite"), False),
-                    create_parents=_as_bool(mp.get("create_parents"), True),
+                    **_filter_kwargs_for_callable(move_workspace_paths, call)
                 )
 
             if isinstance(plan.get("stage"), dict):
@@ -279,41 +296,55 @@ async def workspace_batch(
 
             if isinstance(plan.get("diff"), dict):
                 df = plan["diff"]
+                extra = dict(df)
+                for k in ("full_name", "ref"):
+                    extra.pop(k, None)
+                extra.setdefault("left_ref", _as_str(df.get("left_ref")))
+                extra.setdefault("right_ref", _as_str(df.get("right_ref")))
+                extra.setdefault("staged", _as_bool(df.get("staged"), False))
+                extra.setdefault("paths", _as_list_str(df.get("paths")) or None)
+                extra.setdefault("context_lines", _as_int(df.get("context_lines"), 3))
+                extra.setdefault("max_chars", _as_int(df.get("max_chars"), 200_000))
+                call = {"full_name": full_name, "ref": ref, **extra}
                 steps["diff"] = await workspace_git_diff(
-                    full_name=full_name,
-                    ref=ref,
-                    left_ref=_as_str(df.get("left_ref")),
-                    right_ref=_as_str(df.get("right_ref")),
-                    staged=_as_bool(df.get("staged"), False),
-                    paths=_as_list_str(df.get("paths")) or None,
-                    context_lines=_as_int(df.get("context_lines"), 3),
-                    max_chars=_as_int(df.get("max_chars"), 200_000),
+                    **_filter_kwargs_for_callable(workspace_git_diff, call)
                 )
 
             if isinstance(plan.get("summary"), dict):
                 sm = plan["summary"]
+                extra = dict(sm)
+                for k in ("full_name", "ref"):
+                    extra.pop(k, None)
+                extra.setdefault("path_prefix", _as_str(sm.get("path_prefix")))
+                extra.setdefault("max_files", _as_int(sm.get("max_files"), 200))
+                call = {"full_name": full_name, "ref": ref, **extra}
                 steps["summary"] = await get_workspace_changes_summary(
-                    full_name=full_name,
-                    ref=ref,
-                    path_prefix=_as_str(sm.get("path_prefix")),
-                    max_files=_as_int(sm.get("max_files"), 200),
+                    **_filter_kwargs_for_callable(get_workspace_changes_summary, call)
                 )
 
             if isinstance(plan.get("tests"), dict):
                 ts = plan["tests"]
-                steps["tests"] = await run_tests(
-                    full_name=full_name,
-                    ref=ref,
-                    test_command=_as_str(ts.get("command"), "pytest -q") or "pytest -q",
-                    timeout_seconds=float(ts.get("timeout_seconds") or 0),
-                    workdir=_as_str(ts.get("workdir")),
-                    use_temp_venv=_as_bool(ts.get("use_temp_venv"), True),
-                    installing_dependencies=_as_bool(ts.get("installing_dependencies"), True),
+                cmd = (
+                    _as_str(ts.get("test_command"))
+                    or _as_str(ts.get("command"))
+                    or "pytest -q"
                 )
+                extra = dict(ts)
+                for k in ("full_name", "ref"):
+                    extra.pop(k, None)
+                extra.setdefault("test_command", cmd)
+                extra.setdefault("timeout_seconds", float(ts.get("timeout_seconds") or 0))
+                extra.setdefault("workdir", _as_str(ts.get("workdir")))
+                extra.setdefault("use_temp_venv", _as_bool(ts.get("use_temp_venv"), True))
+                extra.setdefault(
+                    "installing_dependencies", _as_bool(ts.get("installing_dependencies"), True)
+                )
+                call = {"full_name": full_name, "ref": ref, **extra}
+                steps["tests"] = await run_tests(**_filter_kwargs_for_callable(run_tests, call))
 
             if isinstance(plan.get("commit"), dict):
                 cm = plan["commit"]
-                message = _as_str(cm.get("message"))
+                message = _as_str(cm.get("message")) or _as_str(cm.get("commit_message"))
                 if not message:
                     raise ValueError("commit.message must be a non-empty string")
 
@@ -321,21 +352,32 @@ async def workspace_batch(
                 add_all = _as_bool(cm.get("add_all"), True)
                 files = _as_list_str(cm.get("files"))
 
+                extra = dict(cm)
+                for k in ("full_name", "ref", "branch"):
+                    extra.pop(k, None)
                 if files:
+                    call = {
+                        "full_name": full_name,
+                        "files": files,
+                        "ref": ref,
+                        "message": message,
+                        "push": push,
+                        **extra,
+                    }
                     steps["commit"] = await commit_workspace_files(
-                        full_name=full_name,
-                        files=files,
-                        ref=ref,
-                        message=message,
-                        push=push,
+                        **_filter_kwargs_for_callable(commit_workspace_files, call)
                     )
                 else:
+                    call = {
+                        "full_name": full_name,
+                        "ref": ref,
+                        "message": message,
+                        "add_all": add_all,
+                        "push": push,
+                        **extra,
+                    }
                     steps["commit"] = await commit_workspace(
-                        full_name=full_name,
-                        ref=ref,
-                        message=message,
-                        add_all=add_all,
-                        push=push,
+                        **_filter_kwargs_for_callable(commit_workspace, call)
                     )
 
             ok = True
