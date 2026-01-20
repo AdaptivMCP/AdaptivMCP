@@ -85,7 +85,9 @@ _workspace_write_text = _fs._workspace_write_text
 get_workspace_file_contents = _fs.get_workspace_file_contents
 get_workspace_files_contents = _fs.get_workspace_files_contents
 read_workspace_file_excerpt = _fs.read_workspace_file_excerpt
+read_workspace_file_sections = _fs.read_workspace_file_sections
 read_git_file_excerpt = _fs.read_git_file_excerpt
+read_git_file_sections = _fs.read_git_file_sections
 set_workspace_file_contents = _fs.set_workspace_file_contents
 edit_workspace_text_range = _fs.edit_workspace_text_range
 delete_workspace_lines = _fs.delete_workspace_lines
@@ -150,6 +152,9 @@ workspace_manage_folders_and_open_pr = _workflows.workspace_manage_folders_and_o
 # Read-only "what changed" aggregator.
 workspace_change_report = _workflows.workspace_change_report
 
+# Convenience: read multiple files in chunked sections with real line numbers.
+workspace_read_files_in_sections = _workflows.workspace_read_files_in_sections
+
 # Multi-branch / multi-path orchestration.
 workspace_batch = _batch.workspace_batch
 
@@ -178,6 +183,9 @@ __all__ = [
     "get_workspace_file_contents",
     "get_workspace_files_contents",
     "read_workspace_file_excerpt",
+    "read_workspace_file_sections",
+    "read_git_file_excerpt",
+    "read_git_file_sections",
     "set_workspace_file_contents",
     "edit_workspace_text_range",
     "delete_workspace_lines",
@@ -224,6 +232,7 @@ __all__ = [
     "workspace_apply_ops_and_open_pr",
     "workspace_manage_folders_and_open_pr",
     "workspace_change_report",
+    "workspace_read_files_in_sections",
     "workspace_batch",
     "workspace_venv_start",
     "workspace_venv_stop",

@@ -730,3 +730,76 @@ async def workspace_change_report(
         if isinstance(payload, dict) and "steps" not in payload:
             payload["steps"] = steps
         return payload
+
+
+@mcp_tool(write_action=False)
+async def workspace_read_files_in_sections(
+    full_name: str,
+    ref: str = "main",
+    paths: list[str] | None = None,
+    *,
+    start_line: int = 1,
+    max_sections: int = 5,
+    max_lines_per_section: int = 200,
+    max_chars_per_section: int = 80_000,
+    overlap_lines: int = 20,
+    include_missing: bool = True,
+) -> dict[str, Any]:
+    """Read multiple workspace files as chunked sections with real line numbers.
+
+    Convenience wrapper around `read_workspace_file_sections`.
+    """
+
+    try:
+        if paths is None:
+            paths = []
+        if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
+            raise TypeError("paths must be a list of strings")
+        if not paths:
+            raise ValueError("paths must contain at least one item")
+
+        tw = _tw()
+        effective_ref = tw._effective_ref_for_repo(full_name, ref)
+
+        files: list[dict[str, Any]] = []
+        missing: list[str] = []
+        errors: list[dict[str, Any]] = []
+
+        for p in paths:
+            try:
+                res = await tw.read_workspace_file_sections(
+                    full_name=full_name,
+                    ref=effective_ref,
+                    path=p,
+                    start_line=int(start_line),
+                    max_sections=int(max_sections),
+                    max_lines_per_section=int(max_lines_per_section),
+                    max_chars_per_section=int(max_chars_per_section),
+                    overlap_lines=int(overlap_lines),
+                )
+                if not res.get("exists"):
+                    missing.append(p)
+                    if include_missing:
+                        files.append(res)
+                else:
+                    files.append(res)
+            except Exception as exc:
+                errors.append({"path": p, "error": str(exc)})
+
+        ok = len(errors) == 0
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "status": "ok" if ok else "partial",
+            "ok": ok,
+            "start_line": int(start_line),
+            "max_sections": int(max_sections),
+            "max_lines_per_section": int(max_lines_per_section),
+            "max_chars_per_section": int(max_chars_per_section),
+            "overlap_lines": int(overlap_lines),
+            "files": files,
+            "missing_paths": missing,
+            "errors": errors,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="workspace_read_files_in_sections")

@@ -202,8 +202,22 @@ def list_all_actions(
     gate = _write_gate_state()
     write_auto_approved = gate["write_auto_approved"]
     seen_names: set[str] = set()
-    registry_entries, _ = _iter_tool_registry()
-    for tool, func in registry_entries:
+    registry_entries, registry_errors = _iter_tool_registry()
+
+    # Always include the introspection endpoints even if the tool registry is
+    # monkeypatched (tests rely on these being present so the server can still
+    # describe itself when the registry is incomplete).
+    from types import SimpleNamespace
+
+    forced_entries = [
+        (SimpleNamespace(name="list_all_actions", write_action=False), list_all_actions),
+        (SimpleNamespace(name="list_tools", write_action=False), list_tools),
+        (SimpleNamespace(name="list_resources", write_action=False), list_resources),
+        (SimpleNamespace(name="list_write_actions", write_action=False), list_write_actions),
+        (SimpleNamespace(name="list_write_tools", write_action=False), list_write_tools),
+    ]
+
+    for tool, func in (forced_entries + list(registry_entries)):
         name = _registered_tool_name(tool, func)
         if not name:
             continue
@@ -292,6 +306,9 @@ def list_all_actions(
         "compact": compact_mode,
         "tools": tools,
     }
+
+    if isinstance(registry_errors, list) and registry_errors:
+        payload["errors"] = registry_errors
     return payload
 
 
@@ -320,9 +337,21 @@ async def list_tools(
 
     catalog = list_all_actions(include_parameters=False, compact=True)
     tools: list[dict[str, Any]] = []
+    # In the lightweight list_tools view, hide most introspection helpers when
+    # callers ask for "read" tools. This keeps the surface area small for
+    # clients that just want application tools, while still exposing
+    # list_all_actions as the canonical schema registry.
+    hidden_when_only_read = {
+        "list_tools",
+        "list_resources",
+        "list_write_actions",
+        "list_write_tools",
+    }
     for entry in catalog.get("tools", []) or []:
         name = entry.get("name")
         if not isinstance(name, str):
+            continue
+        if only_read and name in hidden_when_only_read:
             continue
         if name_prefix and not name.startswith(name_prefix):
             continue

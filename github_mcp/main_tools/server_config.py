@@ -27,13 +27,13 @@ from github_mcp.server import (
     CONTROLLER_REPO,
     _github_request,
 )
-from github_mcp.utils import REPO_DEFAULTS, _get_main_module
+from github_mcp.utils import REPO_DEFAULTS, REPO_DEFAULTS_PARSE_ERROR, _get_main_module
 
 
 async def get_server_config() -> dict[str, Any]:
     """Return a safe summary of MCP connector and runtime settings."""
 
-    config_payload = {
+    config_payload: dict[str, Any] = {
         "write_allowed": bool(server.WRITE_ALLOWED),
         "github_api_base": GITHUB_API_BASE,
         "http": {
@@ -61,6 +61,11 @@ async def get_server_config() -> dict[str, Any]:
             "render_token_present": bool(_get_optional_render_token()),
         },
     }
+    warnings: list[str] = []
+    if REPO_DEFAULTS_PARSE_ERROR:
+        warnings.append(str(REPO_DEFAULTS_PARSE_ERROR))
+    if warnings:
+        config_payload["warnings"] = warnings
     return config_payload
 
 

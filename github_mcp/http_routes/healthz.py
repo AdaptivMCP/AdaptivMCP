@@ -16,6 +16,7 @@ from github_mcp.config import (
 from github_mcp.exceptions import GitHubAuthError
 from github_mcp.http_clients import _get_github_token
 from github_mcp.server import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
+from github_mcp.utils import REPO_DEFAULTS_PARSE_ERROR
 
 
 def _github_token_present() -> bool:
@@ -47,6 +48,12 @@ def _build_health_payload() -> dict[str, Any]:
             "default_branch": CONTROLLER_DEFAULT_BRANCH,
         },
     }
+
+    warnings: list[str] = []
+    if REPO_DEFAULTS_PARSE_ERROR:
+        warnings.append(str(REPO_DEFAULTS_PARSE_ERROR))
+    if warnings:
+        payload["warnings"] = warnings
     return payload
 
 
