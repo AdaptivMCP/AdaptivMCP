@@ -91,7 +91,11 @@ _PARAM_DOCS: dict[str, dict[str, Any]] = {
         "examples": ["def main", "import os", "async def"],
     },
     "command": {
-        "description": "Shell command to execute in the repo mirror (workspace clone).",
+        "description": (
+            "Shell command to execute in the repo mirror (workspace clone) on the server. "
+            "The repo mirror lives under MCP_WORKSPACE_BASE_DIR (defaults to "
+            "~/.cache/mcp-github-workspaces)."
+        ),
         "examples": ["pytest", "python -m ruff check ."],
     },
     "command_lines": {
@@ -106,7 +110,8 @@ _PARAM_DOCS: dict[str, dict[str, Any]] = {
     },
     "workdir": {
         "description": (
-            "Working directory to run the command from. If relative, it is resolved within the repo mirror."
+            "Working directory to run the command from. If relative, it is resolved within the "
+            "server-side repo mirror."
         ),
         "examples": ["", "src"],
     },
