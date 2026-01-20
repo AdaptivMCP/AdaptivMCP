@@ -8,10 +8,31 @@ fi
 
 python -m pip install --upgrade pip
 
-# Keep prod images small and deploys fast.
-pip install -r dev-requirements.txt
+requirements_file="dev-requirements.txt"
+marker_file=".deps-${requirements_file}.sha256"
 
-# Optional: allow installing dev deps in Render for debugging.
+if [ -f "$requirements_file" ]; then
+  requirements_hash="$(python - <<'PY'
+import hashlib
+from pathlib import Path
+
+path = Path("dev-requirements.txt")
+print(hashlib.sha256(path.read_bytes()).hexdigest())
+PY
+)"
+
+  if [ -f "$marker_file" ] && [ "$(cat "$marker_file")" = "$requirements_hash" ]; then
+    echo "Dependencies already satisfied; skipping install."
+  else
+    # Keep prod images small and deploys fast.
+    pip install -r "$requirements_file"
+    printf '%s\n' "$requirements_hash" > "$marker_file"
+  fi
+else
+  echo "No ${requirements_file} found; skipping dependency install."
+fi
+
+# Optional: allow re-installing dev deps in Render for debugging.
 if [ "${RENDER_INSTALL_DEV_DEPS:-}" = "1" ]; then
-  pip install -r dev-requirements.txt
+  pip install -r "$requirements_file"
 fi

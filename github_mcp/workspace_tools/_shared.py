@@ -1,4 +1,5 @@
 # Split from github_mcp.tools_workspace (generated).
+import hashlib
 import os
 import shlex
 from typing import Any
@@ -82,6 +83,38 @@ async def _run_shell_ok(
         stderr = res.get("stderr", "") or res.get("stdout", "")
         raise GitHubAPIError(f"Command failed: {cmd}: {stderr}")
     return res
+
+
+def _requirements_hash(requirements_path: str) -> str:
+    with open(requirements_path, "rb") as handle:
+        payload = handle.read()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _requirements_marker_path(venv_dir: str, requirements_path: str) -> str:
+    filename = os.path.basename(requirements_path)
+    return os.path.join(venv_dir, f".deps-{filename}.sha256")
+
+
+def _should_install_requirements(venv_dir: str, requirements_path: str) -> bool:
+    if not os.path.isfile(requirements_path):
+        return False
+
+    marker = _requirements_marker_path(venv_dir, requirements_path)
+    if not os.path.isfile(marker):
+        return True
+
+    current_hash = _requirements_hash(requirements_path)
+    with open(marker, "r", encoding="utf-8") as handle:
+        recorded_hash = handle.read().strip()
+    return current_hash != recorded_hash
+
+
+def _write_requirements_marker(venv_dir: str, requirements_path: str) -> None:
+    os.makedirs(venv_dir, exist_ok=True)
+    marker = _requirements_marker_path(venv_dir, requirements_path)
+    with open(marker, "w", encoding="utf-8") as handle:
+        handle.write(_requirements_hash(requirements_path) + "\n")
 
 
 def _git_state_markers(repo_dir: str) -> dict[str, bool]:
