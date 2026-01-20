@@ -697,6 +697,61 @@ def _format_stream_block(
     )
 
 
+def _preview_render_logs(items: list[Any]) -> str:
+    if not items:
+        return ""
+
+    lines: list[str] = []
+    for item in items:
+        if isinstance(item, Mapping):
+            message = (
+                item.get("message")
+                or item.get("log")
+                or item.get("text")
+                or item.get("line")
+                or item.get("entry")
+            )
+            timestamp = (
+                item.get("timestamp")
+                or item.get("time")
+                or item.get("ts")
+                or item.get("created_at")
+            )
+            if message is None:
+                message = _truncate_text(item, limit=240)
+            if isinstance(message, str):
+                msg_text = message.strip()
+            else:
+                msg_text = _truncate_text(message, limit=240)
+            if isinstance(timestamp, str) and timestamp.strip():
+                line = f"{timestamp.strip()} {msg_text}"
+            else:
+                line = msg_text
+        elif isinstance(item, str):
+            line = item.strip()
+        else:
+            line = _truncate_text(item, limit=240)
+
+        if line:
+            lines.append(line)
+
+    max_lines = max(1, LOG_TOOL_VISUAL_MAX_LINES)
+    max_chars = max(1, LOG_TOOL_VISUAL_MAX_CHARS)
+    rendered = _render_numbered_preview(
+        lines,
+        max_lines=max_lines,
+        ansi_enabled=LOG_TOOL_COLOR,
+        include_reset=LOG_TOOL_COLOR,
+    )
+    header = _ansi("logs", ANSI_CYAN) if LOG_TOOL_COLOR else "logs"
+    return header + "\n" + _clip_text(
+        rendered,
+        max_lines=max_lines,
+        max_chars=max_chars,
+        enabled=LOG_TOOL_COLOR,
+    )
+
+
 def _inject_stdout_stderr(out: dict[str, Any]) -> None:
     """Attach stdout/stderr to ChatGPT-friendly responses.
 
