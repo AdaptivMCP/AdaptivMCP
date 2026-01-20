@@ -17,7 +17,8 @@ from urllib.parse import parse_qs
 import anyio
 import httpx  # noqa: F401
 from starlette.applications import Starlette
-from starlette.responses import PlainTextResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.staticfiles import StaticFiles
 
 import github_mcp.server as server  # noqa: F401
@@ -66,7 +67,11 @@ from github_mcp.http_clients import (
 from github_mcp.http_routes.healthz import register_healthz_route
 from github_mcp.http_routes.render import register_render_routes
 from github_mcp.http_routes.session import register_session_routes
-from github_mcp.http_routes.tool_registry import register_tool_registry_routes
+from github_mcp.http_routes.tool_registry import (
+    _response_headers_for_error,
+    _status_code_for_error,
+    register_tool_registry_routes,
+)
 from github_mcp.http_routes.ui import register_ui_routes
 from github_mcp.mcp_server.context import (
     REQUEST_CHATGPT_METADATA,
@@ -635,6 +640,27 @@ async def _handle_value_error(request, exc):
 
 if app is not None:
     app.add_exception_handler(ValueError, _handle_value_error)
+
+
+async def _handle_unexpected_error(request, exc):
+    if isinstance(exc, StarletteHTTPException):
+        return PlainTextResponse(str(exc.detail), status_code=exc.status_code)
+
+    structured = _structured_tool_error(
+        exc,
+        context="http",
+        path=str(getattr(getattr(request, "url", None), "path", "") or ""),
+    )
+    detail = structured.get("error_detail")
+    detail_dict = detail if isinstance(detail, dict) else {"category": "internal"}
+    status_code = _status_code_for_error(detail_dict)
+    headers = _response_headers_for_error(detail_dict)
+    LOGGER.exception("Unhandled exception", extra={"path": request.url.path})
+    return JSONResponse(structured, status_code=status_code, headers=headers)
+
+
+if app is not None:
+    app.add_exception_handler(Exception, _handle_unexpected_error)
 
 
 try:
