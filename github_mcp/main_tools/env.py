@@ -435,15 +435,66 @@ async def validate_environment() -> dict[str, Any]:
         scope_list: list[str] = []
         token_type_inferred: str = "unknown"
 
+        user_resp: dict[str, Any] | None = None
+        user_error: Exception | None = None
+
         try:
             user_resp = await m._github_request("GET", "/user")
         except Exception as exc:
-            add_check(
-                "github_token_details",
-                "warning",
-                "Unable to fetch /user; token may be invalid or missing required permissions",
-                {"error_type": type(exc).__name__, "error": str(exc), **token_details},
-            )
+            user_error = exc
+
+        if user_resp is None:
+            try:
+                app_resp = await m._github_request("GET", "/app")
+            except Exception as exc:
+                add_check(
+                    "github_token_details",
+                    "warning",
+                    "Unable to fetch /user or /app; token may be invalid or missing required permissions",
+                    {
+                        "user_error_type": type(user_error).__name__ if user_error else None,
+                        "user_error": str(user_error) if user_error else None,
+                        "app_error_type": type(exc).__name__,
+                        "app_error": str(exc),
+                        **token_details,
+                    },
+                )
+            else:
+                headers = app_resp.get("headers")
+                scopes = _get_header_ci(headers, "X-OAuth-Scopes")
+                accepted = _get_header_ci(headers, "X-Accepted-OAuth-Scopes")
+                app_json = app_resp.get("json")
+
+                if isinstance(app_json, dict):
+                    token_details.update(
+                        {
+                            "app_name": app_json.get("name"),
+                            "app_slug": app_json.get("slug"),
+                            "app_id": app_json.get("id"),
+                        }
+                    )
+
+                if isinstance(scopes, str) and scopes.strip():
+                    scope_list = [s.strip() for s in scopes.split(",") if s.strip()]
+                token_details["oauth_scopes"] = scope_list
+                if isinstance(accepted, str) and accepted.strip():
+                    token_details["accepted_oauth_scopes"] = [
+                        s.strip() for s in accepted.split(",") if s.strip()
+                    ]
+
+                token_details["token_type_inferred"] = "github_app_token"
+                token_type_inferred = "github_app_token"
+                token_details["user_lookup_error"] = {
+                    "error_type": type(user_error).__name__ if user_error else None,
+                    "error": str(user_error) if user_error else None,
+                }
+
+                add_check(
+                    "github_token_details",
+                    "ok",
+                    "GitHub App token details (best-effort)",
+                    token_details,
+                )
         else:
             headers = user_resp.get("headers")
             scopes = _get_header_ci(headers, "X-OAuth-Scopes")

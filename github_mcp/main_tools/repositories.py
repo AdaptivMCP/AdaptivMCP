@@ -2,7 +2,38 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from github_mcp.exceptions import GitHubAuthError
+
 from ._main import _main
+
+
+async def _fetch_authenticated_identity(
+    m: Any,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Return user/app response payloads for the authenticated token."""
+
+    try:
+        user_resp = await m._github_request("GET", "/user")
+    except GitHubAuthError:
+        user_resp = None
+
+    if user_resp is not None:
+        return user_resp, None
+
+    app_resp = await m._github_request("GET", "/app")
+    return None, app_resp
+
+
+def _login_from_user(user_json: Any) -> str | None:
+    if isinstance(user_json, dict):
+        return user_json.get("login")
+    return None
+
+
+def _login_from_app(app_json: Any) -> str | None:
+    if isinstance(app_json, dict):
+        return app_json.get("slug") or app_json.get("name")
+    return None
 
 
 async def get_rate_limit() -> dict[str, Any]:
@@ -17,14 +48,24 @@ async def get_user_login() -> dict[str, Any]:
 
     m = _main()
 
-    data = await m._github_request("GET", "/user")
-    login = None
-    if isinstance(data.get("json"), dict):
-        login = data["json"].get("login")
+    user_resp, app_resp = await _fetch_authenticated_identity(m)
+    if user_resp is not None:
+        user_json = user_resp.get("json")
+        return {
+            "status_code": user_resp.get("status_code"),
+            "login": _login_from_user(user_json),
+            "user": user_json,
+            "app": None,
+            "account_type": user_json.get("type") if isinstance(user_json, dict) else None,
+        }
+
+    app_json = app_resp.get("json") if app_resp else None
     return {
-        "status_code": data.get("status_code"),
-        "login": login,
-        "user": data.get("json"),
+        "status_code": app_resp.get("status_code") if app_resp else None,
+        "login": _login_from_app(app_json),
+        "user": None,
+        "app": app_json,
+        "account_type": "app",
     }
 
 
@@ -125,17 +166,42 @@ async def create_repository(
 
         target_owner = owner.strip() if isinstance(owner, str) and owner.strip() else None
         authenticated_login: str | None = None
+        authenticated_account_type: str | None = None
+
+        async def _resolve_authenticated_identity() -> None:
+            nonlocal authenticated_login, authenticated_account_type
+            if authenticated_account_type is not None:
+                return
+            user_resp, app_resp = await _fetch_authenticated_identity(m)
+            if user_resp is not None:
+                user_json = user_resp.get("json")
+                authenticated_login = _login_from_user(user_json)
+                if isinstance(user_json, dict):
+                    authenticated_account_type = user_json.get("type") or "user"
+                else:
+                    authenticated_account_type = "user"
+            else:
+                app_json = app_resp.get("json") if app_resp else None
+                authenticated_login = _login_from_app(app_json)
+                authenticated_account_type = "app"
 
         # Resolve the authenticated user (needed for auto owner and template generation).
-        if owner_type != "org" or template_full_name:
-            user = await m._github_request("GET", "/user")
-            if isinstance(user.get("json"), dict):
-                authenticated_login = user["json"].get("login")
-            if not target_owner:
-                target_owner = authenticated_login
-
         if owner_type == "org" and not target_owner:
             raise ValueError("owner is required when owner_type='org'")
+
+        if owner_type != "org":
+            await _resolve_authenticated_identity()
+
+        if authenticated_account_type == "app" and owner_type == "user":
+            raise ValueError(
+                "GitHub App tokens cannot create user repositories; use owner_type='org' with a target owner"
+            )
+
+        if not target_owner:
+            if authenticated_login:
+                target_owner = authenticated_login
+            else:
+                raise ValueError("Unable to resolve authenticated user login")
 
         use_org_endpoint = False
         if owner_type == "org":
@@ -149,6 +215,8 @@ async def create_repository(
         else:
             # auto: if caller provided an owner different from auth login, assume org.
             if target_owner and authenticated_login and target_owner != authenticated_login:
+                use_org_endpoint = True
+            elif authenticated_account_type == "app":
                 use_org_endpoint = True
 
         create_target_desc = (
