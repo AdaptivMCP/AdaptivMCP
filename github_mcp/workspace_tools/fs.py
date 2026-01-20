@@ -17,7 +17,7 @@ from github_mcp.server import (
 
 from ._shared import _tw
 
-_LOG_WRITE_DIFFS = os.environ.get("GITHUB_MCP_LOG_WRITE_DIFFS", "1").strip().lower() not in {
+_LOG_WRITE_DIFFS = os.environ.get("ADAPTIV_MCP_LOG_WRITE_DIFFS", "1").strip().lower() not in {
     "0",
     "false",
     "no",

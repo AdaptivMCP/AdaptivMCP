@@ -492,7 +492,9 @@ async def _github_request(
     # synthetic responses for this repository ONLY when explicitly enabled.
     #
     # This avoids any chance of synthetic payloads leaking into production usage.
-    enable_synthetic = os.environ.get("GITHUB_MCP_ENABLE_SYNTHETIC_GITHUB", "").strip().lower() in (
+    enable_synthetic = os.environ.get(
+        "ADAPTIV_MCP_ENABLE_SYNTHETIC_GITHUB", ""
+    ).strip().lower() in (
         "1",
         "true",
         "t",

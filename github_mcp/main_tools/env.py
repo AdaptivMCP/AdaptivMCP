@@ -13,13 +13,13 @@ from typing import Any
 
 from github_mcp import config
 from github_mcp.config import (
+    ADAPTIV_MCP_GIT_IDENTITY_ENV_VARS,
     GIT_AUTHOR_EMAIL,
     GIT_AUTHOR_NAME,
     GIT_COMMITTER_EMAIL,
     GIT_COMMITTER_NAME,
     GIT_IDENTITY_PLACEHOLDER_ACTIVE,
     GIT_IDENTITY_SOURCES,
-    GITHUB_MCP_GIT_IDENTITY_ENV_VARS,
     GITHUB_TOKEN_ENV_VARS,
     RENDER_TOKEN_ENV_VARS,
 )
@@ -29,7 +29,7 @@ from github_mcp.render_api import _get_optional_render_token, render_request
 from ._main import _main
 
 _DISPATCH_PROBE_COOLDOWN_SECONDS = int(
-    getattr(config, "GITHUB_MCP_DISPATCH_PROBE_COOLDOWN_SECONDS", 0) or 0
+    getattr(config, "ADAPTIV_MCP_DISPATCH_PROBE_COOLDOWN_SECONDS", 0) or 0
 )
 _dispatch_probe_state: dict[str, Any] = {
     "last_at": 0.0,
@@ -181,9 +181,9 @@ async def validate_environment() -> dict[str, Any]:
     # Intended primarily for Render troubleshooting, but safe anywhere.
     #
     # Controls:
-    # - GITHUB_MCP_LOG_DEPENDENCIES (default: true): include dependency list.
-    # - GITHUB_MCP_LOG_DEPENDENCIES_MAX (default: 0): cap number of packages (0 = no cap).
-    include_deps = os.environ.get("GITHUB_MCP_LOG_DEPENDENCIES", "true").strip().lower() in (
+    # - ADAPTIV_MCP_LOG_DEPENDENCIES (default: true): include dependency list.
+    # - ADAPTIV_MCP_LOG_DEPENDENCIES_MAX (default: 0): cap number of packages (0 = no cap).
+    include_deps = os.environ.get("ADAPTIV_MCP_LOG_DEPENDENCIES", "true").strip().lower() in (
         "1",
         "true",
         "t",
@@ -192,7 +192,7 @@ async def validate_environment() -> dict[str, Any]:
         "on",
     )
     if include_deps:
-        max_raw = os.environ.get("GITHUB_MCP_LOG_DEPENDENCIES_MAX", "0").strip()
+        max_raw = os.environ.get("ADAPTIV_MCP_LOG_DEPENDENCIES_MAX", "0").strip()
         try:
             max_pkgs = int(max_raw)
         except Exception:
@@ -235,9 +235,9 @@ async def validate_environment() -> dict[str, Any]:
         )
 
     # Controller repo/branch config
-    controller_repo = os.environ.get("GITHUB_MCP_CONTROLLER_REPO") or m.CONTROLLER_REPO
+    controller_repo = os.environ.get("ADAPTIV_MCP_CONTROLLER_REPO") or m.CONTROLLER_REPO
     controller_branch = (
-        os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") or m.CONTROLLER_DEFAULT_BRANCH
+        os.environ.get("ADAPTIV_MCP_CONTROLLER_BRANCH") or m.CONTROLLER_DEFAULT_BRANCH
     )
 
     add_check(
@@ -247,8 +247,8 @@ async def validate_environment() -> dict[str, Any]:
         {
             "value": controller_branch,
             "env_var": (
-                "GITHUB_MCP_CONTROLLER_BRANCH"
-                if os.environ.get("GITHUB_MCP_CONTROLLER_BRANCH") is not None
+                "ADAPTIV_MCP_CONTROLLER_BRANCH"
+                if os.environ.get("ADAPTIV_MCP_CONTROLLER_BRANCH") is not None
                 else None
             ),
         },
@@ -262,7 +262,7 @@ async def validate_environment() -> dict[str, Any]:
     )
 
     # Git identity env vars / placeholders.
-    identity_envs = {name: os.environ.get(name) for name in GITHUB_MCP_GIT_IDENTITY_ENV_VARS}
+    identity_envs = {name: os.environ.get(name) for name in ADAPTIV_MCP_GIT_IDENTITY_ENV_VARS}
     configured_identity_envs = [
         name for name, value in identity_envs.items() if value and value.strip()
     ]

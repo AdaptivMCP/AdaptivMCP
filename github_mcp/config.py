@@ -25,10 +25,10 @@ def shorten_token(value: object, *, head: int = 8, tail: int = 4) -> object:
     IDs to keep log lines readable.
 
     Control via:
-      - GITHUB_MCP_SHORTEN_TOKENS=1|0
+      - ADAPTIV_MCP_SHORTEN_TOKENS=1|0
     """
 
-    raw = os.environ.get("GITHUB_MCP_SHORTEN_TOKENS")
+    raw = os.environ.get("ADAPTIV_MCP_SHORTEN_TOKENS")
     if raw is None:
         # Default to shortening on Render only.
         shorten = _is_render_runtime()
@@ -72,10 +72,10 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
       - cap nesting depth.
 
     Self-hosted deployments can opt into full fidelity via:
-      - GITHUB_MCP_LOG_FULL_FIDELITY=1
+      - ADAPTIV_MCP_LOG_FULL_FIDELITY=1
     """
 
-    full_raw = os.environ.get("GITHUB_MCP_LOG_FULL_FIDELITY")
+    full_raw = os.environ.get("ADAPTIV_MCP_LOG_FULL_FIDELITY")
     if full_raw is None:
         full_fidelity = not _is_render_runtime()
     else:
@@ -84,9 +84,9 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
     if full_fidelity:
         return _jsonable(value)
 
-    max_depth_cfg = int(os.environ.get("GITHUB_MCP_LOG_MAX_DEPTH", "4") or "4")
-    max_list_cfg = int(os.environ.get("GITHUB_MCP_LOG_MAX_LIST", "50") or "50")
-    max_str_cfg = int(os.environ.get("GITHUB_MCP_LOG_MAX_STR", "500") or "500")
+    max_depth_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_DEPTH", "4") or "4")
+    max_list_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_LIST", "50") or "50")
+    max_str_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_STR", "500") or "500")
 
     def _clip_str(s: str) -> str:
         s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
@@ -142,13 +142,13 @@ def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
       - Self-hosted: full request context
 
     Override via:
-      - GITHUB_MCP_LOG_FULL_REQUEST_CONTEXT=1|0
+      - ADAPTIV_MCP_LOG_FULL_REQUEST_CONTEXT=1|0
     """
 
     if not isinstance(req, Mapping):
         return {}
 
-    full_raw = os.environ.get("GITHUB_MCP_LOG_FULL_REQUEST_CONTEXT")
+    full_raw = os.environ.get("ADAPTIV_MCP_LOG_FULL_REQUEST_CONTEXT")
     if full_raw is None:
         full = not _is_render_runtime()
     else:
@@ -378,23 +378,27 @@ FILE_CACHE_MAX_BYTES = int(os.environ.get("FILE_CACHE_MAX_BYTES", "0"))
 
 # Workspace / command timeouts.
 # Semantics: 0 (or negative) disables timeouts.
-GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS = int(os.environ.get("GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS", "0"))
-GITHUB_MCP_DEP_INSTALL_TIMEOUT_SECONDS = int(
-    os.environ.get("GITHUB_MCP_DEP_INSTALL_TIMEOUT_SECONDS", "0")
+ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS = int(
+    os.environ.get("ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", "0")
 )
-GITHUB_MCP_PREFLIGHT_TIMEOUT_SECONDS = int(
-    os.environ.get("GITHUB_MCP_PREFLIGHT_TIMEOUT_SECONDS", "0")
+ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS = int(
+    os.environ.get("ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS", "0")
 )
-GITHUB_MCP_TIMEOUT_COLLECT_SECONDS = int(os.environ.get("GITHUB_MCP_TIMEOUT_COLLECT_SECONDS", "0"))
-GITHUB_MCP_DISPATCH_PROBE_COOLDOWN_SECONDS = int(
-    os.environ.get("GITHUB_MCP_DISPATCH_PROBE_COOLDOWN_SECONDS", "0")
+ADAPTIV_MCP_PREFLIGHT_TIMEOUT_SECONDS = int(
+    os.environ.get("ADAPTIV_MCP_PREFLIGHT_TIMEOUT_SECONDS", "0")
 )
-GITHUB_MCP_WORKFLOW_DISPATCH_POLL_DEADLINE_SECONDS = int(
-    os.environ.get("GITHUB_MCP_WORKFLOW_DISPATCH_POLL_DEADLINE_SECONDS", "0")
+ADAPTIV_MCP_TIMEOUT_COLLECT_SECONDS = int(
+    os.environ.get("ADAPTIV_MCP_TIMEOUT_COLLECT_SECONDS", "0")
+)
+ADAPTIV_MCP_DISPATCH_PROBE_COOLDOWN_SECONDS = int(
+    os.environ.get("ADAPTIV_MCP_DISPATCH_PROBE_COOLDOWN_SECONDS", "0")
+)
+ADAPTIV_MCP_WORKFLOW_DISPATCH_POLL_DEADLINE_SECONDS = int(
+    os.environ.get("ADAPTIV_MCP_WORKFLOW_DISPATCH_POLL_DEADLINE_SECONDS", "0")
 )
 
-_include_b64 = os.environ.get("GITHUB_MCP_INCLUDE_BASE64_CONTENT", "0").strip().lower()
-GITHUB_MCP_INCLUDE_BASE64_CONTENT = _include_b64 in (
+_include_b64 = os.environ.get("ADAPTIV_MCP_INCLUDE_BASE64_CONTENT", "0").strip().lower()
+ADAPTIV_MCP_INCLUDE_BASE64_CONTENT = _include_b64 in (
     "1",
     "true",
     "t",
@@ -482,7 +486,7 @@ LOG_HTTP_BODIES = _env_flag("LOG_HTTP_BODIES", "false")
 # Include compact request correlation fields (request_id + ChatGPT ids) inline
 # in single-line provider logs (tool calls, outbound HTTP, etc.).
 LOG_INLINE_CONTEXT = _env_flag(
-    "GITHUB_MCP_LOG_CONTEXT",
+    "ADAPTIV_MCP_LOG_CONTEXT",
     "true" if HUMAN_LOGS else "false",
 )
 
@@ -524,11 +528,11 @@ WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS = int(
     os.environ.get("MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", "0")
 )
 
-GITHUB_MCP_GIT_IDENTITY_ENV_VARS = (
-    "GITHUB_MCP_GIT_AUTHOR_NAME",
-    "GITHUB_MCP_GIT_AUTHOR_EMAIL",
-    "GITHUB_MCP_GIT_COMMITTER_NAME",
-    "GITHUB_MCP_GIT_COMMITTER_EMAIL",
+ADAPTIV_MCP_GIT_IDENTITY_ENV_VARS = (
+    "ADAPTIV_MCP_GIT_AUTHOR_NAME",
+    "ADAPTIV_MCP_GIT_AUTHOR_EMAIL",
+    "ADAPTIV_MCP_GIT_COMMITTER_NAME",
+    "ADAPTIV_MCP_GIT_COMMITTER_EMAIL",
 )
 
 DEFAULT_GIT_IDENTITY = {
@@ -602,17 +606,17 @@ def _resolve_git_identity() -> dict[str, object]:
         return default_value, "default_placeholder"
 
     author_name, author_name_source = resolve_value(
-        explicit_env=os.environ.get("GITHUB_MCP_GIT_AUTHOR_NAME"),
+        explicit_env=os.environ.get("ADAPTIV_MCP_GIT_AUTHOR_NAME"),
         app_value=app_identity.get("name"),
         default_value=DEFAULT_GIT_IDENTITY["author_name"],
     )
     author_email, author_email_source = resolve_value(
-        explicit_env=os.environ.get("GITHUB_MCP_GIT_AUTHOR_EMAIL"),
+        explicit_env=os.environ.get("ADAPTIV_MCP_GIT_AUTHOR_EMAIL"),
         app_value=app_identity.get("email"),
         default_value=DEFAULT_GIT_IDENTITY["author_email"],
     )
 
-    committer_name_env = os.environ.get("GITHUB_MCP_GIT_COMMITTER_NAME")
+    committer_name_env = os.environ.get("ADAPTIV_MCP_GIT_COMMITTER_NAME")
     committer_name = None
     committer_name_source = None
     if committer_name_env:
@@ -625,7 +629,7 @@ def _resolve_git_identity() -> dict[str, object]:
         committer_name = author_name
         committer_name_source = "author_fallback"
 
-    committer_email_env = os.environ.get("GITHUB_MCP_GIT_COMMITTER_EMAIL")
+    committer_email_env = os.environ.get("ADAPTIV_MCP_GIT_COMMITTER_EMAIL")
     committer_email = None
     committer_email_source = None
     if committer_email_env:
@@ -671,9 +675,9 @@ def git_identity_warnings() -> list[str]:
     if not GIT_IDENTITY_PLACEHOLDER_ACTIVE:
         return []
     return [
-        "Git identity is using placeholder values. Configure GITHUB_MCP_GIT_AUTHOR_NAME, "
-        "GITHUB_MCP_GIT_AUTHOR_EMAIL, GITHUB_MCP_GIT_COMMITTER_NAME, and "
-        "GITHUB_MCP_GIT_COMMITTER_EMAIL (or set GitHub App metadata) to ensure commits "
+        "Git identity is using placeholder values. Configure ADAPTIV_MCP_GIT_AUTHOR_NAME, "
+        "ADAPTIV_MCP_GIT_AUTHOR_EMAIL, ADAPTIV_MCP_GIT_COMMITTER_NAME, and "
+        "ADAPTIV_MCP_GIT_COMMITTER_EMAIL (or set GitHub App metadata) to ensure commits "
         "are attributed correctly."
     ]
 
@@ -688,11 +692,11 @@ LOG_FORMAT = os.environ.get(
 # ANSI color for log level + logger name (intended for developer-tail workflows).
 #
 # Compatibility:
-# - Docs and tool visual logging use GITHUB_MCP_LOG_COLOR.
+# - Docs and tool visual logging use ADAPTIV_MCP_LOG_COLOR.
 # - Older deployments (and some tests) used LOG_COLOR.
 #
 # Prefer the prefixed variant when present, but keep LOG_COLOR as a fallback.
-_raw_log_color = os.environ.get("GITHUB_MCP_LOG_COLOR")
+_raw_log_color = os.environ.get("ADAPTIV_MCP_LOG_COLOR")
 if _raw_log_color is None:
     LOG_COLOR = _env_flag("LOG_COLOR", "true")
 else:
@@ -985,7 +989,7 @@ __all__ = [
     "GIT_IDENTITY_PLACEHOLDER_ACTIVE",
     "GIT_IDENTITY_SOURCES",
     "GITHUB_API_BASE",
-    "GITHUB_MCP_GIT_IDENTITY_ENV_VARS",
+    "ADAPTIV_MCP_GIT_IDENTITY_ENV_VARS",
     "GITHUB_TOKEN_ENV_VARS",
     "GITHUB_LOGGER",
     "GITHUB_PAT",

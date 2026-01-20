@@ -252,7 +252,7 @@ async def run_tests(
     """
 
     timeout_seconds_i = _normalize_timeout_seconds(
-        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+        timeout_seconds, config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS
     )
 
     step = await _run_named_step(
@@ -314,7 +314,7 @@ async def run_lint_suite(
     """
 
     timeout_seconds_i = _normalize_timeout_seconds(
-        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+        timeout_seconds, config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS
     )
 
     steps: list[dict[str, Any]] = []
@@ -408,10 +408,10 @@ async def run_quality_suite(
     gate_optional_steps: bool = False,
 ) -> dict[str, Any]:
     timeout_seconds_i = _normalize_timeout_seconds(
-        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+        timeout_seconds, config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS
     )
     preflight_timeout = _normalize_timeout_seconds(
-        config.GITHUB_MCP_PREFLIGHT_TIMEOUT_SECONDS,
+        config.ADAPTIV_MCP_PREFLIGHT_TIMEOUT_SECONDS,
         timeout_seconds_i,
     )
     preflight_step_timeout = (

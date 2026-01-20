@@ -1896,7 +1896,7 @@ def list_all_actions(
     Args:
     include_parameters: When ``True``, include the serialized input schema
     for each tool to clarify argument names and types.
-    compact: When ``True`` (or when ``GITHUB_MCP_COMPACT_METADATA_DEFAULT=1`` is
+    compact: When ``True`` (or when ``ADAPTIV_MCP_COMPACT_METADATA_DEFAULT=1`` is
     set), shorten descriptions and omit tag metadata to keep responses
     compact.
     """

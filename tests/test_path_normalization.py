@@ -30,7 +30,7 @@ def test_normalize_repo_path_for_repo_repo_root_like_values_strict(value, monkey
     from github_mcp import utils
 
     full_name = "octo-org/octo-repo"
-    monkeypatch.setenv("GITHUB_MCP_STRICT_CONTRACTS", "1")
+    monkeypatch.setenv("ADAPTIV_MCP_STRICT_CONTRACTS", "1")
     with pytest.raises(Exception) as excinfo:
         utils._normalize_repo_path_for_repo(full_name, value)
 
@@ -42,5 +42,5 @@ def test_normalize_repo_path_for_repo_repo_root_like_values_permissive(value, mo
     from github_mcp import utils
 
     full_name = "octo-org/octo-repo"
-    monkeypatch.delenv("GITHUB_MCP_STRICT_CONTRACTS", raising=False)
+    monkeypatch.delenv("ADAPTIV_MCP_STRICT_CONTRACTS", raising=False)
     assert utils._normalize_repo_path_for_repo(full_name, value) == ""

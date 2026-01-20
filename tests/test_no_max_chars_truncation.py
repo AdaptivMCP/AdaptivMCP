@@ -10,12 +10,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Guardrail: max-character truncation controls were removed and must not return.
 FORBIDDEN_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\bGITHUB_MCP_RESPONSE_MAX_(JSON|TEXT)_CHARS\b"),
+    re.compile(r"\bADAPTIV_MCP_RESPONSE_MAX_(JSON|TEXT)_CHARS\b"),
     re.compile(r"\bCHATGPT_RESPONSE_MAX_(JSON|TEXT)_CHARS\b"),
-    re.compile(r"\bGITHUB_MCP_MAX_FILE_CONTENT_BYTES\b"),
-    re.compile(r"\bGITHUB_MCP_MAX_FILE_TEXT_CHARS\b"),
-    re.compile(r"\bGITHUB_MCP_MAX_FETCH_URL_BYTES\b"),
-    re.compile(r"\bGITHUB_MCP_MAX_FETCH_URL_TEXT_CHARS\b"),
+    re.compile(r"\bADAPTIV_MCP_MAX_FILE_CONTENT_BYTES\b"),
+    re.compile(r"\bADAPTIV_MCP_MAX_FILE_TEXT_CHARS\b"),
+    re.compile(r"\bADAPTIV_MCP_MAX_FETCH_URL_BYTES\b"),
+    re.compile(r"\bADAPTIV_MCP_MAX_FETCH_URL_TEXT_CHARS\b"),
     re.compile(r"\bdef\s+_truncate_string\b"),
     re.compile(r"\bdef\s+_safe_json_dumps\b"),
     re.compile(r"\bjson_truncated\b"),
@@ -66,5 +66,5 @@ def test_docs_do_not_mention_removed_max_chars_controls() -> None:
     if not usage.exists():
         pytest.skip("docs/usage.md is missing")
     text = usage.read_text(encoding="utf-8")
-    assert "GITHUB_MCP_RESPONSE_MAX_JSON_CHARS" not in text
-    assert "GITHUB_MCP_RESPONSE_MAX_TEXT_CHARS" not in text
+    assert "ADAPTIV_MCP_RESPONSE_MAX_JSON_CHARS" not in text
+    assert "ADAPTIV_MCP_RESPONSE_MAX_TEXT_CHARS" not in text

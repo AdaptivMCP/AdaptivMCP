@@ -16,11 +16,11 @@ def _reload_context():
 
 def test_write_gate_follows_auto_approve_env(monkeypatch):
     context = _reload_context()
-    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
     assert context.get_write_allowed(refresh_after_seconds=0.0) is True
     assert bool(context.WRITE_ALLOWED) is True
 
-    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "false")
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "false")
     assert context.get_write_allowed(refresh_after_seconds=0.0) is False
     assert bool(context.WRITE_ALLOWED) is False
 
@@ -30,11 +30,11 @@ def test_decorators_enforce_auto_approve_gate(monkeypatch):
 
     from github_mcp.mcp_server.decorators import _enforce_write_allowed
 
-    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "true")
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
     _enforce_write_allowed("read_tool", write_action=False)
     _enforce_write_allowed("write_tool", write_action=True)
 
-    monkeypatch.setenv("GITHUB_MCP_AUTO_APPROVE", "false")
+    monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "false")
     _enforce_write_allowed("read_tool", write_action=False)
     with pytest.raises(WriteApprovalRequiredError) as excinfo:
         _enforce_write_allowed("write_tool", write_action=True)
@@ -43,7 +43,7 @@ def test_decorators_enforce_auto_approve_gate(monkeypatch):
 
 def test_no_write_gate_env_var_in_ci():
     ci = open(".github/workflows/ci.yml", encoding="utf-8").read()
-    assert "GITHUB_MCP_WRITE_ALLOWED" not in ci
+    assert "ADAPTIV_MCP_WRITE_ALLOWED" not in ci
     # Guard against introducing legacy gates like MCP_WRITE_ALLOWED or WRITE_ALLOWED.
     import re
 

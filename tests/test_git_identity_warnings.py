@@ -20,10 +20,10 @@ def test_git_identity_warnings_when_placeholders_active(monkeypatch):
     config = _reload_config(
         monkeypatch,
         {
-            "GITHUB_MCP_GIT_AUTHOR_NAME": None,
-            "GITHUB_MCP_GIT_AUTHOR_EMAIL": None,
-            "GITHUB_MCP_GIT_COMMITTER_NAME": None,
-            "GITHUB_MCP_GIT_COMMITTER_EMAIL": None,
+            "ADAPTIV_MCP_GIT_AUTHOR_NAME": None,
+            "ADAPTIV_MCP_GIT_AUTHOR_EMAIL": None,
+            "ADAPTIV_MCP_GIT_COMMITTER_NAME": None,
+            "ADAPTIV_MCP_GIT_COMMITTER_EMAIL": None,
             "GITHUB_APP_NAME": None,
             "GITHUB_APP_SLUG": None,
             "GITHUB_APP_ID": None,
@@ -41,10 +41,10 @@ def test_git_identity_warnings_disabled_when_explicit_configured(monkeypatch):
     config = _reload_config(
         monkeypatch,
         {
-            "GITHUB_MCP_GIT_AUTHOR_NAME": "Octo Bot",
-            "GITHUB_MCP_GIT_AUTHOR_EMAIL": "octo-bot[bot]@users.noreply.github.com",
-            "GITHUB_MCP_GIT_COMMITTER_NAME": "Octo Bot",
-            "GITHUB_MCP_GIT_COMMITTER_EMAIL": "octo-bot[bot]@users.noreply.github.com",
+            "ADAPTIV_MCP_GIT_AUTHOR_NAME": "Octo Bot",
+            "ADAPTIV_MCP_GIT_AUTHOR_EMAIL": "octo-bot[bot]@users.noreply.github.com",
+            "ADAPTIV_MCP_GIT_COMMITTER_NAME": "Octo Bot",
+            "ADAPTIV_MCP_GIT_COMMITTER_EMAIL": "octo-bot[bot]@users.noreply.github.com",
             "GITHUB_APP_NAME": None,
             "GITHUB_APP_SLUG": None,
             "GITHUB_APP_ID": None,

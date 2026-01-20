@@ -101,7 +101,7 @@ async def _diagnose_workspace_branch(
     """Return lightweight diagnostics used to detect a mangled repo mirror."""
     diag: dict[str, Any] = {"expected_branch": expected_branch}
     t_default = _normalize_timeout_seconds(
-        config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS,
+        config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
         0,
     )
     show_branch = await deps["run_shell"](
@@ -155,13 +155,13 @@ async def _delete_branch_via_workspace(
     await deps["run_shell"](
         f"git checkout {shlex.quote(effective_ref)}",
         cwd=repo_dir,
-        timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+        timeout_seconds=_normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
     )
 
     delete_remote = await deps["run_shell"](
         f"git push origin --delete {shlex.quote(branch)}",
         cwd=repo_dir,
-        timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+        timeout_seconds=_normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
     )
     if delete_remote.get("exit_code", 0) != 0:
         stderr = delete_remote.get("stderr", "") or delete_remote.get("stdout", "")
@@ -170,7 +170,7 @@ async def _delete_branch_via_workspace(
     delete_local = await deps["run_shell"](
         f"git branch -D {shlex.quote(branch)}",
         cwd=repo_dir,
-        timeout_seconds=_normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+        timeout_seconds=_normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
     )
     return {
         "default_branch": default_branch,
@@ -206,7 +206,7 @@ def _workspace_deps() -> dict[str, Any]:
     ) -> dict[str, Any]:
         timeout_seconds = _normalize_timeout_seconds(
             timeout_seconds,
-            config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS,
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
         )
         merged: dict[str, str] = {}
         if env:

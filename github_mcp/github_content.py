@@ -6,7 +6,7 @@ import base64
 from typing import Any
 
 from .config import (
-    GITHUB_MCP_INCLUDE_BASE64_CONTENT,
+    ADAPTIV_MCP_INCLUDE_BASE64_CONTENT,
     SANDBOX_CONTENT_BASE_URL,
 )
 from .exceptions import GitHubAPIError
@@ -112,8 +112,8 @@ async def _decode_github_content(
 
     response: dict[str, Any] = {
         "json": j,
-        "content": content if GITHUB_MCP_INCLUDE_BASE64_CONTENT else None,
-        "encoding": encoding if GITHUB_MCP_INCLUDE_BASE64_CONTENT else None,
+        "content": content if ADAPTIV_MCP_INCLUDE_BASE64_CONTENT else None,
+        "encoding": encoding if ADAPTIV_MCP_INCLUDE_BASE64_CONTENT else None,
         "sha": j.get("sha"),
         "text": text,
         "decoded_bytes": stored_bytes,

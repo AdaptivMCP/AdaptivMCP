@@ -183,8 +183,8 @@ async def test_validate_environment_happy_path_ok(monkeypatch):
     monkeypatch.setenv(token_env, "test-token")
 
     # Force controller repo/branch config to match the dummy main object.
-    monkeypatch.setenv("GITHUB_MCP_CONTROLLER_REPO", DummyMainAllGreen.CONTROLLER_REPO)
-    monkeypatch.setenv("GITHUB_MCP_CONTROLLER_BRANCH", DummyMainAllGreen.CONTROLLER_DEFAULT_BRANCH)
+    monkeypatch.setenv("ADAPTIV_MCP_CONTROLLER_REPO", DummyMainAllGreen.CONTROLLER_REPO)
+    monkeypatch.setenv("ADAPTIV_MCP_CONTROLLER_BRANCH", DummyMainAllGreen.CONTROLLER_DEFAULT_BRANCH)
 
     # The Render token helper is imported into env.py, so patch it there.
     monkeypatch.setattr(env, "_get_optional_render_token", lambda: "render-token")

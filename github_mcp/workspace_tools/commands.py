@@ -192,7 +192,7 @@ async def render_shell(
     """
 
     timeout_seconds = _normalize_timeout_seconds(
-        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+        timeout_seconds, config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS
     )
 
     try:
@@ -318,7 +318,7 @@ async def terminal_command(
     """
 
     timeout_seconds = _normalize_timeout_seconds(
-        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+        timeout_seconds, config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS
     )
 
     env: dict[str, str] | None = None
@@ -343,7 +343,7 @@ async def terminal_command(
         if installing_dependencies and use_temp_venv:
             install_cmd = "python -m pip install -r dev-requirements.txt"
             dep_timeout = _normalize_timeout_seconds(
-                config.GITHUB_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
+                config.ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
                 timeout_seconds,
             )
             install_result = await deps["run_shell"](
@@ -375,7 +375,7 @@ async def terminal_command(
         if _cmd_invokes_git(command):
             try:
                 t_default = _normalize_timeout_seconds(
-                    config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS,
+                    config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
                     timeout_seconds,
                 )
                 # Only attempt when we are on a named branch (not detached).
@@ -539,7 +539,7 @@ async def run_python(
     """
 
     timeout_seconds = _normalize_timeout_seconds(
-        timeout_seconds, config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS
+        timeout_seconds, config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS
     )
 
     if not isinstance(script, str) or not script.strip():
@@ -575,7 +575,7 @@ async def run_python(
         if installing_dependencies and use_temp_venv:
             install_cmd = "python -m pip install -r dev-requirements.txt"
             dep_timeout = _normalize_timeout_seconds(
-                config.GITHUB_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
+                config.ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
                 timeout_seconds,
             )
             install_result = await deps["run_shell"](

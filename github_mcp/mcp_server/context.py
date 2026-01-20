@@ -111,7 +111,7 @@ def _parse_bool(value: str | None) -> bool:
 
 
 AUTO_APPROVE_ENV_VARS = (
-    "GITHUB_MCP_AUTO_APPROVE",
+    "ADAPTIV_MCP_AUTO_APPROVE",
     "MCP_AUTO_APPROVE",
     "AUTO_APPROVE",
 )
@@ -194,7 +194,7 @@ def get_write_allowed_debug() -> dict[str, Any]:
 
 
 COMPACT_METADATA_DEFAULT = _parse_bool(
-    os.environ.get("GITHUB_MCP_COMPACT_METADATA_DEFAULT", "true")
+    os.environ.get("ADAPTIV_MCP_COMPACT_METADATA_DEFAULT", "true")
 )
 _TOOL_EXAMPLES: dict[str, Any] = {}
 

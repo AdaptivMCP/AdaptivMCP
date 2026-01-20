@@ -46,7 +46,7 @@ async def workspace_venv_start(
             req_path = os.path.join(repo_dir, "dev-requirements.txt")
             if os.path.isfile(req_path):
                 timeout = _normalize_timeout_seconds(
-                    config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS,
+                    config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
                     0,
                 )
                 cmd = f"python -m pip install -r {shlex.quote('dev-requirements.txt')}"

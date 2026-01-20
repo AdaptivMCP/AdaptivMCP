@@ -42,7 +42,7 @@ async def commit_workspace(
     """Commit repo mirror changes and optionally push them."""
 
     try:
-        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
@@ -118,7 +118,7 @@ async def commit_workspace_files(
         raise ValueError("files must be a non-empty list of paths")
 
     try:
-        t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
@@ -186,7 +186,7 @@ async def get_workspace_changes_summary(
     deps = _tw()._workspace_deps()
     effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
     repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-    t_default = _normalize_timeout_seconds(config.GITHUB_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+    t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
 
     status_result = await deps["run_shell"](
         "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=t_default
