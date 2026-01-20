@@ -64,8 +64,8 @@ async def test_load_body_from_content_url_github_happy_path(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_load_body_from_content_url_github_invalid_spec_raises():
-    from github_mcp.github_content import _load_body_from_content_url
     from github_mcp.exceptions import GitHubAPIError
+    from github_mcp.github_content import _load_body_from_content_url
 
     with pytest.raises(GitHubAPIError):
         await _load_body_from_content_url("github:ownerrepo:path", context="x")
@@ -147,4 +147,3 @@ async def test_perform_github_commit_typecheck_and_strips_payload(monkeypatch):
     assert cleaned["content"].get("content") is None
     assert cleaned["content"].get("encoding") is None
     assert cleaned["commit"]["sha"] == "c"
-

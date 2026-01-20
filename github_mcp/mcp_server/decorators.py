@@ -1425,6 +1425,25 @@ def _schema_hash(schema: Mapping[str, Any]) -> str:
 
 
 def _schema_needs_update(existing: Mapping[str, Any], desired: Mapping[str, Any]) -> bool:
+    """Return True when a tool object's published schema should be replaced.
+
+    Historically we only updated schemas when a newly-required parameter was
+    missing from the existing tool schema. That was too conservative: clients
+    that render schemas directly from the registered tool object could end up
+    with stale type/default metadata even when the wrapper publishes an updated
+    schema.
+
+    We now prefer a stable hash-based comparison (falling back to the older
+    required-set heuristic if hashing fails) so tool objects stay in sync with
+    the wrapper-derived schema.
+    """
+
+    try:
+        return _schema_hash(existing) != _schema_hash(desired)
+    except Exception:
+        # Best-effort fallback for non-JSONable schema variants.
+        pass
+
     existing_required = existing.get("required")
     desired_required = desired.get("required")
     existing_set = (

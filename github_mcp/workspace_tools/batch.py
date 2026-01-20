@@ -245,7 +245,9 @@ async def workspace_batch(
             if isinstance(plan.get("move_paths"), dict):
                 mp = plan["move_paths"]
                 raw_moves = mp.get("moves")
-                if not isinstance(raw_moves, list) or any(not isinstance(m, dict) for m in raw_moves):
+                if not isinstance(raw_moves, list) or any(
+                    not isinstance(m, dict) for m in raw_moves
+                ):
                     raise TypeError("move_paths.moves must be a list of {src,dst} objects")
                 moves: list[dict[str, str]] = []
                 for m in raw_moves:

@@ -61,4 +61,3 @@ def test_invalid_tool_args_includes_expected_args_warning(monkeypatch: Any) -> N
     assert isinstance(expected, dict)
     assert expected.get("required") == ["a"]
     assert "b" in (expected.get("optional") or [])
-
