@@ -97,6 +97,14 @@ def tool_registry_module(monkeypatch):
             {"owner": "octo", "repo": "example"},
         ),
         (
+            {"input": {"owner": "octo", "repo": "example"}},
+            {"owner": "octo", "repo": "example"},
+        ),
+        (
+            {"kwargs": {"owner": "octo", "repo": "example"}},
+            {"owner": "octo", "repo": "example"},
+        ),
+        (
             {
                 "args": [
                     {"name": "owner", "value": "octo"},
@@ -107,6 +115,14 @@ def tool_registry_module(monkeypatch):
         ),
         (
             {"params": {"parameters": {"owner": "octo", "repo": "example"}}},
+            {"owner": "octo", "repo": "example"},
+        ),
+        (
+            {"params": {"input": {"owner": "octo", "repo": "example"}}},
+            {"owner": "octo", "repo": "example"},
+        ),
+        (
+            {"params": {"kwargs": {"owner": "octo", "repo": "example"}}},
             {"owner": "octo", "repo": "example"},
         ),
         (

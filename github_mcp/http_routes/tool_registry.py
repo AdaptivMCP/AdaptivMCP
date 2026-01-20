@@ -129,6 +129,8 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
       - {"arguments": {...}} (JSON-RPC/MCP style)
       - {"params": {"arguments": {...}}} (JSON-RPC envelope)
       - {"parameters": {...}} (common LLM client variant)
+      - {"input": {...}} (common tool-call wrapper)
+      - {"kwargs": {...}} (kwargs-style wrapper)
       - raw dict of arguments
 
     We normalize to a plain dict of tool kwargs and strip private metadata.
@@ -145,6 +147,10 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
                 args = params.get("args")
             elif "parameters" in params:
                 args = params.get("parameters")
+            elif "input" in params:
+                args = params.get("input")
+            elif "kwargs" in params:
+                args = params.get("kwargs")
             else:
                 # Some clients send args directly under params.
                 args = params
@@ -154,6 +160,10 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
             args = payload.get("args")
         elif "parameters" in payload:
             args = payload.get("parameters")
+        elif "input" in payload:
+            args = payload.get("input")
+        elif "kwargs" in payload:
+            args = payload.get("kwargs")
     args = _coerce_json_args(args)
     if args is None:
         return {}
