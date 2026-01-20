@@ -14,7 +14,12 @@ from github_mcp.server import (
 )
 from github_mcp.utils import _normalize_timeout_seconds
 
-from ._shared import _cmd_invokes_git, _tw
+from ._shared import (
+    _cmd_invokes_git,
+    _should_install_requirements,
+    _tw,
+    _write_requirements_marker,
+)
 
 
 def _parse_branch_list(stdout: str) -> set[str]:
@@ -341,24 +346,35 @@ async def terminal_command(
         install_result = None
         install_steps: list[dict[str, Any]] = []
         if installing_dependencies and use_temp_venv:
-            install_cmd = "python -m pip install -r dev-requirements.txt"
-            dep_timeout = _normalize_timeout_seconds(
-                config.ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
-                timeout_seconds,
-            )
-            install_result = await deps["run_shell"](
-                install_cmd,
-                cwd=cwd,
-                timeout_seconds=dep_timeout,
-                env=env,
-            )
-            install_steps.append({"command": install_cmd, "result": install_result})
-            if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
-                i_stderr = install_result.get("stderr") or ""
-                i_stdout = install_result.get("stdout") or ""
-                raise GitHubAPIError(
-                    "Dependency installation failed: " + (i_stderr.strip() or i_stdout.strip())
+            req_path = os.path.join(repo_dir, "dev-requirements.txt")
+            venv_dir = os.path.join(repo_dir, ".venv-mcp")
+            if not os.path.isfile(req_path):
+                install_result = {"skipped": True, "reason": "dev-requirements.txt not found"}
+                install_steps.append({"command": None, "result": install_result})
+            elif not _should_install_requirements(venv_dir, req_path):
+                install_result = {"skipped": True, "reason": "dependencies already satisfied"}
+                install_steps.append({"command": None, "result": install_result})
+            else:
+                install_cmd = "python -m pip install -r dev-requirements.txt"
+                dep_timeout = _normalize_timeout_seconds(
+                    config.ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
+                    timeout_seconds,
                 )
+                install_result = await deps["run_shell"](
+                    install_cmd,
+                    cwd=cwd,
+                    timeout_seconds=dep_timeout,
+                    env=env,
+                )
+                install_steps.append({"command": install_cmd, "result": install_result})
+                if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
+                    i_stderr = install_result.get("stderr") or ""
+                    i_stdout = install_result.get("stdout") or ""
+                    raise GitHubAPIError(
+                        "Dependency installation failed: "
+                        + (i_stderr.strip() or i_stdout.strip())
+                    )
+                _write_requirements_marker(venv_dir, req_path)
 
         result = await deps["run_shell"](
             command,
@@ -573,24 +589,35 @@ async def run_python(
         install_result = None
         install_steps: list[dict[str, Any]] = []
         if installing_dependencies and use_temp_venv:
-            install_cmd = "python -m pip install -r dev-requirements.txt"
-            dep_timeout = _normalize_timeout_seconds(
-                config.ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
-                timeout_seconds,
-            )
-            install_result = await deps["run_shell"](
-                install_cmd,
-                cwd=cwd,
-                timeout_seconds=dep_timeout,
-                env=env,
-            )
-            install_steps.append({"command": install_cmd, "result": install_result})
-            if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
-                i_stderr = install_result.get("stderr") or ""
-                i_stdout = install_result.get("stdout") or ""
-                raise GitHubAPIError(
-                    "Dependency installation failed: " + (i_stderr.strip() or i_stdout.strip())
+            req_path = os.path.join(repo_dir, "dev-requirements.txt")
+            venv_dir = os.path.join(repo_dir, ".venv-mcp")
+            if not os.path.isfile(req_path):
+                install_result = {"skipped": True, "reason": "dev-requirements.txt not found"}
+                install_steps.append({"command": None, "result": install_result})
+            elif not _should_install_requirements(venv_dir, req_path):
+                install_result = {"skipped": True, "reason": "dependencies already satisfied"}
+                install_steps.append({"command": None, "result": install_result})
+            else:
+                install_cmd = "python -m pip install -r dev-requirements.txt"
+                dep_timeout = _normalize_timeout_seconds(
+                    config.ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
+                    timeout_seconds,
                 )
+                install_result = await deps["run_shell"](
+                    install_cmd,
+                    cwd=cwd,
+                    timeout_seconds=dep_timeout,
+                    env=env,
+                )
+                install_steps.append({"command": install_cmd, "result": install_result})
+                if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
+                    i_stderr = install_result.get("stderr") or ""
+                    i_stdout = install_result.get("stdout") or ""
+                    raise GitHubAPIError(
+                        "Dependency installation failed: "
+                        + (i_stderr.strip() or i_stdout.strip())
+                    )
+                _write_requirements_marker(venv_dir, req_path)
 
         cmd = "python " + shlex.quote(rel_path)
         if args:

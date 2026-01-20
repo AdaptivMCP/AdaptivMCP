@@ -13,6 +13,7 @@ By default it creates a `.venv` at the repository root and installs
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import subprocess
@@ -86,8 +87,9 @@ def _ensure_pip(python_exe: Path, *, cwd: Path) -> None:
     )
 
 
-def _create_or_repair_venv(python: str, *, venv_dir: Path, cwd: Path) -> Path:
+def _create_or_repair_venv(python: str, *, venv_dir: Path, cwd: Path) -> tuple[Path, bool]:
     vpy = _venv_python(venv_dir)
+    created = False
 
     if venv_dir.is_dir():
         if not vpy.is_file():
@@ -95,7 +97,7 @@ def _create_or_repair_venv(python: str, *, venv_dir: Path, cwd: Path) -> Path:
         else:
             # Validate pip; if broken, recreate.
             if _pip_ok(vpy, cwd=cwd):
-                return vpy
+                return vpy, created
             shutil.rmtree(venv_dir, ignore_errors=True)
 
     # Prefer --upgrade-deps when available.
@@ -108,7 +110,44 @@ def _create_or_repair_venv(python: str, *, venv_dir: Path, cwd: Path) -> Path:
     vpy = _venv_python(venv_dir)
     if not vpy.is_file():
         raise SystemExit("venv creation succeeded but python executable is missing")
-    return vpy
+    created = True
+    return vpy, created
+
+
+def _requirements_hash(requirements_path: Path) -> str:
+    content = requirements_path.read_bytes()
+    return hashlib.sha256(content).hexdigest()
+
+
+def _requirements_marker(venv_dir: Path, requirements_path: Path) -> Path:
+    marker_name = f".deps-{requirements_path.name}.sha256"
+    return venv_dir / marker_name
+
+
+def _should_install_requirements(
+    venv_dir: Path,
+    requirements_path: Path,
+    *,
+    venv_created: bool,
+) -> bool:
+    if not requirements_path.is_file():
+        return False
+
+    if venv_created:
+        return True
+
+    marker = _requirements_marker(venv_dir, requirements_path)
+    if not marker.is_file():
+        return True
+
+    current_hash = _requirements_hash(requirements_path)
+    recorded_hash = marker.read_text(encoding="utf-8").strip()
+    return current_hash != recorded_hash
+
+
+def _record_requirements_marker(venv_dir: Path, requirements_path: Path) -> None:
+    marker = _requirements_marker(venv_dir, requirements_path)
+    marker.write_text(_requirements_hash(requirements_path) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -139,11 +178,18 @@ def main() -> int:
     root = _repo_root()
     venv_dir = (root / args.venv).resolve()
 
-    vpy = _create_or_repair_venv(args.python, venv_dir=venv_dir, cwd=root)
+    vpy, venv_created = _create_or_repair_venv(args.python, venv_dir=venv_dir, cwd=root)
     _ensure_pip(vpy, cwd=root)
 
     if args.deps == "prod" or args.deps == "dev":
-        _run([str(vpy), "-m", "pip", "install", "-r", "dev-requirements.txt"], cwd=root)
+        requirements_path = root / "dev-requirements.txt"
+        if _should_install_requirements(
+            venv_dir,
+            requirements_path,
+            venv_created=venv_created,
+        ):
+            _run([str(vpy), "-m", "pip", "install", "-r", str(requirements_path)], cwd=root)
+            _record_requirements_marker(venv_dir, requirements_path)
 
     if args.run_tests:
         _run([str(vpy), "-m", "pytest", "-q"], cwd=root)

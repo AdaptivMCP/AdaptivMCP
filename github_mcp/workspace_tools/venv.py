@@ -19,7 +19,11 @@ from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import _structured_tool_error, mcp_tool
 from github_mcp.utils import _normalize_timeout_seconds
 
-from ._shared import _tw
+from ._shared import (
+    _should_install_requirements,
+    _tw,
+    _write_requirements_marker,
+)
 
 
 @mcp_tool(write_action=True)
@@ -44,7 +48,12 @@ async def workspace_venv_start(
         install_log: dict[str, Any] | None = None
         if installing_dependencies:
             req_path = os.path.join(repo_dir, "dev-requirements.txt")
-            if os.path.isfile(req_path):
+            venv_dir = os.path.join(repo_dir, ".venv-mcp")
+            if not os.path.isfile(req_path):
+                install_log = {"skipped": True, "reason": "dev-requirements.txt not found"}
+            elif not _should_install_requirements(venv_dir, req_path):
+                install_log = {"skipped": True, "reason": "dependencies already satisfied"}
+            else:
                 timeout = _normalize_timeout_seconds(
                     config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
                     0,
@@ -59,8 +68,7 @@ async def workspace_venv_start(
                 if install_log.get("exit_code", 0) != 0:
                     stderr = install_log.get("stderr", "") or install_log.get("stdout", "")
                     raise GitHubAPIError(f"Dependency install failed: {stderr}")
-            else:
-                install_log = {"skipped": True, "reason": "dev-requirements.txt not found"}
+                _write_requirements_marker(venv_dir, req_path)
 
         status = await deps["virtualenv_status"](repo_dir)
         return {
