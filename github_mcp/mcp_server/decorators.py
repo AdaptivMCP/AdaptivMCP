@@ -49,7 +49,14 @@ from github_mcp.mcp_server.schemas import (
     _normalize_tool_description,
     _schema_from_signature,
 )
-from github_mcp.redaction import redact_any
+
+try:
+    from github_mcp.redaction import redact_any
+except Exception:  # noqa: BLE001
+
+    def redact_any(value: Any, *args: Any, **kwargs: Any) -> Any:
+        return value
+
 
 # Intentionally short logger name; config's formatter further shortens/colorizes.
 LOGGER = BASE_LOGGER.getChild("mcp")
