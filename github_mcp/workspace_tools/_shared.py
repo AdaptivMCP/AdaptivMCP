@@ -31,17 +31,49 @@ def _cmd_invokes_git(cmd: object) -> bool:
     s = cmd.strip()
     if not s:
         return False
-    if s.startswith("git "):
-        return True
+
     # Treat newlines as command separators.
     s = s.replace("\n", ";")
-    for sep in ("&&", "||", ";", "|"):
-        if sep in s:
-            parts = s.split(sep)
-            for part in parts[1:]:
-                if part.lstrip().startswith("git "):
-                    return True
-    return False
+
+    def _segments(value: str) -> list[str]:
+        parts = [value]
+        for sep in ("&&", "||", ";", "|"):
+            next_parts: list[str] = []
+            for part in parts:
+                if sep in part:
+                    next_parts.extend(part.split(sep))
+                else:
+                    next_parts.append(part)
+            parts = next_parts
+        return parts
+
+    def _segment_invokes_git(segment: str) -> bool:
+        seg = segment.strip()
+        if not seg:
+            return False
+        try:
+            tokens = shlex.split(seg)
+        except ValueError:
+            tokens = seg.split()
+        if not tokens:
+            return False
+        idx = 0
+        while idx < len(tokens):
+            tok = tokens[idx]
+            if tok in {"env", "command", "sudo"}:
+                idx += 1
+                continue
+            if "=" in tok and not tok.startswith("-") and tok.find("=") > 0:
+                idx += 1
+                continue
+            break
+        if idx >= len(tokens):
+            return False
+        cmd_token = tokens[idx]
+        base = os.path.basename(cmd_token)
+        return base in {"git", "git.exe"}
+
+    return any(_segment_invokes_git(segment) for segment in _segments(s))
 
 
 def _filter_kwargs_for_callable(fn: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
