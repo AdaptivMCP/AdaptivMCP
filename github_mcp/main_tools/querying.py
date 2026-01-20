@@ -9,7 +9,15 @@ from github_mcp.http_clients import (
 from github_mcp.http_clients import (
     _get_concurrency_semaphore as _default_get_concurrency_semaphore,
 )
-from github_mcp.redaction import redact_any
+
+try:
+    from github_mcp.redaction import redact_any
+except Exception:  # noqa: BLE001
+
+    def redact_any(value: Any, *args: Any, **kwargs: Any) -> Any:
+        return value
+
+
 from github_mcp.server import (
     _github_request as _default_github_request,
 )
