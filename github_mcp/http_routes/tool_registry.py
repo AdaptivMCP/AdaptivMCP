@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import time
 import uuid
 from collections.abc import Callable, Iterable
@@ -101,6 +102,20 @@ def _tool_catalog(
     return payload
 
 
+def _coerce_json_args(args: Any) -> Any:
+    if not isinstance(args, str):
+        return args
+    stripped = args.strip()
+    if not stripped:
+        return args
+    if stripped[0] not in {"{", "["}:
+        return args
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        return args
+
+
 def _normalize_payload(payload: Any) -> dict[str, Any]:
     """Normalize incoming tool invocation payloads.
 
@@ -108,6 +123,7 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
       - {"args": {...}} (legacy)
       - {"arguments": {...}} (JSON-RPC/MCP style)
       - {"params": {"arguments": {...}}} (JSON-RPC envelope)
+      - {"parameters": {...}} (common LLM client variant)
       - raw dict of arguments
 
     We normalize to a plain dict of tool kwargs and strip private metadata.
@@ -122,6 +138,8 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
                 args = params.get("arguments")
             elif "args" in params:
                 args = params.get("args")
+            elif "parameters" in params:
+                args = params.get("parameters")
             else:
                 # Some clients send args directly under params.
                 args = params
@@ -129,6 +147,9 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
             args = payload.get("arguments")
         elif "args" in payload:
             args = payload.get("args")
+        elif "parameters" in payload:
+            args = payload.get("parameters")
+    args = _coerce_json_args(args)
     if args is None:
         return {}
     if isinstance(args, dict):
