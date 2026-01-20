@@ -177,23 +177,22 @@ def _get_github_token() -> str:
     values during long-running processes.
     """
 
-    token = None
-    token_source = None
+    empty_source = None
     for env_var in GITHUB_TOKEN_ENV_VARS:
         candidate = os.environ.get(env_var)
-        if candidate is not None:
-            token = candidate
-            token_source = env_var
-            break
+        if candidate is None:
+            continue
+        token = candidate.strip()
+        if token:
+            return token
+        if empty_source is None:
+            empty_source = env_var
 
-    if token is None:
-        raise GitHubAuthError("GitHub authentication failed: token is not configured")
-
-    token = token.strip()
-    if not token:
-        raise GitHubAuthError(f"GitHub authentication failed: {token_source or 'token'} is empty")
-
-    return token
+    if empty_source is not None:
+        raise GitHubAuthError(
+            f"GitHub authentication failed: {empty_source or 'token'} is empty"
+        )
+    raise GitHubAuthError("GitHub authentication failed: token is not configured")
 
 
 def _get_optional_github_token() -> str | None:
@@ -201,9 +200,11 @@ def _get_optional_github_token() -> str | None:
 
     for env_var in GITHUB_TOKEN_ENV_VARS:
         candidate = os.environ.get(env_var)
-        if candidate is not None:
-            token = candidate.strip()
-            return token or None
+        if candidate is None:
+            continue
+        token = candidate.strip()
+        if token:
+            return token
 
     return None
 
