@@ -139,18 +139,11 @@ def _is_render_runtime() -> bool:
     )
 
 
-# Visual logging (developer-facing).
-#
-# Render and similar providers often display only the message string, so these
-# helpers emit compact, scan-friendly previews for:
-#   - diffs / patches
-#   - workspace changes (git status porcelain)
-#   - file reads (file + snippet with line numbers)
+# Tool logging (developer-facing).
 #
 # ANSI color is enabled by default for developer-facing usage.
 # If your log UI does not interpret escape sequences, disable via:
 #   ADAPTIV_MCP_LOG_COLOR=0
-LOG_TOOL_VISUALS = _env_flag("ADAPTIV_MCP_LOG_VISUALS", default=True)
 LOG_TOOL_COLOR = _env_flag("ADAPTIV_MCP_LOG_COLOR", default=True)
 # Some provider log UIs (notably Render) do not reliably render 256-color ANSI
 # escape sequences. Default to basic ANSI colors on Render for correct visuals.
@@ -161,8 +154,6 @@ LOG_TOOL_COLOR_256 = _env_flag(
     "ADAPTIV_MCP_LOG_COLOR_256",
     default=(not _is_render_runtime()),
 )
-LOG_TOOL_READ_SNIPPETS = _env_flag("ADAPTIV_MCP_LOG_READ_SNIPPETS", default=True)
-LOG_TOOL_DIFF_SNIPPETS = _env_flag("ADAPTIV_MCP_LOG_DIFF_SNIPPETS", default=True)
 LOG_TOOL_STYLE = os.environ.get("ADAPTIV_MCP_LOG_STYLE", "monokai")
 
 # Whether to include Python tracebacks in provider logs for tool failures.
@@ -227,7 +218,7 @@ REDACT_TOOL_OUTPUTS = _env_flag("ADAPTIV_MCP_REDACT_TOOL_OUTPUTS", default=True)
 # Tool log field handling
 #
 # Historically we stripped __log_* keys from tool return values, relying on the
-# provider log stream for visuals (diffs/snippets). This can cause the model and
+# provider log stream for supplemental context. This can cause the model and
 # the user to see different information than what shows up in tool logs.
 #
 # Default is now to PRESERVE __log_* fields in tool responses so HTTP clients
@@ -256,7 +247,6 @@ def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
 
 
 LOG_TOOL_VISUAL_MAX_LINES = _env_int("ADAPTIV_MCP_LOG_VISUAL_MAX_LINES", default=80)
-LOG_TOOL_READ_MAX_LINES = _env_int("ADAPTIV_MCP_LOG_READ_MAX_LINES", default=40)
 LOG_TOOL_VISUAL_MAX_CHARS = _env_int("ADAPTIV_MCP_LOG_VISUAL_MAX_CHARS", default=8000)
 
 
@@ -441,6 +431,7 @@ _TOOL_FRIENDLY_NAMES: dict[str, str] = {
     "get_workspace_changes_summary": "Workspace changes",
     "build_pr_summary": "Build PR summary",
     "commit_and_open_pr_from_workspace": "Commit and open PR",
+    "workspace_manage_folders_and_open_pr": "Manage folders and open PR",
     "open_pr_for_existing_branch": "Open pull request",
     "apply_patch": "Apply patch",
     "get_workspace_file_contents": "Read file",
@@ -452,6 +443,8 @@ _TOOL_FRIENDLY_NAMES: dict[str, str] = {
     "edit_workspace_line": "Edit line",
     "replace_workspace_text": "Replace text",
     "delete_workspace_paths": "Delete paths",
+    "create_workspace_folders": "Create folders",
+    "delete_workspace_folders": "Delete folders",
     "move_workspace_paths": "Move paths",
     "apply_workspace_operations": "Apply workspace operations",
     "list_workspace_files": "List files",
@@ -646,7 +639,6 @@ def _render_numbered_preview(
 
 
 _DIFF_HEADER_RE = re.compile(r"^(diff --git|\+\+\+ |--- |@@ )")
-_DIFF_HUNK_RE = re.compile(r"^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@")
 
 
 def _looks_like_unified_diff(text: str) -> bool:
@@ -656,202 +648,6 @@ def _looks_like_unified_diff(text: str) -> bool:
     return bool(_DIFF_HEADER_RE.search(sample))
 
 
-def _non_ansi_diff_markers(diff_text: str) -> str:
-    """Fallback diff formatting when ANSI is disabled."""
-
-    out: list[str] = []
-    for line in diff_text.splitlines():
-        if line.startswith("+++") or line.startswith("---"):
-            out.append(f"[FILE] {line}")
-        elif line.startswith("@@"):
-            out.append(f"[HUNK] {line}")
-        elif line.startswith("+"):
-            out.append(f"[ADD]  {line}")
-        elif line.startswith("-"):
-            out.append(f"[DEL]  {line}")
-        else:
-            out.append(line)
-    return "\n".join(out)
-
-
-def _preview_unified_diff(diff_text: str) -> str:
-    """Preview a unified diff with file-accurate line numbers.
-
-    The output resembles an editor diff view:
-      <old_ln> <new_ln> │ <prefix><code>
-    where old/new line numbers advance per hunk header.
-    """
-
-    if not diff_text:
-        return ""
-
-    header = "diff"
-    try:
-        from github_mcp.diff_utils import diff_stats
-
-        stats = diff_stats(diff_text)
-        header = f"diff (+{stats.added} -{stats.removed})"
-    except Exception:
-        pass
-
-    # Best-effort parse; fall back to a simple numbered listing if parsing fails.
-    try:
-        rendered = _render_rich_unified_diff(diff_text)
-    except Exception:
-        body = (
-            _highlight_code(diff_text, kind="diff")
-            if LOG_TOOL_COLOR
-            else _non_ansi_diff_markers(diff_text)
-        )
-        numbered: list[str] = []
-        for idx, line in enumerate(body.splitlines(), start=1):
-            ln = _ansi(f"{idx:>4}│", ANSI_DIM)
-            numbered.append(f"{ln} {line}")
-        rendered = "\n".join(numbered)
-
-    clipped = _clip_text(
-        rendered,
-        max_lines=LOG_TOOL_VISUAL_MAX_LINES,
-        max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
-    )
-    return _ansi(header, ANSI_CYAN) + "\n" + clipped
-
-
-def _render_rich_unified_diff(diff_text: str) -> str:
-    current_path = ""
-    old_ln: int | None = None
-    new_ln: int | None = None
-
-    out: list[str] = []
-    for raw in (diff_text or "").splitlines():
-        line = raw.rstrip("\n")
-
-        if line.startswith("diff --git "):
-            old_ln = None
-            new_ln = None
-            out.append(_ansi(line, ANSI_DIM) if LOG_TOOL_COLOR else line)
-            continue
-        if line.startswith("index "):
-            out.append(_ansi(line, ANSI_DIM) if LOG_TOOL_COLOR else line)
-            continue
-        if line.startswith("--- "):
-            out.append(_ansi(line, ANSI_DIM) if LOG_TOOL_COLOR else line)
-            continue
-        if line.startswith("+++ "):
-            # Track the "new" path for syntax highlighting when possible.
-            # Prefer b/<path> but accept whatever is present.
-            current_path = line[4:].strip()
-            if current_path.startswith("b/"):
-                current_path = current_path[2:]
-            out.append(_ansi(line, ANSI_DIM) if LOG_TOOL_COLOR else line)
-            continue
-
-        if line.startswith("@@"):
-            m = _DIFF_HUNK_RE.match(line)
-            if m:
-                old_ln = int(m.group(1))
-                new_ln = int(m.group(3))
-            else:
-                old_ln = None
-                new_ln = None
-            out.append(_ansi(line, ANSI_YELLOW) if LOG_TOOL_COLOR else f"[HUNK] {line}")
-            continue
-
-        # Hunk content
-        if old_ln is None or new_ln is None:
-            # Not in a hunk yet; render verbatim.
-            out.append(_highlight_code(line, kind="diff") if LOG_TOOL_COLOR else line)
-            continue
-
-        prefix = line[:1] if line else ""
-        content = line[1:] if len(line) > 1 else ""
-
-        old_cell = ""
-        new_cell = ""
-        colored_prefix = prefix
-
-        if prefix == " ":
-            old_cell = f"{old_ln:>5}"
-            new_cell = f"{new_ln:>5}"
-            old_ln += 1
-            new_ln += 1
-            if LOG_TOOL_COLOR:
-                colored_prefix = _ansi(" ", ANSI_DIM)
-        elif prefix == "-" and not line.startswith("---"):
-            old_cell = f"{old_ln:>5}"
-            new_cell = " " * 5
-            old_ln += 1
-            if LOG_TOOL_COLOR:
-                colored_prefix = _ansi("-", ANSI_RED)
-        elif prefix == "+" and not line.startswith("+++"):
-            old_cell = " " * 5
-            new_cell = f"{new_ln:>5}"
-            new_ln += 1
-            if LOG_TOOL_COLOR:
-                colored_prefix = _ansi("+", ANSI_GREEN)
-        else:
-            old_cell = " " * 5
-            new_cell = " " * 5
-            if LOG_TOOL_COLOR:
-                colored_prefix = _ansi(prefix or " ", ANSI_DIM)
-
-        # Syntax highlight the content as file text (best-effort), preserving diff prefix coloring.
-        rendered_content = (
-            _highlight_line_for_filename(current_path, content) if LOG_TOOL_COLOR else content
-        )
-
-        gutter = f"{old_cell} {new_cell} {_ansi('│', ANSI_DIM) if LOG_TOOL_COLOR else '|'}"
-        out.append(f"{gutter} {colored_prefix}{rendered_content}")
-
-    return "\n".join(out)
-
-
-def _preview_terminal_result(payload: Mapping[str, Any]) -> str:
-    """Preview stdout/stderr from terminal_command results with line numbers."""
-
-    result = payload.get("result") if isinstance(payload, Mapping) else None
-    if not isinstance(result, Mapping):
-        return ""
-
-    stdout = result.get("stdout") or ""
-    stderr = result.get("stderr") or ""
-    exit_code = result.get("exit_code")
-
-    # Prefer stderr, but include stdout if stderr is empty.
-    combined = ""
-    if isinstance(stderr, str) and stderr.strip():
-        combined = stderr
-    elif isinstance(stdout, str) and stdout.strip():
-        combined = stdout
-    if not combined:
-        return ""
-
-    kind = "text"
-    if "Traceback (most recent call last):" in combined:
-        kind = "traceback"
-    elif _looks_like_unified_diff(combined):
-        kind = "diff"
-    elif 'File "' in combined and "line" in combined and "Error" in combined:
-        kind = "traceback"
-
-    highlighted = _highlight_code(combined, kind=kind)
-    lines = highlighted.splitlines()
-    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
-    rendered = _render_numbered_preview(lines, max_lines=max_lines, ansi_enabled=LOG_TOOL_COLOR)
-
-    header_bits = ["terminal"]
-    if exit_code is not None:
-        header_bits.append(f"exit={exit_code}")
-    header = " ".join(header_bits)
-    return (
-        _ansi(header, ANSI_CYAN)
-        + "\n"
-        + _clip_text(
-            rendered,
-            max_lines=LOG_TOOL_VISUAL_MAX_LINES,
-            max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
-        )
-    )
 
 
 def _format_stream_block(
@@ -955,267 +751,6 @@ def _inject_stdout_stderr(out: dict[str, Any]) -> None:
                 max_chars=max_chars,
             ),
         )
-
-
-def _preview_changed_files(status_lines: list[str]) -> str:
-    if not status_lines:
-        return ""
-
-    rendered: list[str] = []
-    for raw in status_lines[:LOG_TOOL_VISUAL_MAX_LINES]:
-        line = (raw or "").rstrip("\n")
-        if not line:
-            continue
-        code = line[:2]
-        path = line[3:] if len(line) > 3 else ""
-        # Porcelain status heuristics
-        tag = code.strip() or "??"
-        if "?" in code:
-            prefix = _ansi("??", ANSI_DIM)
-        elif "A" in code:
-            prefix = _ansi("A ", ANSI_GREEN)
-        elif "D" in code:
-            prefix = _ansi("D ", ANSI_RED)
-        elif "R" in code:
-            prefix = _ansi("R ", ANSI_CYAN)
-        else:
-            prefix = _ansi("M ", ANSI_YELLOW)
-        rendered.append(f"{prefix} {_ansi(path, ANSI_CYAN) if path else tag}")
-
-    if len(status_lines) > LOG_TOOL_VISUAL_MAX_LINES:
-        rendered.append(
-            _ansi(f"… ({len(status_lines) - LOG_TOOL_VISUAL_MAX_LINES} more files)", ANSI_DIM)
-        )
-
-    return _ansi("workspace_changes", ANSI_CYAN) + "\n" + "\n".join(rendered)
-
-
-_PORCELAIN_RE = re.compile(r"^[ MADRCU?]{2} ")
-
-
-def _is_porcelain_status_list(lines: list[str]) -> bool:
-    if not lines:
-        return False
-    checked = 0
-    ok = 0
-    for raw in lines[:50]:
-        if not isinstance(raw, str) or not raw.strip():
-            continue
-        checked += 1
-        if _PORCELAIN_RE.match(raw):
-            ok += 1
-    # Require most lines to match to avoid mis-classifying file listings.
-    return checked > 0 and (ok / checked) >= 0.8
-
-
-def _preview_file_snippet(path: str, text: str, *, start_line: int = 1) -> str:
-    highlighted = _highlight_file_text(path, text or "")
-    lines = highlighted.splitlines()
-    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
-    preview = lines[:max_lines]
-    rendered: list[str] = []
-    start_line = max(1, int(start_line))
-    for idx, line in enumerate(preview, start=start_line):
-        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
-        rendered.append(f"{ln} {line}")
-    if len(lines) > max_lines:
-        rendered.append(_ansi(f"… ({len(lines) - max_lines} more lines)", ANSI_DIM))
-
-    header = f"read {_ansi(path, ANSI_CYAN) if path else ''}".rstrip()
-    return (
-        _ansi(header, ANSI_CYAN)
-        + "\n"
-        + _clip_text(
-            "\n".join(rendered),
-            max_lines=LOG_TOOL_VISUAL_MAX_LINES,
-            max_chars=LOG_TOOL_VISUAL_MAX_CHARS,
-        )
-    )
-
-
-def _preview_file_list(paths: list[str], *, header: str = "files") -> str:
-    if not paths:
-        return ""
-    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
-    rendered: list[str] = []
-    for idx, p in enumerate(paths[:max_lines], start=1):
-        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
-        rendered.append(f"{ln} {_ansi(p, ANSI_CYAN) if LOG_TOOL_COLOR else p}")
-    if len(paths) > max_lines:
-        rendered.append(_ansi(f"… ({len(paths) - max_lines} more)", ANSI_DIM))
-    return _ansi(header, ANSI_CYAN) + "\n" + "\n".join(rendered)
-
-
-def _preview_search_hits(hits: list[Mapping[str, Any]]) -> str:
-    if not hits:
-        return ""
-    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
-    rendered: list[str] = []
-    for idx, hit in enumerate(hits[:max_lines], start=1):
-        file = str(hit.get("file") or "")
-        line_no = hit.get("line")
-        text = str(hit.get("text") or "")
-        loc = f"{file}:{line_no}" if file and isinstance(line_no, int) else file
-        loc = _ansi(loc, ANSI_CYAN) if LOG_TOOL_COLOR else loc
-        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
-        rendered.append(f"{ln} {loc} {text}".rstrip())
-    if len(hits) > max_lines:
-        rendered.append(_ansi(f"… ({len(hits) - max_lines} more hits)", ANSI_DIM))
-    return _ansi("search", ANSI_CYAN) + "\n" + "\n".join(rendered)
-
-
-def _preview_json_objects(items: list[Any], *, header: str) -> str:
-    """Preview list[dict] payloads from provider APIs (e.g., Render)."""
-
-    if not items:
-        return ""
-    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
-    rendered: list[str] = []
-    for idx, item in enumerate(items[:max_lines], start=1):
-        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
-        if isinstance(item, Mapping):
-            name = item.get("name") or item.get("service") or item.get("type")
-            ident = item.get("id") or item.get("serviceId") or item.get("deployId")
-            bits: list[str] = []
-            if ident:
-                bits.append(str(ident))
-            if name:
-                bits.append(str(name))
-            line = " - ".join(bits) if bits else _truncate_text(item, limit=140)
-        else:
-            line = _truncate_text(item, limit=140)
-        rendered.append(f"{ln} {line}")
-    if len(items) > max_lines:
-        rendered.append(_ansi(f"… ({len(items) - max_lines} more)", ANSI_DIM))
-    return _ansi(header, ANSI_CYAN) + "\n" + "\n".join(rendered)
-
-
-def _render_extract_list(body: Any) -> list[Any] | None:
-    """Extract a representative list from a Render API json payload."""
-
-    if isinstance(body, list):
-        return body
-    if not isinstance(body, Mapping):
-        return None
-
-    # Render endpoints vary: some return a bare list; others wrap under keys.
-    for key in (
-        "logs",
-        "items",
-        "services",
-        "deploys",
-        "owners",
-        "envVars",
-        "events",
-    ):
-        val = body.get(key)
-        if isinstance(val, list):
-            return val
-    # Otherwise pick the first list-like value.
-    for _k, v in body.items():
-        if isinstance(v, list):
-            return v
-    return None
-
-
-def _preview_render_logs(items: list[Any]) -> str:
-    if not items:
-        return ""
-    max_lines = max(1, LOG_TOOL_READ_MAX_LINES)
-    rendered: list[str] = []
-    for idx, item in enumerate(items[:max_lines], start=1):
-        ln = _ansi(f"{idx:>4}│", ANSI_DIM)
-        if isinstance(item, Mapping):
-            ts = item.get("timestamp") or item.get("time") or item.get("createdAt")
-            level = item.get("level") or item.get("severity")
-            msg = item.get("message") or item.get("text") or item.get("log")
-            bits: list[str] = []
-            if ts:
-                bits.append(str(ts))
-            if level:
-                lvl = str(level)
-                if LOG_TOOL_COLOR:
-                    if lvl.lower().startswith("err"):
-                        lvl = _ansi(lvl, ANSI_RED)
-                    elif lvl.lower().startswith("warn"):
-                        lvl = _ansi(lvl, ANSI_YELLOW)
-                    else:
-                        lvl = _ansi(lvl, ANSI_GREEN)
-                bits.append(lvl)
-            if msg:
-                # Render log messages can include large JSON payloads and full tracebacks.
-                # Keep previews single-line and bounded to avoid flooding provider logs.
-                bits.append(_truncate_text(msg, limit=240))
-            line = " ".join(bits) if bits else _truncate_text(item, limit=180)
-        else:
-            line = _truncate_text(item, limit=180)
-        rendered.append(f"{ln} {line}")
-    if len(items) > max_lines:
-        rendered.append(_ansi(f"… ({len(items) - max_lines} more)", ANSI_DIM))
-    return _ansi("render_logs", ANSI_CYAN) + "\n" + "\n".join(rendered)
-
-
-def _log_tool_visual(
-    *,
-    tool_name: str,
-    call_id: str,
-    req: Mapping[str, Any],
-    kind: str,
-    visual: str,
-) -> None:
-    if not visual:
-        return
-    if not (LOG_TOOL_CALLS and HUMAN_LOGS and LOG_TOOL_VISUALS):
-        return
-
-    kv_map: dict[str, Any] = {"kind": kind}
-    if LOG_TOOL_LOG_IDS:
-        req_ctx = summarize_request_context(req)
-        kv_map.update(
-            {
-                "call_id": shorten_token(call_id),
-                "session_id": req_ctx.get("session_id"),
-                "message_id": req_ctx.get("message_id"),
-            }
-        )
-    kv = _format_log_kv(kv_map)
-    header = (
-        _ansi(kind or "visual", ANSI_CYAN) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
-    )
-    if kv:
-        header = header + " " + kv
-    inline = _inline_context(req)
-    if inline:
-        header = header + " " + _ansi(inline, ANSI_DIM)
-    # Provider logs are line-oriented. Keep the message single-line and stash
-    # the full visual preview in structured fields.
-    preview = _truncate_text(visual, limit=240)
-    msg = header
-    if preview:
-        msg = msg + " " + _ansi(f"preview={preview}", ANSI_DIM)
-
-    try:
-        visual_lines = len(str(visual).splitlines()) if str(visual) else 0
-        visual_chars = len(str(visual))
-    except Exception:
-        visual_lines = 0
-        visual_chars = 0
-
-    LOGGER.info(
-        msg,
-        extra={
-            "event": "tool_visual",
-            "tool": tool_name,
-            "kind": kind,
-            "call_id": shorten_token(call_id),
-            "request": snapshot_request_context(req),
-            "log_context": inline or None,
-            "visual": visual,
-            "visual_preview": preview,
-            "visual_lines": visual_lines,
-            "visual_chars": visual_chars,
-        },
-    )
 
 
 def _truncate_text(value: Any, *, limit: int = 180) -> str:
@@ -2081,7 +1616,13 @@ def _normalize_tool_result_envelope(result: Any) -> Any:
     return out
 
 
-def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = None) -> Any:
+def _chatgpt_friendly_result(
+    result: Any,
+    *,
+    req: Mapping[str, Any] | None = None,
+    tool_name: str | None = None,
+    all_args: Mapping[str, Any] | None = None,
+) -> Any:
     """Return a ChatGPT-friendly version of a tool result.
 
     This is opt-in via ADAPTIV_MCP_RESPONSE_MODE=chatgpt.
@@ -2098,14 +1639,18 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
     try:
         # Scalars/lists: wrap so callers always get a mapping with status.
         if not isinstance(result, Mapping):
-            return _inject_adaptiv_mcp_metadata(
-                {
-                    "status": "success",
-                    "ok": True,
-                    "result": result,
-                    "summary": _result_snapshot(result),
-                }
+            payload = {
+                "status": "success",
+                "ok": True,
+                "result": result,
+                "summary": _result_snapshot(result),
+            }
+            summary_text = _tool_paragraph_summary(
+                tool_name=tool_name, result=result, all_args=all_args
             )
+            if summary_text:
+                payload["summary_text"] = summary_text
+            return _inject_adaptiv_mcp_metadata(payload)
 
         out: dict[str, Any] = _inject_adaptiv_mcp_metadata(result)
 
@@ -2129,6 +1674,11 @@ def _chatgpt_friendly_result(result: Any, *, req: Mapping[str, Any] | None = Non
 
         # Add a compact snapshot for LLMs (does not replace the full payload).
         out.setdefault("summary", _result_snapshot(out))
+        summary_text = _tool_paragraph_summary(
+            tool_name=tool_name, result=out, all_args=all_args
+        )
+        if summary_text:
+            out.setdefault("summary_text", summary_text)
 
         # Surface stdout/stderr in ChatGPT-friendly payloads.
         try:
@@ -2514,6 +2064,99 @@ def _result_snapshot(result: Any) -> dict[str, Any]:
     return {"type": type(result).__name__, "value": _truncate_text(result, limit=180)}
 
 
+def _tool_paragraph_summary(
+    *,
+    tool_name: str | None,
+    result: Any,
+    all_args: Mapping[str, Any] | None = None,
+) -> str:
+    """Create a concise paragraph summary of a tool response."""
+
+    friendly = _friendly_tool_name(tool_name or "tool_call")
+    outcome = _tool_result_outcome(result) if isinstance(result, Mapping) else "ok"
+    if outcome == "warning":
+        sentence = f"{friendly} completed with warnings."
+    elif outcome == "error":
+        sentence = f"{friendly} failed."
+    else:
+        sentence = f"{friendly} completed successfully."
+
+    details: list[str] = []
+
+    if isinstance(result, Mapping):
+        err = result.get("error")
+        err_msg: str | None = None
+        if isinstance(err, Mapping):
+            err_msg = err.get("message") or err.get("detail") or err.get("error")
+        elif isinstance(err, str):
+            err_msg = err
+        if outcome == "error" and err_msg:
+            details.append(f"Error: {_clean_error_message(err_msg, limit=160)}.")
+
+        warnings = result.get("warnings")
+        if outcome == "warning":
+            warning_msg: str | None = None
+            if isinstance(warnings, list) and warnings:
+                warning_msg = str(warnings[0])
+            elif isinstance(warnings, str):
+                warning_msg = warnings
+            if warning_msg:
+                details.append(f"Warning: {_truncate_text(warning_msg, limit=160)}.")
+
+        def _count_items(value: Any) -> int | None:
+            if isinstance(value, list):
+                return len(value)
+            if isinstance(value, int):
+                return value
+            return None
+
+        count_map = (
+            ("created", "Created"),
+            ("added", "Added"),
+            ("removed", "Removed"),
+            ("deleted", "Deleted"),
+            ("moved", "Moved"),
+            ("updated", "Updated"),
+            ("written", "Wrote"),
+            ("skipped", "Skipped"),
+            ("missing", "Missing"),
+            ("failed", "Failed"),
+            ("steps", "Recorded"),
+            ("files", "Found"),
+            ("items", "Found"),
+        )
+        if tool_name not in {"apply_workspace_operations", "workspace_batch"}:
+            count_map = count_map + (("results", "Processed"),)
+        for key, label in count_map:
+            count = _count_items(result.get(key))
+            if isinstance(count, int):
+                noun = "item" if count == 1 else "items"
+                details.append(f"{label} {count} {noun}.")
+
+        if tool_name in {"apply_workspace_operations", "workspace_batch"}:
+            op_count = _count_items(result.get("results"))
+            if isinstance(op_count, int):
+                noun = "operation" if op_count == 1 else "operations"
+                details.append(f"Processed {op_count} {noun}.")
+            if result.get("preview_only"):
+                details.append("Preview only (no changes applied).")
+
+        ref = result.get("ref")
+        if isinstance(ref, str) and ref.strip():
+            details.append(f"Ref: {_truncate_text(ref, limit=80)}.")
+        elif isinstance(all_args, Mapping):
+            arg_ref = all_args.get("ref") or all_args.get("branch")
+            if isinstance(arg_ref, str) and arg_ref.strip():
+                details.append(f"Ref: {_truncate_text(arg_ref, limit=80)}.")
+
+    if not details and result is not None:
+        snap = _result_snapshot(result)
+        details.append(f"Result snapshot: {_truncate_text(snap, limit=180)}.")
+
+    summary = " ".join([sentence] + details).strip()
+    return " ".join(summary.split())
+
+
 def _friendly_result_bits(snapshot: Mapping[str, Any] | None) -> list[str]:
     """Convert a result snapshot into short, user-facing bits for RES lines."""
 
@@ -2620,6 +2263,46 @@ def _log_tool_start(
     LOGGER.info(msg, extra={"event": "tool_call_started", **payload})
 
 
+def _log_tool_summary(
+    *,
+    tool_name: str,
+    call_id: str,
+    write_action: bool,
+    req: Mapping[str, Any],
+    schema_hash: str | None,
+    schema_present: bool,
+    result: Any,
+    all_args: Mapping[str, Any] | None = None,
+) -> None:
+    if not (LOG_TOOL_CALLS and HUMAN_LOGS):
+        return
+    summary = _tool_paragraph_summary(tool_name=tool_name, result=result, all_args=all_args)
+    if not summary:
+        return
+    payload = _tool_log_payload(
+        tool_name=tool_name,
+        call_id=call_id,
+        write_action=write_action,
+        req=req,
+        schema_hash=schema_hash,
+        schema_present=schema_present,
+    )
+    if all_args is not None:
+        payload.update(_extract_context(all_args))
+    payload["summary"] = summary
+    friendly = _friendly_tool_name(tool_name)
+    prefix = (
+        _ansi("SUMMARY", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+    )
+    msg = f"{prefix} {summary}"
+    if LOG_TOOL_LOG_IDS:
+        msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+    inline = payload.get("log_context")
+    if isinstance(inline, str) and inline:
+        msg = msg + " " + _ansi(inline, ANSI_DIM)
+    LOGGER.info(msg, extra={"event": "tool_call_summary", **payload})
+
+
 def _log_tool_success(
     *,
     tool_name: str,
@@ -2673,117 +2356,16 @@ def _log_tool_success(
         if isinstance(inline, str) and inline:
             msg = msg + " " + _ansi(inline, ANSI_DIM)
         LOGGER.info(msg, extra={"event": "tool_call_completed", **payload})
-
-        # Optional developer-facing visuals for common workflows.
-        # These are emitted as a second log entry so dashboards can filter on
-        # `event=tool_call_completed` vs `event=tool_visual`.
-        try:
-            if LOG_TOOL_VISUALS and all_args is not None:
-                visual = ""
-                kind = ""
-
-                # 1) Diff / patch tools
-                diff_candidate = None
-                if isinstance(result, Mapping):
-                    diff_candidate = (
-                        result.get("__log_diff") or result.get("diff") or result.get("patch")
-                    )
-                if diff_candidate is None and isinstance(all_args, Mapping):
-                    diff_candidate = all_args.get("diff") or all_args.get("patch")
-
-                if isinstance(diff_candidate, str) and _looks_like_unified_diff(diff_candidate):
-                    if LOG_TOOL_DIFF_SNIPPETS:
-                        kind = "diff"
-                        visual = _preview_unified_diff(diff_candidate)
-
-                # 2) Workspace change listings (git status porcelain)
-                if not visual and isinstance(result, Mapping):
-                    status_lines = (
-                        result.get("changed_files")
-                        or result.get("staged_files")
-                        or result.get("files")
-                    )
-                    if isinstance(status_lines, list) and all(
-                        isinstance(x, str) for x in status_lines
-                    ):
-                        if _is_porcelain_status_list(status_lines):
-                            kind = "changes"
-                            visual = _preview_changed_files(status_lines)
-                        else:
-                            kind = "files"
-                            visual = _preview_file_list(status_lines)
-
-                # 2b) Search hits
-                if not visual and isinstance(result, Mapping) and tool_name == "search_workspace":
-                    hits = result.get("results")
-                    if isinstance(hits, list):
-                        kind = "search"
-                        visual = _preview_search_hits(
-                            [x for x in hits if isinstance(x, Mapping)]  # type: ignore[list-item]
-                        )
-
-                # 2c) Render endpoints
-                if (
-                    not visual
-                    and isinstance(result, Mapping)
-                    and (
-                        tool_name.startswith("list_render_")
-                        or tool_name.startswith("render_list_")
-                        or tool_name.startswith("render_get_")
-                        or tool_name.startswith("get_render_")
-                    )
-                ):
-                    body = result.get("json") if "json" in result else result
-                    items = _render_extract_list(body)
-                    if isinstance(items, list):
-                        kind = "render"
-                        if tool_name.endswith("_logs"):
-                            visual = _preview_render_logs(items)
-                        else:
-                            visual = _preview_json_objects(items, header="render")
-
-                # 3) File reads (show which file + a snippet)
-                if (
-                    not visual
-                    and LOG_TOOL_READ_SNIPPETS
-                    and isinstance(result, Mapping)
-                    and isinstance(result.get("path"), str)
-                    and isinstance(result.get("text"), str)
-                ):
-                    start_line = 1
-                    if isinstance(result.get("start_line"), int):
-                        start_line = int(result.get("start_line"))
-                    elif isinstance(result.get("__log_start_line"), int):
-                        start_line = int(result.get("__log_start_line"))
-
-                    # Only preview on read tools to avoid echoing writes unless explicitly enabled.
-                    if not bool(write_action):
-                        kind = "read"
-                        visual = _preview_file_snippet(
-                            str(result.get("path") or ""),
-                            str(result.get("text") or ""),
-                            start_line=start_line,
-                        )
-
-                # 4) terminal_command output preview (stdout/stderr)
-                if not visual and isinstance(result, Mapping) and tool_name == "terminal_command":
-                    kind = "terminal"
-                    visual = _preview_terminal_result(result)
-
-                if visual:
-                    _log_tool_visual(
-                        tool_name=tool_name,
-                        call_id=call_id,
-                        req=req,
-                        kind=kind or "info",
-                        visual=visual,
-                    )
-        except Exception as exc:
-            # Visual logging is best-effort, but failures should be visible.
-            try:
-                LOGGER.debug("Visual logging failed", exc_info=exc)
-            except Exception:
-                pass
+        _log_tool_summary(
+            tool_name=tool_name,
+            call_id=call_id,
+            write_action=write_action,
+            req=req,
+            schema_hash=schema_hash if schema_present else None,
+            schema_present=schema_present,
+            result=result,
+            all_args=all_args,
+        )
     else:
         kv_map: dict[str, Any] = {
             "tool": tool_name,
@@ -3224,6 +2806,8 @@ def mcp_tool(
                 "run_python",
                 "apply_patch",
                 "apply_workspace_operations",
+                "create_workspace_folders",
+                "delete_workspace_folders",
             } or tool_name.startswith("workspace_"):
                 group, icon = "workspace", "🧩"
             elif tool_name.startswith("list_") or tool_name.startswith("get_"):
@@ -3343,7 +2927,12 @@ def mcp_tool(
                                 exc=exc2,
                                 extra={"event": "tool_output_redaction_failed"},
                             )
-                    return _chatgpt_friendly_result(client_payload, req=req)
+                    return _chatgpt_friendly_result(
+                        client_payload,
+                        req=req,
+                        tool_name=tool_name,
+                        all_args=all_args,
+                    )
 
                 try:
                     # Best-effort idempotency for inbound requests. This prevents
@@ -3429,7 +3018,12 @@ def mcp_tool(
                                 exc=exc2,
                                 extra={"event": "tool_output_redaction_failed"},
                             )
-                    return _chatgpt_friendly_result(client_payload, req=req)
+                    return _chatgpt_friendly_result(
+                        client_payload,
+                        req=req,
+                        tool_name=tool_name,
+                        all_args=all_args,
+                    )
 
                 # Preserve scalar return types for tools that naturally return scalars.
                 # Some clients/servers already wrap tool outputs under a top-level
@@ -3501,7 +3095,12 @@ def mcp_tool(
                             exc=exc,
                             extra={"event": "tool_output_redaction_failed"},
                         )
-                return _chatgpt_friendly_result(client_payload, req=req)
+                return _chatgpt_friendly_result(
+                    client_payload,
+                    req=req,
+                    tool_name=tool_name,
+                    all_args=all_args,
+                )
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
                 wrapper,
@@ -3676,7 +3275,12 @@ def mcp_tool(
                             exc=exc2,
                             extra={"event": "tool_output_redaction_failed"},
                         )
-                return _chatgpt_friendly_result(client_payload, req=req)
+                return _chatgpt_friendly_result(
+                    client_payload,
+                    req=req,
+                    tool_name=tool_name,
+                    all_args=all_args,
+                )
 
             try:
                 # Best-effort idempotency for inbound requests.
@@ -3756,7 +3360,12 @@ def mcp_tool(
                             exc=exc2,
                             extra={"event": "tool_output_redaction_failed"},
                         )
-                return _chatgpt_friendly_result(client_payload, req=req)
+                return _chatgpt_friendly_result(
+                    client_payload,
+                    req=req,
+                    tool_name=tool_name,
+                    all_args=all_args,
+                )
 
             # Preserve scalar return types for tools that naturally return scalars.
             duration_ms = (time.perf_counter() - start) * 1000
@@ -3822,7 +3431,12 @@ def mcp_tool(
                         exc=exc,
                         extra={"event": "tool_output_redaction_failed"},
                     )
-            return _chatgpt_friendly_result(client_payload, req=req)
+            return _chatgpt_friendly_result(
+                client_payload,
+                req=req,
+                tool_name=tool_name,
+                all_args=all_args,
+            )
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(
             wrapper,

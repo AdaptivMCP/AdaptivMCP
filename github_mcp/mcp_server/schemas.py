@@ -78,6 +78,14 @@ _PARAM_DOCS: dict[str, dict[str, Any]] = {
         "description": "List of repository-relative paths.",
         "examples": [["README.md", "src/app.py"]],
     },
+    "create_paths": {
+        "description": "List of repository-relative folder paths to create.",
+        "examples": [["docs", "tests/fixtures"]],
+    },
+    "delete_paths": {
+        "description": "List of repository-relative folder paths to delete.",
+        "examples": [["docs/legacy", "tmp"]],
+    },
     "query": {
         "description": "Search query string.",
         "examples": ["def main", "import os", "async def"],

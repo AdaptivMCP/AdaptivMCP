@@ -568,6 +568,70 @@ def _pos_to_offset(lines: list[str], line: int, col: int) -> int:
 
 
 @mcp_tool(write_action=True)
+async def create_workspace_folders(
+    full_name: str,
+    ref: str = "main",
+    paths: list[str] | None = None,
+    exist_ok: bool = True,
+    create_parents: bool = True,
+) -> dict[str, Any]:
+    """Create one or more folders in the repo mirror.
+
+    Notes:
+      - `paths` must be repo-relative paths.
+      - When `exist_ok` is false, existing folders are treated as failures.
+    """
+
+    if paths is None:
+        paths = []
+    if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
+        raise TypeError("paths must be a list of strings")
+    if len(paths) == 0:
+        raise ValueError("paths must contain at least one path")
+
+    try:
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        created: list[str] = []
+        existing: list[str] = []
+        failed: list[dict[str, Any]] = []
+
+        for rel_path in paths:
+            try:
+                abs_path = _workspace_safe_join(repo_dir, rel_path)
+                if os.path.exists(abs_path):
+                    if os.path.isdir(abs_path):
+                        if exist_ok:
+                            existing.append(rel_path)
+                        else:
+                            raise FileExistsError(rel_path)
+                    else:
+                        raise FileExistsError(rel_path)
+                    continue
+
+                if create_parents:
+                    os.makedirs(abs_path, exist_ok=bool(exist_ok))
+                else:
+                    os.mkdir(abs_path)
+                created.append(rel_path)
+            except Exception as exc:
+                failed.append({"path": rel_path, "error": str(exc)})
+
+        return {
+            "ref": effective_ref,
+            "status": "created",
+            "created": created,
+            "existing": existing,
+            "failed": failed,
+            "ok": len(failed) == 0,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="create_workspace_folders")
+
+
+@mcp_tool(write_action=True)
 async def delete_workspace_paths(
     full_name: str,
     ref: str = "main",
@@ -633,6 +697,70 @@ async def delete_workspace_paths(
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="delete_workspace_paths")
+
+
+@mcp_tool(write_action=True)
+async def delete_workspace_folders(
+    full_name: str,
+    ref: str = "main",
+    paths: list[str] | None = None,
+    allow_missing: bool = True,
+    allow_recursive: bool = False,
+) -> dict[str, Any]:
+    """Delete one or more folders from the repo mirror.
+
+    Notes:
+      - `paths` must be repo-relative paths.
+      - Non-empty folders require `allow_recursive=true`.
+    """
+
+    if paths is None:
+        paths = []
+    if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
+        raise TypeError("paths must be a list of strings")
+    if len(paths) == 0:
+        raise ValueError("paths must contain at least one path")
+
+    try:
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        removed: list[str] = []
+        missing: list[str] = []
+        failed: list[dict[str, Any]] = []
+
+        for rel_path in paths:
+            try:
+                abs_path = _workspace_safe_join(repo_dir, rel_path)
+
+                if not os.path.exists(abs_path):
+                    if allow_missing:
+                        missing.append(rel_path)
+                        continue
+                    raise FileNotFoundError(rel_path)
+
+                if not os.path.isdir(abs_path):
+                    raise NotADirectoryError(rel_path)
+
+                if allow_recursive:
+                    shutil.rmtree(abs_path)
+                else:
+                    os.rmdir(abs_path)
+                removed.append(rel_path)
+            except Exception as exc:
+                failed.append({"path": rel_path, "error": str(exc)})
+
+        return {
+            "ref": effective_ref,
+            "status": "deleted",
+            "removed": removed,
+            "missing": missing,
+            "failed": failed,
+            "ok": len(failed) == 0,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="delete_workspace_folders")
 
 
 @mcp_tool(write_action=False)
@@ -2377,6 +2505,8 @@ async def apply_workspace_operations(
       - {"op": "delete_word", "path": "...", "word": "...", "occurrence": int, "replace_all": bool, "case_sensitive": bool, "whole_word": bool}
       - {"op": "delete_chars", "path": "...", "line": int, "col": int, "count": int}
       - {"op": "delete", "path": "...", "allow_missing": bool}
+      - {"op": "mkdir", "path": "...", "exist_ok": bool, "parents": bool}
+      - {"op": "rmdir", "path": "...", "allow_missing": bool, "allow_recursive": bool}
       - {"op": "move", "src": "...", "dst": "...", "overwrite": bool}
       - {"op": "apply_patch", "patch": "..."}
     """
@@ -2770,6 +2900,56 @@ async def apply_workspace_operations(
                     if not preview_only:
                         os.remove(abs_path)
                     results.append({"index": idx, "op": "delete", "path": path, "status": "ok"})
+                    continue
+
+                if op_name == "mkdir":
+                    path = op.get("path")
+                    exist_ok = bool(op.get("exist_ok", True))
+                    parents = bool(op.get("parents", create_parents))
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("mkdir.path must be a non-empty string")
+                    abs_path = _workspace_safe_join(repo_dir, path)
+
+                    if os.path.exists(abs_path):
+                        if not os.path.isdir(abs_path):
+                            raise FileExistsError(path)
+                        if exist_ok:
+                            results.append(
+                                {"index": idx, "op": "mkdir", "path": path, "status": "noop"}
+                            )
+                            continue
+                        raise FileExistsError(path)
+
+                    if not preview_only:
+                        if parents:
+                            os.makedirs(abs_path, exist_ok=exist_ok)
+                        else:
+                            os.mkdir(abs_path)
+                    results.append({"index": idx, "op": "mkdir", "path": path, "status": "ok"})
+                    continue
+
+                if op_name == "rmdir":
+                    path = op.get("path")
+                    allow_missing = bool(op.get("allow_missing", True))
+                    allow_recursive = bool(op.get("allow_recursive", False))
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError("rmdir.path must be a non-empty string")
+                    abs_path = _workspace_safe_join(repo_dir, path)
+                    if not os.path.exists(abs_path):
+                        if allow_missing:
+                            results.append(
+                                {"index": idx, "op": "rmdir", "path": path, "status": "noop"}
+                            )
+                            continue
+                        raise FileNotFoundError(path)
+                    if not os.path.isdir(abs_path):
+                        raise NotADirectoryError(path)
+                    if not preview_only:
+                        if allow_recursive:
+                            shutil.rmtree(abs_path)
+                        else:
+                            os.rmdir(abs_path)
+                    results.append({"index": idx, "op": "rmdir", "path": path, "status": "ok"})
                     continue
 
                 if op_name == "move":
