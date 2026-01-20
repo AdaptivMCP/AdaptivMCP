@@ -89,7 +89,7 @@ def tool_registry_module(monkeypatch):
     [
         ({"owner": "octo", "repo": "example"}, {"owner": "octo", "repo": "example"}),
         (
-            {"arguments": "{\"owner\": \"octo\", \"repo\": \"example\"}"},
+            {"arguments": '{"owner": "octo", "repo": "example"}'},
             {"owner": "octo", "repo": "example"},
         ),
         (

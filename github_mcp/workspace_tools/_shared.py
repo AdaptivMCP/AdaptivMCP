@@ -105,7 +105,7 @@ def _should_install_requirements(venv_dir: str, requirements_path: str) -> bool:
         return True
 
     current_hash = _requirements_hash(requirements_path)
-    with open(marker, "r", encoding="utf-8") as handle:
+    with open(marker, encoding="utf-8") as handle:
         recorded_hash = handle.read().strip()
     return current_hash != recorded_hash
 

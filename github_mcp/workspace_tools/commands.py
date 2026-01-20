@@ -371,8 +371,7 @@ async def terminal_command(
                     i_stderr = install_result.get("stderr") or ""
                     i_stdout = install_result.get("stdout") or ""
                     raise GitHubAPIError(
-                        "Dependency installation failed: "
-                        + (i_stderr.strip() or i_stdout.strip())
+                        "Dependency installation failed: " + (i_stderr.strip() or i_stdout.strip())
                     )
                 _write_requirements_marker(venv_dir, req_path)
 
@@ -614,8 +613,7 @@ async def run_python(
                     i_stderr = install_result.get("stderr") or ""
                     i_stdout = install_result.get("stdout") or ""
                     raise GitHubAPIError(
-                        "Dependency installation failed: "
-                        + (i_stderr.strip() or i_stdout.strip())
+                        "Dependency installation failed: " + (i_stderr.strip() or i_stdout.strip())
                     )
                 _write_requirements_marker(venv_dir, req_path)
 
