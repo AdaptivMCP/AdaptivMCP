@@ -1,5 +1,6 @@
 # Split from github_mcp.tools_workspace (generated).
 import hashlib
+import inspect
 import os
 import shlex
 from typing import Any
@@ -41,6 +42,28 @@ def _cmd_invokes_git(cmd: object) -> bool:
                 if part.lstrip().startswith("git "):
                     return True
     return False
+
+
+def _filter_kwargs_for_callable(fn: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Return only the kwargs accepted by ``fn``.
+
+    Orchestration tools often accept dynamic argument dicts that should flow
+    through to lower-level tools without hardcoding every parameter name.
+    This helper makes that safe by filtering to the callable's current
+    signature.
+    """
+
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return kwargs
+
+    for param in sig.parameters.values():
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            return kwargs
+
+    allowed = set(sig.parameters.keys())
+    return {k: v for k, v in kwargs.items() if k in allowed}
 
 
 def _tw():

@@ -69,6 +69,8 @@ async def test_workspace_change_report_builds_hunks_and_excerpts(
         max_files=10,
         max_hunks_per_file=5,
         include_diff=True,
+        git_diff_args={"context_lines": 9},
+        excerpt_args={"max_chars": 1234},
     )
 
     assert res["status"] == "ok"
@@ -96,6 +98,13 @@ async def test_workspace_change_report_builds_hunks_and_excerpts(
     # Underlying tools were invoked.
     assert any(c["fn"] == "workspace_git_diff" for c in fake.calls)
     assert sum(1 for c in fake.calls if c["fn"] == "read_git_file_excerpt") == 2
+
+    # Dynamic kwargs were passed through.
+    diff_call = next(c for c in fake.calls if c["fn"] == "workspace_git_diff")
+    assert diff_call["kwargs"].get("context_lines") == 9
+    excerpt_calls = [c for c in fake.calls if c["fn"] == "read_git_file_excerpt"]
+    assert excerpt_calls[0]["kwargs"].get("max_chars") == 1234
+    assert excerpt_calls[1]["kwargs"].get("max_chars") == 1234
 
 
 @pytest.mark.anyio

@@ -56,6 +56,11 @@ async def test_workspace_apply_ops_and_open_pr_happy_path(monkeypatch: pytest.Mo
         operations=[{"op": "write", "path": "README.md", "content": "x"}],
         commit_message="Update docs",
         run_quality=True,
+        sync_args={"discard_local_changes": False},
+        create_branch_args={"push": False},
+        apply_ops_args={"preview_only": True},
+        quality_args={"developer_defaults": False, "auto_fix": True},
+        pr_args={"draft": True},
     )
 
     assert res["status"] == "ok"
@@ -71,6 +76,14 @@ async def test_workspace_apply_ops_and_open_pr_happy_path(monkeypatch: pytest.Mo
         "run_quality_suite",
         "commit_and_open_pr_from_workspace",
     ]
+
+    # Dynamic args were passed through.
+    assert fake.calls[0]["kwargs"]["discard_local_changes"] is False
+    assert fake.calls[1]["kwargs"]["push"] is False
+    assert fake.calls[2]["kwargs"]["preview_only"] is True
+    assert fake.calls[3]["kwargs"]["developer_defaults"] is False
+    assert fake.calls[3]["kwargs"]["auto_fix"] is True
+    assert fake.calls[4]["kwargs"]["draft"] is True
 
 
 @pytest.mark.anyio

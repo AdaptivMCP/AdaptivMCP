@@ -614,6 +614,71 @@ def _preview_line_indices(total: int, max_lines: int) -> tuple[list[int], int, i
     return (indices, skipped, head)
 
 
+def _preview_file_snippet(path: str, text: str, *, start_line: int = 1) -> str:
+    """Render a numbered snippet for file previews.
+
+    Kept intentionally stable for unit tests.
+    """
+
+    _ = path  # reserved for future headers
+    lines = text.splitlines()
+    rendered: list[str] = []
+    line_no = int(start_line)
+    for line in lines:
+        rendered.append(f"{line_no:4d}│{line}")
+        line_no += 1
+    return "\n".join(rendered)
+
+
+def _preview_unified_diff(diff_text: str) -> str:
+    """Render a unified diff with old/new line numbers.
+
+    Formatting is tuned for visual logs and unit tests.
+    """
+
+    import re
+
+    old_line: int | None = None
+    new_line: int | None = None
+    rendered: list[str] = []
+
+    hunk_re = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+
+    for raw in diff_text.splitlines():
+        m = hunk_re.match(raw)
+        if m:
+            old_line = int(m.group(1))
+            new_line = int(m.group(2))
+            rendered.append(raw)
+            continue
+
+        if old_line is None or new_line is None:
+            rendered.append(raw)
+            continue
+
+        if raw == "":
+            rendered.append(raw)
+            continue
+
+        prefix = raw[0]
+        body = raw[1:] if prefix in {" ", "+", "-"} else raw
+
+        if prefix == " ":
+            rendered.append(f"{old_line:5d} {new_line:5d} |{body}")
+            old_line += 1
+            new_line += 1
+        elif prefix == "-":
+            rendered.append(f"{old_line:5d} {'':5s} |{body}")
+            old_line += 1
+        elif prefix == "+":
+            rendered.append(f"{'':5s} {new_line:5d} |{body}")
+            new_line += 1
+        else:
+            rendered.append(raw)
+
+    return "\n".join(rendered)
+
+
 def _render_numbered_preview(
     lines: list[str],
     *,

@@ -8,7 +8,7 @@ from typing import Any
 
 from github_mcp.server import _structured_tool_error, mcp_tool
 
-from ._shared import _safe_branch_slug, _tw
+from ._shared import _filter_kwargs_for_callable, _safe_branch_slug, _tw
 
 _HUNK_RE = re.compile(r"^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@")
 
@@ -136,6 +136,11 @@ async def workspace_apply_ops_and_open_pr(
     quality_timeout_seconds: float = 0,
     test_command: str = "pytest -q",
     lint_command: str = "ruff check .",
+    sync_args: dict[str, Any] | None = None,
+    create_branch_args: dict[str, Any] | None = None,
+    apply_ops_args: dict[str, Any] | None = None,
+    quality_args: dict[str, Any] | None = None,
+    pr_args: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Apply workspace operations on a new branch and open a PR.
 
@@ -183,10 +188,17 @@ async def workspace_apply_ops_and_open_pr(
                 "Sync base",
                 f"Resetting workspace clone for '{effective_base}' to match origin.",
             )
+            extra_sync = dict(sync_args or {})
+            extra_sync.pop("full_name", None)
+            extra_sync.pop("ref", None)
+            sync_call = {
+                "full_name": full_name,
+                "ref": effective_base,
+                "discard_local_changes": discard_local_changes,
+                **extra_sync,
+            }
             sync_res = await tw.workspace_sync_to_remote(
-                full_name=full_name,
-                ref=effective_base,
-                discard_local_changes=discard_local_changes,
+                **_filter_kwargs_for_callable(tw.workspace_sync_to_remote, sync_call)
             )
             if isinstance(sync_res, dict) and sync_res.get("status") == "error":
                 return _error_return(
@@ -216,11 +228,19 @@ async def workspace_apply_ops_and_open_pr(
             f"Creating feature branch '{feature_ref}' from '{effective_base}'.",
             feature_ref=feature_ref,
         )
+        extra_branch = dict(create_branch_args or {})
+        extra_branch.pop("full_name", None)
+        extra_branch.pop("base_ref", None)
+        extra_branch.pop("new_branch", None)
+        branch_call = {
+            "full_name": full_name,
+            "base_ref": effective_base,
+            "new_branch": feature_ref,
+            "push": True,
+            **extra_branch,
+        }
         branch_res = await tw.workspace_create_branch(
-            full_name=full_name,
-            base_ref=effective_base,
-            new_branch=feature_ref,
-            push=True,
+            **_filter_kwargs_for_callable(tw.workspace_create_branch, branch_call)
         )
         if isinstance(branch_res, dict) and branch_res.get("status") == "error":
             return _error_return(
@@ -234,13 +254,21 @@ async def workspace_apply_ops_and_open_pr(
         _step(steps, "Create branch", "Feature branch ready.", branch=branch_res)
 
         _step(steps, "Apply operations", f"Applying {len(operations)} operation(s).")
+        extra_ops = dict(apply_ops_args or {})
+        extra_ops.pop("full_name", None)
+        extra_ops.pop("ref", None)
+        extra_ops.pop("operations", None)
+        ops_call = {
+            "full_name": full_name,
+            "ref": feature_ref,
+            "operations": operations,
+            "fail_fast": True,
+            "rollback_on_error": True,
+            "preview_only": False,
+            **extra_ops,
+        }
         ops_res = await tw.apply_workspace_operations(
-            full_name=full_name,
-            ref=feature_ref,
-            operations=operations,
-            fail_fast=True,
-            rollback_on_error=True,
-            preview_only=False,
+            **_filter_kwargs_for_callable(tw.apply_workspace_operations, ops_call)
         )
         if isinstance(ops_res, dict) and ops_res.get("status") == "error":
             return _error_return(
@@ -267,14 +295,21 @@ async def workspace_apply_ops_and_open_pr(
         quality_res: Any = None
         if run_quality:
             _step(steps, "Quality suite", "Running lint/tests before commit.")
+            extra_quality = dict(quality_args or {})
+            extra_quality.pop("full_name", None)
+            extra_quality.pop("ref", None)
+            quality_call = {
+                "full_name": full_name,
+                "ref": feature_ref,
+                "test_command": test_command,
+                "lint_command": lint_command,
+                "timeout_seconds": quality_timeout_seconds,
+                "fail_fast": True,
+                "developer_defaults": True,
+                **extra_quality,
+            }
             quality_res = await tw.run_quality_suite(
-                full_name=full_name,
-                ref=feature_ref,
-                test_command=test_command,
-                lint_command=lint_command,
-                timeout_seconds=quality_timeout_seconds,
-                fail_fast=True,
-                developer_defaults=True,
+                **_filter_kwargs_for_callable(tw.run_quality_suite, quality_call)
             )
             if isinstance(quality_res, dict) and quality_res.get("status") in {"failed", "error"}:
                 return _error_return(
@@ -298,15 +333,23 @@ async def workspace_apply_ops_and_open_pr(
 
         title = pr_title or f"{feature_ref} -> {effective_base}"
         _step(steps, "Commit + PR", "Committing changes and opening PR.", title=title)
+        extra_pr = dict(pr_args or {})
+        extra_pr.pop("full_name", None)
+        extra_pr.pop("ref", None)
+        extra_pr.pop("base", None)
+        pr_call = {
+            "full_name": full_name,
+            "ref": feature_ref,
+            "base": effective_base,
+            "title": title,
+            "body": pr_body,
+            "draft": bool(draft),
+            "commit_message": commit_message,
+            "run_quality": False,
+            **extra_pr,
+        }
         pr_res = await tw.commit_and_open_pr_from_workspace(
-            full_name=full_name,
-            ref=feature_ref,
-            base=effective_base,
-            title=title,
-            body=pr_body,
-            draft=bool(draft),
-            commit_message=commit_message,
-            run_quality=False,
+            **_filter_kwargs_for_callable(tw.commit_and_open_pr_from_workspace, pr_call)
         )
         if isinstance(pr_res, dict) and pr_res.get("status") == "error":
             return _error_return(
@@ -377,6 +420,9 @@ async def workspace_manage_folders_and_open_pr(
     quality_timeout_seconds: float = 0,
     test_command: str = "pytest -q",
     lint_command: str = "ruff check .",
+    mkdir_args: dict[str, Any] | None = None,
+    rmdir_args: dict[str, Any] | None = None,
+    workflow_args: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create/remove folders on a branch and open a PR.
 
@@ -403,39 +449,55 @@ async def workspace_manage_folders_and_open_pr(
         for path in create_paths:
             if not path.strip():
                 raise ValueError("create_paths must contain non-empty strings")
-            operations.append({"op": "mkdir", "path": path})
+            op: dict[str, Any] = {"op": "mkdir", "path": path}
+            extra = dict(mkdir_args or {})
+            extra.pop("op", None)
+            extra.pop("path", None)
+            op.update(extra)
+            operations.append(op)
 
         for path in delete_paths:
             if not path.strip():
                 raise ValueError("delete_paths must contain non-empty strings")
-            operations.append(
-                {
-                    "op": "rmdir",
-                    "path": path,
-                    "allow_recursive": bool(allow_recursive),
-                    "allow_missing": bool(allow_missing),
-                }
-            )
+            op = {
+                "op": "rmdir",
+                "path": path,
+                "allow_recursive": bool(allow_recursive),
+                "allow_missing": bool(allow_missing),
+            }
+            extra = dict(rmdir_args or {})
+            extra.pop("op", None)
+            extra.pop("path", None)
+            # Let explicit allow_recursive/allow_missing params remain the default
+            # unless overridden via rmdir_args.
+            op.update(extra)
+            operations.append(op)
 
         if not operations:
             raise ValueError("At least one create_paths or delete_paths entry is required")
 
         tw = _tw()
+        extra_flow = dict(workflow_args or {})
+        extra_flow.pop("full_name", None)
+        flow_call = {
+            "full_name": full_name,
+            "base_ref": base_ref,
+            "feature_ref": feature_ref,
+            "operations": operations,
+            "pr_title": pr_title,
+            "pr_body": pr_body,
+            "draft": draft,
+            "commit_message": commit_message,
+            "sync_base_to_remote": sync_base_to_remote,
+            "discard_local_changes": discard_local_changes,
+            "run_quality": run_quality,
+            "quality_timeout_seconds": quality_timeout_seconds,
+            "test_command": test_command,
+            "lint_command": lint_command,
+            **extra_flow,
+        }
         return await tw.workspace_apply_ops_and_open_pr(
-            full_name=full_name,
-            base_ref=base_ref,
-            feature_ref=feature_ref,
-            operations=operations,
-            pr_title=pr_title,
-            pr_body=pr_body,
-            draft=draft,
-            commit_message=commit_message,
-            sync_base_to_remote=sync_base_to_remote,
-            discard_local_changes=discard_local_changes,
-            run_quality=run_quality,
-            quality_timeout_seconds=quality_timeout_seconds,
-            test_command=test_command,
-            lint_command=lint_command,
+            **_filter_kwargs_for_callable(tw.workspace_apply_ops_and_open_pr, flow_call)
         )
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_manage_folders_and_open_pr")
@@ -456,6 +518,8 @@ async def workspace_change_report(
     max_diff_chars: int = 200_000,
     max_excerpt_chars: int = 80_000,
     include_diff: bool = True,
+    git_diff_args: dict[str, Any] | None = None,
+    excerpt_args: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Single-call "what changed" report between two refs.
 
@@ -496,15 +560,22 @@ async def workspace_change_report(
         )
 
         _step(steps, "Diff", "Computing git diff + numstat.")
+        extra_diff = dict(git_diff_args or {})
+        extra_diff.pop("full_name", None)
+        extra_diff.pop("ref", None)
+        diff_call = {
+            "full_name": full_name,
+            "ref": effective_head,
+            "left_ref": effective_base,
+            "right_ref": effective_head,
+            "staged": False,
+            "paths": None,
+            "context_lines": int(diff_context_lines),
+            "max_chars": int(max_diff_chars),
+            **extra_diff,
+        }
         diff_res = await tw.workspace_git_diff(
-            full_name=full_name,
-            ref=effective_head,
-            left_ref=effective_base,
-            right_ref=effective_head,
-            staged=False,
-            paths=None,
-            context_lines=int(diff_context_lines),
-            max_chars=int(max_diff_chars),
+            **_filter_kwargs_for_callable(tw.workspace_git_diff, diff_call)
         )
         if isinstance(diff_res, dict) and diff_res.get("status") == "error":
             return _error_return(
@@ -550,22 +621,58 @@ async def workspace_change_report(
                 )
 
                 base_excerpt = await tw.read_git_file_excerpt(
-                    full_name=full_name,
-                    ref=effective_head,
-                    path=path,
-                    git_ref=effective_base,
-                    start_line=base_start,
-                    max_lines=base_len,
-                    max_chars=int(max_excerpt_chars),
+                    **_filter_kwargs_for_callable(
+                        tw.read_git_file_excerpt,
+                        {
+                            "full_name": full_name,
+                            "ref": effective_head,
+                            "path": path,
+                            "git_ref": effective_base,
+                            "start_line": base_start,
+                            "max_lines": base_len,
+                            "max_chars": int(max_excerpt_chars),
+                            **{
+                                k: v
+                                for k, v in (excerpt_args or {}).items()
+                                if k
+                                not in {
+                                    "full_name",
+                                    "ref",
+                                    "path",
+                                    "git_ref",
+                                    "start_line",
+                                    "max_lines",
+                                }
+                            },
+                        },
+                    )
                 )
                 head_excerpt = await tw.read_git_file_excerpt(
-                    full_name=full_name,
-                    ref=effective_head,
-                    path=path,
-                    git_ref=effective_head,
-                    start_line=head_start,
-                    max_lines=head_len,
-                    max_chars=int(max_excerpt_chars),
+                    **_filter_kwargs_for_callable(
+                        tw.read_git_file_excerpt,
+                        {
+                            "full_name": full_name,
+                            "ref": effective_head,
+                            "path": path,
+                            "git_ref": effective_head,
+                            "start_line": head_start,
+                            "max_lines": head_len,
+                            "max_chars": int(max_excerpt_chars),
+                            **{
+                                k: v
+                                for k, v in (excerpt_args or {}).items()
+                                if k
+                                not in {
+                                    "full_name",
+                                    "ref",
+                                    "path",
+                                    "git_ref",
+                                    "start_line",
+                                    "max_lines",
+                                }
+                            },
+                        },
+                    )
                 )
 
                 excerpts.append(
