@@ -34,6 +34,7 @@ from github_mcp.workspace_tools import rg as _rg
 from github_mcp.workspace_tools import suites as _suites
 from github_mcp.workspace_tools import venv as _venv
 from github_mcp.workspace_tools import workflows as _workflows
+from github_mcp.workspace_tools import batch as _batch
 
 LOGGER = BASE_LOGGER.getChild("tools_workspace")
 
@@ -143,6 +144,9 @@ workspace_apply_ops_and_open_pr = _workflows.workspace_apply_ops_and_open_pr
 # Read-only "what changed" aggregator.
 workspace_change_report = _workflows.workspace_change_report
 
+# Multi-branch / multi-path orchestration.
+workspace_batch = _batch.workspace_batch
+
 # Virtualenv lifecycle tools
 workspace_venv_start = _venv.workspace_venv_start
 workspace_venv_stop = _venv.workspace_venv_stop
@@ -208,6 +212,7 @@ __all__ = [
     "commit_and_open_pr_from_workspace",
     "workspace_apply_ops_and_open_pr",
     "workspace_change_report",
+    "workspace_batch",
     "workspace_venv_start",
     "workspace_venv_stop",
     "workspace_venv_status",
