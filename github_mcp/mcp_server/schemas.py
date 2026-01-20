@@ -688,10 +688,27 @@ def _normalize_input_schema(tool_obj: Any) -> dict[str, Any] | None:
 
 
 def _annotation_to_schema(annotation: Any) -> dict[str, Any]:
+    """Translate a Python type annotation into a lightweight JSON Schema fragment.
+
+    This is intentionally *best-effort* and focuses on the common primitives and
+    containers used in tool signatures.
+    """
+
     if annotation is inspect.Signature.empty:
         return {}
     if annotation is None or annotation is type(None):
         return {"type": "null"}
+
+    # typing.Annotated[T, ...] (commonly produced by Pydantic and other libs).
+    # We ignore metadata and describe only the underlying type.
+    origin = get_origin(annotation)
+    if origin is typing.Annotated:
+        args = get_args(annotation)
+        return _annotation_to_schema(args[0]) if args else {}
+
+    # typing.Any is an intentionally open-ended contract.
+    if annotation is Any:
+        return {}
 
     origin = get_origin(annotation)
     if origin is None:
@@ -716,32 +733,39 @@ def _annotation_to_schema(annotation: Any) -> dict[str, Any]:
             return {}
 
         json_vals = [_jsonable(v) for v in vals]
-        type_set = {type(v) for v in vals}
+
+        # Determine whether literals are all the same JSON primitive type.
+        # Note: bool is a subclass of int in Python, so treat it explicitly.
+        def _json_primitive_type(v: Any) -> str | None:
+            if v is None:
+                return "null"
+            if isinstance(v, bool):
+                return "boolean"
+            if isinstance(v, int):
+                return "integer"
+            if isinstance(v, float):
+                return "number"
+            if isinstance(v, str):
+                return "string"
+            return None
+
+        type_set = {_json_primitive_type(v) for v in vals}
 
         schema: dict[str, Any] = {"enum": json_vals}
 
         # If all literal values are the same primitive type, emit an explicit JSON Schema type.
-        if type_set == {str}:
-            schema["type"] = "string"
-        elif type_set == {int}:
-            schema["type"] = "integer"
-        elif type_set == {float}:
-            schema["type"] = "number"
-        elif type_set == {bool}:
-            schema["type"] = "boolean"
-        elif type_set == {type(None)}:
-            schema["type"] = "null"
-        else:
-            # Mixed literals: keep enum without forcing a type.
-            pass
+        if len(type_set) == 1:
+            only = next(iter(type_set))
+            if only is not None:
+                schema["type"] = only
 
         return schema
 
-    if origin is list:
+    if origin in {list, Sequence}:
         args = get_args(annotation)
         items = _annotation_to_schema(args[0]) if args else {}
         return {"type": "array", "items": items}
-    if origin is dict:
+    if origin in {dict, Mapping}:
         args = get_args(annotation)
         value_schema = _annotation_to_schema(args[1]) if len(args) > 1 else {}
         return {"type": "object", "additionalProperties": value_schema}

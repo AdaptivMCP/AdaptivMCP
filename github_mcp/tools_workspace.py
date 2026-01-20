@@ -23,6 +23,7 @@ from github_mcp.server import CONTROLLER_REPO, _structured_tool_error, mcp_tool
 from github_mcp.utils import _default_branch_for_repo, _effective_ref_for_repo
 from github_mcp.workspace import _workspace_path
 from github_mcp.workspace_tools import _shared as _shared
+from github_mcp.workspace_tools import batch as _batch
 from github_mcp.workspace_tools import clone as _clone
 from github_mcp.workspace_tools import commands as _commands
 from github_mcp.workspace_tools import commit as _commit
@@ -34,7 +35,6 @@ from github_mcp.workspace_tools import rg as _rg
 from github_mcp.workspace_tools import suites as _suites
 from github_mcp.workspace_tools import venv as _venv
 from github_mcp.workspace_tools import workflows as _workflows
-from github_mcp.workspace_tools import batch as _batch
 
 LOGGER = BASE_LOGGER.getChild("tools_workspace")
 

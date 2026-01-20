@@ -154,4 +154,3 @@ async def test_create_branch_raises_on_unexpected_base_ref_status(monkeypatch):
 
     with pytest.raises(_GitHubAPIError):
         await branches.create_branch("o/r", "feature", from_ref="main")
-

@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import difflib
 import inspect
-from typing import Any, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 
 def _norm_token(value: str) -> str:
@@ -186,4 +187,3 @@ def augment_structured_error_for_bad_args(
         return structured_error
 
     return structured_error
-

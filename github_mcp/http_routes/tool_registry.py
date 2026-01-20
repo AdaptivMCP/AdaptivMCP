@@ -12,14 +12,13 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from github_mcp.mcp_server.context import REQUEST_CHATGPT_METADATA
-from github_mcp.server import _find_registered_tool
-
 from github_mcp.mcp_server import registry as mcp_registry
+from github_mcp.mcp_server.context import REQUEST_CHATGPT_METADATA
 from github_mcp.mcp_server.suggestions import (
     augment_structured_error_for_bad_args,
     build_unknown_tool_payload,
 )
+from github_mcp.server import _find_registered_tool
 
 
 def _normalize_base_path(base_path: str | None) -> str:
