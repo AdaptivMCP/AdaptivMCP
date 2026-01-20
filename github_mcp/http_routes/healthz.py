@@ -10,15 +10,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from github_mcp.config import (
-    GIT_IDENTITY_PLACEHOLDER_ACTIVE,
     SERVER_GIT_COMMIT,
     SERVER_START_TIME,
-    git_identity_warnings,
 )
 from github_mcp.exceptions import GitHubAuthError
 from github_mcp.http_clients import _get_github_token
 from github_mcp.server import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
-from github_mcp.utils import REPO_DEFAULTS_PARSE_ERROR
 
 
 def _github_token_present() -> bool:
@@ -34,12 +31,10 @@ def _github_token_present() -> bool:
 
 def _build_health_payload() -> dict[str, Any]:
     github_token_present = _github_token_present()
-    identity_placeholder_active = GIT_IDENTITY_PLACEHOLDER_ACTIVE
-
     uptime_seconds = max(0, int(time.time() - SERVER_START_TIME))
 
     payload = {
-        "status": ("ok" if github_token_present and not identity_placeholder_active else "warning"),
+        "status": "ok",
         "git_commit": SERVER_GIT_COMMIT,
         "uptime_seconds": uptime_seconds,
         "github_token_present": github_token_present,
@@ -52,13 +47,6 @@ def _build_health_payload() -> dict[str, Any]:
             "default_branch": CONTROLLER_DEFAULT_BRANCH,
         },
     }
-    warnings: list[str] = []
-    if REPO_DEFAULTS_PARSE_ERROR:
-        warnings.append(REPO_DEFAULTS_PARSE_ERROR)
-    warnings.extend(git_identity_warnings())
-    if warnings:
-        payload["warnings"] = warnings
-
     return payload
 
 

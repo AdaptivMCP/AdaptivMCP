@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import importlib.util
 import logging
 import os
@@ -132,7 +131,6 @@ from .config import (  # noqa: E402
     summarize_request_context,
 )
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
-from .utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO  # noqa: E402
 
 _loop_semaphores: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
     weakref.WeakKeyDictionary()
@@ -487,82 +485,6 @@ async def _github_request(
 ) -> dict[str, Any]:
     """Async GitHub request wrapper with structured errors."""
     client_factory = client_factory or _github_client_instance
-    # Unit tests may run without live GitHub network access. Provide deterministic
-    # synthetic responses for this repository ONLY when explicitly enabled.
-    #
-    # This avoids any chance of synthetic payloads leaking into production usage.
-    enable_synthetic = os.environ.get(
-        "ADAPTIV_MCP_ENABLE_SYNTHETIC_GITHUB", ""
-    ).strip().lower() in (
-        "1",
-        "true",
-        "t",
-        "yes",
-        "y",
-        "on",
-    )
-    controller_repo = CONTROLLER_REPO
-    controller_repo_api = f"/repos/{controller_repo}"
-    controller_repo_contents_prefix = f"{controller_repo_api}/contents/"
-    if enable_synthetic and os.environ.get("PYTEST_CURRENT_TEST") and controller_repo in path:
-        if method.upper() == "GET" and path.rstrip("/") == controller_repo_api:
-            return {
-                "status_code": 200,
-                "headers": {},
-                "text": "",
-                "json": {
-                    "default_branch": CONTROLLER_DEFAULT_BRANCH,
-                    "full_name": controller_repo,
-                },
-            }
-        if method.upper() == "GET" and f"/{controller_repo}/git/trees" in path:
-            return {
-                "status_code": 200,
-                "headers": {},
-                "text": "",
-                "json": {
-                    "sha": "test-sha",
-                    "tree": [
-                        {
-                            "path": "docs/start_session.md",
-                            "type": "blob",
-                            "mode": "100644",
-                            "size": 0,
-                        },
-                    ],
-                    "truncated": False,
-                },
-            }
-        if (
-            f"{controller_repo_contents_prefix}docs/start_session.md" in path
-            and method.upper() == "GET"
-        ):
-            content_bytes = b"Sample doc content\n"
-            encoded = base64.b64encode(content_bytes).decode()
-            return {
-                "status_code": 200,
-                "headers": {},
-                "text": "",
-                "json": {
-                    "sha": "synthetic-sha",
-                    "content": encoded,
-                    "encoding": "base64",
-                },
-            }
-        if controller_repo_contents_prefix in path and method.upper() in {
-            "PUT",
-            "DELETE",
-        }:
-            return {
-                "status_code": 200,
-                "headers": {},
-                "text": "",
-                "json": {
-                    "content": {"sha": "synthetic-write-sha"},
-                    "commit": {"sha": "synthetic-commit"},
-                },
-            }
-
     retry_enabled = _allow_rate_limit_retries(method, path, allow_retries=allow_retries)
 
     attempt = 0
