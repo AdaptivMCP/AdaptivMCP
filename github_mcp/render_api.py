@@ -180,15 +180,8 @@ def _log_render_http(
     if not LOG_RENDER_HTTP:
         return
 
-    lvl = (level or "info").strip().lower()
-    if lvl == "debug":
-        BASE_LOGGER.debug(msg, extra=extra)
-    elif lvl == "warning":
-        BASE_LOGGER.warning(msg, extra=extra)
-    elif lvl == "error":
-        BASE_LOGGER.error(msg, extra=extra)
-    else:
-        BASE_LOGGER.info(msg, extra=extra)
+    # Info-only logging policy: always emit INFO.
+    BASE_LOGGER.info(msg, extra=extra)
 
 
 def _refresh_async_client(
@@ -201,10 +194,10 @@ def _refresh_async_client(
     from .async_utils import refresh_async_client
 
     def _log_debug(msg: str) -> None:
-        BASE_LOGGER.debug(msg)
+        BASE_LOGGER.info(msg)
 
     def _log_debug_exc(msg: str) -> None:
-        BASE_LOGGER.debug(msg, exc_info=True)
+        BASE_LOGGER.info(msg, exc_info=True)
 
     refreshed, loop = refresh_async_client(
         client,

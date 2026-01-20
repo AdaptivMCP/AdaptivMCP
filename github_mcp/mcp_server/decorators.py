@@ -413,7 +413,11 @@ def _inline_context(req: Mapping[str, Any]) -> str:
     except Exception as exc:
         # Best-effort: do not break tool logging, but make failures visible.
         try:
-            LOGGER.debug("Failed to format inline log context", exc_info=exc)
+            LOGGER.info(
+                "Failed to format inline log context",
+                extra={"severity": "warning"},
+                exc_info=exc,
+            )
         except Exception:
             pass
         return ""
@@ -1836,9 +1840,10 @@ def _chatgpt_friendly_result(
         # However, failures here are otherwise invisible and can look like
         # "errors being swallowed" to operators and clients.
         try:
-            LOGGER.warning(
+            LOGGER.info(
                 "Tool result shaping failed; returning raw result",
                 extra={
+                    "severity": "warning",
                     "event": "tool_result_shape_failed",
                     "error_type": exc.__class__.__name__,
                     "error_message": _truncate_text(str(exc), limit=200) if str(exc) else None,
@@ -1878,9 +1883,9 @@ def _log_tool_warning(
     payload["response"] = _result_snapshot(result) if not LOG_TOOL_PAYLOADS else result
 
     if not HUMAN_LOGS:
-        LOGGER.warning(
+        LOGGER.info(
             f"{_ansi('!', ANSI_YELLOW)} {_ansi(tool_name, ANSI_CYAN)} ms={duration_ms:.2f}",
-            extra={"event": "tool_call_completed_with_warnings", **payload},
+            extra={"severity": "warning", "event": "tool_call_completed_with_warnings", **payload},
         )
         return
 
@@ -1900,7 +1905,10 @@ def _log_tool_warning(
     inline = payload.get("log_context")
     if isinstance(inline, str) and inline:
         msg = msg + " " + _ansi(inline, ANSI_DIM)
-    LOGGER.warning(msg, extra={"event": "tool_call_completed_with_warnings", **payload})
+    LOGGER.info(
+        msg,
+        extra={"severity": "warning", "event": "tool_call_completed_with_warnings", **payload},
+    )
 
 
 def _log_tool_returned_error(
@@ -1957,7 +1965,10 @@ def _log_tool_returned_error(
         inline = payload.get("log_context")
         if isinstance(inline, str) and inline:
             msg = msg + " " + _ansi(inline, ANSI_DIM)
-        LOGGER.error(msg, extra={"event": "tool_call_failed", **payload})
+        LOGGER.info(
+            msg,
+            extra={"severity": "error", "event": "tool_call_failed", **payload},
+        )
         return
 
     arg_summary = _args_summary(all_args)
@@ -1989,7 +2000,10 @@ def _log_tool_returned_error(
     inline = payload.get("log_context")
     if isinstance(inline, str) and inline:
         msg = msg + " " + _ansi(inline, ANSI_DIM)
-    LOGGER.error(msg, extra={"event": "tool_call_failed", **payload})
+    LOGGER.info(
+        msg,
+        extra={"severity": "error", "event": "tool_call_failed", **payload},
+    )
 
 
 def _extract_tool_meta(kwargs: Mapping[str, Any]) -> dict[str, Any]:
@@ -2565,9 +2579,9 @@ def _log_tool_failure(
         inline = payload.get("log_context")
         if isinstance(inline, str) and inline:
             msg = msg + " " + _ansi(inline, ANSI_DIM)
-        LOGGER.error(
+        LOGGER.info(
             msg,
-            extra={"event": "tool_call_failed", **payload},
+            extra={"severity": "error", "event": "tool_call_failed", **payload},
             exc_info=exc if LOG_TOOL_EXC_INFO else None,
         )
         return
@@ -2610,9 +2624,9 @@ def _log_tool_failure(
     inline = payload.get("log_context")
     if isinstance(inline, str) and inline:
         msg = msg + " " + _ansi(inline, ANSI_DIM)
-    LOGGER.error(
+    LOGGER.info(
         msg,
-        extra={"event": "tool_call_failed", **payload},
+        extra={"severity": "error", "event": "tool_call_failed", **payload},
         # Hosted providers (Render) can become unusably noisy when every failure
         # includes a full traceback. Emit `exc_info` only when explicitly enabled.
         exc_info=exc if LOG_TOOL_EXC_INFO else None,
@@ -3664,7 +3678,11 @@ def register_extra_tools_if_available() -> None:
     except Exception as exc:
         # Keep best-effort behavior, but ensure operators can see why optional
         # tools were skipped.
-        LOGGER.warning("Failed to import/register optional extra_tools", exc_info=exc)
+        LOGGER.info(
+            "Failed to import/register optional extra_tools",
+            extra={"severity": "warning"},
+            exc_info=exc,
+        )
         return None
 
 

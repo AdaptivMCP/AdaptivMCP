@@ -798,8 +798,14 @@ class _StructuredFormatter(logging.Formatter):
         if isinstance(event, str) and event.startswith("tool_"):
             return base
 
+        severity = getattr(record, "severity", None)
+        severity_is_warn_or_error = (
+            isinstance(severity, str) and severity.strip().lower() in {"warning", "error"}
+        )
+
         should_append = bool(LOG_APPEND_EXTRAS) and (
             record.levelno >= logging.WARNING
+            or severity_is_warn_or_error
             or (isinstance(event, str) and event in always_append_events)
         )
 
@@ -888,6 +894,17 @@ def _format_extras_block(payload: Mapping[str, Any]) -> str:
 _STANDARD_LOG_FIELDS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys())
 
 
+class _InfoOnlyFilter(logging.Filter):
+    """Allow only INFO log records.
+
+    This repo is intentionally configured to emit a single log level in provider
+    streams.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003 - matches logging.Filter
+        return record.levelno == logging.INFO
+
+
 def _extract_log_extras(record: logging.LogRecord) -> dict[str, object]:
     extras: dict[str, object] = {}
 
@@ -916,10 +933,11 @@ def _configure_logging() -> None:
 
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(_StructuredFormatter(LOG_FORMAT))
-    console_handler.setLevel(logging.CRITICAL if QUIET_LOGS else _resolve_log_level(LOG_LEVEL))
+    console_handler.setLevel(logging.INFO)
+    console_handler.addFilter(_InfoOnlyFilter())
 
     logging.basicConfig(
-        level=logging.CRITICAL if QUIET_LOGS else _resolve_log_level(LOG_LEVEL),
+        level=logging.INFO,
         handlers=[console_handler],
         force=True,
     )
@@ -939,10 +957,10 @@ def _configure_logging() -> None:
         "httpx",
         "httpcore",
     ):
-        logging.getLogger(noisy).setLevel(logging.ERROR if QUIET_LOGS else logging.WARNING)
+        logging.getLogger(noisy).setLevel(logging.INFO)
 
     # Keep access logs off by default (they include request IDs / IPs and are very noisy).
-    logging.getLogger("uvicorn.access").setLevel(logging.ERROR if QUIET_LOGS else logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
 
     root._github_mcp_configured = True
 

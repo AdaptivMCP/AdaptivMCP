@@ -62,7 +62,8 @@ def test_provider_warning_logs_append_human_extras_block(monkeypatch):
     logger.setLevel(logging.INFO)
     logger.addHandler(handler)
 
-    logger.warning("warn", extra={"foo": "bar"})
+    # Info-only logging policy: warnings are emitted at INFO with a severity tag.
+    logger.info("warn", extra={"severity": "warning", "foo": "bar"})
 
     out = stream.getvalue()
     assert "extras:" in out

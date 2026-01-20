@@ -409,13 +409,14 @@ class _RequestContextMiddleware:
                         "duration_ms": duration_ms,
                         "exception_type": type(exc).__name__,
                     }
-                    LOGGER.exception(
+                    LOGGER.info(
                         (
                             "http_exception "
                             f"method={scope.get('method')} path={path} request_id={shorten_token(request_id)} "
                             f"duration_ms={duration_ms:.2f}"
                         ),
-                        extra=payload,
+                        extra={"severity": "error", **payload},
+                        exc_info=True,
                     )
                 raise
 
@@ -434,13 +435,14 @@ class _RequestContextMiddleware:
                     "duration_ms": duration_ms,
                     "exception_type": type(exc).__name__,
                 }
-                LOGGER.exception(
+                LOGGER.info(
                     (
                         "http_exception "
                         f"method={scope.get('method')} path={path} request_id={shorten_token(request_id)} "
                         f"duration_ms={duration_ms:.2f}"
                     ),
-                    extra=payload,
+                    extra={"severity": "error", **payload},
+                    exc_info=True,
                 )
             raise
 
@@ -655,7 +657,11 @@ async def _handle_unexpected_error(request, exc):
     detail_dict = detail if isinstance(detail, dict) else {"category": "internal"}
     status_code = _status_code_for_error(detail_dict)
     headers = _response_headers_for_error(detail_dict)
-    LOGGER.exception("Unhandled exception", extra={"path": request.url.path})
+    LOGGER.info(
+        "Unhandled exception",
+        extra={"severity": "error", "path": request.url.path},
+        exc_info=True,
+    )
     return JSONResponse(structured, status_code=status_code, headers=headers)
 
 

@@ -55,22 +55,25 @@ async def _perform_github_commit_and_refresh_workspace(
             reset=True,
         )
         if isinstance(refresh, dict) and refresh.get("error"):
-            LOGGER.debug(
+            LOGGER.info(
                 "Repo mirror refresh returned an error after commit",
                 extra={
+                    "severity": "error",
                     "full_name": full_name,
                     "branch": branch,
                     "error": refresh.get("error"),
                 },
             )
     except Exception as exc:  # pragma: no cover - defensive logging only
-        LOGGER.debug(
+        LOGGER.info(
             "Failed to refresh repo mirror after commit",
             extra={
+                "severity": "error",
                 "full_name": full_name,
                 "branch": branch,
                 "error": str(exc),
             },
+            exc_info=True,
         )
 
     return commit_result
