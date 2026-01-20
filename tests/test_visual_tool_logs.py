@@ -51,10 +51,25 @@ def test_preview_file_snippet_respects_start_line() -> None:
     assert "  11│" in rendered
 
 
-def test_strip_internal_log_fields_removes_private_keys() -> None:
+def test_strip_internal_log_fields_preserves_log_keys_by_default() -> None:
     decorators = _reload_decorators_with_env(
         ADAPTIV_MCP_LOG_COLOR="0",
         ADAPTIV_MCP_LOG_VISUALS="1",
+        ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS="0",
+    )
+
+    payload = {"ok": True, "__log_diff": "x", "__log_start_line": 12}
+    cleaned = decorators._strip_internal_log_fields(payload)
+    # Preserve the log keys so client-visible output matches the payload used
+    # to render tool log visuals.
+    assert cleaned == payload
+
+
+def test_strip_internal_log_fields_can_restore_legacy_stripping() -> None:
+    decorators = _reload_decorators_with_env(
+        ADAPTIV_MCP_LOG_COLOR="0",
+        ADAPTIV_MCP_LOG_VISUALS="1",
+        ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS="1",
     )
 
     payload = {"ok": True, "__log_diff": "x", "__log_start_line": 12}

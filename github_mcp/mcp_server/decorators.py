@@ -224,6 +224,16 @@ CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int("ADAPTIV_MCP_RESPONSE_MAX_LIST_ITEMS"
 # outputs. Redaction is therefore enabled by default, with an escape hatch.
 REDACT_TOOL_OUTPUTS = _env_flag("ADAPTIV_MCP_REDACT_TOOL_OUTPUTS", default=True)
 
+# Tool log field handling
+#
+# Historically we stripped __log_* keys from tool return values, relying on the
+# provider log stream for visuals (diffs/snippets). This can cause the model and
+# the user to see different information than what shows up in tool logs.
+#
+# Default is now to PRESERVE __log_* fields in tool responses so HTTP clients
+# and MCP clients see the same payload that generated the visuals.
+STRIP_INTERNAL_LOG_FIELDS = _env_flag("ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS", default=False)
+
 
 def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
     """Determine response shaping mode.
@@ -1928,16 +1938,19 @@ def _strip_tool_meta(kwargs: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _strip_internal_log_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Remove internal log-only keys from a tool result before returning.
+    """Optionally remove internal log-only keys from a tool result.
 
     Tool implementations may include keys prefixed with ``__log_`` to pass
-    additional context to provider logs (e.g., precomputed diffs).
-    These keys are filtered from client responses.
+    additional context to provider logs (e.g., precomputed diffs/snippets).
+
+    Default behavior is to PRESERVE these fields so the client-visible payload
+    matches the payload used to render tool logs. Set
+    ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=1 to restore legacy stripping.
     """
 
-    if not isinstance(payload, Mapping):
-        return dict(payload)
-    out = dict(payload)
+    out = dict(payload) if isinstance(payload, Mapping) else dict(payload)
+    if not STRIP_INTERNAL_LOG_FIELDS:
+        return out
     for k in list(out.keys()):
         if isinstance(k, str) and k.startswith("__log_"):
             out.pop(k, None)
