@@ -5,6 +5,7 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from github_mcp.exceptions import UsageError
 from github_mcp.mcp_server.error_handling import _structured_tool_error
 
 
@@ -103,7 +104,7 @@ def register_render_routes(app: Any) -> None:
 
         service_id = str(request.path_params.get("service_id") or "").strip()
         if not service_id:
-            return JSONResponse({"error": "service_id is required"}, status_code=400)
+            return _error_response(UsageError("service_id is required"), context="http:render_service")
         try:
             result = await get_render_service(service_id=service_id)
             return JSONResponse(result)
@@ -115,7 +116,7 @@ def register_render_routes(app: Any) -> None:
 
         service_id = str(request.path_params.get("service_id") or "").strip()
         if not service_id:
-            return JSONResponse({"error": "service_id is required"}, status_code=400)
+            return _error_response(UsageError("service_id is required"), context="http:render_deploys")
 
         cursor = _parse_str(request.query_params.get("cursor"))
         limit = _parse_int(
@@ -133,7 +134,10 @@ def register_render_routes(app: Any) -> None:
         service_id = str(request.path_params.get("service_id") or "").strip()
         deploy_id = str(request.path_params.get("deploy_id") or "").strip()
         if not service_id or not deploy_id:
-            return JSONResponse({"error": "service_id and deploy_id are required"}, status_code=400)
+            return _error_response(
+                UsageError("service_id and deploy_id are required"),
+                context="http:render_deploy",
+            )
         try:
             result = await get_render_deploy(service_id=service_id, deploy_id=deploy_id)
             return JSONResponse(result)
@@ -145,7 +149,10 @@ def register_render_routes(app: Any) -> None:
 
         service_id = str(request.path_params.get("service_id") or "").strip()
         if not service_id:
-            return JSONResponse({"error": "service_id is required"}, status_code=400)
+            return _error_response(
+                UsageError("service_id is required"),
+                context="http:render_create_deploy",
+            )
 
         body = await _json_body(request)
         clear_cache = bool(body.get("clear_cache", False))
@@ -169,7 +176,10 @@ def register_render_routes(app: Any) -> None:
         service_id = str(request.path_params.get("service_id") or "").strip()
         deploy_id = str(request.path_params.get("deploy_id") or "").strip()
         if not service_id or not deploy_id:
-            return JSONResponse({"error": "service_id and deploy_id are required"}, status_code=400)
+            return _error_response(
+                UsageError("service_id and deploy_id are required"),
+                context="http:render_cancel_deploy",
+            )
         try:
             result = await cancel_render_deploy(service_id=service_id, deploy_id=deploy_id)
             return JSONResponse(result)
@@ -182,7 +192,10 @@ def register_render_routes(app: Any) -> None:
         service_id = str(request.path_params.get("service_id") or "").strip()
         deploy_id = str(request.path_params.get("deploy_id") or "").strip()
         if not service_id or not deploy_id:
-            return JSONResponse({"error": "service_id and deploy_id are required"}, status_code=400)
+            return _error_response(
+                UsageError("service_id and deploy_id are required"),
+                context="http:render_rollback_deploy",
+            )
         try:
             result = await rollback_render_deploy(service_id=service_id, deploy_id=deploy_id)
             return JSONResponse(result)
@@ -194,7 +207,10 @@ def register_render_routes(app: Any) -> None:
 
         service_id = str(request.path_params.get("service_id") or "").strip()
         if not service_id:
-            return JSONResponse({"error": "service_id is required"}, status_code=400)
+            return _error_response(
+                UsageError("service_id is required"),
+                context="http:render_restart_service",
+            )
         try:
             result = await restart_render_service(service_id=service_id)
             return JSONResponse(result)
@@ -252,14 +268,17 @@ def register_render_routes(app: Any) -> None:
             try:
                 status_code = int(status_code_raw)
             except Exception:
-                return JSONResponse({"error": "status_code must be an integer"}, status_code=400)
+                return _error_response(
+                    UsageError("status_code must be an integer"),
+                    context="http:render_list_logs",
+                )
 
         if not owner_id or not resources:
-            return JSONResponse(
-                {
-                    "error": "Provide owner_id and resources. Example: /render/logs?owner_id=<id>&resources=srv-...",
-                },
-                status_code=400,
+            return _error_response(
+                UsageError(
+                    "Provide owner_id and resources. Example: /render/logs?owner_id=<id>&resources=srv-..."
+                ),
+                context="http:render_list_logs",
             )
 
         try:

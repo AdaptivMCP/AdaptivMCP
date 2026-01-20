@@ -41,8 +41,9 @@ def _maybe_diff_for_log(
 ) -> str | None:
     """Best-effort unified diff for provider logs.
 
-    The diff is attached to tool results under a __log_* key and stripped from
-    client-visible payloads by the tool wrapper.
+    The diff is attached to tool results under a __log_* key. The tool wrapper
+    preserves these fields in client-visible payloads by default so the user and
+    model see the same data that produced visual tool logs.
     """
 
     if not _LOG_WRITE_DIFFS:
@@ -2225,7 +2226,8 @@ async def apply_patch(
 
     Notes:
       - Visual tool logs look for `__log_diff` in the *raw* tool payload. The decorator wrapper
-        strips `__log_*` fields from the client-facing response.
+        preserves `__log_*` fields in the client-facing response by default.
+        Set ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=1 to restore legacy stripping.
       - To avoid leaking patch contents in error responses, we only include short digests.
     """
 
