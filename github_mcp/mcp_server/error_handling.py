@@ -11,9 +11,23 @@ Contract notes:
 
 from __future__ import annotations
 
+import asyncio
+import importlib.util
 import os
 import re
 from typing import Any
+
+if importlib.util.find_spec("httpx") is not None:
+    import httpx
+else:
+
+    class TimeoutException(Exception):
+        """Fallback timeout exception when httpx is unavailable."""
+
+    class _HttpxModule:
+        TimeoutException = TimeoutException
+
+    httpx = _HttpxModule()
 
 from github_mcp.exceptions import (
     APIError,
@@ -194,6 +208,10 @@ def _structured_tool_error(
     elif isinstance(exc, GitHubRateLimitError):
         category = "rate_limited"
         code = code or "github_rate_limited"
+        retryable = True
+    elif isinstance(exc, (TimeoutError, asyncio.TimeoutError, httpx.TimeoutException)):
+        category = "timeout"
+        code = code or "timeout"
         retryable = True
     elif isinstance(exc, (WriteApprovalRequiredError, WriteNotAuthorizedError)):
         category = "permission"
