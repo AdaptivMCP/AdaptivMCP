@@ -441,7 +441,7 @@ async def run_quality_suite(
             security_command = (
                 "python -m pip check"
                 " && pip-audit -r dev-requirements.txt"
-                " && bandit -q -r github_mcp"
+                " && bandit -q -r github_mcp --ini .bandit"
             )
 
     # If auto-fix is enabled, prefer fix-capable commands.
