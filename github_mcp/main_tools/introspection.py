@@ -202,7 +202,7 @@ def list_all_actions(
     gate = _write_gate_state()
     write_auto_approved = gate["write_auto_approved"]
     seen_names: set[str] = set()
-    registry_entries, registry_errors = _iter_tool_registry()
+    registry_entries, _ = _iter_tool_registry()
     for tool, func in registry_entries:
         name = _registered_tool_name(tool, func)
         if not name:
@@ -286,39 +286,12 @@ def list_all_actions(
 
         tools.append(tool_info)
 
-    if "list_all_actions" not in seen_names:
-        approval_required = _approval_required(False, write_auto_approved)
-        synthetic: dict[str, Any] = {
-            "name": "list_all_actions",
-            "description": "Enumerate every available MCP tool with optional schemas.",
-            "visibility": "public",
-            "write_action": False,
-            "write_allowed": gate["write_allowed"],
-            "write_enabled": gate["write_enabled"],
-            "write_auto_approved": write_auto_approved,
-            "write_actions_enabled": gate["write_actions_enabled"],
-            "approval_required": approval_required,
-        }
-        if include_parameters:
-            synthetic["input_schema"] = {
-                "type": "object",
-                "properties": {
-                    "include_parameters": {"type": "boolean"},
-                    "compact": {"type": ["boolean", "null"]},
-                },
-                "additionalProperties": False,
-            }
-            synthetic["inputSchema"] = synthetic["input_schema"]
-        tools.append(synthetic)
-
     tools.sort(key=lambda entry: entry["name"])
 
     payload: dict[str, Any] = {
         "compact": compact_mode,
         "tools": tools,
     }
-    if registry_errors:
-        payload["errors"] = registry_errors
     return payload
 
 
