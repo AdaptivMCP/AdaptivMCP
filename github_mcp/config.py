@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 import re
@@ -11,6 +12,11 @@ from collections.abc import Mapping
 from typing import Any
 
 from github_mcp.mcp_server.schemas import _jsonable
+
+if importlib.util.find_spec("dotenv"):
+    from dotenv import load_dotenv
+
+    load_dotenv()
 
 _UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
