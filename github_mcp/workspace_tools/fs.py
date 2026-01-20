@@ -1232,6 +1232,167 @@ async def compare_workspace_files(
         return _structured_tool_error(exc, context="compare_workspace_files")
 
 
+async def _build_workspace_diff_payload(
+    *,
+    full_name: str,
+    ref: str,
+    path: str | None,
+    before: str | None,
+    after: str | None,
+    updated_content: str | None,
+    context_lines: int,
+    max_chars_per_side: int,
+    max_diff_chars: int,
+    fromfile: str | None,
+    tofile: str | None,
+) -> dict[str, Any]:
+    if not isinstance(context_lines, int) or context_lines < 0:
+        raise ValueError("context_lines must be an int >= 0")
+    if not isinstance(max_chars_per_side, int) or max_chars_per_side < 1:
+        raise ValueError("max_chars_per_side must be an int >= 1")
+    if not isinstance(max_diff_chars, int) or max_diff_chars < 1:
+        raise ValueError("max_diff_chars must be an int >= 1")
+
+    meta: dict[str, Any] = {
+        "context_lines": int(context_lines),
+        "max_diff_chars": int(max_diff_chars),
+    }
+
+    if path is not None and path != "":
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("path must be a non-empty string when provided")
+        if updated_content is None:
+            raise ValueError("updated_content must be provided when path is set")
+        if not isinstance(updated_content, str):
+            raise TypeError("updated_content must be a string")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        before_info = _workspace_read_text_limited(
+            repo_dir, path, max_chars=max_chars_per_side
+        )
+        before_text = (before_info.get("text") or "") if before_info.get("exists") else ""
+        before_exists = bool(before_info.get("exists"))
+        before_label = fromfile or (f"a/{path}" if before_exists else "/dev/null")
+        after_label = tofile or f"b/{path}"
+
+        meta.update(
+            {
+                "ref": effective_ref,
+                "path": path,
+                "before_exists": before_exists,
+                "before_truncated": bool(before_info.get("truncated")),
+                "max_chars_per_side": int(max_chars_per_side),
+            }
+        )
+        before = before_text
+        after = updated_content
+    else:
+        if before is None or after is None:
+            raise ValueError("before and after must be provided when path is not set")
+        if not isinstance(before, str) or not isinstance(after, str):
+            raise TypeError("before and after must be strings")
+        before_label = fromfile or "before"
+        after_label = tofile or "after"
+
+    diff_text = build_unified_diff(
+        before,
+        after,
+        fromfile=before_label,
+        tofile=after_label,
+        n=int(context_lines),
+    )
+    truncated = False
+    if len(diff_text) > int(max_diff_chars):
+        diff_text = diff_text[: int(max_diff_chars)]
+        truncated = True
+
+    stats = diff_stats(diff_text)
+    meta.update(
+        {
+            "diff": diff_text,
+            "diff_stats": {"added": stats.added, "removed": stats.removed},
+            "truncated": bool(truncated),
+        }
+    )
+    return meta
+
+
+@mcp_tool(write_action=False)
+async def make_workspace_diff(
+    full_name: str,
+    ref: str = "main",
+    *,
+    path: str | None = None,
+    before: str | None = None,
+    after: str | None = None,
+    updated_content: str | None = None,
+    context_lines: int = 3,
+    max_chars_per_side: int = 200_000,
+    max_diff_chars: int = 200_000,
+    fromfile: str | None = None,
+    tofile: str | None = None,
+) -> dict[str, Any]:
+    """Build a unified diff from workspace content or provided text."""
+
+    try:
+        return await _build_workspace_diff_payload(
+            full_name=full_name,
+            ref=ref,
+            path=path,
+            before=before,
+            after=after,
+            updated_content=updated_content,
+            context_lines=context_lines,
+            max_chars_per_side=max_chars_per_side,
+            max_diff_chars=max_diff_chars,
+            fromfile=fromfile,
+            tofile=tofile,
+        )
+    except Exception as exc:
+        return _structured_tool_error(exc, context="make_workspace_diff", path=path)
+
+
+@mcp_tool(write_action=False)
+async def make_workspace_patch(
+    full_name: str,
+    ref: str = "main",
+    *,
+    path: str | None = None,
+    before: str | None = None,
+    after: str | None = None,
+    updated_content: str | None = None,
+    context_lines: int = 3,
+    max_chars_per_side: int = 200_000,
+    max_diff_chars: int = 200_000,
+    fromfile: str | None = None,
+    tofile: str | None = None,
+) -> dict[str, Any]:
+    """Build a unified diff patch from workspace content or provided text."""
+
+    try:
+        payload = await _build_workspace_diff_payload(
+            full_name=full_name,
+            ref=ref,
+            path=path,
+            before=before,
+            after=after,
+            updated_content=updated_content,
+            context_lines=context_lines,
+            max_chars_per_side=max_chars_per_side,
+            max_diff_chars=max_diff_chars,
+            fromfile=fromfile,
+            tofile=tofile,
+        )
+        patch = payload.pop("diff", "")
+        payload["patch"] = patch
+        return payload
+    except Exception as exc:
+        return _structured_tool_error(exc, context="make_workspace_patch", path=path)
+
+
 @mcp_tool(write_action=True)
 async def set_workspace_file_contents(
     full_name: str,
@@ -1896,46 +2057,18 @@ async def replace_workspace_text(
         )
 
 
-@mcp_tool(
-    write_action=True,
-    open_world_hint=True,
-    destructive_hint=True,
-    ui={
-        "group": "workspace",
-        "icon": "🧩",
-        "label": "Apply Patch",
-        "danger": "high",
-    },
-)
-async def apply_patch(
-    full_name: str,
-    ref: str = "main",
+async def _apply_patch_impl(
     *,
+    full_name: str,
+    ref: str,
     patch: str | list[str],
-    add: bool = False,
-    commit: bool = False,
-    commit_message: str = "Apply patch",
-    push: bool = False,
-    check_changes: bool = False,
+    add: bool,
+    commit: bool,
+    commit_message: str,
+    push: bool,
+    check_changes: bool,
+    context: str,
 ) -> dict[str, Any]:
-    """Apply one or more unified diff patches to the persistent repo mirror.
-
-    Args:
-      patch: a unified diff string or a list of unified diff strings.
-      add: if true, stage changes after applying.
-      commit: if true, create a local commit after applying (requires changes).
-      push: if true, push the created commit to origin (requires commit=true and a branch ref).
-      check_changes: if true, include `status_output` (git status porcelain) in the response.
-
-    Returns:
-      A dict with stable keys: ref, status, ok, patches_applied (+ optional diff_stats/status_output).
-
-    Notes:
-      - Visual tool logs look for `__log_diff` in the *raw* tool payload. The decorator wrapper
-        strips `__log_*` fields from the client-facing response.
-      - To avoid leaking patch contents in error responses, we only include short digests.
-    """
-
     debug_args: dict[str, Any] = {
         "full_name": full_name,
         "ref": ref,
@@ -2053,7 +2186,97 @@ async def apply_patch(
         return response
 
     except Exception as exc:
-        return _structured_tool_error(exc, context="apply_patch", args=debug_args)
+        return _structured_tool_error(exc, context=context, args=debug_args)
+
+
+@mcp_tool(
+    write_action=True,
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={
+        "group": "workspace",
+        "icon": "🧩",
+        "label": "Apply Patch",
+        "danger": "high",
+    },
+)
+async def apply_patch(
+    full_name: str,
+    ref: str = "main",
+    *,
+    patch: str | list[str],
+    add: bool = False,
+    commit: bool = False,
+    commit_message: str = "Apply patch",
+    push: bool = False,
+    check_changes: bool = False,
+) -> dict[str, Any]:
+    """Apply one or more unified diff patches to the persistent repo mirror.
+
+    Args:
+      patch: a unified diff string or a list of unified diff strings.
+      add: if true, stage changes after applying.
+      commit: if true, create a local commit after applying (requires changes).
+      push: if true, push the created commit to origin (requires commit=true and a branch ref).
+      check_changes: if true, include `status_output` (git status porcelain) in the response.
+
+    Returns:
+      A dict with stable keys: ref, status, ok, patches_applied (+ optional diff_stats/status_output).
+
+    Notes:
+      - Visual tool logs look for `__log_diff` in the *raw* tool payload. The decorator wrapper
+        strips `__log_*` fields from the client-facing response.
+      - To avoid leaking patch contents in error responses, we only include short digests.
+    """
+
+    return await _apply_patch_impl(
+        full_name=full_name,
+        ref=ref,
+        patch=patch,
+        add=add,
+        commit=commit,
+        commit_message=commit_message,
+        push=push,
+        check_changes=check_changes,
+        context="apply_patch",
+    )
+
+
+@mcp_tool(
+    write_action=True,
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={
+        "group": "workspace",
+        "icon": "🧩",
+        "label": "Apply Diff",
+        "danger": "high",
+    },
+)
+async def apply_workspace_diff(
+    full_name: str,
+    ref: str = "main",
+    *,
+    diff: str | list[str],
+    add: bool = False,
+    commit: bool = False,
+    commit_message: str = "Apply diff",
+    push: bool = False,
+    check_changes: bool = False,
+) -> dict[str, Any]:
+    """Apply one or more unified diffs to the persistent repo mirror."""
+
+    return await _apply_patch_impl(
+        full_name=full_name,
+        ref=ref,
+        patch=diff,
+        add=add,
+        commit=commit,
+        commit_message=commit_message,
+        push=push,
+        check_changes=check_changes,
+        context="apply_workspace_diff",
+    )
 
 
 @mcp_tool(write_action=True)
