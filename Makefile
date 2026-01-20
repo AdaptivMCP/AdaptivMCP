@@ -24,7 +24,7 @@ typecheck:
 security:
 	python -m pip check
 	pip-audit -r dev-requirements.txt
-	bandit -q -r github_mcp
+	bandit -q -r github_mcp --ini .bandit
 
 test:
 	pytest -q
