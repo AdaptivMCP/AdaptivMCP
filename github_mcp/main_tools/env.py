@@ -109,37 +109,43 @@ async def validate_environment() -> dict[str, Any]:
             status = "warning"
 
     # GitHub token presence/shape
-    raw_token = None
+    token_value = None
     token_env_var = None
+    empty_env_var = None
     for env_var in GITHUB_TOKEN_ENV_VARS:
         candidate = os.environ.get(env_var)
-        if candidate is not None:
-            raw_token = candidate
+        if candidate is None:
+            continue
+        stripped = candidate.strip()
+        if stripped:
+            token_value = stripped
             token_env_var = env_var
             break
+        if empty_env_var is None:
+            empty_env_var = env_var
 
-    if raw_token is None:
-        add_check(
-            "github_token",
-            "error",
-            "GitHub token is not set",
-            {"env_vars": list(GITHUB_TOKEN_ENV_VARS)},
-        )
-        token_ok = False
-    elif not raw_token.strip():
-        add_check(
-            "github_token",
-            "error",
-            "GitHub token environment variable is set but empty",
-            {"env_var": token_env_var} if token_env_var else {},
-        )
+    if token_value is None:
+        if empty_env_var is not None:
+            add_check(
+                "github_token",
+                "error",
+                "GitHub token environment variable is set but empty",
+                {"env_var": empty_env_var},
+            )
+        else:
+            add_check(
+                "github_token",
+                "error",
+                "GitHub token is not set",
+                {"env_vars": list(GITHUB_TOKEN_ENV_VARS)},
+            )
         token_ok = False
     else:
         add_check(
             "github_token",
             "ok",
             "GitHub token environment variable is set",
-            {"env_var": token_env_var, "length": len(raw_token)},
+            {"env_var": token_env_var, "length": len(token_value)},
         )
         token_ok = True
 
@@ -422,7 +428,7 @@ async def validate_environment() -> dict[str, Any]:
 
         token_details: dict[str, Any] = {
             "env_var": token_env_var,
-            "length": len(raw_token or "") if raw_token is not None else None,
+            "length": len(token_value or "") if token_value is not None else None,
             "authorization_scheme": "Bearer",
         }
 

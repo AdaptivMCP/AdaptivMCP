@@ -205,6 +205,84 @@ async def test_validate_environment_happy_path_ok(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_validate_environment_skips_empty_github_pat(monkeypatch):
+    import github_mcp.main_tools.env as env
+
+    # Avoid identity placeholder warnings in this unit test.
+    monkeypatch.setattr(env, "GIT_IDENTITY_PLACEHOLDER_ACTIVE", False)
+
+    expected_tool_names = {
+        # Introspection
+        "list_all_actions",
+        "list_tools",
+        "describe_tool",
+        # Render (canonical)
+        "list_render_owners",
+        "list_render_services",
+        "get_render_service",
+        "list_render_deploys",
+        "get_render_deploy",
+        "create_render_deploy",
+        "cancel_render_deploy",
+        "rollback_render_deploy",
+        "restart_render_service",
+        "get_render_logs",
+        "list_render_logs",
+        # Render (aliases)
+        "render_list_owners",
+        "render_list_services",
+        "render_get_service",
+        "render_list_deploys",
+        "render_get_deploy",
+        "render_create_deploy",
+        "render_cancel_deploy",
+        "render_rollback_deploy",
+        "render_restart_service",
+        "render_get_logs",
+        "render_list_logs",
+    }
+
+    def fake_list_all_actions(*, include_parameters: bool = False, compact: bool | None = None):
+        return {"tools": [{"name": name} for name in sorted(expected_tool_names)]}
+
+    monkeypatch.setattr(
+        "github_mcp.main_tools.introspection.list_all_actions",
+        fake_list_all_actions,
+    )
+    monkeypatch.setattr(
+        "github_mcp.mcp_server.registry._REGISTERED_MCP_TOOLS",
+        [{"name": name} for name in sorted(expected_tool_names)],
+    )
+
+    from github_mcp.config import GITHUB_TOKEN_ENV_VARS
+
+    for name in GITHUB_TOKEN_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
+    monkeypatch.setenv("GITHUB_PAT", "  ")
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+
+    monkeypatch.setenv("ADAPTIV_MCP_CONTROLLER_REPO", DummyMainAllGreen.CONTROLLER_REPO)
+    monkeypatch.setenv("ADAPTIV_MCP_CONTROLLER_BRANCH", DummyMainAllGreen.CONTROLLER_DEFAULT_BRANCH)
+
+    monkeypatch.setattr(env, "_get_optional_render_token", lambda: "render-token")
+
+    async def dummy_render_request(method: str, path: str, params=None, json_body=None):
+        assert method == "GET"
+        assert path == "/owners"
+        return {"json": [{"id": "o1", "name": "Owner", "type": "team"}]}
+
+    monkeypatch.setattr(env, "render_request", dummy_render_request)
+    monkeypatch.setattr(env, "_main", lambda: DummyMainAllGreen())
+
+    payload = await env.validate_environment()
+
+    checks = {c["name"]: c for c in payload["checks"]}
+    assert checks["github_token"]["level"] == "ok"
+    assert checks["github_token"]["details"]["env_var"] == "GITHUB_TOKEN"
+
+
+@pytest.mark.anyio
 async def test_main_validate_environment_delegates(monkeypatch):
     import main
 
