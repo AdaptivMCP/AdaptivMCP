@@ -94,10 +94,13 @@ delete_workspace_word = _fs.delete_workspace_word
 edit_workspace_line = _fs.edit_workspace_line
 replace_workspace_text = _fs.replace_workspace_text
 apply_patch = _fs.apply_patch
+apply_workspace_diff = _fs.apply_workspace_diff
 delete_workspace_paths = _fs.delete_workspace_paths
 move_workspace_paths = _fs.move_workspace_paths
 apply_workspace_operations = _fs.apply_workspace_operations
 compare_workspace_files = _fs.compare_workspace_files
+make_workspace_diff = _fs.make_workspace_diff
+make_workspace_patch = _fs.make_workspace_patch
 
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace
@@ -180,10 +183,13 @@ __all__ = [
     "edit_workspace_line",
     "replace_workspace_text",
     "apply_patch",
+    "apply_workspace_diff",
     "delete_workspace_paths",
     "move_workspace_paths",
     "apply_workspace_operations",
     "compare_workspace_files",
+    "make_workspace_diff",
+    "make_workspace_patch",
     "list_workspace_files",
     "search_workspace",
     "find_workspace_paths",
