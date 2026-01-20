@@ -869,6 +869,34 @@ def _stringify_annotation(annotation: Any) -> str:
         return f"<{type(annotation).__name__}>"
 
 
+def _schema_for_callable(
+    func: Any,
+    tool_obj: Any | None = None,
+    *,
+    tool_name: str,
+) -> dict[str, Any]:
+    """Return the best-effort input schema for a tool callable."""
+
+    schema: Any = None
+    try:
+        schema = _schema_from_signature(inspect.signature(func), tool_name=tool_name)
+    except Exception:
+        schema = None
+
+    if not isinstance(schema, Mapping):
+        schema = getattr(func, "__mcp_input_schema__", None)
+    if not isinstance(schema, Mapping) and tool_obj is not None:
+        schema = _normalize_input_schema(tool_obj)
+    if not isinstance(schema, Mapping):
+        schema = {"type": "object", "properties": {}}
+
+    safe_schema = _jsonable(schema)
+    if not isinstance(safe_schema, Mapping):
+        safe_schema = {"type": "object", "properties": {}}
+
+    return dict(safe_schema)
+
+
 def _preflight_tool_args(
     tool_name: str,
     args: Mapping[str, Any],
