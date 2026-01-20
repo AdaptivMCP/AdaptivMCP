@@ -163,6 +163,35 @@ async def validate_environment() -> dict[str, Any]:
         },
     )
 
+    min_version = config.MIN_PYTHON_VERSION
+    max_version = config.MAX_PYTHON_VERSION
+    current_version = sys.version_info
+    current_pair = (current_version.major, current_version.minor)
+    current_label = f"{current_version.major}.{current_version.minor}"
+    min_label = f"{min_version[0]}.{min_version[1]}"
+    max_label = f"{max_version[0]}.{max_version[1]}"
+    if current_pair < min_version:
+        add_check(
+            "python_version",
+            "error",
+            f"Python {current_label} is below the supported minimum {min_label}",
+            {"current": current_label, "minimum": min_label, "maximum": max_label},
+        )
+    elif current_pair > max_version:
+        add_check(
+            "python_version",
+            "warning",
+            f"Python {current_label} is newer than the supported maximum {max_label}",
+            {"current": current_label, "minimum": min_label, "maximum": max_label},
+        )
+    else:
+        add_check(
+            "python_version",
+            "ok",
+            f"Python {current_label} is within the supported range",
+            {"current": current_label, "minimum": min_label, "maximum": max_label},
+        )
+
     # Render/host environment signals (best-effort; do not assume Render)
     env_signals: dict[str, Any] = {}
     for key in (

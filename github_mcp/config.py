@@ -22,6 +22,10 @@ _UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 
+# Supported runtime versions for the server.
+MIN_PYTHON_VERSION = (3, 12)
+MAX_PYTHON_VERSION = (3, 13)
+
 
 def shorten_token(value: object, *, head: int = 8, tail: int = 4) -> object:
     """Optionally shorten identifiers for scan-friendly provider logs.

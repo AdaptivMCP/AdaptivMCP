@@ -7,6 +7,11 @@ This repository provides a lightweight MCP server exposing GitHub and workspace 
 Response-size truncation environment variables and related code paths were removed.
 If you encounter references to max-character response limits elsewhere, treat them as obsolete.
 
+## Supported Python versions
+
+This server targets Python 3.12 through 3.13. Use Python 3.12 or 3.13 for
+production deployments; older runtimes are unsupported.
+
 ## Workspace clone location
 
 Workspace tools (like `terminal_command` and file operations) run against a
