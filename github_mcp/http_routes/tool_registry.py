@@ -352,8 +352,10 @@ async def _execute_tool(
                     status_code = _status_code_for_error(err)
                     headers = _response_headers_for_error(err)
 
-                    if (not write_action) and retryable and (
-                        max_attempts is None or attempt < max_attempts
+                    if (
+                        (not write_action)
+                        and retryable
+                        and (max_attempts is None or attempt < max_attempts)
                     ):
                         delay = min(base_backoff_s * (2 ** (attempt - 1)), 2.0)
                         details = err.get("details")
@@ -381,8 +383,10 @@ async def _execute_tool(
             headers = _response_headers_for_error(err)
 
             # Retry only for read tools, and only when explicitly marked retryable.
-            if (not write_action) and retryable and (
-                max_attempts is None or attempt < max_attempts
+            if (
+                (not write_action)
+                and retryable
+                and (max_attempts is None or attempt < max_attempts)
             ):
                 delay = min(base_backoff_s * (2 ** (attempt - 1)), 2.0)
                 details = err.get("details")
