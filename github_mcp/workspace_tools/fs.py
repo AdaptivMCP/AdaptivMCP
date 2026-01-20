@@ -181,6 +181,36 @@ def _workspace_read_text_limited(
             "truncated": False,
         }
 
+    # Binary files can decode into enormous replacement-filled strings that
+    # overwhelm some clients and appear as an "infinite hang". Detect a small
+    # sample up-front and return a stable, non-text payload.
+    if _is_probably_binary(abs_path):
+        size_bytes = os.path.getsize(abs_path)
+        truncated_bytes = size_bytes > max_bytes
+        sample = b""
+        try:
+            with open(abs_path, "rb") as bf:
+                sample = bf.read(min(4096, int(max_bytes)))
+        except Exception:
+            sample = b""
+
+        digest = hashlib.blake2s(sample, digest_size=4).hexdigest() if sample else None
+        return {
+            "exists": True,
+            "path": path,
+            "text": "",
+            "encoding": "binary",
+            "is_binary": True,
+            "had_decoding_errors": False,
+            "size_bytes": int(size_bytes),
+            "truncated": bool(truncated_bytes),
+            "truncated_bytes": bool(truncated_bytes),
+            "truncated_chars": False,
+            "max_bytes": int(max_bytes),
+            "max_chars": int(max_chars),
+            "text_digest": digest,
+        }
+
     size_bytes = os.path.getsize(abs_path)
     truncated_bytes = size_bytes > max_bytes
     to_read = min(size_bytes, max_bytes)
