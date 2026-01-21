@@ -249,7 +249,7 @@ try:
     FASTMCP_AVAILABLE = True
 
     mcp = FastMCP(
-        "github-mcp",
+        "Adaptiv MCP Custom Connector",
         host=os.environ.get("FASTMCP_HOST", "0.0.0.0"),
         transport_security=_resolve_transport_security(),
     )

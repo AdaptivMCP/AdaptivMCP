@@ -259,7 +259,7 @@ ANSI_CYAN = "\x1b[36m"
 
 _ADAPTIV_MCP_METADATA = {
     "provider": "Adaptiv MCP",
-    "server": "github-mcp",
+    "server": "adaptiv-mcp-custom-connector",
     "connected": True,
 }
 
