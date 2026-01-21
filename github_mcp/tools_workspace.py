@@ -29,6 +29,7 @@ from github_mcp.workspace_tools import commands as _commands
 from github_mcp.workspace_tools import commit as _commit
 from github_mcp.workspace_tools import fs as _fs
 from github_mcp.workspace_tools import git_ops as _git_ops
+from github_mcp.workspace_tools import git_worktree as _git_worktree
 from github_mcp.workspace_tools import listing as _listing
 from github_mcp.workspace_tools import pr as _pr
 from github_mcp.workspace_tools import rg as _rg
@@ -135,6 +136,14 @@ workspace_sync_status = _git_ops.workspace_sync_status
 workspace_sync_to_remote = _git_ops.workspace_sync_to_remote
 workspace_sync_bidirectional = _git_ops.workspace_sync_bidirectional
 
+# Git porcelain helpers
+workspace_git_status = _git_worktree.workspace_git_status
+workspace_git_stage = _git_worktree.workspace_git_stage
+workspace_git_unstage = _git_worktree.workspace_git_unstage
+workspace_git_pull = _git_worktree.workspace_git_pull
+workspace_git_push = _git_worktree.workspace_git_push
+workspace_open_pr_from_workspace = _git_worktree.workspace_open_pr_from_workspace
+
 commit_workspace = _commit.commit_workspace
 commit_workspace_files = _commit.commit_workspace_files
 get_workspace_changes_summary = _commit.get_workspace_changes_summary
@@ -218,6 +227,13 @@ __all__ = [
     "workspace_create_branch",
     "workspace_delete_branch",
     "workspace_self_heal_branch",
+    "workspace_git_diff",
+    "workspace_git_status",
+    "workspace_git_stage",
+    "workspace_git_unstage",
+    "workspace_git_pull",
+    "workspace_git_push",
+    "workspace_open_pr_from_workspace",
     "workspace_sync_status",
     "workspace_sync_to_remote",
     "workspace_sync_bidirectional",

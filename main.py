@@ -65,9 +65,9 @@ from github_mcp.http_clients import (
     _github_client_instance,  # noqa: F401
 )
 from github_mcp.http_routes.healthz import register_healthz_route
+from github_mcp.http_routes.llm_execute import register_llm_execute_routes
 from github_mcp.http_routes.render import register_render_routes
 from github_mcp.http_routes.session import register_session_routes
-from github_mcp.http_routes.llm_execute import register_llm_execute_routes
 from github_mcp.http_routes.tool_registry import (
     _response_headers_for_error,
     _status_code_for_error,

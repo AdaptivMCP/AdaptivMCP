@@ -53,7 +53,11 @@ def build_llm_execute_endpoint():
 
         calls = extract_tool_calls_from_text(texts, max_calls=max_calls)
 
-        dry_run = bool(payload.get("dry_run")) or request.query_params.get("dry_run") in {"1", "true", "yes"}
+        dry_run = bool(payload.get("dry_run")) or request.query_params.get("dry_run") in {
+            "1",
+            "true",
+            "yes",
+        }
         max_attempts = payload.get("max_attempts")
         if max_attempts is not None:
             try:
