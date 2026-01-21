@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 
 def test_find_registered_tool_resolves_common_name_variants(monkeypatch: Any) -> None:
     from github_mcp.mcp_server import registry as mcp_registry
@@ -27,9 +25,7 @@ def test_find_registered_tool_resolves_common_name_variants(monkeypatch: Any) ->
 
     # Module-qualified variant.
     assert (
-        mcp_registry._find_registered_tool(
-            "github_mcp.workspace_tools.git_ops.terminal_command"
-        )
+        mcp_registry._find_registered_tool("github_mcp.workspace_tools.git_ops.terminal_command")
         is not None
     )
 
@@ -52,7 +48,9 @@ def test_find_registered_tool_does_not_silently_choose_ambiguous_matches(monkeyp
     def func_b(**_kwargs: Any) -> dict[str, Any]:
         return {"ok": "b"}
 
-    monkeypatch.setattr(mcp_registry, "_REGISTERED_MCP_TOOLS", [(ToolA(), func_a), (ToolB(), func_b)])
+    monkeypatch.setattr(
+        mcp_registry, "_REGISTERED_MCP_TOOLS", [(ToolA(), func_a), (ToolB(), func_b)]
+    )
 
     # This canonicalizes to the same name as both tools.
     assert mcp_registry._find_registered_tool("foo-bar") is None
