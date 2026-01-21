@@ -227,6 +227,40 @@ def _default_include_parameters(request: Request) -> bool:
     return False
 
 
+def _is_openai_client(request: Request) -> bool:
+    """Best-effort detection for ChatGPT-hosted / OpenAI tool clients.
+
+    Many LLM tool runtimes treat non-2xx HTTP responses as a hard tool failure and
+    may stop the agent loop entirely. For these clients, it's better to return a
+    200 with a structured error payload than a 4xx/5xx.
+
+    We detect ChatGPT via request-scoped metadata when available, with a header
+    fallback for deployments that don't install middleware.
+    """
+
+    try:
+        if REQUEST_CHATGPT_METADATA.get():
+            return True
+    except Exception:
+        pass
+
+    try:
+        for hdr in (
+            "x-openai-assistant-id",
+            "x-openai-conversation-id",
+            "x-openai-organization-id",
+            "x-openai-project-id",
+            "x-openai-session-id",
+            "x-openai-user-id",
+        ):
+            if request.headers.get(hdr):
+                return True
+    except Exception:
+        pass
+
+    return False
+
+
 def _status_code_for_error(error: dict[str, Any]) -> int:
     """Map structured error payloads to HTTP status codes."""
 
@@ -532,13 +566,25 @@ async def _cancel_invocation(invocation: ToolInvocation) -> None:
 
 
 async def _invoke_tool(
-    tool_name: str, args: dict[str, Any], *, max_attempts: int | None = None
+    request: Request,
+    tool_name: str,
+    args: dict[str, Any],
+    *,
+    max_attempts: int | None = None,
 ) -> Response:
     payload, status_code, headers = await _execute_tool(
         tool_name,
         args,
         max_attempts=max_attempts,
     )
+
+    # LLM-safe mode: keep the payload as-is but avoid non-2xx status codes that
+    # can cause the agent runtime to abort.
+    if status_code >= 400 and _is_openai_client(request):
+        safe_headers = dict(headers or {})
+        safe_headers.setdefault("X-Tool-Original-Status", str(int(status_code)))
+        return JSONResponse(payload, status_code=200, headers=safe_headers)
+
     return JSONResponse(payload, status_code=status_code, headers=headers)
 
 
@@ -624,7 +670,7 @@ def build_tool_invoke_endpoint() -> Callable[[Request], Response]:
             except Exception:
                 payload = {}
         args = _normalize_payload(payload)
-        return await _invoke_tool(tool_name, args, max_attempts=max_attempts)
+        return await _invoke_tool(request, tool_name, args, max_attempts=max_attempts)
 
     return _endpoint
 

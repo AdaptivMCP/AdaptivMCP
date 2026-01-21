@@ -78,3 +78,40 @@ def test_invoke_endpoint_does_not_retry_write_tools(monkeypatch: Any) -> None:
     resp = client.post("/tools/writey", json={"args": {}}, params={"max_attempts": 3})
     assert resp.status_code == 500
     assert calls["n"] == 1
+
+
+def test_invoke_endpoint_returns_200_for_openai_clients_on_structured_errors(
+    monkeypatch: Any,
+) -> None:
+    """ChatGPT-style clients may treat non-2xx as a hard tool failure.
+
+    For these clients we keep the structured error payload but return 200 and
+    include the original status in a header.
+    """
+
+    import github_mcp.http_routes.tool_registry as tool_registry
+
+    class Tool:
+        name = "bad_tool"
+        write_action = False
+
+    def func(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "error_detail": {
+                "category": "validation",
+                "message": "bad args",
+            }
+        }
+
+    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+
+    client = TestClient(main.app)
+    resp = client.post(
+        "/tools/bad_tool",
+        json={"args": {"x": 1}},
+        headers={"x-openai-assistant-id": "test"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers.get("X-Tool-Original-Status") == "400"
+    payload = resp.json()
+    assert payload.get("error_detail", {}).get("message") == "bad args"

@@ -12,7 +12,7 @@ from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
-from github_mcp.utils import _normalize_timeout_seconds
+from github_mcp.utils import _env_flag, _normalize_timeout_seconds
 
 from ._shared import (
     _cmd_invokes_git,
@@ -79,29 +79,52 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
     """
 
     repo_real = os.path.realpath(repo_dir)
+    strict = _env_flag("ADAPTIV_MCP_STRICT_CONTRACTS", default=False)
     if not workdir:
         return repo_real
     if not isinstance(workdir, str):
         raise ValueError("workdir must be a string")
 
     normalized = workdir.strip().replace("\\", "/")
-    if not normalized or normalized in {".", "./"}:
+    if not normalized or normalized in {".", "./", "/"}:
         return repo_real
 
     # Accept absolute paths that point inside the repo mirror.
     if os.path.isabs(normalized) or normalized.startswith("/"):
         candidate_abs = os.path.realpath(normalized)
-        if candidate_abs != repo_real and not candidate_abs.startswith(repo_real + os.sep):
-            raise ValueError("workdir must resolve inside the workspace repository")
-        if not os.path.isdir(candidate_abs):
-            raise ValueError("workdir must point to a directory")
-        return candidate_abs
+        if candidate_abs == repo_real or candidate_abs.startswith(repo_real + os.sep):
+            if not os.path.isdir(candidate_abs):
+                if strict:
+                    raise ValueError("workdir must point to a directory")
+                return repo_real
+            return candidate_abs
+
+        # Common caller intent: "/subdir" means repo-relative "subdir".
+        normalized = normalized.lstrip("/")
+        if not normalized:
+            return repo_real
+
+    # Clamp any parent-directory traversal attempts back to repo root.
+    parts: list[str] = []
+    for part in normalized.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if parts:
+                parts.pop()
+            continue
+        parts.append(part)
+    normalized = "/".join(parts)
+    if not normalized:
+        return repo_real
 
     candidate = os.path.realpath(os.path.join(repo_real, normalized))
     if candidate != repo_real and not candidate.startswith(repo_real + os.sep):
         raise ValueError("workdir must resolve inside the workspace repository")
     if not os.path.isdir(candidate):
-        raise ValueError("workdir must point to a directory")
+        if strict:
+            raise ValueError("workdir must point to a directory")
+        return repo_real
     return candidate
 
 
@@ -510,12 +533,30 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
     # Accept absolute paths as long as they resolve inside the repo mirror.
     if os.path.isabs(normalized) or normalized.startswith("/"):
         candidate = os.path.realpath(normalized)
-        if candidate == repo_real or not candidate.startswith(repo_real + os.sep):
-            raise ValueError("path must resolve inside the repo mirror")
-        rel = os.path.relpath(candidate, repo_real).replace("\\", "/")
-        if not rel or rel in {".", "./"}:
+        if candidate != repo_real and candidate.startswith(repo_real + os.sep):
+            rel = os.path.relpath(candidate, repo_real).replace("\\", "/")
+            if not rel or rel in {".", "./"}:
+                raise ValueError("path must be repo-relative")
+            return rel
+
+        # Common caller intent: "/foo/bar" means repo-relative "foo/bar".
+        normalized = normalized.lstrip("/")
+        if not normalized:
             raise ValueError("path must be repo-relative")
-        return rel
+
+    # Clamp traversal attempts back to repo root so LLM callers don't hard-fail.
+    parts: list[str] = []
+    for part in normalized.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if parts:
+                parts.pop()
+            continue
+        parts.append(part)
+    normalized = "/".join(parts)
+    if not normalized:
+        raise ValueError("path must be repo-relative")
 
     candidate = os.path.realpath(os.path.join(repo_real, normalized))
     repo_real = os.path.realpath(repo_dir)

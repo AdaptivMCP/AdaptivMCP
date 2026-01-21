@@ -113,8 +113,26 @@ def _normalize_workspace_path(path: str) -> str:
     # Collapse dot segments while preserving relative semantics.
     # `posixpath.normpath` is safe here because we already normalized separators.
     normalized = posixpath.normpath(normalized)
-    if normalized == ".":
-        normalized = ""
+    if normalized in (".", "/"):
+        return ""
+
+    # Be permissive with parent-directory segments in *relative* paths.
+    # LLM clients often produce "../" paths; clamp them safely back into the
+    # workspace root rather than hard-failing.
+    #
+    # Safety invariant is still enforced later when we resolve against repo_dir.
+    if not normalized.startswith("/"):
+        parts: list[str] = []
+        for part in normalized.split("/"):
+            if part in ("", "."):
+                continue
+            if part == "..":
+                if parts:
+                    parts.pop()
+                # Clamp attempts to traverse beyond root.
+                continue
+            parts.append(part)
+        normalized = "/".join(parts)
     return normalized
 
 
@@ -131,7 +149,20 @@ def _resolve_workspace_start(repo_dir: str, path: str) -> tuple[str, str]:
         except Exception:
             common = ""
         if common != root:
-            raise ValueError("path must resolve inside the workspace repository")
+            # Heuristic fallback: many callers send "/subdir" intending a
+            # repo-relative path. If the absolute path doesn't resolve inside
+            # the workspace root, try interpreting it as repo-relative.
+            rel = normalized_path.lstrip("/")
+            if not rel:
+                return "", root
+            start = os.path.realpath(os.path.join(repo_dir, rel))
+            try:
+                common = os.path.commonpath([root, start])
+            except Exception:
+                common = ""
+            if common != root:
+                raise ValueError("path must resolve inside the workspace repository")
+            return rel, start
         display_path = os.path.relpath(start, root)
         if display_path == ".":
             display_path = ""

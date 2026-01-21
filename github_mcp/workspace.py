@@ -914,11 +914,40 @@ def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
         raise GitHubAPIError("path must be a non-empty string")
     raw_path = rel_path.strip().replace("\\", "/")
     repo_root = os.path.realpath(repo_dir)
+
+    # Prefer treating true absolute paths as absolute only if they resolve inside
+    # the repo mirror. If they don't, fall back to interpreting them as
+    # repo-relative (common caller intent for "/subdir/file").
     if os.path.isabs(raw_path) or raw_path.startswith("/"):
-        candidate = os.path.realpath(raw_path)
+        candidate_abs = os.path.realpath(raw_path)
+        if candidate_abs != repo_root and candidate_abs.startswith(repo_root + os.sep):
+            candidate = candidate_abs
+        else:
+            raw_path = raw_path.lstrip("/")
+            if not raw_path:
+                raise GitHubAPIError("path must be repository-relative")
+            candidate = ""
     else:
+        candidate = ""
+
+    if not candidate:
+        # Clamp traversal attempts back to repo root to avoid brittle hard-fails
+        # from LLM clients that produce "../" paths.
         rel_path = raw_path.lstrip("/\\")
+        parts: list[str] = []
+        for part in rel_path.split("/"):
+            if part in ("", "."):
+                continue
+            if part == "..":
+                if parts:
+                    parts.pop()
+                continue
+            parts.append(part)
+        rel_path = "/".join(parts)
+        if not rel_path:
+            raise GitHubAPIError("path must be repository-relative")
         candidate = os.path.realpath(os.path.join(repo_root, rel_path))
+
     if candidate == repo_root or not candidate.startswith(repo_root + os.sep):
         raise GitHubAPIError("path must resolve inside the workspace repository")
     return candidate
