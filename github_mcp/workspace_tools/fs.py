@@ -100,6 +100,12 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
         return os.path.realpath(repo_dir)
     raw_path = rel_path.strip().replace("\\", "/")
     root = os.path.realpath(repo_dir)
+
+    # Common caller intent: "/" means "repo root" (not filesystem root).
+    # Treat this one special case permissively while keeping other absolute
+    # paths locked down.
+    if raw_path == "/":
+        return root
     if os.path.isabs(raw_path):
         # Accept absolute paths *only* when they resolve inside this workspace
         # mirror. This allows callers to round-trip paths returned by tools
