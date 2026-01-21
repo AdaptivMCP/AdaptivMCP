@@ -905,6 +905,17 @@ class _InfoOnlyFilter(logging.Filter):
         return record.levelno == logging.INFO
 
 
+class _UvicornHealthzFilter(logging.Filter):
+    """Suppress noisy health check access logs from uvicorn."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003 - matches logging.Filter
+        try:
+            message = record.getMessage()
+        except Exception:
+            return True
+        return "/healthz" not in message
+
+
 def _extract_log_extras(record: logging.LogRecord) -> dict[str, object]:
     extras: dict[str, object] = {}
 
@@ -961,6 +972,7 @@ def _configure_logging() -> None:
 
     # Keep access logs off by default (they include request IDs / IPs and are very noisy).
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+    logging.getLogger("uvicorn.access").addFilter(_UvicornHealthzFilter())
 
     root._github_mcp_configured = True
 
