@@ -262,6 +262,10 @@ def register_render_routes(app: Any) -> None:
         path = _parse_str(request.query_params.get("path"))
         text = _parse_str(request.query_params.get("text"))
         log_type = _parse_str(request.query_params.get("log_type"))
+        if not log_type:
+            log_type = _parse_str(request.query_params.get("logType"))
+        if not log_type:
+            log_type = _parse_str(request.query_params.get("type"))
         status_code_raw = _parse_str(request.query_params.get("status_code"))
         status_code = None
         if status_code_raw:
