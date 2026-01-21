@@ -209,10 +209,27 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("ADAPTIV_MCP_TOOL_RESULT_ENVELOPE_SCALA
 RESPONSE_MODE_DEFAULT = os.environ.get("ADAPTIV_MCP_RESPONSE_MODE", "raw").strip().lower()
 CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int("ADAPTIV_MCP_RESPONSE_MAX_LIST_ITEMS", default=0)
 
+# Tool stream shaping
+#
+# Some tools (notably shell/terminal helpers) can emit very large stdout/stderr
+# payloads. In ChatGPT/compact response modes this can easily cause context
+# overflow and degrade downstream tool use. We therefore clip stdout/stderr in
+# these modes by default.
+RESPONSE_STREAM_MAX_LINES = _env_int("ADAPTIV_MCP_RESPONSE_STREAM_MAX_LINES", default=200)
+RESPONSE_STREAM_MAX_CHARS = _env_int("ADAPTIV_MCP_RESPONSE_STREAM_MAX_CHARS", default=20000)
+
 # In hosted LLM connector environments, returning token-like strings (even from
 # test fixtures or diffs) can trigger upstream safety filters and block tool
 # outputs. Redaction is therefore enabled by default, with an escape hatch.
 REDACT_TOOL_OUTPUTS = _env_flag("ADAPTIV_MCP_REDACT_TOOL_OUTPUTS", default=True)
+
+# Allow per-request override of redaction (default: disallow). This is a
+# deliberate escape hatch for advanced runtimes that want to trade safety vs.
+# fidelity on a per-call basis.
+REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE = _env_flag(
+    "ADAPTIV_MCP_REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE",
+    default=False,
+)
 
 # Tool log field handling
 #
@@ -235,6 +252,18 @@ def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
     if _running_under_pytest():
         return "raw"
 
+    # Allow the caller to explicitly choose a mode (e.g. from the model/router)
+    # so it can trade off verbosity vs. context footprint.
+    if isinstance(req, Mapping):
+        raw_override = req.get("response_mode")
+        cg = req.get("chatgpt")
+        if raw_override is None and isinstance(cg, Mapping):
+            raw_override = cg.get("response_mode")
+        if isinstance(raw_override, str):
+            override = raw_override.strip().lower()
+            if override in {"raw", "chatgpt", "compact"}:
+                return override
+
     mode = (RESPONSE_MODE_DEFAULT or "raw").strip().lower()
     if mode and mode not in {"raw", "default"}:
         return mode
@@ -243,6 +272,94 @@ def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
         if isinstance(cg, Mapping) and cg:
             return "chatgpt"
     return "raw"
+
+
+def _effective_int_override(
+    req: Mapping[str, Any] | None,
+    *,
+    cg_key: str,
+    env_default: int,
+    allow_increase: bool = False,
+) -> int:
+    """Return an int override from request metadata.
+
+    - When env_default > 0 and allow_increase is False, the request may only
+      *decrease* the value.
+    - When env_default <= 0, request values are accepted as-is (when > 0).
+    """
+
+    base = int(env_default)
+    if not isinstance(req, Mapping):
+        return base
+    cg = req.get("chatgpt")
+    if not isinstance(cg, Mapping):
+        return base
+    raw = cg.get(cg_key)
+    try:
+        val = int(raw)
+    except Exception:
+        return base
+    if val <= 0:
+        return base
+    if base > 0 and not allow_increase:
+        return min(base, val)
+    return val
+
+
+def _effective_response_max_list_items(req: Mapping[str, Any] | None) -> int:
+    return _effective_int_override(
+        req,
+        cg_key="response_max_list_items",
+        env_default=CHATGPT_RESPONSE_MAX_LIST_ITEMS,
+        allow_increase=False,
+    )
+
+
+def _effective_response_stream_limits(req: Mapping[str, Any] | None) -> tuple[int, int]:
+    max_lines = _effective_int_override(
+        req,
+        cg_key="response_stream_max_lines",
+        env_default=RESPONSE_STREAM_MAX_LINES,
+        allow_increase=False,
+    )
+    max_chars = _effective_int_override(
+        req,
+        cg_key="response_stream_max_chars",
+        env_default=RESPONSE_STREAM_MAX_CHARS,
+        allow_increase=False,
+    )
+    return (int(max_lines), int(max_chars))
+
+
+def _parse_bool(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(int(value))
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in {"1", "true", "yes", "y", "on"}:
+            return True
+        if raw in {"0", "false", "no", "n", "off"}:
+            return False
+    return None
+
+
+def _effective_redact_tool_outputs(req: Mapping[str, Any] | None) -> bool:
+    """Determine whether to redact client-facing tool outputs."""
+
+    base = bool(REDACT_TOOL_OUTPUTS)
+    if not REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE:
+        return base
+
+    if not isinstance(req, Mapping):
+        return base
+    # Allow both top-level and chatgpt-scoped knobs.
+    override = _parse_bool(req.get("redact_tool_outputs"))
+    cg = req.get("chatgpt")
+    if override is None and isinstance(cg, Mapping):
+        override = _parse_bool(cg.get("redact_tool_outputs"))
+    return base if override is None else bool(override)
 
 
 LOG_TOOL_VISUAL_MAX_LINES = _env_int("ADAPTIV_MCP_LOG_VISUAL_MAX_LINES", default=80)
@@ -822,7 +939,7 @@ def _preview_render_logs(items: list[Any]) -> str:
     )
 
 
-def _inject_stdout_stderr(out: dict[str, Any]) -> None:
+def _inject_stdout_stderr(out: dict[str, Any], *, req: Mapping[str, Any] | None = None) -> None:
     """Attach stdout/stderr to ChatGPT-friendly responses.
 
     Many tools return process outputs nested under `result`. ChatGPT UIs often
@@ -840,12 +957,52 @@ def _inject_stdout_stderr(out: dict[str, Any]) -> None:
     result = out.get("result")
     inner = result if isinstance(result, Mapping) else out
 
-    stdout = inner.get("stdout") if isinstance(inner, Mapping) else None
-    stderr = inner.get("stderr") if isinstance(inner, Mapping) else None
+    # Prefer already-surfaced top-level values when present.
+    stdout = out.get("stdout")
+    stderr = out.get("stderr")
+    if not isinstance(stdout, str):
+        stdout = inner.get("stdout") if isinstance(inner, Mapping) else None
+    if not isinstance(stderr, str):
+        stderr = inner.get("stderr") if isinstance(inner, Mapping) else None
 
-    if isinstance(stdout, str) and stdout and "stdout" not in out:
+    if isinstance(stdout, str) and stdout:
+        # Clip raw streams in chatgpt/compact modes to avoid runaway context.
+        mode = _effective_response_mode(req)
+        if mode in {"chatgpt", "compact"}:
+            stream_max_lines, stream_max_chars = _effective_response_stream_limits(req)
+            if (stream_max_lines > 0 and len(stdout.splitlines()) > stream_max_lines) or (
+                stream_max_chars > 0 and len(stdout) > stream_max_chars
+            ):
+                raw_lines = stdout.splitlines()
+                raw_chars = len(stdout)
+                stdout = _clip_text(
+                    stdout,
+                    max_lines=stream_max_lines,
+                    max_chars=stream_max_chars,
+                    enabled=False,
+                )
+                out.setdefault("stdout_total_lines", len(raw_lines))
+                out.setdefault("stdout_total_chars", raw_chars)
+                out["stdout_truncated"] = True
         out["stdout"] = stdout
-    if isinstance(stderr, str) and stderr and "stderr" not in out:
+    if isinstance(stderr, str) and stderr:
+        mode = _effective_response_mode(req)
+        if mode in {"chatgpt", "compact"}:
+            stream_max_lines, stream_max_chars = _effective_response_stream_limits(req)
+            if (stream_max_lines > 0 and len(stderr.splitlines()) > stream_max_lines) or (
+                stream_max_chars > 0 and len(stderr) > stream_max_chars
+            ):
+                raw_lines = stderr.splitlines()
+                raw_chars = len(stderr)
+                stderr = _clip_text(
+                    stderr,
+                    max_lines=stream_max_lines,
+                    max_chars=stream_max_chars,
+                    enabled=False,
+                )
+                out.setdefault("stderr_total_lines", len(raw_lines))
+                out.setdefault("stderr_total_chars", raw_chars)
+                out["stderr_truncated"] = True
         out["stderr"] = stderr
 
     # Render colorized blocks (even when LOG_TOOL_COLOR is off) because this is
@@ -1805,7 +1962,7 @@ def _chatgpt_friendly_result(
 
         # Surface stdout/stderr in ChatGPT-friendly payloads.
         try:
-            _inject_stdout_stderr(out)
+            _inject_stdout_stderr(out, req=req)
         except Exception as exc:
             _log_once(
                 "stdout_stderr_injection_failed",
@@ -1818,15 +1975,16 @@ def _chatgpt_friendly_result(
         truncated_fields: list[str] = []
 
         # Truncate common large lists to keep payload sizes manageable.
+        max_items = _effective_response_max_list_items(req)
         for key in ("packages", "checks", "results", "items"):
             val = out.get(key)
             if (
                 isinstance(val, list)
-                and CHATGPT_RESPONSE_MAX_LIST_ITEMS > 0
-                and len(val) > CHATGPT_RESPONSE_MAX_LIST_ITEMS
+                and max_items > 0
+                and len(val) > max_items
             ):
                 out[f"{key}_total"] = len(val)
-                out[key] = val[:CHATGPT_RESPONSE_MAX_LIST_ITEMS]
+                out[key] = val[:max_items]
                 out[f"{key}_truncated"] = True
                 truncated_fields.append(key)
 
@@ -3046,7 +3204,7 @@ def mcp_tool(
                             pass
                     else:
                         client_payload = structured_error
-                    if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {
+                    if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
                         "chatgpt",
                         "compact",
                     }:
@@ -3137,7 +3295,7 @@ def mcp_tool(
                             pass
                     else:
                         client_payload = structured_error
-                    if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {
+                    if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
                         "chatgpt",
                         "compact",
                     }:
@@ -3216,7 +3374,7 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = result
-                if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {"chatgpt", "compact"}:
                     try:
                         client_payload = redact_any(client_payload)
                     except Exception as exc:
@@ -3397,7 +3555,7 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = structured_error
-                if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {"chatgpt", "compact"}:
                     try:
                         client_payload = redact_any(client_payload)
                     except Exception as exc2:
@@ -3482,7 +3640,7 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = structured_error
-                if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {"chatgpt", "compact"}:
                     try:
                         client_payload = redact_any(client_payload)
                     except Exception as exc2:
@@ -3553,7 +3711,7 @@ def mcp_tool(
                     pass
             else:
                 client_payload = result
-            if REDACT_TOOL_OUTPUTS and _effective_response_mode(req) in {"chatgpt", "compact"}:
+            if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {"chatgpt", "compact"}:
                 try:
                     client_payload = redact_any(client_payload)
                 except Exception as exc:
