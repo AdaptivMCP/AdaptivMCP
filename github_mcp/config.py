@@ -799,9 +799,10 @@ class _StructuredFormatter(logging.Formatter):
             return base
 
         severity = getattr(record, "severity", None)
-        severity_is_warn_or_error = (
-            isinstance(severity, str) and severity.strip().lower() in {"warning", "error"}
-        )
+        severity_is_warn_or_error = isinstance(severity, str) and severity.strip().lower() in {
+            "warning",
+            "error",
+        }
 
         should_append = bool(LOG_APPEND_EXTRAS) and (
             record.levelno >= logging.WARNING

@@ -324,11 +324,7 @@ async def workspace_batch(
 
             if isinstance(plan.get("tests"), dict):
                 ts = plan["tests"]
-                cmd = (
-                    _as_str(ts.get("test_command"))
-                    or _as_str(ts.get("command"))
-                    or "pytest -q"
-                )
+                cmd = _as_str(ts.get("test_command")) or _as_str(ts.get("command")) or "pytest -q"
                 extra = dict(ts)
                 for k in ("full_name", "ref"):
                     extra.pop(k, None)

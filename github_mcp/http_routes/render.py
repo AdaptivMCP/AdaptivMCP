@@ -104,7 +104,9 @@ def register_render_routes(app: Any) -> None:
 
         service_id = str(request.path_params.get("service_id") or "").strip()
         if not service_id:
-            return _error_response(UsageError("service_id is required"), context="http:render_service")
+            return _error_response(
+                UsageError("service_id is required"), context="http:render_service"
+            )
         try:
             result = await get_render_service(service_id=service_id)
             return JSONResponse(result)
@@ -116,7 +118,9 @@ def register_render_routes(app: Any) -> None:
 
         service_id = str(request.path_params.get("service_id") or "").strip()
         if not service_id:
-            return _error_response(UsageError("service_id is required"), context="http:render_deploys")
+            return _error_response(
+                UsageError("service_id is required"), context="http:render_deploys"
+            )
 
         cursor = _parse_str(request.query_params.get("cursor"))
         limit = _parse_int(

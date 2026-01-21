@@ -437,13 +437,9 @@ async def workspace_manage_folders_and_open_pr(
         if delete_paths is None:
             delete_paths = []
 
-        if not isinstance(create_paths, list) or any(
-            not isinstance(p, str) for p in create_paths
-        ):
+        if not isinstance(create_paths, list) or any(not isinstance(p, str) for p in create_paths):
             raise TypeError("create_paths must be a list of strings")
-        if not isinstance(delete_paths, list) or any(
-            not isinstance(p, str) for p in delete_paths
-        ):
+        if not isinstance(delete_paths, list) or any(not isinstance(p, str) for p in delete_paths):
             raise TypeError("delete_paths must be a list of strings")
 
         for path in create_paths:

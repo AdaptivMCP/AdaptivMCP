@@ -34,9 +34,7 @@ async def test_read_git_file_sections_happy_path(monkeypatch: pytest.MonkeyPatch
     fake = _FakeTW()
     monkeypatch.setattr(fs, "_tw", lambda: fake)
 
-    def _fake_git_show(
-        *args: Any, **kwargs: Any
-    ) -> tuple[bool, dict[str, Any], str | None]:
+    def _fake_git_show(*args: Any, **kwargs: Any) -> tuple[bool, dict[str, Any], str | None]:
         return (
             True,
             {
@@ -105,9 +103,7 @@ async def test_read_git_file_sections_missing(monkeypatch: pytest.MonkeyPatch) -
     fake = _FakeTW()
     monkeypatch.setattr(fs, "_tw", lambda: fake)
 
-    def _fake_git_show(
-        *args: Any, **kwargs: Any
-    ) -> tuple[bool, dict[str, Any], str | None]:
+    def _fake_git_show(*args: Any, **kwargs: Any) -> tuple[bool, dict[str, Any], str | None]:
         return (
             False,
             {
@@ -141,4 +137,3 @@ async def test_read_git_file_sections_missing(monkeypatch: pytest.MonkeyPatch) -
 
     assert res["exists"] is False
     assert res["error"] == "no such path"
-

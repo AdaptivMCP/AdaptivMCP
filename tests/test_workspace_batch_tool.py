@@ -79,7 +79,11 @@ def test_workspace_batch_passes_dynamic_step_kwargs(monkeypatch):
             plans=[
                 {
                     "ref": "feature",
-                    "apply_ops": {"operations": [{"op": "write", "path": "a", "content": "b"}], "fail_fast": False, "preview_only": True},
+                    "apply_ops": {
+                        "operations": [{"op": "write", "path": "a", "content": "b"}],
+                        "fail_fast": False,
+                        "preview_only": True,
+                    },
                     "tests": {"test_command": "pytest -q", "use_temp_venv": False},
                 }
             ],

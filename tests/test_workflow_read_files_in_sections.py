@@ -73,4 +73,3 @@ async def test_workspace_read_files_in_sections_aggregates(monkeypatch: pytest.M
     assert len(res["files"]) == 2
     assert "missing.txt" in res["missing_paths"]
     assert sum(1 for c in fake.calls if c["fn"] == "read_workspace_file_sections") == 2
-

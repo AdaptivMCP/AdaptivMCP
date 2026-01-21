@@ -24,7 +24,6 @@ def test_response_includes_server_anchor_header():
     assert payload["anchor"] == header_anchor
 
 
-
 def test_session_anchor_and_assert_routes_roundtrip():
     client = TestClient(_build_app())
     anchor_resp = client.get("/session/anchor")

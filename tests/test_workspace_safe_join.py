@@ -30,4 +30,3 @@ def test_workspace_safe_join_rejects_absolute_path_outside_repo(tmp_path):
         assert "inside the workspace repository" in str(exc) or "repository-relative" in str(exc)
     else:
         raise AssertionError("expected ValueError")
-
