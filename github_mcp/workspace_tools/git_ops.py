@@ -16,10 +16,47 @@ from github_mcp.utils import _normalize_timeout_seconds
 from ._shared import (
     _delete_branch_via_workspace,
     _diagnose_workspace_branch,
+    _resolve_full_name,
+    _resolve_ref,
     _run_shell_ok,
     _safe_branch_slug,
     _tw,
 )
+
+
+def _slim_shell_result(result: Any) -> dict[str, Any]:
+    """Return a connector-safe view of a run_shell result without truncation."""
+    if not isinstance(result, dict):
+        return {"raw": str(result)}
+    stdout = (result.get("stdout") or "").strip()
+    stderr = (result.get("stderr") or "").strip()
+    # Bound very large outputs.
+    if len(stdout) > 4000:
+        stdout = stdout[:4000] + "…"
+    if len(stderr) > 4000:
+        stderr = stderr[:4000] + "…"
+    return {
+        "exit_code": result.get("exit_code"),
+        "timed_out": result.get("timed_out", False),
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+
+
+def _shell_error(action: str, result: Any) -> GitHubAPIError:
+    """Create a consistent GitHubAPIError from a run_shell result."""
+    if not isinstance(result, dict):
+        return GitHubAPIError(f"{action} failed: {result!r}")
+    exit_code = result.get("exit_code")
+    timed_out = bool(result.get("timed_out", False))
+    stderr = (result.get("stderr") or "").strip()
+    stdout = (result.get("stdout") or "").strip()
+    detail = stderr or stdout
+    if len(detail) > 4000:
+        detail = detail[:4000] + "…"
+    return GitHubAPIError(
+        f"{action} failed (exit_code={exit_code}, timed_out={timed_out}): {detail}"
+    )
 
 
 async def _workspace_sync_snapshot(
@@ -66,7 +103,7 @@ async def _workspace_sync_snapshot(
     status_lines = [line for line in (status.get("stdout", "") or "").splitlines() if line.strip()]
 
     return {
-        "fetch": fetch,
+        "fetch": _slim_shell_result(fetch),
         "remote_ref": remote_ref,
         "local_sha": (head.get("stdout", "") or "").strip(),
         "remote_sha": (remote.get("stdout", "") or "").strip(),
@@ -112,7 +149,7 @@ def _parse_git_numstat(stdout: str) -> list[dict[str, Any]]:
 
 @mcp_tool(write_action=False)
 async def workspace_git_diff(
-    full_name: str,
+    full_name: str | None = None,
     ref: str = "main",
     *,
     left_ref: str | None = None,
@@ -121,6 +158,9 @@ async def workspace_git_diff(
     paths: list[str] | None = None,
     context_lines: int = 3,
     max_chars: int = 200_000,
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
 ) -> dict[str, Any]:
     """Return a git diff from the workspace mirror.
 
@@ -142,6 +182,8 @@ async def workspace_git_diff(
         if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
             raise TypeError("paths must be a list of strings")
 
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -182,8 +224,7 @@ async def workspace_git_diff(
             ),
         )
         if diff_res.get("exit_code", 0) != 0:
-            stderr = diff_res.get("stderr", "") or diff_res.get("stdout", "")
-            raise GitHubAPIError(f"git diff failed: {stderr}")
+            raise _shell_error("git diff", diff_res)
         diff_text = diff_res.get("stdout", "") or ""
         truncated = False
         if len(diff_text) > int(max_chars):
@@ -217,10 +258,14 @@ async def workspace_git_diff(
 
 @mcp_tool(write_action=True)
 async def workspace_create_branch(
-    full_name: str,
+    full_name: str | None = None,
     base_ref: str = "main",
     new_branch: str = "",
     push: bool = True,
+    *,
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
 ) -> dict[str, Any]:
     """Create a branch using the repo mirror (workspace clone), optionally pushing to origin.
 
@@ -229,6 +274,8 @@ async def workspace_create_branch(
 
     try:
         t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        base_ref = _resolve_ref(base_ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_base = _tw()._effective_ref_for_repo(full_name, base_ref)
 
@@ -243,8 +290,7 @@ async def workspace_create_branch(
             timeout_seconds=t_default,
         )
         if checkout.get("exit_code", 0) != 0:
-            stderr = checkout.get("stderr", "") or checkout.get("stdout", "")
-            raise GitHubAPIError(f"git checkout -b failed: {stderr}")
+            raise _shell_error("git checkout -b", checkout)
 
         push_result = None
         if push:
@@ -254,14 +300,13 @@ async def workspace_create_branch(
                 timeout_seconds=t_default,
             )
             if push_result.get("exit_code", 0) != 0:
-                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
-                raise GitHubAPIError(f"git push failed: {stderr}")
+                raise _shell_error("git push", push_result)
 
         return {
             "base_ref": effective_base,
             "new_branch": new_branch,
-            "checkout": checkout,
-            "push": push_result,
+            "checkout": _slim_shell_result(checkout),
+            "push": _slim_shell_result(push_result) if push_result is not None else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_create_branch")
@@ -269,8 +314,11 @@ async def workspace_create_branch(
 
 @mcp_tool(write_action=True)
 async def workspace_delete_branch(
-    full_name: str,
+    full_name: str | None = None,
     branch: str = "",
+    *,
+    owner: str | None = None,
+    repo: str | None = None,
 ) -> dict[str, Any]:
     """Delete a non-default branch using the repo mirror (workspace clone).
 
@@ -280,6 +328,7 @@ async def workspace_delete_branch(
 
     try:
         t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
         deps = _tw()._workspace_deps()
 
         if not isinstance(branch, str) or not branch.strip():
@@ -314,8 +363,7 @@ async def workspace_delete_branch(
             timeout_seconds=t_default,
         )
         if delete_remote.get("exit_code", 0) != 0:
-            stderr = delete_remote.get("stderr", "") or delete_remote.get("stdout", "")
-            raise GitHubAPIError(f"git push origin --delete failed: {stderr}")
+            raise _shell_error("git push origin --delete", delete_remote)
 
         # Then delete local branch if it exists. If it does not, treat that as best-effort.
         delete_local = await deps["run_shell"](
@@ -327,8 +375,8 @@ async def workspace_delete_branch(
         return {
             "default_branch": default_branch,
             "deleted_branch": branch,
-            "delete_remote": delete_remote,
-            "delete_local": delete_local,
+            "delete_remote": _slim_shell_result(delete_remote),
+            "delete_local": _slim_shell_result(delete_local),
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_delete_branch")
@@ -336,7 +384,7 @@ async def workspace_delete_branch(
 
 @mcp_tool(write_action=True)
 async def workspace_self_heal_branch(
-    full_name: str,
+    full_name: str | None = None,
     branch: str = "",
     *,
     base_ref: str = "main",
@@ -346,6 +394,8 @@ async def workspace_self_heal_branch(
     reset_base: bool = True,
     enumerate_repo: bool = True,
     dry_run: bool = False,
+    owner: str | None = None,
+    repo: str | None = None,
 ) -> dict[str, Any]:
     """Detect a mangled repo mirror branch and recover to a fresh branch.
 
@@ -364,6 +414,7 @@ async def workspace_self_heal_branch(
 
     try:
         t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
         deps = _tw()._workspace_deps()
 
         if not isinstance(branch, str) or not branch.strip():
@@ -586,11 +637,17 @@ async def workspace_self_heal_branch(
 
 @mcp_tool(write_action=False)
 async def workspace_sync_status(
-    full_name: str,
+    full_name: str | None = None,
     ref: str = "main",
+    *,
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
 ) -> dict[str, Any]:
     """Report how a repo mirror (workspace clone) differs from its remote branch."""
     try:
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -609,14 +666,19 @@ async def workspace_sync_status(
 
 @mcp_tool(write_action=True)
 async def workspace_sync_to_remote(
-    full_name: str,
+    full_name: str | None = None,
     ref: str = "main",
     *,
     discard_local_changes: bool = False,
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
 ) -> dict[str, Any]:
     """Reset a repo mirror (workspace clone) to match the remote branch."""
     try:
         t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -658,17 +720,22 @@ async def workspace_sync_to_remote(
 
 @mcp_tool(write_action=True)
 async def workspace_sync_bidirectional(
-    full_name: str,
+    full_name: str | None = None,
     ref: str = "main",
     commit_message: str = "Sync workspace changes",
     add_all: bool = True,
     push: bool = True,
     *,
     discard_local_changes: bool = False,
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
 ) -> dict[str, Any]:
     """Sync repo mirror changes to the remote and refresh local state from GitHub."""
     try:
         t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
@@ -716,8 +783,7 @@ async def workspace_sync_bidirectional(
                     "git add -A", cwd=repo_dir, timeout_seconds=t_default
                 )
                 if add_result.get("exit_code", 0) != 0:
-                    stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
-                    raise GitHubAPIError(f"git add failed: {stderr}")
+                    raise _shell_error("git add -A", add_result)
 
             status_result = await deps["run_shell"](
                 "git status --porcelain", cwd=repo_dir, timeout_seconds=t_default
@@ -729,8 +795,7 @@ async def workspace_sync_bidirectional(
                     commit_cmd, cwd=repo_dir, timeout_seconds=t_default
                 )
                 if commit_result.get("exit_code", 0) != 0:
-                    stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
-                    raise GitHubAPIError(f"git commit failed: {stderr}")
+                    raise _shell_error("git commit", commit_result)
                 actions.append("committed_local_changes")
 
             snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
@@ -739,8 +804,7 @@ async def workspace_sync_bidirectional(
             push_cmd = f"git push origin HEAD:{effective_ref}"
             push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=t_default)
             if push_result.get("exit_code", 0) != 0:
-                stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
-                raise GitHubAPIError(f"git push failed: {stderr}")
+                raise _shell_error("git push", push_result)
             actions.append("pushed_to_remote")
             snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
 
