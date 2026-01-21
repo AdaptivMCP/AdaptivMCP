@@ -31,7 +31,6 @@ from github_mcp.config import (
     format_log_context,
     shorten_token,
     snapshot_request_context,
-    summarize_request_context,
 )
 from github_mcp.exceptions import UsageError, WriteApprovalRequiredError
 from github_mcp.mcp_server.context import (
@@ -717,8 +716,6 @@ def _looks_like_unified_diff(text: str) -> bool:
     return bool(_DIFF_HEADER_RE.search(sample))
 
 
-
-
 def _format_stream_block(
     text: str,
     *,
@@ -813,11 +810,15 @@ def _preview_render_logs(items: list[Any]) -> str:
         include_reset=LOG_TOOL_COLOR,
     )
     header = _ansi("logs", ANSI_CYAN) if LOG_TOOL_COLOR else "logs"
-    return header + "\n" + _clip_text(
-        rendered,
-        max_lines=max_lines,
-        max_chars=max_chars,
-        enabled=LOG_TOOL_COLOR,
+    return (
+        header
+        + "\n"
+        + _clip_text(
+            rendered,
+            max_lines=max_lines,
+            max_chars=max_chars,
+            enabled=LOG_TOOL_COLOR,
+        )
     )
 
 
@@ -1798,9 +1799,7 @@ def _chatgpt_friendly_result(
 
         # Add a compact snapshot for LLMs (does not replace the full payload).
         out.setdefault("summary", _result_snapshot(out))
-        summary_text = _tool_paragraph_summary(
-            tool_name=tool_name, result=out, all_args=all_args
-        )
+        summary_text = _tool_paragraph_summary(tool_name=tool_name, result=out, all_args=all_args)
         if summary_text:
             out.setdefault("summary_text", summary_text)
 
@@ -3745,9 +3744,8 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
 
             try:
                 func.__doc__ = _build_tool_docstring(
-                    tool_name=_registered_tool_name(tool_obj, func) or getattr(
-                        tool_obj, "name", None
-                    )
+                    tool_name=_registered_tool_name(tool_obj, func)
+                    or getattr(tool_obj, "name", None)
                     or getattr(func, "__name__", "unknown"),
                     description=str(description or "").strip(),
                     input_schema=schema if isinstance(schema, Mapping) else None,

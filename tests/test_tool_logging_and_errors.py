@@ -46,7 +46,9 @@ def test_emit_tool_error_includes_trace_and_args() -> None:
     assert debug["args"].get("path")
 
 
-def test_failure_logs_emit_at_info_level_with_error_severity(caplog: pytest.LogCaptureFixture) -> None:
+def test_failure_logs_emit_at_info_level_with_error_severity(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     from github_mcp.mcp_server.decorators import _log_tool_failure
 
     caplog.set_level(logging.INFO)

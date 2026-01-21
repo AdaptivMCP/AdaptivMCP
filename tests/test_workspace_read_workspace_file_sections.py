@@ -88,4 +88,3 @@ async def test_apply_workspace_operations_read_sections(
     assert res["results"][0]["op"] == "read_sections"
     assert res["results"][0]["status"] == "ok"
     assert "parts" in res["results"][0]["sections"]
-

@@ -217,7 +217,7 @@ def list_all_actions(
         (SimpleNamespace(name="list_write_tools", write_action=False), list_write_tools),
     ]
 
-    for tool, func in (forced_entries + list(registry_entries)):
+    for tool, func in forced_entries + list(registry_entries):
         name = _registered_tool_name(tool, func)
         if not name:
             continue
@@ -485,7 +485,7 @@ def _validate_single_tool_args(tool_name: str, args: Mapping[str, Any] | None) -
     if args is not None and not isinstance(args, Mapping):
         raise TypeError("args must be a mapping")
 
-    m = _main()
+    _main()
     tool = None
     func = None
     for candidate_tool, candidate_func in _tool_registry():

@@ -55,9 +55,7 @@ def test_workspace_deps_injects_git_auth_env(monkeypatch) -> None:
 
     deps = _shared._workspace_deps()
     asyncio.run(deps["run_shell"]("git status", cwd=".", timeout_seconds=1, env={"EXISTING": "1"}))
-    asyncio.run(
-        deps["run_shell"]("echo hello", cwd=".", timeout_seconds=1, env={"EXISTING": "2"})
-    )
+    asyncio.run(deps["run_shell"]("echo hello", cwd=".", timeout_seconds=1, env={"EXISTING": "2"}))
 
     assert calls[0].get("EXISTING") == "1"
     assert calls[0].get("GIT_HTTP_EXTRAHEADER") == "auth"

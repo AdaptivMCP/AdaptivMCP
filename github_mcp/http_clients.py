@@ -187,9 +187,7 @@ def _get_github_token() -> str:
             empty_source = env_var
 
     if empty_source is not None:
-        raise GitHubAuthError(
-            f"GitHub authentication failed: {empty_source or 'token'} is empty"
-        )
+        raise GitHubAuthError(f"GitHub authentication failed: {empty_source or 'token'} is empty")
     raise GitHubAuthError("GitHub authentication failed: token is not configured")
 
 

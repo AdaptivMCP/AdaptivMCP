@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 from types import ModuleType
 
-import pytest
-
 from github_mcp.exceptions import GitHubAuthError
 
 
@@ -74,9 +72,10 @@ def test_create_repository_user_owner_blocks_app_tokens(monkeypatch):
 
     dummy_main = ModuleType("main")
     dummy_main._github_request = _github_request
-    dummy_main._structured_tool_error = (
-        lambda exc, context=None: {"error": str(exc), "error_type": type(exc).__name__}
-    )
+    dummy_main._structured_tool_error = lambda exc, context=None: {
+        "error": str(exc),
+        "error_type": type(exc).__name__,
+    }
 
     monkeypatch.setattr(repositories, "_main", lambda: dummy_main)
 
