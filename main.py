@@ -67,6 +67,7 @@ from github_mcp.http_clients import (
 from github_mcp.http_routes.healthz import register_healthz_route
 from github_mcp.http_routes.render import register_render_routes
 from github_mcp.http_routes.session import register_session_routes
+from github_mcp.http_routes.llm_execute import register_llm_execute_routes
 from github_mcp.http_routes.tool_registry import (
     _response_headers_for_error,
     _status_code_for_error,
@@ -683,6 +684,7 @@ register_tool_registry_routes(app)
 register_ui_routes(app)
 register_render_routes(app)
 register_session_routes(app)
+register_llm_execute_routes(app)
 
 
 def _reset_file_cache_for_tests() -> None:
