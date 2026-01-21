@@ -168,13 +168,30 @@ def _normalize_repo_path(path: str) -> str:
     while "//" in normalized:
         normalized = normalized.replace("//", "/")
 
-    parts = [part for part in normalized.split("/") if part not in ("", ".")]
-    if any(part == ".." for part in parts):
-        # Block path traversal.
-        raise ToolPreflightValidationError(
-            "<server>",
-            f"Invalid path {path!r}: parent-directory segments are not allowed.",
-        )
+    # Normalize segments.
+    #
+    # Safety policy: disallow escaping the repository root.
+    # - In strict mode, reject any usage of "..".
+    # - In permissive mode (default), *clamp* traversal attempts back to the
+    #   repository root by treating ".." as "pop a segment if possible" and
+    #   otherwise ignoring it.
+    #
+    # This keeps the server safe while preventing brittle "path rejection"
+    # failures when LLM clients accidentally include parent-directory segments.
+    parts: list[str] = []
+    for part in normalized.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if strict:
+                raise ToolPreflightValidationError(
+                    "<server>",
+                    f"Invalid path {path!r}: parent-directory segments are not allowed.",
+                )
+            if parts:
+                parts.pop()
+            continue
+        parts.append(part)
 
     normalized = "/".join(parts)
     if not normalized:
