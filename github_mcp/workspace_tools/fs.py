@@ -99,10 +99,20 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     raw_path = rel_path.strip().replace("\\", "/")
     root = os.path.realpath(repo_dir)
     if os.path.isabs(raw_path):
-        # For consistent tool UX (and to reduce ambiguity around workspace base
-        # directories), require repository-relative paths. All workspace file
-        # tools accept paths relative to the repo mirror root.
-        raise ValueError("path must be repository-relative (no leading '/')")
+        # Accept absolute paths *only* when they resolve inside this workspace
+        # mirror. This allows callers to round-trip paths returned by tools
+        # like `terminal_command` (which reports an absolute workdir) without
+        # requiring them to know the workspace base directory.
+        candidate = os.path.realpath(raw_path)
+        try:
+            common = os.path.commonpath([root, candidate])
+        except Exception:
+            common = ""
+        if common != root:
+            raise ValueError(
+                "path must be repository-relative or an absolute path inside the workspace repository"
+            )
+        return candidate
     rel_path = raw_path.lstrip("/\\")
     if not rel_path:
         raise ValueError("path must be a non-empty string")
@@ -1477,18 +1487,22 @@ def _git_show_lines_sections_limited(
 
     if proc.returncode != 0:
         err = (stderr or "").strip() or None
-        return False, {
-            "start_line": int(start_line),
-            "end_line": int(start_line),
-            "parts": [],
-            "truncated": False,
-            "next_start_line": None,
-            "max_sections": int(max_sections),
-            "max_lines_per_section": int(max_lines_per_section),
-            "max_chars_per_section": int(max_chars_per_section),
-            "overlap_lines": int(overlap_lines),
-            "had_decoding_errors": False,
-        }, err
+        return (
+            False,
+            {
+                "start_line": int(start_line),
+                "end_line": int(start_line),
+                "parts": [],
+                "truncated": False,
+                "next_start_line": None,
+                "max_sections": int(max_sections),
+                "max_lines_per_section": int(max_lines_per_section),
+                "max_chars_per_section": int(max_chars_per_section),
+                "overlap_lines": int(overlap_lines),
+                "had_decoding_errors": False,
+            },
+            err,
+        )
 
     return True, sections, None
 
@@ -1890,9 +1904,7 @@ async def _build_workspace_diff_payload(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
-        before_info = _workspace_read_text_limited(
-            repo_dir, path, max_chars=max_chars_per_side
-        )
+        before_info = _workspace_read_text_limited(repo_dir, path, max_chars=max_chars_per_side)
         before_text = (before_info.get("text") or "") if before_info.get("exists") else ""
         before_exists = bool(before_info.get("exists"))
         before_label = fromfile or (f"a/{path}" if before_exists else "/dev/null")
