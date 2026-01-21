@@ -87,7 +87,8 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
 
     full_raw = os.environ.get("ADAPTIV_MCP_LOG_FULL_FIDELITY")
     if full_raw is None:
-        full_fidelity = not _is_render_runtime()
+        # Default to full fidelity so logs keep enough context for debugging and tooling.
+        full_fidelity = True
     else:
         full_fidelity = str(full_raw).strip().lower() in ("1", "true", "t", "yes", "y", "on")
 

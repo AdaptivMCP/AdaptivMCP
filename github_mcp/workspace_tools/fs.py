@@ -2985,7 +2985,45 @@ async def move_workspace_paths(
         return _structured_tool_error(exc, context="move_workspace_paths")
 
 
-@mcp_tool(write_action=True)
+def _apply_workspace_operations_write_action_resolver(args: dict[str, Any] | None) -> bool:
+    """Determine whether a specific call will mutate the workspace mirror.
+
+    `apply_workspace_operations` supports read-only operations (for example
+    `read_sections`) and `preview_only` mode that returns a diff without
+    applying it. Those calls should not require write approval.
+    """
+
+    if not isinstance(args, dict):
+        # Conservative default: treat unknown args as write-capable.
+        return True
+
+    if bool(args.get("preview_only")):
+        return False
+
+    operations = args.get("operations")
+    if not operations:
+        # The tool will fail validation, but classify as write-capable.
+        return True
+
+    if not isinstance(operations, list):
+        return True
+
+    op_names: list[str] = []
+    for op in operations:
+        if not isinstance(op, dict):
+            return True
+        name = op.get("op")
+        if not isinstance(name, str):
+            return True
+        op_names.append(name)
+
+    if op_names and all(name == "read_sections" for name in op_names):
+        return False
+
+    return True
+
+
+@mcp_tool(write_action=True, write_action_resolver=_apply_workspace_operations_write_action_resolver)
 async def apply_workspace_operations(
     full_name: str,
     ref: str = "main",
@@ -3019,7 +3057,7 @@ async def apply_workspace_operations(
         operations = []
     if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
         raise TypeError("operations must be a list of dicts")
-    if not operations:
+    if not operations and not preview_only:
         raise ValueError("operations must contain at least one item")
 
     def _read_bytes(path: str) -> bytes:
