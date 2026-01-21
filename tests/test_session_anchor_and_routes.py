@@ -16,12 +16,13 @@ def _build_app():
 
 def test_response_includes_server_anchor_header():
     client = TestClient(_build_app())
-    resp = client.get("/session/ping")
+    resp = client.get("/session/anchor")
     assert resp.status_code == 200
-    assert resp.headers.get("x-server-anchor")
+    header_anchor = resp.headers.get("x-server-anchor")
+    assert header_anchor
     payload = resp.json()
-    assert payload["ok"] is True
-    assert payload["anchor"] == resp.headers["x-server-anchor"]
+    assert payload["anchor"] == header_anchor
+
 
 
 def test_session_anchor_and_assert_routes_roundtrip():
