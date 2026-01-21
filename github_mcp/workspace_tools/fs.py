@@ -3023,7 +3023,9 @@ def _apply_workspace_operations_write_action_resolver(args: dict[str, Any] | Non
     return True
 
 
-@mcp_tool(write_action=True, write_action_resolver=_apply_workspace_operations_write_action_resolver)
+@mcp_tool(
+    write_action=True, write_action_resolver=_apply_workspace_operations_write_action_resolver
+)
 async def apply_workspace_operations(
     full_name: str,
     ref: str = "main",

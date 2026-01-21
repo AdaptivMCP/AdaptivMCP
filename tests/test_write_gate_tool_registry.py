@@ -99,7 +99,9 @@ def test_tools_with_write_action_resolver_are_always_write_gated(monkeypatch):
         # Wrapper metadata must exist.
         assert hasattr(func, "__mcp_tool__"), f"{name} missing __mcp_tool__ wrapper metadata"
         assert hasattr(func, "__mcp_input_schema__"), f"{name} missing __mcp_input_schema__"
-        assert hasattr(func, "__mcp_input_schema_hash__"), f"{name} missing __mcp_input_schema_hash__"
+        assert hasattr(func, "__mcp_input_schema_hash__"), (
+            f"{name} missing __mcp_input_schema_hash__"
+        )
         assert hasattr(func, "__mcp_visibility__"), f"{name} missing __mcp_visibility__"
 
         # Dynamic tools must be conservatively classified as write-capable.

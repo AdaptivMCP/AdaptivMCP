@@ -4,7 +4,10 @@ from github_mcp.workspace_tools.fs import _apply_workspace_operations_write_acti
 
 
 def test_apply_workspace_operations_resolver_preview_only_is_read() -> None:
-    assert _apply_workspace_operations_write_action_resolver({"preview_only": True, "operations": []}) is False
+    assert (
+        _apply_workspace_operations_write_action_resolver({"preview_only": True, "operations": []})
+        is False
+    )
 
 
 def test_apply_workspace_operations_resolver_read_sections_only_is_read() -> None:
