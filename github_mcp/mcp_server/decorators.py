@@ -1978,11 +1978,7 @@ def _chatgpt_friendly_result(
         max_items = _effective_response_max_list_items(req)
         for key in ("packages", "checks", "results", "items"):
             val = out.get(key)
-            if (
-                isinstance(val, list)
-                and max_items > 0
-                and len(val) > max_items
-            ):
+            if isinstance(val, list) and max_items > 0 and len(val) > max_items:
                 out[f"{key}_total"] = len(val)
                 out[key] = val[:max_items]
                 out[f"{key}_truncated"] = True
@@ -3374,7 +3370,10 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = result
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+                    "chatgpt",
+                    "compact",
+                }:
                     try:
                         client_payload = redact_any(client_payload)
                     except Exception as exc:
@@ -3555,7 +3554,10 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = structured_error
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+                    "chatgpt",
+                    "compact",
+                }:
                     try:
                         client_payload = redact_any(client_payload)
                     except Exception as exc2:
@@ -3640,7 +3642,10 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = structured_error
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {"chatgpt", "compact"}:
+                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+                    "chatgpt",
+                    "compact",
+                }:
                     try:
                         client_payload = redact_any(client_payload)
                     except Exception as exc2:
@@ -3711,7 +3716,10 @@ def mcp_tool(
                     pass
             else:
                 client_payload = result
-            if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {"chatgpt", "compact"}:
+            if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+                "chatgpt",
+                "compact",
+            }:
                 try:
                     client_payload = redact_any(client_payload)
                 except Exception as exc:

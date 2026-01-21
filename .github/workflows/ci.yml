@@ -53,7 +53,7 @@ jobs:
         run: ruff check .
 
       - name: Typecheck (mypy)
-        run: mypy .
+        run: mypy github_mcp
 
       - name: Security (pip check + pip-audit + bandit)
         run: |

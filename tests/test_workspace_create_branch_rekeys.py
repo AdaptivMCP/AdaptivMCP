@@ -9,7 +9,9 @@ import pytest
 
 
 @pytest.mark.anyio
-async def test_workspace_create_branch_rekeys_workspace_dir(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_create_branch_rekeys_workspace_dir(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Creating a branch should not "lose" uncommitted edits.
 
     The workspace mirror is keyed by ref. Historically, the tool created a new
@@ -136,4 +138,3 @@ async def test_workspace_create_branch_errors_if_target_mirror_exists(
         assert res["status"] == "error"
         assert res["ok"] is False
         assert "already exists" in (res.get("error") or "").lower()
-

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-
 import github_mcp.mcp_server.decorators as dec
-
 
 _chatgpt_friendly_result = dec._chatgpt_friendly_result
 
@@ -59,6 +57,33 @@ def test_request_max_list_items_truncates_common_lists(monkeypatch):
     assert len(shaped["items"]) == 2
 
 
+def test_request_max_list_items_truncates_checks_list(monkeypatch):
+    _enable_shaping(monkeypatch)
+    monkeypatch.setattr(dec, "RESPONSE_MODE_DEFAULT", "raw")
+    monkeypatch.setattr(dec, "CHATGPT_RESPONSE_MAX_LIST_ITEMS", 0)
+
+    payload = {
+        "status": "ok",
+        "ok": True,
+        "checks": [{"n": i} for i in range(4)],
+    }
+
+    shaped = _chatgpt_friendly_result(
+        payload,
+        req={
+            "chatgpt": {
+                "response_mode": "chatgpt",
+                "response_max_list_items": 2,
+            }
+        },
+    )
+
+    assert shaped.get("checks_total") == 4
+    assert shaped.get("checks_truncated") is True
+    assert isinstance(shaped.get("checks"), list)
+    assert len(shaped["checks"]) == 2
+
+
 def test_stream_limits_clip_raw_stdout(monkeypatch):
     _enable_shaping(monkeypatch)
     monkeypatch.setattr(dec, "RESPONSE_MODE_DEFAULT", "raw")
@@ -97,4 +122,3 @@ def test_redaction_can_be_disabled_per_request_when_allowed(monkeypatch):
 
     assert dec._effective_redact_tool_outputs({"chatgpt": {"redact_tool_outputs": False}}) is False
     assert dec._effective_redact_tool_outputs({"chatgpt": {"redact_tool_outputs": True}}) is True
-
