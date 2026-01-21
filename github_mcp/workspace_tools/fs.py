@@ -95,7 +95,9 @@ def _looks_like_diff(text: str) -> bool:
 
 def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
-        raise ValueError("path must be a non-empty string")
+        # Treat empty/whitespace-only paths as the workspace root. Many callers
+        # (including rg tools and some UI flows) pass "" to mean "repo root".
+        return os.path.realpath(repo_dir)
     raw_path = rel_path.strip().replace("\\", "/")
     root = os.path.realpath(repo_dir)
     if os.path.isabs(raw_path):
@@ -115,7 +117,28 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
         return candidate
     rel_path = raw_path.lstrip("/\\")
     if not rel_path:
-        raise ValueError("path must be a non-empty string")
+        # Treat paths that collapse to "" (e.g. "/" after stripping) as root.
+        return root
+
+    # Be permissive with caller-provided relative paths that include parent
+    # directory segments. LLM clients frequently prepend "../" when referring to
+    # files, which previously caused hard "path must resolve inside" failures.
+    #
+    # Safety invariant: never allow escaping the workspace root.
+    parts: list[str] = []
+    for part in rel_path.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if parts:
+                parts.pop()
+            # Clamp attempts to traverse beyond the root.
+            continue
+        parts.append(part)
+    rel_path = "/".join(parts)
+    if not rel_path:
+        # e.g. input was ".", "./", or "../". Interpret as workspace root.
+        return root
     candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
     try:
         common = os.path.commonpath([root, candidate])
