@@ -300,37 +300,10 @@ def _sanitize_workspace_ref(ref: str) -> str:
     # Collapse separators and Windows drive markers into safe tokens.
     raw = raw.replace("/", "__").replace(":", "__")
 
-    # Allow a conservative set of characters; replace the rest (no regex).
-    allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
-    parts: list[str] = []
-    prev_underscore = False
-    for ch in raw:
-        if ch in allowed:
-            parts.append(ch)
-            prev_underscore = False
-        else:
-            if not prev_underscore:
-                parts.append("_")
-                prev_underscore = True
-    slug = "".join(parts).strip("._-")
-    # Collapse underscore runs (no regex).
-    if slug:
-        collapsed: list[str] = []
-        prev_us = False
-        for ch in slug:
-            if ch == "_":
-                if not prev_us:
-                    collapsed.append(ch)
-                prev_us = True
-            else:
-                collapsed.append(ch)
-                prev_us = False
-        slug = "".join(collapsed).strip("._-")
-
-    if not slug:
+    if not raw.strip():
         return "main"
 
-    return slug
+    return raw.strip()
 
 
 async def _clone_repo(
