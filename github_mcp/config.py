@@ -897,14 +897,31 @@ _STANDARD_LOG_FIELDS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict_
 
 
 class _InfoOnlyFilter(logging.Filter):
-    """Allow only INFO log records.
+    """Legacy filter that allowed only INFO log records.
 
-    This repo is intentionally configured to emit a single log level in provider
-    streams.
+    Historically, this server tried to keep provider log streams on a single
+    severity level to improve scanability in UIs like Render.
+
+    In practice, suppressing WARNING/ERROR makes both humans and automated
+    consumers (LLMs, log processors) miss important signals.
+
+    This filter is retained for backward compatibility but is no longer applied
+    by default.
     """
 
     def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003 - matches logging.Filter
         return record.levelno == logging.INFO
+
+
+class _MinLevelFilter(logging.Filter):
+    """Allow log records at or above a minimum level."""
+
+    def __init__(self, min_level: int) -> None:
+        super().__init__()
+        self._min_level = int(min_level)
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003 - matches logging.Filter
+        return record.levelno >= self._min_level
 
 
 class _UvicornHealthzFilter(logging.Filter):
@@ -944,16 +961,16 @@ def _configure_logging() -> None:
     if getattr(root, "_github_mcp_configured", False):
         return
 
+    # LOG_LEVEL is surfaced for both humans and automated tooling. Keep it
+    # consistent across the root logger, handler, and framework loggers.
+    level = logging._nameToLevel.get(LOG_LEVEL, logging.INFO)
+
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(_StructuredFormatter(LOG_FORMAT))
-    console_handler.setLevel(logging.INFO)
-    console_handler.addFilter(_InfoOnlyFilter())
+    console_handler.setLevel(level)
+    console_handler.addFilter(_MinLevelFilter(level))
 
-    logging.basicConfig(
-        level=logging.INFO,
-        handlers=[console_handler],
-        force=True,
-    )
+    logging.basicConfig(level=level, handlers=[console_handler], force=True)
 
     # Uvicorn CLI applies its own logging configuration. We rebind uvicorn loggers
     # to the root handler so the output format is consistent (and colorized).
@@ -963,17 +980,25 @@ def _configure_logging() -> None:
         lg.propagate = True
 
     # Reduce noisy framework logs in provider log streams.
-    for noisy in (
-        "mcp",
-        "mcp.server",
-        "mcp.server.lowlevel.server",
-        "httpx",
-        "httpcore",
-    ):
-        logging.getLogger(noisy).setLevel(logging.INFO)
+    #
+    # Defaults:
+    # - Render: suppress noisy framework INFO chatter (keep our tool logs).
+    # - Self-hosted: preserve INFO (developer-friendly).
+    #
+    # Override via:
+    # - ADAPTIV_MCP_NOISY_FRAMEWORK_LOGS=1 to keep INFO everywhere.
+    noisy_default = not _is_render_runtime()
+    keep_noisy = _env_flag("ADAPTIV_MCP_NOISY_FRAMEWORK_LOGS", "true" if noisy_default else "false")
+    noisy_level = level if keep_noisy else logging.WARNING
+    for noisy in ("mcp", "mcp.server", "mcp.server.lowlevel.server", "httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(noisy_level)
 
     # Keep access logs off by default (they include request IDs / IPs and are very noisy).
-    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+    # Override via:
+    # - ADAPTIV_MCP_ACCESS_LOGS=1
+    access_default = not _is_render_runtime()
+    enable_access = _env_flag("ADAPTIV_MCP_ACCESS_LOGS", "true" if access_default else "false")
+    logging.getLogger("uvicorn.access").setLevel(logging.INFO if enable_access else logging.WARNING)
     logging.getLogger("uvicorn.access").addFilter(_UvicornHealthzFilter())
 
     root._github_mcp_configured = True
