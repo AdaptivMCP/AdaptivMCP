@@ -12,6 +12,7 @@ from github_mcp.server import (
     mcp_tool,
 )
 from github_mcp.utils import _normalize_timeout_seconds
+from github_mcp.workspace import _workspace_path
 
 from ._shared import (
     _delete_branch_via_workspace,
@@ -282,6 +283,14 @@ async def workspace_create_branch(
         if not isinstance(new_branch, str) or not new_branch:
             raise ValueError("new_branch must be a non-empty string")
 
+        # IMPORTANT: the workspace mirror is keyed by `ref`. If we create +
+        # checkout a new branch *inside* the base mirror directory, subsequent
+        # calls that operate on the new branch will use a different mirror
+        # directory and appear to "lose" local changes. To keep mirrors
+        # consistent we:
+        # 1) create the branch in the base mirror (preserves uncommitted changes)
+        # 2) move that working copy directory to the new branch mirror directory
+        # 3) recreate a clean base mirror directory from origin
         repo_dir = await deps["clone_repo"](full_name, ref=effective_base, preserve_changes=True)
 
         checkout = await deps["run_shell"](
@@ -302,9 +311,34 @@ async def workspace_create_branch(
             if push_result.get("exit_code", 0) != 0:
                 raise _shell_error("git push", push_result)
 
+        # Rekey the workspace mirror directory so future calls using `ref=new_branch`
+        # see the same working tree (including any uncommitted edits).
+        effective_new = _tw()._effective_ref_for_repo(full_name, new_branch)
+        new_repo_dir = _workspace_path(full_name, effective_new)
+        moved = False
+        if os.path.abspath(new_repo_dir) != os.path.abspath(repo_dir):
+            if os.path.exists(new_repo_dir):
+                raise GitHubAPIError(
+                    f"Workspace mirror already exists for branch {effective_new!r}: {new_repo_dir}"
+                )
+            os.makedirs(os.path.dirname(new_repo_dir), exist_ok=True)
+            shutil.move(repo_dir, new_repo_dir)
+            moved = True
+        else:
+            new_repo_dir = repo_dir
+
+        # Recreate a clean base mirror directory so future operations on the base
+        # ref don't accidentally reuse the new branch working copy.
+        base_repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_base, preserve_changes=False
+        )
+
         return {
             "base_ref": effective_base,
             "new_branch": new_branch,
+            "new_repo_dir": new_repo_dir,
+            "base_repo_dir": base_repo_dir,
+            "moved_workspace": moved,
             "checkout": _slim_shell_result(checkout),
             "push": _slim_shell_result(push_result) if push_result is not None else None,
         }
