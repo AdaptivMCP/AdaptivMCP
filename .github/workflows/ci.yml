@@ -59,7 +59,9 @@ jobs:
         run: |
           python -m pip check
           pip-audit -r dev-requirements.txt
-          bandit -q -r github_mcp
+          # Keep Bandit in CI, but apply the repo's standard skips/exclusions.
+          # `.bandit` is a Bandit ini-args file and must be passed via --ini.
+          bandit --ini .bandit -q -r github_mcp
 
       - name: Compile
         run: python -m compileall -q github_mcp main.py
