@@ -135,8 +135,17 @@ async def _run_shell_ok(
 ) -> dict[str, Any]:
     res = await deps["run_shell"](cmd, cwd=cwd, timeout_seconds=timeout_seconds)
     if res.get("exit_code", 0) != 0:
-        stderr = res.get("stderr", "") or res.get("stdout", "")
-        raise GitHubAPIError(f"Command failed: {cmd}: {stderr}")
+        exit_code = res.get("exit_code")
+        timed_out = bool(res.get("timed_out", False))
+        stderr = (res.get("stderr", "") or "").strip()
+        stdout = (res.get("stdout", "") or "").strip()
+        detail = stderr or stdout
+        # Keep error payloads bounded for tool responses.
+        if len(detail) > 4000:
+            detail = detail[:4000] + "…"
+        raise GitHubAPIError(
+            f"Command failed (exit_code={exit_code}, timed_out={timed_out}): {cmd}: {detail}"
+        )
     return res
 
 
