@@ -246,12 +246,47 @@ async def run_tests(
     workdir: str | None = None,
     use_temp_venv: bool = True,
     installing_dependencies: bool = True,
+    *,
+    coverage: bool = False,
+    cov_target: str | None = None,
+    cov_report: str = "term-missing:skip-covered",
+    cov_fail_under: int | None = None,
+    parallel: bool = False,
+    parallel_workers: str = "auto",
+    timeout_per_test_seconds: int | None = None,
 ) -> dict[str, Any]:
     """Run tests in the repo mirror.
 
     Refactor note: uses the same step executor as the quality suite so outputs
     (duration, stdout/stderr stats, etc.) are consistent across tools.
+
+    Extra knobs (coverage/parallel/timeouts) are opt-in to stay compatible with
+    repos that haven't adopted these plugins yet.
     """
+
+    def _has_flag(cmd: str, flag: str) -> bool:
+        return flag in (cmd or "")
+
+    effective_command = test_command
+
+    if (coverage or cov_fail_under is not None) and not _has_flag(effective_command, "--cov"):
+        effective_command += f" --cov={cov_target or '.'}"
+
+    if coverage and cov_report and not _has_flag(effective_command, "--cov-report"):
+        effective_command += f" --cov-report={cov_report}"
+
+    if cov_fail_under is not None and not _has_flag(effective_command, "--cov-fail-under"):
+        effective_command += f" --cov-fail-under={int(cov_fail_under)}"
+
+    if (
+        parallel
+        and " -n" not in effective_command
+        and not _has_flag(effective_command, "--numprocesses")
+    ):
+        effective_command += f" -n {parallel_workers}"
+
+    if timeout_per_test_seconds is not None and not _has_flag(effective_command, "--timeout"):
+        effective_command += f" --timeout={int(timeout_per_test_seconds)}"
 
     timeout_seconds_i = _normalize_timeout_seconds(
         timeout_seconds, config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS
@@ -261,7 +296,7 @@ async def run_tests(
         name="tests",
         full_name=full_name,
         ref=ref,
-        command=test_command,
+        command=effective_command,
         timeout_seconds=timeout_seconds_i,
         workdir=workdir,
         use_temp_venv=use_temp_venv,
@@ -278,7 +313,7 @@ async def run_tests(
 
     return {
         "status": status,
-        "command": test_command,
+        "command": effective_command,
         "exit_code": exit_code,
         "workdir": workdir,
         "summary": summary,
@@ -288,7 +323,7 @@ async def run_tests(
             "Completed test command in repo mirror:",
             f"- Repo: {full_name}",
             f"- Ref: {ref}",
-            f"- Command: {test_command}",
+            f"- Command: {effective_command}",
             f"- Status: {status}",
             f"- Exit code: {exit_code}",
             f"- Duration (ms): {(summary or {}).get('duration_ms')}",
@@ -313,6 +348,9 @@ async def run_lint_suite(
     """Run formatting + lint checks.
 
     Industry-standard default: include a formatting check alongside lint.
+
+    When using a temp venv + dependency installation, we run format+lint in a
+    single terminal_command invocation so dependencies are installed once.
     """
 
     timeout_seconds_i = _normalize_timeout_seconds(
@@ -327,14 +365,44 @@ async def run_lint_suite(
     ]
 
     combined_command = lint_command
-
     if include_format_check and format_command:
         combined_command = f"{format_command} && {lint_command}"
-        fmt_step = await _run_named_step(
-            name="format",
+
+    use_single_runner = bool(use_temp_venv) and bool(installing_dependencies)
+
+    async def _run_multi_command_suite() -> dict[str, Any]:
+        steps.clear()
+
+        if include_format_check and format_command:
+            fmt_step = await _run_named_step(
+                name="format",
+                full_name=full_name,
+                ref=ref,
+                command=format_command,
+                timeout_seconds=timeout_seconds_i,
+                workdir=workdir,
+                use_temp_venv=use_temp_venv,
+                installing_dependencies=installing_dependencies,
+                include_raw=include_raw_step_outputs,
+                allow_missing_command=False,
+            )
+            steps.append(fmt_step)
+            if fmt_step.get("status") == "failed" and fail_fast:
+                controller_log.append("- Aborted: format failed")
+                return {
+                    "status": "failed",
+                    "command": combined_command,
+                    "exit_code": (fmt_step.get("summary") or {}).get("exit_code"),
+                    "workdir": workdir,
+                    "steps": steps,
+                    "controller_log": controller_log,
+                }
+
+        lint_step = await _run_named_step(
+            name="lint",
             full_name=full_name,
             ref=ref,
-            command=format_command,
+            command=lint_command,
             timeout_seconds=timeout_seconds_i,
             workdir=workdir,
             use_temp_venv=use_temp_venv,
@@ -342,50 +410,152 @@ async def run_lint_suite(
             include_raw=include_raw_step_outputs,
             allow_missing_command=False,
         )
-        steps.append(fmt_step)
-        if fmt_step.get("status") == "failed" and fail_fast:
-            controller_log.append("- Aborted: format failed")
+        steps.append(lint_step)
+
+        exit_code = (lint_step.get("summary") or {}).get("exit_code")
+        status = "passed" if lint_step.get("status") == "passed" else "failed"
+        controller_log.append(f"- Status: {status}")
+
+        return {
+            "status": status,
+            "command": combined_command,
+            "exit_code": exit_code,
+            "workdir": workdir,
+            "summary": (lint_step.get("summary") if isinstance(lint_step, dict) else {}),
+            "result": {
+                "exit_code": exit_code,
+                "timed_out": ((lint_step.get("summary") or {}).get("timed_out")),
+            },
+            "steps": steps,
+            "controller_log": controller_log,
+        }
+
+    if use_single_runner:
+        runner_steps: list[dict[str, Any]] = []
+        if include_format_check and format_command:
+            runner_steps.append(
+                {
+                    "name": "format",
+                    "command": format_command,
+                    "allow_missing": False,
+                    "stop_on_fail": bool(fail_fast),
+                }
+            )
+        runner_steps.append(
+            {
+                "name": "lint",
+                "command": lint_command,
+                "allow_missing": False,
+                "stop_on_fail": True,
+            }
+        )
+
+        runner_command = _build_quality_suite_runner_command(steps=runner_steps)
+        raw = await _tw().terminal_command(
+            full_name=full_name,
+            ref=ref,
+            command=runner_command,
+            timeout_seconds=timeout_seconds_i,
+            workdir=workdir,
+            use_temp_venv=use_temp_venv,
+            installing_dependencies=installing_dependencies,
+        )
+
+        slim = _slim_terminal_command_payload(raw)
+        parsed = _parse_marked_steps(str(slim.get("stdout") or ""))
+
+        # If the runner was mocked (common in unit tests), it will not emit
+        # markers. Fall back to the per-step implementation.
+        if not parsed and _looks_like_mocked_terminal_command(slim):
+            controller_log.append(
+                "- Note: detected mocked terminal_command; falling back to per-step execution"
+            )
+            return await _run_multi_command_suite()
+
+        if not parsed:
+            controller_log.append("- Failed: runner did not emit step markers (unexpected output)")
+            if include_raw_step_outputs:
+                return {
+                    "status": "failed",
+                    "command": combined_command,
+                    "exit_code": slim.get("exit_code"),
+                    "workdir": workdir,
+                    "steps": [
+                        {
+                            "name": "runner",
+                            "status": "failed",
+                            "summary": slim,
+                            "raw": raw,
+                        }
+                    ],
+                    "controller_log": controller_log,
+                }
             return {
                 "status": "failed",
                 "command": combined_command,
-                "exit_code": (fmt_step.get("summary") or {}).get("exit_code"),
+                "exit_code": slim.get("exit_code"),
                 "workdir": workdir,
-                "steps": steps,
+                "steps": [{"name": "runner", "status": "failed", "summary": slim}],
                 "controller_log": controller_log,
             }
 
-    lint_step = await _run_named_step(
-        name="lint",
-        full_name=full_name,
-        ref=ref,
-        command=lint_command,
-        timeout_seconds=timeout_seconds_i,
-        workdir=workdir,
-        use_temp_venv=use_temp_venv,
-        installing_dependencies=installing_dependencies,
-        include_raw=include_raw_step_outputs,
-        allow_missing_command=False,
-    )
-    steps.append(lint_step)
+        parsed_by_name: dict[str, dict[str, Any]] = {
+            str(p.get("name")): p for p in parsed if isinstance(p, dict) and p.get("name")
+        }
 
-    exit_code = (lint_step.get("summary") or {}).get("exit_code")
-    status = "passed" if lint_step.get("status") == "passed" else "failed"
-    controller_log.append(f"- Status: {status}")
+        exit_code: int | None = 0
+        status = "passed"
 
-    # Keep backward-compatible fields while also returning structured steps.
-    return {
-        "status": status,
-        "command": combined_command,
-        "exit_code": exit_code,
-        "workdir": workdir,
-        "summary": (lint_step.get("summary") if isinstance(lint_step, dict) else {}),
-        "result": {
+        for step_def in runner_steps:
+            name = step_def["name"]
+            p = parsed_by_name.get(name)
+            step_exit = (p or {}).get("exit_code")
+            duration_ms = (p or {}).get("duration_ms")
+            step_status = _step_status_from_exit_code(
+                exit_code=step_exit,
+                allow_missing_command=False,
+            )
+            step_out = (p or {}).get("output") or ""
+            out_chars, out_lines = _text_stats(step_out)
+            step: dict[str, Any] = {
+                "name": name,
+                "status": step_status,
+                "summary": {
+                    "command": step_def.get("command"),
+                    "exit_code": step_exit,
+                    "timed_out": False,
+                    "stdout_stats": {"chars": out_chars, "lines": out_lines},
+                    "stderr_stats": {"chars": 0, "lines": 0},
+                    "duration_ms": duration_ms,
+                    "stdout": step_out,
+                    "stderr": "",
+                },
+            }
+            if include_raw_step_outputs:
+                step["raw"] = raw
+            steps.append(step)
+
+            if step_status == "failed" and status != "failed":
+                status = "failed"
+                exit_code = step_exit
+
+        lint_step = next((s for s in steps if s.get("name") == "lint"), None)
+        lint_summary = (lint_step or {}).get("summary") if isinstance(lint_step, dict) else {}
+
+        controller_log.append(f"- Status: {status}")
+
+        return {
+            "status": status,
+            "command": combined_command,
             "exit_code": exit_code,
-            "timed_out": ((lint_step.get("summary") or {}).get("timed_out")),
-        },
-        "steps": steps,
-        "controller_log": controller_log,
-    }
+            "workdir": workdir,
+            "summary": lint_summary,
+            "result": {"exit_code": exit_code, "timed_out": (lint_summary or {}).get("timed_out")},
+            "steps": steps,
+            "controller_log": controller_log,
+        }
+
+    return await _run_multi_command_suite()
 
 
 @mcp_tool(write_action=False)

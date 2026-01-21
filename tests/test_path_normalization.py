@@ -25,8 +25,10 @@ def test_normalize_repo_path_for_repo_strips_raw_github_url():
     assert utils._normalize_repo_path_for_repo(full_name, url) == "docs/readme.md"
 
 
-
-@pytest.mark.parametrize("value", ["/", "", ".", "./", "https://github.com/octo-org/octo-repo"])
+@pytest.mark.parametrize(
+    "value",
+    ["/", "", ".", "./", "https://github.com/octo-org/octo-repo"],
+)
 def test_normalize_repo_path_for_repo_repo_root_like_values_strict(value, monkeypatch):
     from github_mcp import utils
 
@@ -38,7 +40,10 @@ def test_normalize_repo_path_for_repo_repo_root_like_values_strict(value, monkey
     assert "expected a repository-relative file path" in str(excinfo.value)
 
 
-@pytest.mark.parametrize("value", ["/", "", ".", "./", "https://github.com/octo-org/octo-repo"])
+@pytest.mark.parametrize(
+    "value",
+    ["/", "", ".", "./", "https://github.com/octo-org/octo-repo"],
+)
 def test_normalize_repo_path_for_repo_repo_root_like_values_permissive(value, monkeypatch):
     from github_mcp import utils
 
