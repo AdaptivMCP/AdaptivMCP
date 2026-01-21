@@ -355,10 +355,12 @@ async def list_render_logs(
         ("method", _normalize_optional_str(method)),
         ("path", _normalize_optional_str(path)),
         ("text", _normalize_optional_str(text)),
-        ("type", _normalize_optional_str(log_type)),
     ):
         if val:
             params[key] = val
+    log_type_value = _normalize_optional_str(log_type)
+    if log_type_value:
+        params["logType"] = log_type_value
 
     if status_code is not None:
         if isinstance(status_code, bool):
