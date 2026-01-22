@@ -2152,7 +2152,8 @@ def _log_tool_warning(
     *,
     tool_name: str,
     call_id: str,
-    write_action: bool,
+    base_write_action: bool,
+    effective_write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2162,10 +2163,28 @@ def _log_tool_warning(
 ) -> None:
     if not LOG_TOOL_CALLS:
         return
+
+    shaped_payload: dict[str, Any]
+    if isinstance(result, Mapping):
+        shaped_payload = dict(result)
+    else:
+        shaped_payload = {"status": "success", "ok": True, "result": result}
+    shaped_payload["tool_metadata"] = {
+        "base_write_action": bool(base_write_action),
+        "effective_write_action": bool(effective_write_action),
+    }
+    report = _llm_dev_report(
+        tool_name=tool_name,
+        shaped_payload=shaped_payload,
+        all_args=all_args,
+        req=req,
+    )
+
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        write_action=write_action,
+        base_write_action=base_write_action,
+        effective_write_action=effective_write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2173,7 +2192,9 @@ def _log_tool_warning(
     if all_args is not None:
         payload.update(_extract_context(all_args))
     payload["duration_ms"] = duration_ms
-    payload["response"] = _result_snapshot(result) if not LOG_TOOL_PAYLOADS else result
+    payload["report"] = report
+    if LOG_TOOL_PAYLOADS:
+        payload["raw"] = result
 
     if not HUMAN_LOGS:
         LOGGER.info(
@@ -2186,13 +2207,14 @@ def _log_tool_warning(
     bits = _friendly_arg_bits(all_args or {})
     suffix = (" - " + " - ".join(bits)) if bits else ""
     prefix = (
-        _ansi("RES", ANSI_YELLOW) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        _ansi("RES", ANSI_YELLOW)
+        + " "
+        + _ansi(friendly, ANSI_CYAN)
+        + _write_badge(bool(effective_write_action))
     )
     ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
-    snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
-    rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
-    res_suffix = (" - " + " - ".join(rbits)) if rbits else ""
-    msg = f"{prefix} {ms}{suffix}{res_suffix}"
+    # Prefer the structured report summary (single surface, no duplication).
+    msg = f"{prefix} {ms}{suffix} - {_truncate_text(str(report.get('summary') or ''), limit=220)}"
     if LOG_TOOL_LOG_IDS:
         msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
     inline = payload.get("log_context")
@@ -2208,7 +2230,8 @@ def _log_tool_returned_error(
     *,
     tool_name: str,
     call_id: str,
-    write_action: bool,
+    base_write_action: bool,
+    effective_write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2218,10 +2241,23 @@ def _log_tool_returned_error(
 ) -> None:
     """Log a tool call that returned an error payload without raising."""
 
+    shaped_payload = dict(result)
+    shaped_payload["tool_metadata"] = {
+        "base_write_action": bool(base_write_action),
+        "effective_write_action": bool(effective_write_action),
+    }
+    report = _llm_dev_report(
+        tool_name=tool_name,
+        shaped_payload=shaped_payload,
+        all_args=all_args,
+        req=req,
+    )
+
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        write_action=write_action,
+        base_write_action=base_write_action,
+        effective_write_action=effective_write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2235,24 +2271,29 @@ def _log_tool_returned_error(
     elif isinstance(err, str):
         payload["error_message"] = err
 
-    payload["response"] = result if LOG_TOOL_PAYLOADS else _result_snapshot(result)
+    payload["report"] = report
+    if LOG_TOOL_PAYLOADS:
+        payload["raw"] = result
 
     if HUMAN_LOGS:
         friendly = _friendly_tool_name(tool_name)
         bits = _friendly_arg_bits(all_args or {})
         suffix = (" - " + " - ".join(bits)) if bits else ""
         prefix = (
-            _ansi("RES", ANSI_RED) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+            _ansi("RES", ANSI_RED)
+            + " "
+            + _ansi(friendly, ANSI_CYAN)
+            + _write_badge(bool(effective_write_action))
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         err_type = _ansi("ReturnedError", ANSI_YELLOW)
         err_msg = _ansi(
             _clean_error_message(payload.get("error_message") or "", limit=180), ANSI_RED
         )
-        snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
-        rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
-        res_suffix = (" - " + " - ".join(rbits)) if rbits else ""
-        msg = f"{prefix} {ms}{suffix}{res_suffix} - {err_type}: {err_msg}"
+        msg = (
+            f"{prefix} {ms}{suffix} - {err_type}: {err_msg} - "
+            f"{_truncate_text(str(report.get('summary') or ''), limit=200)}"
+        )
         if LOG_TOOL_LOG_IDS:
             msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
         inline = payload.get("log_context")
@@ -2629,7 +2670,8 @@ def _tool_log_payload(
     *,
     tool_name: str,
     call_id: str,
-    write_action: bool,
+    base_write_action: bool,
+    effective_write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2640,10 +2682,15 @@ def _tool_log_payload(
         "tool": tool_name,
         "call_id": shorten_token(call_id),
         "request": snapshot_request_context(req),
-        "log_context": inline or None,
     }
-    if write_action:
-        payload["write_action"] = True
+    if inline:
+        payload["log_context"] = inline
+
+    # Align with response payload semantics.
+    payload["tool_metadata"] = {
+        "base_write_action": bool(base_write_action),
+        "effective_write_action": bool(effective_write_action),
+    }
     if LOG_TOOL_VERBOSE_EXTRAS:
         payload["schema_present"] = bool(schema_present)
         payload["schema_hash"] = shorten_token(schema_hash) if schema_present else None
@@ -2656,7 +2703,8 @@ def _log_tool_start(
     *,
     tool_name: str,
     call_id: str,
-    write_action: bool,
+    base_write_action: bool,
+    effective_write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2668,7 +2716,8 @@ def _log_tool_start(
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        write_action=write_action,
+        base_write_action=base_write_action,
+        effective_write_action=effective_write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2679,7 +2728,10 @@ def _log_tool_start(
     bits = _friendly_arg_bits(all_args)
     suffix = (" - " + " - ".join(bits)) if bits else ""
     prefix = (
-        _ansi("REQ", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+        _ansi("REQ", ANSI_GREEN)
+        + " "
+        + _ansi(friendly, ANSI_CYAN)
+        + _write_badge(bool(effective_write_action))
     )
     msg = f"{prefix}{suffix}"
     if LOG_TOOL_LOG_IDS:
@@ -2688,6 +2740,67 @@ def _log_tool_start(
     if isinstance(inline, str) and inline:
         msg = msg + " " + _ansi(inline, ANSI_DIM)
     LOGGER.info(msg, extra={"event": "tool_call_started", **payload})
+
+
+def _log_tool_report(
+    *,
+    tool_name: str,
+    call_id: str,
+    base_write_action: bool,
+    effective_write_action: bool,
+    req: Mapping[str, Any],
+    schema_hash: str | None,
+    schema_present: bool,
+    result: Any,
+    all_args: Mapping[str, Any] | None = None,
+) -> None:
+    if not (LOG_TOOL_CALLS and HUMAN_LOGS):
+        return
+    # Build a single structured report aligned with the shaped response payload.
+    shaped_payload: dict[str, Any]
+    if isinstance(result, Mapping):
+        shaped_payload = dict(result)
+    else:
+        shaped_payload = {"status": "success", "ok": True, "result": result}
+    shaped_payload["tool_metadata"] = {
+        "base_write_action": bool(base_write_action),
+        "effective_write_action": bool(effective_write_action),
+    }
+
+    report = _llm_dev_report(
+        tool_name=tool_name,
+        shaped_payload=shaped_payload,
+        all_args=all_args,
+        req=req,
+    )
+
+    payload = _tool_log_payload(
+        tool_name=tool_name,
+        call_id=call_id,
+        base_write_action=base_write_action,
+        effective_write_action=effective_write_action,
+        req=req,
+        schema_hash=schema_hash,
+        schema_present=schema_present,
+    )
+    if all_args is not None:
+        payload.update(_extract_context(all_args))
+    payload["report"] = report
+    friendly = _friendly_tool_name(tool_name)
+    prefix = (
+        _ansi("REPORT", ANSI_GREEN)
+        + " "
+        + _ansi(friendly, ANSI_CYAN)
+        + _write_badge(bool(effective_write_action))
+    )
+    # Single-line message for provider logs.
+    msg = f"{prefix} {_truncate_text(str(report.get('summary') or ''), limit=220)}"
+    if LOG_TOOL_LOG_IDS:
+        msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+    inline = payload.get("log_context")
+    if isinstance(inline, str) and inline:
+        msg = msg + " " + _ansi(inline, ANSI_DIM)
+    LOGGER.info(msg, extra={"event": "tool_call_report", **payload})
 
 
 def _log_tool_summary(
@@ -2701,40 +2814,31 @@ def _log_tool_summary(
     result: Any,
     all_args: Mapping[str, Any] | None = None,
 ) -> None:
-    if not (LOG_TOOL_CALLS and HUMAN_LOGS):
-        return
-    summary = _tool_paragraph_summary(tool_name=tool_name, result=result, all_args=all_args)
-    if not summary:
-        return
-    payload = _tool_log_payload(
+    """Backward-compatible wrapper.
+
+    Historically this emitted a separate SUMMARY line. It now emits a single
+    REPORT line to avoid duplicate log output and align with shaped payloads.
+    """
+
+    _log_tool_report(
         tool_name=tool_name,
         call_id=call_id,
-        write_action=write_action,
+        base_write_action=bool(write_action),
+        effective_write_action=bool(write_action),
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
+        result=result,
+        all_args=all_args,
     )
-    if all_args is not None:
-        payload.update(_extract_context(all_args))
-    payload["summary"] = summary
-    friendly = _friendly_tool_name(tool_name)
-    prefix = (
-        _ansi("SUMMARY", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
-    )
-    msg = f"{prefix} {summary}"
-    if LOG_TOOL_LOG_IDS:
-        msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
-    inline = payload.get("log_context")
-    if isinstance(inline, str) and inline:
-        msg = msg + " " + _ansi(inline, ANSI_DIM)
-    LOGGER.info(msg, extra={"event": "tool_call_summary", **payload})
 
 
 def _log_tool_success(
     *,
     tool_name: str,
     call_id: str,
-    write_action: bool,
+    base_write_action: bool,
+    effective_write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2744,10 +2848,28 @@ def _log_tool_success(
 ) -> None:
     if not LOG_TOOL_CALLS:
         return
+
+    shaped_payload: dict[str, Any]
+    if isinstance(result, Mapping):
+        shaped_payload = dict(result)
+    else:
+        shaped_payload = {"status": "success", "ok": True, "result": result}
+    shaped_payload["tool_metadata"] = {
+        "base_write_action": bool(base_write_action),
+        "effective_write_action": bool(effective_write_action),
+    }
+    report = _llm_dev_report(
+        tool_name=tool_name,
+        shaped_payload=shaped_payload,
+        all_args=all_args,
+        req=req,
+    )
+
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        write_action=write_action,
+        base_write_action=base_write_action,
+        effective_write_action=effective_write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2755,44 +2877,34 @@ def _log_tool_success(
     if all_args is not None:
         payload.update(_extract_context(all_args))
     payload["duration_ms"] = duration_ms
+    payload["report"] = report
     if LOG_TOOL_PAYLOADS:
+        # Opt-in only; avoid duplicating the report with a second "response" surface.
         try:
             from github_mcp.mcp_server.schemas import _jsonable
 
-            payload["response"] = _jsonable(result)
+            payload["raw"] = _jsonable(result)
         except Exception:
-            payload["response"] = result
-    else:
-        payload["response"] = _result_snapshot(result)
+            payload["raw"] = result
 
     if HUMAN_LOGS:
         friendly = _friendly_tool_name(tool_name)
         bits = _friendly_arg_bits(all_args or {})
         suffix = (" - " + " - ".join(bits)) if bits else ""
         prefix = (
-            _ansi("RES", ANSI_GREEN) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+            _ansi("RES", ANSI_GREEN)
+            + " "
+            + _ansi(friendly, ANSI_CYAN)
+            + _write_badge(bool(effective_write_action))
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
-        snap = payload.get("response") if not LOG_TOOL_PAYLOADS else _result_snapshot(result)
-        rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
-        res_suffix = (" - " + " - ".join(rbits)) if rbits else ""
-        msg = f"{prefix} {ms}{suffix}{res_suffix}"
+        msg = f"{prefix} {ms}{suffix} - {_truncate_text(str(report.get('summary') or ''), limit=220)}"
         if LOG_TOOL_LOG_IDS:
             msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
         inline = payload.get("log_context")
         if isinstance(inline, str) and inline:
             msg = msg + " " + _ansi(inline, ANSI_DIM)
         LOGGER.info(msg, extra={"event": "tool_call_completed", **payload})
-        _log_tool_summary(
-            tool_name=tool_name,
-            call_id=call_id,
-            write_action=write_action,
-            req=req,
-            schema_hash=schema_hash if schema_present else None,
-            schema_present=schema_present,
-            result=result,
-            all_args=all_args,
-        )
     else:
         kv_map: dict[str, Any] = {
             "tool": tool_name,
@@ -2813,7 +2925,8 @@ def _log_tool_failure(
     *,
     tool_name: str,
     call_id: str,
-    write_action: bool,
+    base_write_action: bool,
+    effective_write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2822,10 +2935,31 @@ def _log_tool_failure(
     all_args: Mapping[str, Any],
     structured_error: Mapping[str, Any] | None = None,
 ) -> None:
+    shaped_payload: dict[str, Any]
+    if isinstance(structured_error, Mapping):
+        shaped_payload = dict(structured_error)
+    else:
+        shaped_payload = {
+            "status": "error",
+            "ok": False,
+            "error": {"message": str(exc) or exc.__class__.__name__},
+        }
+    shaped_payload["tool_metadata"] = {
+        "base_write_action": bool(base_write_action),
+        "effective_write_action": bool(effective_write_action),
+    }
+    report = _llm_dev_report(
+        tool_name=tool_name,
+        shaped_payload=shaped_payload,
+        all_args=all_args,
+        req=req,
+    )
+
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        write_action=write_action,
+        base_write_action=base_write_action,
+        effective_write_action=effective_write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2837,6 +2971,7 @@ def _log_tool_failure(
             "error_type": exc.__class__.__name__,
         }
     )
+    payload["report"] = report
 
     if structured_error:
         err = structured_error.get("error")
@@ -2844,29 +2979,28 @@ def _log_tool_failure(
             payload["error_message"] = err.get("message")
         elif isinstance(err, str):
             payload["error_message"] = err
-
-        # Include a compact response snapshot so failures have both sides.
         if LOG_TOOL_PAYLOADS:
-            payload["response"] = structured_error
-        else:
-            payload["response"] = _result_snapshot(structured_error)
+            payload["raw"] = structured_error
 
     if HUMAN_LOGS:
         friendly = _friendly_tool_name(tool_name)
         bits = _friendly_arg_bits(all_args or {})
         suffix = (" - " + " - ".join(bits)) if bits else ""
         prefix = (
-            _ansi("RES", ANSI_RED) + " " + _ansi(friendly, ANSI_CYAN) + _write_badge(write_action)
+            _ansi("RES", ANSI_RED)
+            + " "
+            + _ansi(friendly, ANSI_CYAN)
+            + _write_badge(bool(effective_write_action))
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         err_type_raw = payload.get("error_type") or exc.__class__.__name__
         err_msg_raw = payload.get("error_message") or str(exc)
         err_type = _ansi(str(err_type_raw), ANSI_YELLOW)
         err_msg = _ansi(_clean_error_message(err_msg_raw, limit=180), ANSI_RED)
-        snap = payload.get("response") if not LOG_TOOL_PAYLOADS else payload.get("response")
-        rbits = _friendly_result_bits(snap if isinstance(snap, Mapping) else None)
-        res_suffix = (" - " + " - ".join(rbits)) if rbits else ""
-        msg = f"{prefix} {ms}{suffix}{res_suffix} - {err_type}: {err_msg}"
+        msg = (
+            f"{prefix} {ms}{suffix} - {err_type}: {err_msg} - "
+            f"{_truncate_text(str(report.get('summary') or ''), limit=200)}"
+        )
         if LOG_TOOL_LOG_IDS:
             msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
         inline = payload.get("log_context")
@@ -3287,7 +3421,8 @@ def mcp_tool(
                 _log_tool_start(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=effective_write_action,
+                    base_write_action=bool(write_action),
+                    effective_write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -3314,7 +3449,8 @@ def mcp_tool(
                     _log_tool_failure(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=effective_write_action,
+                        base_write_action=bool(write_action),
+                        effective_write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3408,7 +3544,8 @@ def mcp_tool(
                     _log_tool_failure(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=effective_write_action,
+                        base_write_action=bool(write_action),
+                        effective_write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash,
                         schema_present=True,
@@ -3463,7 +3600,8 @@ def mcp_tool(
                     _log_tool_returned_error(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=effective_write_action,
+                        base_write_action=bool(write_action),
+                        effective_write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3475,7 +3613,8 @@ def mcp_tool(
                     _log_tool_warning(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=effective_write_action,
+                        base_write_action=bool(write_action),
+                        effective_write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3487,7 +3626,8 @@ def mcp_tool(
                     _log_tool_success(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=effective_write_action,
+                        base_write_action=bool(write_action),
+                        effective_write_action=effective_write_action,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3644,7 +3784,8 @@ def mcp_tool(
             _log_tool_start(
                 tool_name=tool_name,
                 call_id=call_id,
-                write_action=effective_write_action,
+                base_write_action=bool(write_action),
+                effective_write_action=effective_write_action,
                 req=req,
                 schema_hash=schema_hash if schema_present else None,
                 schema_present=schema_present,
@@ -3671,7 +3812,8 @@ def mcp_tool(
                 _log_tool_failure(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=effective_write_action,
+                    base_write_action=bool(write_action),
+                    effective_write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -3759,7 +3901,8 @@ def mcp_tool(
                 _log_tool_failure(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=effective_write_action,
+                    base_write_action=bool(write_action),
+                    effective_write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash,
                     schema_present=True,
@@ -3810,7 +3953,8 @@ def mcp_tool(
                 _log_tool_returned_error(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=effective_write_action,
+                    base_write_action=bool(write_action),
+                    effective_write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -3822,7 +3966,8 @@ def mcp_tool(
                 _log_tool_warning(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=effective_write_action,
+                    base_write_action=bool(write_action),
+                    effective_write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -3834,7 +3979,8 @@ def mcp_tool(
                 _log_tool_success(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=effective_write_action,
+                    base_write_action=bool(write_action),
+                    effective_write_action=effective_write_action,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,

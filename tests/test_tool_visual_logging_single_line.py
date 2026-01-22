@@ -45,8 +45,9 @@ def test_log_tool_summary_emits_single_line_message(monkeypatch) -> None:
     # Provider logs are line-oriented; keep message single line.
     assert "\n" not in msg
 
-    assert extra.get("event") == "tool_call_summary"
-    assert "Created 2 items" in str(extra.get("summary") or "")
+    assert extra.get("event") == "tool_call_report"
+    report = extra.get("report") or {}
+    assert "Created 2 items" in str(report.get("summary") or "")
 
 
 def test_suites_normalizes_carriage_returns() -> None:
