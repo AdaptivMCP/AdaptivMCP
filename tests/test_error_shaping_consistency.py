@@ -20,7 +20,7 @@ def test_chatgpt_friendly_result_overwrites_conflicting_ok(monkeypatch):
     assert shaped["ok"] is False
 
 
-def test_mcp_tool_error_is_shaped_and_includes_tool_metadata(monkeypatch):
+def test_mcp_tool_error_is_shaped_and_includes_gating(monkeypatch):
     import github_mcp.mcp_server.decorators as dec
 
     monkeypatch.setattr(dec, "_running_under_pytest", lambda: False)
@@ -35,6 +35,6 @@ def test_mcp_tool_error_is_shaped_and_includes_tool_metadata(monkeypatch):
     assert isinstance(shaped, dict)
     assert shaped.get("status") == "error"
     assert shaped.get("ok") is False
-    tool_meta = shaped.get("tool_metadata")
-    assert isinstance(tool_meta, dict)
-    assert tool_meta.get("effective_write_action") is False
+    gating = shaped.get("gating")
+    assert isinstance(gating, dict)
+    assert gating.get("effective_write_action") is False

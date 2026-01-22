@@ -375,19 +375,25 @@ ANSI_YELLOW = "\x1b[33m"
 ANSI_CYAN = "\x1b[36m"
 
 
-_ADAPTIV_MCP_METADATA = {
-    "provider": "Adaptiv MCP",
+_PROVIDER_METADATA = {
+    "name": "Adaptiv MCP",
     "server": "adaptiv-mcp-custom-connector",
     "connected": True,
 }
 
 
-def _inject_adaptiv_mcp_metadata(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+def _inject_provider_metadata(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Inject provider metadata into a mapping payload.
+
+    This is the single canonical provider surface. Backwards-compatibility
+    aliases are intentionally not emitted.
+    """
+
     if not isinstance(payload, Mapping):
         return {}
     out = dict(payload)
-    if "adaptiv_mcp" not in out:
-        out["adaptiv_mcp"] = dict(_ADAPTIV_MCP_METADATA)
+    if "provider" not in out:
+        out["provider"] = dict(_PROVIDER_METADATA)
     return out
 
 
@@ -1168,13 +1174,13 @@ def _llm_dev_report(
             if key in result and result.get(key) is not None:
                 out.setdefault("highlights", {})[key] = result.get(key)
 
-    # Include tool metadata (write gating) inside the report for easy inspection.
-    tool_meta = shaped_payload.get("tool_metadata")
-    if isinstance(tool_meta, Mapping):
+    # Include write gating inside the report for easy inspection.
+    gating = shaped_payload.get("gating")
+    if isinstance(gating, Mapping):
         out["gating"] = {
-            "base_write_action": tool_meta.get("base_write_action"),
-            "effective_write_action": tool_meta.get("effective_write_action"),
-            "annotations": tool_meta.get("annotations"),
+            "base_write_action": gating.get("base_write_action"),
+            "effective_write_action": gating.get("effective_write_action"),
+            "annotations": gating.get("annotations"),
         }
 
     return out
@@ -1219,26 +1225,20 @@ def _llm_scan_friendly_payload(
             out[k] = val
 
     # Provider metadata + write gating metadata (when present).
-    tool_meta = shaped_payload.get("tool_metadata")
-    if isinstance(tool_meta, Mapping):
-        # Preserve the canonical tool metadata for backward compatibility.
-        out["tool_metadata"] = dict(tool_meta)
-        out.setdefault("gating", {})
-        if isinstance(out.get("gating"), Mapping):
-            out["gating"] = {
-                "base_write_action": tool_meta.get("base_write_action"),
-                "effective_write_action": tool_meta.get("effective_write_action"),
-                "annotations": tool_meta.get("annotations"),
-            }
+    gating = shaped_payload.get("gating")
+    if isinstance(gating, Mapping):
+        out["gating"] = {
+            "base_write_action": gating.get("base_write_action"),
+            "effective_write_action": gating.get("effective_write_action"),
+            "annotations": gating.get("annotations"),
+        }
 
-    adaptiv_meta = shaped_payload.get("adaptiv_mcp")
-    if isinstance(adaptiv_meta, Mapping):
-        # Preserve provider metadata for backward compatibility.
-        out["adaptiv_mcp"] = dict(adaptiv_meta)
+    provider = shaped_payload.get("provider")
+    if isinstance(provider, Mapping):
         out["provider"] = {
-            "name": adaptiv_meta.get("provider"),
-            "server": adaptiv_meta.get("server"),
-            "connected": adaptiv_meta.get("connected"),
+            "name": provider.get("name"),
+            "server": provider.get("server"),
+            "connected": provider.get("connected"),
         }
 
     # Never echo the raw nested result envelope at the top level.
@@ -1679,7 +1679,7 @@ def _merge_invocation_metadata(
     """Attach dynamic tool metadata to a mapping payload."""
 
     out = dict(payload)
-    tool_metadata: dict[str, Any] = {
+    gating: dict[str, Any] = {
         "base_write_action": bool(base_write_action),
         "effective_write_action": bool(effective_write_action),
     }
@@ -1687,15 +1687,15 @@ def _merge_invocation_metadata(
         func, effective_write_action=effective_write_action
     )
     if annotations:
-        tool_metadata["annotations"] = annotations
+        gating["annotations"] = annotations
 
-    existing = out.get("tool_metadata")
+    existing = out.get("gating")
     if isinstance(existing, Mapping):
         merged = dict(existing)
-        merged.update(tool_metadata)
-        out["tool_metadata"] = merged
+        merged.update(gating)
+        out["gating"] = merged
     else:
-        out["tool_metadata"] = tool_metadata
+        out["gating"] = gating
     return out
 
 
@@ -2145,7 +2145,7 @@ def _chatgpt_friendly_result(
                 "ok": True,
                 "result": result,
             }
-            base_payload = _inject_adaptiv_mcp_metadata(base_payload)
+            base_payload = _inject_provider_metadata(base_payload)
             return _llm_scan_friendly_payload(
                 tool_name=tool_name,
                 shaped_payload=base_payload,
@@ -2153,7 +2153,7 @@ def _chatgpt_friendly_result(
                 req=req,
             )
 
-        out: dict[str, Any] = _inject_adaptiv_mcp_metadata(result)
+        out: dict[str, Any] = _inject_provider_metadata(result)
 
         # Ensure stable status/ok.
         #
@@ -2220,7 +2220,7 @@ def _log_tool_warning(
         shaped_payload = dict(result)
     else:
         shaped_payload = {"status": "success", "ok": True, "result": result}
-    shaped_payload["tool_metadata"] = {
+    shaped_payload["gating"] = {
         "base_write_action": bool(base_write_action),
         "effective_write_action": bool(effective_write_action),
     }
@@ -2293,7 +2293,7 @@ def _log_tool_returned_error(
     """Log a tool call that returned an error payload without raising."""
 
     shaped_payload = dict(result)
-    shaped_payload["tool_metadata"] = {
+    shaped_payload["gating"] = {
         "base_write_action": bool(base_write_action),
         "effective_write_action": bool(effective_write_action),
     }
@@ -2738,7 +2738,7 @@ def _tool_log_payload(
         payload["log_context"] = inline
 
     # Align with response payload semantics.
-    payload["tool_metadata"] = {
+    payload["gating"] = {
         "base_write_action": bool(base_write_action),
         "effective_write_action": bool(effective_write_action),
     }
@@ -2813,7 +2813,7 @@ def _log_tool_report(
         shaped_payload = dict(result)
     else:
         shaped_payload = {"status": "success", "ok": True, "result": result}
-    shaped_payload["tool_metadata"] = {
+    shaped_payload["gating"] = {
         "base_write_action": bool(base_write_action),
         "effective_write_action": bool(effective_write_action),
     }
@@ -2905,7 +2905,7 @@ def _log_tool_success(
         shaped_payload = dict(result)
     else:
         shaped_payload = {"status": "success", "ok": True, "result": result}
-    shaped_payload["tool_metadata"] = {
+    shaped_payload["gating"] = {
         "base_write_action": bool(base_write_action),
         "effective_write_action": bool(effective_write_action),
     }
@@ -2997,7 +2997,7 @@ def _log_tool_failure(
             "ok": False,
             "error": {"message": str(exc) or exc.__class__.__name__},
         }
-    shaped_payload["tool_metadata"] = {
+    shaped_payload["gating"] = {
         "base_write_action": bool(base_write_action),
         "effective_write_action": bool(effective_write_action),
     }
@@ -3514,7 +3514,7 @@ def mcp_tool(
                     )
                     # Return errors through the same client-facing shaping path
                     # as successful results so callers always see a consistent
-                    # envelope (redaction, tool_metadata, ok/status normalization).
+                    # envelope (redaction, gating, ok/status normalization).
                     client_payload: Any
                     if isinstance(structured_error, Mapping):
                         client_payload = _strip_internal_log_fields(structured_error)

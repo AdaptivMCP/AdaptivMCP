@@ -60,12 +60,12 @@ def test_mcp_tool_dynamic_write_action_is_exposed_in_response(monkeypatch) -> No
         return {"mode": mode}
 
     out_read = dyn_tool(mode="read")
-    assert out_read.get("tool_metadata", {}).get("base_write_action") is True
-    assert out_read.get("tool_metadata", {}).get("effective_write_action") is False
+    assert out_read.get("gating", {}).get("base_write_action") is True
+    assert out_read.get("gating", {}).get("effective_write_action") is False
 
     out_write = dyn_tool(mode="write")
-    assert out_write.get("tool_metadata", {}).get("base_write_action") is True
-    assert out_write.get("tool_metadata", {}).get("effective_write_action") is True
+    assert out_write.get("gating", {}).get("base_write_action") is True
+    assert out_write.get("gating", {}).get("effective_write_action") is True
 
 
 def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) -> None:
@@ -93,13 +93,13 @@ def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) ->
         return {"mode": mode}
 
     out_read = dyn_ann_tool(mode="read")
-    ann_read = out_read.get("tool_metadata", {}).get("annotations", {})
+    ann_read = out_read.get("gating", {}).get("annotations", {})
     assert ann_read.get("readOnlyHint") is True
     assert ann_read.get("destructiveHint") is False
     assert ann_read.get("openWorldHint") is True
 
     out_write = dyn_ann_tool(mode="write")
-    ann_write = out_write.get("tool_metadata", {}).get("annotations", {})
+    ann_write = out_write.get("gating", {}).get("annotations", {})
     assert ann_write.get("readOnlyHint") is False
     assert ann_write.get("destructiveHint") is True
     assert ann_write.get("openWorldHint") is True
@@ -138,13 +138,13 @@ def test_registered_tool_annotations_update_on_invocation(monkeypatch) -> None:
     tool_obj = dyn_tool_obj.__mcp_tool__
 
     out_read = dyn_tool_obj(mode="read")
-    assert out_read.get("tool_metadata", {}).get("effective_write_action") is False
+    assert out_read.get("gating", {}).get("effective_write_action") is False
     ann_read = tool_obj.get("annotations", {})
     assert ann_read.get("readOnlyHint") is True
     assert ann_read.get("destructiveHint") is False
 
     out_write = dyn_tool_obj(mode="write")
-    assert out_write.get("tool_metadata", {}).get("effective_write_action") is True
+    assert out_write.get("gating", {}).get("effective_write_action") is True
     ann_write = tool_obj.get("annotations", {})
     assert ann_write.get("readOnlyHint") is False
     assert ann_write.get("destructiveHint") is True
@@ -238,7 +238,7 @@ def test_auto_approve_suppresses_all_ui_hints(monkeypatch) -> None:
         return {"ok": True}
 
     out = hint_suppression_tool()
-    ann = out.get("tool_metadata", {}).get("annotations", {})
+    ann = out.get("gating", {}).get("annotations", {})
     assert ann.get("readOnlyHint") is False
     assert ann.get("destructiveHint") is False
     assert ann.get("openWorldHint") is False
