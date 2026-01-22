@@ -25,15 +25,15 @@ def test_chatgpt_friendly_result_surfaces_stdout_and_stderr(monkeypatch):
     shaped = _chatgpt_friendly_result(payload, req={"headers": {}})
     assert isinstance(shaped, dict)
 
-    streams = shaped.get("streams")
-    assert isinstance(streams, dict)
+    # The server no longer wraps results into a separate summary/streams envelope.
+    # Stdout/stderr remain in the tool's raw payload.
+    assert shaped.get("status") in {"success", "ok"}
+    assert shaped.get("ok") is True
+    assert isinstance(shaped.get("result"), dict)
+    assert shaped["result"].get("stdout") == "hello\nworld\n"
+    assert shaped["result"].get("stderr") == "warn: nope\n"
 
-    # Streams live under report.streams to avoid duplicating payload fields.
-    assert streams.get("stdout") == "hello\nworld\n"
-    assert streams.get("stderr") == "warn: nope\n"
-    assert streams.get("stdout_total_lines") == 2
-    assert streams.get("stderr_total_lines") == 1
-
-    # Ensure we do not duplicate at the top-level.
-    assert "stdout" not in shaped
-    assert "stderr" not in shaped
+    # No extra wrapper fields are added.
+    assert shaped.get("streams") is None
+    assert shaped.get("summary") is None
+    assert shaped.get("data") is None

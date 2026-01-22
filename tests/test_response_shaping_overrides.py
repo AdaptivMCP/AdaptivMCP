@@ -27,15 +27,14 @@ def test_response_mode_override_enables_chatgpt_shaping(monkeypatch):
     assert shaped.get("status") in {"success", "ok"}
     assert shaped.get("ok") is True
 
-    assert isinstance(shaped.get("summary"), str) and shaped.get("summary")
+    # The server no longer wraps results into a separate summary/streams envelope.
+    assert isinstance(shaped.get("result"), dict)
+    assert shaped["result"].get("stdout") == "hi\n"
 
-    streams = shaped.get("streams")
-    assert isinstance(streams, dict)
-    assert streams.get("stdout") == "hi\n"
-
-    # Avoid duplication of nested envelopes at the top-level.
-    assert "result" not in shaped
-    assert "stdout" not in shaped
+    # No extra wrapper fields are added.
+    assert shaped.get("summary") is None
+    assert shaped.get("streams") is None
+    assert shaped.get("data") is None
 
 
 def test_shaped_payload_does_not_echo_large_lists(monkeypatch):
@@ -58,10 +57,11 @@ def test_shaped_payload_does_not_echo_large_lists(monkeypatch):
         },
     )
 
-    assert "items" not in shaped
-    snap = shaped.get("data")
-    assert isinstance(snap, dict)
-    assert snap.get("type") == "dict"
+    # In raw result mode, the payload is not truncated or re-shaped.
+    assert "items" in shaped
+    assert isinstance(shaped["items"], list) and len(shaped["items"]) == 5
+    assert shaped.get("summary") is None
+    assert shaped.get("data") is None
 
 
 def test_stream_limits_clip_raw_stdout(monkeypatch):
@@ -89,12 +89,10 @@ def test_stream_limits_clip_raw_stdout(monkeypatch):
         },
     )
 
-    streams = shaped.get("streams")
-    assert isinstance(streams, dict)
-    assert streams.get("stdout_truncated") is True
-    assert streams.get("stdout_total_lines") == 5
-    assert isinstance(streams.get("stdout"), str)
-    assert "… (" in streams["stdout"]
+    # No stream truncation wrapper is applied; raw stdout remains in result.
+    assert isinstance(shaped.get("result"), dict)
+    assert shaped["result"].get("stdout") == "a\nb\nc\nd\ne\n"
+    assert shaped.get("streams") is None
 
 
 def test_chatgpt_shaping_returns_single_structured_report_without_duplication(monkeypatch):
@@ -110,13 +108,13 @@ def test_chatgpt_shaping_returns_single_structured_report_without_duplication(mo
 
     shaped = _chatgpt_friendly_result(payload, req={"response_mode": "chatgpt"})
     assert isinstance(shaped, dict)
-    assert set(shaped.keys()).issuperset({"status", "ok", "summary", "data"})
 
-    # The top-level should be minimal (no nested envelopes or secondary summary strings).
-    assert "result" not in shaped
-    assert "summary_text" not in shaped
-    assert "stdout" not in shaped
-    assert "stderr" not in shaped
+    # Raw result payload is preserved.
+    assert set(shaped.keys()).issuperset({"status", "ok", "result"})
+    assert isinstance(shaped.get("result"), dict)
+    assert shaped["result"].get("stdout") == "hi\n"
 
-    assert isinstance(shaped.get("summary"), str) and shaped.get("summary")
-    assert isinstance(shaped.get("data"), dict)
+    # No extra wrapper fields are added.
+    assert shaped.get("summary") is None
+    assert shaped.get("data") is None
+    assert shaped.get("streams") is None
