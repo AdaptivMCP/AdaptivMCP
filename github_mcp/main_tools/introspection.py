@@ -187,7 +187,7 @@ def _iter_tool_registry() -> tuple[list[tuple[Any, Any]], list[dict[str, Any]]]:
 
 
 def list_all_actions(
-    include_parameters: bool = False, compact: bool | None = None
+    include_parameters: bool = True, compact: bool | None = None
 ) -> dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
@@ -313,7 +313,7 @@ def list_all_actions(
 
 
 def list_write_actions(
-    include_parameters: bool = False, compact: bool | None = None
+    include_parameters: bool = True, compact: bool | None = None
 ) -> dict[str, Any]:
     """Enumerate write-capable MCP tools with optional schemas."""
 
@@ -394,7 +394,7 @@ def _normalize_base_path(base_path: str | None) -> str:
 
 def list_resources(
     base_path: str | None = None,
-    include_parameters: bool = False,
+    include_parameters: bool = True,
     compact: bool | None = None,
 ) -> dict[str, Any]:
     """Return a resource catalog derived from registered tools."""

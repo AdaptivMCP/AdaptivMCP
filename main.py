@@ -1562,7 +1562,7 @@ def list_write_tools() -> dict[str, Any]:
     description="Enumerate write-capable MCP tools with optional schemas.",
 )
 def list_write_actions(
-    include_parameters: bool = False, compact: bool | None = None
+    include_parameters: bool = True, compact: bool | None = None
 ) -> dict[str, Any]:
     """Enumerate write-capable MCP tools with optional schemas."""
     from github_mcp.main_tools.introspection import list_write_actions as _impl
@@ -1908,7 +1908,7 @@ async def list_tools(
 @mcp_tool(write_action=False)
 def list_resources(
     base_path: str | None = None,
-    include_parameters: bool = False,
+    include_parameters: bool = True,
     compact: bool | None = None,
 ) -> dict[str, Any]:
     """Return a resource catalog derived from registered tools."""
@@ -1919,7 +1919,7 @@ def list_resources(
 
 @mcp_tool(write_action=False)
 def list_all_actions(
-    include_parameters: bool = False, compact: bool | None = None
+    include_parameters: bool = True, compact: bool | None = None
 ) -> dict[str, Any]:
     """Enumerate every available MCP tool with optional schemas.
 
