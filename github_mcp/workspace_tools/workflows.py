@@ -127,6 +127,7 @@ async def workspace_apply_ops_and_open_pr(
     base_ref: str = "main",
     feature_ref: str | None = None,
     operations: list[dict[str, Any]] | None = None,
+    ops: list[dict[str, Any]] | None = None,
     pr_title: str | None = None,
     pr_body: str | None = None,
     draft: bool = False,
@@ -164,6 +165,12 @@ async def workspace_apply_ops_and_open_pr(
     steps: list[dict[str, Any]] = []
 
     try:
+        # Alias support for LLM/tooling ergonomics.
+        if operations is None and ops is not None:
+            operations = ops
+        elif operations is not None and ops is not None and operations is not ops:
+            raise ValueError("Provide only one of 'operations' or 'ops'")
+
         if operations is None:
             operations = []
         if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):

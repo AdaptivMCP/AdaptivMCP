@@ -146,6 +146,7 @@ async def workspace_task_apply_edits(
     *,
     ref: str = "main",
     operations: list[dict[str, Any]] | None = None,
+    ops: list[dict[str, Any]] | None = None,
     preview_only: bool = False,
     fail_fast: bool = True,
     rollback_on_error: bool = True,
@@ -155,6 +156,12 @@ async def workspace_task_apply_edits(
 
     steps: list[dict[str, Any]] = []
     try:
+        # Alias support for LLM/tooling ergonomics.
+        if operations is None and ops is not None:
+            operations = ops
+        elif operations is not None and ops is not None and operations is not ops:
+            raise ValueError("Provide only one of 'operations' or 'ops'")
+
         if operations is None:
             operations = []
         if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
@@ -176,6 +183,7 @@ async def workspace_task_apply_edits(
         extra.pop("full_name", None)
         extra.pop("ref", None)
         extra.pop("operations", None)
+        extra.pop("ops", None)
 
         call = {
             "full_name": full_name,
@@ -233,6 +241,7 @@ async def workspace_task_execute(
     base_ref: str = "main",
     feature_ref: str | None = None,
     operations: list[dict[str, Any]] | None = None,
+    ops: list[dict[str, Any]] | None = None,
     commit_message: str = "Task updates",
     run_quality: bool = True,
     quality_timeout_seconds: float = 0,
@@ -262,6 +271,12 @@ async def workspace_task_execute(
 
     steps: list[dict[str, Any]] = []
     try:
+        # Alias support for LLM/tooling ergonomics.
+        if operations is None and ops is not None:
+            operations = ops
+        elif operations is not None and ops is not None and operations is not ops:
+            raise ValueError("Provide only one of 'operations' or 'ops'")
+
         if operations is None:
             operations = []
         if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):

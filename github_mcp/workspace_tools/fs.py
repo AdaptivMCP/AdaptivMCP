@@ -3139,6 +3139,8 @@ async def apply_workspace_operations(
     full_name: str,
     ref: str = "main",
     operations: list[dict[str, Any]] | None = None,
+    *,
+    ops: list[dict[str, Any]] | None = None,
     fail_fast: bool = True,
     rollback_on_error: bool = True,
     preview_only: bool = False,
@@ -3163,6 +3165,12 @@ async def apply_workspace_operations(
       - {"op": "apply_patch", "patch": "..."}
       - {"op": "read_sections", "path": "...", "start_line": int, "max_sections": int, "max_lines_per_section": int, "max_chars_per_section": int, "overlap_lines": int}
     """
+
+    # Alias support for LLM/tooling ergonomics.
+    if operations is None and ops is not None:
+        operations = ops
+    elif operations is not None and ops is not None and operations is not ops:
+        raise ValueError("Provide only one of 'operations' or 'ops'")
 
     if operations is None:
         operations = []
