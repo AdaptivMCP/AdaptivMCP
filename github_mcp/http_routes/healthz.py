@@ -3,11 +3,12 @@ from __future__ import annotations
 import platform
 import sys
 import time
+import os
 from collections.abc import Callable
 from typing import Any
 
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from github_mcp.config import (
     SERVER_GIT_COMMIT,
@@ -17,6 +18,30 @@ from github_mcp.exceptions import GitHubAuthError
 from github_mcp.http_clients import _get_github_token
 from github_mcp.server import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
 from github_mcp.utils import REPO_DEFAULTS_PARSE_ERROR
+
+
+def _env_flag(name: str, *, default: str = "false") -> bool:
+    raw = os.getenv(name, default)
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _oneshot_enabled() -> bool:
+    """Return True when /healthz should behave as a one-shot endpoint.
+
+    This mode is designed to reduce noise from platforms that aggressively poll
+    /healthz. When enabled:
+      - the first request returns the normal JSON payload (200)
+      - subsequent requests return 204 No Content (still a healthy 2xx)
+
+    Callers can force the full JSON payload by adding `?verbose=1`.
+    """
+
+    # Default to enabled to avoid repeated health-check spam in hosted
+    # environments. Set HEALTHZ_ONESHOT=0/false to restore legacy behavior.
+    return _env_flag("HEALTHZ_ONESHOT", default="true")
+
+
+_healthz_served_once = False
 
 
 def _github_token_present() -> bool:
@@ -57,9 +82,24 @@ def _build_health_payload() -> dict[str, Any]:
     return payload
 
 
-def build_healthz_endpoint() -> Callable[[Request], JSONResponse]:
-    async def _endpoint(_: Request) -> JSONResponse:
-        return JSONResponse(_build_health_payload())
+def build_healthz_endpoint() -> Callable[[Request], Response]:
+    async def _endpoint(request: Request) -> Response:
+        global _healthz_served_once
+
+        qp = getattr(request, "query_params", None)
+        verbose = False
+        if qp is not None:
+            verbose = str(qp.get("verbose", "")).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+        oneshot = _oneshot_enabled()
+        if oneshot and _healthz_served_once and not verbose:
+            # Minimal response for noisy platform health checks.
+            return Response(status_code=204)
+
+        payload = _build_health_payload()
+        if oneshot and not _healthz_served_once and not verbose:
+            _healthz_served_once = True
+        return JSONResponse(payload)
 
     return _endpoint
 
