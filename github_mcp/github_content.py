@@ -247,9 +247,12 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             with open(local_path, "rb") as f:
                 return f.read()
         except FileNotFoundError as exc:
-            raise GitHubAPIError(
-                f"{context} content_url path not found at {local_path}. {missing_hint}"
-            ) from exc
+            err = GitHubAPIError(f"{context} content_url path not found at {local_path}.")
+            if missing_hint:
+                # Keep hints separate from the primary error message so clients
+                # can render them without triggering repetitive LLM behaviors.
+                err.hint = str(missing_hint).strip()
+            raise err from exc
         except OSError as exc:
             raise GitHubAPIError(f"Failed to read content_url from {local_path}: {exc}") from exc
 
@@ -295,12 +298,16 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
                 rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
             ):
                 return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
-            raise GitHubAPIError(
+            err = GitHubAPIError(
                 f"{context} content_url path not found at {local_path}. "
                 "Provide an http(s) URL that already points to the sandbox file "
                 "or configure SANDBOX_CONTENT_BASE_URL so the server can fetch it "
                 "when direct filesystem access is unavailable."
-            ) from exc
+            )
+            # Preserve the sandbox hint in a structured field without duplicating
+            # it in the primary error message.
+            err.hint = getattr(exc, "hint", None) or sandbox_hint
+            raise err from exc
 
     if content_url.startswith("/") or _is_windows_absolute_path(content_url):
         rewrite_base = SANDBOX_CONTENT_BASE_URL
@@ -315,12 +322,14 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
                 rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
             ):
                 return await _fetch_rewritten_path(content_url, base_url=rewrite_base)
-            raise GitHubAPIError(
+            err = GitHubAPIError(
                 f"{context} content_url path not found at {content_url}. "
-                f"{missing_hint} Configure SANDBOX_CONTENT_BASE_URL or provide an "
-                "absolute http(s) URL so the server can fetch the sandbox file when "
-                "it is not mounted locally."
-            ) from exc
+                "Configure SANDBOX_CONTENT_BASE_URL or provide an absolute http(s) URL "
+                "so the server can fetch the sandbox file when it is not mounted locally."
+            )
+            if missing_hint:
+                err.hint = str(missing_hint).strip()
+            raise err from exc
 
     if content_url.startswith("http://") or content_url.startswith("https://"):
         client = _external_client_instance()

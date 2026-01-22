@@ -1166,7 +1166,12 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
                     "Standard unified diff hunk headers look like '@@ -1,3 +1,3 @@', "
                     "or use the MCP tool patch format ('*** Begin Patch')."
                 )
-            raise GitHubAPIError(f"git apply failed while preparing workspace: {stderr}{hint}")
+            exc = GitHubAPIError(f"git apply failed while preparing workspace: {stderr}")
+            if hint:
+                # Keep hints separate from the main error message so clients can
+                # render them without triggering repetition/looping behavior.
+                exc.hint = hint.strip()
+            raise exc
     finally:
         try:
             os.remove(patch_path)
