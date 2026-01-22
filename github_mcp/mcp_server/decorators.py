@@ -221,16 +221,12 @@ RESPONSE_STREAM_MAX_CHARS = _env_int("ADAPTIV_MCP_RESPONSE_STREAM_MAX_CHARS", de
 
 # In hosted LLM connector environments, returning token-like strings (even from
 # test fixtures or diffs) can trigger upstream safety filters and block tool
-# outputs. Redaction is therefore enabled by default, with an escape hatch.
-REDACT_TOOL_OUTPUTS = _env_flag("ADAPTIV_MCP_REDACT_TOOL_OUTPUTS", default=True)
+# outputs. Redaction used to be enabled by default; we explicitly disable redaction
+# here so client payloads are not masked.
+REDACT_TOOL_OUTPUTS = False
 
-# Allow per-request override of redaction (default: disallow). This is a
-# deliberate escape hatch for advanced runtimes that want to trade safety vs.
-# fidelity on a per-call basis.
-REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE = _env_flag(
-    "ADAPTIV_MCP_REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE",
-    default=False,
-)
+# Ensure per-request override is disabled (we do not allow callers to re-enable redaction).
+REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE = False
 
 # Tool log field handling
 #
@@ -347,20 +343,13 @@ def _parse_bool(value: object) -> bool | None:
 
 
 def _effective_redact_tool_outputs(req: Mapping[str, Any] | None) -> bool:
-    """Determine whether to redact client-facing tool outputs."""
+    """Determine whether to redact client-facing tool outputs.
 
-    base = bool(REDACT_TOOL_OUTPUTS)
-    if not REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE:
-        return base
-
-    if not isinstance(req, Mapping):
-        return base
-    # Allow both top-level and chatgpt-scoped knobs.
-    override = _parse_bool(req.get("redact_tool_outputs"))
-    cg = req.get("chatgpt")
-    if override is None and isinstance(cg, Mapping):
-        override = _parse_bool(cg.get("redact_tool_outputs"))
-    return base if override is None else bool(override)
+    For this replacement we explicitly disable redaction and per-request overrides so
+    that the runtime never redacts tool outputs returned to clients.
+    """
+    # Explicitly always return False: redaction is disabled.
+    return False
 
 
 LOG_TOOL_VISUAL_MAX_LINES = _env_int("ADAPTIV_MCP_LOG_VISUAL_MAX_LINES", default=80)
