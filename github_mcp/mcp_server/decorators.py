@@ -1599,7 +1599,12 @@ def _attach_tool_annotations(tool_obj: Any, annotations: Mapping[str, Any]) -> N
     # As a final fallback, stash under meta.
     meta = getattr(tool_obj, "meta", None)
     if isinstance(meta, dict):
-        meta.setdefault("annotations", ann)
+        # NOTE: This path is used by some tool object implementations that do
+        # not expose a writable `.annotations` attribute (and are not Mapping
+        # instances). We must overwrite, not setdefault, so UI hints can
+        # accurately reflect dynamic read/write classification across
+        # invocations.
+        meta["annotations"] = ann
 
 
 def _tool_annotations(

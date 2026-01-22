@@ -150,6 +150,62 @@ def test_registered_tool_annotations_update_on_invocation(monkeypatch) -> None:
     assert ann_write.get("destructiveHint") is True
 
 
+def test_tool_obj_meta_annotations_overwrite_on_invocation(monkeypatch) -> None:
+    """Tool objects without a writable `.annotations` must still toggle hints.
+
+    Some FastMCP tool implementations expose annotations via `meta["annotations"]`
+    and either omit `.annotations` or provide it as a read-only property.
+    In those cases, the decorators fallback path must overwrite the meta entry
+    each invocation so READ/WRITE UI tags do not get stuck.
+    """
+
+    _set_auto_approve(monkeypatch, False)
+
+    from github_mcp.mcp_server import decorators
+
+    class ToolObj:
+        def __init__(self, *, name: str | None, meta: dict | None):
+            self.name = name
+            self.meta = meta or {}
+
+        @property
+        def annotations(self):
+            # Deliberately read-only; attempts to assign should raise.
+            return self.meta.get("annotations")
+
+    class FakeMCP:
+        def tool(self, *, name=None, description=None, meta=None, annotations=None):
+            def decorator(fn):
+                # Ignore incoming annotations; decorators should populate
+                # `meta["annotations"]` via their own attachment logic.
+                return ToolObj(name=name, meta=meta)
+
+            return decorator
+
+    monkeypatch.setattr(decorators, "mcp", FakeMCP())
+    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
+
+    def resolver(args: dict[str, Any]) -> bool:
+        return bool(args.get("mode") == "write")
+
+    @decorators.mcp_tool(name="meta_ann_tool", write_action=True, write_action_resolver=resolver)
+    def meta_ann_tool(mode: str = "read") -> dict:
+        return {"mode": mode}
+
+    tool_obj = meta_ann_tool.__mcp_tool__
+    assert isinstance(tool_obj, ToolObj)
+
+    _ = meta_ann_tool(mode="read")
+    ann_read = tool_obj.meta.get("annotations", {})
+    assert ann_read.get("readOnlyHint") is True
+    assert ann_read.get("destructiveHint") is False
+
+    _ = meta_ann_tool(mode="write")
+    ann_write = tool_obj.meta.get("annotations", {})
+    assert ann_write.get("readOnlyHint") is False
+    assert ann_write.get("destructiveHint") is True
+
+
 def test_http_tool_registry_uses_effective_write_action_for_retries(monkeypatch) -> None:
     """Read-classified invocations may retry; write-classified invocations must not."""
 
