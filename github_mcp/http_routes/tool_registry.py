@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import logging
 import time
 import uuid
 from collections.abc import Callable, Iterable
@@ -19,6 +20,18 @@ from github_mcp.mcp_server.suggestions import (
     build_unknown_tool_payload,
 )
 from github_mcp.server import _find_registered_tool
+
+try:
+    from github_mcp.config import ERRORS_LOGGER
+except Exception:  # noqa: BLE001
+    ERRORS_LOGGER = logging.getLogger("github_mcp")
+
+try:
+    from github_mcp.redaction import redact_any
+except Exception:  # noqa: BLE001
+
+    def redact_any(value: Any, *args: Any, **kwargs: Any) -> Any:  # type: ignore[override]
+        return value
 
 
 def _normalize_base_path(base_path: str | None) -> str:
@@ -119,6 +132,153 @@ def _coerce_json_args(args: Any) -> Any:
         return json.loads(stripped)
     except json.JSONDecodeError:
         return args
+
+
+def _coerce_error_message(detail: dict[str, Any]) -> str:
+    for key in ("message", "error", "detail"):
+        val = detail.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def _infer_error_category(code: str, category: str, message: str) -> str:
+    """Best-effort category inference for legacy/unstructured errors.
+
+    We intentionally keep this conservative: only upgrade to a non-internal
+    category when the signal is clear.
+    """
+
+    if isinstance(category, str) and category.strip():
+        return category.strip()
+
+    code_norm = str(code or "").strip().lower()
+    msg = str(message or "").strip().lower()
+
+    if code_norm in {"write_approval_required", "write_approval", "write_approval_required_error"}:
+        return "write_approval_required"
+    if code_norm in {"write_not_authorized", "write_not_authorized_error"}:
+        return "permission"
+
+    if "rate" in msg and "limit" in msg:
+        return "rate_limited"
+    if "too many requests" in msg:
+        return "rate_limited"
+    if "timeout" in msg or "timed out" in msg:
+        return "timeout"
+    if "not found" in msg or "does not exist" in msg:
+        return "not_found"
+    if "unauthorized" in msg or "authentication" in msg or ("token" in msg and "missing" in msg):
+        return "auth"
+    if "forbidden" in msg or "permission" in msg or "not authorized" in msg:
+        return "permission"
+    if "conflict" in msg or "already exists" in msg:
+        return "conflict"
+
+    # Validation / bad args.
+    if "bad arg" in msg or "bad args" in msg:
+        return "validation"
+    if "invalid" in msg or "missing required" in msg or "unexpected keyword" in msg:
+        return "validation"
+    if "preflight validation" in msg:
+        return "validation"
+
+    return "internal"
+
+
+def _looks_like_error_detail(result: dict[str, Any]) -> bool:
+    """Return True when the mapping is itself an error_detail payload."""
+
+    has_cat = isinstance(result.get("category"), str) and str(result.get("category")).strip()
+    has_code = isinstance(result.get("code"), str) and str(result.get("code")).strip()
+    has_msg = any(
+        isinstance(result.get(k), str) and str(result.get(k)).strip() for k in ("message", "error", "detail")
+    )
+    return bool((has_cat or has_code) and has_msg)
+
+
+def _normalize_structured_error_payload(result: dict[str, Any], err_detail: dict[str, Any]) -> dict[str, Any]:
+    """Ensure structured errors always return a stable envelope.
+
+    Tools historically returned:
+    - a full envelope: {status, ok, error, error_detail}
+    - a partial envelope: {error, error_detail}
+    - a bare error_detail dict: {category, message, ...}
+
+    HTTP callers rely on stable fields, so we normalize here.
+    """
+
+    # If the tool returned a bare detail dict, wrap it.
+    if _looks_like_error_detail(result) and "error_detail" not in result:
+        msg = _coerce_error_message(result)
+        out: dict[str, Any] = {
+            "status": "error",
+            "ok": False,
+            "error": msg or "Tool failed.",
+            "error_detail": dict(result),
+        }
+        # Also surface inferred category/code at the top level for convenience.
+        if isinstance(result.get("category"), str):
+            out.setdefault("category", str(result.get("category")).strip())
+        if isinstance(result.get("code"), str):
+            out.setdefault("code", str(result.get("code")).strip())
+        return out
+
+    out = dict(result)
+    out["status"] = "error"
+    out["ok"] = False
+    out.setdefault("error_detail", dict(err_detail))
+
+    if not (isinstance(out.get("error"), str) and str(out.get("error")).strip()):
+        msg = _coerce_error_message(err_detail)
+        if msg:
+            out["error"] = msg
+
+    # Convenience top-level fields.
+    if isinstance(err_detail.get("category"), str) and err_detail.get("category").strip():
+        out.setdefault("category", err_detail.get("category").strip())
+    if isinstance(err_detail.get("code"), str) and err_detail.get("code").strip():
+        out.setdefault("code", err_detail.get("code").strip())
+    return out
+
+
+def _log_http_structured_error(
+    *,
+    tool_name: str,
+    status_code: int,
+    error_detail: dict[str, Any],
+    invocation_id: str | None = None,
+    exc: BaseException | None = None,
+) -> None:
+    """Best-effort structured logging for HTTP errors.
+
+    Some tools return structured error dicts instead of raising; without this
+    logging, operators see failures only via client symptoms.
+    """
+
+    try:
+        msg = _coerce_error_message(error_detail) or "Tool invocation failed"
+        category = str(error_detail.get("category") or "").strip()
+        code = str(error_detail.get("code") or "").strip()
+        retryable = error_detail.get("retryable")
+        level = logging.ERROR if int(status_code) >= 500 else logging.WARNING
+        ERRORS_LOGGER.log(
+            level,
+            msg,
+            exc_info=exc,
+            extra={
+                "event": "tool_http_error",
+                "tool": tool_name,
+                "http_status": int(status_code),
+                "category": category or None,
+                "code": code or None,
+                "retryable": bool(retryable) if isinstance(retryable, bool) else None,
+                "invocation_id": invocation_id,
+                "error_detail": redact_any(error_detail),
+            },
+        )
+    except Exception:
+        return
 
 
 def _normalize_payload(payload: Any) -> dict[str, Any]:
@@ -264,10 +424,15 @@ def _is_openai_client(request: Request) -> bool:
 def _status_code_for_error(error: dict[str, Any]) -> int:
     """Map structured error payloads to HTTP status codes."""
 
-    code = str(error.get("code") or "")
-    category = str(error.get("category") or "")
+    code_raw = str(error.get("code") or "")
+    category_raw = str(error.get("category") or "")
+    message = _coerce_error_message(error)
 
-    if code in {"github_rate_limited", "render_rate_limited"} or category == "rate_limited":
+    category = _infer_error_category(code_raw, category_raw, message)
+    code = code_raw.strip()
+    code_norm = code.lower()
+
+    if code_norm in {"github_rate_limited", "render_rate_limited"} or category == "rate_limited":
         return 429
     if category == "auth":
         return 401
@@ -336,6 +501,10 @@ def _looks_like_structured_error(payload: Any) -> dict[str, Any] | None:
 
     if not isinstance(payload, dict):
         return None
+
+    # Legacy tools may return the error_detail dict directly.
+    if _looks_like_error_detail(payload):
+        return payload
 
     # Newer tools return {"error": "...", "error_detail": {...}}.
     detail = payload.get("error_detail")
@@ -432,9 +601,22 @@ async def _execute_tool(
             if isinstance(result, dict):
                 err = _looks_like_structured_error(result)
                 if err is not None:
-                    retryable = bool(err.get("retryable", False))
-                    status_code = _status_code_for_error(err)
-                    headers = _response_headers_for_error(err)
+                    err_detail: dict[str, Any] = dict(err)
+                    # Ensure category is populated for legacy errors so mapping and
+                    # client diagnostics are consistent.
+                    inferred_category = _infer_error_category(
+                        str(err_detail.get("code") or ""),
+                        str(err_detail.get("category") or ""),
+                        _coerce_error_message(err_detail),
+                    )
+                    if not str(err_detail.get("category") or "").strip() and inferred_category:
+                        err_detail["category"] = inferred_category
+
+                    retryable = bool(err_detail.get("retryable", False))
+                    status_code = _status_code_for_error(err_detail)
+                    headers = _response_headers_for_error(err_detail)
+
+                    normalized_payload = _normalize_structured_error_payload(result, err_detail)
 
                     if (
                         (not write_action)
@@ -450,7 +632,12 @@ async def _execute_tool(
                         await asyncio.sleep(_jitter_sleep_seconds(delay, respect_min=True))
                         continue
 
-                    return result, status_code, headers
+                    _log_http_structured_error(
+                        tool_name=tool_name,
+                        status_code=status_code,
+                        error_detail=err_detail,
+                    )
+                    return normalized_payload, status_code, headers
 
             payload = result if isinstance(result, dict) else result
             return payload, 200, {}
@@ -471,7 +658,20 @@ async def _execute_tool(
             )
 
             # Prefer structured error details when available.
-            err = _coerce_error_detail(structured)
+            err = dict(_coerce_error_detail(structured))
+
+            inferred_category = _infer_error_category(
+                str(err.get("code") or ""),
+                str(err.get("category") or ""),
+                _coerce_error_message(err),
+            )
+            if not str(err.get("category") or "").strip() and inferred_category:
+                err["category"] = inferred_category
+
+            if isinstance(structured, dict):
+                detail = structured.get("error_detail")
+                if isinstance(detail, dict) and not str(detail.get("category") or "").strip() and inferred_category:
+                    detail["category"] = inferred_category
 
             retryable = bool(err.get("retryable", False))
             status_code = _status_code_for_error(err)
@@ -492,7 +692,16 @@ async def _execute_tool(
                 await asyncio.sleep(_jitter_sleep_seconds(delay, respect_min=True))
                 continue
 
-            return structured, status_code, headers
+            normalized_payload = (
+                _normalize_structured_error_payload(structured, err) if isinstance(structured, dict) else structured
+            )
+            _log_http_structured_error(
+                tool_name=tool_name,
+                status_code=status_code,
+                error_detail=err,
+                exc=exc,
+            )
+            return normalized_payload, status_code, headers
 
 
 def _invocation_payload(invocation: ToolInvocation) -> dict[str, Any]:
