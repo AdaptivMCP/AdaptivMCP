@@ -67,6 +67,7 @@ __all__ = [
     "get_request_context",
     "get_request_id",
     "get_auto_approve_enabled",
+    "peek_auto_approve_enabled",
 ]
 
 
@@ -202,6 +203,19 @@ def get_auto_approve_enabled(*, refresh_after_seconds: float = 0.5) -> bool:
     value, _source = _auto_approve_from_env()
     _update_write_gate_cache(value)
     return value
+
+
+def peek_auto_approve_enabled() -> bool:
+    """Read the auto-approve flag from the environment without side effects.
+
+    Unlike get_auto_approve_enabled(), this function does *not* update caches or
+    trigger tool metadata refresh. It is intended for response-shaping logic
+    (e.g., UI hints) where we want a fast, non-recursive read of the current
+    setting.
+    """
+
+    value, _source = _auto_approve_from_env()
+    return bool(value)
 
 
 def get_write_allowed_debug() -> dict[str, Any]:

@@ -34,9 +34,9 @@ from github_mcp.workspace_tools import listing as _listing
 from github_mcp.workspace_tools import pr as _pr
 from github_mcp.workspace_tools import rg as _rg
 from github_mcp.workspace_tools import suites as _suites
+from github_mcp.workspace_tools import task_workflows as _task_workflows
 from github_mcp.workspace_tools import venv as _venv
 from github_mcp.workspace_tools import workflows as _workflows
-from github_mcp.workspace_tools import task_workflows as _task_workflows
 
 LOGGER = BASE_LOGGER.getChild("tools_workspace")
 

@@ -133,7 +133,9 @@ async def workspace_task_plan(
             "steps": steps,
         }
     except Exception as exc:
-        _step(steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error")
+        _step(
+            steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error"
+        )
         payload = _structured_tool_error(exc, context="workspace_task_plan")
         if isinstance(payload, dict) and "steps" not in payload:
             payload["steps"] = steps
@@ -216,7 +218,9 @@ async def workspace_task_apply_edits(
             "steps": steps,
         }
     except Exception as exc:
-        _step(steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error")
+        _step(
+            steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error"
+        )
         payload = _structured_tool_error(exc, context="workspace_task_apply_edits")
         if isinstance(payload, dict) and "steps" not in payload:
             payload["steps"] = steps
@@ -304,7 +308,11 @@ async def workspace_task_execute(
 
         sync_res: Any = None
         if sync_base_to_remote:
-            _step(steps, "Sync base", f"Resetting workspace clone for '{effective_base}' to match origin.")
+            _step(
+                steps,
+                "Sync base",
+                f"Resetting workspace clone for '{effective_base}' to match origin.",
+            )
             extra_sync = dict(sync_args or {})
             extra_sync.pop("full_name", None)
             extra_sync.pop("ref", None)
@@ -328,14 +336,20 @@ async def workspace_task_execute(
                 )
             _step(steps, "Sync base", "Base workspace clone is ready.")
         else:
-            _step(steps, "Sync base", "Skipped base sync (sync_base_to_remote=false).", status="skip")
+            _step(
+                steps, "Sync base", "Skipped base sync (sync_base_to_remote=false).", status="skip"
+            )
 
         # Create a unique feature branch if none was provided.
         if feature_ref is None or not str(feature_ref).strip():
             feature_ref = f"task/{_safe_branch_slug(commit_message)}-{tw.uuid.uuid4().hex[:10]}"
         feature_ref = _safe_branch_slug(str(feature_ref))
 
-        _step(steps, "Create branch", f"Creating feature branch '{feature_ref}' from '{effective_base}'.")
+        _step(
+            steps,
+            "Create branch",
+            f"Creating feature branch '{feature_ref}' from '{effective_base}'.",
+        )
         extra_branch = dict(create_branch_args or {})
         extra_branch.pop("full_name", None)
         extra_branch.pop("base_ref", None)
@@ -437,7 +451,9 @@ async def workspace_task_execute(
                 )
             _step(steps, "Quality suite", "Quality suite passed.")
         else:
-            _step(steps, "Quality suite", "Skipped quality suite (run_quality=false).", status="skip")
+            _step(
+                steps, "Quality suite", "Skipped quality suite (run_quality=false).", status="skip"
+            )
 
         # Change report + PR summary are useful in both finalize modes.
         _step(steps, "Report", "Building change report and summary.")
@@ -538,9 +554,10 @@ async def workspace_task_execute(
             "steps": steps,
         }
     except Exception as exc:
-        _step(steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error")
+        _step(
+            steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error"
+        )
         payload = _structured_tool_error(exc, context="workspace_task_execute")
         if isinstance(payload, dict) and "steps" not in payload:
             payload["steps"] = steps
         return payload
-

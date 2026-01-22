@@ -132,7 +132,9 @@ def expected_args_from_signature(signature: inspect.Signature | None) -> dict[st
         return out
 
 
-def _high_confidence_single_match(ranked: list[tuple[float, str]], matches: list[str]) -> str | None:
+def _high_confidence_single_match(
+    ranked: list[tuple[float, str]], matches: list[str]
+) -> str | None:
     """Return a single suggested tool only when the signal is strong.
 
     Tool runtimes can over-anchor on a single suggestion; we only return one

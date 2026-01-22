@@ -39,6 +39,7 @@ from github_mcp.mcp_server.context import (
     get_auto_approve_enabled,
     get_request_context,
     mcp,
+    peek_auto_approve_enabled,
 )
 from github_mcp.mcp_server.error_handling import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
@@ -1569,6 +1570,14 @@ def _tool_annotations(
         # (filesystem/network/hosted provider). Default to True.
         open_world_hint = True
 
+    # Operator request: when auto-approve is enabled, suppress all UI hints.
+    # This keeps MCP annotations structurally present while preventing clients
+    # from rendering hint badges.
+    if peek_auto_approve_enabled():
+        read_only_hint = False
+        destructive_hint = False
+        open_world_hint = False
+
     return {
         "readOnlyHint": bool(read_only_hint),
         "destructiveHint": bool(destructive_hint),
@@ -2898,7 +2907,9 @@ def _log_tool_success(
             + _write_badge(bool(effective_write_action))
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
-        msg = f"{prefix} {ms}{suffix} - {_truncate_text(str(report.get('summary') or ''), limit=220)}"
+        msg = (
+            f"{prefix} {ms}{suffix} - {_truncate_text(str(report.get('summary') or ''), limit=220)}"
+        )
         if LOG_TOOL_LOG_IDS:
             msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
         inline = payload.get("log_context")

@@ -4,9 +4,11 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_workspace_git_apply_error_sets_hint_without_appending_to_message(tmp_path, monkeypatch):
-    from github_mcp.exceptions import GitHubAPIError
+async def test_workspace_git_apply_error_sets_hint_without_appending_to_message(
+    tmp_path, monkeypatch
+):
     from github_mcp import workspace
+    from github_mcp.exceptions import GitHubAPIError
 
     async def _fake_run_shell(*_args, **_kwargs):
         return {"exit_code": 1, "stderr": "Only garbage was found in the patch input."}
@@ -58,7 +60,9 @@ async def test_load_body_absolute_path_missing_sets_hint_separately(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_load_body_sandbox_missing_without_rewrite_preserves_sandbox_hint(tmp_path, monkeypatch):
+async def test_load_body_sandbox_missing_without_rewrite_preserves_sandbox_hint(
+    tmp_path, monkeypatch
+):
     from github_mcp import github_content
     from github_mcp.exceptions import GitHubAPIError
 
@@ -76,4 +80,3 @@ async def test_load_body_sandbox_missing_without_rewrite_preserves_sandbox_hint(
     assert "sandbox" in hint.lower()
     # Keep the detailed sandbox explanation out of the error message.
     assert "runtime sandbox" not in str(exc).lower()
-

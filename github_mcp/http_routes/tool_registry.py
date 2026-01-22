@@ -197,18 +197,27 @@ def _looks_like_error_detail(result: dict[str, Any]) -> bool:
     if isinstance(result.get("ok"), bool):
         return False
     status = result.get("status")
-    if isinstance(status, str) and status.strip().lower() in {"ok", "error", "success", "failed", "running"}:
+    if isinstance(status, str) and status.strip().lower() in {
+        "ok",
+        "error",
+        "success",
+        "failed",
+        "running",
+    }:
         return False
 
     has_cat = isinstance(result.get("category"), str) and str(result.get("category")).strip()
     has_code = isinstance(result.get("code"), str) and str(result.get("code")).strip()
     has_msg = any(
-        isinstance(result.get(k), str) and str(result.get(k)).strip() for k in ("message", "error", "detail")
+        isinstance(result.get(k), str) and str(result.get(k)).strip()
+        for k in ("message", "error", "detail")
     )
     return bool((has_cat or has_code) and has_msg)
 
 
-def _normalize_structured_error_payload(result: dict[str, Any], err_detail: dict[str, Any]) -> dict[str, Any]:
+def _normalize_structured_error_payload(
+    result: dict[str, Any], err_detail: dict[str, Any]
+) -> dict[str, Any]:
     """Ensure structured errors always return a stable envelope.
 
     Tools historically returned:
@@ -221,12 +230,12 @@ def _normalize_structured_error_payload(result: dict[str, Any], err_detail: dict
 
     # If the tool returned an envelope without error_detail, synthesize one
     # rather than nesting the whole envelope.
-    if (
-        "error_detail" not in result
-        and (
-            (isinstance(result.get("status"), str) and str(result.get("status")).strip().lower() == "error")
-            or (result.get("ok") is False)
+    if "error_detail" not in result and (
+        (
+            isinstance(result.get("status"), str)
+            and str(result.get("status")).strip().lower() == "error"
         )
+        or (result.get("ok") is False)
     ):
         msg = _coerce_error_message(result) or _coerce_error_message(err_detail) or "Tool failed."
         detail: dict[str, Any] = {}
@@ -716,7 +725,11 @@ async def _execute_tool(
 
             if isinstance(structured, dict):
                 detail = structured.get("error_detail")
-                if isinstance(detail, dict) and not str(detail.get("category") or "").strip() and inferred_category:
+                if (
+                    isinstance(detail, dict)
+                    and not str(detail.get("category") or "").strip()
+                    and inferred_category
+                ):
                     detail["category"] = inferred_category
 
             retryable = bool(err.get("retryable", False))
@@ -739,7 +752,9 @@ async def _execute_tool(
                 continue
 
             normalized_payload = (
-                _normalize_structured_error_payload(structured, err) if isinstance(structured, dict) else structured
+                _normalize_structured_error_payload(structured, err)
+                if isinstance(structured, dict)
+                else structured
             )
             _log_http_structured_error(
                 tool_name=tool_name,

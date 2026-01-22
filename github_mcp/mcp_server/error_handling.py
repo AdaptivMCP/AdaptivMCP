@@ -31,8 +31,8 @@ else:
 
 from github_mcp.exceptions import (
     APIError,
-    GitHubAuthError,
     GitHubAPIError,
+    GitHubAuthError,
     GitHubRateLimitError,
     RenderAuthError,
     UsageError,
@@ -257,7 +257,8 @@ def _structured_tool_error(
             "malformed patch" in lowered
             or "patch missing" in lowered
             or "unexpected patch content" in lowered
-            or "invalid" in lowered and "patch" in lowered
+            or "invalid" in lowered
+            and "patch" in lowered
             or "received empty patch" in lowered
             or "unsupported patch action" in lowered
         ):

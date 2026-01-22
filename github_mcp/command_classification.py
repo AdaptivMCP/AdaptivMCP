@@ -258,13 +258,18 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
         sub = parts[1]
         if sub == "test":
             return False
-        if sub == "run" and len(parts) > 2 and parts[2] in {
-            "test",
-            "lint",
-            "typecheck",
-            "check",
-            "ci",
-        }:
+        if (
+            sub == "run"
+            and len(parts) > 2
+            and parts[2]
+            in {
+                "test",
+                "lint",
+                "typecheck",
+                "check",
+                "ci",
+            }
+        ):
             return False
         # Installs and other mutations remain write.
         return True

@@ -29,7 +29,9 @@ def _err_code(payload: dict) -> str | None:
         ("path must be repository-relative", "validation", "PATH_INVALID"),
     ],
 )
-def test_github_api_error_message_inference(message: str, expected_category: str, expected_code: str) -> None:
+def test_github_api_error_message_inference(
+    message: str, expected_category: str, expected_code: str
+) -> None:
     exc = GitHubAPIError(message)
     payload = _structured_tool_error(exc, context="unit:test")
     assert _err_category(payload) == expected_category
@@ -55,4 +57,3 @@ def test_apply_patch_empty_patch_is_validation_with_code() -> None:
             assert getattr(exc, "code", None) == "PATCH_EMPTY"
 
     asyncio.run(_run())
-
