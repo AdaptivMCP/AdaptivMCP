@@ -396,30 +396,118 @@ def list_resources(
     base_path: str | None = None,
     include_parameters: bool = False,
     compact: bool | None = None,
+    cursor: int | None = 0,
+    limit: int | None = 200,
 ) -> dict[str, Any]:
-    """Return a resource catalog derived from registered tools."""
+    """Return a resource catalog derived from registered tools.
 
-    catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
-    tools = list(catalog.get("tools") or [])
-    resources: list[dict[str, Any]] = []
+    This is intentionally lightweight and supports pagination.
+
+    Args:
+        base_path: Optional prefix prepended to each resource URI.
+        include_parameters: When True, include the tool input schema for each
+            returned resource. This can be expensive for very large catalogs;
+            consider paginating via cursor/limit.
+        compact: When True, shorten descriptions.
+        cursor: Integer offset into the sorted resource list.
+        limit: Maximum number of resources to return (bounded).
+    """
+
+    m = _main()
+    compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
     prefix = _normalize_base_path(base_path)
-    for entry in tools:
-        name = entry.get("name")
-        if not isinstance(name, str) or not name:
-            continue
-        resources.append(
-            {
-                "uri": f"{prefix}/tools/{name}",
-                "name": name,
-                "description": entry.get("description"),
-                "mimeType": "application/json",
-            }
-        )
 
-    payload: dict[str, Any] = {"resources": resources, "finite": True}
-    errors = catalog.get("errors")
-    if isinstance(errors, list) and errors:
-        payload["errors"] = errors
+    # Validate + clamp pagination inputs.
+    try:
+        cursor_i = int(cursor or 0)
+    except (TypeError, ValueError):
+        cursor_i = 0
+    if cursor_i < 0:
+        cursor_i = 0
+
+    try:
+        limit_i = int(limit or 200)
+    except (TypeError, ValueError):
+        limit_i = 200
+
+    # Safety cap: avoid giant payloads that can overwhelm clients.
+    max_limit = 500
+    if limit_i <= 0:
+        limit_i = 200
+    if limit_i > max_limit:
+        limit_i = max_limit
+
+    registry_entries, registry_errors = _iter_tool_registry()
+
+    # Keep introspection endpoints visible even when the registry is damaged.
+    from types import SimpleNamespace
+
+    forced_entries = [
+        (SimpleNamespace(name="list_all_actions", write_action=False), list_all_actions),
+        (SimpleNamespace(name="list_tools", write_action=False), list_tools),
+        (SimpleNamespace(name="list_resources", write_action=False), list_resources),
+        (SimpleNamespace(name="list_write_actions", write_action=False), list_write_actions),
+        (SimpleNamespace(name="list_write_tools", write_action=False), list_write_tools),
+    ]
+
+    seen_names: set[str] = set()
+    items: list[dict[str, Any]] = []
+    for tool, func in forced_entries + list(registry_entries):
+        name = _registered_tool_name(tool, func)
+        if not name:
+            continue
+        name_str = str(name)
+        if name_str in seen_names:
+            continue
+        seen_names.add(name_str)
+
+        description = getattr(tool, "description", None) or (func.__doc__ or "")
+        description = _clean_description(str(description).strip())
+
+        if compact_mode and description:
+            description = description.splitlines()[0].strip() or description
+
+        items.append({"name": name_str, "description": description, "tool": tool, "func": func})
+
+    items.sort(key=lambda entry: entry["name"])
+    total = len(items)
+    page = items[cursor_i : cursor_i + limit_i]
+
+    resources: list[dict[str, Any]] = []
+    for entry in page:
+        name = entry["name"]
+        resource: dict[str, Any] = {
+            "uri": f"{prefix}/tools/{name}",
+            "name": name,
+            "mimeType": "application/json",
+        }
+        if entry.get("description"):
+            resource["description"] = entry.get("description")
+        if include_parameters:
+            safe_schema = _schema_for_callable(entry["func"], entry["tool"], tool_name=name)
+            resource["input_schema"] = safe_schema
+            resource["inputSchema"] = safe_schema
+        resources.append(resource)
+
+    end = cursor_i + len(page)
+    finite = end >= total
+    next_cursor: int | None = None if finite else end
+
+    payload: dict[str, Any] = {
+        "resources": resources,
+        "finite": finite,
+        "cursor": cursor_i,
+        "limit": limit_i,
+        "total": total,
+        "compact": compact_mode,
+    }
+    if next_cursor is not None:
+        # Support both snake_case and camelCase for downstream clients.
+        payload["next_cursor"] = next_cursor
+        payload["nextCursor"] = next_cursor
+
+    if isinstance(registry_errors, list) and registry_errors:
+        payload["errors"] = registry_errors
     return payload
 
 

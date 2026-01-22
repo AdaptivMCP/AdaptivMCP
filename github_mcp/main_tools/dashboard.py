@@ -104,12 +104,13 @@ async def get_repo_dashboard(full_name: str, branch: str | None = None) -> dict[
             path = entry.get("path")
             if not isinstance(path, str):
                 continue
-            # Keep only top-level entries (no slashes) for a compact view.
-            if "/" in path:
-                continue
-
             # Normalize paths defensively (e.g., strip accidental GitHub URLs).
             normalized_path = _normalize_repo_path_for_repo(full_name, path)
+
+            # Keep only top-level entries (no slashes) for a compact view.
+            if not normalized_path or "/" in normalized_path:
+                continue
+
             top_level_tree.append(
                 {
                     "path": normalized_path,

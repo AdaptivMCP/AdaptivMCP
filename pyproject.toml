@@ -5,6 +5,7 @@ line-length = 100
 # Keep linting deterministic across environments.
 exclude = [
     ".venv",
+    ".mcp_tmp",
     "build",
     "dist",
     "__pycache__",

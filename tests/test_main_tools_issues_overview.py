@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from types import ModuleType
 
 import pytest
@@ -39,7 +38,9 @@ async def test_open_issue_context_matches_branches_and_prs(monkeypatch):
             ]
         }
 
-    async def list_pull_requests(full_name: str, state: str = "open", per_page: int = 30, page: int = 1):
+    async def list_pull_requests(
+        full_name: str, state: str = "open", per_page: int = 30, page: int = 1
+    ):
         assert full_name == "o/r"
         assert state == "all"
         return {
@@ -134,7 +135,9 @@ async def test_get_issue_overview_normalizes_fields_and_extracts_checklists(monk
 
     labels = issue.get("labels")
     assert isinstance(labels, list)
-    assert {l.get("name") for l in labels if isinstance(l, dict)}.issuperset({"bug", "help wanted"})
+    assert {label.get("name") for label in labels if isinstance(label, dict)}.issuperset(
+        {"bug", "help wanted"}
+    )
 
     checklist = overview.get("checklist_items")
     assert isinstance(checklist, list)
