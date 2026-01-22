@@ -107,11 +107,12 @@ def _tw():
 def _safe_branch_slug(value: str) -> str:
     """Return a conservative branch slug derived from an arbitrary string."""
     raw = (value or "").strip()
+    allowed_extra = set("-_/.")
     # Replace any disallowed runs with a single '-'.
     parts: list[str] = []
     prev_dash = False
     for ch in raw:
-        if ch in allowed:
+        if ch.isalnum() or ch in allowed_extra:
             parts.append(ch)
             prev_dash = False
         else:
@@ -125,6 +126,7 @@ def _safe_branch_slug(value: str) -> str:
     cleaned = cleaned.replace("..", "-").replace("@{", "-")
     # Ensure it starts with an allowed character.
     if cleaned and not cleaned[0].isalnum():
+        cleaned = f"b{cleaned}"
     return cleaned
 
 
