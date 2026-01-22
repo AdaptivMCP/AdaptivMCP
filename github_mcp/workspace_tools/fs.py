@@ -1461,6 +1461,174 @@ async def read_workspace_file_sections(
         return _structured_tool_error(exc, context="read_workspace_file_sections", path=path)
 
 
+def _format_numbered_lines_as_text(
+    lines: list[dict[str, Any]],
+    *,
+    width: int | None = None,
+    separator: str = ": ",
+) -> str:
+    """Format structured {line, text} entries as a single numbered string."""
+
+    if not lines:
+        return ""
+    if width is None:
+        # Use the widest line number in the payload.
+        width = max(len(str(int(x.get("line") or 0))) for x in lines)
+    width = max(1, int(width))
+    sep = separator if isinstance(separator, str) else ": "
+
+    out_lines: list[str] = []
+    for entry in lines:
+        ln = int(entry.get("line") or 0)
+        txt = str(entry.get("text") or "")
+        out_lines.append(f"{ln:>{width}}{sep}{txt}")
+    return "\n".join(out_lines)
+
+
+@mcp_tool(write_action=False)
+async def read_workspace_file_with_line_numbers(
+    full_name: str,
+    ref: str = "main",
+    path: str = "",
+    *,
+    start_line: int = 1,
+    end_line: int | None = None,
+    max_lines: int = 200,
+    max_chars: int = 80_000,
+    separator: str = ": ",
+    include_text: bool = True,
+) -> dict[str, Any]:
+    """Read a line-numbered excerpt of a file with an optional text rendering.
+
+    This is a convenience wrapper over `read_workspace_file_excerpt` designed
+    for clients that want a ready-to-display string (similar to `nl -ba`).
+
+    It is safe for very large files: the implementation streams only the
+    requested portion and enforces max line and char budgets.
+
+    Pagination:
+      - When truncated, `numbered.next_start_line` is set to the first line
+        after the returned excerpt.
+
+    Args:
+      end_line: Optional inclusive end line. When provided, it overrides
+        max_lines.
+    """
+
+    try:
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("path must be a non-empty string")
+        if not isinstance(start_line, int) or start_line < 1:
+            raise ValueError("start_line must be an int >= 1")
+        if end_line is not None:
+            if not isinstance(end_line, int) or end_line < start_line:
+                raise ValueError("end_line must be an int >= start_line")
+            max_lines = int(end_line - start_line + 1)
+        if not isinstance(max_lines, int) or max_lines < 1:
+            raise ValueError("max_lines must be an int >= 1")
+        if not isinstance(max_chars, int) or max_chars < 1:
+            raise ValueError("max_chars must be an int >= 1")
+
+        deps = _tw()._workspace_deps()
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+
+        abs_path = _workspace_safe_join(repo_dir, path)
+        if not os.path.exists(abs_path):
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": path,
+                "exists": False,
+                "numbered": {
+                    "start_line": int(start_line),
+                    "end_line": int(start_line),
+                    "lines": [],
+                    "text": "" if include_text else None,
+                    "truncated": False,
+                    "next_start_line": None,
+                    "max_lines": int(max_lines),
+                    "max_chars": int(max_chars),
+                    "separator": str(separator),
+                    "had_decoding_errors": False,
+                },
+            }
+
+        if os.path.isdir(abs_path):
+            raise IsADirectoryError(path)
+        if _is_probably_binary(abs_path):
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": path,
+                "exists": True,
+                "is_binary": True,
+                "size_bytes": os.path.getsize(abs_path),
+                "numbered": {
+                    "start_line": int(start_line),
+                    "end_line": int(start_line),
+                    "lines": [],
+                    "text": "" if include_text else None,
+                    "truncated": False,
+                    "next_start_line": None,
+                    "max_lines": int(max_lines),
+                    "max_chars": int(max_chars),
+                    "separator": str(separator),
+                    "had_decoding_errors": False,
+                },
+            }
+
+        excerpt = _read_lines_excerpt(
+            abs_path,
+            start_line=int(start_line),
+            max_lines=int(max_lines),
+            max_chars=int(max_chars),
+        )
+
+        lines = excerpt.get("lines") or []
+        next_start_line: int | None = None
+        if excerpt.get("truncated") and lines:
+            next_start_line = (
+                int(lines[-1].get("line") or excerpt.get("end_line") or start_line) + 1
+            )
+        elif excerpt.get("truncated"):
+            next_start_line = int(start_line)
+
+        width = None
+        if lines:
+            width = max(1, len(str(int(lines[-1].get("line") or 0))))
+        numbered_text = None
+        if include_text:
+            numbered_text = _format_numbered_lines_as_text(
+                lines, width=width, separator=str(separator)
+            )
+
+        return {
+            "full_name": full_name,
+            "ref": effective_ref,
+            "path": path,
+            "exists": True,
+            "is_binary": False,
+            "size_bytes": os.path.getsize(abs_path),
+            "numbered": {
+                "start_line": int(excerpt.get("start_line") or start_line),
+                "end_line": int(excerpt.get("end_line") or start_line),
+                "lines": lines,
+                "text": numbered_text,
+                "truncated": bool(excerpt.get("truncated")),
+                "next_start_line": next_start_line,
+                "max_lines": int(max_lines),
+                "max_chars": int(max_chars),
+                "separator": str(separator),
+                "had_decoding_errors": bool(excerpt.get("had_decoding_errors")),
+            },
+        }
+    except Exception as exc:
+        return _structured_tool_error(
+            exc, context="read_workspace_file_with_line_numbers", path=path
+        )
+
+
 def _git_show_lines_excerpt_limited(
     repo_dir: str,
     *,

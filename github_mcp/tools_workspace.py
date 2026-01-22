@@ -88,6 +88,7 @@ get_workspace_file_contents = _fs.get_workspace_file_contents
 get_workspace_files_contents = _fs.get_workspace_files_contents
 read_workspace_file_excerpt = _fs.read_workspace_file_excerpt
 read_workspace_file_sections = _fs.read_workspace_file_sections
+read_workspace_file_with_line_numbers = _fs.read_workspace_file_with_line_numbers
 read_git_file_excerpt = _fs.read_git_file_excerpt
 read_git_file_sections = _fs.read_git_file_sections
 set_workspace_file_contents = _fs.set_workspace_file_contents
@@ -199,6 +200,7 @@ __all__ = [
     "get_workspace_files_contents",
     "read_workspace_file_excerpt",
     "read_workspace_file_sections",
+    "read_workspace_file_with_line_numbers",
     "read_git_file_excerpt",
     "read_git_file_sections",
     "set_workspace_file_contents",

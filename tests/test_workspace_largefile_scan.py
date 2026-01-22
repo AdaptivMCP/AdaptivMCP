@@ -95,6 +95,76 @@ def test_read_workspace_file_excerpt_returns_line_numbers_and_limits(tmp_path, m
     assert result2["excerpt"]["truncated"] is True
 
 
+def test_read_workspace_file_with_line_numbers_formats_text_and_end_line(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    p = repo_dir / "lines.txt"
+    p.write_text("".join(f"line-{i}\n" for i in range(1, 21)), encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.read_workspace_file_with_line_numbers(
+            full_name="octo/example",
+            ref="feature",
+            path="lines.txt",
+            start_line=9,
+            end_line=11,
+            separator=" | ",
+            include_text=True,
+        )
+    )
+
+    assert result.get("error") is None
+    assert result["exists"] is True
+    numbered = result["numbered"]
+    assert numbered["start_line"] == 9
+    assert numbered["end_line"] == 11
+    assert [ln["line"] for ln in numbered["lines"]] == [9, 10, 11]
+    assert numbered["text"] == " 9 | line-9\n10 | line-10\n11 | line-11"
+
+    result2 = asyncio.run(
+        workspace_fs.read_workspace_file_with_line_numbers(
+            full_name="octo/example",
+            ref="feature",
+            path="lines.txt",
+            start_line=1,
+            end_line=1,
+            include_text=False,
+        )
+    )
+    assert result2.get("error") is None
+    assert result2["numbered"]["text"] is None
+
+
+def test_read_workspace_file_with_line_numbers_sets_next_start_line_on_truncation(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    p = repo_dir / "lines.txt"
+    p.write_text("".join(f"line-{i}\n" for i in range(1, 501)), encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.read_workspace_file_with_line_numbers(
+            full_name="octo/example",
+            ref="feature",
+            path="lines.txt",
+            start_line=1,
+            max_lines=3,
+            max_chars=1_000,
+        )
+    )
+    assert result.get("error") is None
+    numbered = result["numbered"]
+    assert numbered["truncated"] is True
+    assert numbered["next_start_line"] == 4
+
+
 def test_search_workspace_pagination_cursor(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
