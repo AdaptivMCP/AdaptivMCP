@@ -89,9 +89,74 @@ _WRITE_BINARIES: set[str] = {
 
 _SHELL_REDIRECT_TOKENS = {">", ">>", "2>", "&>", "1>", "2>>", "1>>"}
 
+# Common shell command separators that indicate multiple commands.
+_SHELL_SEPARATORS = {"&&", "||", ";"}
+
 
 _SED_INPLACE = re.compile(r"(^|\s)-i(\s|$)")
 _SHELL_REDIRECT_RE = re.compile(r"(^|\s)(?:\d*>>?|&>|2>|1>)")
+
+
+def _has_unquoted_output_redirection(cmd: str) -> bool:
+    """Return True if cmd contains an unquoted output redirection operator.
+
+    We treat only output redirection (>, >>, 1>, 2>, &>) as write intent.
+    Input redirection (<, <<) is ignored for gating purposes.
+
+    This is a small state machine so commands like `rg ">" .` do not get
+    misclassified as writes.
+    """
+
+    if not isinstance(cmd, str) or not cmd:
+        return False
+
+    in_single = False
+    in_double = False
+    escape = False
+
+    i = 0
+    n = len(cmd)
+    while i < n:
+        ch = cmd[i]
+        if escape:
+            escape = False
+            i += 1
+            continue
+
+        if ch == "\\":
+            # Backslash escapes outside single quotes.
+            if not in_single:
+                escape = True
+            i += 1
+            continue
+
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            i += 1
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            i += 1
+            continue
+
+        if not in_single and not in_double:
+            # Check multi-char operators first.
+            if cmd.startswith("&>>", i):
+                return True
+            if cmd.startswith("2>>", i) or cmd.startswith("1>>", i):
+                return True
+            if cmd.startswith(">>", i):
+                return True
+            if cmd.startswith("&>", i):
+                return True
+            if cmd.startswith("2>", i) or cmd.startswith("1>", i):
+                return True
+            if ch == ">":
+                return True
+
+        i += 1
+
+    return False
 
 
 _READ_ONLY_DEV_BINARIES: set[str] = {
@@ -144,11 +209,20 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
     if prog in _READ_ONLY_DEV_BINARIES:
         return False
 
+    # pip: some subcommands are read-only.
+    if prog == "pip" and len(parts) > 1:
+        sub = parts[1]
+        if sub in {"check", "--version", "-V", "list", "freeze", "show", "help"}:
+            return False
+
     # Python module entrypoints.
     if prog == "python" and len(parts) >= 3 and parts[1] == "-m":
         module = parts[2]
-        # pip is write.
-        if module in {"pip"}:
+        # pip is nuanced: some subcommands are read-only.
+        if module == "pip":
+            sub = parts[3] if len(parts) >= 4 else ""
+            if sub in {"check", "--version", "-V", "list", "freeze", "show", "help"}:
+                return False
             return True
         # Delegate classification for other common modules.
         return _infer_write_action_from_parts([module, *parts[3:]])
@@ -275,16 +349,32 @@ def infer_write_action_from_shell(
     if not parts:
         return True
 
-    # Redirections are write-ish.
-    # We check both tokenized forms (e.g. ">") and compact forms (e.g. "2>err.txt").
-    if any(tok in _SHELL_REDIRECT_TOKENS for tok in parts) or _SHELL_REDIRECT_RE.search(cmd):
+    # Redirections are write-ish, but only when unquoted.
+    # Avoid false positives like: rg ">" .
+    if _has_unquoted_output_redirection(cmd) or _SHELL_REDIRECT_RE.search(cmd):
         return True
 
-    # Pipelines: treat as write only if any stage is write.
-    if "|" in parts:
-        segments = _split_pipeline(parts)
-        if not segments:
-            return True
-        return any(_infer_write_action_from_parts(seg) for seg in segments)
+    # Split chained commands (e.g. "cmd1 && cmd2; cmd3").
+    segments: list[list[str]] = [[]]
+    for tok in parts:
+        if tok in _SHELL_SEPARATORS:
+            if segments[-1]:
+                segments.append([])
+            continue
+        segments[-1].append(tok)
+    segments = [seg for seg in segments if seg]
 
-    return _infer_write_action_from_parts(parts)
+    def _segment_is_write(seg: list[str]) -> bool:
+        if not seg:
+            return False
+        # Pipelines: treat as write only if any stage is write.
+        if "|" in seg:
+            pipe_segments = _split_pipeline(seg)
+            if not pipe_segments:
+                return True
+            return any(_infer_write_action_from_parts(p) for p in pipe_segments)
+        return _infer_write_action_from_parts(seg)
+
+    if segments:
+        return any(_segment_is_write(seg) for seg in segments)
+    return True
