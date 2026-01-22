@@ -10,19 +10,13 @@ The virtualenv lives at ``<repo_dir>/.venv-mcp``.
 
 from __future__ import annotations
 
-import os
-import shlex
 from typing import Any
 
-from github_mcp import config
-from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import _structured_tool_error, mcp_tool
-from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import (
-    _should_install_requirements,
+    _maybe_install_dev_requirements,
     _tw,
-    _write_requirements_marker,
 )
 
 
@@ -47,28 +41,15 @@ async def workspace_venv_start(
 
         install_log: dict[str, Any] | None = None
         if installing_dependencies:
-            req_path = os.path.join(repo_dir, "dev-requirements.txt")
-            venv_dir = os.path.join(repo_dir, ".venv-mcp")
-            if not os.path.isfile(req_path):
-                install_log = {"skipped": True, "reason": "dev-requirements.txt not found"}
-            elif not _should_install_requirements(venv_dir, req_path):
-                install_log = {"skipped": True, "reason": "dependencies already satisfied"}
-            else:
-                timeout = _normalize_timeout_seconds(
-                    config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
-                    0,
-                )
-                cmd = f"python -m pip install -r {shlex.quote('dev-requirements.txt')}"
-                install_log = await deps["run_shell"](
-                    cmd,
-                    cwd=repo_dir,
-                    timeout_seconds=timeout,
-                    env=env,
-                )
-                if install_log.get("exit_code", 0) != 0:
-                    stderr = install_log.get("stderr", "") or install_log.get("stdout", "")
-                    raise GitHubAPIError(f"Dependency install failed: {stderr}")
-                _write_requirements_marker(venv_dir, req_path)
+            install_log, _ = await _maybe_install_dev_requirements(
+                deps,
+                repo_dir=repo_dir,
+                cwd=repo_dir,
+                env=env,
+                timeout_seconds=0,
+                installing_dependencies=True,
+                use_temp_venv=True,
+            )
 
         status = await deps["virtualenv_status"](repo_dir)
         return {

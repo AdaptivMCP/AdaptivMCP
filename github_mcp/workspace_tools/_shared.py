@@ -181,6 +181,72 @@ def _write_requirements_marker(venv_dir: str, requirements_path: str) -> None:
         handle.write(_requirements_hash(requirements_path) + "\n")
 
 
+async def _maybe_install_dev_requirements(
+    deps: dict[str, Any],
+    *,
+    repo_dir: str,
+    cwd: str,
+    env: dict[str, str] | None,
+    timeout_seconds: float,
+    installing_dependencies: bool,
+    use_temp_venv: bool,
+    requirements_filename: str = "dev-requirements.txt",
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Best-effort install for ``dev-requirements.txt``.
+
+    The workspace tools optionally install development requirements into the
+    persistent workspace virtualenv (``.venv-mcp``). This helper centralizes
+    that logic so command runners and the explicit venv lifecycle tool behave
+    consistently.
+
+    Notes:
+    - Installation is skipped unless both ``installing_dependencies`` and
+      ``use_temp_venv`` are truthy.
+    - The installation command is executed in ``cwd`` so relative requirement
+      paths resolve predictably (callers typically pass the repo root).
+    """
+
+    install_steps: list[dict[str, Any]] = []
+    if not (installing_dependencies and use_temp_venv):
+        return None, install_steps
+
+    req_path = os.path.join(repo_dir, requirements_filename)
+    venv_dir = os.path.join(repo_dir, ".venv-mcp")
+    if not os.path.isfile(req_path):
+        install_result: dict[str, Any] | None = {
+            "skipped": True,
+            "reason": f"{requirements_filename} not found",
+        }
+        install_steps.append({"command": None, "result": install_result})
+        return install_result, install_steps
+
+    if not _should_install_requirements(venv_dir, req_path):
+        install_result = {"skipped": True, "reason": "dependencies already satisfied"}
+        install_steps.append({"command": None, "result": install_result})
+        return install_result, install_steps
+
+    dep_timeout = _normalize_timeout_seconds(
+        config.ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
+        timeout_seconds,
+    )
+    install_cmd = f"python -m pip install -r {shlex.quote(requirements_filename)}"
+    install_result = await deps["run_shell"](
+        install_cmd,
+        cwd=cwd,
+        timeout_seconds=dep_timeout,
+        env=env,
+    )
+    install_steps.append({"command": install_cmd, "result": install_result})
+    if install_result.get("exit_code", 0) != 0:
+        stderr = (install_result.get("stderr") or "").strip()
+        stdout = (install_result.get("stdout") or "").strip()
+        detail = stderr or stdout
+        raise GitHubAPIError(f"Dependency install failed: {detail}")
+
+    _write_requirements_marker(venv_dir, req_path)
+    return install_result, install_steps
+
+
 def _git_state_markers(repo_dir: str) -> dict[str, bool]:
     git_dir = os.path.join(repo_dir, ".git")
     return {
