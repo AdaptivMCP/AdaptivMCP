@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import os
 import platform
 import sys
 import time
-import os
 from collections.abc import Callable
 from typing import Any
 
