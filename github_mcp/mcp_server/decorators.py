@@ -2135,12 +2135,7 @@ def _chatgpt_friendly_result(
                 "result": result,
             }
             base_payload = _inject_provider_metadata(base_payload)
-            return _llm_scan_friendly_payload(
-                tool_name=tool_name,
-                shaped_payload=base_payload,
-                all_args=all_args,
-                req=req,
-            )
+            return base_payload
 
         out: dict[str, Any] = _inject_provider_metadata(result)
 
@@ -2162,12 +2157,7 @@ def _chatgpt_friendly_result(
         elif status_str in {"error", "failed", "failure"}:
             out["status"] = "error"
 
-        return _llm_scan_friendly_payload(
-            tool_name=tool_name,
-            shaped_payload=out,
-            all_args=all_args,
-            req=req,
-        )
+        return out
     except Exception as exc:
         # Best-effort: never break tool behavior if the shaper fails.
         # However, failures here are otherwise invisible and can look like
