@@ -351,7 +351,7 @@ def infer_write_action_from_shell(
 
     # Redirections are write-ish, but only when unquoted.
     # Avoid false positives like: rg ">" .
-    if _has_unquoted_output_redirection(cmd) or _SHELL_REDIRECT_RE.search(cmd):
+    if _has_unquoted_output_redirection(cmd):
         return True
 
     # Split chained commands (e.g. "cmd1 && cmd2; cmd3").

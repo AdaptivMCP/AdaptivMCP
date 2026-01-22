@@ -25,15 +25,17 @@ def test_chatgpt_friendly_result_surfaces_stdout_and_stderr(monkeypatch):
     shaped = _chatgpt_friendly_result(payload, req={"headers": {}})
     assert isinstance(shaped, dict)
 
-    # Raw surfaces.
-    assert shaped.get("stdout") == "hello\nworld\n"
-    assert shaped.get("stderr") == "warn: nope\n"
+    report = shaped.get("report")
+    assert isinstance(report, dict)
+    streams = report.get("streams")
+    assert isinstance(streams, dict)
 
-    # Colored previews.
-    sc = shaped.get("stdout_colored")
-    ec = shaped.get("stderr_colored")
-    assert isinstance(sc, str) and "stdout" in sc
-    assert isinstance(ec, str) and "stderr" in ec
-    # Should include ANSI escape sequences.
-    assert "\x1b[" in sc
-    assert "\x1b[" in ec
+    # Streams live under report.streams to avoid duplicating payload fields.
+    assert streams.get("stdout") == "hello\nworld\n"
+    assert streams.get("stderr") == "warn: nope\n"
+    assert streams.get("stdout_total_lines") == 2
+    assert streams.get("stderr_total_lines") == 1
+
+    # Ensure we do not duplicate at the top-level.
+    assert "stdout" not in shaped
+    assert "stderr" not in shaped

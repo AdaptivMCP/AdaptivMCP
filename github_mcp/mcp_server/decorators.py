@@ -1035,6 +1035,150 @@ def _inject_stdout_stderr(out: dict[str, Any], *, req: Mapping[str, Any] | None 
         )
 
 
+def _extract_streams_for_report(
+    payload: Mapping[str, Any], *, req: Mapping[str, Any] | None
+) -> dict[str, Any] | None:
+    """Extract stdout/stderr into a single, non-duplicative report section."""
+
+    if not isinstance(payload, Mapping):
+        return None
+
+    result = payload.get("result")
+    inner = result if isinstance(result, Mapping) else payload
+
+    stdout = inner.get("stdout") if isinstance(inner, Mapping) else None
+    stderr = inner.get("stderr") if isinstance(inner, Mapping) else None
+
+    if not isinstance(stdout, str):
+        stdout = None
+    if not isinstance(stderr, str):
+        stderr = None
+
+    if not stdout and not stderr:
+        return None
+
+    mode = _effective_response_mode(req)
+    stream_max_lines, stream_max_chars = _effective_response_stream_limits(req)
+
+    out: dict[str, Any] = {}
+
+    def _clip(name: str, value: str) -> None:
+        if not value:
+            return
+        clipped = value
+        truncated = False
+        raw_lines = value.splitlines()
+        raw_chars = len(value)
+        if mode in {"chatgpt", "compact"}:
+            if (stream_max_lines > 0 and len(raw_lines) > stream_max_lines) or (
+                stream_max_chars > 0 and raw_chars > stream_max_chars
+            ):
+                clipped = _clip_text(
+                    value,
+                    max_lines=stream_max_lines,
+                    max_chars=stream_max_chars,
+                    enabled=False,
+                )
+                truncated = True
+
+        out[name] = clipped
+        out[f"{name}_total_lines"] = len(raw_lines)
+        out[f"{name}_total_chars"] = raw_chars
+        if truncated:
+            out[f"{name}_truncated"] = True
+
+    if stdout:
+        _clip("stdout", stdout)
+    if stderr:
+        _clip("stderr", stderr)
+
+    return out
+
+
+def _llm_dev_report(
+    *,
+    tool_name: str | None,
+    shaped_payload: Mapping[str, Any],
+    all_args: Mapping[str, Any] | None,
+    req: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Build a single structured report for LLM consumption and developer debugging.
+
+    The intent is to avoid duplicating large payload fields (stdout/stderr, nested
+    `result` envelopes, and secondary summary strings) while still providing a
+    complete, well-organized view of what happened.
+    """
+
+    out: dict[str, Any] = {
+        "tool": tool_name,
+        "status": shaped_payload.get("status"),
+        "ok": shaped_payload.get("ok"),
+        "summary": _tool_paragraph_summary(
+            tool_name=tool_name, result=shaped_payload, all_args=all_args
+        ),
+        "snapshot": _result_snapshot(shaped_payload),
+    }
+
+    # Inputs
+    if all_args is not None:
+        out["inputs"] = _args_summary(all_args)
+
+    # Warnings/errors
+    warnings = shaped_payload.get("warnings")
+    if isinstance(warnings, list) and warnings:
+        out["warnings"] = [str(w).strip() for w in warnings if str(w).strip()]
+    elif isinstance(warnings, str) and warnings.strip():
+        out["warnings"] = [warnings.strip()]
+
+    err = shaped_payload.get("error")
+    if isinstance(err, Mapping):
+        msg = err.get("message") or err.get("detail") or err.get("error")
+        if isinstance(msg, str) and msg.strip():
+            out["error"] = {"message": _clean_error_message(msg, limit=800)}
+    elif isinstance(err, str) and err.strip():
+        out["error"] = {"message": _clean_error_message(err, limit=800)}
+
+    # Streams
+    streams = _extract_streams_for_report(shaped_payload, req=req)
+    if streams:
+        out["streams"] = streams
+
+    # Key fields commonly useful to devs.
+    for key in (
+        "ref",
+        "full_name",
+        "workdir",
+        "command",
+        "command_input",
+        "branch",
+        "url",
+        "html_url",
+        "number",
+        "id",
+    ):
+        val = shaped_payload.get(key)
+        if val not in (None, ""):
+            out.setdefault("highlights", {})[key] = val
+
+    # Exit code convenience (terminal_command etc.)
+    result = shaped_payload.get("result")
+    if isinstance(result, Mapping):
+        for key in ("exit_code", "timed_out", "stdout_truncated", "stderr_truncated"):
+            if key in result and result.get(key) is not None:
+                out.setdefault("highlights", {})[key] = result.get(key)
+
+    # Include tool metadata (write gating) inside the report for easy inspection.
+    tool_meta = shaped_payload.get("tool_metadata")
+    if isinstance(tool_meta, Mapping):
+        out["gating"] = {
+            "base_write_action": tool_meta.get("base_write_action"),
+            "effective_write_action": tool_meta.get("effective_write_action"),
+            "annotations": tool_meta.get("annotations"),
+        }
+
+    return out
+
+
 def _truncate_text(value: Any, *, limit: int = 180) -> str:
     def scalar(v: Any) -> str:
         if v is None:
@@ -1921,18 +2065,28 @@ def _chatgpt_friendly_result(
     try:
         # Scalars/lists: wrap so callers always get a mapping with status.
         if not isinstance(result, Mapping):
-            payload = {
+            base_payload: dict[str, Any] = {
                 "status": "success",
                 "ok": True,
                 "result": result,
-                "summary": _result_snapshot(result),
             }
-            summary_text = _tool_paragraph_summary(
-                tool_name=tool_name, result=result, all_args=all_args
+            base_payload = _inject_adaptiv_mcp_metadata(base_payload)
+            report = _llm_dev_report(
+                tool_name=tool_name,
+                shaped_payload=base_payload,
+                all_args=all_args,
+                req=req,
             )
-            if summary_text:
-                payload["summary_text"] = summary_text
-            return _inject_adaptiv_mcp_metadata(payload)
+            minimal: dict[str, Any] = {
+                "status": base_payload.get("status"),
+                "ok": base_payload.get("ok"),
+                "report": report,
+            }
+            # Preserve metadata fields if present.
+            for k in ("tool_metadata", "adaptiv_mcp"):
+                if k in base_payload:
+                    minimal[k] = base_payload[k]
+            return minimal
 
         out: dict[str, Any] = _inject_adaptiv_mcp_metadata(result)
 
@@ -1954,40 +2108,26 @@ def _chatgpt_friendly_result(
         elif status_str in {"error", "failed", "failure"}:
             out["status"] = "error"
 
-        # Add a compact snapshot for LLMs (does not replace the full payload).
-        out.setdefault("summary", _result_snapshot(out))
-        summary_text = _tool_paragraph_summary(tool_name=tool_name, result=out, all_args=all_args)
-        if summary_text:
-            out.setdefault("summary_text", summary_text)
+        # Build a single structured report and return a minimal payload.
+        report = _llm_dev_report(
+            tool_name=tool_name,
+            shaped_payload=out,
+            all_args=all_args,
+            req=req,
+        )
 
-        # Surface stdout/stderr in ChatGPT-friendly payloads.
-        try:
-            _inject_stdout_stderr(out, req=req)
-        except Exception as exc:
-            _log_once(
-                "stdout_stderr_injection_failed",
-                logging.DEBUG,
-                "Failed to inject stdout/stderr into shaped tool result",
-                exc=exc,
-                extra={"event": "stdout_stderr_injection_failed"},
-            )
+        minimal: dict[str, Any] = {
+            "status": out.get("status"),
+            "ok": out.get("ok"),
+            "report": report,
+        }
 
-        truncated_fields: list[str] = []
+        # Preserve provider metadata + write-gating metadata.
+        for k in ("tool_metadata", "adaptiv_mcp"):
+            if k in out:
+                minimal[k] = out[k]
 
-        # Truncate common large lists to keep payload sizes manageable.
-        max_items = _effective_response_max_list_items(req)
-        for key in ("packages", "checks", "results", "items"):
-            val = out.get(key)
-            if isinstance(val, list) and max_items > 0 and len(val) > max_items:
-                out[f"{key}_total"] = len(val)
-                out[key] = val[:max_items]
-                out[f"{key}_truncated"] = True
-                truncated_fields.append(key)
-
-        if truncated_fields:
-            out.setdefault("truncated_fields", sorted(set(truncated_fields)))
-
-        return out
+        return minimal
     except Exception as exc:
         # Best-effort: never break tool behavior if the shaper fails.
         # However, failures here are otherwise invisible and can look like

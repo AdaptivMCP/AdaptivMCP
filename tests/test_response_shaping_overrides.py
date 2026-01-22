@@ -24,16 +24,24 @@ def test_response_mode_override_enables_chatgpt_shaping(monkeypatch):
     shaped = _chatgpt_friendly_result(payload, req={"response_mode": "chatgpt"})
     assert isinstance(shaped, dict)
     assert shaped.get("status") in {"success", "ok"}
-    # Shaped responses include a summary field.
-    assert "summary" in shaped
-    # stdout surfaces at the top level.
-    assert shaped.get("stdout") == "hi\n"
+    assert shaped.get("ok") is True
+
+    report = shaped.get("report")
+    assert isinstance(report, dict)
+    assert isinstance(report.get("summary"), str) and report.get("summary")
+
+    streams = report.get("streams")
+    assert isinstance(streams, dict)
+    assert streams.get("stdout") == "hi\n"
+
+    # Avoid duplication of nested envelopes at the top-level.
+    assert "result" not in shaped
+    assert "stdout" not in shaped
 
 
-def test_request_max_list_items_truncates_common_lists(monkeypatch):
+def test_shaped_payload_does_not_echo_large_lists(monkeypatch):
     _enable_shaping(monkeypatch)
     monkeypatch.setattr(dec, "RESPONSE_MODE_DEFAULT", "raw")
-    monkeypatch.setattr(dec, "CHATGPT_RESPONSE_MAX_LIST_ITEMS", 0)
 
     payload = {
         "status": "ok",
@@ -51,37 +59,13 @@ def test_request_max_list_items_truncates_common_lists(monkeypatch):
         },
     )
 
-    assert shaped.get("items_total") == 5
-    assert shaped.get("items_truncated") is True
-    assert isinstance(shaped.get("items"), list)
-    assert len(shaped["items"]) == 2
-
-
-def test_request_max_list_items_truncates_checks_list(monkeypatch):
-    _enable_shaping(monkeypatch)
-    monkeypatch.setattr(dec, "RESPONSE_MODE_DEFAULT", "raw")
-    monkeypatch.setattr(dec, "CHATGPT_RESPONSE_MAX_LIST_ITEMS", 0)
-
-    payload = {
-        "status": "ok",
-        "ok": True,
-        "checks": [{"n": i} for i in range(4)],
-    }
-
-    shaped = _chatgpt_friendly_result(
-        payload,
-        req={
-            "chatgpt": {
-                "response_mode": "chatgpt",
-                "response_max_list_items": 2,
-            }
-        },
-    )
-
-    assert shaped.get("checks_total") == 4
-    assert shaped.get("checks_truncated") is True
-    assert isinstance(shaped.get("checks"), list)
-    assert len(shaped["checks"]) == 2
+    assert "items" not in shaped
+    report = shaped.get("report")
+    assert isinstance(report, dict)
+    assert "items" not in report
+    snap = report.get("snapshot")
+    assert isinstance(snap, dict)
+    assert snap.get("type") == "dict"
 
 
 def test_stream_limits_clip_raw_stdout(monkeypatch):
@@ -109,10 +93,14 @@ def test_stream_limits_clip_raw_stdout(monkeypatch):
         },
     )
 
-    assert shaped.get("stdout_truncated") is True
-    assert shaped.get("stdout_total_lines") == 5
-    assert isinstance(shaped.get("stdout"), str)
-    assert "… (" in shaped["stdout"]
+    report = shaped.get("report")
+    assert isinstance(report, dict)
+    streams = report.get("streams")
+    assert isinstance(streams, dict)
+    assert streams.get("stdout_truncated") is True
+    assert streams.get("stdout_total_lines") == 5
+    assert isinstance(streams.get("stdout"), str)
+    assert "… (" in streams["stdout"]
 
 
 def test_redaction_can_be_disabled_per_request_when_allowed(monkeypatch):
@@ -122,3 +110,31 @@ def test_redaction_can_be_disabled_per_request_when_allowed(monkeypatch):
 
     assert dec._effective_redact_tool_outputs({"chatgpt": {"redact_tool_outputs": False}}) is False
     assert dec._effective_redact_tool_outputs({"chatgpt": {"redact_tool_outputs": True}}) is True
+
+
+def test_chatgpt_shaping_returns_single_structured_report_without_duplication(monkeypatch):
+    _enable_shaping(monkeypatch)
+    monkeypatch.setattr(dec, "RESPONSE_MODE_DEFAULT", "raw")
+
+    payload = {
+        "status": "ok",
+        "ok": True,
+        "ref": "main",
+        "result": {"exit_code": 0, "timed_out": False, "stdout": "hi\n"},
+    }
+
+    shaped = _chatgpt_friendly_result(payload, req={"response_mode": "chatgpt"})
+    assert isinstance(shaped, dict)
+    assert set(shaped.keys()).issuperset({"status", "ok", "report"})
+
+    # The top-level should be minimal (no nested envelopes or secondary summary strings).
+    assert "result" not in shaped
+    assert "summary" not in shaped
+    assert "summary_text" not in shaped
+    assert "stdout" not in shaped
+    assert "stderr" not in shaped
+
+    report = shaped.get("report")
+    assert isinstance(report, dict)
+    assert isinstance(report.get("summary"), str) and report.get("summary")
+    assert isinstance(report.get("snapshot"), dict)
