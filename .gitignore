@@ -3,6 +3,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# MCP / tooling temp artifacts
+.mcp_tmp/
+
+# Coverage / test artifacts
+coverage.json
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
 # Virtual environments
 .venv/
 .venv-mcp/
