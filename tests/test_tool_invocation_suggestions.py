@@ -33,6 +33,45 @@ def test_unknown_tool_includes_suggested_tool_and_warnings(monkeypatch: Any) -> 
     assert any("Did you mean" in w for w in warnings)
 
 
+def test_unknown_tool_ambiguous_does_not_force_single_suggestion(monkeypatch: Any) -> None:
+    """When multiple close matches exist, avoid anchoring on a single tool."""
+
+    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.mcp_server import registry as mcp_registry
+
+    class ToolA:
+        name = "terminal_command"
+        write_action = True
+
+    class ToolB:
+        name = "terminal_commands"
+        write_action = True
+
+    def func(**_kwargs: Any) -> dict[str, Any]:
+        return {"status": "success", "ok": True}
+
+    # Force the invoke path to treat the requested name as unknown.
+    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: None)
+    monkeypatch.setattr(mcp_registry, "_REGISTERED_MCP_TOOLS", [(ToolA(), func), (ToolB(), func)])
+
+    client = TestClient(main.app)
+    resp = client.post("/tools/terminal_comand", json={"args": {}})
+    assert resp.status_code == 404
+    payload = resp.json()
+    assert payload.get("category") == "not_found"
+
+    # We should not force a single tool when two close matches exist.
+    assert payload.get("suggested_tool") in {None, ""}
+    suggested = payload.get("suggested_tools")
+    assert isinstance(suggested, list)
+    assert "terminal_command" in suggested
+    assert "terminal_commands" in suggested
+
+    warnings = payload.get("warnings")
+    assert isinstance(warnings, list)
+    assert any("Close matches" in w for w in warnings)
+
+
 def test_invalid_tool_args_includes_expected_args_warning(monkeypatch: Any) -> None:
     import github_mcp.http_routes.tool_registry as tool_registry
 

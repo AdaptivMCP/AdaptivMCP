@@ -19,30 +19,74 @@ def _norm_token(value: str) -> str:
     return str(value).strip().lower().replace("-", "_").replace(" ", "_")
 
 
-def suggest_best_name(requested: str, options: Iterable[str], *, cutoff: float = 0.6) -> str | None:
-    """Return the closest matching option to `requested`, if any."""
+def _similarity(a: str, b: str) -> float:
+    """Return a stable similarity score in [0, 1].
+
+    This is intentionally simple and dependency-free.
+    """
+
+    try:
+        return difflib.SequenceMatcher(None, a, b).ratio()
+    except Exception:
+        return 0.0
+
+
+def rank_names(requested: str, options: Iterable[str]) -> list[tuple[float, str]]:
+    """Return candidate options ranked by similarity to `requested`.
+
+    The output is a list of (score, original_name), sorted descending by score.
+    """
 
     try:
         requested_n = _norm_token(requested)
         opt_list = [str(o) for o in options if o is not None and str(o).strip()]
-        if not opt_list:
-            return None
-
-        # difflib works on sequences of strings; we normalize both sides but return
-        # the original option for display.
-        normalized_to_original: dict[str, str] = {}
-        normalized: list[str] = []
+        ranked: list[tuple[float, str]] = []
         for o in opt_list:
-            n = _norm_token(o)
-            normalized_to_original.setdefault(n, o)
-            normalized.append(n)
-
-        matches = difflib.get_close_matches(requested_n, normalized, n=1, cutoff=float(cutoff))
-        if not matches:
-            return None
-        return normalized_to_original.get(matches[0])
+            score = _similarity(requested_n, _norm_token(o))
+            ranked.append((float(score), o))
+        ranked.sort(key=lambda t: (-t[0], t[1]))
+        return ranked
     except Exception:
-        return None
+        return []
+
+
+def suggest_close_matches(
+    requested: str,
+    options: Iterable[str],
+    *,
+    cutoff: float = 0.6,
+    max_suggestions: int = 5,
+) -> list[str]:
+    """Return up to `max_suggestions` close matches to `requested`.
+
+    Matches are ordered by similarity (descending).
+    """
+
+    ranked = rank_names(requested, options)
+    if not ranked:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for score, name in ranked:
+        if score < float(cutoff):
+            break
+        if name in seen:
+            continue
+        out.append(name)
+        seen.add(name)
+        if len(out) >= int(max_suggestions):
+            break
+    return out
+
+
+def suggest_best_name(requested: str, options: Iterable[str], *, cutoff: float = 0.6) -> str | None:
+    """Return the closest matching option to `requested`, if any.
+
+    This is retained for backward compatibility; prefer `suggest_close_matches`.
+    """
+
+    matches = suggest_close_matches(requested, options, cutoff=cutoff, max_suggestions=1)
+    return matches[0] if matches else None
 
 
 def expected_args_from_signature(signature: inspect.Signature | None) -> dict[str, Any]:
@@ -88,19 +132,61 @@ def expected_args_from_signature(signature: inspect.Signature | None) -> dict[st
         return out
 
 
+def _high_confidence_single_match(ranked: list[tuple[float, str]], matches: list[str]) -> str | None:
+    """Return a single suggested tool only when the signal is strong.
+
+    Tool runtimes can over-anchor on a single suggestion; we only return one
+    when the requested name is extremely close and unambiguous.
+    """
+
+    if not matches or not ranked:
+        return None
+    if len(matches) != 1:
+        return None
+
+    best_score = ranked[0][0]
+    if best_score < 0.92:
+        return None
+
+    # If we have a runner-up with a close score, avoid suggesting a single tool.
+    if len(ranked) >= 2:
+        gap = best_score - float(ranked[1][0])
+        if gap < 0.08:
+            return None
+
+    return matches[0]
+
+
 def build_unknown_tool_payload(tool_name: str, available_tools: Iterable[str]) -> dict[str, Any]:
-    """Return a structured error payload for an unknown tool with suggestions."""
+    """Return a structured error payload for an unknown tool with suggestions.
+
+    Key behavior:
+    - Prefer *ranked* candidates (similarity-based) rather than an alphabetical
+      sample, so suggestions vary by user intent.
+    - Provide multiple close matches to reduce the chance of "getting stuck" on
+      a single repeated tool.
+    - Only emit `suggested_tool` when the match is high-confidence.
+    """
 
     available = [str(t) for t in available_tools if t is not None and str(t).strip()]
-    suggestion = suggest_best_name(tool_name, available)
+    ranked = rank_names(tool_name, available)
+    close_matches = suggest_close_matches(tool_name, available, cutoff=0.66, max_suggestions=5)
+    single = _high_confidence_single_match(ranked, close_matches)
 
     warnings: list[str] = []
-    if suggestion:
-        warnings.append(f"Unknown tool {tool_name!r}. Did you mean {suggestion!r}?")
+    if single:
+        warnings.append(f"Unknown tool {tool_name!r}. Did you mean {single!r}?")
+    elif close_matches:
+        rendered = ", ".join(repr(x) for x in close_matches)
+        warnings.append(
+            f"Unknown tool {tool_name!r}. Close matches: {rendered}. If none fit, call GET /tools to discover the full catalog."
+        )
     elif available:
         # Keep this bounded; callers can always hit /tools for the full list.
-        sample = ", ".join(sorted(available)[:15])
-        warnings.append(f"Unknown tool {tool_name!r}. Available tools include: {sample}")
+        top = ", ".join(repr(name) for _score, name in ranked[:15])
+        warnings.append(
+            f"Unknown tool {tool_name!r}. Most similar available tools: {top}. (For the full list, call GET /tools.)"
+        )
     else:
         warnings.append(f"Unknown tool {tool_name!r}.")
 
@@ -111,8 +197,12 @@ def build_unknown_tool_payload(tool_name: str, available_tools: Iterable[str]) -
         "category": "not_found",
         "warnings": warnings,
     }
-    if suggestion:
-        payload["suggested_tool"] = suggestion
+
+    if close_matches:
+        payload["suggested_tools"] = close_matches
+    if single:
+        payload["suggested_tool"] = single
+
     return payload
 
 
@@ -146,9 +236,9 @@ def augment_structured_error_for_bad_args(
         if unknown:
             per_key: list[str] = []
             for key in unknown[:10]:
-                guess = suggest_best_name(key, expected_all)
-                if guess and guess != key:
-                    per_key.append(f"{key!r} -> {guess!r}")
+                guesses = suggest_close_matches(key, expected_all, cutoff=0.66, max_suggestions=3)
+                if guesses and guesses[0] != key:
+                    per_key.append(f"{key!r} -> {', '.join(repr(g) for g in guesses)}")
             if per_key:
                 warnings.append(
                     f"Invalid argument name(s) for {tool_name}: {', '.join(unknown)}. Closest matches: {', '.join(per_key)}"
