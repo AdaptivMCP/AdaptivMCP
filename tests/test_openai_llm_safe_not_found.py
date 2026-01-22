@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from starlette.testclient import TestClient
 
 import main
@@ -45,4 +44,3 @@ def test_openai_client_unknown_invocation_cancel_is_llm_safe() -> None:
     assert resp.headers.get("X-Tool-Original-Status") == "404"
     payload = resp.json()
     assert payload.get("error") == "Unknown invocation id"
-

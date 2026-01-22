@@ -1044,7 +1044,9 @@ def build_tool_invocation_status_endpoint() -> Callable[[Request], Response]:
             return JSONResponse({"error": "invocation_id is required"}, status_code=400)
         invocation = await _get_invocation(str(invocation_id))
         if invocation is None:
-            return _llm_safe_json_response(request, {"error": "Unknown invocation id"}, 404, headers={})
+            return _llm_safe_json_response(
+                request, {"error": "Unknown invocation id"}, 404, headers={}
+            )
         return JSONResponse(_invocation_payload(invocation))
 
     return _endpoint
@@ -1057,7 +1059,9 @@ def build_tool_invocation_cancel_endpoint() -> Callable[[Request], Response]:
             return JSONResponse({"error": "invocation_id is required"}, status_code=400)
         invocation = await _get_invocation(str(invocation_id))
         if invocation is None:
-            return _llm_safe_json_response(request, {"error": "Unknown invocation id"}, 404, headers={})
+            return _llm_safe_json_response(
+                request, {"error": "Unknown invocation id"}, 404, headers={}
+            )
         await _cancel_invocation(invocation)
         return JSONResponse(_invocation_payload(invocation))
 

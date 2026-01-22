@@ -100,5 +100,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r dev-requirements.txt
 
+      - name: Lint (ruff)
+        if: ${{ matrix.python-version == '3.12' }}
+        run: ruff check .
+
       - name: Run tests
         run: pytest -q --cov=github_mcp --cov-report=term-missing:skip-covered --cov-fail-under=45
