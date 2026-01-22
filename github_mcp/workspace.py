@@ -122,19 +122,14 @@ async def _run_shell(
         start_new_session=start_new_session,
     )
 
-    try:
-        if timeout_seconds and timeout_seconds > 0:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout_seconds
-            )
-            timed_out = False
-        else:
-            stdout_bytes, stderr_bytes = await proc.communicate()
-            timed_out = False
-    except TimeoutError:
-        timed_out = True
-        # Best-effort termination: kill the whole process group on POSIX so
-        # child processes (e.g. pytest workers) don't keep pipes open.
+    async def _terminate_process() -> None:
+        """Best-effort termination for the subprocess and its children.
+
+        Hosted MCP deployments can see upstream disconnects/cancellations.
+        Ensure we do not leave runaway subprocesses that can exhaust CPU/memory
+        and eventually trigger hangs or server disconnects.
+        """
+
         if os.name != "nt":
             import signal
 
@@ -144,6 +139,7 @@ async def _run_shell(
                 pass
             try:
                 await asyncio.wait_for(proc.wait(), timeout=3)
+                return
             except Exception:
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
@@ -154,6 +150,32 @@ async def _run_shell(
                 proc.kill()
             except Exception:
                 pass
+
+    try:
+        if timeout_seconds and timeout_seconds > 0:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout_seconds
+            )
+            timed_out = False
+        else:
+            stdout_bytes, stderr_bytes = await proc.communicate()
+            timed_out = False
+    except asyncio.CancelledError:
+        # Client disconnects/cancellation: ensure the subprocess does not keep
+        # running in the background and consuming resources.
+        try:
+            await _terminate_process()
+        except Exception:
+            pass
+        raise
+    except TimeoutError:
+        timed_out = True
+        # Best-effort termination: kill the whole process group on POSIX so
+        # child processes (e.g. pytest workers) don't keep pipes open.
+        try:
+            await _terminate_process()
+        except Exception:
+            pass
 
         # Best-effort output collection after timeout. Keep configurable.
         try:
