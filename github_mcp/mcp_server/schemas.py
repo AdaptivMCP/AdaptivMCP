@@ -740,13 +740,18 @@ def _annotation_to_schema(annotation: Any) -> dict[str, Any]:
             return {"type": "object"}
         return {}
 
-    # typing.Literal[...] support (critical for correct schemas like Optional[Literal["asc","desc"]])
+    # typing.Literal[...] support.
+    #
+    # Contract policy: keep schemas permissive.
+    # Some MCP clients treat the JSON Schema as a hard validator and will block
+    # requests that contain values outside of an enum/anyOf. Since the server
+    # does not enforce JSON Schema at runtime, we intentionally avoid emitting
+    # tight enums for Literal types and instead describe only the primitive
+    # JSON type when it is unambiguous.
     if origin is typing.Literal:
         vals = get_args(annotation)
         if not vals:
             return {}
-
-        json_vals = [_jsonable(v) for v in vals]
 
         # Determine whether literals are all the same JSON primitive type.
         # Note: bool is a subclass of int in Python, so treat it explicitly.
@@ -765,41 +770,33 @@ def _annotation_to_schema(annotation: Any) -> dict[str, Any]:
 
         type_set = {_json_primitive_type(v) for v in vals}
 
-        schema: dict[str, Any] = {"enum": json_vals}
-
-        # If all literal values are the same primitive type, emit an explicit JSON Schema type.
+        # If all literal values are the same primitive type, emit only that type.
+        # Otherwise, fall back to an open schema.
         if len(type_set) == 1:
             only = next(iter(type_set))
             if only is not None:
-                schema["type"] = only
+                return {"type": only}
 
-        return schema
+        return {}
 
+    # Containers: keep element/value schemas permissive to avoid clients
+    # rejecting valid tool calls due to nested shape mismatches.
     if origin in {list, Sequence}:
-        args = get_args(annotation)
-        items = _annotation_to_schema(args[0]) if args else {}
-        return {"type": "array", "items": items}
+        return {"type": "array", "items": {}}
     if origin in {dict, Mapping}:
-        args = get_args(annotation)
-        value_schema = _annotation_to_schema(args[1]) if len(args) > 1 else {}
-        return {"type": "object", "additionalProperties": value_schema}
+        return {"type": "object", "additionalProperties": True}
     if origin is tuple:
-        args = get_args(annotation)
-        if args and args[-1] is ...:
-            return {"type": "array", "items": _annotation_to_schema(args[0])}
-        return {
-            "type": "array",
-            "prefixItems": [_annotation_to_schema(arg) for arg in args],
-        }
+        return {"type": "array", "items": {}}
     if origin is set:
-        args = get_args(annotation)
-        items = _annotation_to_schema(args[0]) if args else {}
-        return {"type": "array", "items": items, "uniqueItems": True}
+        # Preserve uniqueness hint without constraining item shapes.
+        return {"type": "array", "items": {}, "uniqueItems": True}
     if origin is type(None):
         return {"type": "null"}
+    # Union types: avoid anyOf, which some client validators treat as strict.
+    # Returning an open schema prevents client-side rejection while the server
+    # continues to accept and forward the raw JSON values.
     if origin is __import__("typing").Union or origin is getattr(types, "UnionType", None):
-        args = get_args(annotation)
-        return {"anyOf": [_annotation_to_schema(arg) for arg in args]}
+        return {}
 
     return {}
 

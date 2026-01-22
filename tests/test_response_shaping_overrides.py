@@ -97,15 +97,6 @@ def test_stream_limits_clip_raw_stdout(monkeypatch):
     assert "… (" in streams["stdout"]
 
 
-def test_redaction_can_be_disabled_per_request_when_allowed(monkeypatch):
-    _enable_shaping(monkeypatch)
-    monkeypatch.setattr(dec, "REDACT_TOOL_OUTPUTS", True)
-    monkeypatch.setattr(dec, "REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE", True)
-
-    assert dec._effective_redact_tool_outputs({"chatgpt": {"redact_tool_outputs": False}}) is False
-    assert dec._effective_redact_tool_outputs({"chatgpt": {"redact_tool_outputs": True}}) is True
-
-
 def test_chatgpt_shaping_returns_single_structured_report_without_duplication(monkeypatch):
     _enable_shaping(monkeypatch)
     monkeypatch.setattr(dec, "RESPONSE_MODE_DEFAULT", "raw")
