@@ -36,6 +36,7 @@ from github_mcp.workspace_tools import rg as _rg
 from github_mcp.workspace_tools import suites as _suites
 from github_mcp.workspace_tools import venv as _venv
 from github_mcp.workspace_tools import workflows as _workflows
+from github_mcp.workspace_tools import task_workflows as _task_workflows
 
 LOGGER = BASE_LOGGER.getChild("tools_workspace")
 
@@ -158,6 +159,11 @@ commit_and_open_pr_from_workspace = _pr.commit_and_open_pr_from_workspace
 workspace_apply_ops_and_open_pr = _workflows.workspace_apply_ops_and_open_pr
 workspace_manage_folders_and_open_pr = _workflows.workspace_manage_folders_and_open_pr
 
+# Task lifecycle workflows.
+workspace_task_plan = _task_workflows.workspace_task_plan
+workspace_task_apply_edits = _task_workflows.workspace_task_apply_edits
+workspace_task_execute = _task_workflows.workspace_task_execute
+
 # Read-only "what changed" aggregator.
 workspace_change_report = _workflows.workspace_change_report
 
@@ -247,6 +253,9 @@ __all__ = [
     "commit_and_open_pr_from_workspace",
     "workspace_apply_ops_and_open_pr",
     "workspace_manage_folders_and_open_pr",
+    "workspace_task_plan",
+    "workspace_task_apply_edits",
+    "workspace_task_execute",
     "workspace_change_report",
     "workspace_read_files_in_sections",
     "workspace_batch",
