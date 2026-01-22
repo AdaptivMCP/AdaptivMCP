@@ -26,11 +26,9 @@ def test_response_mode_override_enables_chatgpt_shaping(monkeypatch):
     assert shaped.get("status") in {"success", "ok"}
     assert shaped.get("ok") is True
 
-    report = shaped.get("report")
-    assert isinstance(report, dict)
-    assert isinstance(report.get("summary"), str) and report.get("summary")
+    assert isinstance(shaped.get("summary"), str) and shaped.get("summary")
 
-    streams = report.get("streams")
+    streams = shaped.get("streams")
     assert isinstance(streams, dict)
     assert streams.get("stdout") == "hi\n"
 
@@ -60,10 +58,7 @@ def test_shaped_payload_does_not_echo_large_lists(monkeypatch):
     )
 
     assert "items" not in shaped
-    report = shaped.get("report")
-    assert isinstance(report, dict)
-    assert "items" not in report
-    snap = report.get("snapshot")
+    snap = shaped.get("data")
     assert isinstance(snap, dict)
     assert snap.get("type") == "dict"
 
@@ -93,9 +88,7 @@ def test_stream_limits_clip_raw_stdout(monkeypatch):
         },
     )
 
-    report = shaped.get("report")
-    assert isinstance(report, dict)
-    streams = report.get("streams")
+    streams = shaped.get("streams")
     assert isinstance(streams, dict)
     assert streams.get("stdout_truncated") is True
     assert streams.get("stdout_total_lines") == 5
@@ -125,16 +118,13 @@ def test_chatgpt_shaping_returns_single_structured_report_without_duplication(mo
 
     shaped = _chatgpt_friendly_result(payload, req={"response_mode": "chatgpt"})
     assert isinstance(shaped, dict)
-    assert set(shaped.keys()).issuperset({"status", "ok", "report"})
+    assert set(shaped.keys()).issuperset({"status", "ok", "summary", "data"})
 
     # The top-level should be minimal (no nested envelopes or secondary summary strings).
     assert "result" not in shaped
-    assert "summary" not in shaped
     assert "summary_text" not in shaped
     assert "stdout" not in shaped
     assert "stderr" not in shaped
 
-    report = shaped.get("report")
-    assert isinstance(report, dict)
-    assert isinstance(report.get("summary"), str) and report.get("summary")
-    assert isinstance(report.get("snapshot"), dict)
+    assert isinstance(shaped.get("summary"), str) and shaped.get("summary")
+    assert isinstance(shaped.get("data"), dict)

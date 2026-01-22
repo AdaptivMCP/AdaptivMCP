@@ -1180,6 +1180,72 @@ def _llm_dev_report(
     return out
 
 
+def _llm_scan_friendly_payload(
+    *,
+    tool_name: str | None,
+    shaped_payload: Mapping[str, Any],
+    all_args: Mapping[str, Any] | None,
+    req: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Return a flat, LLM-scan-friendly response payload.
+
+    Design goals:
+    - single top-level mapping with predictable keys
+    - no duplicated nested envelopes (e.g. result + stdout/stderr copies)
+    - streams and errors are always in a consistent location
+    - data is compact (snapshot) and does not echo large lists
+    """
+
+    report = _llm_dev_report(
+        tool_name=tool_name,
+        shaped_payload=shaped_payload,
+        all_args=all_args,
+        req=req,
+    )
+
+    out: dict[str, Any] = {
+        "tool": tool_name,
+        "status": shaped_payload.get("status"),
+        "ok": shaped_payload.get("ok"),
+        "summary": report.get("summary"),
+        # Compact representation of the underlying tool result.
+        "data": report.get("snapshot"),
+    }
+
+    # Optional structured fields.
+    for k in ("warnings", "error", "streams", "highlights", "inputs", "gating"):
+        val = report.get(k)
+        if val not in (None, "") and not (isinstance(val, list) and not val):
+            out[k] = val
+
+    # Provider metadata + write gating metadata (when present).
+    tool_meta = shaped_payload.get("tool_metadata")
+    if isinstance(tool_meta, Mapping):
+        # Preserve the canonical tool metadata for backward compatibility.
+        out["tool_metadata"] = dict(tool_meta)
+        out.setdefault("gating", {})
+        if isinstance(out.get("gating"), Mapping):
+            out["gating"] = {
+                "base_write_action": tool_meta.get("base_write_action"),
+                "effective_write_action": tool_meta.get("effective_write_action"),
+                "annotations": tool_meta.get("annotations"),
+            }
+
+    adaptiv_meta = shaped_payload.get("adaptiv_mcp")
+    if isinstance(adaptiv_meta, Mapping):
+        # Preserve provider metadata for backward compatibility.
+        out["adaptiv_mcp"] = dict(adaptiv_meta)
+        out["provider"] = {
+            "name": adaptiv_meta.get("provider"),
+            "server": adaptiv_meta.get("server"),
+            "connected": adaptiv_meta.get("connected"),
+        }
+
+    # Never echo the raw nested result envelope at the top level.
+    out.pop("result", None)
+    return out
+
+
 def _truncate_text(value: Any, *, limit: int = 180) -> str:
     def scalar(v: Any) -> str:
         if v is None:
@@ -2080,22 +2146,12 @@ def _chatgpt_friendly_result(
                 "result": result,
             }
             base_payload = _inject_adaptiv_mcp_metadata(base_payload)
-            report = _llm_dev_report(
+            return _llm_scan_friendly_payload(
                 tool_name=tool_name,
                 shaped_payload=base_payload,
                 all_args=all_args,
                 req=req,
             )
-            minimal: dict[str, Any] = {
-                "status": base_payload.get("status"),
-                "ok": base_payload.get("ok"),
-                "report": report,
-            }
-            # Preserve metadata fields if present.
-            for k in ("tool_metadata", "adaptiv_mcp"):
-                if k in base_payload:
-                    minimal[k] = base_payload[k]
-            return minimal
 
         out: dict[str, Any] = _inject_adaptiv_mcp_metadata(result)
 
@@ -2117,26 +2173,12 @@ def _chatgpt_friendly_result(
         elif status_str in {"error", "failed", "failure"}:
             out["status"] = "error"
 
-        # Build a single structured report and return a minimal payload.
-        report = _llm_dev_report(
+        return _llm_scan_friendly_payload(
             tool_name=tool_name,
             shaped_payload=out,
             all_args=all_args,
             req=req,
         )
-
-        minimal: dict[str, Any] = {
-            "status": out.get("status"),
-            "ok": out.get("ok"),
-            "report": report,
-        }
-
-        # Preserve provider metadata + write-gating metadata.
-        for k in ("tool_metadata", "adaptiv_mcp"):
-            if k in out:
-                minimal[k] = out[k]
-
-        return minimal
     except Exception as exc:
         # Best-effort: never break tool behavior if the shaper fails.
         # However, failures here are otherwise invisible and can look like

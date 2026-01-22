@@ -25,9 +25,7 @@ def test_chatgpt_friendly_result_surfaces_stdout_and_stderr(monkeypatch):
     shaped = _chatgpt_friendly_result(payload, req={"headers": {}})
     assert isinstance(shaped, dict)
 
-    report = shaped.get("report")
-    assert isinstance(report, dict)
-    streams = report.get("streams")
+    streams = shaped.get("streams")
     assert isinstance(streams, dict)
 
     # Streams live under report.streams to avoid duplicating payload fields.
