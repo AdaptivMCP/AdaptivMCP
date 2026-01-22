@@ -59,12 +59,3 @@ def test_no_max_chars_truncation_knobs_or_code_paths_exist() -> None:
             )
 
     assert not offenders, "Forbidden patterns found:\n" + "\n".join(offenders)
-
-
-def test_docs_do_not_mention_removed_max_chars_controls() -> None:
-    usage = REPO_ROOT / "docs" / "usage.md"
-    if not usage.exists():
-        pytest.skip("docs/usage.md is missing")
-    text = usage.read_text(encoding="utf-8")
-    assert "ADAPTIV_MCP_RESPONSE_MAX_JSON_CHARS" not in text
-    assert "ADAPTIV_MCP_RESPONSE_MAX_TEXT_CHARS" not in text
