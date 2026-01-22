@@ -2518,7 +2518,6 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
 
 def _result_snapshot(result: Any) -> dict[str, Any]:
     """Produce a compact result summary for provider logs."""
-
     # Scalars
     if result is None:
         return {"type": "null"}
@@ -2567,9 +2566,50 @@ def _result_snapshot(result: Any) -> dict[str, Any]:
         inner = result.get("result")
         if isinstance(inner, Mapping) and inner.get("exit_code") is not None:
             out["exit_code"] = inner.get("exit_code")
+
+        # Add compact stdout/stderr preview (non-duplicative, best-effort)
+        try:
+            # Inner payload often contains the streams (or they may be top-level).
+            inner_payload = inner if isinstance(inner, Mapping) else result
+            stdout = inner_payload.get("stdout") if isinstance(inner_payload, Mapping) else None
+            stderr = inner_payload.get("stderr") if isinstance(inner_payload, Mapping) else None
+
+            # Preview limits: 10k lines, no char limit (0 => no char truncation)
+            _PREVIEW_MAX_LINES = 10_000
+            _PREVIEW_MAX_CHARS = 0
+
+            if isinstance(stdout, str) and stdout:
+                stdout_lines = stdout.splitlines()
+                preview = _clip_text(
+                    stdout,
+                    max_lines=_PREVIEW_MAX_LINES,
+                    max_chars=_PREVIEW_MAX_CHARS,
+                    enabled=False,
+                )
+                out["stdout_preview"] = preview
+                out["stdout_lines"] = len(stdout_lines)
+                out["stdout_truncated"] = len(stdout_lines) > _PREVIEW_MAX_LINES
+
+            if isinstance(stderr, str) and stderr:
+                stderr_lines = stderr.splitlines()
+                preview = _clip_text(
+                    stderr,
+                    max_lines=_PREVIEW_MAX_LINES,
+                    max_chars=_PREVIEW_MAX_CHARS,
+                    enabled=False,
+                )
+                out["stderr_preview"] = preview
+                out["stderr_lines"] = len(stderr_lines)
+                out["stderr_truncated"] = len(stderr_lines) > _PREVIEW_MAX_LINES
+        except Exception:
+            # Best-effort only; snapshot must not raise.
+            pass
+
         return out
 
     return {"type": type(result).__name__, "value": _truncate_text(result, limit=180)}
+
+
 
 
 def _tool_paragraph_summary(
