@@ -894,14 +894,29 @@ async def _invoke_tool(
         max_attempts=max_attempts,
     )
 
-    # LLM-safe mode: keep the payload as-is but avoid non-2xx status codes that
-    # can cause the agent runtime to abort.
-    if status_code >= 400 and _is_openai_client(request):
+    return _llm_safe_json_response(request, payload, status_code, headers=headers)
+
+
+def _llm_safe_json_response(
+    request: Request,
+    payload: Any,
+    status_code: int,
+    *,
+    headers: dict[str, str] | None = None,
+) -> Response:
+    """Return JSON responses in an LLM-safe way for OpenAI clients.
+
+    The OpenAI agent runtime can abort tool usage on non-2xx responses.
+    When we detect an OpenAI client, we keep the payload intact but convert
+    HTTP errors into 200s and preserve the original status code in a header.
+    """
+
+    if int(status_code) >= 400 and _is_openai_client(request):
         safe_headers = dict(headers or {})
         safe_headers.setdefault("X-Tool-Original-Status", str(int(status_code)))
         return JSONResponse(payload, status_code=200, headers=safe_headers)
 
-    return JSONResponse(payload, status_code=status_code, headers=headers)
+    return JSONResponse(payload, status_code=int(status_code), headers=headers)
 
 
 def build_tool_registry_endpoint() -> Callable[[Request], Response]:
@@ -959,7 +974,12 @@ def build_tool_detail_endpoint() -> Callable[[Request], Response]:
         catalog = _tool_catalog(include_parameters=True, compact=None)
         tools = [t for t in catalog.get("tools", []) if t.get("name") == tool_name]
         if not tools:
-            return JSONResponse({"error": f"Unknown tool {tool_name!r}."}, status_code=404)
+            return _llm_safe_json_response(
+                request,
+                {"error": f"Unknown tool {tool_name!r}."},
+                404,
+                headers={},
+            )
         return JSONResponse(tools[0])
 
     return _endpoint
@@ -1024,7 +1044,7 @@ def build_tool_invocation_status_endpoint() -> Callable[[Request], Response]:
             return JSONResponse({"error": "invocation_id is required"}, status_code=400)
         invocation = await _get_invocation(str(invocation_id))
         if invocation is None:
-            return JSONResponse({"error": "Unknown invocation id"}, status_code=404)
+            return _llm_safe_json_response(request, {"error": "Unknown invocation id"}, 404, headers={})
         return JSONResponse(_invocation_payload(invocation))
 
     return _endpoint
@@ -1037,7 +1057,7 @@ def build_tool_invocation_cancel_endpoint() -> Callable[[Request], Response]:
             return JSONResponse({"error": "invocation_id is required"}, status_code=400)
         invocation = await _get_invocation(str(invocation_id))
         if invocation is None:
-            return JSONResponse({"error": "Unknown invocation id"}, status_code=404)
+            return _llm_safe_json_response(request, {"error": "Unknown invocation id"}, 404, headers={})
         await _cancel_invocation(invocation)
         return JSONResponse(_invocation_payload(invocation))
 
