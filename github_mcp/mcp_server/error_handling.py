@@ -32,6 +32,7 @@ else:
 from github_mcp.exceptions import (
     APIError,
     GitHubAuthError,
+    GitHubAPIError,
     GitHubRateLimitError,
     RenderAuthError,
     UsageError,
@@ -227,6 +228,8 @@ def _structured_tool_error(
         if isinstance(exc.response_payload, dict) and exc.response_payload:
             details.setdefault("upstream_payload", exc.response_payload)
 
+        if exc.status_code in (400, 422):
+            category = "validation"
         if exc.status_code == 401:
             category = "auth"
         elif exc.status_code == 403:
@@ -241,6 +244,40 @@ def _structured_tool_error(
         elif isinstance(exc.status_code, int) and exc.status_code >= 500:
             category = "upstream"
             retryable = True
+
+    # 3b) GitHubAPIError is frequently used for local workspace operations and
+    # patch application failures. Those errors are not necessarily "internal";
+    # infer categories from common message patterns when the exception did not
+    # carry an explicit category.
+    if isinstance(exc, GitHubAPIError) and category == "internal":
+        lowered = (message or "").lower()
+
+        # Patch/diff parsing & formatting errors.
+        if (
+            "malformed patch" in lowered
+            or "patch missing" in lowered
+            or "unexpected patch content" in lowered
+            or "invalid" in lowered and "patch" in lowered
+            or "received empty patch" in lowered
+            or "unsupported patch action" in lowered
+        ):
+            category = "validation"
+            code = code or "PATCH_MALFORMED"
+
+        # Path validation errors.
+        elif lowered.startswith("path must") or "path must" in lowered:
+            category = "validation"
+            code = code or "PATH_INVALID"
+
+        # Missing files referenced by patches.
+        elif "file does not exist" in lowered or "no such file" in lowered:
+            category = "not_found"
+            code = code or "FILE_NOT_FOUND"
+
+        # Patch hunks not applying cleanly.
+        elif "does not apply" in lowered or "patch does not apply" in lowered:
+            category = "conflict"
+            code = code or "PATCH_DOES_NOT_APPLY"
 
     # 4) UsageError is a user-facing error by default.
     if isinstance(exc, UsageError) and category == "internal":

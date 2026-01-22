@@ -1124,7 +1124,11 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     """
 
     if not patch or not patch.strip():
-        raise GitHubAPIError("Received empty patch to apply in workspace")
+        exc = GitHubAPIError("Received empty patch to apply in workspace")
+        exc.category = "validation"
+        exc.code = "PATCH_EMPTY"
+        exc.origin = "workspace_patch"
+        raise exc
 
     if patch.lstrip().startswith("*** Begin Patch"):
         _apply_tool_patch(repo_dir, patch)
@@ -1156,6 +1160,16 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
             stderr = apply_result.get("stderr", "") or apply_result.get("stdout", "")
             lowered = (stderr or "").lower()
             hint = ""
+            category = "conflict"
+            code = "PATCH_APPLY_FAILED"
+
+            # Heuristics to improve categorization for LLM + dev tooling.
+            if "only garbage" in lowered or "corrupt patch" in lowered or "malformed" in lowered:
+                category = "validation"
+                code = "PATCH_MALFORMED"
+            elif "does not exist" in lowered or "no such file" in lowered:
+                category = "not_found"
+                code = "FILE_NOT_FOUND"
             if (
                 "only garbage" in lowered
                 and "@@" in patch
@@ -1167,6 +1181,9 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
                     "or use the MCP tool patch format ('*** Begin Patch')."
                 )
             exc = GitHubAPIError(f"git apply failed while preparing workspace: {stderr}")
+            exc.category = category
+            exc.code = code
+            exc.origin = "workspace_patch"
             if hint:
                 # Keep hints separate from the main error message so clients can
                 # render them without triggering repetition/looping behavior.

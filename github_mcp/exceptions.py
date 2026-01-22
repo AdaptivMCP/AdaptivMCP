@@ -71,6 +71,33 @@ class UsageError(Exception):
     pass
 
 
+class ToolOperationError(Exception):
+    """Raised when a tool fails during execution (not a user input validation error).
+
+    This error type supports structured fields consumed by `_structured_tool_error`
+    for consistent categorization and developer-facing diagnostics.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: str = "internal",
+        code: str | None = None,
+        details: dict[str, Any] | None = None,
+        hint: str | None = None,
+        origin: str | None = None,
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.category = category
+        self.code = code
+        self.details = details or {}
+        self.hint = hint
+        self.origin = origin
+        self.retryable = bool(retryable)
+
+
 __all__ = [
     "APIError",
     "GitHubAPIError",
@@ -82,4 +109,5 @@ __all__ = [
     "WriteApprovalRequiredError",
     "ToolPreflightValidationError",
     "UsageError",
+    "ToolOperationError",
 ]
