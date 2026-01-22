@@ -189,6 +189,17 @@ def _infer_error_category(code: str, category: str, message: str) -> str:
 def _looks_like_error_detail(result: dict[str, Any]) -> bool:
     """Return True when the mapping is itself an error_detail payload."""
 
+    # If the payload already looks like an envelope, do not treat it as a bare
+    # detail dict. Otherwise we can end up "double wrapping" like:
+    #   {status, ok, category, error} -> {error_detail: {status, ok, ...}}
+    if "error_detail" in result:
+        return False
+    if isinstance(result.get("ok"), bool):
+        return False
+    status = result.get("status")
+    if isinstance(status, str) and status.strip().lower() in {"ok", "error", "success", "failed", "running"}:
+        return False
+
     has_cat = isinstance(result.get("category"), str) and str(result.get("category")).strip()
     has_code = isinstance(result.get("code"), str) and str(result.get("code")).strip()
     has_msg = any(
@@ -207,6 +218,41 @@ def _normalize_structured_error_payload(result: dict[str, Any], err_detail: dict
 
     HTTP callers rely on stable fields, so we normalize here.
     """
+
+    # If the tool returned an envelope without error_detail, synthesize one
+    # rather than nesting the whole envelope.
+    if (
+        "error_detail" not in result
+        and (
+            (isinstance(result.get("status"), str) and str(result.get("status")).strip().lower() == "error")
+            or (result.get("ok") is False)
+        )
+    ):
+        msg = _coerce_error_message(result) or _coerce_error_message(err_detail) or "Tool failed."
+        detail: dict[str, Any] = {}
+        if isinstance(result.get("category"), str) and str(result.get("category")).strip():
+            detail["category"] = str(result.get("category")).strip()
+        if isinstance(result.get("code"), str) and str(result.get("code")).strip():
+            detail["code"] = str(result.get("code")).strip()
+        if msg:
+            detail["message"] = msg
+        hint = result.get("hint")
+        if isinstance(hint, str) and hint.strip():
+            detail["hint"] = hint.strip()
+        details = result.get("details")
+        if isinstance(details, dict):
+            detail["details"] = details
+
+        out = dict(result)
+        out["status"] = "error"
+        out["ok"] = False
+        out["error"] = msg
+        out["error_detail"] = detail
+        if "category" in detail:
+            out.setdefault("category", detail.get("category"))
+        if "code" in detail:
+            out.setdefault("code", detail.get("code"))
+        return out
 
     # If the tool returned a bare detail dict, wrap it.
     if _looks_like_error_detail(result) and "error_detail" not in result:
