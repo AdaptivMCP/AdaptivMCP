@@ -9,6 +9,7 @@ from typing import Any
 from github_mcp.server import _structured_tool_error, mcp_tool
 
 from ._shared import _filter_kwargs_for_callable, _safe_branch_slug, _tw
+from .fs import _normalize_workspace_operations
 
 _HUNK_RE = re.compile(r"^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@")
 
@@ -167,6 +168,7 @@ async def workspace_apply_ops_and_open_pr(
             operations = []
         if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
             raise TypeError("operations must be a list of dicts")
+        operations = _normalize_workspace_operations(operations)
         if not operations:
             raise ValueError("operations must contain at least one operation")
 
@@ -442,9 +444,31 @@ async def workspace_manage_folders_and_open_pr(
         if not isinstance(delete_paths, list) or any(not isinstance(p, str) for p in delete_paths):
             raise TypeError("delete_paths must be a list of strings")
 
+        def _clean_paths(values: list[str]) -> list[str]:
+            seen: set[str] = set()
+            out: list[str] = []
+            for raw in values:
+                if not isinstance(raw, str):
+                    continue
+                p = raw.strip()
+                if not p:
+                    continue
+                if p in seen:
+                    continue
+                seen.add(p)
+                out.append(p)
+            return out
+
+        create_paths = _clean_paths(create_paths)
+        delete_paths = _clean_paths(delete_paths)
+
+        conflict = set(create_paths).intersection(delete_paths)
+        if conflict:
+            raise ValueError(
+                f"Paths cannot be both created and deleted in one call: {sorted(conflict)}"
+            )
+
         for path in create_paths:
-            if not path.strip():
-                raise ValueError("create_paths must contain non-empty strings")
             op: dict[str, Any] = {"op": "mkdir", "path": path}
             extra = dict(mkdir_args or {})
             extra.pop("op", None)
@@ -453,8 +477,6 @@ async def workspace_manage_folders_and_open_pr(
             operations.append(op)
 
         for path in delete_paths:
-            if not path.strip():
-                raise ValueError("delete_paths must contain non-empty strings")
             op = {
                 "op": "rmdir",
                 "path": path,

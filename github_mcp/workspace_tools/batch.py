@@ -24,7 +24,12 @@ from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import _filter_kwargs_for_callable, _tw
 from .commit import commit_workspace, commit_workspace_files, get_workspace_changes_summary
-from .fs import apply_workspace_operations, delete_workspace_paths, move_workspace_paths
+from .fs import (
+    _normalize_workspace_operations,
+    apply_workspace_operations,
+    delete_workspace_paths,
+    move_workspace_paths,
+)
 from .git_ops import workspace_create_branch, workspace_git_diff
 from .suites import run_tests
 
@@ -203,6 +208,16 @@ async def workspace_batch(
 
             steps: dict[str, Any] = {}
 
+            # Convenience mapping: allow top-level plan.operations / plan.ops as
+            # shorthand for apply_ops.operations.
+            if not isinstance(plan.get("apply_ops"), dict):
+                raw_ops = plan.get("operations")
+                if raw_ops is None:
+                    raw_ops = plan.get("ops")
+                if isinstance(raw_ops, list):
+                    plan = dict(plan)
+                    plan["apply_ops"] = {"operations": raw_ops}
+
             if create_if_missing:
                 exists = await _remote_branch_exists(full_name, base_ref=base_ref, branch=ref)
                 steps["branch_exists"] = {"ref": ref, "exists": exists}
@@ -227,15 +242,23 @@ async def workspace_batch(
                 ao = plan["apply_ops"]
                 operations = ao.get("operations")
                 if operations is None:
+                    operations = ao.get("ops")
+                if operations is None:
                     raise ValueError("apply_ops.operations is required when apply_ops is provided")
+                if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
+                    raise TypeError("apply_ops.operations must be a list of dicts")
+                operations = _normalize_workspace_operations(operations)
                 extra = dict(ao)
                 for k in ("full_name", "ref"):
                     extra.pop(k, None)
+                # Ensure normalized operations are not overwritten by raw inputs.
+                extra.pop("operations", None)
+                extra.pop("ops", None)
                 extra.setdefault("fail_fast", True)
                 extra.setdefault("rollback_on_error", True)
                 extra.setdefault("preview_only", _as_bool(ao.get("preview_only"), False))
                 extra.setdefault("create_parents", True)
-                call = {"full_name": full_name, "ref": ref, **extra}
+                call = {"full_name": full_name, "ref": ref, "operations": operations, **extra}
                 steps["apply_ops"] = await apply_workspace_operations(
                     **_filter_kwargs_for_callable(apply_workspace_operations, call)
                 )

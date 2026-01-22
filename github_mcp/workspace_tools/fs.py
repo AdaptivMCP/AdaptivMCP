@@ -32,6 +32,82 @@ _DEFAULT_MAX_READ_BYTES = 2_000_000
 _DEFAULT_MAX_READ_CHARS = 300_000
 
 
+# ---------------------------------------------------------------------------
+# Workspace operation normalization
+# ---------------------------------------------------------------------------
+
+# Common aliases accepted by apply_workspace_operations and workflow helpers.
+_WORKSPACE_OPERATION_ALIASES: dict[str, str] = {
+    # Deletes.
+    "rm": "delete",
+    "del": "delete",
+    # Moves.
+    "mv": "move",
+    # Patches.
+    "patch": "apply_patch",
+    # Reads.
+    "read": "read_sections",
+    "read_section": "read_sections",
+    # mkdir variants.
+    "mkdirp": "mkdir",
+    "mkdir-p": "mkdir",
+    "mkdir_parents": "mkdir",
+}
+
+_WORKSPACE_READ_ONLY_OPS: set[str] = {"read_sections"}
+
+
+def _normalize_workspace_operation(op: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize a workspace operation to the canonical schema.
+
+    Supported conveniences:
+      - `operation` as a synonym for `op`
+      - common aliases (rm/mv/patch/read/mkdirp)
+      - mkdirp-style aliases default to parents=True
+    """
+
+    if not isinstance(op, Mapping):
+        raise TypeError("operation must be a mapping")
+
+    raw = op.get("op")
+    if raw is None:
+        raw = op.get("operation")
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError("op must be a non-empty string")
+
+    original = raw.strip()
+    lower = original.lower()
+    canonical = _WORKSPACE_OPERATION_ALIASES.get(lower, original)
+    canonical = canonical.strip() if isinstance(canonical, str) else original
+
+    out = dict(op)
+    out.pop("operation", None)
+    out["op"] = canonical
+
+    if lower in {"mkdirp", "mkdir-p", "mkdir_parents"}:
+        out.setdefault("parents", True)
+
+    return out
+
+
+def _normalize_workspace_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize a list of workspace operations (best-effort).
+
+    This helper is used by workflows/batch orchestration to make sure operation
+    names are canonical before gating, logging, and downstream validation.
+    """
+
+    if not isinstance(operations, list):
+        raise TypeError("operations must be a list")
+
+    out: list[dict[str, Any]] = []
+    for op in operations:
+        if not isinstance(op, dict):
+            raise TypeError("operations must be a list of dicts")
+        out.append(_normalize_workspace_operation(op))
+    return out
+
+
 def _maybe_diff_for_log(
     *,
     path: str,
@@ -3041,12 +3117,16 @@ def _apply_workspace_operations_write_action_resolver(args: dict[str, Any] | Non
     for op in operations:
         if not isinstance(op, dict):
             return True
-        name = op.get("op")
-        if not isinstance(name, str):
+        try:
+            norm = _normalize_workspace_operation(op)
+        except Exception:
             return True
-        op_names.append(name)
+        name = norm.get("op")
+        if not isinstance(name, str) or not name.strip():
+            return True
+        op_names.append(name.strip())
 
-    if op_names and all(name == "read_sections" for name in op_names):
+    if op_names and all(name in _WORKSPACE_READ_ONLY_OPS for name in op_names):
         return False
 
     return True
@@ -3088,6 +3168,8 @@ async def apply_workspace_operations(
         operations = []
     if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
         raise TypeError("operations must be a list of dicts")
+    # Canonicalize op names (aliases, `operation` key) before validation/execution.
+    operations = _normalize_workspace_operations(operations)
     if not operations and not preview_only:
         raise ValueError("operations must contain at least one item")
 
