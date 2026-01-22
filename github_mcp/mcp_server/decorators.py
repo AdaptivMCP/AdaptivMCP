@@ -3115,6 +3115,105 @@ def _log_tool_failure(
     # NOTE: we intentionally emit a single provider log line per failure.
 
 
+def _log_tool_cancelled(
+    *,
+    tool_name: str,
+    call_id: str,
+    base_write_action: bool,
+    effective_write_action: bool,
+    req: Mapping[str, Any],
+    schema_hash: str | None,
+    schema_present: bool,
+    duration_ms: float,
+    exc: BaseException,
+    all_args: Mapping[str, Any],
+) -> None:
+    """Log tool cancellations explicitly.
+
+    Cancellation is a control-flow signal (user cancel, upstream disconnect,
+    server shutdown). It should not be logged as a failure, but it is important
+    operationally because it can present as a hang from the caller's
+    perspective.
+    """
+
+    if not LOG_TOOL_CALLS:
+        return
+
+    shaped_payload: dict[str, Any] = {
+        "status": "cancelled",
+        "ok": False,
+        "error": "cancelled",
+        "error_detail": {
+            "message": "Tool execution cancelled",
+            "category": "cancelled",
+            "code": "CANCELLED",
+        },
+        "gating": {
+            "base_write_action": bool(base_write_action),
+            "effective_write_action": bool(effective_write_action),
+        },
+    }
+
+    report = _llm_dev_report(
+        tool_name=tool_name,
+        shaped_payload=shaped_payload,
+        all_args=all_args,
+        req=req,
+    )
+
+    payload = _tool_log_payload(
+        tool_name=tool_name,
+        call_id=call_id,
+        base_write_action=base_write_action,
+        effective_write_action=effective_write_action,
+        req=req,
+        schema_hash=schema_hash,
+        schema_present=schema_present,
+        all_args=all_args,
+    )
+    payload.update(
+        {
+            "duration_ms": duration_ms,
+            "error_type": exc.__class__.__name__,
+            "report": report,
+        }
+    )
+
+    if HUMAN_LOGS:
+        friendly = _friendly_tool_name(tool_name)
+        bits = _friendly_arg_bits(all_args or {})
+        suffix = (" - " + " - ".join(bits)) if bits else ""
+        prefix = (
+            _ansi("CANCEL", ANSI_YELLOW)
+            + " "
+            + _ansi(friendly, ANSI_CYAN)
+            + _write_badge(bool(effective_write_action))
+        )
+        ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
+        msg = f"{prefix} {ms}{suffix}"
+        if LOG_TOOL_LOG_IDS:
+            msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
+        inline = payload.get("log_context")
+        if isinstance(inline, str) and inline:
+            msg = msg + " " + _ansi(inline, ANSI_DIM)
+        LOGGER.info(msg, extra={"event": "tool_call_cancelled", **payload})
+        return
+
+    kv_map: dict[str, Any] = {
+        "tool": tool_name,
+        "ms": f"{duration_ms:.2f}",
+    }
+    if LOG_TOOL_LOG_IDS:
+        kv_map["call_id"] = shorten_token(call_id)
+    line = _format_log_kv(kv_map)
+    prefix = _ansi("!", ANSI_YELLOW) + " " + _ansi(tool_name, ANSI_CYAN)
+    msg = f"{prefix} {line}"
+    inline = payload.get("log_context")
+    if isinstance(inline, str) and inline:
+        msg = msg + " " + _ansi(inline, ANSI_DIM)
+    LOGGER.info(msg, extra={"event": "tool_call_cancelled", **payload})
+
+
 def _emit_tool_error(
     tool_name: str,
     call_id: str,
@@ -3484,7 +3583,20 @@ def mcp_tool(
                 try:
                     if _should_enforce_write_gate(req):
                         _enforce_write_allowed(tool_name, write_action=effective_write_action)
-                except asyncio.CancelledError:
+                except asyncio.CancelledError as exc:
+                    duration_ms = (time.perf_counter() - start) * 1000
+                    _log_tool_cancelled(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        base_write_action=bool(write_action),
+                        effective_write_action=effective_write_action,
+                        req=req,
+                        schema_hash=schema_hash if schema_present else None,
+                        schema_present=schema_present,
+                        duration_ms=duration_ms,
+                        exc=exc,
+                        all_args=all_args,
+                    )
                     raise
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
@@ -3579,7 +3691,20 @@ def mcp_tool(
                             result = await func(*args, **clean_kwargs)
                     else:
                         result = await func(*args, **clean_kwargs)
-                except asyncio.CancelledError:
+                except asyncio.CancelledError as exc:
+                    duration_ms = (time.perf_counter() - start) * 1000
+                    _log_tool_cancelled(
+                        tool_name=tool_name,
+                        call_id=call_id,
+                        base_write_action=bool(write_action),
+                        effective_write_action=effective_write_action,
+                        req=req,
+                        schema_hash=schema_hash,
+                        schema_present=True,
+                        duration_ms=duration_ms,
+                        exc=exc,
+                        all_args=all_args,
+                    )
                     raise
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
@@ -3847,7 +3972,20 @@ def mcp_tool(
             try:
                 if _should_enforce_write_gate(req):
                     _enforce_write_allowed(tool_name, write_action=effective_write_action)
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as exc:
+                duration_ms = (time.perf_counter() - start) * 1000
+                _log_tool_cancelled(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    base_write_action=bool(write_action),
+                    effective_write_action=effective_write_action,
+                    req=req,
+                    schema_hash=schema_hash if schema_present else None,
+                    schema_present=schema_present,
+                    duration_ms=duration_ms,
+                    exc=exc,
+                    all_args=all_args,
+                )
                 raise
             except Exception as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
@@ -3936,7 +4074,20 @@ def mcp_tool(
                         result = func(*args, **clean_kwargs)
                 else:
                     result = func(*args, **clean_kwargs)
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as exc:
+                duration_ms = (time.perf_counter() - start) * 1000
+                _log_tool_cancelled(
+                    tool_name=tool_name,
+                    call_id=call_id,
+                    base_write_action=bool(write_action),
+                    effective_write_action=effective_write_action,
+                    req=req,
+                    schema_hash=schema_hash,
+                    schema_present=True,
+                    duration_ms=duration_ms,
+                    exc=exc,
+                    all_args=all_args,
+                )
                 raise
             except Exception as exc:
                 duration_ms = (time.perf_counter() - start) * 1000

@@ -505,8 +505,38 @@ def _status_code_for_error(error: dict[str, Any]) -> int:
         return 504
     if category == "upstream":
         return 502
+    if category == "cancelled":
+        # Mirrors common "client closed request" semantics.
+        return 499
 
     return 500
+
+
+def _log_http_tool_cancelled(
+    *,
+    tool_name: str,
+    invocation_id: str | None = None,
+    exc: BaseException | None = None,
+) -> None:
+    """Best-effort logging for tool cancellations.
+
+    Cancellations can be user-initiated or caused by upstream disconnects.
+    Logging them explicitly helps diagnose "hangs" that are actually cancelled
+    long-running tool calls.
+    """
+
+    try:
+        ERRORS_LOGGER.info(
+            "Tool invocation cancelled",
+            exc_info=exc,
+            extra={
+                "event": "tool_http_cancelled",
+                "tool": tool_name,
+                "invocation_id": invocation_id,
+            },
+        )
+    except Exception:
+        return
 
 
 def _response_headers_for_error(error: dict[str, Any]) -> dict[str, str]:
@@ -696,6 +726,9 @@ async def _execute_tool(
 
             payload = result if isinstance(result, dict) else result
             return payload, 200, {}
+        except asyncio.CancelledError as exc:
+            _log_http_tool_cancelled(tool_name=tool_name, invocation_id=None, exc=exc)
+            raise
         except Exception as exc:
             from github_mcp.mcp_server.error_handling import _structured_tool_error
 
@@ -773,7 +806,7 @@ def _invocation_payload(invocation: ToolInvocation) -> dict[str, Any]:
         "started_at": invocation.started_at,
         "finished_at": invocation.finished_at,
     }
-    if invocation.status in {"succeeded", "failed"}:
+    if invocation.status in {"succeeded", "failed", "cancelled"}:
         payload["result"] = invocation.result
         payload["status_code"] = invocation.status_code
         payload["headers"] = invocation.headers or {}
@@ -803,6 +836,18 @@ async def _create_invocation(
             invocation.finished_at = time.time()
             if fut.cancelled():
                 invocation.status = "cancelled"
+                invocation.status_code = 499
+                invocation.headers = {}
+                invocation.result = {
+                    "status": "cancelled",
+                    "ok": False,
+                    "error": "cancelled",
+                    "error_detail": {
+                        "message": "Tool execution cancelled",
+                        "category": "cancelled",
+                        "code": "CANCELLED",
+                    },
+                }
                 return
             try:
                 payload, status_code, headers = fut.result()
@@ -832,6 +877,7 @@ async def _cancel_invocation(invocation: ToolInvocation) -> None:
     if invocation.task.done():
         return
     invocation.status = "cancelling"
+    _log_http_tool_cancelled(tool_name=invocation.tool_name, invocation_id=invocation.invocation_id)
     invocation.task.cancel()
 
 

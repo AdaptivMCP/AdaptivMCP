@@ -81,4 +81,7 @@ def test_async_tool_invocation_cancelled(monkeypatch: Any) -> None:
     payload = _wait_for_status(client, invocation_id, "cancelled")
 
     assert payload["status"] == "cancelled"
+    assert payload["status_code"] == 499
+    assert isinstance(payload.get("result"), dict)
+    assert payload["result"]["status"] == "cancelled"
     assert cancelled.is_set()

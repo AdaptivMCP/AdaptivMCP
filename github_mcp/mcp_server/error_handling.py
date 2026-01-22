@@ -167,6 +167,32 @@ def _structured_tool_error(
 ) -> dict[str, Any]:
     message = str(exc) or exc.__class__.__name__
 
+    # Cancellation is not an error in the conventional sense; it is an execution
+    # control signal (user cancel, upstream disconnect, server shutdown). Treat
+    # it as a first-class outcome so callers and logs can distinguish it from
+    # failures.
+    if isinstance(exc, asyncio.CancelledError):
+        error_detail: dict[str, Any] = {
+            "message": "Tool execution cancelled",
+            "category": "cancelled",
+            "code": "CANCELLED",
+        }
+        if context:
+            error_detail["context"] = context
+        payload: dict[str, Any] = {
+            "status": "cancelled",
+            "ok": False,
+            "error": "cancelled",
+            "error_detail": error_detail,
+        }
+        if request is not None:
+            payload["request"] = request
+        if tool_surface is not None:
+            payload["tool_surface"] = tool_surface
+        if routing_hint is not None:
+            payload["routing_hint"] = routing_hint
+        return payload
+
     # Best-effort categorization for consistent HTTP status mapping.
     category = "internal"
     code: str | None = None
