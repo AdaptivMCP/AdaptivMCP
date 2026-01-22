@@ -7,7 +7,6 @@ from typing import Any
 
 from github_mcp import config
 from github_mcp.command_classification import infer_write_action_from_shell
-from github_mcp.exceptions import GitHubAPIError
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
@@ -16,14 +15,9 @@ from github_mcp.utils import _env_flag, _normalize_timeout_seconds
 
 from ._shared import (
     _cmd_invokes_git,
-    _should_install_requirements,
+    _maybe_install_dev_requirements,
     _tw,
-    _write_requirements_marker,
 )
-
-
-def _parse_branch_list(stdout: str) -> set[str]:
-    return {line.strip() for line in (stdout or "").splitlines() if line.strip()}
 
 
 def _terminal_command_write_action(args: dict[str, Any]) -> bool:
@@ -126,74 +120,6 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
             raise ValueError("workdir must point to a directory")
         return repo_real
     return candidate
-
-
-def _extract_missing_module(stdout: str, stderr: str) -> str:
-    """Best-effort extraction of a missing module name from Python tracebacks."""
-    combined = f"{stderr}\n{stdout}" if (stdout or stderr) else ""
-    # Common patterns:
-    # - "ModuleNotFoundError: No module named 'ruff'"
-    # - "No module named ruff" (some runtimes omit the exception type)
-    markers = [
-        "ModuleNotFoundError: No module named ",
-        "No module named ",
-    ]
-    pos = -1
-    marker = ""
-    for m in markers:
-        p = combined.find(m)
-        if p != -1:
-            pos = p
-            marker = m
-            break
-    if pos == -1:
-        return ""
-    tail = combined[pos + len(marker) :].strip()
-    if not tail:
-        return ""
-    if tail[:1] in ('"', "'"):
-        q = tail[0]
-        rest = tail[1:]
-        endq = rest.find(q)
-        return (rest[:endq] if endq != -1 else rest).strip()
-    return (tail.split()[0] if tail else "").strip()
-
-
-def _required_packages_for_command(command: str) -> list[str]:
-    """Best-effort mapping from a shell command to pip-installable packages.
-
-    This is intentionally conservative: it only covers common dev tools.
-    """
-
-    if not command:
-        return []
-
-    c = command.strip()
-    lower = c.lower()
-
-    # Common Python quality tools.
-    if lower.startswith("ruff ") or lower == "ruff" or "python -m ruff" in lower:
-        return ["ruff"]
-    if lower.startswith("mypy ") or lower == "mypy" or "python -m mypy" in lower:
-        return ["mypy"]
-    if (
-        lower.startswith("pytest")
-        or "python -m pytest" in lower
-        or lower.startswith("python -m pytest")
-    ):
-        return ["pytest"]
-    if lower.startswith("black ") or lower == "black":
-        return ["black"]
-    if lower.startswith("isort ") or lower == "isort":
-        return ["isort"]
-    if lower.startswith("flake8 ") or lower == "flake8":
-        return ["flake8"]
-    if lower.startswith("bandit ") or lower == "bandit":
-        return ["bandit"]
-    if lower.startswith("pip-audit") or "pip-audit" in lower:
-        return ["pip-audit"]
-
-    return []
 
 
 @mcp_tool(write_action=True)
@@ -366,37 +292,16 @@ async def terminal_command(
         # Execute the raw intended command (may contain newlines if provided via command_lines).
         command = requested_command
 
-        install_result = None
-        install_steps: list[dict[str, Any]] = []
-        if installing_dependencies and use_temp_venv:
-            req_path = os.path.join(repo_dir, "dev-requirements.txt")
-            venv_dir = os.path.join(repo_dir, ".venv-mcp")
-            if not os.path.isfile(req_path):
-                install_result = {"skipped": True, "reason": "dev-requirements.txt not found"}
-                install_steps.append({"command": None, "result": install_result})
-            elif not _should_install_requirements(venv_dir, req_path):
-                install_result = {"skipped": True, "reason": "dependencies already satisfied"}
-                install_steps.append({"command": None, "result": install_result})
-            else:
-                install_cmd = "python -m pip install -r dev-requirements.txt"
-                dep_timeout = _normalize_timeout_seconds(
-                    config.ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
-                    timeout_seconds,
-                )
-                install_result = await deps["run_shell"](
-                    install_cmd,
-                    cwd=cwd,
-                    timeout_seconds=dep_timeout,
-                    env=env,
-                )
-                install_steps.append({"command": install_cmd, "result": install_result})
-                if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
-                    i_stderr = install_result.get("stderr") or ""
-                    i_stdout = install_result.get("stdout") or ""
-                    raise GitHubAPIError(
-                        "Dependency installation failed: " + (i_stderr.strip() or i_stdout.strip())
-                    )
-                _write_requirements_marker(venv_dir, req_path)
+        install_result, install_steps = await _maybe_install_dev_requirements(
+            deps,
+            repo_dir=repo_dir,
+            # Always install from repo root so the requirements filename resolves.
+            cwd=repo_dir,
+            env=env,
+            timeout_seconds=timeout_seconds,
+            installing_dependencies=installing_dependencies,
+            use_temp_venv=use_temp_venv,
+        )
 
         result = await deps["run_shell"](
             command,
@@ -606,6 +511,8 @@ async def run_python(
             raise ValueError("args must be a list[str]")
 
     env: dict[str, str] | None = None
+    created_temp_file = False
+    created_rel_path: str | None = None
 
     try:
         deps = _tw()._workspace_deps()
@@ -620,43 +527,25 @@ async def run_python(
         if rel_path is None:
             rel_path = f".mcp_tmp/run_python_{uuid.uuid4().hex}.py"
 
+        created_temp_file = filename is None or not (isinstance(filename, str) and filename.strip())
+        created_rel_path = rel_path
+
         rel_path = _safe_repo_relative_path(repo_dir, rel_path)
         abs_path = os.path.realpath(os.path.join(repo_dir, rel_path))
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
         with open(abs_path, "w", encoding="utf-8") as handle:
             handle.write(script)
 
-        install_result = None
-        install_steps: list[dict[str, Any]] = []
-        if installing_dependencies and use_temp_venv:
-            req_path = os.path.join(repo_dir, "dev-requirements.txt")
-            venv_dir = os.path.join(repo_dir, ".venv-mcp")
-            if not os.path.isfile(req_path):
-                install_result = {"skipped": True, "reason": "dev-requirements.txt not found"}
-                install_steps.append({"command": None, "result": install_result})
-            elif not _should_install_requirements(venv_dir, req_path):
-                install_result = {"skipped": True, "reason": "dependencies already satisfied"}
-                install_steps.append({"command": None, "result": install_result})
-            else:
-                install_cmd = "python -m pip install -r dev-requirements.txt"
-                dep_timeout = _normalize_timeout_seconds(
-                    config.ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS,
-                    timeout_seconds,
-                )
-                install_result = await deps["run_shell"](
-                    install_cmd,
-                    cwd=cwd,
-                    timeout_seconds=dep_timeout,
-                    env=env,
-                )
-                install_steps.append({"command": install_cmd, "result": install_result})
-                if isinstance(install_result, dict) and install_result.get("exit_code", 0) != 0:
-                    i_stderr = install_result.get("stderr") or ""
-                    i_stdout = install_result.get("stdout") or ""
-                    raise GitHubAPIError(
-                        "Dependency installation failed: " + (i_stderr.strip() or i_stdout.strip())
-                    )
-                _write_requirements_marker(venv_dir, req_path)
+        install_result, install_steps = await _maybe_install_dev_requirements(
+            deps,
+            repo_dir=repo_dir,
+            # Always install from repo root so the requirements filename resolves.
+            cwd=repo_dir,
+            env=env,
+            timeout_seconds=timeout_seconds,
+            installing_dependencies=installing_dependencies,
+            use_temp_venv=use_temp_venv,
+        )
 
         cmd = "python " + shlex.quote(rel_path)
         if args:
@@ -690,14 +579,8 @@ async def run_python(
                 repo_dir = await deps["clone_repo"](
                     full_name, ref=effective_ref, preserve_changes=True
                 )
-                rel_path2 = (
-                    filename.strip() if isinstance(filename, str) and filename.strip() else None
-                )
-                if rel_path2 is None:
-                    # Only auto-cleanup when we created the file.
-                    pass
-                else:
-                    rel_path2 = _safe_repo_relative_path(repo_dir, rel_path2)
+                if created_temp_file and created_rel_path:
+                    rel_path2 = _safe_repo_relative_path(repo_dir, created_rel_path)
                     abs_path2 = os.path.realpath(os.path.join(repo_dir, rel_path2))
                     if os.path.isfile(abs_path2):
                         os.remove(abs_path2)
