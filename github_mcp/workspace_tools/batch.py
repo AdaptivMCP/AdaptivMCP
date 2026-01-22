@@ -245,7 +245,9 @@ async def workspace_batch(
                     operations = ao.get("ops")
                 if operations is None:
                     raise ValueError("apply_ops.operations is required when apply_ops is provided")
-                if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
+                if not isinstance(operations, list) or any(
+                    not isinstance(op, dict) for op in operations
+                ):
                     raise TypeError("apply_ops.operations must be a list of dicts")
                 operations = _normalize_workspace_operations(operations)
                 extra = dict(ao)

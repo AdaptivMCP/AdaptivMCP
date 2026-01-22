@@ -51,7 +51,9 @@ async def test_workspace_manage_folders_detects_conflicting_paths() -> None:
 
 
 @pytest.mark.anyio
-async def test_workspace_batch_maps_top_level_operations_to_apply_ops(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_batch_maps_top_level_operations_to_apply_ops(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import batch
 
     calls: list[dict[str, Any]] = []
@@ -109,4 +111,3 @@ async def test_workspace_batch_accepts_apply_ops_ops_alias(monkeypatch: pytest.M
     op_list = calls[0].get("operations")
     assert isinstance(op_list, list) and op_list
     assert op_list[0]["op"] == "move"  # mv alias normalized
-

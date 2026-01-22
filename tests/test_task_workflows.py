@@ -49,7 +49,11 @@ class _FakeTW:
 
     async def workspace_change_report(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "workspace_change_report", "kwargs": kwargs})
-        return {"status": "ok", "base_ref": kwargs.get("base_ref"), "head_ref": kwargs.get("head_ref")}
+        return {
+            "status": "ok",
+            "base_ref": kwargs.get("base_ref"),
+            "head_ref": kwargs.get("head_ref"),
+        }
 
     async def build_pr_summary(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "build_pr_summary", "kwargs": kwargs})
@@ -65,7 +69,9 @@ class _FakeTW:
 
 
 @pytest.mark.anyio
-async def test_workspace_task_plan_collects_tree_and_search(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_task_plan_collects_tree_and_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import task_workflows
 
     fake = _FakeTW()
@@ -169,4 +175,3 @@ async def test_workspace_task_execute_commit_only(monkeypatch: pytest.MonkeyPatc
     fns = [c["fn"] for c in fake.calls]
     assert "commit_workspace" in fns
     assert "commit_and_open_pr_from_workspace" not in fns
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def test_infer_write_action_from_shell_chained_commands() -> None:
@@ -127,9 +128,9 @@ def test_core_tool_gating_metadata_is_consistent() -> None:
     """Regression tests for tooling/workflow write-action annotations."""
 
     from github_mcp.workspace_tools.batch import workspace_batch
-    from github_mcp.workspace_tools.workflows import workspace_apply_ops_and_open_pr
-    from github_mcp.workspace_tools.suites import run_tests, run_lint_suite, run_quality_suite
     from github_mcp.workspace_tools.commands import terminal_command
+    from github_mcp.workspace_tools.suites import run_lint_suite, run_quality_suite, run_tests
+    from github_mcp.workspace_tools.workflows import workspace_apply_ops_and_open_pr
 
     # Orchestration/workflow tools are inherently write-capable.
     assert bool(getattr(workspace_batch, "__mcp_write_action__", None)) is True
@@ -143,4 +144,3 @@ def test_core_tool_gating_metadata_is_consistent() -> None:
     # Command runner is dynamically gated.
     assert bool(getattr(terminal_command, "__mcp_write_action__", None)) is True
     assert callable(getattr(terminal_command, "__mcp_write_action_resolver__", None))
-
