@@ -2414,8 +2414,6 @@ def _log_tool_warning(
         schema_hash=schema_hash,
         schema_present=schema_present,
     )
-    if all_args is not None:
-        payload.update(_extract_context(all_args))
     payload["duration_ms"] = duration_ms
     payload["report"] = report
     if LOG_TOOL_PAYLOADS:
@@ -2929,6 +2927,7 @@ def _tool_log_payload(
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
+    include_args: bool = False,
     all_args: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     inline = _inline_context(req)
@@ -2948,9 +2947,15 @@ def _tool_log_payload(
     if LOG_TOOL_VERBOSE_EXTRAS:
         payload["schema_present"] = bool(schema_present)
         payload["schema_hash"] = shorten_token(schema_hash) if schema_present else None
-    if all_args is not None:
+
+    # Args are high-cardinality and often duplicated by report["inputs"]. Only
+    # include them when explicitly requested by the caller (e.g., REQ lines or
+    # failure diagnostics when payload logging is enabled).
+    if include_args and all_args is not None:
         payload.update(_extract_context(all_args))
+
     return payload
+
 
 
 def _log_tool_start(
@@ -2975,6 +2980,7 @@ def _log_tool_start(
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
+        include_args=True,
         all_args=all_args,
     )
     # Developer-facing, scan-friendly request snapshot.
@@ -3037,8 +3043,6 @@ def _log_tool_report(
         schema_hash=schema_hash,
         schema_present=schema_present,
     )
-    if all_args is not None:
-        payload.update(_extract_context(all_args))
     payload["report"] = report
     friendly = _friendly_tool_name(tool_name)
     prefix = (
@@ -3128,8 +3132,6 @@ def _log_tool_success(
         schema_hash=schema_hash,
         schema_present=schema_present,
     )
-    if all_args is not None:
-        payload.update(_extract_context(all_args))
     payload["duration_ms"] = duration_ms
     payload["report"] = report
     if LOG_TOOL_PAYLOADS:
