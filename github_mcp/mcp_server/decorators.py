@@ -2111,6 +2111,58 @@ def _normalize_tool_result_envelope(result: Any) -> Any:
     return out
 
 
+def _inject_coloured_streams(
+    out: dict[str, Any], *, req: Mapping[str, Any] | None = None
+) -> None:
+    """Attach ANSI-colored stdout/stderr previews to a mapping payload.
+
+    This helper is intentionally minimal: it only adds
+    - stdout_colored
+    - stderr_colored
+
+    It does not add any additional metadata (line counts, truncation flags,
+    gating/provider envelopes, etc.).
+    """
+
+    if not isinstance(out, dict):
+        return
+
+    # Streams may appear either at the top-level payload or nested under "result".
+    result = out.get("result")
+    inner = result if isinstance(result, Mapping) else out
+
+    stdout = inner.get("stdout") if isinstance(inner, Mapping) else None
+    stderr = inner.get("stderr") if isinstance(inner, Mapping) else None
+
+    if not isinstance(stdout, str):
+        stdout = None
+    if not isinstance(stderr, str):
+        stderr = None
+
+    if not stdout and not stderr:
+        return
+
+    max_lines, max_chars = _effective_response_stream_limits(req)
+
+    if stdout and stdout.strip() and not isinstance(out.get("stdout_colored"), str):
+        out["stdout_colored"] = _format_stream_block(
+            stdout,
+            label="STDOUT",
+            header_color=ANSI_GREEN,
+            max_lines=max_lines,
+            max_chars=max_chars,
+        )
+
+    if stderr and stderr.strip() and not isinstance(out.get("stderr_colored"), str):
+        out["stderr_colored"] = _format_stream_block(
+            stderr,
+            label="STDERR",
+            header_color=ANSI_RED,
+            max_lines=max_lines,
+            max_chars=max_chars,
+        )
+
+
 def _chatgpt_friendly_result(
     result: Any,
     *,
@@ -2123,8 +2175,8 @@ def _chatgpt_friendly_result(
     This is opt-in via ADAPTIV_MCP_RESPONSE_MODE=chatgpt.
 
     Goals:
-    - consistent ok/status surface
-    - include a compact summary to aid LLM planning
+    - Preserve tool outputs (raw) without adding extra wrapper fields.
+    - Add ANSI-colored stdout/stderr previews when present.
     """
 
     mode = _effective_response_mode(req)
@@ -2132,36 +2184,12 @@ def _chatgpt_friendly_result(
         return result
 
     try:
-        # Scalars/lists: wrap so callers always get a mapping with status.
+        # Preserve non-mapping payloads verbatim in chatgpt/compact modes.
         if not isinstance(result, Mapping):
-            base_payload: dict[str, Any] = {
-                "status": "success",
-                "ok": True,
-                "result": result,
-            }
-            base_payload = _inject_provider_metadata(base_payload)
-            return base_payload
+            return result
 
-        out: dict[str, Any] = _inject_provider_metadata(result)
-
-        # Ensure stable status/ok.
-        #
-        # Some legacy tools return a payload with conflicting signals
-        # (e.g. ok=True alongside status=error or an error field). In
-        # ChatGPT/compact response modes, we prefer a consistent surface.
-        outcome = _tool_result_outcome(out)
-        out["ok"] = outcome != "error"
-        status = out.get("status")
-        status_str = str(status).strip().lower() if status is not None else ""
-        if not status_str or status_str in {"ok", "passed", "succeeded", "success"}:
-            out["status"] = (
-                "success" if outcome == "ok" else ("warning" if outcome == "warning" else "error")
-            )
-        elif status_str in {"warn", "warning"}:
-            out["status"] = "warning"
-        elif status_str in {"error", "failed", "failure"}:
-            out["status"] = "error"
-
+        out: dict[str, Any] = dict(_strip_internal_log_fields(result))
+        _inject_coloured_streams(out, req=req)
         return out
     except Exception as exc:
         # Best-effort: never break tool behavior if the shaper fails.
@@ -3653,12 +3681,13 @@ def mcp_tool(
                     if isinstance(structured_error, Mapping):
                         client_payload = _strip_internal_log_fields(structured_error)
                         try:
-                            client_payload = _merge_invocation_metadata(
-                                client_payload,
-                                func=wrapper,
-                                base_write_action=bool(write_action),
-                                effective_write_action=bool(effective_write_action),
-                            )
+                            if _effective_response_mode(req) not in {"chatgpt", "compact"}:
+                                client_payload = _merge_invocation_metadata(
+                                    client_payload,
+                                    func=wrapper,
+                                    base_write_action=bool(write_action),
+                                    effective_write_action=bool(effective_write_action),
+                                )
                         except Exception:
                             pass
                     else:
@@ -3758,12 +3787,13 @@ def mcp_tool(
                     if isinstance(structured_error, Mapping):
                         client_payload = _strip_internal_log_fields(structured_error)
                         try:
-                            client_payload = _merge_invocation_metadata(
-                                client_payload,
-                                func=wrapper,
-                                base_write_action=bool(write_action),
-                                effective_write_action=bool(effective_write_action),
-                            )
+                            if _effective_response_mode(req) not in {"chatgpt", "compact"}:
+                                client_payload = _merge_invocation_metadata(
+                                    client_payload,
+                                    func=wrapper,
+                                    base_write_action=bool(write_action),
+                                    effective_write_action=bool(effective_write_action),
+                                )
                         except Exception:
                             pass
                     else:
@@ -3840,12 +3870,14 @@ def mcp_tool(
                 if isinstance(result, Mapping):
                     client_payload = _strip_internal_log_fields(result)
                     try:
-                        client_payload = _merge_invocation_metadata(
-                            client_payload,
-                            func=wrapper,
-                            base_write_action=bool(write_action),
-                            effective_write_action=bool(effective_write_action),
-                        )
+                        # Keep ChatGPT/compact responses as close to raw tool output as possible.
+                        if _effective_response_mode(req) not in {"chatgpt", "compact"}:
+                            client_payload = _merge_invocation_metadata(
+                                client_payload,
+                                func=wrapper,
+                                base_write_action=bool(write_action),
+                                effective_write_action=bool(effective_write_action),
+                            )
                     except Exception:
                         pass
                 else:

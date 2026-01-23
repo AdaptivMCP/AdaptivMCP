@@ -23,12 +23,15 @@ def test_response_mode_override_enables_chatgpt_shaping(monkeypatch):
 
     shaped = _chatgpt_friendly_result(payload, req={"response_mode": "chatgpt"})
     assert isinstance(shaped, dict)
-    assert shaped.get("status") in {"success", "ok"}
+    assert shaped.get("status") == "ok"
     assert shaped.get("ok") is True
 
-    # The server no longer wraps results into a separate summary/streams envelope.
+    # Raw payload is preserved.
     assert isinstance(shaped.get("result"), dict)
     assert shaped["result"].get("stdout") == "hi\n"
+
+    # Colored previews are injected.
+    assert isinstance(shaped.get("stdout_colored"), str) and shaped["stdout_colored"]
 
     # No extra wrapper fields are added.
     assert shaped.get("summary") is None
@@ -93,6 +96,9 @@ def test_stream_limits_clip_raw_stdout(monkeypatch):
     assert shaped["result"].get("stdout") == "a\nb\nc\nd\ne\n"
     assert shaped.get("streams") is None
 
+    # Colored previews are still present.
+    assert isinstance(shaped.get("stdout_colored"), str) and shaped["stdout_colored"]
+
 
 def test_chatgpt_shaping_returns_single_structured_report_without_duplication(monkeypatch):
     _enable_shaping(monkeypatch)
@@ -112,6 +118,9 @@ def test_chatgpt_shaping_returns_single_structured_report_without_duplication(mo
     assert set(shaped.keys()).issuperset({"status", "ok", "result"})
     assert isinstance(shaped.get("result"), dict)
     assert shaped["result"].get("stdout") == "hi\n"
+
+    # Colored previews are injected.
+    assert isinstance(shaped.get("stdout_colored"), str) and shaped["stdout_colored"]
 
     # No extra wrapper fields are added.
     assert shaped.get("summary") is None

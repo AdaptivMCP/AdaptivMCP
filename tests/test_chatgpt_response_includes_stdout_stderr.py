@@ -25,13 +25,16 @@ def test_chatgpt_friendly_result_surfaces_stdout_and_stderr(monkeypatch):
     shaped = _chatgpt_friendly_result(payload, req={"headers": {}})
     assert isinstance(shaped, dict)
 
-    # The server no longer wraps results into a separate summary/streams envelope.
-    # Stdout/stderr remain in the tool's raw payload.
-    assert shaped.get("status") in {"success", "ok"}
+    # Raw payload is preserved.
+    assert shaped.get("status") == "ok"
     assert shaped.get("ok") is True
     assert isinstance(shaped.get("result"), dict)
     assert shaped["result"].get("stdout") == "hello\nworld\n"
     assert shaped["result"].get("stderr") == "warn: nope\n"
+
+    # Colored previews are injected at top-level.
+    assert isinstance(shaped.get("stdout_colored"), str) and shaped["stdout_colored"]
+    assert isinstance(shaped.get("stderr_colored"), str) and shaped["stderr_colored"]
 
     # No extra wrapper fields are added.
     assert shaped.get("streams") is None
