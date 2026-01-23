@@ -38,6 +38,7 @@ def test_rg_list_workspace_files_falls_back_to_python(tmp_path, monkeypatch):
             path="",
             include_hidden=False,
             glob=["*.txt", "*.py"],
+            exclude_paths=["sub"],
             max_results=10,
         )
     )
@@ -46,7 +47,7 @@ def test_rg_list_workspace_files_falls_back_to_python(tmp_path, monkeypatch):
     assert result["engine"] == "python"
     assert ".hidden.txt" not in result["files"]
     assert "a.txt" in result["files"]
-    assert "sub/c.py" in result["files"]
+    assert "sub/c.py" not in result["files"]
 
 
 def test_rg_search_workspace_returns_line_numbers_and_context(tmp_path, monkeypatch):
@@ -66,6 +67,7 @@ def test_rg_search_workspace_returns_line_numbers_and_context(tmp_path, monkeypa
             path="",
             regex=False,
             case_sensitive=True,
+            include_paths=["a.txt"],
             max_results=10,
             context_lines=1,
         )

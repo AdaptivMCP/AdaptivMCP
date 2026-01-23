@@ -84,6 +84,35 @@ def _normalize_globs(glob: str | list[str] | None) -> list[str]:
     raise TypeError("glob must be a string, list of strings, or null")
 
 
+def _normalize_paths(value: str | list[str] | None) -> list[str]:
+    """Normalize repo-relative paths/prefixes.
+
+    Notes:
+    - Returns POSIX-ish paths ("/" separators).
+    - Strips leading "/" so callers can pass either "tests" or "/tests".
+    - Keeps empty result for invalid/blank inputs.
+    """
+
+    if value is None:
+        return []
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return []
+        return [s.lstrip("/").replace("\\", "/")]
+    if isinstance(value, list):
+        out: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            s = item.strip()
+            if not s:
+                continue
+            out.append(s.lstrip("/").replace("\\", "/"))
+        return out
+    raise TypeError("paths must be a string, list of strings, or null")
+
+
 def _passes_globs(rel_path: str, globs: list[str]) -> bool:
     if not globs:
         return True
@@ -92,12 +121,76 @@ def _passes_globs(rel_path: str, globs: list[str]) -> bool:
     return any(fnmatch.fnmatch(p, g) for g in globs)
 
 
+def _passes_path_prefixes(rel_path: str, prefixes: list[str]) -> bool:
+    if not prefixes:
+        return True
+    p = rel_path.replace("\\", "/")
+    for raw in prefixes:
+        pref = (raw or "").strip().lstrip("/")
+        if not pref:
+            continue
+        pref = pref.replace("\\", "/")
+        if p == pref:
+            return True
+        # Treat as a directory prefix.
+        if not pref.endswith("/"):
+            pref = pref + "/"
+        if p.startswith(pref):
+            return True
+    return False
+
+
+def _passes_filters(
+    rel_path: str,
+    *,
+    include_globs: list[str],
+    exclude_globs: list[str],
+    include_paths: list[str],
+    exclude_paths: list[str],
+) -> bool:
+    # Include filters (tighten search space).
+    if include_paths and (not _passes_path_prefixes(rel_path, include_paths)):
+        return False
+    if include_globs and (not _passes_globs(rel_path, include_globs)):
+        return False
+
+    # Exclude filters.
+    if exclude_paths and _passes_path_prefixes(rel_path, exclude_paths):
+        return False
+    if exclude_globs and any(fnmatch.fnmatch(rel_path.replace("\\", "/"), g) for g in exclude_globs):
+        return False
+
+    return True
+
+
+def _exclude_globs_from_paths(exclude_paths: list[str]) -> list[str]:
+    """Translate excluded paths/prefixes into glob patterns.
+
+    This helps apply the same semantics when delegating to ripgrep.
+    """
+
+    out: list[str] = []
+    for p in exclude_paths:
+        s = (p or "").strip().lstrip("/").replace("\\", "/")
+        if not s:
+            continue
+        if s.endswith("/"):
+            out.append(f"{s}**")
+            continue
+        out.append(s)
+        out.append(f"{s}/**")
+    return out
+
+
 def _python_walk_files(
     repo_dir: str,
     base_rel: str,
     *,
     include_hidden: bool,
     globs: list[str],
+    exclude_globs: list[str],
+    include_paths: list[str],
+    exclude_paths: list[str],
     max_results: int,
 ) -> list[str]:
     base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
@@ -123,7 +216,13 @@ def _python_walk_files(
                 continue
             if rel_path == "." or rel_path.startswith(".."):
                 continue
-            if not _passes_globs(rel_path, globs):
+            if not _passes_filters(
+                rel_path,
+                include_globs=globs,
+                exclude_globs=exclude_globs,
+                include_paths=include_paths,
+                exclude_paths=exclude_paths,
+            ):
                 continue
             out.append(rel_path)
             if len(out) >= max_results:
@@ -140,6 +239,9 @@ def _python_search(
     case_sensitive: bool,
     include_hidden: bool,
     globs: list[str],
+    exclude_globs: list[str],
+    include_paths: list[str],
+    exclude_paths: list[str],
     max_results: int,
     max_file_bytes: int | None,
 ) -> tuple[list[dict[str, Any]], bool]:
@@ -160,6 +262,9 @@ def _python_search(
         base_rel,
         include_hidden=include_hidden,
         globs=globs,
+        exclude_globs=exclude_globs,
+        include_paths=include_paths,
+        exclude_paths=exclude_paths,
         max_results=50_000,
     ):
         try:
@@ -234,6 +339,9 @@ async def rg_list_workspace_files(
     *,
     include_hidden: bool = False,
     glob: str | list[str] | None = None,
+    exclude_glob: str | list[str] | None = None,
+    include_paths: str | list[str] | None = None,
+    exclude_paths: str | list[str] | None = None,
     max_results: int = 5000,
 ) -> dict[str, Any]:
     """List files quickly (ripgrep `--files`) with an os.walk fallback."""
@@ -247,6 +355,11 @@ async def rg_list_workspace_files(
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         globs = _normalize_globs(glob)
+        excl_globs = _normalize_globs(exclude_glob)
+        incl_paths = _normalize_paths(include_paths)
+        excl_paths = _normalize_paths(exclude_paths)
+        # Ensure exclude_paths are also applied to rg via glob patterns.
+        excl_globs = [*excl_globs, *_exclude_globs_from_paths(excl_paths)]
 
         files: list[str] = []
         truncated = False
@@ -259,9 +372,21 @@ async def rg_list_workspace_files(
                 cmd.append("--hidden")
             for g in globs:
                 cmd.extend(["--glob", g])
+            for g in excl_globs:
+                # rg treats negated globs as exclusions.
+                cmd.extend(["--glob", f"!{g}"])
 
             base_rel = (path or "").strip().lstrip("/")
-            base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
+            # If include_paths is provided, search only those targets from repo root.
+            if incl_paths:
+                base_abs = repo_dir
+                for p in incl_paths:
+                    joined = os.path.normpath(os.path.join(base_rel, p)).replace("\\", "/")
+                    if joined.startswith("../") or joined == "..":
+                        continue
+                    cmd.append(joined)
+            else:
+                base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
             proc = subprocess.run(cmd, cwd=base_abs, capture_output=True, text=True, timeout=30)
             if proc.returncode not in (0, 1):
                 raise RuntimeError((proc.stderr or proc.stdout or "rg failed").strip())
@@ -270,7 +395,13 @@ async def rg_list_workspace_files(
                     continue
                 # rg emits paths relative to cwd; normalize to repo root.
                 rel = os.path.normpath(os.path.join(base_rel, line)).replace("\\", "/")
-                if not _passes_globs(rel, globs):
+                if not _passes_filters(
+                    rel,
+                    include_globs=globs,
+                    exclude_globs=excl_globs,
+                    include_paths=incl_paths,
+                    exclude_paths=excl_paths,
+                ):
                     continue
                 files.append(rel)
                 if len(files) >= max_results:
@@ -282,6 +413,9 @@ async def rg_list_workspace_files(
                 (path or "").strip().lstrip("/"),
                 include_hidden=bool(include_hidden),
                 globs=globs,
+                exclude_globs=excl_globs,
+                include_paths=incl_paths,
+                exclude_paths=excl_paths,
                 max_results=int(max_results),
             )
             truncated = len(files) >= max_results
@@ -295,6 +429,9 @@ async def rg_list_workspace_files(
             "path": (path or "").strip().lstrip("/"),
             "include_hidden": bool(include_hidden),
             "glob": globs,
+            "exclude_glob": excl_globs,
+            "include_paths": incl_paths,
+            "exclude_paths": excl_paths,
             "files": files,
             "truncated": bool(truncated),
             "max_results": int(max_results),
@@ -314,6 +451,9 @@ async def rg_search_workspace(
     case_sensitive: bool = True,
     include_hidden: bool = False,
     glob: str | list[str] | None = None,
+    exclude_glob: str | list[str] | None = None,
+    include_paths: str | list[str] | None = None,
+    exclude_paths: str | list[str] | None = None,
     max_results: int = 200,
     context_lines: int = 0,
     max_file_bytes: int | str | None = None,
@@ -340,8 +480,15 @@ async def rg_search_workspace(
         repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
 
         base_rel = (path or "").strip().lstrip("/")
-        base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
         globs = _normalize_globs(glob)
+        excl_globs = _normalize_globs(exclude_glob)
+        incl_paths = _normalize_paths(include_paths)
+        excl_paths = _normalize_paths(exclude_paths)
+        excl_globs = [*excl_globs, *_exclude_globs_from_paths(excl_paths)]
+
+        # When include_paths is provided, we run from repo root and pass explicit
+        # targets to ripgrep. Otherwise we use `path` as the working directory.
+        base_abs = repo_dir if incl_paths else _workspace_safe_join(repo_dir, base_rel or ".")
 
         matches: list[dict[str, Any]] = []
         truncated = False
@@ -362,8 +509,17 @@ async def rg_search_workspace(
                     cmd.extend(["--max-filesize", str(int(max_bytes))])
                 for g in globs:
                     cmd.extend(["--glob", g])
+                for g in excl_globs:
+                    cmd.extend(["--glob", f"!{g}"])
                 cmd.append("--")
                 cmd.append(query)
+
+                if incl_paths:
+                    for p in incl_paths:
+                        joined = os.path.normpath(os.path.join(base_rel, p)).replace("\\", "/")
+                        if joined.startswith("../") or joined == "..":
+                            continue
+                        cmd.append(joined)
 
                 proc = subprocess.Popen(
                     cmd,
@@ -390,7 +546,13 @@ async def rg_search_workspace(
                             continue
                         # Normalize to repo-root relative path.
                         rel_norm = os.path.normpath(os.path.join(base_rel, rel)).replace("\\", "/")
-                        if not _passes_globs(rel_norm, globs):
+                        if not _passes_filters(
+                            rel_norm,
+                            include_globs=globs,
+                            exclude_globs=excl_globs,
+                            include_paths=incl_paths,
+                            exclude_paths=excl_paths,
+                        ):
                             continue
                         line_no = int(data.get("line_number") or 0)
                         sub = data.get("submatches") or []
@@ -444,6 +606,9 @@ async def rg_search_workspace(
                     case_sensitive=bool(case_sensitive),
                     include_hidden=bool(include_hidden),
                     globs=globs,
+                    exclude_globs=excl_globs,
+                    include_paths=incl_paths,
+                    exclude_paths=excl_paths,
                     max_results=int(max_results),
                     max_file_bytes=max_bytes,
                 )
@@ -458,6 +623,9 @@ async def rg_search_workspace(
                 case_sensitive=bool(case_sensitive),
                 include_hidden=bool(include_hidden),
                 globs=globs,
+                exclude_globs=excl_globs,
+                include_paths=incl_paths,
+                exclude_paths=excl_paths,
                 max_results=int(max_results),
                 max_file_bytes=max_bytes,
             )
@@ -492,6 +660,9 @@ async def rg_search_workspace(
             "case_sensitive": bool(case_sensitive),
             "include_hidden": bool(include_hidden),
             "glob": globs,
+            "exclude_glob": excl_globs,
+            "include_paths": incl_paths,
+            "exclude_paths": excl_paths,
             "max_results": int(max_results),
             "context_lines": int(context_lines),
             "max_file_bytes": max_bytes,
