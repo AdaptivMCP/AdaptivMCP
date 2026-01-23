@@ -100,8 +100,9 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
     max_str_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_STR", "500") or "500")
 
     def _clip_str(s: str) -> str:
-        s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
-        s = " ".join(s.split())
+        # Preserve newlines and whitespace so developer-facing logs can include
+        # raw request/response payloads. Normalize CRLF/CR to LF.
+        s = s.replace("\r\n", "\n").replace("\r", "\n")
         if max_str_cfg > 0 and len(s) > max_str_cfg:
             return s[: max(0, max_str_cfg - 1)] + "…"
         return s
@@ -471,8 +472,12 @@ _log_tool_call_starts_default = "true" if HUMAN_LOGS else "false"
 LOG_TOOL_CALL_STARTS = _env_flag("LOG_TOOL_CALL_STARTS", _log_tool_call_starts_default)
 
 # When enabled, include full tool args and full tool results in logs.
-# WARNING: This can create very large log lines and may stress hosted log ingestion.
-LOG_TOOL_PAYLOADS = _env_flag("LOG_TOOL_PAYLOADS", "false")
+# WARNING: This can create very large log output and may stress hosted log ingestion.
+#
+# Default to enabled when HUMAN_LOGS are enabled so developer-facing deployments
+# capture raw request/response payloads without additional configuration.
+_log_tool_payloads_default = "true" if HUMAN_LOGS else "false"
+LOG_TOOL_PAYLOADS = _env_flag("LOG_TOOL_PAYLOADS", _log_tool_payloads_default)
 
 # When enabled, include outbound GitHub HTTP request/response details in logs.
 LOG_GITHUB_HTTP = _env_flag("LOG_GITHUB_HTTP", "false")
@@ -490,9 +495,18 @@ _log_http_default = (
 )
 LOG_HTTP_REQUESTS = _env_flag("LOG_HTTP_REQUESTS", _log_http_default)
 
-# When enabled, include HTTP request bodies for POST /messages in logs.
+# When enabled, include inbound HTTP request bodies (and captured response bodies)
+# in logs.
 # WARNING: Can be large. This does not modify tool outputs.
-LOG_HTTP_BODIES = _env_flag("LOG_HTTP_BODIES", "false")
+#
+# Default to enabled when HUMAN_LOGS are enabled so developer-facing deployments
+# capture raw inbound/outbound payloads for debugging.
+_log_http_bodies_default = "true" if HUMAN_LOGS else "false"
+LOG_HTTP_BODIES = _env_flag("LOG_HTTP_BODIES", _log_http_bodies_default)
+
+# Maximum bytes of request/response body to capture for inbound HTTP logs.
+# Bodies above this limit are truncated.
+LOG_HTTP_MAX_BODY_BYTES = int(os.environ.get("LOG_HTTP_MAX_BODY_BYTES", "1000000"))
 
 # Include compact request correlation fields (request_id + ChatGPT ids) inline
 # in single-line provider logs (tool calls, outbound HTTP, etc.).
@@ -793,10 +807,14 @@ class _StructuredFormatter(logging.Formatter):
         }
         event = getattr(record, "event", None)
 
-        # Do not append an "extras" block for tool events.
-        # Tool logs already embed a scan-friendly summary (REQ/RES) and keeping
-        # an additional YAML-like block duplicates information and adds noise.
-        if isinstance(event, str) and event.startswith("tool_"):
+        # When payload logging is enabled, allow tool lifecycle events to append
+        # structured extras (including raw args/results) for debugging.
+        tool_payloads_enabled = bool(LOG_TOOL_PAYLOADS)
+
+        # Tool logs embed scan-friendly summaries (REQ/RES). By default, avoid
+        # adding an additional block. When tool payload logging is enabled,
+        # include the structured extras so raw args/results are visible.
+        if isinstance(event, str) and event.startswith("tool_") and not tool_payloads_enabled:
             return base
 
         severity = getattr(record, "severity", None)
@@ -836,13 +854,18 @@ def _format_extras_block(payload: Mapping[str, Any]) -> str:
         if isinstance(v, (int, float)):
             return str(v)
         s = str(v)
-        # Keep single-line scalars.
-        s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
-        return " ".join(s.split())
+        # Normalize CRLF/CR but preserve newlines for raw payload readability.
+        return s.replace("\r\n", "\n").replace("\r", "\n")
 
     lines: list[str] = []
     max_lines = max(20, int(LOG_EXTRAS_MAX_LINES))
     max_chars = max(2000, int(LOG_EXTRAS_MAX_CHARS))
+
+    # Optional ANSI coloring for extras blocks (developer-tail workflows).
+    ansi = bool(HUMAN_LOGS and LOG_COLOR)
+    reset = "\x1b[0m" if ansi else ""
+    dim = "\x1b[2m" if ansi else ""
+    cyan = "\x1b[36m" if ansi else ""
 
     def emit(line: str) -> None:
         if len(lines) >= max_lines:
@@ -851,15 +874,16 @@ def _format_extras_block(payload: Mapping[str, Any]) -> str:
 
     def walk(key: str, value: object, indent: int) -> None:
         prefix = "  " * indent
+        label = f"{dim}{cyan}{key}{reset}" if ansi else key
         if isinstance(value, Mapping):
-            emit(f"{prefix}{key}:")
+            emit(f"{prefix}{label}:")
             for k2, v2 in list(value.items()):
                 if len(lines) >= max_lines:
                     break
                 walk(str(k2), v2, indent + 1)
             return
         if isinstance(value, list):
-            emit(f"{prefix}{key}:")
+            emit(f"{prefix}{label}:")
             for item in value[:50]:
                 if len(lines) >= max_lines:
                     break
@@ -878,10 +902,19 @@ def _format_extras_block(payload: Mapping[str, Any]) -> str:
                 emit(f"{prefix}  - … ({len(value) - 50} more)")
             return
 
-        emit(f"{prefix}{key}: {scalar(value)}")
+        rendered = scalar(value)
+        if "\n" in rendered:
+            # YAML-like block scalar for multiline values.
+            emit(f"{prefix}{label}: |-")
+            for ln in rendered.split("\n"):
+                if len(lines) >= max_lines:
+                    break
+                emit(f"{prefix}  {ln}")
+            return
+        emit(f"{prefix}{label}: {rendered}")
 
     # Sort for stable output.
-    emit("extras:")
+    emit(f"{dim}{cyan}extras{reset}:")
     for k, v in sorted(payload.items(), key=lambda kv: str(kv[0])):
         if len(lines) >= max_lines:
             break
