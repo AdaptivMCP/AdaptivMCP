@@ -323,7 +323,8 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             ):
                 return await _fetch_rewritten_path(content_url, base_url=rewrite_base)
             err = GitHubAPIError(
-                f"{context} content_url path not found at {content_url}. "
+                f"{context} content_url local file was not found at {content_url}. "
+                "This is a file-path error (not a network/disconnect issue). "
                 "Configure SANDBOX_CONTENT_BASE_URL or provide an absolute http(s) URL "
                 "so the server can fetch the sandbox file when it is not mounted locally."
             )
