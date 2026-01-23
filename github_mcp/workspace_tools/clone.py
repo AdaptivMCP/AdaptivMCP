@@ -33,7 +33,9 @@ async def ensure_workspace_clone(
 
     try:
         resolved_full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
-        effective_ref = _tw()._effective_ref_for_repo(resolved_full_name, _tw()._resolve_ref(ref, branch=branch))
+        effective_ref = _tw()._effective_ref_for_repo(
+            resolved_full_name, _tw()._resolve_ref(ref, branch=branch)
+        )
         workspace_dir = _tw()._workspace_path(resolved_full_name, effective_ref)
         existed = os.path.isdir(os.path.join(workspace_dir, ".git"))
 
