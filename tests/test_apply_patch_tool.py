@@ -32,7 +32,7 @@ class DummyWorkspaceTools:
         return ref
 
 
-def test_apply_patch_reports_diff_stats_and_includes_log_diff(tmp_path, monkeypatch):
+def test_apply_patch_reports_diff_stats_and_strips_log_diff_by_default(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
 
@@ -60,9 +60,8 @@ index 0000000..1111111 100644
     assert result["ok"] is True
     assert result["patches_applied"] == 1
 
-    # Client-facing responses should include __log_* fields so the model and
-    # user see the same payload used to render tool log visuals.
-    assert result.get("__log_diff")
+    # Client-facing responses strip __log_* fields by default.
+    assert result.get("__log_diff") is None
 
     # But derived, safe metadata should be present.
     assert result.get("diff_stats") == {"added": 1, "removed": 1}
