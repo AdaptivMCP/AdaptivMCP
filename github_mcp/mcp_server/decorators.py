@@ -1502,6 +1502,152 @@ def _apply_tool_metadata(
     metadata is intended for discovery/UIs.
     """
 
+    # ------------------------------------------------------------------
+    # Tool metadata versioning + levels
+    # ------------------------------------------------------------------
+    # Many MCP clients only inspect the registered tool object (not the
+    # wrapper function) when building tool catalogs. We therefore attach
+    # a stable `version` and a lightweight classification surface `levels`
+    # onto the tool object metadata.
+    #
+    # NOTE: These are discovery/UI hints only; they do not affect runtime.
+
+    def _derive_tool_levels(
+        tool_name: str,
+        *,
+        tags_in: Iterable[str] | None,
+        ui_in: Mapping[str, Any] | None,
+        write_action_in: bool | None,
+    ) -> list[str]:
+        """Best-effort classification for tool discovery.
+
+        Levels are intentionally coarse and may overlap with `tags`.
+        """
+
+        allowed_order = [
+            "Low-Level",
+            "High-Level",
+            "Common",
+            "Testing",
+            "editing",
+            "github api",
+            "render api",
+            "git",
+            "workspace",
+            "mirror",
+            "clone",
+            "remote",
+            "workflow",
+            "tool",
+        ]
+        allowed = set(allowed_order)
+
+        name = str(tool_name or "").strip()
+        lowered = name.lower()
+
+        tagset: set[str] = set()
+        if tags_in:
+            for t in tags_in:
+                if t is None:
+                    continue
+                s = str(t).strip()
+                if s:
+                    tagset.add(s.lower())
+
+        ui_group = None
+        if isinstance(ui_in, Mapping):
+            ui_group = ui_in.get("group")
+        ui_group_s = str(ui_group).strip().lower() if ui_group else ""
+
+        levels: set[str] = {"tool"}
+
+        # Domain surfaces
+        if "github" in tagset or any(
+            k in lowered for k in ("issue", "pull", "pr_", "graphql", "repository", "repo_")
+        ):
+            levels.add("github api")
+        if "render" in tagset or "render" in lowered:
+            levels.add("render api")
+        if "git" in tagset or any(
+            k in lowered for k in ("git_", "branch", "worktree", "commit", "rebase", "merge")
+        ):
+            levels.add("git")
+        if "workspace" in tagset or "workspace" in lowered or ui_group_s == "workspace":
+            levels.add("workspace")
+        if "workflow" in tagset or "workflow" in lowered or ui_group_s == "workflow":
+            levels.add("workflow")
+
+        # Repo topology / sync concepts
+        if "mirror" in lowered:
+            levels.add("mirror")
+        if "clone" in lowered:
+            levels.add("clone")
+        if "remote" in lowered or "origin" in lowered or "sync" in lowered:
+            levels.add("remote")
+
+        # Editing
+        if bool(write_action_in) or any(
+            k in lowered
+            for k in (
+                "edit_",
+                "update_",
+                "delete_",
+                "move_",
+                "replace_",
+                "apply_patch",
+                "set_",
+                "write_",
+                "commit_",
+            )
+        ):
+            levels.add("editing")
+
+        # Testing
+        if any(k in lowered for k in ("test", "pytest", "lint", "quality_suite", "smoke")):
+            levels.add("Testing")
+
+        # Complexity level
+        low_level_indicators = (
+            "read_",
+            "get_",
+            "list_",
+            "find_",
+            "rg_",
+            "search_",
+            "scan_",
+            "make_workspace_",
+            "compare_",
+            "terminal_",
+            "run_shell",
+        )
+        high_level_indicators = (
+            "ensure_",
+            "open_",
+            "dashboard",
+            "overview",
+            "apply_ops_and_open_pr",
+            "task_",
+            "workspace_task_",
+            "commit_and_open_pr",
+            "trigger_and_wait_",
+        )
+
+        is_low = any(lowered.startswith(p) for p in low_level_indicators)
+        is_high = any(p in lowered for p in high_level_indicators)
+
+        if is_high and not is_low:
+            levels.add("High-Level")
+        elif is_low and not is_high:
+            levels.add("Low-Level")
+        else:
+            levels.add("Common")
+
+        # Only emit known values (defensive).
+        ordered = [lvl for lvl in allowed_order if lvl in levels]
+        # Also preserve any extra values (future-proof) at the end, sorted.
+        extras = sorted(level for level in levels if level not in allowed)
+        return ordered + extras
+
     if tool_obj is None:
         return
 
@@ -1556,6 +1702,23 @@ def _apply_tool_metadata(
         if tag_list:
             if isinstance(meta, dict):
                 meta["tags"] = tag_list
+
+    # Version + levels (tool discovery hints)
+    if isinstance(meta, dict):
+        meta.setdefault("version", "Alpha")
+        if "levels" not in meta:
+            try:
+                tool_name = getattr(tool_obj, "name", None)
+            except Exception:
+                tool_name = None
+            if not tool_name and isinstance(tool_obj, Mapping):
+                tool_name = tool_obj.get("name")  # type: ignore[assignment]
+            meta["levels"] = _derive_tool_levels(
+                str(tool_name or ""),
+                tags_in=tags,
+                ui_in=ui,
+                write_action_in=write_action,
+            )
 
     if isinstance(meta, dict):
         if write_action is not None:

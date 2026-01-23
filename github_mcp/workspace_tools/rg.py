@@ -157,7 +157,9 @@ def _passes_filters(
     # Exclude filters.
     if exclude_paths and _passes_path_prefixes(rel_path, exclude_paths):
         return False
-    if exclude_globs and any(fnmatch.fnmatch(rel_path.replace("\\", "/"), g) for g in exclude_globs):
+    if exclude_globs and any(
+        fnmatch.fnmatch(rel_path.replace("\\", "/"), g) for g in exclude_globs
+    ):
         return False
 
     return True
