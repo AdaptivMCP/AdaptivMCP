@@ -7,6 +7,8 @@ def _reload_config(monkeypatch):
     # Ensure predictable, non-ANSI output for assertions.
     monkeypatch.setenv("HUMAN_LOGS", "1")
     monkeypatch.setenv("LOG_COLOR", "0")
+    # Prefer the prefixed variant when present; explicitly disable it for tests.
+    monkeypatch.setenv("ADAPTIV_MCP_LOG_COLOR", "0")
     monkeypatch.setenv("LOG_APPEND_EXTRAS", "1")
     # Keep appended blocks bounded for test stability.
     monkeypatch.setenv("LOG_EXTRAS_MAX_LINES", "200")
@@ -42,8 +44,10 @@ def test_provider_tool_success_logs_append_human_extras_block(monkeypatch):
     )
 
     out = stream.getvalue()
-    # Tool lifecycle events should NOT append an "extras" block.
-    assert "extras:" not in out
+    # Tool lifecycle events should append an "extras" block when payload logging
+    # is enabled (developer-facing mode).
+    assert "extras:" in out
+    assert "foo: bar" in out
     # No JSON blobs.
     assert "data=" not in out
     assert "{" not in out

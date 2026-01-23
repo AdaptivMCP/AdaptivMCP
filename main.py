@@ -36,6 +36,7 @@ from github_mcp.config import (
     HTTPX_TIMEOUT,
     HUMAN_LOGS,
     LOG_HTTP_BODIES,
+    LOG_HTTP_MAX_BODY_BYTES,
     LOG_HTTP_REQUESTS,
     LOG_RENDER_HTTP,  # noqa: F401
     LOG_RENDER_HTTP_BODIES,  # noqa: F401
@@ -268,49 +269,128 @@ class _RequestContextMiddleware:
         access_started_at = time.perf_counter()
         access_logged = False
         captured_body: bytes | None = None
+        captured_body_truncated = False
+
+        # Optional response capture (bounded).
+        response_status: int | None = None
+        response_headers: list[tuple[bytes, bytes]] | None = None
+        response_body_chunks: list[bytes] = []
+        response_body_total = 0
+        response_body_truncated = False
 
         async def send_access_wrapper(message):
             nonlocal access_logged
+            nonlocal response_status, response_headers
+            nonlocal response_body_total, response_body_truncated
+            nonlocal captured_body_truncated
             if not LOG_HTTP_REQUESTS:
                 return await send_wrapper(message)
-            if message.get("type") == "http.response.start" and not access_logged:
-                access_logged = True
-                status_code = message.get("status")
-                duration_ms = (time.perf_counter() - access_started_at) * 1000
-                # Human-readable line + machine-friendly structured payload.
-                payload = {
-                    "event": "http_request",
-                    "request_id": request_id,
-                    "session_id": REQUEST_SESSION_ID.get(),
-                    "message_id": REQUEST_MESSAGE_ID.get(),
-                    "method": scope.get("method"),
-                    "path": path,
-                    "status_code": status_code,
-                    "duration_ms": duration_ms,
-                }
-                if LOG_HTTP_BODIES and captured_body is not None and path.endswith("/messages"):
-                    try:
-                        payload["request_body"] = captured_body.decode("utf-8", errors="replace")
-                    except Exception:
-                        payload["request_body"] = repr(captured_body)
+            msg_type = message.get("type")
 
-                if HUMAN_LOGS:
-                    rid = shorten_token(request_id)
-                    sid = shorten_token(REQUEST_SESSION_ID.get())
-                    mid = shorten_token(REQUEST_MESSAGE_ID.get())
-                    LOGGER.info(
-                        (
-                            "http_request "
-                            f"method={scope.get('method')} path={path} status={status_code} "
-                            f"duration_ms={duration_ms:.2f} request_id={rid} session_id={sid} message_id={mid}"
-                        ),
-                        extra=payload,
-                    )
-                else:
-                    LOGGER.info(
-                        f"http_request method={scope.get('method')} path={path} status={status_code}",
-                        extra=payload,
-                    )
+            if msg_type == "http.response.start":
+                response_status = message.get("status")
+                response_headers = list(message.get("headers") or [])
+
+                # When body logging is enabled for this request, delay the log
+                # until we see the final body chunk so we can include the
+                # response payload.
+                if LOG_HTTP_BODIES and (captured_body is not None or scope.get("method") == "POST"):
+                    return await send_wrapper(message)
+
+                if not access_logged:
+                    access_logged = True
+                    duration_ms = (time.perf_counter() - access_started_at) * 1000
+                    payload = {
+                        "event": "http_request",
+                        "request_id": request_id,
+                        "session_id": REQUEST_SESSION_ID.get(),
+                        "message_id": REQUEST_MESSAGE_ID.get(),
+                        "method": scope.get("method"),
+                        "path": path,
+                        "status_code": response_status,
+                        "duration_ms": duration_ms,
+                    }
+                    if HUMAN_LOGS:
+                        rid = shorten_token(request_id)
+                        sid = shorten_token(REQUEST_SESSION_ID.get())
+                        mid = shorten_token(REQUEST_MESSAGE_ID.get())
+                        LOGGER.info(
+                            (
+                                "http_request "
+                                f"method={scope.get('method')} path={path} status={response_status} "
+                                f"duration_ms={duration_ms:.2f} request_id={rid} session_id={sid} message_id={mid}"
+                            ),
+                            extra=payload,
+                        )
+                    else:
+                        LOGGER.info(
+                            f"http_request method={scope.get('method')} path={path} status={response_status}",
+                            extra=payload,
+                        )
+                return await send_wrapper(message)
+
+            if msg_type == "http.response.body" and LOG_HTTP_BODIES and (
+                captured_body is not None or scope.get("method") == "POST"
+            ):
+                body_chunk = message.get("body", b"") or b""
+                if body_chunk and not response_body_truncated:
+                    remaining = max(0, int(LOG_HTTP_MAX_BODY_BYTES) - response_body_total)
+                    if remaining > 0:
+                        response_body_chunks.append(body_chunk[:remaining])
+                        response_body_total += min(len(body_chunk), remaining)
+                    if len(body_chunk) > remaining:
+                        response_body_truncated = True
+
+                if not message.get("more_body") and not access_logged:
+                    access_logged = True
+                    duration_ms = (time.perf_counter() - access_started_at) * 1000
+                    payload = {
+                        "event": "http_request",
+                        "request_id": request_id,
+                        "session_id": REQUEST_SESSION_ID.get(),
+                        "message_id": REQUEST_MESSAGE_ID.get(),
+                        "method": scope.get("method"),
+                        "path": path,
+                        "status_code": response_status,
+                        "duration_ms": duration_ms,
+                    }
+
+                    if captured_body is not None:
+                        try:
+                            payload["request_body"] = captured_body.decode("utf-8", errors="replace")
+                        except Exception:
+                            payload["request_body"] = repr(captured_body)
+                        if captured_body_truncated:
+                            payload["request_body_truncated"] = True
+
+                    resp_bytes = b"".join(response_body_chunks)
+                    if resp_bytes:
+                        try:
+                            payload["response_body"] = resp_bytes.decode("utf-8", errors="replace")
+                        except Exception:
+                            payload["response_body"] = repr(resp_bytes)
+                        if response_body_truncated:
+                            payload["response_body_truncated"] = True
+
+                    if HUMAN_LOGS:
+                        rid = shorten_token(request_id)
+                        sid = shorten_token(REQUEST_SESSION_ID.get())
+                        mid = shorten_token(REQUEST_MESSAGE_ID.get())
+                        LOGGER.info(
+                            (
+                                "http_request "
+                                f"method={scope.get('method')} path={path} status={response_status} "
+                                f"duration_ms={duration_ms:.2f} request_id={rid} session_id={sid} message_id={mid}"
+                            ),
+                            extra=payload,
+                        )
+                    else:
+                        LOGGER.info(
+                            f"http_request method={scope.get('method')} path={path} status={response_status}",
+                            extra=payload,
+                        )
+
+                return await send_wrapper(message)
             return await send_wrapper(message)
 
         def _extract_idempotency_from_payload(payload: Any) -> str | None:
@@ -369,7 +449,15 @@ class _RequestContextMiddleware:
             # Drain once, then replay to downstream app.
             await _drain_body()
             body = b"".join(body_chunks)
-            captured_body = body if LOG_HTTP_BODIES else None
+            if LOG_HTTP_BODIES:
+                limit = max(0, int(LOG_HTTP_MAX_BODY_BYTES))
+                if limit and len(body) > limit:
+                    captured_body = body[:limit]
+                    captured_body_truncated = True
+                else:
+                    captured_body = body
+            else:
+                captured_body = None
             try:
                 if body:
                     payload = json.loads(body.decode("utf-8", errors="replace"))
