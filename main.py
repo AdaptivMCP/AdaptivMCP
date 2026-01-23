@@ -329,8 +329,10 @@ class _RequestContextMiddleware:
                         )
                 return await send_wrapper(message)
 
-            if msg_type == "http.response.body" and LOG_HTTP_BODIES and (
-                captured_body is not None or scope.get("method") == "POST"
+            if (
+                msg_type == "http.response.body"
+                and LOG_HTTP_BODIES
+                and (captured_body is not None or scope.get("method") == "POST")
             ):
                 body_chunk = message.get("body", b"") or b""
                 if body_chunk and not response_body_truncated:
@@ -357,7 +359,9 @@ class _RequestContextMiddleware:
 
                     if captured_body is not None:
                         try:
-                            payload["request_body"] = captured_body.decode("utf-8", errors="replace")
+                            payload["request_body"] = captured_body.decode(
+                                "utf-8", errors="replace"
+                            )
                         except Exception:
                             payload["request_body"] = repr(captured_body)
                         if captured_body_truncated:
