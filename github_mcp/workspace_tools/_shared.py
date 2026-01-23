@@ -6,7 +6,7 @@ import shlex
 from typing import Any
 
 from github_mcp import config
-from github_mcp.exceptions import GitHubAPIError
+from github_mcp.exceptions import GitHubAPIError, UsageError
 from github_mcp.server import CONTROLLER_REPO
 from github_mcp.utils import _get_main_module, _normalize_timeout_seconds
 from github_mcp.workspace import (
@@ -412,9 +412,16 @@ def _resolve_full_name(
     if isinstance(full_name, str) and full_name.strip():
         return full_name.strip()
 
+    owner_val = owner.strip() if isinstance(owner, str) else ""
+    repo_val = repo.strip() if isinstance(repo, str) else ""
+
     # Back-compat: allow callers to provide owner+repo instead of full_name.
-    if isinstance(owner, str) and owner.strip() and isinstance(repo, str) and repo.strip():
-        return owner.strip() + "/" + repo.strip()
+    if owner_val or repo_val:
+        if not owner_val or not repo_val:
+            raise UsageError(
+                "Provide both 'owner' and 'repo' together, or use 'full_name' as 'owner/repo'."
+            )
+        return owner_val + "/" + repo_val
 
     return CONTROLLER_REPO
 
