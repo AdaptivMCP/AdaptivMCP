@@ -299,7 +299,8 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             ):
                 return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
             err = GitHubAPIError(
-                f"{context} content_url path not found at {local_path}. "
+                f"{context} content_url sandbox file was not found at {local_path}. "
+                "This indicates a missing file path (not an auth or connectivity problem). "
                 "Provide an http(s) URL that already points to the sandbox file "
                 "or configure SANDBOX_CONTENT_BASE_URL so the server can fetch it "
                 "when direct filesystem access is unavailable."
