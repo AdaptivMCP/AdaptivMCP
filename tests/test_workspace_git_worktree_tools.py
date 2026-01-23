@@ -95,9 +95,7 @@ async def test_workspace_git_branches_parses_refs(
 
     monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
 
-    out = await git_worktree.workspace_git_branches(
-        full_name="octo-org/octo-repo", ref="main"
-    )
+    out = await git_worktree.workspace_git_branches(full_name="octo-org/octo-repo", ref="main")
     assert out["ok"] is True
     assert out["branches"][0]["name"] == "main"
     assert out["branches"][0]["is_head"] is True
@@ -109,10 +107,10 @@ async def test_workspace_git_checkout_rekeys_workspace(
 ) -> None:
     """Checkout should move the working copy to the new ref mirror path."""
 
-    from github_mcp.workspace_tools import git_worktree
-
     import shutil
     import tempfile
+
+    from github_mcp.workspace_tools import git_worktree
 
     class _TW:
         def _effective_ref_for_repo(self, _full_name: str, ref: str) -> str:
@@ -169,4 +167,3 @@ async def test_workspace_git_checkout_rekeys_workspace(
         assert os.path.exists(os.path.join(target_dir, "local.txt"))
         assert not os.path.exists(os.path.join(base_dir, "local.txt"))
         assert os.path.exists(os.path.join(base_dir, "clean.txt"))
-

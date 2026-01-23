@@ -83,9 +83,21 @@ async def test_list_repository_tree_filters_and_normalizes_prefix(monkeypatch):
             "json": {
                 "sha": "tree-sha",
                 "tree": [
-                    {"path": "src/app.py", "type": "blob", "mode": "100644", "size": 12, "sha": "a"},
+                    {
+                        "path": "src/app.py",
+                        "type": "blob",
+                        "mode": "100644",
+                        "size": 12,
+                        "sha": "a",
+                    },
                     {"path": "src/pkg", "type": "tree", "mode": "040000", "sha": "b"},
-                    {"path": "docs/readme.md", "type": "blob", "mode": "100644", "size": 5, "sha": "c"},
+                    {
+                        "path": "docs/readme.md",
+                        "type": "blob",
+                        "mode": "100644",
+                        "size": 5,
+                        "sha": "c",
+                    },
                     {"path": "ignored", "type": "commit", "sha": "d"},
                     "not-a-dict",
                 ],
