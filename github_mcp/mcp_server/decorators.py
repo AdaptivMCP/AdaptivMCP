@@ -2111,9 +2111,7 @@ def _normalize_tool_result_envelope(result: Any) -> Any:
     return out
 
 
-def _inject_coloured_streams(
-    out: dict[str, Any], *, req: Mapping[str, Any] | None = None
-) -> None:
+def _inject_coloured_streams(out: dict[str, Any], *, req: Mapping[str, Any] | None = None) -> None:
     """Attach ANSI-colored stdout/stderr previews to a mapping payload.
 
     This helper is intentionally minimal: it only adds

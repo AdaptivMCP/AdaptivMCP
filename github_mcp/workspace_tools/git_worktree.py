@@ -15,8 +15,8 @@ commands):
 
 from __future__ import annotations
 
-import shlex
 import os
+import shlex
 import shutil
 from typing import Any
 
@@ -44,7 +44,7 @@ def _clip_text(text: str, *, max_chars: int) -> tuple[str, bool]:
     if max_chars <= 0 or len(raw) <= max_chars:
         return (raw, False)
     if max_chars < 4:
-        return (raw[:max(0, max_chars)], True)
+        return (raw[: max(0, max_chars)], True)
     return (raw[: max(0, max_chars - 1)] + "…", True)
 
 
@@ -309,12 +309,11 @@ async def workspace_git_log(
             stderr = res.get("stderr", "") or res.get("stdout", "")
             raise GitHubAPIError(f"git log failed: {stderr}")
 
-        out_raw, truncated = _clip_text((res.get("stdout", "") or "").rstrip("\n"), max_chars=max_chars)
+        out_raw, truncated = _clip_text(
+            (res.get("stdout", "") or "").rstrip("\n"), max_chars=max_chars
+        )
         rows = _parse_tabbed_rows(out_raw.splitlines(), expected_cols=4)
-        commits = [
-            {"sha": r[0], "author": r[1], "date": r[2], "subject": r[3]}
-            for r in rows
-        ]
+        commits = [{"sha": r[0], "author": r[1], "date": r[2], "subject": r[3]} for r in rows]
 
         return {
             "full_name": full_name,
@@ -375,7 +374,9 @@ async def workspace_git_show(
             stderr = res.get("stderr", "") or res.get("stdout", "")
             raise GitHubAPIError(f"git show failed: {stderr}")
 
-        out_raw, truncated = _clip_text((res.get("stdout", "") or "").rstrip("\n"), max_chars=max_chars)
+        out_raw, truncated = _clip_text(
+            (res.get("stdout", "") or "").rstrip("\n"), max_chars=max_chars
+        )
         return {
             "full_name": full_name,
             "ref": effective_ref,
@@ -499,7 +500,12 @@ async def workspace_git_branches(
 
         fmt = "%(_refname)\t%(refname:short)\t%(objectname)\t%(upstream:short)\t%(upstream:track)\t%(HEAD)"
         # Use a stable format line; git treats percent-parens as placeholders.
-        cmd = "git for-each-ref --format=" + shlex.quote(fmt) + " " + " ".join(shlex.quote(r) for r in refs)
+        cmd = (
+            "git for-each-ref --format="
+            + shlex.quote(fmt)
+            + " "
+            + " ".join(shlex.quote(r) for r in refs)
+        )
         res = await deps["run_shell"](cmd, cwd=repo_dir, timeout_seconds=t_default)
         if res.get("exit_code", 0) != 0:
             stderr = res.get("stderr", "") or res.get("stdout", "")
@@ -563,11 +569,7 @@ async def workspace_git_tags(
             n = 2000
 
         fmt = "%(refname:strip=2)\t%(objectname)\t%(creatordate:iso-strict)"
-        cmd = (
-            "git tag -l --sort=-creatordate --format="
-            + shlex.quote(fmt)
-            + f" | head -n {n}"
-        )
+        cmd = "git tag -l --sort=-creatordate --format=" + shlex.quote(fmt) + f" | head -n {n}"
         # `head` is a small portability risk, but the server already relies on
         # common shell tools. If `head` is unavailable, git output will still
         # be bounded by the MCP response shaping.
