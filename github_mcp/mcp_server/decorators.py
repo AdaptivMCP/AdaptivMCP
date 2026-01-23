@@ -2957,7 +2957,6 @@ def _tool_log_payload(
     return payload
 
 
-
 def _log_tool_start(
     *,
     tool_name: str,
