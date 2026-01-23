@@ -5,6 +5,18 @@ import os
 def _reload_decorators_with_env(**env: str) -> object:
     """Reload github_mcp.mcp_server.decorators after setting env vars."""
 
+    # Keep tests deterministic: clear known env vars and only set the ones
+    # explicitly requested by the test case.
+    known = {
+        "ADAPTIV_MCP_LOG_COLOR",
+        "ADAPTIV_MCP_LOG_VISUALS",
+        "ADAPTIV_MCP_LOG_DIFF_SNIPPETS",
+        "ADAPTIV_MCP_LOG_READ_SNIPPETS",
+        "ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS",
+    }
+    for k in known:
+        os.environ.pop(k, None)
+
     for k, v in env.items():
         os.environ[k] = v
     import github_mcp.mcp_server.decorators as decorators  # type: ignore
@@ -51,7 +63,18 @@ def test_preview_file_snippet_respects_start_line() -> None:
     assert "  11│" in rendered
 
 
-def test_strip_internal_log_fields_preserves_log_keys_by_default() -> None:
+def test_strip_internal_log_fields_strips_log_keys_by_default() -> None:
+    decorators = _reload_decorators_with_env(
+        ADAPTIV_MCP_LOG_COLOR="0",
+        ADAPTIV_MCP_LOG_VISUALS="1",
+    )
+
+    payload = {"ok": True, "__log_diff": "x", "__log_start_line": 12}
+    cleaned = decorators._strip_internal_log_fields(payload)
+    assert cleaned == {"ok": True}
+
+
+def test_strip_internal_log_fields_can_preserve_log_keys() -> None:
     decorators = _reload_decorators_with_env(
         ADAPTIV_MCP_LOG_COLOR="0",
         ADAPTIV_MCP_LOG_VISUALS="1",
@@ -60,18 +83,4 @@ def test_strip_internal_log_fields_preserves_log_keys_by_default() -> None:
 
     payload = {"ok": True, "__log_diff": "x", "__log_start_line": 12}
     cleaned = decorators._strip_internal_log_fields(payload)
-    # Preserve the log keys so client-visible output matches the payload used
-    # to render tool log visuals.
     assert cleaned == payload
-
-
-def test_strip_internal_log_fields_can_restore_legacy_stripping() -> None:
-    decorators = _reload_decorators_with_env(
-        ADAPTIV_MCP_LOG_COLOR="0",
-        ADAPTIV_MCP_LOG_VISUALS="1",
-        ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS="1",
-    )
-
-    payload = {"ok": True, "__log_diff": "x", "__log_start_line": 12}
-    cleaned = decorators._strip_internal_log_fields(payload)
-    assert cleaned == {"ok": True}

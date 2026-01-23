@@ -234,9 +234,11 @@ REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE = False
 # provider log stream for supplemental context. This can cause the model and
 # the user to see different information than what shows up in tool logs.
 #
-# Default is now to PRESERVE __log_* fields in tool responses so HTTP clients
-# and MCP clients see the same payload that generated the visuals.
-STRIP_INTERNAL_LOG_FIELDS = _env_flag("ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS", default=False)
+# Default is to STRIP __log_* fields from client-visible tool responses.
+#
+# Set ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=0 to preserve these fields in the
+# client payload (useful for debugging or when a client explicitly needs them).
+STRIP_INTERNAL_LOG_FIELDS = _env_flag("ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS", default=True)
 
 
 def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
@@ -2136,9 +2138,8 @@ def _strip_internal_log_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
     Tool implementations may include keys prefixed with ``__log_`` to pass
     additional context to provider logs (e.g., precomputed diffs/snippets).
 
-    Default behavior is to PRESERVE these fields so the client-visible payload
-    matches the payload used to render tool logs. Set
-    ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=1 to restore legacy stripping.
+    Default behavior is to STRIP these fields from the client-visible payload.
+    Set ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=0 to preserve them.
     """
 
     out = dict(payload) if isinstance(payload, Mapping) else dict(payload)
