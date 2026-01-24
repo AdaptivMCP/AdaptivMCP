@@ -148,3 +148,68 @@ async def test_run_python_preserves_user_filename(monkeypatch, tmp_path):
 
     assert out["script_path"] == filename
     assert os.path.isfile(os.path.join(str(repo_dir), filename))
+
+
+@pytest.mark.anyio
+async def test_terminal_command_pytest_cleans_artifacts_and_sets_env(monkeypatch, tmp_path):
+    import github_mcp.workspace_tools.commands as commands
+
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    # Create some typical transient artifacts.
+    (repo_dir / ".pytest_cache").mkdir()
+    (repo_dir / ".pytest_cache" / "v").mkdir(parents=True, exist_ok=True)
+    (repo_dir / ".pytest_cache" / "v" / "cache.json").write_text("{}", encoding="utf-8")
+
+    (repo_dir / "__pycache__").mkdir()
+    (repo_dir / "__pycache__" / "mod.cpython-311.pyc").write_bytes(b"\0\0")
+
+    (repo_dir / ".coverage").write_text("data", encoding="utf-8")
+
+    captured_env: list[dict[str, str] | None] = []
+
+    async def clone_repo(_full_name: str, *, ref: str, preserve_changes: bool):
+        assert preserve_changes is True
+        return str(repo_dir)
+
+    async def prepare_venv(_repo_dir: str):
+        return {"VIRTUAL_ENV": os.path.join(str(repo_dir), ".venv-mcp"), "PATH": ""}
+
+    async def run_shell(cmd: str, *, cwd: str, timeout_seconds: int, env=None):
+        captured_env.append(dict(env) if isinstance(env, dict) else None)
+        return {"exit_code": 0, "stdout": "ok", "stderr": "", "timed_out": False}
+
+    fake_tw = SimpleNamespace(
+        _effective_ref_for_repo=lambda full_name, ref: ref,
+        _workspace_deps=lambda: {
+            "clone_repo": clone_repo,
+            "prepare_temp_virtualenv": prepare_venv,
+            "run_shell": run_shell,
+        },
+    )
+
+    monkeypatch.setattr(commands, "_tw", lambda: fake_tw)
+
+    out = await commands.terminal_command(
+        full_name="owner/repo",
+        ref="main",
+        command="pytest -q",
+        workdir=None,
+        use_temp_venv=True,
+        installing_dependencies=False,
+    )
+
+    assert out["result"]["exit_code"] == 0
+    assert out.get("test_artifact_cleanup")
+
+    # Artifacts should be removed.
+    assert not os.path.isdir(os.path.join(str(repo_dir), ".pytest_cache"))
+    assert not os.path.isdir(os.path.join(str(repo_dir), "__pycache__"))
+    assert not os.path.exists(os.path.join(str(repo_dir), ".coverage"))
+
+    # Ensure env passed to command disables bytecode and pytest cache provider.
+    assert captured_env
+    env0 = captured_env[-1] or {}
+    assert env0.get("PYTHONDONTWRITEBYTECODE") == "1"
+    assert "no:cacheprovider" in (env0.get("PYTEST_ADDOPTS") or "")

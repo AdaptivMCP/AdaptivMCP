@@ -20,6 +20,153 @@ from ._shared import (
 )
 
 
+_TEST_ARTIFACT_DIRS = {
+    ".pytest_cache",
+    "htmlcov",
+    ".hypothesis",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".coverage-html",
+}
+
+_TEST_ARTIFACT_FILES = {
+    ".coverage",
+    "coverage.xml",
+    "junit.xml",
+    "pytest.xml",
+    "pytest-report.xml",
+}
+
+
+def _looks_like_pytest_command(command: str, command_lines: list[str] | None) -> bool:
+    """Heuristically detect pytest invocations.
+
+    We use a conservative substring match because many callers embed pytest
+    inside compound shell commands (e.g. "python -m pytest", "coverage run -m pytest",
+    "pytest -q && echo done").
+    """
+
+    blob = "\n".join(command_lines or []) if command_lines else (command or "")
+    s = blob.lower()
+    return ("pytest" in s) or ("-m pytest" in s)
+
+
+def _augment_env_for_pytest(env: dict[str, str] | None) -> dict[str, str] | None:
+    """Reduce test artifact churn for pytest runs.
+
+    - PYTHONDONTWRITEBYTECODE=1 avoids __pycache__ / *.pyc creation.
+    - Disabling pytest's cache provider prevents `.pytest_cache/`.
+
+    The changes are best-effort and only applied when the caller is running
+    pytest. We avoid heavy-handed settings like PYTEST_DISABLE_PLUGIN_AUTOLOAD
+    which can break repos that rely on plugins.
+    """
+
+    out = dict(env or {})
+    out.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+
+    addopts = str(out.get("PYTEST_ADDOPTS") or "")
+    if "no:cacheprovider" not in addopts:
+        out["PYTEST_ADDOPTS"] = (addopts + " -p no:cacheprovider").strip()
+    return out
+
+
+def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
+    """Best-effort removal of common test artifacts under a repo root.
+
+    This is intentionally conservative:
+    - Only removes well-known transient paths.
+    - Never recurses into `.git/` or `.venv-mcp/`.
+    """
+
+    repo_real = os.path.realpath(repo_dir)
+    removed_dirs = 0
+    removed_files = 0
+    errors: list[str] = []
+
+    # Fast-path: remove known top-level artifacts.
+    for d in sorted(_TEST_ARTIFACT_DIRS):
+        p = os.path.join(repo_real, d)
+        if os.path.isdir(p):
+            try:
+                for root, dirs, files in os.walk(p, topdown=False):
+                    for fn in files:
+                        try:
+                            os.remove(os.path.join(root, fn))
+                        except Exception as exc:
+                            errors.append(f"remove_file:{os.path.relpath(os.path.join(root, fn), repo_real)}:{exc}")
+                    for dn in dirs:
+                        try:
+                            os.rmdir(os.path.join(root, dn))
+                        except Exception:
+                            # Directory may not be empty; continue best-effort.
+                            pass
+                os.rmdir(p)
+                removed_dirs += 1
+            except Exception as exc:
+                errors.append(f"remove_dir:{d}:{exc}")
+
+    for f in sorted(_TEST_ARTIFACT_FILES):
+        p = os.path.join(repo_real, f)
+        if os.path.isfile(p):
+            try:
+                os.remove(p)
+                removed_files += 1
+            except Exception as exc:
+                errors.append(f"remove_file:{f}:{exc}")
+
+    # Sweep: remove __pycache__ dirs and *.pyc/*.pyo files (excluding venv/git).
+    skip_dirs = {".git", ".venv-mcp"}
+    for root, dirs, files in os.walk(repo_real, topdown=True):
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+
+        # Remove stray bytecode files.
+        for fn in list(files):
+            if fn.endswith(".pyc") or fn.endswith(".pyo"):
+                try:
+                    os.remove(os.path.join(root, fn))
+                    removed_files += 1
+                except Exception as exc:
+                    errors.append(
+                        f"remove_file:{os.path.relpath(os.path.join(root, fn), repo_real)}:{exc}"
+                    )
+
+        # Remove __pycache__ directories encountered in this level.
+        if "__pycache__" in dirs:
+            pyc_dir = os.path.join(root, "__pycache__")
+            try:
+                for r2, d2, f2 in os.walk(pyc_dir, topdown=False):
+                    for fn in f2:
+                        try:
+                            os.remove(os.path.join(r2, fn))
+                        except Exception as exc:
+                            errors.append(
+                                f"remove_file:{os.path.relpath(os.path.join(r2, fn), repo_real)}:{exc}"
+                            )
+                    for dn in d2:
+                        try:
+                            os.rmdir(os.path.join(r2, dn))
+                        except Exception:
+                            pass
+                os.rmdir(pyc_dir)
+                removed_dirs += 1
+            except Exception as exc:
+                errors.append(
+                    f"remove_dir:{os.path.relpath(pyc_dir, repo_real)}:{exc}"
+                )
+            try:
+                dirs.remove("__pycache__")
+            except ValueError:
+                pass
+
+    return {
+        "removed_dir_count": removed_dirs,
+        "removed_file_count": removed_files,
+        "errors": errors[:25],
+        "error_count": len(errors),
+    }
+
+
 def _terminal_command_write_action(args: dict[str, Any]) -> bool:
     """Infer the write/read classification for terminal_command invocations."""
 
@@ -305,6 +452,10 @@ async def terminal_command(
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
 
+        is_pytest = _looks_like_pytest_command(requested_command, command_lines_out)
+        if is_pytest:
+            env = _augment_env_for_pytest(env)
+
         cwd = _resolve_workdir(repo_dir, workdir)
 
         # Execute the raw intended command (may contain newlines if provided via command_lines).
@@ -327,6 +478,10 @@ async def terminal_command(
             timeout_seconds=timeout_seconds,
             env=env,
         )
+
+        cleanup_summary: dict[str, Any] | None = None
+        if is_pytest:
+            cleanup_summary = _cleanup_test_artifacts(repo_dir)
 
         # Best-effort: if the caller created a new local branch (e.g. via
         # `git checkout -b foo` / `git switch -c foo`) ensure the corresponding
@@ -435,6 +590,7 @@ async def terminal_command(
             "install_steps": install_steps,
             "result": result,
             **({"auto_push_branch": auto_push} if auto_push is not None else {}),
+            **({"test_artifact_cleanup": cleanup_summary} if cleanup_summary else {}),
         }
 
         return out
