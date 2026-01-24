@@ -35,6 +35,8 @@ except Exception:  # noqa: BLE001
 
     def redact_any(value: Any, *args: Any, **kwargs: Any) -> Any:  # type: ignore[override]
         return value
+
+
 def _parse_bool(value: str | None) -> bool | None:
     if value is None:
         return None
@@ -46,7 +48,9 @@ def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool = True) -> 
 
     from ..retry_utils import jitter_sleep_seconds
 
-    return jitter_sleep_seconds(delay_seconds, respect_min=respect_min, cap_seconds=0.25)
+    return jitter_sleep_seconds(
+        delay_seconds, respect_min=respect_min, cap_seconds=0.25
+    )
 
 
 def _tool_catalog(
@@ -63,7 +67,9 @@ def _tool_catalog(
     try:
         from github_mcp.main_tools.introspection import list_all_actions
 
-        catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
+        catalog = list_all_actions(
+            include_parameters=include_parameters, compact=compact
+        )
         tools = list(catalog.get("tools") or [])
         catalog_error: str | None = None
         catalog_errors = catalog.get("errors")
@@ -144,7 +150,11 @@ def _infer_error_category(code: str, category: str, message: str) -> str:
     code_norm = str(code or "").strip().lower()
     msg = str(message or "").strip().lower()
 
-    if code_norm in {"write_approval_required", "write_approval", "write_approval_required_error"}:
+    if code_norm in {
+        "write_approval_required",
+        "write_approval",
+        "write_approval_required_error",
+    }:
         return "write_approval_required"
     if code_norm in {"write_not_authorized", "write_not_authorized_error"}:
         return "permission"
@@ -157,7 +167,11 @@ def _infer_error_category(code: str, category: str, message: str) -> str:
         return "timeout"
     if "not found" in msg or "does not exist" in msg:
         return "not_found"
-    if "unauthorized" in msg or "authentication" in msg or ("token" in msg and "missing" in msg):
+    if (
+        "unauthorized" in msg
+        or "authentication" in msg
+        or ("token" in msg and "missing" in msg)
+    ):
         return "auth"
     if "forbidden" in msg or "permission" in msg or "not authorized" in msg:
         return "permission"
@@ -195,7 +209,9 @@ def _looks_like_error_detail(result: dict[str, Any]) -> bool:
     }:
         return False
 
-    has_cat = isinstance(result.get("category"), str) and str(result.get("category")).strip()
+    has_cat = (
+        isinstance(result.get("category"), str) and str(result.get("category")).strip()
+    )
     has_code = isinstance(result.get("code"), str) and str(result.get("code")).strip()
     has_msg = any(
         isinstance(result.get(k), str) and str(result.get(k)).strip()
@@ -226,9 +242,16 @@ def _normalize_structured_error_payload(
         )
         or (result.get("ok") is False)
     ):
-        msg = _coerce_error_message(result) or _coerce_error_message(err_detail) or "Tool failed."
+        msg = (
+            _coerce_error_message(result)
+            or _coerce_error_message(err_detail)
+            or "Tool failed."
+        )
         detail: dict[str, Any] = {}
-        if isinstance(result.get("category"), str) and str(result.get("category")).strip():
+        if (
+            isinstance(result.get("category"), str)
+            and str(result.get("category")).strip()
+        ):
             detail["category"] = str(result.get("category")).strip()
         if isinstance(result.get("code"), str) and str(result.get("code")).strip():
             detail["code"] = str(result.get("code")).strip()
@@ -279,7 +302,10 @@ def _normalize_structured_error_payload(
             out["error"] = msg
 
     # Convenience top-level fields.
-    if isinstance(err_detail.get("category"), str) and err_detail.get("category").strip():
+    if (
+        isinstance(err_detail.get("category"), str)
+        and err_detail.get("category").strip()
+    ):
         out.setdefault("category", err_detail.get("category").strip())
     if isinstance(err_detail.get("code"), str) and err_detail.get("code").strip():
         out.setdefault("code", err_detail.get("code").strip())
@@ -476,7 +502,10 @@ def _status_code_for_error(error: dict[str, Any]) -> int:
     code = code_raw.strip()
     code_norm = code.lower()
 
-    if code_norm in {"github_rate_limited", "render_rate_limited"} or category == "rate_limited":
+    if (
+        code_norm in {"github_rate_limited", "render_rate_limited"}
+        or category == "rate_limited"
+    ):
         return 429
     if category == "auth":
         return 401
@@ -640,7 +669,9 @@ async def _execute_tool(
     if not resolved:
         available: list[str] = []
         try:
-            for tool_obj, func in list(getattr(mcp_registry, "_REGISTERED_MCP_TOOLS", []) or []):
+            for tool_obj, func in list(
+                getattr(mcp_registry, "_REGISTERED_MCP_TOOLS", []) or []
+            ):
                 name = mcp_registry._registered_tool_name(tool_obj, func)
                 if name:
                     available.append(name)
@@ -683,14 +714,19 @@ async def _execute_tool(
                         str(err_detail.get("category") or ""),
                         _coerce_error_message(err_detail),
                     )
-                    if not str(err_detail.get("category") or "").strip() and inferred_category:
+                    if (
+                        not str(err_detail.get("category") or "").strip()
+                        and inferred_category
+                    ):
                         err_detail["category"] = inferred_category
 
                     retryable = bool(err_detail.get("retryable", False))
                     status_code = _status_code_for_error(err_detail)
                     headers = _response_headers_for_error(err_detail)
 
-                    normalized_payload = _normalize_structured_error_payload(result, err_detail)
+                    normalized_payload = _normalize_structured_error_payload(
+                        result, err_detail
+                    )
 
                     if (
                         (not write_action)
@@ -701,9 +737,14 @@ async def _execute_tool(
                         details = err.get("details")
                         if isinstance(details, dict):
                             retry_after = details.get("retry_after_seconds")
-                            if isinstance(retry_after, (int, float)) and retry_after > 0:
+                            if (
+                                isinstance(retry_after, (int, float))
+                                and retry_after > 0
+                            ):
                                 delay = min(float(retry_after), 2.0)
-                        await asyncio.sleep(_jitter_sleep_seconds(delay, respect_min=True))
+                        await asyncio.sleep(
+                            _jitter_sleep_seconds(delay, respect_min=True)
+                        )
                         continue
 
                     _log_http_structured_error(
@@ -806,7 +847,9 @@ async def _create_invocation(
     tool_name: str, args: dict[str, Any], *, max_attempts: int | None = None
 ) -> ToolInvocation:
     invocation_id = uuid.uuid4().hex
-    task = asyncio.create_task(_execute_tool(tool_name, args, max_attempts=max_attempts))
+    task = asyncio.create_task(
+        _execute_tool(tool_name, args, max_attempts=max_attempts)
+    )
     invocation = ToolInvocation(
         invocation_id=invocation_id,
         tool_name=tool_name,
@@ -866,7 +909,9 @@ async def _cancel_invocation(invocation: ToolInvocation) -> None:
     if invocation.task.done():
         return
     invocation.status = "cancelling"
-    _log_http_tool_cancelled(tool_name=invocation.tool_name, invocation_id=invocation.invocation_id)
+    _log_http_tool_cancelled(
+        tool_name=invocation.tool_name, invocation_id=invocation.invocation_id
+    )
     invocation.task.cancel()
 
 
@@ -1033,7 +1078,9 @@ def build_tool_invoke_async_endpoint() -> Callable[[Request], Response]:
             except Exception:
                 payload = {}
         args = _normalize_payload(payload)
-        invocation = await _create_invocation(tool_name, args, max_attempts=max_attempts)
+        invocation = await _create_invocation(
+            tool_name, args, max_attempts=max_attempts
+        )
         return JSONResponse(_invocation_payload(invocation), status_code=202)
 
     return _endpoint
@@ -1083,7 +1130,9 @@ def register_tool_registry_routes(app: Any) -> None:
     app.add_route("/resources", resources_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", detail_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", invoke_endpoint, methods=["POST"])
-    app.add_route("/tools/{tool_name:str}/invocations", invoke_async_endpoint, methods=["POST"])
+    app.add_route(
+        "/tools/{tool_name:str}/invocations", invoke_async_endpoint, methods=["POST"]
+    )
     app.add_route(
         "/tool_invocations/{invocation_id:str}",
         invocation_status_endpoint,
@@ -1108,7 +1157,9 @@ def register_tool_registry_routes(app: Any) -> None:
     )
 
 
-def _prioritize_tool_registry_routes(app: Any, endpoints: Iterable[Callable[..., Any]]) -> None:
+def _prioritize_tool_registry_routes(
+    app: Any, endpoints: Iterable[Callable[..., Any]]
+) -> None:
     """Move tool registry routes to the front of the routing table."""
 
     router = getattr(app, "router", None)

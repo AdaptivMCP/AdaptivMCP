@@ -44,7 +44,9 @@ def test_run_shell_cancellation_terminates_process_group(monkeypatch):
     def _fake_killpg(pid: int, sig: int):
         killpg_calls.append((pid, sig))
 
-    monkeypatch.setattr(workspace.asyncio, "create_subprocess_shell", _fake_create_subprocess_shell)
+    monkeypatch.setattr(
+        workspace.asyncio, "create_subprocess_shell", _fake_create_subprocess_shell
+    )
     monkeypatch.setattr(workspace.os, "killpg", _fake_killpg)
 
     loop = asyncio.new_event_loop()
@@ -52,7 +54,9 @@ def test_run_shell_cancellation_terminates_process_group(monkeypatch):
         asyncio.set_event_loop(loop)
 
         async def _scenario() -> None:
-            task = asyncio.create_task(workspace._run_shell("sleep 999", timeout_seconds=0))
+            task = asyncio.create_task(
+                workspace._run_shell("sleep 999", timeout_seconds=0)
+            )
             await started.wait()
             task.cancel()
             try:
@@ -100,13 +104,17 @@ def test_run_shell_timeout_terminates_process_group(monkeypatch):
     def _fake_killpg(pid: int, sig: int):
         killpg_calls.append((pid, sig))
 
-    monkeypatch.setattr(workspace.asyncio, "create_subprocess_shell", _fake_create_subprocess_shell)
+    monkeypatch.setattr(
+        workspace.asyncio, "create_subprocess_shell", _fake_create_subprocess_shell
+    )
     monkeypatch.setattr(workspace.os, "killpg", _fake_killpg)
 
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(workspace._run_shell("sleep 999", timeout_seconds=0.01))
+        result = loop.run_until_complete(
+            workspace._run_shell("sleep 999", timeout_seconds=0.01)
+        )
     finally:
         loop.close()
         asyncio.set_event_loop(None)

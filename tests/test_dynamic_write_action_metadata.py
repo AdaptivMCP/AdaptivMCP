@@ -34,7 +34,10 @@ def test_infer_write_action_from_shell_write_examples() -> None:
     assert infer_write_action_from_shell("sed -i 's/a/b/' file.txt") is True
     assert infer_write_action_from_shell("echo hi > out.txt") is True
     assert infer_write_action_from_shell("tee out.txt < in.txt") is True
-    assert infer_write_action_from_shell("python -m pip install -r dev-requirements.txt") is True
+    assert (
+        infer_write_action_from_shell("python -m pip install -r dev-requirements.txt")
+        is True
+    )
 
 
 def test_mcp_tool_dynamic_write_action_is_exposed_in_response(monkeypatch) -> None:
@@ -45,7 +48,12 @@ def test_mcp_tool_dynamic_write_action_is_exposed_in_response(monkeypatch) -> No
     class FakeMCP:
         def tool(self, *, name=None, description=None, meta=None, annotations=None):
             def decorator(fn):
-                return {"fn": fn, "name": name, "meta": meta, "annotations": annotations}
+                return {
+                    "fn": fn,
+                    "name": name,
+                    "meta": meta,
+                    "annotations": annotations,
+                }
 
             return decorator
 
@@ -55,7 +63,9 @@ def test_mcp_tool_dynamic_write_action_is_exposed_in_response(monkeypatch) -> No
     def resolver(args):
         return bool(args.get("mode") == "write")
 
-    @decorators.mcp_tool(name="dyn_tool", write_action=True, write_action_resolver=resolver)
+    @decorators.mcp_tool(
+        name="dyn_tool", write_action=True, write_action_resolver=resolver
+    )
     def dyn_tool(mode: str = "read") -> dict:
         return {"mode": mode}
 
@@ -78,7 +88,12 @@ def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) ->
     class FakeMCP:
         def tool(self, *, name=None, description=None, meta=None, annotations=None):
             def decorator(fn):
-                return {"fn": fn, "name": name, "meta": meta, "annotations": annotations}
+                return {
+                    "fn": fn,
+                    "name": name,
+                    "meta": meta,
+                    "annotations": annotations,
+                }
 
             return decorator
 
@@ -88,7 +103,9 @@ def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) ->
     def resolver(args: dict[str, Any]) -> bool:
         return bool(args.get("mode") == "write")
 
-    @decorators.mcp_tool(name="dyn_ann_tool", write_action=False, write_action_resolver=resolver)
+    @decorators.mcp_tool(
+        name="dyn_ann_tool", write_action=False, write_action_resolver=resolver
+    )
     def dyn_ann_tool(mode: str = "read") -> dict:
         return {"mode": mode}
 
@@ -121,7 +138,12 @@ def test_registered_tool_annotations_update_on_invocation(monkeypatch) -> None:
     class FakeMCP:
         def tool(self, *, name=None, description=None, meta=None, annotations=None):
             def decorator(fn):
-                return {"fn": fn, "name": name, "meta": meta, "annotations": annotations}
+                return {
+                    "fn": fn,
+                    "name": name,
+                    "meta": meta,
+                    "annotations": annotations,
+                }
 
             return decorator
 
@@ -131,7 +153,9 @@ def test_registered_tool_annotations_update_on_invocation(monkeypatch) -> None:
     def resolver(args: dict[str, Any]) -> bool:
         return bool(args.get("mode") == "write")
 
-    @decorators.mcp_tool(name="dyn_tool_obj", write_action=True, write_action_resolver=resolver)
+    @decorators.mcp_tool(
+        name="dyn_tool_obj", write_action=True, write_action_resolver=resolver
+    )
     def dyn_tool_obj(mode: str = "read") -> dict:
         return {"mode": mode}
 
@@ -188,7 +212,9 @@ def test_tool_obj_meta_annotations_overwrite_on_invocation(monkeypatch) -> None:
     def resolver(args: dict[str, Any]) -> bool:
         return bool(args.get("mode") == "write")
 
-    @decorators.mcp_tool(name="meta_ann_tool", write_action=True, write_action_resolver=resolver)
+    @decorators.mcp_tool(
+        name="meta_ann_tool", write_action=True, write_action_resolver=resolver
+    )
     def meta_ann_tool(mode: str = "read") -> dict:
         return {"mode": mode}
 
@@ -206,7 +232,9 @@ def test_tool_obj_meta_annotations_overwrite_on_invocation(monkeypatch) -> None:
     assert ann_write.get("destructiveHint") is True
 
 
-def test_http_tool_registry_uses_effective_write_action_for_retries(monkeypatch) -> None:
+def test_http_tool_registry_uses_effective_write_action_for_retries(
+    monkeypatch,
+) -> None:
     """Read-classified invocations may retry; write-classified invocations must not."""
 
     _set_auto_approve(monkeypatch, False)
@@ -250,10 +278,14 @@ def test_http_tool_registry_uses_effective_write_action_for_retries(monkeypatch)
             return ToolObj(), flaky_cmd
         return None
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", fake_find_registered_tool)
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", fake_find_registered_tool
+    )
 
     endpoint = tool_registry.build_tool_invoke_endpoint()
-    app = Starlette(routes=[Route("/tools/{tool_name}/invoke", endpoint, methods=["POST"])])
+    app = Starlette(
+        routes=[Route("/tools/{tool_name}/invoke", endpoint, methods=["POST"])]
+    )
     client = TestClient(app)
 
     # 1) Read invocation should retry up to max_attempts.
@@ -282,7 +314,12 @@ def test_auto_approve_suppresses_all_ui_hints(monkeypatch) -> None:
     class FakeMCP:
         def tool(self, *, name=None, description=None, meta=None, annotations=None):
             def decorator(fn):
-                return {"fn": fn, "name": name, "meta": meta, "annotations": annotations}
+                return {
+                    "fn": fn,
+                    "name": name,
+                    "meta": meta,
+                    "annotations": annotations,
+                }
 
             return decorator
 

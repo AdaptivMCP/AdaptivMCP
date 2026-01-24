@@ -113,7 +113,9 @@ async def test_ensure_branch_creates_when_missing(monkeypatch):
     client = _DummyClient(
         get_map={
             "/repos/o/r/git/ref/heads/feature": _Resp(404, payload={}),
-            "/repos/o/r/git/ref/heads/main": _Resp(200, payload={"object": {"sha": "s"}}),
+            "/repos/o/r/git/ref/heads/main": _Resp(
+                200, payload={"object": {"sha": "s"}}
+            ),
         },
         post_map={
             "/repos/o/r/git/refs": _Resp(201, payload={"ref": "refs/heads/feature"}),

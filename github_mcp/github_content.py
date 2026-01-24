@@ -54,7 +54,9 @@ async def _decode_github_content(
     ref: str | None = None,
 ) -> dict[str, Any]:
     main_mod = _get_main_module()
-    effective_ref_fn = getattr(main_mod, "_effective_ref_for_repo", _effective_ref_for_repo)
+    effective_ref_fn = getattr(
+        main_mod, "_effective_ref_for_repo", _effective_ref_for_repo
+    )
     effective_ref = effective_ref_fn(full_name, ref)
     normalized_path = _normalize_repo_path_for_repo(full_name, path)
     try:
@@ -218,7 +220,9 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
     if content_url.startswith("github:"):
         spec = content_url[len("github:") :].strip()
         if not spec:
-            raise GitHubAPIError("github: content_url must include owner/repo:path[@ref]")
+            raise GitHubAPIError(
+                "github: content_url must include owner/repo:path[@ref]"
+            )
 
         if "/" not in spec or ":" not in spec:
             raise GitHubAPIError("github: content_url must be owner/repo:path[@ref]")
@@ -230,7 +234,9 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         full_name = owner_repo
         path_part, _, ref = path_ref.partition("@")
         if not path_part:
-            raise GitHubAPIError("github: content_url must specify a file path after ':'")
+            raise GitHubAPIError(
+                "github: content_url must specify a file path after ':'"
+            )
 
         decoded = await _decode_github_content(
             full_name=full_name,
@@ -247,14 +253,18 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             with open(local_path, "rb") as f:
                 return f.read()
         except FileNotFoundError as exc:
-            err = GitHubAPIError(f"{context} content_url path not found at {local_path}.")
+            err = GitHubAPIError(
+                f"{context} content_url path not found at {local_path}."
+            )
             if missing_hint:
                 # Keep hints separate from the primary error message so clients
                 # can render them without triggering repetitive LLM behaviors.
                 err.hint = str(missing_hint).strip()
             raise err from exc
         except OSError as exc:
-            raise GitHubAPIError(f"Failed to read content_url from {local_path}: {exc}") from exc
+            raise GitHubAPIError(
+                f"Failed to read content_url from {local_path}: {exc}"
+            ) from exc
 
     async def _fetch_rewritten_path(local_path: str, *, base_url: str) -> bytes:
         rewritten_url = base_url.rstrip("/") + "/" + local_path.lstrip("/")
@@ -295,7 +305,8 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             return _read_local(local_path, sandbox_hint)
         except GitHubAPIError as exc:
             if rewrite_base and (
-                rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
+                rewrite_base.startswith("http://")
+                or rewrite_base.startswith("https://")
             ):
                 return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
             err = GitHubAPIError(
@@ -320,7 +331,8 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             return _read_local(content_url, missing_hint)
         except GitHubAPIError as exc:
             if rewrite_base and (
-                rewrite_base.startswith("http://") or rewrite_base.startswith("https://")
+                rewrite_base.startswith("http://")
+                or rewrite_base.startswith("https://")
             ):
                 return await _fetch_rewritten_path(content_url, base_url=rewrite_base)
             err = GitHubAPIError(

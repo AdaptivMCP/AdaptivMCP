@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from github_mcp.workspace_tools.fs import _apply_workspace_operations_write_action_resolver
+from github_mcp.workspace_tools.fs import (
+    _apply_workspace_operations_write_action_resolver,
+)
 
 
 def test_apply_workspace_operations_resolver_preview_only_is_read() -> None:
     assert (
-        _apply_workspace_operations_write_action_resolver({"preview_only": True, "operations": []})
+        _apply_workspace_operations_write_action_resolver(
+            {"preview_only": True, "operations": []}
+        )
         is False
     )
 

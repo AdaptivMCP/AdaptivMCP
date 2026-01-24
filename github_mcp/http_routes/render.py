@@ -77,7 +77,11 @@ def register_render_routes(app: Any) -> None:
 
         cursor = _parse_str(request.query_params.get("cursor"))
         limit = _parse_int(
-            request.query_params.get("limit"), default=20, min_value=1, max_value=100, name="limit"
+            request.query_params.get("limit"),
+            default=20,
+            min_value=1,
+            max_value=100,
+            name="limit",
         )
         try:
             result = await list_render_owners(cursor=cursor, limit=limit)
@@ -91,10 +95,16 @@ def register_render_routes(app: Any) -> None:
         owner_id = _parse_str(request.query_params.get("owner_id"))
         cursor = _parse_str(request.query_params.get("cursor"))
         limit = _parse_int(
-            request.query_params.get("limit"), default=20, min_value=1, max_value=100, name="limit"
+            request.query_params.get("limit"),
+            default=20,
+            min_value=1,
+            max_value=100,
+            name="limit",
         )
         try:
-            result = await list_render_services(owner_id=owner_id, cursor=cursor, limit=limit)
+            result = await list_render_services(
+                owner_id=owner_id, cursor=cursor, limit=limit
+            )
             return JSONResponse(result)
         except Exception as exc:
             return _error_response(exc, context="http:render_services")
@@ -124,10 +134,16 @@ def register_render_routes(app: Any) -> None:
 
         cursor = _parse_str(request.query_params.get("cursor"))
         limit = _parse_int(
-            request.query_params.get("limit"), default=20, min_value=1, max_value=100, name="limit"
+            request.query_params.get("limit"),
+            default=20,
+            min_value=1,
+            max_value=100,
+            name="limit",
         )
         try:
-            result = await list_render_deploys(service_id=service_id, cursor=cursor, limit=limit)
+            result = await list_render_deploys(
+                service_id=service_id, cursor=cursor, limit=limit
+            )
             return JSONResponse(result)
         except Exception as exc:
             return _error_response(exc, context="http:render_deploys")
@@ -185,7 +201,9 @@ def register_render_routes(app: Any) -> None:
                 context="http:render_cancel_deploy",
             )
         try:
-            result = await cancel_render_deploy(service_id=service_id, deploy_id=deploy_id)
+            result = await cancel_render_deploy(
+                service_id=service_id, deploy_id=deploy_id
+            )
             return JSONResponse(result)
         except Exception as exc:
             return _error_response(exc, context="http:render_cancel_deploy")
@@ -201,7 +219,9 @@ def register_render_routes(app: Any) -> None:
                 context="http:render_rollback_deploy",
             )
         try:
-            result = await rollback_render_deploy(service_id=service_id, deploy_id=deploy_id)
+            result = await rollback_render_deploy(
+                service_id=service_id, deploy_id=deploy_id
+            )
             return JSONResponse(result)
         except Exception as exc:
             return _error_response(exc, context="http:render_rollback_deploy")
@@ -249,7 +269,9 @@ def register_render_routes(app: Any) -> None:
         resources: list[str] = []
         try:
             # Starlette's QueryParams supports multi-values.
-            resources.extend([r for r in request.query_params.getlist("resources") if r])
+            resources.extend(
+                [r for r in request.query_params.getlist("resources") if r]
+            )
         except Exception:
             pass
         if not resources:

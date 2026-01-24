@@ -132,12 +132,12 @@ from .config import (  # noqa: E402
 )
 from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
 
-_loop_semaphores: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
-    weakref.WeakKeyDictionary()
-)
-_search_rate_limit_states: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, Any]] = (
-    weakref.WeakKeyDictionary()
-)
+_loop_semaphores: weakref.WeakKeyDictionary[
+    asyncio.AbstractEventLoop, asyncio.Semaphore
+] = weakref.WeakKeyDictionary()
+_search_rate_limit_states: weakref.WeakKeyDictionary[
+    asyncio.AbstractEventLoop, dict[str, Any]
+] = weakref.WeakKeyDictionary()
 _http_client_github: httpx.AsyncClient | None = None
 _http_client_github_loop: asyncio.AbstractEventLoop | None = None
 _http_client_github_token: str | None = None
@@ -148,13 +148,19 @@ _http_client_external_loop: asyncio.AbstractEventLoop | None = None
 class _GitHubClientProtocol:
     """Structural protocol for httpx.Client-like objects used in this module."""
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:  # pragma: no cover - protocol only
+    def __init__(
+        self, *args: Any, **kwargs: Any
+    ) -> None:  # pragma: no cover - protocol only
         ...
 
-    def get(self, url: str, **kwargs: Any) -> httpx.Response:  # pragma: no cover - protocol only
+    def get(
+        self, url: str, **kwargs: Any
+    ) -> httpx.Response:  # pragma: no cover - protocol only
         ...
 
-    def post(self, url: str, **kwargs: Any) -> httpx.Response:  # pragma: no cover - protocol only
+    def post(
+        self, url: str, **kwargs: Any
+    ) -> httpx.Response:  # pragma: no cover - protocol only
         ...
 
     def close(self) -> None:  # pragma: no cover - protocol only
@@ -187,7 +193,9 @@ def _get_github_token() -> str:
             empty_source = env_var
 
     if empty_source is not None:
-        raise GitHubAuthError(f"GitHub authentication failed: {empty_source or 'token'} is empty")
+        raise GitHubAuthError(
+            f"GitHub authentication failed: {empty_source or 'token'} is empty"
+        )
     raise GitHubAuthError("GitHub authentication failed: token is not configured")
 
 
@@ -250,7 +258,9 @@ def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool) -> float:
     return jitter_sleep_seconds(delay_seconds, respect_min=respect_min, cap_seconds=1.0)
 
 
-def _is_rate_limit_response(*, resp: httpx.Response, message_lower: str, error_flag: bool) -> bool:
+def _is_rate_limit_response(
+    *, resp: httpx.Response, message_lower: str, error_flag: bool
+) -> bool:
     if not error_flag:
         return False
 
@@ -335,7 +345,9 @@ def _refresh_async_client(
 def _build_default_client() -> httpx.Client:
     """Return a default httpx.Client configured for GitHub's API."""
 
-    return httpx.Client(base_url=GITHUB_API_BASE_URL, timeout=GITHUB_REQUEST_TIMEOUT_SECONDS)
+    return httpx.Client(
+        base_url=GITHUB_API_BASE_URL, timeout=GITHUB_REQUEST_TIMEOUT_SECONDS
+    )
 
 
 def _github_client_instance() -> httpx.AsyncClient:
@@ -377,7 +389,9 @@ def _external_client_instance() -> httpx.AsyncClient:
 
     global _http_client_external, _http_client_external_loop
     main_module = _get_main_module_for_patching()
-    patched_client = getattr(main_module, "_http_client_external", None) if main_module else None
+    patched_client = (
+        getattr(main_module, "_http_client_external", None) if main_module else None
+    )
     if patched_client is not None:
         _http_client_external = patched_client
 
@@ -407,7 +421,9 @@ def _extract_response_body(resp: httpx.Response) -> Any | None:
     return extract_response_json(resp)
 
 
-def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> dict[str, Any]:
+def _build_response_payload(
+    resp: httpx.Response, *, body: Any | None = None
+) -> dict[str, Any]:
     """Backward-compatible wrapper for shared response payload builder."""
 
     from .http_utils import build_response_payload
@@ -443,7 +459,9 @@ async def _send_request(
 _RETRYABLE_GITHUB_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
-def _allow_rate_limit_retries(method: str, path: str, *, allow_retries: bool | None) -> bool:
+def _allow_rate_limit_retries(
+    method: str, path: str, *, allow_retries: bool | None
+) -> bool:
     """Return True when the request is safe to retry on secondary/rate limits.
 
     Automatic retries are safe for idempotent/read-only requests, but can cause
@@ -521,7 +539,9 @@ async def _github_request(
             duration_ms = (time.perf_counter() - started) * 1000
             payload: dict[str, Any] = {
                 "event": "github_http",
-                "request": summarize_request_context(req) if isinstance(req, dict) else {},
+                "request": summarize_request_context(req)
+                if isinstance(req, dict)
+                else {},
                 "method": str(method).upper(),
                 "path": path,
                 "status_code": getattr(resp, "status_code", None),
@@ -532,11 +552,15 @@ async def _github_request(
             if json_body is not None:
                 payload["json_body"] = json_body
             if headers is not None:
-                safe_headers = {k: v for k, v in headers.items() if k.lower() != "authorization"}
+                safe_headers = {
+                    k: v for k, v in headers.items() if k.lower() != "authorization"
+                }
                 payload["headers"] = safe_headers
             if LOG_GITHUB_HTTP_BODIES:
                 payload["response_headers"] = dict(getattr(resp, "headers", {}) or {})
-                payload["response_body"] = body if body is not None else getattr(resp, "text", "")
+                payload["response_body"] = (
+                    body if body is not None else getattr(resp, "text", "")
+                )
 
             GITHUB_LOGGER.info(
                 f"github_http method={str(method).upper()} path={path} status={getattr(resp, 'status_code', None)} duration_ms={duration_ms:.2f}",
@@ -545,8 +569,12 @@ async def _github_request(
 
         message = body.get("message", "") if isinstance(body, dict) else ""
         message_lower = message.lower() if isinstance(message, str) else ""
-        if _is_rate_limit_response(resp=resp, message_lower=message_lower, error_flag=error_flag):
-            reset_hint = resp.headers.get("X-RateLimit-Reset") or resp.headers.get("Retry-After")
+        if _is_rate_limit_response(
+            resp=resp, message_lower=message_lower, error_flag=error_flag
+        ):
+            reset_hint = resp.headers.get("X-RateLimit-Reset") or resp.headers.get(
+                "Retry-After"
+            )
             header_delay = _parse_rate_limit_delay_seconds(resp)
             retry_delay = header_delay
             if retry_delay is None:
@@ -558,7 +586,9 @@ async def _github_request(
                 and retry_delay <= GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS
             ):
                 await asyncio.sleep(
-                    _jitter_sleep_seconds(retry_delay, respect_min=header_delay is not None)
+                    _jitter_sleep_seconds(
+                        retry_delay, respect_min=header_delay is not None
+                    )
                 )
                 attempt += 1
                 continue

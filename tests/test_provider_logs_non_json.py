@@ -24,7 +24,9 @@ def test_provider_tool_success_logs_append_human_extras_block(monkeypatch):
 
     stream = io.StringIO()
     handler = logging.StreamHandler(stream)
-    handler.setFormatter(config._StructuredFormatter("%(levelname)s | %(name)s | %(message)s"))
+    handler.setFormatter(
+        config._StructuredFormatter("%(levelname)s | %(name)s | %(message)s")
+    )
 
     logger = logging.getLogger("test.provider")
     logger.handlers = []
@@ -58,7 +60,9 @@ def test_provider_warning_logs_append_human_extras_block(monkeypatch):
 
     stream = io.StringIO()
     handler = logging.StreamHandler(stream)
-    handler.setFormatter(config._StructuredFormatter("%(levelname)s | %(name)s | %(message)s"))
+    handler.setFormatter(
+        config._StructuredFormatter("%(levelname)s | %(name)s | %(message)s")
+    )
 
     logger = logging.getLogger("test.provider.warn")
     logger.handlers = []

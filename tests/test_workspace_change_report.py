@@ -34,7 +34,9 @@ class _FakeTW:
                 "+c\n"
             ),
             "truncated": False,
-            "numstat": [{"path": "foo.txt", "added": 2, "removed": 1, "is_binary": False}],
+            "numstat": [
+                {"path": "foo.txt", "added": 2, "removed": 1, "is_binary": False}
+            ],
         }
 
     async def read_git_file_excerpt(self, **kwargs: Any) -> dict[str, Any]:
@@ -108,7 +110,9 @@ async def test_workspace_change_report_builds_hunks_and_excerpts(
 
 
 @pytest.mark.anyio
-async def test_workspace_change_report_omits_diff(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_change_report_omits_diff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import workflows
 
     fake = _FakeTW()

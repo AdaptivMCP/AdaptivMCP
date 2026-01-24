@@ -65,4 +65,3 @@ def test_tool_registry_uris_survive_forwarded_prefix_changes() -> None:
     assert detail.status_code == 200
     detail_payload = detail.json()
     assert detail_payload.get("name") == res_a.get("name")
-

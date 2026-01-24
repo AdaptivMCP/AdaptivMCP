@@ -197,31 +197,47 @@ async def render_shell(
             "base_ref": effective_ref,
             "target_ref": target_ref,
             "branch": branch_creation,
-            "status": cleaned_command.get("status") if isinstance(cleaned_command, dict) else None,
-            "ok": cleaned_command.get("ok") if isinstance(cleaned_command, dict) else None,
-            "error": cleaned_command.get("error") if isinstance(cleaned_command, dict) else None,
+            "status": cleaned_command.get("status")
+            if isinstance(cleaned_command, dict)
+            else None,
+            "ok": cleaned_command.get("ok")
+            if isinstance(cleaned_command, dict)
+            else None,
+            "error": cleaned_command.get("error")
+            if isinstance(cleaned_command, dict)
+            else None,
             "error_detail": cleaned_command.get("error_detail")
             if isinstance(cleaned_command, dict)
             else None,
             "workdir": (
-                cleaned_command.get("workdir") if isinstance(cleaned_command, dict) else None
+                cleaned_command.get("workdir")
+                if isinstance(cleaned_command, dict)
+                else None
             ),
             # Keep payload fields newline-free to avoid downstream double-escaping.
             "command_input": command,
             "command_lines": command_lines_out,
             "command": (
-                cleaned_command.get("command") if isinstance(cleaned_command, dict) else command
+                cleaned_command.get("command")
+                if isinstance(cleaned_command, dict)
+                else command
             ),
             "install": (
-                cleaned_command.get("install") if isinstance(cleaned_command, dict) else None
+                cleaned_command.get("install")
+                if isinstance(cleaned_command, dict)
+                else None
             ),
-            "result": cleaned_command.get("result") if isinstance(cleaned_command, dict) else None,
+            "result": cleaned_command.get("result")
+            if isinstance(cleaned_command, dict)
+            else None,
         }
         return out
     except asyncio.CancelledError:
         raise
     except Exception as exc:
-        return _structured_tool_error(exc, context="render_shell", tool_surface="render_shell")
+        return _structured_tool_error(
+            exc, context="render_shell", tool_surface="render_shell"
+        )
 
 
 @mcp_tool(
@@ -283,7 +299,9 @@ async def terminal_command(
     try:
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
 
@@ -329,7 +347,9 @@ async def terminal_command(
                     env=env,
                 )
                 current_branch = (
-                    (cur.get("stdout", "") or "").strip() if isinstance(cur, dict) else ""
+                    (cur.get("stdout", "") or "").strip()
+                    if isinstance(cur, dict)
+                    else ""
                 )
                 if current_branch:
                     default_branch = _tw()._default_branch_for_repo(full_name)
@@ -395,7 +415,11 @@ async def terminal_command(
         error: str | None = None
         error_detail: dict[str, Any] | None = None
         if not ok:
-            error = "Command timed out" if timed_out else f"Command exited with code {exit_code}"
+            error = (
+                "Command timed out"
+                if timed_out
+                else f"Command exited with code {exit_code}"
+            )
             error_detail = {"exit_code": exit_code, "timed_out": timed_out}
 
         out: dict[str, Any] = {
@@ -517,17 +541,23 @@ async def run_python(
     try:
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
         if use_temp_venv:
             env = await deps["prepare_temp_virtualenv"](repo_dir)
 
         cwd = _resolve_workdir(repo_dir, workdir)
 
-        rel_path = filename.strip() if isinstance(filename, str) and filename.strip() else None
+        rel_path = (
+            filename.strip() if isinstance(filename, str) and filename.strip() else None
+        )
         if rel_path is None:
             rel_path = f".mcp_tmp/run_python_{uuid.uuid4().hex}.py"
 
-        created_temp_file = filename is None or not (isinstance(filename, str) and filename.strip())
+        created_temp_file = filename is None or not (
+            isinstance(filename, str) and filename.strip()
+        )
         created_rel_path = rel_path
 
         rel_path = _safe_repo_relative_path(repo_dir, rel_path)
@@ -570,7 +600,9 @@ async def run_python(
     except asyncio.CancelledError:
         raise
     except Exception as exc:
-        return _structured_tool_error(exc, context="run_python", tool_surface="run_python")
+        return _structured_tool_error(
+            exc, context="run_python", tool_surface="run_python"
+        )
     finally:
         if cleanup:
             try:

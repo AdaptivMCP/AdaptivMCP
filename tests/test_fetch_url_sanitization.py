@@ -7,7 +7,9 @@ import pytest
 
 
 class _DummyStreamResponse:
-    def __init__(self, *, status_code: int, headers: dict[str, str], body: bytes) -> None:
+    def __init__(
+        self, *, status_code: int, headers: dict[str, str], body: bytes
+    ) -> None:
         self.status_code = status_code
         self.headers = headers
         self._body = body

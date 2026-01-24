@@ -7,7 +7,9 @@ from github_mcp.utils import _normalize_repo_path_for_repo
 from ._main import _main
 
 
-async def get_repo_dashboard(full_name: str, branch: str | None = None) -> dict[str, Any]:
+async def get_repo_dashboard(
+    full_name: str, branch: str | None = None
+) -> dict[str, Any]:
     """Return a compact, multi-signal dashboard for a repository.
 
     Implementation moved out of `main.py` to keep the main registration surface
@@ -24,7 +26,9 @@ async def get_repo_dashboard(full_name: str, branch: str | None = None) -> dict[
         # Fall back to the default branch when available.
         defaults = await m.get_repo_defaults(full_name)
         repo_defaults = defaults.get("defaults") or {}
-        effective_branch = repo_defaults.get("default_branch") or m._effective_ref_for_repo(
+        effective_branch = repo_defaults.get(
+            "default_branch"
+        ) or m._effective_ref_for_repo(
             full_name,
             "main",
         )
@@ -83,7 +87,9 @@ async def get_repo_dashboard(full_name: str, branch: str | None = None) -> dict[
             page=1,
         )
         runs_json = runs_resp.get("json") or {}
-        workflow_runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
+        workflow_runs = (
+            runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
+        )
     except Exception as exc:  # pragma: no cover - defensive
         workflows_error = str(exc)
 

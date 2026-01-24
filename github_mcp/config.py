@@ -90,7 +90,14 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
         # Default to full fidelity so logs keep enough context for debugging and tooling.
         full_fidelity = True
     else:
-        full_fidelity = str(full_raw).strip().lower() in ("1", "true", "t", "yes", "y", "on")
+        full_fidelity = str(full_raw).strip().lower() in (
+            "1",
+            "true",
+            "t",
+            "yes",
+            "y",
+            "on",
+        )
 
     if full_fidelity:
         return _jsonable(value)
@@ -491,7 +498,9 @@ LOG_GITHUB_HTTP_BODIES = _env_flag("LOG_GITHUB_HTTP_BODIES", "false")
 # Render already emits request access logs at the platform layer.
 # Default to disabling the app-layer access logs on Render to avoid duplicates.
 _log_http_default = (
-    "false" if _is_render_runtime() and os.environ.get("LOG_HTTP_REQUESTS") is None else "true"
+    "false"
+    if _is_render_runtime() and os.environ.get("LOG_HTTP_REQUESTS") is None
+    else "true"
 )
 LOG_HTTP_REQUESTS = _env_flag("LOG_HTTP_REQUESTS", _log_http_default)
 
@@ -591,7 +600,9 @@ def _slugify_app_name(value: str | None) -> str | None:
 def _resolve_app_identity() -> dict[str, str] | None:
     app_name = os.environ.get("GITHUB_APP_NAME")
     app_slug = os.environ.get("GITHUB_APP_SLUG") or _slugify_app_name(app_name)
-    app_id = os.environ.get("GITHUB_APP_ID") or os.environ.get("GITHUB_APP_INSTALLATION_ID")
+    app_id = os.environ.get("GITHUB_APP_ID") or os.environ.get(
+        "GITHUB_APP_INSTALLATION_ID"
+    )
 
     bot_login = None
     if app_slug:
@@ -725,7 +736,14 @@ _raw_log_color = os.environ.get("ADAPTIV_MCP_LOG_COLOR")
 if _raw_log_color is None:
     LOG_COLOR = _env_flag("LOG_COLOR", "true")
 else:
-    LOG_COLOR = str(_raw_log_color).strip().lower() in ("1", "true", "t", "yes", "y", "on")
+    LOG_COLOR = str(_raw_log_color).strip().lower() in (
+        "1",
+        "true",
+        "t",
+        "yes",
+        "y",
+        "on",
+    )
 
 
 class _StructuredFormatter(logging.Formatter):
@@ -814,11 +832,17 @@ class _StructuredFormatter(logging.Formatter):
         # Tool logs embed scan-friendly summaries (REQ/RES). By default, avoid
         # adding an additional block. When tool payload logging is enabled,
         # include the structured extras so raw args/results are visible.
-        if isinstance(event, str) and event.startswith("tool_") and not tool_payloads_enabled:
+        if (
+            isinstance(event, str)
+            and event.startswith("tool_")
+            and not tool_payloads_enabled
+        ):
             return base
 
         severity = getattr(record, "severity", None)
-        severity_is_warn_or_error = isinstance(severity, str) and severity.strip().lower() in {
+        severity_is_warn_or_error = isinstance(
+            severity, str
+        ) and severity.strip().lower() in {
             "warning",
             "error",
         }
@@ -926,7 +950,9 @@ def _format_extras_block(payload: Mapping[str, Any]) -> str:
     return out
 
 
-_STANDARD_LOG_FIELDS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys())
+_STANDARD_LOG_FIELDS = set(
+    logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys()
+)
 
 
 class _InfoOnlyFilter(logging.Filter):
@@ -1021,17 +1047,29 @@ def _configure_logging() -> None:
     # Override via:
     # - ADAPTIV_MCP_NOISY_FRAMEWORK_LOGS=1 to keep INFO everywhere.
     noisy_default = not _is_render_runtime()
-    keep_noisy = _env_flag("ADAPTIV_MCP_NOISY_FRAMEWORK_LOGS", "true" if noisy_default else "false")
+    keep_noisy = _env_flag(
+        "ADAPTIV_MCP_NOISY_FRAMEWORK_LOGS", "true" if noisy_default else "false"
+    )
     noisy_level = level if keep_noisy else logging.WARNING
-    for noisy in ("mcp", "mcp.server", "mcp.server.lowlevel.server", "httpx", "httpcore"):
+    for noisy in (
+        "mcp",
+        "mcp.server",
+        "mcp.server.lowlevel.server",
+        "httpx",
+        "httpcore",
+    ):
         logging.getLogger(noisy).setLevel(noisy_level)
 
     # Keep access logs off by default (they include request IDs / IPs and are very noisy).
     # Override via:
     # - ADAPTIV_MCP_ACCESS_LOGS=1
     access_default = not _is_render_runtime()
-    enable_access = _env_flag("ADAPTIV_MCP_ACCESS_LOGS", "true" if access_default else "false")
-    logging.getLogger("uvicorn.access").setLevel(logging.INFO if enable_access else logging.WARNING)
+    enable_access = _env_flag(
+        "ADAPTIV_MCP_ACCESS_LOGS", "true" if access_default else "false"
+    )
+    logging.getLogger("uvicorn.access").setLevel(
+        logging.INFO if enable_access else logging.WARNING
+    )
     logging.getLogger("uvicorn.access").addFilter(_UvicornHealthzFilter())
 
     root._github_mcp_configured = True

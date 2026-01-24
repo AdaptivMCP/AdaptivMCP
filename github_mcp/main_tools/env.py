@@ -218,7 +218,9 @@ async def validate_environment() -> dict[str, Any]:
     # Controls:
     # - ADAPTIV_MCP_LOG_DEPENDENCIES (default: true): include dependency list.
     # - ADAPTIV_MCP_LOG_DEPENDENCIES_MAX (default: 0): cap number of packages (0 = no cap).
-    include_deps = os.environ.get("ADAPTIV_MCP_LOG_DEPENDENCIES", "true").strip().lower() in (
+    include_deps = os.environ.get(
+        "ADAPTIV_MCP_LOG_DEPENDENCIES", "true"
+    ).strip().lower() in (
         "1",
         "true",
         "t",
@@ -297,7 +299,9 @@ async def validate_environment() -> dict[str, Any]:
     )
 
     # Git identity env vars / placeholders.
-    identity_envs = {name: os.environ.get(name) for name in ADAPTIV_MCP_GIT_IDENTITY_ENV_VARS}
+    identity_envs = {
+        name: os.environ.get(name) for name in ADAPTIV_MCP_GIT_IDENTITY_ENV_VARS
+    }
     configured_identity_envs = [
         name for name, value in identity_envs.items() if value and value.strip()
     ]
@@ -358,14 +362,19 @@ async def validate_environment() -> dict[str, Any]:
     # expected GitHub + Render tool surfaces are present.
     try:
         from github_mcp.main_tools.introspection import list_all_actions
-        from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
+        from github_mcp.mcp_server.registry import (
+            _REGISTERED_MCP_TOOLS,
+            _registered_tool_name,
+        )
 
         # Prefer the public introspection catalog (stable schema), but fall back
         # to the raw registry if catalog generation fails or returns empty.
         catalog = list_all_actions(include_parameters=False, compact=True)
         tools = catalog.get("tools") if isinstance(catalog, dict) else None
         tool_names = {
-            t.get("name") for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str)
+            t.get("name")
+            for t in tools
+            if isinstance(t, dict) and isinstance(t.get("name"), str)
         }
 
         if not tool_names and isinstance(_REGISTERED_MCP_TOOLS, list):
@@ -407,7 +416,9 @@ async def validate_environment() -> dict[str, Any]:
 
         missing = sorted(name for name in expected if name not in tool_names)
         registered_count = (
-            len(_REGISTERED_MCP_TOOLS) if isinstance(_REGISTERED_MCP_TOOLS, list) else None
+            len(_REGISTERED_MCP_TOOLS)
+            if isinstance(_REGISTERED_MCP_TOOLS, list)
+            else None
         )
         unique_count = len(tool_names)
 
@@ -481,7 +492,9 @@ async def validate_environment() -> dict[str, Any]:
                     "warning",
                     "Unable to fetch /user or /app; token may be invalid or missing required permissions",
                     {
-                        "user_error_type": type(user_error).__name__ if user_error else None,
+                        "user_error_type": type(user_error).__name__
+                        if user_error
+                        else None,
                         "user_error": str(user_error) if user_error else None,
                         "app_error_type": type(exc).__name__,
                         "app_error": str(exc),
@@ -650,7 +663,9 @@ async def validate_environment() -> dict[str, Any]:
             # effects (e.g. workflow dispatch), we provide an inferred result.
             probes: list[dict[str, Any]] = []
 
-            async def _probe_get(name: str, path: str, *, params: dict[str, Any] | None = None):
+            async def _probe_get(
+                name: str, path: str, *, params: dict[str, Any] | None = None
+            ):
                 try:
                     await m._github_request("GET", path, params=params)
                 except Exception as exc:
@@ -659,7 +674,10 @@ async def validate_environment() -> dict[str, Any]:
                             "probe": name,
                             "mode": "actual",
                             "result": "fail",
-                            "details": {"error_type": type(exc).__name__, "error": str(exc)},
+                            "details": {
+                                "error_type": type(exc).__name__,
+                                "error": str(exc),
+                            },
                         }
                     )
                 else:
@@ -691,7 +709,9 @@ async def validate_environment() -> dict[str, Any]:
             except GitHubAPIError as exc:
                 status_code = getattr(exc, "status_code", None)
                 if status_code == 422:
-                    probes.append({"probe": "can_create_pr", "mode": "actual", "result": "pass"})
+                    probes.append(
+                        {"probe": "can_create_pr", "mode": "actual", "result": "pass"}
+                    )
                 else:
                     probes.append(
                         {
@@ -707,7 +727,10 @@ async def validate_environment() -> dict[str, Any]:
                         "probe": "can_create_pr",
                         "mode": "actual",
                         "result": "fail",
-                        "details": {"error_type": type(exc).__name__, "error": str(exc)},
+                        "details": {
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                        },
                     }
                 )
             else:
@@ -717,7 +740,9 @@ async def validate_environment() -> dict[str, Any]:
                         "probe": "can_create_pr",
                         "mode": "actual",
                         "result": "pass",
-                        "details": {"note": "Unexpected success creating PR probe payload"},
+                        "details": {
+                            "note": "Unexpected success creating PR probe payload"
+                        },
                     }
                 )
 
@@ -739,11 +764,15 @@ async def validate_environment() -> dict[str, Any]:
                     "Previous dispatch probe was recent; continuing anyway per configuration."
                 )
                 dispatch_details["last_at"] = last_at
-                dispatch_details["last_workflow_id"] = _dispatch_probe_state.get("last_workflow_id")
+                dispatch_details["last_workflow_id"] = _dispatch_probe_state.get(
+                    "last_workflow_id"
+                )
                 dispatch_details["last_workflow_name"] = _dispatch_probe_state.get(
                     "last_workflow_name"
                 )
-                dispatch_details["last_run_id"] = _dispatch_probe_state.get("last_run_id")
+                dispatch_details["last_run_id"] = _dispatch_probe_state.get(
+                    "last_run_id"
+                )
 
             try:
                 wf_list = await m._github_request(
@@ -767,8 +796,12 @@ async def validate_environment() -> dict[str, Any]:
             else:
                 wf_json = wf_list.get("json")
                 workflows: list[dict[str, Any]] = []
-                if isinstance(wf_json, dict) and isinstance(wf_json.get("workflows"), list):
-                    workflows = [w for w in wf_json.get("workflows") if isinstance(w, dict)]
+                if isinstance(wf_json, dict) and isinstance(
+                    wf_json.get("workflows"), list
+                ):
+                    workflows = [
+                        w for w in wf_json.get("workflows") if isinstance(w, dict)
+                    ]
 
                 # Prefer common CI-like workflows first.
                 preferred: list[dict[str, Any]] = []
@@ -776,7 +809,9 @@ async def validate_environment() -> dict[str, Any]:
                 for w in workflows:
                     name = w.get("name")
                     name_lower = str(name).lower() if isinstance(name, str) else ""
-                    if any(tok in name_lower for tok in ("ci", "test", "lint", "build")):
+                    if any(
+                        tok in name_lower for tok in ("ci", "test", "lint", "build")
+                    ):
                         preferred.append(w)
                     else:
                         other.append(w)
@@ -793,8 +828,12 @@ async def validate_environment() -> dict[str, Any]:
                     if not isinstance(wid, int):
                         continue
                     chosen_id = wid
-                    chosen_name = w.get("name") if isinstance(w.get("name"), str) else None
-                    chosen_path = w.get("path") if isinstance(w.get("path"), str) else None
+                    chosen_name = (
+                        w.get("name") if isinstance(w.get("name"), str) else None
+                    )
+                    chosen_path = (
+                        w.get("path") if isinstance(w.get("path"), str) else None
+                    )
                     try:
                         await m._github_request(
                             "POST",
@@ -894,12 +933,18 @@ async def validate_environment() -> dict[str, Any]:
                         }
                     )
 
-            probe_level = "ok" if all(p.get("result") == "pass" for p in probes) else "warning"
+            probe_level = (
+                "ok" if all(p.get("result") == "pass" for p in probes) else "warning"
+            )
             add_check(
                 "capability_probes",
                 probe_level,
                 "Capability probes (safe, best-effort)",
-                {"repo": controller_repo, "branch": controller_branch, "probes": probes},
+                {
+                    "repo": controller_repo,
+                    "branch": controller_branch,
+                    "probes": probes,
+                },
             )
 
             # Surface the repo permissions block prominently for clarity.
@@ -910,7 +955,9 @@ async def validate_environment() -> dict[str, Any]:
                 {"full_name": controller_repo, "permissions": permissions},
             )
 
-            push_allowed = permissions.get("push") if isinstance(permissions, dict) else None
+            push_allowed = (
+                permissions.get("push") if isinstance(permissions, dict) else None
+            )
             if push_allowed is True:
                 add_check(
                     "controller_repo_push_permission",
@@ -1025,13 +1072,17 @@ async def validate_environment() -> dict[str, Any]:
                 {"error_type": type(exc).__name__, "error": str(exc)},
             )
         else:
-            owners_json = owners_resp.get("json") if isinstance(owners_resp, dict) else None
+            owners_json = (
+                owners_resp.get("json") if isinstance(owners_resp, dict) else None
+            )
             owners: list[dict[str, Any]] = []
             cursor = None
             if isinstance(owners_json, dict):
                 # Some Render API responses are paginated objects.
                 items = (
-                    owners_json.get("owners") or owners_json.get("items") or owners_json.get("data")
+                    owners_json.get("owners")
+                    or owners_json.get("items")
+                    or owners_json.get("data")
                 )
                 if isinstance(items, list):
                     owners = [o for o in items if isinstance(o, dict)]

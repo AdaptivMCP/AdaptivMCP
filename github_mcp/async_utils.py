@@ -88,7 +88,9 @@ def _schedule_close(
                 return False
 
             try:
-                client_loop.call_soon_threadsafe(lambda: asyncio.create_task(client.aclose()))
+                client_loop.call_soon_threadsafe(
+                    lambda: asyncio.create_task(client.aclose())
+                )
                 return True
             except Exception:
                 _log("Failed to schedule client close via call_soon_threadsafe")

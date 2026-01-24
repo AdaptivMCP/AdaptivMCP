@@ -17,7 +17,9 @@ from github_mcp.server import (
 
 from ._shared import _tw
 
-_LOG_WRITE_DIFFS = os.environ.get("ADAPTIV_MCP_LOG_WRITE_DIFFS", "1").strip().lower() not in {
+_LOG_WRITE_DIFFS = os.environ.get(
+    "ADAPTIV_MCP_LOG_WRITE_DIFFS", "1"
+).strip().lower() not in {
     "0",
     "false",
     "no",
@@ -90,7 +92,9 @@ def _normalize_workspace_operation(op: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _normalize_workspace_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _normalize_workspace_operations(
+    operations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Normalize a list of workspace operations (best-effort).
 
     This helper is used by workflows/batch orchestration to make sure operation
@@ -343,7 +347,9 @@ def _workspace_read_text_limited(
     if truncated_chars:
         text = text[:max_chars]
 
-    digest = hashlib.blake2s(text.encode("utf-8", errors="replace"), digest_size=4).hexdigest()
+    digest = hashlib.blake2s(
+        text.encode("utf-8", errors="replace"), digest_size=4
+    ).hexdigest()
 
     return {
         "exists": True,
@@ -407,7 +413,9 @@ def _read_lines_excerpt(
                     remaining = max_chars - collected_chars
                     if remaining > 0:
                         text = text[:remaining]
-                        lines_out.append({"line": current, "text": text, "truncated": True})
+                        lines_out.append(
+                            {"line": current, "text": text, "truncated": True}
+                        )
                     truncated = True
                     break
                 lines_out.append({"line": current, "text": text})
@@ -548,7 +556,9 @@ def _sections_from_line_iter(
             truncated = True
             remaining = max_chars_per_section - current_chars - 1
             if remaining > 0:
-                current_lines.append({"line": line_no, "text": text[:remaining], "truncated": True})
+                current_lines.append(
+                    {"line": line_no, "text": text[:remaining], "truncated": True}
+                )
             _finalize_current()
             next_start_line = line_no + 1
             break
@@ -562,7 +572,9 @@ def _sections_from_line_iter(
     else:
         # If truncated but we didn't flush (e.g., max_sections cut), ensure any
         # pending section makes it into the response.
-        if current_lines and (not parts or parts[-1].get("end_line") != current_lines[-1]["line"]):
+        if current_lines and (
+            not parts or parts[-1].get("end_line") != current_lines[-1]["line"]
+        ):
             _finalize_current()
 
     # If we filled max_sections exactly but ended at EOF, clear truncation.
@@ -672,7 +684,8 @@ def _git_show_text(repo_dir: str, git_ref: str, path: str) -> dict[str, Any]:
             "text": "",
             "encoding": "utf-8",
             "had_decoding_errors": False,
-            "error": (proc.stderr or b"").decode("utf-8", errors="replace").strip() or None,
+            "error": (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+            or None,
         }
 
     data = proc.stdout or b""
@@ -793,7 +806,9 @@ def _git_show_text_limited(
     if truncated_chars:
         text = text[:max_chars]
 
-    digest = hashlib.blake2s(text.encode("utf-8", errors="replace"), digest_size=4).hexdigest()
+    digest = hashlib.blake2s(
+        text.encode("utf-8", errors="replace"), digest_size=4
+    ).hexdigest()
 
     return {
         "exists": True,
@@ -934,7 +949,9 @@ async def create_workspace_folders(
     try:
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         created: list[str] = []
         existing: list[str] = []
@@ -1002,7 +1019,9 @@ async def delete_workspace_paths(
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
         removed: list[str] = []
         missing: list[str] = []
         failed: list[dict[str, Any]] = []
@@ -1066,7 +1085,9 @@ async def delete_workspace_folders(
     try:
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         removed: list[str] = []
         missing: list[str] = []
@@ -1129,7 +1150,9 @@ async def get_workspace_file_contents(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         info = _workspace_read_text_limited(
             repo_dir,
@@ -1140,7 +1163,9 @@ async def get_workspace_file_contents(
         info.update({"full_name": full_name, "ref": effective_ref})
         return info
     except Exception as exc:
-        return _structured_tool_error(exc, context="get_workspace_file_contents", path=path)
+        return _structured_tool_error(
+            exc, context="get_workspace_file_contents", path=path
+        )
 
 
 @mcp_tool(write_action=False)
@@ -1182,7 +1207,9 @@ async def get_workspace_files_contents(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         expanded: list[str] = []
         for raw in paths:
@@ -1296,7 +1323,9 @@ async def read_workspace_file_excerpt(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         abs_path = _workspace_safe_join(repo_dir, path)
         if not os.path.exists(abs_path):
@@ -1351,7 +1380,9 @@ async def read_workspace_file_excerpt(
             "excerpt": excerpt,
         }
     except Exception as exc:
-        return _structured_tool_error(exc, context="read_workspace_file_excerpt", path=path)
+        return _structured_tool_error(
+            exc, context="read_workspace_file_excerpt", path=path
+        )
 
 
 @mcp_tool(write_action=False)
@@ -1393,7 +1424,9 @@ async def read_workspace_file_sections(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         abs_path = _workspace_safe_join(repo_dir, path)
         if not os.path.exists(abs_path):
@@ -1458,7 +1491,9 @@ async def read_workspace_file_sections(
             "sections": sections,
         }
     except Exception as exc:
-        return _structured_tool_error(exc, context="read_workspace_file_sections", path=path)
+        return _structured_tool_error(
+            exc, context="read_workspace_file_sections", path=path
+        )
 
 
 def _format_numbered_lines_as_text(
@@ -1531,7 +1566,9 @@ async def read_workspace_file_with_line_numbers(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         abs_path = _workspace_safe_join(repo_dir, path)
         if not os.path.exists(abs_path):
@@ -1813,7 +1850,9 @@ async def read_git_file_excerpt(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         exists, lines, truncated, error = _git_show_lines_excerpt_limited(
             repo_dir,
@@ -1895,7 +1934,9 @@ async def read_git_file_sections(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         exists, sections, error = _git_show_lines_sections_limited(
             repo_dir,
@@ -1967,7 +2008,9 @@ async def compare_workspace_files(
     try:
         if comparisons is None:
             comparisons = []
-        if not isinstance(comparisons, list) or any(not isinstance(c, dict) for c in comparisons):
+        if not isinstance(comparisons, list) or any(
+            not isinstance(c, dict) for c in comparisons
+        ):
             raise TypeError("comparisons must be a list of dicts")
         if not comparisons:
             raise ValueError("comparisons must contain at least one item")
@@ -1981,7 +2024,9 @@ async def compare_workspace_files(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         out: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
@@ -2175,10 +2220,16 @@ async def _build_workspace_diff_payload(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
-        before_info = _workspace_read_text_limited(repo_dir, path, max_chars=max_chars_per_side)
-        before_text = (before_info.get("text") or "") if before_info.get("exists") else ""
+        before_info = _workspace_read_text_limited(
+            repo_dir, path, max_chars=max_chars_per_side
+        )
+        before_text = (
+            (before_info.get("text") or "") if before_info.get("exists") else ""
+        )
         before_exists = bool(before_info.get("exists"))
         before_label = fromfile or (f"a/{path}" if before_exists else "/dev/null")
         after_label = tofile or f"b/{path}"
@@ -2323,9 +2374,13 @@ async def set_workspace_file_contents(
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
 
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
         before_info = _workspace_read_text(repo_dir, path)
-        before_text = (before_info.get("text") or "") if before_info.get("exists") else ""
+        before_text = (
+            (before_info.get("text") or "") if before_info.get("exists") else ""
+        )
         write_info = _workspace_write_text(
             repo_dir,
             path,
@@ -2347,7 +2402,9 @@ async def set_workspace_file_contents(
             **write_info,
         }
     except Exception as exc:
-        return _structured_tool_error(exc, context="set_workspace_file_contents", path=path)
+        return _structured_tool_error(
+            exc, context="set_workspace_file_contents", path=path
+        )
 
 
 @mcp_tool(write_action=True)
@@ -2383,7 +2440,9 @@ async def edit_workspace_text_range(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         info = _workspace_read_text(repo_dir, path)
         if not info.get("exists"):
@@ -2465,7 +2524,9 @@ async def delete_workspace_lines(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         info = _workspace_read_text(repo_dir, path)
         if not info.get("exists"):
@@ -2549,7 +2610,9 @@ async def delete_workspace_char(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         info = _workspace_read_text(repo_dir, path)
         if not info.get("exists"):
@@ -2629,7 +2692,9 @@ async def delete_workspace_word(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         info = _workspace_read_text(repo_dir, path)
         if not info.get("exists"):
@@ -2706,7 +2771,9 @@ async def edit_workspace_line(
     full_name: str,
     ref: str = "main",
     path: str = "",
-    operation: Literal["replace", "insert_before", "insert_after", "delete"] = "replace",
+    operation: Literal[
+        "replace", "insert_before", "insert_after", "delete"
+    ] = "replace",
     line_number: int = 1,
     text: str = "",
     create_parents: bool = True,
@@ -2725,7 +2792,9 @@ async def edit_workspace_line(
         if not isinstance(path, str) or not path.strip():
             raise ValueError("path must be a non-empty string")
         if operation not in ("replace", "insert_before", "insert_after", "delete"):
-            raise ValueError("operation must be replace/insert_before/insert_after/delete")
+            raise ValueError(
+                "operation must be replace/insert_before/insert_after/delete"
+            )
         if not isinstance(line_number, int) or line_number < 1:
             raise ValueError("line_number must be an int >= 1")
         if text is None:
@@ -2735,7 +2804,9 @@ async def edit_workspace_line(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         info = _workspace_read_text(repo_dir, path)
         if not info.get("exists"):
@@ -2895,7 +2966,9 @@ async def replace_workspace_text(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         info = _workspace_read_text(repo_dir, path)
         if not info.get("exists"):
@@ -3013,7 +3086,9 @@ async def _apply_patch_impl(
 
         # Only surface unified diffs for visual logs.
         diff_blobs = [p for p in patches if isinstance(p, str) and _looks_like_diff(p)]
-        combined_diff = "\n".join(x.rstrip("\n") for x in diff_blobs).strip() if diff_blobs else ""
+        combined_diff = (
+            "\n".join(x.rstrip("\n") for x in diff_blobs).strip() if diff_blobs else ""
+        )
         if combined_diff and not combined_diff.endswith("\n"):
             combined_diff += "\n"
 
@@ -3021,7 +3096,9 @@ async def _apply_patch_impl(
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         debug_args["effective_ref"] = effective_ref
 
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         for patch_entry in patches:
             await deps["apply_patch_to_repo"](repo_dir, patch_entry)
@@ -3034,22 +3111,30 @@ async def _apply_patch_impl(
 
         status_result = None
         if check_changes or commit:
-            status_result = await deps["run_shell"]("git status --porcelain", cwd=repo_dir)
+            status_result = await deps["run_shell"](
+                "git status --porcelain", cwd=repo_dir
+            )
 
         commit_result = None
         push_result = None
         if commit:
             if not isinstance(commit_message, str) or not commit_message.strip():
-                raise ValueError("commit_message must be a non-empty string when commit is true")
+                raise ValueError(
+                    "commit_message must be a non-empty string when commit is true"
+                )
 
-            status_lines = (status_result.get("stdout", "") if status_result else "").strip()
+            status_lines = (
+                status_result.get("stdout", "") if status_result else ""
+            ).strip()
             if not status_lines:
                 raise ValueError("No changes to commit after applying patch")
 
             commit_cmd = f"git commit -m {shlex.quote(commit_message)}"
             commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir)
             if commit_result.get("exit_code") != 0:
-                stderr = commit_result.get("stderr", "") or commit_result.get("stdout", "")
+                stderr = commit_result.get("stderr", "") or commit_result.get(
+                    "stdout", ""
+                )
                 raise ValueError(f"git commit failed: {stderr}")
 
             if push:
@@ -3067,7 +3152,9 @@ async def _apply_patch_impl(
                 push_cmd = f"git push origin {shlex.quote(f'HEAD:{effective_ref}')}"
                 push_result = await deps["run_shell"](push_cmd, cwd=repo_dir)
                 if push_result.get("exit_code") != 0:
-                    stderr = push_result.get("stderr", "") or push_result.get("stdout", "")
+                    stderr = push_result.get("stderr", "") or push_result.get(
+                        "stdout", ""
+                    )
                     raise ValueError(f"git push failed: {stderr}")
 
         response: dict[str, Any] = {
@@ -3210,7 +3297,9 @@ async def move_workspace_paths(
     try:
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         moved: list[dict[str, str]] = []
         failed: list[dict[str, Any]] = []
@@ -3219,10 +3308,14 @@ async def move_workspace_paths(
             src = m.get("src")
             dst = m.get("dst")
             if not isinstance(src, str) or not src.strip():
-                failed.append({"src": src, "dst": dst, "error": "src must be a non-empty string"})
+                failed.append(
+                    {"src": src, "dst": dst, "error": "src must be a non-empty string"}
+                )
                 continue
             if not isinstance(dst, str) or not dst.strip():
-                failed.append({"src": src, "dst": dst, "error": "dst must be a non-empty string"})
+                failed.append(
+                    {"src": src, "dst": dst, "error": "dst must be a non-empty string"}
+                )
                 continue
 
             try:
@@ -3258,7 +3351,9 @@ async def move_workspace_paths(
         return _structured_tool_error(exc, context="move_workspace_paths")
 
 
-def _apply_workspace_operations_write_action_resolver(args: dict[str, Any] | None) -> bool:
+def _apply_workspace_operations_write_action_resolver(
+    args: dict[str, Any] | None,
+) -> bool:
     """Determine whether a specific call will mutate the workspace mirror.
 
     `apply_workspace_operations` supports read-only operations (for example
@@ -3301,7 +3396,8 @@ def _apply_workspace_operations_write_action_resolver(args: dict[str, Any] | Non
 
 
 @mcp_tool(
-    write_action=True, write_action_resolver=_apply_workspace_operations_write_action_resolver
+    write_action=True,
+    write_action_resolver=_apply_workspace_operations_write_action_resolver,
 )
 async def apply_workspace_operations(
     full_name: str,
@@ -3334,7 +3430,9 @@ async def apply_workspace_operations(
 
     if operations is None:
         operations = []
-    if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
+    if not isinstance(operations, list) or any(
+        not isinstance(op, dict) for op in operations
+    ):
         raise TypeError("operations must be a list of dicts")
     # Canonicalize op names (aliases, `operation` key) before validation/execution.
     operations = _normalize_workspace_operations(operations)
@@ -3379,7 +3477,9 @@ async def apply_workspace_operations(
     try:
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         results: list[dict[str, Any]] = []
         diffs: list[str] = []
@@ -3387,7 +3487,11 @@ async def apply_workspace_operations(
         for idx, op in enumerate(operations):
             op_name = op.get("op")
             if not isinstance(op_name, str) or not op_name.strip():
-                entry = {"index": idx, "status": "error", "error": "op must be a non-empty string"}
+                entry = {
+                    "index": idx,
+                    "status": "error",
+                    "error": "op must be a non-empty string",
+                }
                 results.append(entry)
                 if fail_fast:
                     raise ValueError(entry["error"])
@@ -3424,18 +3528,26 @@ async def apply_workspace_operations(
                     )
                     if isinstance(d, str) and d:
                         diffs.append(d)
-                    results.append({"index": idx, "op": "write", "path": path, "status": "ok"})
+                    results.append(
+                        {"index": idx, "op": "write", "path": path, "status": "ok"}
+                    )
                     continue
 
                 if op_name == "read_sections":
                     path = op.get("path")
                     if not isinstance(path, str) or not path.strip():
-                        raise ValueError("read_sections.path must be a non-empty string")
+                        raise ValueError(
+                            "read_sections.path must be a non-empty string"
+                        )
 
                     start_line = int(op.get("start_line", 1) or 1)
                     max_sections = int(op.get("max_sections", 5) or 5)
-                    max_lines_per_section = int(op.get("max_lines_per_section", 200) or 200)
-                    max_chars_per_section = int(op.get("max_chars_per_section", 80_000) or 80_000)
+                    max_lines_per_section = int(
+                        op.get("max_lines_per_section", 200) or 200
+                    )
+                    max_chars_per_section = int(
+                        op.get("max_chars_per_section", 80_000) or 80_000
+                    )
                     overlap_lines = int(op.get("overlap_lines", 20) or 0)
 
                     if start_line < 1:
@@ -3555,10 +3667,14 @@ async def apply_workspace_operations(
                             start = found_at + len(old)
                         after = before
                         if found_at != -1:
-                            after = before[:found_at] + new + before[found_at + len(old) :]
+                            after = (
+                                before[:found_at] + new + before[found_at + len(old) :]
+                            )
 
                     if not preview_only and after != before:
-                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                        _workspace_write_text(
+                            repo_dir, path, after, create_parents=create_parents
+                        )
                     d = _maybe_diff_for_log(
                         path=path, before=before, after=after, before_exists=True
                     )
@@ -3609,7 +3725,9 @@ async def apply_workspace_operations(
                     after = before[:start_offset] + replacement + before[end_offset:]
 
                     if not preview_only and after != before:
-                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                        _workspace_write_text(
+                            repo_dir, path, after, create_parents=create_parents
+                        )
                     d = _maybe_diff_for_log(
                         path=path, before=before, after=after, before_exists=True
                     )
@@ -3632,7 +3750,9 @@ async def apply_workspace_operations(
                     if not isinstance(path, str) or not path.strip():
                         raise ValueError("delete_lines.path must be a non-empty string")
                     if start_line < 1 or end_line < 1:
-                        raise ValueError("delete_lines.start_line/end_line must be >= 1")
+                        raise ValueError(
+                            "delete_lines.start_line/end_line must be >= 1"
+                        )
                     if end_line < start_line:
                         raise ValueError("delete_lines.end_line must be >= start_line")
 
@@ -3659,7 +3779,9 @@ async def apply_workspace_operations(
 
                     after = before[:start_offset] + before[end_offset:]
                     if not preview_only and after != before:
-                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                        _workspace_write_text(
+                            repo_dir, path, after, create_parents=create_parents
+                        )
                     d = _maybe_diff_for_log(
                         path=path, before=before, after=after, before_exists=True
                     )
@@ -3702,11 +3824,15 @@ async def apply_workspace_operations(
                     start_offset = _pos_to_offset(lines, line, col)
                     end_offset = start_offset + count
                     if end_offset > len(before):
-                        raise ValueError("delete_chars range extends beyond end of file")
+                        raise ValueError(
+                            "delete_chars range extends beyond end of file"
+                        )
                     after = before[:start_offset] + before[end_offset:]
 
                     if not preview_only and after != before:
-                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                        _workspace_write_text(
+                            repo_dir, path, after, create_parents=create_parents
+                        )
                     d = _maybe_diff_for_log(
                         path=path, before=before, after=after, before_exists=True
                     )
@@ -3768,7 +3894,9 @@ async def apply_workspace_operations(
                             after = before[: m.start()] + before[m.end() :]
 
                     if not preview_only and after != before:
-                        _workspace_write_text(repo_dir, path, after, create_parents=create_parents)
+                        _workspace_write_text(
+                            repo_dir, path, after, create_parents=create_parents
+                        )
                     d = _maybe_diff_for_log(
                         path=path, before=before, after=after, before_exists=True
                     )
@@ -3798,7 +3926,12 @@ async def apply_workspace_operations(
                     if backups[abs_path] is None:
                         if allow_missing:
                             results.append(
-                                {"index": idx, "op": "delete", "path": path, "status": "noop"}
+                                {
+                                    "index": idx,
+                                    "op": "delete",
+                                    "path": path,
+                                    "status": "noop",
+                                }
                             )
                             continue
                         raise FileNotFoundError(path)
@@ -3813,7 +3946,9 @@ async def apply_workspace_operations(
                         diffs.append(d)
                     if not preview_only:
                         os.remove(abs_path)
-                    results.append({"index": idx, "op": "delete", "path": path, "status": "ok"})
+                    results.append(
+                        {"index": idx, "op": "delete", "path": path, "status": "ok"}
+                    )
                     continue
 
                 if op_name == "mkdir":
@@ -3829,7 +3964,12 @@ async def apply_workspace_operations(
                             raise FileExistsError(path)
                         if exist_ok:
                             results.append(
-                                {"index": idx, "op": "mkdir", "path": path, "status": "noop"}
+                                {
+                                    "index": idx,
+                                    "op": "mkdir",
+                                    "path": path,
+                                    "status": "noop",
+                                }
                             )
                             continue
                         raise FileExistsError(path)
@@ -3839,7 +3979,9 @@ async def apply_workspace_operations(
                             os.makedirs(abs_path, exist_ok=exist_ok)
                         else:
                             os.mkdir(abs_path)
-                    results.append({"index": idx, "op": "mkdir", "path": path, "status": "ok"})
+                    results.append(
+                        {"index": idx, "op": "mkdir", "path": path, "status": "ok"}
+                    )
                     continue
 
                 if op_name == "rmdir":
@@ -3852,7 +3994,12 @@ async def apply_workspace_operations(
                     if not os.path.exists(abs_path):
                         if allow_missing:
                             results.append(
-                                {"index": idx, "op": "rmdir", "path": path, "status": "noop"}
+                                {
+                                    "index": idx,
+                                    "op": "rmdir",
+                                    "path": path,
+                                    "status": "noop",
+                                }
                             )
                             continue
                         raise FileNotFoundError(path)
@@ -3863,7 +4010,9 @@ async def apply_workspace_operations(
                             shutil.rmtree(abs_path)
                         else:
                             os.rmdir(abs_path)
-                    results.append({"index": idx, "op": "rmdir", "path": path, "status": "ok"})
+                    results.append(
+                        {"index": idx, "op": "rmdir", "path": path, "status": "ok"}
+                    )
                     continue
 
                 if op_name == "move":
@@ -3892,7 +4041,13 @@ async def apply_workspace_operations(
                             os.makedirs(os.path.dirname(abs_dst), exist_ok=True)
                         shutil.move(abs_src, abs_dst)
                     results.append(
-                        {"index": idx, "op": "move", "src": src, "dst": dst, "status": "ok"}
+                        {
+                            "index": idx,
+                            "op": "move",
+                            "src": src,
+                            "dst": dst,
+                            "status": "ok",
+                        }
                     )
                     continue
 
@@ -3911,7 +4066,12 @@ async def apply_workspace_operations(
                 raise ValueError(f"Unsupported op: {op_name}")
 
             except Exception as exc:
-                entry = {"index": idx, "op": op_name, "status": "error", "error": str(exc)}
+                entry = {
+                    "index": idx,
+                    "op": op_name,
+                    "status": "error",
+                    "error": str(exc),
+                }
                 results.append(entry)
                 if fail_fast:
                     raise

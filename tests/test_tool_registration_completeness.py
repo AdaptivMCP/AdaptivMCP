@@ -41,7 +41,10 @@ def test_all_mcp_wrapped_tools_are_registered() -> None:
 
     # Root entrypoint tools.
     expected_names.update(
-        {f.__name__ for f in _iter_mcp_wrapped_callables(importlib.import_module("main"))}
+        {
+            f.__name__
+            for f in _iter_mcp_wrapped_callables(importlib.import_module("main"))
+        }
     )
 
     # Workspace tool modules.
@@ -76,6 +79,7 @@ def test_registered_tools_have_write_action_flag() -> None:
         if flag is None:
             missing_flag.append(str(name))
 
-    assert not missing_flag, "Registered tools missing write_action classification: " + str(
-        sorted(missing_flag)
+    assert not missing_flag, (
+        "Registered tools missing write_action classification: "
+        + str(sorted(missing_flag))
     )

@@ -85,7 +85,10 @@ def _log_once(
     payload.setdefault("key", key)
     try:
         LOGGER.log(
-            level, message, extra=payload, exc_info=exc if (exc and LOG_TOOL_EXC_INFO) else None
+            level,
+            message,
+            extra=payload,
+            exc_info=exc if (exc and LOG_TOOL_EXC_INFO) else None,
         )
     except Exception:
         return
@@ -194,7 +197,9 @@ LOG_TOOL_VERBOSE_EXTRAS = _env_flag("ADAPTIV_MCP_LOG_VERBOSE_EXTRAS", default=Fa
 # IMPORTANT: default is False to preserve the repo's compatibility contract:
 # tool return values must not be mutated by the wrapper.
 TOOL_RESULT_ENVELOPE = _env_flag("ADAPTIV_MCP_TOOL_RESULT_ENVELOPE", default=False)
-TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("ADAPTIV_MCP_TOOL_RESULT_ENVELOPE_SCALARS", default=False)
+TOOL_RESULT_ENVELOPE_SCALARS = _env_flag(
+    "ADAPTIV_MCP_TOOL_RESULT_ENVELOPE_SCALARS", default=False
+)
 
 # Tool response shaping
 #
@@ -207,8 +212,12 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag("ADAPTIV_MCP_TOOL_RESULT_ENVELOPE_SCALA
 # Response shaping is intentionally opt-in via env var. When set to "chatgpt",
 # the decorator can wrap scalar outputs, add ok/status when missing, and
 # truncate very large nested "json" payloads.
-RESPONSE_MODE_DEFAULT = os.environ.get("ADAPTIV_MCP_RESPONSE_MODE", "raw").strip().lower()
-CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int("ADAPTIV_MCP_RESPONSE_MAX_LIST_ITEMS", default=0)
+RESPONSE_MODE_DEFAULT = (
+    os.environ.get("ADAPTIV_MCP_RESPONSE_MODE", "raw").strip().lower()
+)
+CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int(
+    "ADAPTIV_MCP_RESPONSE_MAX_LIST_ITEMS", default=0
+)
 
 # Tool stream shaping
 #
@@ -216,8 +225,12 @@ CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int("ADAPTIV_MCP_RESPONSE_MAX_LIST_ITEMS"
 # payloads. In ChatGPT/compact response modes this can easily cause context
 # overflow and degrade downstream tool use. We therefore clip stdout/stderr in
 # these modes by default.
-RESPONSE_STREAM_MAX_LINES = _env_int("ADAPTIV_MCP_RESPONSE_STREAM_MAX_LINES", default=200)
-RESPONSE_STREAM_MAX_CHARS = _env_int("ADAPTIV_MCP_RESPONSE_STREAM_MAX_CHARS", default=20000)
+RESPONSE_STREAM_MAX_LINES = _env_int(
+    "ADAPTIV_MCP_RESPONSE_STREAM_MAX_LINES", default=200
+)
+RESPONSE_STREAM_MAX_CHARS = _env_int(
+    "ADAPTIV_MCP_RESPONSE_STREAM_MAX_CHARS", default=20000
+)
 
 # In hosted LLM connector environments, returning token-like strings (even from
 # test fixtures or diffs) can trigger upstream safety filters and block tool
@@ -238,7 +251,9 @@ REDACT_TOOL_OUTPUTS_ALLOW_OVERRIDE = False
 #
 # Set ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=0 to preserve these fields in the
 # client payload (useful for debugging or when a client explicitly needs them).
-STRIP_INTERNAL_LOG_FIELDS = _env_flag("ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS", default=True)
+STRIP_INTERNAL_LOG_FIELDS = _env_flag(
+    "ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS", default=True
+)
 
 
 def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
@@ -432,7 +447,9 @@ def _highlight_code(
         else:
             lexer = TextLexer()
         formatter = (
-            Terminal256Formatter(style=LOG_TOOL_STYLE) if use_256_enabled else TerminalFormatter()
+            Terminal256Formatter(style=LOG_TOOL_STYLE)
+            if use_256_enabled
+            else TerminalFormatter()
         )
         rendered = highlight(text, lexer, formatter).rstrip("\n")
         # Some formatters (and some terminals/UIs) can leave attributes "open".
@@ -467,7 +484,9 @@ def _highlight_file_text(
         except Exception:
             lexer = TextLexer()
         formatter = (
-            Terminal256Formatter(style=LOG_TOOL_STYLE) if use_256_enabled else TerminalFormatter()
+            Terminal256Formatter(style=LOG_TOOL_STYLE)
+            if use_256_enabled
+            else TerminalFormatter()
         )
         rendered = highlight(text, lexer, formatter).rstrip("\n")
         if rendered and not rendered.endswith(ANSI_RESET):
@@ -500,7 +519,9 @@ def _highlight_line_for_filename(
         except Exception:
             lexer = TextLexer()
         formatter = (
-            Terminal256Formatter(style=LOG_TOOL_STYLE) if use_256_enabled else TerminalFormatter()
+            Terminal256Formatter(style=LOG_TOOL_STYLE)
+            if use_256_enabled
+            else TerminalFormatter()
         )
         rendered = highlight(text, lexer, formatter).rstrip("\n")
         if rendered and not rendered.endswith(ANSI_RESET):
@@ -666,10 +687,16 @@ def _friendly_arg_bits(all_args: Mapping[str, Any]) -> list[str]:
     if isinstance(cmd, str) and cmd.strip():
         bits.append(cmd.strip())
     cmd_lines = all_args.get("command_lines")
-    if isinstance(cmd_lines, list) and cmd_lines and all(isinstance(x, str) for x in cmd_lines):
+    if (
+        isinstance(cmd_lines, list)
+        and cmd_lines
+        and all(isinstance(x, str) for x in cmd_lines)
+    ):
         first = cmd_lines[0].strip()
         if first:
-            bits.append(first + (f" (+{len(cmd_lines) - 1} more)" if len(cmd_lines) > 1 else ""))
+            bits.append(
+                first + (f" (+{len(cmd_lines) - 1} more)" if len(cmd_lines) > 1 else "")
+            )
 
     return bits
 
@@ -937,7 +964,9 @@ def _preview_render_logs(items: list[Any]) -> str:
     )
 
 
-def _inject_stdout_stderr(out: dict[str, Any], *, req: Mapping[str, Any] | None = None) -> None:
+def _inject_stdout_stderr(
+    out: dict[str, Any], *, req: Mapping[str, Any] | None = None
+) -> None:
     """Attach stdout/stderr to ChatGPT-friendly responses.
 
     Many tools return process outputs nested under `result`. ChatGPT UIs often
@@ -968,9 +997,9 @@ def _inject_stdout_stderr(out: dict[str, Any], *, req: Mapping[str, Any] | None 
         mode = _effective_response_mode(req)
         if mode in {"chatgpt", "compact"}:
             stream_max_lines, stream_max_chars = _effective_response_stream_limits(req)
-            if (stream_max_lines > 0 and len(stdout.splitlines()) > stream_max_lines) or (
-                stream_max_chars > 0 and len(stdout) > stream_max_chars
-            ):
+            if (
+                stream_max_lines > 0 and len(stdout.splitlines()) > stream_max_lines
+            ) or (stream_max_chars > 0 and len(stdout) > stream_max_chars):
                 raw_lines = stdout.splitlines()
                 raw_chars = len(stdout)
                 stdout = _clip_text(
@@ -987,9 +1016,9 @@ def _inject_stdout_stderr(out: dict[str, Any], *, req: Mapping[str, Any] | None 
         mode = _effective_response_mode(req)
         if mode in {"chatgpt", "compact"}:
             stream_max_lines, stream_max_chars = _effective_response_stream_limits(req)
-            if (stream_max_lines > 0 and len(stderr.splitlines()) > stream_max_lines) or (
-                stream_max_chars > 0 and len(stderr) > stream_max_chars
-            ):
+            if (
+                stream_max_lines > 0 and len(stderr.splitlines()) > stream_max_lines
+            ) or (stream_max_chars > 0 and len(stderr) > stream_max_chars):
                 raw_lines = stderr.splitlines()
                 raw_chars = len(stderr)
                 stderr = _clip_text(
@@ -1453,7 +1482,9 @@ def _schema_hash(schema: Mapping[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()
 
 
-def _schema_needs_update(existing: Mapping[str, Any], desired: Mapping[str, Any]) -> bool:
+def _schema_needs_update(
+    existing: Mapping[str, Any], desired: Mapping[str, Any]
+) -> bool:
     """Return True when a tool object's published schema should be replaced.
 
     Historically we only updated schemas when a newly-required parameter was
@@ -1565,13 +1596,15 @@ def _apply_tool_metadata(
 
         # Domain surfaces
         if "github" in tagset or any(
-            k in lowered for k in ("issue", "pull", "pr_", "graphql", "repository", "repo_")
+            k in lowered
+            for k in ("issue", "pull", "pr_", "graphql", "repository", "repo_")
         ):
             levels.add("github api")
         if "render" in tagset or "render" in lowered:
             levels.add("render api")
         if "git" in tagset or any(
-            k in lowered for k in ("git_", "branch", "worktree", "commit", "rebase", "merge")
+            k in lowered
+            for k in ("git_", "branch", "worktree", "commit", "rebase", "merge")
         ):
             levels.add("git")
         if "workspace" in tagset or "workspace" in lowered or ui_group_s == "workspace":
@@ -1605,7 +1638,9 @@ def _apply_tool_metadata(
             levels.add("editing")
 
         # Testing
-        if any(k in lowered for k in ("test", "pytest", "lint", "quality_suite", "smoke")):
+        if any(
+            k in lowered for k in ("test", "pytest", "lint", "quality_suite", "smoke")
+        ):
             levels.add("Testing")
 
         # Complexity level
@@ -1858,7 +1893,9 @@ def _merge_invocation_metadata(
     return out
 
 
-def _refresh_tool_annotations_for_invocation(func: Any, *, effective_write_action: bool) -> None:
+def _refresh_tool_annotations_for_invocation(
+    func: Any, *, effective_write_action: bool
+) -> None:
     """Best-effort update of tool annotations for the current invocation."""
 
     try:
@@ -1958,8 +1995,12 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
         return
     if get_auto_approve_enabled():
         return
-    exc = WriteApprovalRequiredError(f"Write approval required to run tool {tool_name!r}.")
-    exc.hint = "Approve the action in ChatGPT or enable auto-approve to allow write tools."
+    exc = WriteApprovalRequiredError(
+        f"Write approval required to run tool {tool_name!r}."
+    )
+    exc.hint = (
+        "Approve the action in ChatGPT or enable auto-approve to allow write tools."
+    )
     raise exc
 
 
@@ -2269,13 +2310,20 @@ def _normalize_tool_result_envelope(result: Any) -> Any:
 
     # Success
     out.setdefault("ok", True)
-    if not raw_status_str or raw_status_str.lower() in {"ok", "success", "succeeded", "passed"}:
+    if not raw_status_str or raw_status_str.lower() in {
+        "ok",
+        "success",
+        "succeeded",
+        "passed",
+    }:
         out["status"] = "success"
     # Otherwise, preserve the original status value.
     return out
 
 
-def _inject_coloured_streams(out: dict[str, Any], *, req: Mapping[str, Any] | None = None) -> None:
+def _inject_coloured_streams(
+    out: dict[str, Any], *, req: Mapping[str, Any] | None = None
+) -> None:
     """Attach ANSI-colored stdout/stderr previews to a mapping payload.
 
     This helper is intentionally minimal: it only adds
@@ -2364,7 +2412,9 @@ def _chatgpt_friendly_result(
                     "severity": "warning",
                     "event": "tool_result_shape_failed",
                     "error_type": exc.__class__.__name__,
-                    "error_message": _truncate_text(str(exc), limit=200) if str(exc) else None,
+                    "error_message": _truncate_text(str(exc), limit=200)
+                    if str(exc)
+                    else None,
                 },
                 exc_info=exc if LOG_TOOL_EXC_INFO else None,
             )
@@ -2422,7 +2472,11 @@ def _log_tool_warning(
     if not HUMAN_LOGS:
         LOGGER.info(
             f"{_ansi('!', ANSI_YELLOW)} {_ansi(tool_name, ANSI_CYAN)} ms={duration_ms:.2f}",
-            extra={"severity": "warning", "event": "tool_call_completed_with_warnings", **payload},
+            extra={
+                "severity": "warning",
+                "event": "tool_call_completed_with_warnings",
+                **payload,
+            },
         )
         return
 
@@ -2445,7 +2499,11 @@ def _log_tool_warning(
         msg = msg + " " + _ansi(inline, ANSI_DIM)
     LOGGER.info(
         msg,
-        extra={"severity": "warning", "event": "tool_call_completed_with_warnings", **payload},
+        extra={
+            "severity": "warning",
+            "event": "tool_call_completed_with_warnings",
+            **payload,
+        },
     )
 
 
@@ -2511,7 +2569,8 @@ def _log_tool_returned_error(
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         err_type = _ansi("ReturnedError", ANSI_YELLOW)
         err_msg = _ansi(
-            _clean_error_message(payload.get("error_message") or "", limit=180), ANSI_RED
+            _clean_error_message(payload.get("error_message") or "", limit=180),
+            ANSI_RED,
         )
         msg = (
             f"{prefix} {ms}{suffix} - {err_type}: {err_msg} - "
@@ -2542,7 +2601,11 @@ def _log_tool_returned_error(
         if rbits:
             kv_map["response"] = "; ".join(rbits[:3])
     if LOG_TOOL_LOG_IDS:
-        req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
+        req_ctx = (
+            payload.get("request", {})
+            if isinstance(payload.get("request"), Mapping)
+            else {}
+        )
         kv_map.update(
             {
                 "call_id": payload.get("call_id"),
@@ -2552,7 +2615,9 @@ def _log_tool_returned_error(
             }
         )
     line = _format_log_kv(kv_map)
-    prefix = _ansi("RES", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+    prefix = (
+        _ansi("RES", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+    )
     msg = f"{prefix} {line}"
     inline = payload.get("log_context")
     if isinstance(inline, str) and inline:
@@ -2626,7 +2691,11 @@ def _dedupe_ttl_seconds(*, write_action: bool, meta: Mapping[str, Any]) -> float
 
 
 def _dedupe_key(
-    *, tool_name: str, write_action: bool, req: Mapping[str, Any], args: Mapping[str, Any]
+    *,
+    tool_name: str,
+    write_action: bool,
+    req: Mapping[str, Any],
+    args: Mapping[str, Any],
 ) -> str:
     """Build a stable idempotency key for a tool call."""
 
@@ -2690,7 +2759,11 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
             from github_mcp.mcp_server.schemas import _preflight_tool_args
 
             preflight = _preflight_tool_args("<tool>", all_args, compact=False)
-            args = preflight.get("args") if isinstance(preflight, Mapping) else dict(all_args)
+            args = (
+                preflight.get("args")
+                if isinstance(preflight, Mapping)
+                else dict(all_args)
+            )
         except Exception:
             args = dict(all_args)
         return {"tool_args": args}
@@ -2705,7 +2778,10 @@ def _result_snapshot(result: Any) -> dict[str, Any]:
     if result is None:
         return {"type": "null"}
     if isinstance(result, (bool, int, float, str)):
-        return {"type": type(result).__name__, "value": _truncate_text(result, limit=180)}
+        return {
+            "type": type(result).__name__,
+            "value": _truncate_text(result, limit=180),
+        }
 
     # Collections
     if isinstance(result, list):
@@ -2754,8 +2830,16 @@ def _result_snapshot(result: Any) -> dict[str, Any]:
         try:
             # Inner payload often contains the streams (or they may be top-level).
             inner_payload = inner if isinstance(inner, Mapping) else result
-            stdout = inner_payload.get("stdout") if isinstance(inner_payload, Mapping) else None
-            stderr = inner_payload.get("stderr") if isinstance(inner_payload, Mapping) else None
+            stdout = (
+                inner_payload.get("stdout")
+                if isinstance(inner_payload, Mapping)
+                else None
+            )
+            stderr = (
+                inner_payload.get("stderr")
+                if isinstance(inner_payload, Mapping)
+                else None
+            )
 
             if isinstance(stdout, str) and stdout:
                 out["stdout_lines"] = len(stdout.splitlines())
@@ -2888,7 +2972,16 @@ def _friendly_result_bits(snapshot: Mapping[str, Any] | None) -> list[str]:
 
     if typ == "dict":
         # Preferred high-signal fields.
-        for k in ("exit_code", "status", "state", "ok", "success", "number", "name", "full_name"):
+        for k in (
+            "exit_code",
+            "status",
+            "state",
+            "ok",
+            "success",
+            "number",
+            "name",
+            "full_name",
+        ):
             if k in snapshot and snapshot.get(k) not in (None, ""):
                 bits.append(f"{k}={_truncate_text(snapshot.get(k), limit=60)}")
 
@@ -3153,9 +3246,7 @@ def _log_tool_success(
             + _write_badge(bool(effective_write_action))
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
-        msg = (
-            f"{prefix} {ms}{suffix} - {_truncate_text(str(report.get('summary') or ''), limit=220)}"
-        )
+        msg = f"{prefix} {ms}{suffix} - {_truncate_text(str(report.get('summary') or ''), limit=220)}"
         if LOG_TOOL_LOG_IDS:
             msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
         inline = payload.get("log_context")
@@ -3273,7 +3364,11 @@ def _log_tool_failure(
     call_id_short = payload.get("call_id")
 
     # Emit a scan-friendly message with a compact arg summary.
-    req_ctx = payload.get("request", {}) if isinstance(payload.get("request"), Mapping) else {}
+    req_ctx = (
+        payload.get("request", {})
+        if isinstance(payload.get("request"), Mapping)
+        else {}
+    )
     msg_id = req_ctx.get("message_id")
     session_id = req_ctx.get("session_id")
     path = req_ctx.get("path")
@@ -3303,7 +3398,9 @@ def _log_tool_failure(
             }
         )
     line = _format_log_kv(kv_map)
-    prefix = _ansi("RES", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+    prefix = (
+        _ansi("RES", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+    )
     msg = f"{prefix} {line}"
     inline = payload.get("log_context")
     if isinstance(inline, str) and inline:
@@ -3464,7 +3561,8 @@ def _filter_kwargs_for_signature(
     allowed = {
         param.name
         for param in params
-        if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        if param.kind
+        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
     }
     return {k: v for k, v in kwargs.items() if k in allowed}
 
@@ -3513,7 +3611,8 @@ def _register_with_fastmcp(
     # in that case we still exercise registration logic.
     if not FASTMCP_AVAILABLE and (
         mcp is None
-        or getattr(getattr(mcp, "__class__", None), "__name__", None) == "_MissingFastMCP"
+        or getattr(getattr(mcp, "__class__", None), "__name__", None)
+        == "_MissingFastMCP"
     ):
         # FastMCP is not available (or explicitly missing). Still register a
         # stub tool object so HTTP routes and introspection can function.
@@ -3524,7 +3623,9 @@ def _register_with_fastmcp(
             except Exception:
                 pass
         _REGISTERED_MCP_TOOLS[:] = [
-            (t, f) for (t, f) in _REGISTERED_MCP_TOOLS if _registered_tool_name(t, f) != name
+            (t, f)
+            for (t, f) in _REGISTERED_MCP_TOOLS
+            if _registered_tool_name(t, f) != name
         ]
         _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
         return tool_obj
@@ -3655,7 +3756,9 @@ def _register_with_fastmcp(
         raise RuntimeError("Failed to register tool with FastMCP")
 
     _REGISTERED_MCP_TOOLS[:] = [
-        (t, f) for (t, f) in _REGISTERED_MCP_TOOLS if _registered_tool_name(t, f) != name
+        (t, f)
+        for (t, f) in _REGISTERED_MCP_TOOLS
+        if _registered_tool_name(t, f) != name
     ]
     _REGISTERED_MCP_TOOLS.append((tool_obj, fn))
     return tool_obj
@@ -3751,7 +3854,11 @@ def mcp_tool(
                 call_id = str(uuid.uuid4())
                 meta = _extract_tool_meta(kwargs)
                 clean_kwargs = _strip_tool_meta(kwargs)
-                all_args = _bind_call_args(signature, args, clean_kwargs) if LOG_TOOL_CALLS else {}
+                all_args = (
+                    _bind_call_args(signature, args, clean_kwargs)
+                    if LOG_TOOL_CALLS
+                    else {}
+                )
                 req = get_request_context()
                 start = time.perf_counter()
 
@@ -3760,7 +3867,9 @@ def mcp_tool(
                     try:
                         # Prefer bound args if available; otherwise use raw kwargs.
                         basis = (
-                            all_args if isinstance(all_args, Mapping) and all_args else clean_kwargs
+                            all_args
+                            if isinstance(all_args, Mapping) and all_args
+                            else clean_kwargs
                         )
                         effective_write_action = bool(write_action_resolver(basis))
                     except Exception:
@@ -3773,7 +3882,9 @@ def mcp_tool(
 
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-                schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+                schema_present = isinstance(schema, Mapping) and isinstance(
+                    schema_hash, str
+                )
                 _log_tool_start(
                     tool_name=tool_name,
                     call_id=call_id,
@@ -3786,7 +3897,9 @@ def mcp_tool(
                 )
                 try:
                     if _should_enforce_write_gate(req):
-                        _enforce_write_allowed(tool_name, write_action=effective_write_action)
+                        _enforce_write_allowed(
+                            tool_name, write_action=effective_write_action
+                        )
                 except asyncio.CancelledError as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
                     _log_tool_cancelled(
@@ -3835,7 +3948,10 @@ def mcp_tool(
                     if isinstance(structured_error, Mapping):
                         client_payload = _strip_internal_log_fields(structured_error)
                         try:
-                            if _effective_response_mode(req) not in {"chatgpt", "compact"}:
+                            if _effective_response_mode(req) not in {
+                                "chatgpt",
+                                "compact",
+                            }:
                                 client_payload = _merge_invocation_metadata(
                                     client_payload,
                                     func=wrapper,
@@ -3846,7 +3962,9 @@ def mcp_tool(
                             pass
                     else:
                         client_payload = structured_error
-                    if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+                    if _effective_redact_tool_outputs(req) and _effective_response_mode(
+                        req
+                    ) in {
                         "chatgpt",
                         "compact",
                     }:
@@ -3890,7 +4008,9 @@ def mcp_tool(
                                 args=key_args,
                             )
                             result = await _maybe_dedupe_call(
-                                dedupe_key, lambda: func(*args, **clean_kwargs), ttl_s=ttl_s
+                                dedupe_key,
+                                lambda: func(*args, **clean_kwargs),
+                                ttl_s=ttl_s,
                             )
                         else:
                             result = await func(*args, **clean_kwargs)
@@ -3941,7 +4061,10 @@ def mcp_tool(
                     if isinstance(structured_error, Mapping):
                         client_payload = _strip_internal_log_fields(structured_error)
                         try:
-                            if _effective_response_mode(req) not in {"chatgpt", "compact"}:
+                            if _effective_response_mode(req) not in {
+                                "chatgpt",
+                                "compact",
+                            }:
                                 client_payload = _merge_invocation_metadata(
                                     client_payload,
                                     func=wrapper,
@@ -3952,7 +4075,9 @@ def mcp_tool(
                             pass
                     else:
                         client_payload = structured_error
-                    if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+                    if _effective_redact_tool_outputs(req) and _effective_response_mode(
+                        req
+                    ) in {
                         "chatgpt",
                         "compact",
                     }:
@@ -4036,7 +4161,9 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = result
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+                if _effective_redact_tool_outputs(req) and _effective_response_mode(
+                    req
+                ) in {
                     "chatgpt",
                     "compact",
                 }:
@@ -4070,7 +4197,9 @@ def mcp_tool(
             if not isinstance(schema, Mapping):
                 schema = _normalize_input_schema(wrapper.__mcp_tool__)
             if not isinstance(schema, Mapping):
-                raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
+                raise RuntimeError(
+                    f"Failed to derive input schema for tool {tool_name!r}."
+                )
             wrapper.__mcp_input_schema__ = schema
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_tool_name__ = tool_name
@@ -4094,7 +4223,9 @@ def mcp_tool(
                 if schema_inline:
                     normalized_description = (normalized_description or "").strip()
                     first, *rest = (
-                        normalized_description.splitlines() if normalized_description else [""]
+                        normalized_description.splitlines()
+                        if normalized_description
+                        else [""]
                     )
                     first = (first or "").strip()
                     if first and "Schema:" not in first:
@@ -4137,7 +4268,9 @@ def mcp_tool(
 
             # Keep the tool registry description aligned with the docstring.
             try:
-                wrapper.__mcp_tool__.description = wrapper.__doc__ or normalized_description
+                wrapper.__mcp_tool__.description = (
+                    wrapper.__doc__ or normalized_description
+                )
             except Exception:
                 pass
 
@@ -4148,14 +4281,20 @@ def mcp_tool(
             call_id = str(uuid.uuid4())
             meta = _extract_tool_meta(kwargs)
             clean_kwargs = _strip_tool_meta(kwargs)
-            all_args = _bind_call_args(signature, args, clean_kwargs) if LOG_TOOL_CALLS else {}
+            all_args = (
+                _bind_call_args(signature, args, clean_kwargs) if LOG_TOOL_CALLS else {}
+            )
             req = get_request_context()
             start = time.perf_counter()
 
             effective_write_action = bool(write_action)
             if callable(write_action_resolver):
                 try:
-                    basis = all_args if isinstance(all_args, Mapping) and all_args else clean_kwargs
+                    basis = (
+                        all_args
+                        if isinstance(all_args, Mapping) and all_args
+                        else clean_kwargs
+                    )
                     effective_write_action = bool(write_action_resolver(basis))
                 except Exception:
                     effective_write_action = bool(write_action)
@@ -4166,7 +4305,9 @@ def mcp_tool(
 
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
-            schema_present = isinstance(schema, Mapping) and isinstance(schema_hash, str)
+            schema_present = isinstance(schema, Mapping) and isinstance(
+                schema_hash, str
+            )
             _log_tool_start(
                 tool_name=tool_name,
                 call_id=call_id,
@@ -4179,7 +4320,9 @@ def mcp_tool(
             )
             try:
                 if _should_enforce_write_gate(req):
-                    _enforce_write_allowed(tool_name, write_action=effective_write_action)
+                    _enforce_write_allowed(
+                        tool_name, write_action=effective_write_action
+                    )
             except asyncio.CancelledError as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
                 _log_tool_cancelled(
@@ -4235,7 +4378,9 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = structured_error
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+                if _effective_redact_tool_outputs(req) and _effective_response_mode(
+                    req
+                ) in {
                     "chatgpt",
                     "compact",
                 }:
@@ -4337,7 +4482,9 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = structured_error
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+                if _effective_redact_tool_outputs(req) and _effective_response_mode(
+                    req
+                ) in {
                     "chatgpt",
                     "compact",
                 }:
@@ -4414,7 +4561,9 @@ def mcp_tool(
                     pass
             else:
                 client_payload = result
-            if _effective_redact_tool_outputs(req) and _effective_response_mode(req) in {
+            if _effective_redact_tool_outputs(req) and _effective_response_mode(
+                req
+            ) in {
                 "chatgpt",
                 "compact",
             }:
@@ -4469,7 +4618,9 @@ def mcp_tool(
             if schema_inline:
                 normalized_description = (normalized_description or "").strip()
                 first, *rest = (
-                    normalized_description.splitlines() if normalized_description else [""]
+                    normalized_description.splitlines()
+                    if normalized_description
+                    else [""]
                 )
                 first = (first or "").strip()
                 if first and "Schema:" not in first:
@@ -4604,7 +4755,9 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
 
             description = getattr(func, "__mcp_description__", None)
             if not isinstance(description, str) or not description.strip():
-                description = getattr(tool_obj, "description", None) or (func.__doc__ or "")
+                description = getattr(tool_obj, "description", None) or (
+                    func.__doc__ or ""
+                )
 
             try:
                 func.__doc__ = _build_tool_docstring(
@@ -4645,7 +4798,9 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
             try:
                 name = _registered_tool_name(tool_obj, func)
             except Exception:
-                name = getattr(tool_obj, "name", None) or getattr(func, "__name__", None)
+                name = getattr(tool_obj, "name", None) or getattr(
+                    func, "__name__", None
+                )
             key = f"tool_metadata_refresh_failed:{name or 'unknown'}"
             _log_once(
                 key,

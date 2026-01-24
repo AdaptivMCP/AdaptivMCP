@@ -86,7 +86,9 @@ async def test_open_issue_context_matches_branches_and_prs(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_issue_overview_normalizes_fields_and_extracts_checklists(monkeypatch):
+async def test_get_issue_overview_normalizes_fields_and_extracts_checklists(
+    monkeypatch,
+):
     """Cover get_issue_overview normalization and checklist extraction."""
 
     from github_mcp.main_tools import issues
@@ -108,8 +110,13 @@ async def test_get_issue_overview_normalizes_fields_and_extracts_checklists(monk
                 "created_at": "2020-01-01T00:00:00Z",
                 "updated_at": "2020-01-02T00:00:00Z",
                 "closed_at": None,
-                "user": {"login": "alice", "html_url": "https://example.invalid/u/alice"},
-                "assignees": [{"login": "bob", "html_url": "https://example.invalid/u/bob"}],
+                "user": {
+                    "login": "alice",
+                    "html_url": "https://example.invalid/u/alice",
+                },
+                "assignees": [
+                    {"login": "bob", "html_url": "https://example.invalid/u/bob"}
+                ],
                 "labels": [{"name": "bug", "color": "ff0000"}, "help wanted"],
                 "body": "- [ ] first\n- [x] second\n",
             },
@@ -131,13 +138,16 @@ async def test_get_issue_overview_normalizes_fields_and_extracts_checklists(monk
     issue = overview.get("issue")
     assert isinstance(issue, dict)
     assert issue.get("number") == 5
-    assert issue.get("user") == {"login": "alice", "html_url": "https://example.invalid/u/alice"}
+    assert issue.get("user") == {
+        "login": "alice",
+        "html_url": "https://example.invalid/u/alice",
+    }
 
     labels = issue.get("labels")
     assert isinstance(labels, list)
-    assert {label.get("name") for label in labels if isinstance(label, dict)}.issuperset(
-        {"bug", "help wanted"}
-    )
+    assert {
+        label.get("name") for label in labels if isinstance(label, dict)
+    }.issuperset({"bug", "help wanted"})
 
     checklist = overview.get("checklist_items")
     assert isinstance(checklist, list)

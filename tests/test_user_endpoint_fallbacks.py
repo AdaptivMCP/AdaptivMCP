@@ -13,7 +13,10 @@ def test_get_user_login_falls_back_to_app(monkeypatch):
         if method == "GET" and path == "/user":
             raise GitHubAuthError("Resource not accessible by integration")
         if method == "GET" and path == "/app":
-            return {"status_code": 200, "json": {"slug": "sample-app", "name": "Sample App"}}
+            return {
+                "status_code": 200,
+                "json": {"slug": "sample-app", "name": "Sample App"},
+            }
         raise AssertionError(f"Unexpected request: {method} {path}")
 
     dummy_main = ModuleType("main")

@@ -38,7 +38,9 @@ def _rg_available() -> bool:
         return False
 
 
-def _safe_communicate(proc: subprocess.Popen, *, timeout: float = 5.0) -> tuple[str, str]:
+def _safe_communicate(
+    proc: subprocess.Popen, *, timeout: float = 5.0
+) -> tuple[str, str]:
     """Best-effort communicate that never leaves a child process running.
 
     Some environments (or unexpected child process states) can cause
@@ -273,7 +275,10 @@ def _python_search(
             abs_path = _workspace_safe_join(repo_dir, rel_path)
             if os.path.isdir(abs_path):
                 continue
-            if max_file_bytes is not None and os.path.getsize(abs_path) > max_file_bytes:
+            if (
+                max_file_bytes is not None
+                and os.path.getsize(abs_path) > max_file_bytes
+            ):
                 continue
             if _is_probably_binary(abs_path):
                 continue
@@ -354,7 +359,9 @@ async def rg_list_workspace_files(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         globs = _normalize_globs(glob)
         excl_globs = _normalize_globs(exclude_glob)
@@ -383,13 +390,17 @@ async def rg_list_workspace_files(
             if incl_paths:
                 base_abs = repo_dir
                 for p in incl_paths:
-                    joined = os.path.normpath(os.path.join(base_rel, p)).replace("\\", "/")
+                    joined = os.path.normpath(os.path.join(base_rel, p)).replace(
+                        "\\", "/"
+                    )
                     if joined.startswith("../") or joined == "..":
                         continue
                     cmd.append(joined)
             else:
                 base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
-            proc = subprocess.run(cmd, cwd=base_abs, capture_output=True, text=True, timeout=30)
+            proc = subprocess.run(
+                cmd, cwd=base_abs, capture_output=True, text=True, timeout=30
+            )
             if proc.returncode not in (0, 1):
                 raise RuntimeError((proc.stderr or proc.stdout or "rg failed").strip())
             for line in (proc.stdout or "").splitlines():
@@ -479,7 +490,9 @@ async def rg_search_workspace(
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         base_rel = (path or "").strip().lstrip("/")
         globs = _normalize_globs(glob)
@@ -490,7 +503,9 @@ async def rg_search_workspace(
 
         # When include_paths is provided, we run from repo root and pass explicit
         # targets to ripgrep. Otherwise we use `path` as the working directory.
-        base_abs = repo_dir if incl_paths else _workspace_safe_join(repo_dir, base_rel or ".")
+        base_abs = (
+            repo_dir if incl_paths else _workspace_safe_join(repo_dir, base_rel or ".")
+        )
 
         matches: list[dict[str, Any]] = []
         truncated = False
@@ -518,7 +533,9 @@ async def rg_search_workspace(
 
                 if incl_paths:
                     for p in incl_paths:
-                        joined = os.path.normpath(os.path.join(base_rel, p)).replace("\\", "/")
+                        joined = os.path.normpath(os.path.join(base_rel, p)).replace(
+                            "\\", "/"
+                        )
                         if joined.startswith("../") or joined == "..":
                             continue
                         cmd.append(joined)
@@ -547,7 +564,9 @@ async def rg_search_workspace(
                         if not isinstance(rel, str) or not rel:
                             continue
                         # Normalize to repo-root relative path.
-                        rel_norm = os.path.normpath(os.path.join(base_rel, rel)).replace("\\", "/")
+                        rel_norm = os.path.normpath(
+                            os.path.join(base_rel, rel)
+                        ).replace("\\", "/")
                         if not _passes_filters(
                             rel_norm,
                             include_globs=globs,

@@ -87,15 +87,21 @@ async def test_load_body_from_content_url_reads_sandbox_local_file(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_load_body_from_content_url_sandbox_missing_uses_rewrite(monkeypatch, tmp_path):
+async def test_load_body_from_content_url_sandbox_missing_uses_rewrite(
+    monkeypatch, tmp_path
+):
     from github_mcp import github_content
 
     missing = tmp_path / "does-not-exist.txt"
-    monkeypatch.setattr(github_content, "SANDBOX_CONTENT_BASE_URL", "https://sandbox.test")
+    monkeypatch.setattr(
+        github_content, "SANDBOX_CONTENT_BASE_URL", "https://sandbox.test"
+    )
     monkeypatch.setattr(
         github_content,
         "_external_client_instance",
-        lambda: _DummyHTTPClient(_DummyHTTPResponse(status_code=200, content=b"rewritten")),
+        lambda: _DummyHTTPClient(
+            _DummyHTTPResponse(status_code=200, content=b"rewritten")
+        ),
     )
 
     body = await github_content._load_body_from_content_url(
@@ -134,7 +140,9 @@ async def test_perform_github_commit_typecheck_and_strips_payload(monkeypatch):
         }
 
     monkeypatch.setattr(github_content, "_request", _fake_request)
-    monkeypatch.setattr(github_content, "_normalize_repo_path_for_repo", lambda _r, p: p)
+    monkeypatch.setattr(
+        github_content, "_normalize_repo_path_for_repo", lambda _r, p: p
+    )
 
     cleaned = await github_content._perform_github_commit(
         "o/r",

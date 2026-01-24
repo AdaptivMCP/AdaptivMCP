@@ -35,7 +35,9 @@ async def workspace_venv_start(
     try:
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         deps = _tw()._workspace_deps()
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         env = await deps["prepare_temp_virtualenv"](repo_dir)
 
@@ -55,7 +57,9 @@ async def workspace_venv_start(
         return {
             "ref": effective_ref,
             "venv": status,
-            "installed_dependencies": bool(install_log and not install_log.get("skipped")),
+            "installed_dependencies": bool(
+                install_log and not install_log.get("skipped")
+            ),
             "install_log": install_log,
         }
     except Exception as exc:
@@ -72,7 +76,9 @@ async def workspace_venv_stop(
     try:
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         deps = _tw()._workspace_deps()
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         stopped = await deps["stop_virtualenv"](repo_dir)
         status = await deps["virtualenv_status"](repo_dir)
@@ -95,7 +101,9 @@ async def workspace_venv_status(
     try:
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
         deps = _tw()._workspace_deps()
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
         status = await deps["virtualenv_status"](repo_dir)
         return {
             "ref": effective_ref,

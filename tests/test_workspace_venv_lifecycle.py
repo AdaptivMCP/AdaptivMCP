@@ -92,7 +92,9 @@ async def test_stop_virtualenv_removes_directory(monkeypatch, tmp_path):
 
 
 @pytest.mark.anyio
-async def test_workspace_venv_tools_skip_install_when_missing_requirements(monkeypatch, tmp_path):
+async def test_workspace_venv_tools_skip_install_when_missing_requirements(
+    monkeypatch, tmp_path
+):
     import github_mcp.workspace_tools.venv as venv_tools
 
     repo_dir = tmp_path / "repo"

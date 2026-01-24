@@ -67,7 +67,7 @@ def extract_file_blocks_from_text(
             if lang not in _FILE_BLOCK_LANGS:
                 continue
 
-            body = (match.group("body") or "")
+            body = match.group("body") or ""
             if not body:
                 continue
 

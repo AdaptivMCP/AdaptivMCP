@@ -113,8 +113,12 @@ async def workspace_git_status(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         # Ensure checkout is consistent.
         await deps["run_shell"](
@@ -164,13 +168,19 @@ async def workspace_git_stage(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         if paths is None:
             cmd = "git add -A"
         else:
-            quoted = " ".join(shlex.quote(p) for p in paths if isinstance(p, str) and p.strip())
+            quoted = " ".join(
+                shlex.quote(p) for p in paths if isinstance(p, str) and p.strip()
+            )
             cmd = f"git add -- {quoted}" if quoted else "git add -A"
 
         res = await deps["run_shell"](cmd, cwd=repo_dir, timeout_seconds=t_default)
@@ -184,7 +194,9 @@ async def workspace_git_stage(
             timeout_seconds=t_default,
         )
         staged_files = [
-            ln.strip() for ln in (staged.get("stdout", "") or "").splitlines() if ln.strip()
+            ln.strip()
+            for ln in (staged.get("stdout", "") or "").splitlines()
+            if ln.strip()
         ]
 
         return {
@@ -215,13 +227,19 @@ async def workspace_git_unstage(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         if not paths:
             cmd = "git reset"
         else:
-            quoted = " ".join(shlex.quote(p) for p in paths if isinstance(p, str) and p.strip())
+            quoted = " ".join(
+                shlex.quote(p) for p in paths if isinstance(p, str) and p.strip()
+            )
             cmd = f"git reset -- {quoted}" if quoted else "git reset"
 
         res = await deps["run_shell"](cmd, cwd=repo_dir, timeout_seconds=t_default)
@@ -235,7 +253,9 @@ async def workspace_git_unstage(
             timeout_seconds=t_default,
         )
         staged_files = [
-            ln.strip() for ln in (staged.get("stdout", "") or "").splitlines() if ln.strip()
+            ln.strip()
+            for ln in (staged.get("stdout", "") or "").splitlines()
+            if ln.strip()
         ]
 
         return {
@@ -274,8 +294,12 @@ async def workspace_git_log(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         n = int(max_entries)
         if n <= 0:
@@ -313,7 +337,9 @@ async def workspace_git_log(
             (res.get("stdout", "") or "").rstrip("\n"), max_chars=max_chars
         )
         rows = _parse_tabbed_rows(out_raw.splitlines(), expected_cols=4)
-        commits = [{"sha": r[0], "author": r[1], "date": r[2], "subject": r[3]} for r in rows]
+        commits = [
+            {"sha": r[0], "author": r[1], "date": r[2], "subject": r[3]} for r in rows
+        ]
 
         return {
             "full_name": full_name,
@@ -350,8 +376,12 @@ async def workspace_git_show(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -417,8 +447,12 @@ async def workspace_git_blame(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         if not isinstance(path, str) or not path.strip():
             raise ValueError("path is required")
@@ -452,7 +486,11 @@ async def workspace_git_blame(
             stderr = res.get("stderr", "") or res.get("stdout", "")
             raise GitHubAPIError(f"git blame failed: {stderr}")
 
-        lines = [ln.rstrip("\n") for ln in (res.get("stdout", "") or "").splitlines() if ln.strip()]
+        lines = [
+            ln.rstrip("\n")
+            for ln in (res.get("stdout", "") or "").splitlines()
+            if ln.strip()
+        ]
         return {
             "full_name": full_name,
             "ref": effective_ref,
@@ -485,8 +523,12 @@ async def workspace_git_branches(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -511,7 +553,11 @@ async def workspace_git_branches(
             stderr = res.get("stderr", "") or res.get("stdout", "")
             raise GitHubAPIError(f"git for-each-ref failed: {stderr}")
 
-        lines = [ln.strip() for ln in (res.get("stdout", "") or "").splitlines() if ln.strip()]
+        lines = [
+            ln.strip()
+            for ln in (res.get("stdout", "") or "").splitlines()
+            if ln.strip()
+        ]
         rows = _parse_tabbed_rows(lines, expected_cols=6)
         branches_out = [
             {
@@ -553,8 +599,12 @@ async def workspace_git_tags(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -569,7 +619,11 @@ async def workspace_git_tags(
             n = 2000
 
         fmt = "%(refname:strip=2)\t%(objectname)\t%(creatordate:iso-strict)"
-        cmd = "git tag -l --sort=-creatordate --format=" + shlex.quote(fmt) + f" | head -n {n}"
+        cmd = (
+            "git tag -l --sort=-creatordate --format="
+            + shlex.quote(fmt)
+            + f" | head -n {n}"
+        )
         # `head` is a small portability risk, but the server already relies on
         # common shell tools. If `head` is unavailable, git output will still
         # be bounded by the MCP response shaping.
@@ -578,7 +632,11 @@ async def workspace_git_tags(
             stderr = res.get("stderr", "") or res.get("stdout", "")
             raise GitHubAPIError(f"git tag failed: {stderr}")
 
-        lines = [ln.strip() for ln in (res.get("stdout", "") or "").splitlines() if ln.strip()]
+        lines = [
+            ln.strip()
+            for ln in (res.get("stdout", "") or "").splitlines()
+            if ln.strip()
+        ]
         rows = _parse_tabbed_rows(lines, expected_cols=3)
         tags = [{"name": r[0], "sha": r[1], "date": r[2] or None} for r in rows]
         return {
@@ -610,8 +668,12 @@ async def workspace_git_stash_list(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -674,8 +736,12 @@ async def workspace_git_stash_save(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -753,8 +819,12 @@ async def workspace_git_stash_pop(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
             cwd=repo_dir,
@@ -790,8 +860,12 @@ async def workspace_git_stash_apply(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
             cwd=repo_dir,
@@ -827,8 +901,12 @@ async def workspace_git_stash_drop(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
             cwd=repo_dir,
@@ -879,8 +957,12 @@ async def workspace_git_checkout(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         if not isinstance(target, str) or not target.strip():
             raise ValueError("target must be a non-empty string")
@@ -914,7 +996,9 @@ async def workspace_git_checkout(
         push_res = None
         if push:
             push_cmd = f"git push -u origin {shlex.quote(target)}"
-            push_res = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=t_default)
+            push_res = await deps["run_shell"](
+                push_cmd, cwd=repo_dir, timeout_seconds=t_default
+            )
             if push_res.get("exit_code", 0) != 0:
                 stderr = push_res.get("stderr", "") or push_res.get("stdout", "")
                 raise GitHubAPIError(f"git push failed: {stderr}")
@@ -995,8 +1079,12 @@ async def workspace_git_commit(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -1006,7 +1094,9 @@ async def workspace_git_commit(
 
         add_res = None
         if stage_all:
-            add_res = await deps["run_shell"]("git add -A", cwd=repo_dir, timeout_seconds=t_default)
+            add_res = await deps["run_shell"](
+                "git add -A", cwd=repo_dir, timeout_seconds=t_default
+            )
             if add_res.get("exit_code", 0) != 0:
                 stderr = add_res.get("stderr", "") or add_res.get("stdout", "")
                 raise GitHubAPIError(f"git add failed: {stderr}")
@@ -1021,7 +1111,9 @@ async def workspace_git_commit(
 
         cmd_parts = ["git", "commit"] + flags + ["-m", message.strip()]
         cmd = " ".join(shlex.quote(p) for p in cmd_parts)
-        commit_res = await deps["run_shell"](cmd, cwd=repo_dir, timeout_seconds=t_default)
+        commit_res = await deps["run_shell"](
+            cmd, cwd=repo_dir, timeout_seconds=t_default
+        )
         if commit_res.get("exit_code", 0) != 0:
             stderr = commit_res.get("stderr", "") or commit_res.get("stdout", "")
             raise GitHubAPIError(f"git commit failed: {stderr}")
@@ -1078,8 +1170,12 @@ async def workspace_git_fetch(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -1136,8 +1232,12 @@ async def workspace_git_reset(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -1193,8 +1293,12 @@ async def workspace_git_clean(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -1253,8 +1357,12 @@ async def workspace_git_restore(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         if not paths:
             raise ValueError("paths is required")
@@ -1325,8 +1433,12 @@ async def workspace_git_merge(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -1396,8 +1508,12 @@ async def workspace_git_rebase(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -1459,8 +1575,12 @@ async def workspace_git_cherry_pick(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -1523,8 +1643,12 @@ async def workspace_git_revert(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -1583,8 +1707,12 @@ async def workspace_git_pull(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         allowed = {"ff-only", "merge", "rebase"}
         if strategy not in allowed:
@@ -1612,7 +1740,9 @@ async def workspace_git_pull(
         else:
             pull_cmd = f"git pull origin {shlex.quote(effective_ref)}"
 
-        pull = await deps["run_shell"](pull_cmd, cwd=repo_dir, timeout_seconds=t_default)
+        pull = await deps["run_shell"](
+            pull_cmd, cwd=repo_dir, timeout_seconds=t_default
+        )
         if pull.get("exit_code", 0) != 0:
             stderr = pull.get("stderr", "") or pull.get("stdout", "")
             raise GitHubAPIError(f"git pull failed: {stderr}")
@@ -1655,8 +1785,12 @@ async def workspace_git_push(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -1672,7 +1806,9 @@ async def workspace_git_push(
         flag_str = " ".join(flags)
         push_cmd = f"git push {flag_str} origin HEAD".strip()
 
-        push = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=t_default)
+        push = await deps["run_shell"](
+            push_cmd, cwd=repo_dir, timeout_seconds=t_default
+        )
         if push.get("exit_code", 0) != 0:
             stderr = push.get("stderr", "") or push.get("stdout", "")
             raise GitHubAPIError(f"git push failed: {stderr}")

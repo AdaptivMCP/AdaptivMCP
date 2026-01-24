@@ -77,7 +77,9 @@ async def _decode(full_name: str, path: str, ref: str | None) -> dict[str, Any]:
     return await fn(full_name, path, ref)
 
 
-async def fetch_files(full_name: str, paths: list[str], ref: str = "main") -> dict[str, Any]:
+async def fetch_files(
+    full_name: str, paths: list[str], ref: str = "main"
+) -> dict[str, Any]:
     """Fetch multiple files concurrently with per-file error isolation."""
 
     snapshot = await _resolve_ref_snapshot(full_name, ref)
@@ -116,7 +118,9 @@ async def fetch_files(full_name: str, paths: list[str], ref: str = "main") -> di
     return {"ref": requested_ref, "resolved_ref": resolved_ref, "files": results}
 
 
-async def get_cached_files(full_name: str, paths: list[str], ref: str = "main") -> dict[str, Any]:
+async def get_cached_files(
+    full_name: str, paths: list[str], ref: str = "main"
+) -> dict[str, Any]:
     """Return cached file entries and list any missing paths."""
 
     snapshot = await _resolve_ref_snapshot(full_name, ref)
@@ -164,7 +168,11 @@ async def cache_files(
 
             decoded = await _decode(full_name, p, resolved_ref)
             if isinstance(decoded, dict):
-                decoded = {**decoded, "requested_ref": effective_ref, "resolved_ref": resolved_ref}
+                decoded = {
+                    **decoded,
+                    "requested_ref": effective_ref,
+                    "resolved_ref": resolved_ref,
+                }
             cached = cache_payload(
                 full_name=full_name,
                 ref=resolved_ref,

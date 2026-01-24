@@ -37,7 +37,9 @@ def test_list_all_actions_registry_has_no_duplicates_and_callables() -> None:
 
     catalog = introspection.list_all_actions(include_parameters=False, compact=True)
     catalog_names = [t.get("name") for t in catalog.get("tools", [])]
-    assert len(catalog_names) == len(set(catalog_names)), "Duplicate tool names in list_all_actions"
+    assert len(catalog_names) == len(set(catalog_names)), (
+        "Duplicate tool names in list_all_actions"
+    )
 
     # Every registered tool must appear in the catalog.
     missing = sorted(set(registered_names) - set(catalog_names))
@@ -54,7 +56,9 @@ def test_list_all_actions_registry_has_no_duplicates_and_callables() -> None:
         if name == "list_all_actions":
             continue
         assert name in registry_map, f"Catalog tool has no registered callable: {name}"
-        assert callable(registry_map[name]), f"Catalog tool callable is not callable: {name}"
+        assert callable(registry_map[name]), (
+            f"Catalog tool callable is not callable: {name}"
+        )
 
 
 def test_describe_tool_dedupes_requested_names_and_round_trips() -> None:
@@ -65,7 +69,9 @@ def test_describe_tool_dedupes_requested_names_and_round_trips() -> None:
     assert sample, "Expected at least one tool in catalog"
 
     requested = [sample[0], sample[0], sample[-1]]
-    described = asyncio.run(introspection.describe_tool(names=requested, include_parameters=True))
+    described = asyncio.run(
+        introspection.describe_tool(names=requested, include_parameters=True)
+    )
 
     described_names = [t.get("name") for t in described.get("tools", [])]
     assert described_names == [sample[0], sample[-1]]

@@ -38,7 +38,9 @@ def test_extract_response_json_missing_method_returns_none() -> None:
 def test_parse_rate_limit_delay_retry_after_takes_precedence() -> None:
     resp = _FakeResp(headers={"Retry-After": "2", "X-RateLimit-Reset": "9999999999"})
     assert (
-        parse_rate_limit_delay_seconds(resp, reset_header_names=("X-RateLimit-Reset",), now=0.0)
+        parse_rate_limit_delay_seconds(
+            resp, reset_header_names=("X-RateLimit-Reset",), now=0.0
+        )
         == 2.0
     )
 
@@ -47,7 +49,9 @@ def test_parse_rate_limit_delay_epoch_seconds() -> None:
     now = 1_700_000_000.0
     resp = _FakeResp(headers={"X-RateLimit-Reset": str(now + 10.0)})
     assert (
-        parse_rate_limit_delay_seconds(resp, reset_header_names=("X-RateLimit-Reset",), now=now)
+        parse_rate_limit_delay_seconds(
+            resp, reset_header_names=("X-RateLimit-Reset",), now=now
+        )
         == 10.0
     )
 

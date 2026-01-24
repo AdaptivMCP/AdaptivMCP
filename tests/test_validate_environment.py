@@ -18,7 +18,9 @@ class DummyMainNoNetwork:
     FETCH_FILES_CONCURRENCY = 5
 
     async def _github_request(self, *args, **kwargs):  # pragma: no cover
-        raise AssertionError("_github_request should not be called when token is missing")
+        raise AssertionError(
+            "_github_request should not be called when token is missing"
+        )
 
 
 @pytest.mark.anyio
@@ -27,7 +29,9 @@ async def test_validate_environment_missing_tokens_marks_error(monkeypatch):
     from github_mcp.config import GITHUB_TOKEN_ENV_VARS, RENDER_TOKEN_ENV_VARS
 
     # Force a deterministic "no token" environment even when running in CI.
-    monkeypatch.setattr(env.sys, "version_info", SimpleNamespace(major=3, minor=12, micro=0))
+    monkeypatch.setattr(
+        env.sys, "version_info", SimpleNamespace(major=3, minor=12, micro=0)
+    )
     for name in GITHUB_TOKEN_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     for name in RENDER_TOKEN_ENV_VARS:
@@ -51,7 +55,9 @@ async def test_validate_environment_flags_unsupported_python(monkeypatch):
     import github_mcp.main_tools.env as env
     from github_mcp.config import GITHUB_TOKEN_ENV_VARS, RENDER_TOKEN_ENV_VARS
 
-    monkeypatch.setattr(env.sys, "version_info", SimpleNamespace(major=3, minor=11, micro=9))
+    monkeypatch.setattr(
+        env.sys, "version_info", SimpleNamespace(major=3, minor=11, micro=9)
+    )
     for name in GITHUB_TOKEN_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     for name in RENDER_TOKEN_ENV_VARS:
@@ -101,15 +107,27 @@ class DummyMainAllGreen:
             return {
                 "json": {
                     "resources": {
-                        "core": {"limit": 5000, "used": 0, "remaining": 5000, "reset": 0},
-                        "graphql": {"limit": 5000, "used": 0, "remaining": 5000, "reset": 0},
+                        "core": {
+                            "limit": 5000,
+                            "used": 0,
+                            "remaining": 5000,
+                            "reset": 0,
+                        },
+                        "graphql": {
+                            "limit": 5000,
+                            "used": 0,
+                            "remaining": 5000,
+                            "reset": 0,
+                        },
                         "search": {"limit": 30, "used": 0, "remaining": 30, "reset": 0},
                     }
                 }
             }
 
         if method == "GET" and path == f"/repos/{repo}":
-            return {"json": {"permissions": {"admin": True, "push": True, "pull": True}}}
+            return {
+                "json": {"permissions": {"admin": True, "push": True, "pull": True}}
+            }
 
         if method == "GET" and path == f"/repos/{repo}/actions/workflows":
             return {
@@ -126,7 +144,11 @@ class DummyMainAllGreen:
 
         if method == "POST" and path == f"/repos/{repo}/actions/workflows/1/dispatches":
             # Side-effectful in production, but no-op in tests.
-            return {"status_code": 204, "json": None} if expect_json else {"status_code": 204}
+            return (
+                {"status_code": 204, "json": None}
+                if expect_json
+                else {"status_code": 204}
+            )
 
         if method == "GET" and path == f"/repos/{repo}/actions/workflows/1/runs":
             return {"json": {"workflow_runs": [{"id": 123}]}}
@@ -147,7 +169,9 @@ async def test_validate_environment_happy_path_ok(monkeypatch):
     import github_mcp.main_tools.env as env
 
     # Avoid identity placeholder warnings in this unit test.
-    monkeypatch.setattr(env.sys, "version_info", SimpleNamespace(major=3, minor=12, micro=0))
+    monkeypatch.setattr(
+        env.sys, "version_info", SimpleNamespace(major=3, minor=12, micro=0)
+    )
     monkeypatch.setattr(env, "GIT_IDENTITY_PLACEHOLDER_ACTIVE", False)
 
     # Ensure the env tool registry sanity check does not fail due to import-order
@@ -183,7 +207,9 @@ async def test_validate_environment_happy_path_ok(monkeypatch):
         "render_list_logs",
     }
 
-    def fake_list_all_actions(*, include_parameters: bool = False, compact: bool | None = None):
+    def fake_list_all_actions(
+        *, include_parameters: bool = False, compact: bool | None = None
+    ):
         return {"tools": [{"name": name} for name in sorted(expected_tool_names)]}
 
     monkeypatch.setattr(
@@ -207,7 +233,9 @@ async def test_validate_environment_happy_path_ok(monkeypatch):
 
     # Force controller repo/branch config to match the dummy main object.
     monkeypatch.setenv("ADAPTIV_MCP_CONTROLLER_REPO", DummyMainAllGreen.CONTROLLER_REPO)
-    monkeypatch.setenv("ADAPTIV_MCP_CONTROLLER_BRANCH", DummyMainAllGreen.CONTROLLER_DEFAULT_BRANCH)
+    monkeypatch.setenv(
+        "ADAPTIV_MCP_CONTROLLER_BRANCH", DummyMainAllGreen.CONTROLLER_DEFAULT_BRANCH
+    )
 
     # The Render token helper is imported into env.py, so patch it there.
     monkeypatch.setattr(env, "_get_optional_render_token", lambda: "render-token")
@@ -232,7 +260,9 @@ async def test_validate_environment_skips_empty_github_pat(monkeypatch):
     import github_mcp.main_tools.env as env
 
     # Avoid identity placeholder warnings in this unit test.
-    monkeypatch.setattr(env.sys, "version_info", SimpleNamespace(major=3, minor=12, micro=0))
+    monkeypatch.setattr(
+        env.sys, "version_info", SimpleNamespace(major=3, minor=12, micro=0)
+    )
     monkeypatch.setattr(env, "GIT_IDENTITY_PLACEHOLDER_ACTIVE", False)
 
     expected_tool_names = {
@@ -266,7 +296,9 @@ async def test_validate_environment_skips_empty_github_pat(monkeypatch):
         "render_list_logs",
     }
 
-    def fake_list_all_actions(*, include_parameters: bool = False, compact: bool | None = None):
+    def fake_list_all_actions(
+        *, include_parameters: bool = False, compact: bool | None = None
+    ):
         return {"tools": [{"name": name} for name in sorted(expected_tool_names)]}
 
     monkeypatch.setattr(
@@ -287,7 +319,9 @@ async def test_validate_environment_skips_empty_github_pat(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "test-token")
 
     monkeypatch.setenv("ADAPTIV_MCP_CONTROLLER_REPO", DummyMainAllGreen.CONTROLLER_REPO)
-    monkeypatch.setenv("ADAPTIV_MCP_CONTROLLER_BRANCH", DummyMainAllGreen.CONTROLLER_DEFAULT_BRANCH)
+    monkeypatch.setenv(
+        "ADAPTIV_MCP_CONTROLLER_BRANCH", DummyMainAllGreen.CONTROLLER_DEFAULT_BRANCH
+    )
 
     monkeypatch.setattr(env, "_get_optional_render_token", lambda: "render-token")
 
@@ -310,7 +344,11 @@ async def test_validate_environment_skips_empty_github_pat(monkeypatch):
 async def test_main_validate_environment_delegates(monkeypatch):
     import main
 
-    sentinel = {"status": "ok", "checks": [], "summary": {"ok": 0, "warning": 0, "error": 0}}
+    sentinel = {
+        "status": "ok",
+        "checks": [],
+        "summary": {"ok": 0, "warning": 0, "error": 0},
+    }
 
     async def fake_impl():
         return sentinel

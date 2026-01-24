@@ -23,8 +23,12 @@ def test_normalize_workspace_operation_accepts_operation_key_and_aliases() -> No
     assert op.get("parents") is True
 
 
-def test_apply_workspace_operations_write_action_resolver_treats_read_alias_as_read_only() -> None:
-    from github_mcp.workspace_tools.fs import _apply_workspace_operations_write_action_resolver
+def test_apply_workspace_operations_write_action_resolver_treats_read_alias_as_read_only() -> (
+    None
+):
+    from github_mcp.workspace_tools.fs import (
+        _apply_workspace_operations_write_action_resolver,
+    )
 
     # Alias via `operation` key.
     args = {"operations": [{"operation": "read", "path": "README.md", "start_line": 1}]}
@@ -33,7 +37,9 @@ def test_apply_workspace_operations_write_action_resolver_treats_read_alias_as_r
 
 @pytest.mark.anyio
 async def test_workspace_manage_folders_detects_conflicting_paths() -> None:
-    from github_mcp.workspace_tools.workflows import workspace_manage_folders_and_open_pr
+    from github_mcp.workspace_tools.workflows import (
+        workspace_manage_folders_and_open_pr,
+    )
 
     res = await workspace_manage_folders_and_open_pr(
         full_name="octo-org/octo-repo",
@@ -62,7 +68,9 @@ async def test_workspace_batch_maps_top_level_operations_to_apply_ops(
         calls.append(kwargs)
         return {"status": "ok", "ok": True, "result": []}
 
-    monkeypatch.setattr(batch, "apply_workspace_operations", fake_apply_workspace_operations)
+    monkeypatch.setattr(
+        batch, "apply_workspace_operations", fake_apply_workspace_operations
+    )
 
     res = await batch.workspace_batch(
         full_name="octo-org/octo-repo",
@@ -84,7 +92,9 @@ async def test_workspace_batch_maps_top_level_operations_to_apply_ops(
 
 
 @pytest.mark.anyio
-async def test_workspace_batch_accepts_apply_ops_ops_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_batch_accepts_apply_ops_ops_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import batch
 
     calls: list[dict[str, Any]] = []
@@ -93,7 +103,9 @@ async def test_workspace_batch_accepts_apply_ops_ops_alias(monkeypatch: pytest.M
         calls.append(kwargs)
         return {"status": "ok", "ok": True, "result": []}
 
-    monkeypatch.setattr(batch, "apply_workspace_operations", fake_apply_workspace_operations)
+    monkeypatch.setattr(
+        batch, "apply_workspace_operations", fake_apply_workspace_operations
+    )
 
     res = await batch.workspace_batch(
         full_name="octo-org/octo-repo",

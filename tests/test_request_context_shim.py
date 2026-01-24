@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from github_mcp.mcp_server.context import get_request_context as canonical_get_request_context
+from github_mcp.mcp_server.context import (
+    get_request_context as canonical_get_request_context,
+)
 from github_mcp.request_context import get_request_context
 
 

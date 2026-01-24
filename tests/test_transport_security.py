@@ -13,7 +13,9 @@ def _reload_context() -> object:
 
 def test_transport_security_configured_from_env(monkeypatch):
     monkeypatch.setenv("ALLOWED_HOSTS", "localhost")
-    monkeypatch.setenv("RENDER_EXTERNAL_HOSTNAME", "chatgpt-mcp-github-iu2y.onrender.com")
+    monkeypatch.setenv(
+        "RENDER_EXTERNAL_HOSTNAME", "chatgpt-mcp-github-iu2y.onrender.com"
+    )
 
     context = _reload_context()
     settings = context.mcp.settings.transport_security

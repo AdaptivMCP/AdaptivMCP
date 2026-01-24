@@ -20,7 +20,10 @@ def test_annotation_to_schema_supports_sequence_origin() -> None:
 def test_annotation_to_schema_supports_mapping_origin() -> None:
     ann = Mapping[str, int]
     # Permissive contract: avoid constraining value types.
-    assert _annotation_to_schema(ann) == {"type": "object", "additionalProperties": True}
+    assert _annotation_to_schema(ann) == {
+        "type": "object",
+        "additionalProperties": True,
+    }
 
 
 def test_annotation_to_schema_literal_bool_is_boolean_not_integer() -> None:

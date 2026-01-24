@@ -148,10 +148,14 @@ class _CacheControlMiddleware:
                 if path.startswith("/static/"):
                     # Honor any explicit Cache-Control set upstream; otherwise make static assets cacheable.
                     if not _has_cache_control(headers):
-                        headers.append((b"cache-control", b"public, max-age=31536000, immutable"))
+                        headers.append(
+                            (b"cache-control", b"public, max-age=31536000, immutable")
+                        )
                 else:
                     # Default to no-store for everything else so edge caching (or proxies) never cache dynamic endpoints.
-                    headers = [(k, v) for (k, v) in headers if k.lower() != b"cache-control"]
+                    headers = [
+                        (k, v) for (k, v) in headers if k.lower() != b"cache-control"
+                    ]
                     headers.append((b"cache-control", b"no-store"))
                 message["headers"] = headers
             elif message.get("type") == "http.response.body":
@@ -242,7 +246,9 @@ class _RequestContextMiddleware:
                 # and avoid "drift" when reconnecting.
                 try:
                     anchor, _payload = get_server_anchor()
-                    if not any((hk or b"").lower() == b"x-server-anchor" for hk, _ in headers):
+                    if not any(
+                        (hk or b"").lower() == b"x-server-anchor" for hk, _ in headers
+                    ):
                         headers.append((b"x-server-anchor", anchor.encode("utf-8")))
                 except Exception:
                     pass
@@ -257,7 +263,9 @@ class _RequestContextMiddleware:
             if session_id:
                 REQUEST_SESSION_ID.set(str(session_id))
             if not REQUEST_IDEMPOTENCY_KEY.get():
-                qs_idempotency = (qs.get("idempotency_key") or qs.get("dedupe_key") or [None])[0]
+                qs_idempotency = (
+                    qs.get("idempotency_key") or qs.get("dedupe_key") or [None]
+                )[0]
                 if qs_idempotency:
                     REQUEST_IDEMPOTENCY_KEY.set(str(qs_idempotency))
         except Exception:
@@ -294,7 +302,9 @@ class _RequestContextMiddleware:
                 # When body logging is enabled for this request, delay the log
                 # until we see the final body chunk so we can include the
                 # response payload.
-                if LOG_HTTP_BODIES and (captured_body is not None or scope.get("method") == "POST"):
+                if LOG_HTTP_BODIES and (
+                    captured_body is not None or scope.get("method") == "POST"
+                ):
                     return await send_wrapper(message)
 
                 if not access_logged:
@@ -336,7 +346,9 @@ class _RequestContextMiddleware:
             ):
                 body_chunk = message.get("body", b"") or b""
                 if body_chunk and not response_body_truncated:
-                    remaining = max(0, int(LOG_HTTP_MAX_BODY_BYTES) - response_body_total)
+                    remaining = max(
+                        0, int(LOG_HTTP_MAX_BODY_BYTES) - response_body_total
+                    )
                     if remaining > 0:
                         response_body_chunks.append(body_chunk[:remaining])
                         response_body_total += min(len(body_chunk), remaining)
@@ -370,7 +382,9 @@ class _RequestContextMiddleware:
                     resp_bytes = b"".join(response_body_chunks)
                     if resp_bytes:
                         try:
-                            payload["response_body"] = resp_bytes.decode("utf-8", errors="replace")
+                            payload["response_body"] = resp_bytes.decode(
+                                "utf-8", errors="replace"
+                            )
                         except Exception:
                             payload["response_body"] = repr(resp_bytes)
                         if response_body_truncated:
@@ -473,7 +487,9 @@ class _RequestContextMiddleware:
                         if extracted:
                             REQUEST_IDEMPOTENCY_KEY.set(extracted)
                         elif path.startswith("/tools/"):
-                            REQUEST_IDEMPOTENCY_KEY.set(_auto_idempotency_for_tool(path, payload))
+                            REQUEST_IDEMPOTENCY_KEY.set(
+                                _auto_idempotency_for_tool(path, payload)
+                            )
             except Exception:
                 pass
 
@@ -549,7 +565,11 @@ class _SuppressClientDisconnectMiddleware:
     async def __call__(self, scope, receive, send):
         try:
             return await self.app(scope, receive, send)
-        except (anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream):
+        except (
+            anyio.ClosedResourceError,
+            anyio.BrokenResourceError,
+            anyio.EndOfStream,
+        ):
             return
         except Exception as exc:
             # Python 3.12+ includes ExceptionGroup / BaseExceptionGroup.
@@ -557,13 +577,18 @@ class _SuppressClientDisconnectMiddleware:
             # import time. To remain compatible, detect "exception group" shape
             # via duck-typing rather than referencing ExceptionGroup directly.
             excs = getattr(exc, "exceptions", None)
-            if exc.__class__.__name__ in {"ExceptionGroup", "BaseExceptionGroup"} and isinstance(
-                excs, tuple
-            ):
+            if exc.__class__.__name__ in {
+                "ExceptionGroup",
+                "BaseExceptionGroup",
+            } and isinstance(excs, tuple):
                 if all(
                     isinstance(
                         err,
-                        (anyio.ClosedResourceError, anyio.BrokenResourceError, anyio.EndOfStream),
+                        (
+                            anyio.ClosedResourceError,
+                            anyio.BrokenResourceError,
+                            anyio.EndOfStream,
+                        ),
                     )
                     for err in excs
                 ):
@@ -964,7 +989,9 @@ async def validate_environment() -> dict[str, Any]:
 
 
 @mcp_tool(write_action=False)
-async def list_render_owners(cursor: str | None = None, limit: int = 20) -> dict[str, Any]:
+async def list_render_owners(
+    cursor: str | None = None, limit: int = 20
+) -> dict[str, Any]:
     """List Render owners (workspaces + personal owners)."""
 
     from github_mcp.main_tools.render import list_render_owners as _impl
@@ -1093,7 +1120,9 @@ async def set_render_service_env_vars(
 
 
 @mcp_tool(write_action=True)
-async def patch_render_service(service_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+async def patch_render_service(
+    service_id: str, patch: dict[str, Any]
+) -> dict[str, Any]:
     """Patch a Render service."""
 
     from github_mcp.main_tools.render import patch_render_service as _impl
@@ -1180,7 +1209,9 @@ async def list_render_logs(
     name="render_list_owners",
     ui={"group": "render", "icon": "🟦", "label": "List Owners", "danger": "low"},
 )
-async def render_list_owners(cursor: str | None = None, limit: int = 20) -> dict[str, Any]:
+async def render_list_owners(
+    cursor: str | None = None, limit: int = 20
+) -> dict[str, Any]:
     return await list_render_owners(cursor=cursor, limit=limit)
 
 
@@ -1309,7 +1340,9 @@ async def render_list_env_vars(service_id: str) -> dict[str, Any]:
     destructive_hint=True,
     ui={"group": "render", "icon": "🧪", "label": "Set Env Vars", "danger": "high"},
 )
-async def render_set_env_vars(service_id: str, env_vars: list[dict[str, Any]]) -> dict[str, Any]:
+async def render_set_env_vars(
+    service_id: str, env_vars: list[dict[str, Any]]
+) -> dict[str, Any]:
     return await set_render_service_env_vars(service_id=service_id, env_vars=env_vars)
 
 
@@ -1320,7 +1353,9 @@ async def render_set_env_vars(service_id: str, env_vars: list[dict[str, Any]]) -
     destructive_hint=True,
     ui={"group": "render", "icon": "🧩", "label": "Patch Service", "danger": "high"},
 )
-async def render_patch_service(service_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+async def render_patch_service(
+    service_id: str, patch: dict[str, Any]
+) -> dict[str, Any]:
     return await patch_render_service(service_id=service_id, patch=patch)
 
 
@@ -1420,7 +1455,9 @@ async def list_repositories(
 ) -> dict[str, Any]:
     from github_mcp.main_tools.repositories import list_repositories as _impl
 
-    return await _impl(affiliation=affiliation, visibility=visibility, per_page=per_page, page=page)
+    return await _impl(
+        affiliation=affiliation, visibility=visibility, per_page=per_page, page=page
+    )
 
 
 @mcp_tool(write_action=False)
@@ -1557,7 +1594,9 @@ async def fetch_issue_comments(
 ) -> dict[str, Any]:
     from github_mcp.main_tools.issues import fetch_issue_comments as _impl
 
-    return await _impl(full_name=full_name, issue_number=issue_number, per_page=per_page, page=page)
+    return await _impl(
+        full_name=full_name, issue_number=issue_number, per_page=per_page, page=page
+    )
 
 
 @mcp_tool(write_action=False)
@@ -1580,7 +1619,9 @@ async def fetch_pr_comments(
 ) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import fetch_pr_comments as _impl
 
-    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
+    return await _impl(
+        full_name=full_name, pull_number=pull_number, per_page=per_page, page=page
+    )
 
 
 @mcp_tool(write_action=False)
@@ -1589,7 +1630,9 @@ async def list_pr_changed_filenames(
 ) -> dict[str, Any]:
     from github_mcp.main_tools.pull_requests import list_pr_changed_filenames as _impl
 
-    return await _impl(full_name=full_name, pull_number=pull_number, per_page=per_page, page=page)
+    return await _impl(
+        full_name=full_name, pull_number=pull_number, per_page=per_page, page=page
+    )
 
 
 @mcp_tool(write_action=False)
@@ -1605,7 +1648,9 @@ async def get_issue_comment_reactions(
 ) -> dict[str, Any]:
     from github_mcp.main_tools.issues import get_issue_comment_reactions as _impl
 
-    return await _impl(full_name=full_name, comment_id=comment_id, per_page=per_page, page=page)
+    return await _impl(
+        full_name=full_name, comment_id=comment_id, per_page=per_page, page=page
+    )
 
 
 @mcp_tool(write_action=False)
@@ -1727,7 +1772,11 @@ async def get_file_contents(
 
     decoded = await _decode_github_content(full_name, path, resolved_ref)
     if isinstance(decoded, dict):
-        decoded = {**decoded, "requested_ref": requested_ref, "resolved_ref": resolved_ref}
+        decoded = {
+            **decoded,
+            "requested_ref": requested_ref,
+            "resolved_ref": resolved_ref,
+        }
 
     # Keep the local cache warm for subsequent reads.
     from github_mcp.main_tools.content_cache import _cache_file_result as _cache_impl
@@ -1878,7 +1927,9 @@ async def search(
 async def download_user_content(content_url: str) -> dict[str, Any]:
     """Download user-provided content (sandbox/local/http) with base64 encoding."""
 
-    body_bytes = await _load_body_from_content_url(content_url, context="download_user_content")
+    body_bytes = await _load_body_from_content_url(
+        content_url, context="download_user_content"
+    )
     text: str | None
     try:
         text = body_bytes.decode("utf-8")
@@ -1994,7 +2045,9 @@ async def list_tools(
     """Lightweight tool catalog."""
     from github_mcp.main_tools.introspection import list_tools as _impl
 
-    return await _impl(only_write=only_write, only_read=only_read, name_prefix=name_prefix)
+    return await _impl(
+        only_write=only_write, only_read=only_read, name_prefix=name_prefix
+    )
 
 
 @mcp_tool(write_action=False)
@@ -2006,7 +2059,9 @@ def list_resources(
     """Return a resource catalog derived from registered tools."""
     from github_mcp.main_tools.introspection import list_resources as _impl
 
-    return _impl(base_path=base_path, include_parameters=include_parameters, compact=compact)
+    return _impl(
+        base_path=base_path, include_parameters=include_parameters, compact=compact
+    )
 
 
 @mcp_tool(write_action=False)
@@ -2363,7 +2418,9 @@ async def ensure_branch(
 
 
 @mcp_tool(write_action=False)
-async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> dict[str, Any]:
+async def get_branch_summary(
+    full_name: str, branch: str, base: str = "main"
+) -> dict[str, Any]:
     from github_mcp.main_tools.branches import get_branch_summary as _impl
 
     return await _impl(full_name=full_name, branch=branch, base=base)
@@ -2379,7 +2436,9 @@ async def get_latest_branch_status(
 
 
 @mcp_tool(write_action=False)
-async def get_repo_dashboard(full_name: str, branch: str | None = None) -> dict[str, Any]:
+async def get_repo_dashboard(
+    full_name: str, branch: str | None = None
+) -> dict[str, Any]:
     """Return a compact, multi-signal dashboard for a repository.
 
     This helper aggregates several lower-level tools into a single call so
@@ -2418,7 +2477,9 @@ async def get_repo_dashboard(full_name: str, branch: str | None = None) -> dict[
 
 
 @mcp_tool(write_action=False)
-async def get_repo_dashboard_graphql(full_name: str, branch: str | None = None) -> dict[str, Any]:
+async def get_repo_dashboard_graphql(
+    full_name: str, branch: str | None = None
+) -> dict[str, Any]:
     """Return a compact dashboard using GraphQL as a fallback."""
     from github_mcp.main_tools.graphql_dashboard import (
         get_repo_dashboard_graphql as _impl,
@@ -2565,7 +2626,9 @@ async def apply_text_update_and_commit(
 
 @mcp_tool(
     write_action=False,
-    description=("Return a compact overview of a pull request, including files and CI status."),
+    description=(
+        "Return a compact overview of a pull request, including files and CI status."
+    ),
 )
 async def get_pr_overview(full_name: str, pull_number: int) -> dict[str, Any]:
     # Summarize a pull request for quick review.

@@ -9,7 +9,9 @@ from github_mcp.exceptions import GitHubAPIError
 
 
 @pytest.mark.anyio
-async def test_decode_github_content_large_file_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_decode_github_content_large_file_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def _fake_request(*_args, **_kwargs):
         return {"json": {"sha": "abc", "size": 123, "download_url": "https://example"}}
 
@@ -30,7 +32,9 @@ async def test_decode_github_content_raises_on_invalid_base64(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _fake_request(*_args, **_kwargs):
-        return {"json": {"content": "not-valid-base64", "encoding": "base64", "sha": "abc"}}
+        return {
+            "json": {"content": "not-valid-base64", "encoding": "base64", "sha": "abc"}
+        }
 
     monkeypatch.setattr(github_content, "_request", _fake_request)
 
@@ -59,7 +63,9 @@ async def test_decode_github_content_non_utf8_text_returns_none(
 
 
 @pytest.mark.anyio
-async def test_decode_github_content_returns_full_body(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_decode_github_content_returns_full_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     body = b"hello world"
     payload = base64.b64encode(body).decode("ascii")
 

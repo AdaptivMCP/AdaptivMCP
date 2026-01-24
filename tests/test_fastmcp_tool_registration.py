@@ -12,7 +12,11 @@ def test_register_with_fastmcp_skips_unsupported_kwargs(monkeypatch):
             assert description == "sample description"
             assert meta == {}
             assert isinstance(annotations, dict)
-            assert set(annotations.keys()) >= {"readOnlyHint", "destructiveHint", "openWorldHint"}
+            assert set(annotations.keys()) >= {
+                "readOnlyHint",
+                "destructiveHint",
+                "openWorldHint",
+            }
 
             def decorator(fn):
                 return {"fn": fn, "name": name}
@@ -30,7 +34,11 @@ def test_register_with_fastmcp_skips_unsupported_kwargs(monkeypatch):
         sample_tool,
         name="sample_tool",
         description="sample description",
-        annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": True},
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
     )
     assert tool_obj["fn"] is sample_tool
     assert tool_obj["name"] == "sample_tool"
@@ -42,7 +50,11 @@ def test_register_with_fastmcp_requires_fn_positional(monkeypatch):
             assert name == "positional_tool"
             assert description == "positional description"
             assert isinstance(annotations, dict)
-            assert set(annotations.keys()) >= {"readOnlyHint", "destructiveHint", "openWorldHint"}
+            assert set(annotations.keys()) >= {
+                "readOnlyHint",
+                "destructiveHint",
+                "openWorldHint",
+            }
             return {"fn": fn, "name": name}
 
     fake_mcp = FakeMCP()
@@ -56,7 +68,11 @@ def test_register_with_fastmcp_requires_fn_positional(monkeypatch):
         positional_tool,
         name="positional_tool",
         description="positional description",
-        annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": True},
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
     )
     assert tool_obj["fn"] is positional_tool
     assert tool_obj["name"] == "positional_tool"
@@ -98,7 +114,11 @@ def test_register_with_fastmcp_does_not_emit_tags(monkeypatch):
         name="tagged_tool",
         description="tagged description",
         tags=["alpha", "beta"],
-        annotations={"readOnlyHint": True, "destructiveHint": False, "openWorldHint": True},
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "openWorldHint": True,
+        },
     )
     assert captured["tags"] is None
 
@@ -178,4 +198,8 @@ def test_mcp_tool_does_not_inject_ui_fields_for_mapping_returns(monkeypatch):
     meta = out["gating"]
     assert meta["base_write_action"] is False
     assert meta["effective_write_action"] is False
-    assert set(meta["annotations"].keys()) >= {"readOnlyHint", "destructiveHint", "openWorldHint"}
+    assert set(meta["annotations"].keys()) >= {
+        "readOnlyHint",
+        "destructiveHint",
+        "openWorldHint",
+    }

@@ -23,7 +23,11 @@ from github_mcp.server import _structured_tool_error, mcp_tool
 from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import _filter_kwargs_for_callable, _tw
-from .commit import commit_workspace, commit_workspace_files, get_workspace_changes_summary
+from .commit import (
+    commit_workspace,
+    commit_workspace_files,
+    get_workspace_changes_summary,
+)
 from .fs import (
     _normalize_workspace_operations,
     apply_workspace_operations,
@@ -76,8 +80,12 @@ async def _remote_branch_exists(full_name: str, *, base_ref: str, branch: str) -
 
     deps = _tw()._workspace_deps()
     effective_base = _tw()._effective_ref_for_repo(full_name, base_ref)
-    repo_dir = await deps["clone_repo"](full_name, ref=effective_base, preserve_changes=True)
-    t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+    repo_dir = await deps["clone_repo"](
+        full_name, ref=effective_base, preserve_changes=True
+    )
+    t_default = _normalize_timeout_seconds(
+        config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+    )
     q_branch = shlex.quote(branch)
 
     res = await deps["run_shell"](
@@ -91,11 +99,17 @@ async def _remote_branch_exists(full_name: str, *, base_ref: str, branch: str) -
     return bool((res.get("stdout", "") or "").strip())
 
 
-async def _stage_paths(full_name: str, *, ref: str, paths: list[str] | None) -> dict[str, Any]:
+async def _stage_paths(
+    full_name: str, *, ref: str, paths: list[str] | None
+) -> dict[str, Any]:
     deps = _tw()._workspace_deps()
     effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-    repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-    t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+    repo_dir = await deps["clone_repo"](
+        full_name, ref=effective_ref, preserve_changes=True
+    )
+    t_default = _normalize_timeout_seconds(
+        config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+    )
 
     if paths is None:
         cmd = "git add -A"
@@ -111,16 +125,29 @@ async def _stage_paths(full_name: str, *, ref: str, paths: list[str] | None) -> 
     staged = await deps["run_shell"](
         "git diff --cached --name-only", cwd=repo_dir, timeout_seconds=t_default
     )
-    staged_files = [ln for ln in (staged.get("stdout", "") or "").splitlines() if ln.strip()]
+    staged_files = [
+        ln for ln in (staged.get("stdout", "") or "").splitlines() if ln.strip()
+    ]
 
-    return {"ref": effective_ref, "command": cmd, "staged_files": staged_files, "ok": True}
+    return {
+        "ref": effective_ref,
+        "command": cmd,
+        "staged_files": staged_files,
+        "ok": True,
+    }
 
 
-async def _unstage_paths(full_name: str, *, ref: str, paths: list[str] | None) -> dict[str, Any]:
+async def _unstage_paths(
+    full_name: str, *, ref: str, paths: list[str] | None
+) -> dict[str, Any]:
     deps = _tw()._workspace_deps()
     effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-    repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-    t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+    repo_dir = await deps["clone_repo"](
+        full_name, ref=effective_ref, preserve_changes=True
+    )
+    t_default = _normalize_timeout_seconds(
+        config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+    )
 
     if not paths:
         cmd = "git reset"
@@ -136,9 +163,16 @@ async def _unstage_paths(full_name: str, *, ref: str, paths: list[str] | None) -
     staged = await deps["run_shell"](
         "git diff --cached --name-only", cwd=repo_dir, timeout_seconds=t_default
     )
-    staged_files = [ln for ln in (staged.get("stdout", "") or "").splitlines() if ln.strip()]
+    staged_files = [
+        ln for ln in (staged.get("stdout", "") or "").splitlines() if ln.strip()
+    ]
 
-    return {"ref": effective_ref, "command": cmd, "staged_files": staged_files, "ok": True}
+    return {
+        "ref": effective_ref,
+        "command": cmd,
+        "staged_files": staged_files,
+        "ok": True,
+    }
 
 
 @mcp_tool(write_action=True)
@@ -197,13 +231,20 @@ async def workspace_batch(
             ref = _as_str(plan.get("ref"))
             if not ref:
                 out_plans.append(
-                    {"index": idx, "status": "error", "ok": False, "error": "plan.ref is required"}
+                    {
+                        "index": idx,
+                        "status": "error",
+                        "ok": False,
+                        "error": "plan.ref is required",
+                    }
                 )
                 if fail_fast:
                     break
                 continue
 
-            base_ref = _as_str(plan.get("base_ref"), default_base_ref) or default_base_ref
+            base_ref = (
+                _as_str(plan.get("base_ref"), default_base_ref) or default_base_ref
+            )
             create_if_missing = _as_bool(plan.get("create_branch_if_missing"), False)
 
             steps: dict[str, Any] = {}
@@ -219,11 +260,15 @@ async def workspace_batch(
                     plan["apply_ops"] = {"operations": raw_ops}
 
             if create_if_missing:
-                exists = await _remote_branch_exists(full_name, base_ref=base_ref, branch=ref)
+                exists = await _remote_branch_exists(
+                    full_name, base_ref=base_ref, branch=ref
+                )
                 steps["branch_exists"] = {"ref": ref, "exists": exists}
                 if not exists:
                     extra_branch = plan.get("create_branch_args")
-                    extra_branch = extra_branch if isinstance(extra_branch, dict) else {}
+                    extra_branch = (
+                        extra_branch if isinstance(extra_branch, dict) else {}
+                    )
                     extra_branch = dict(extra_branch)
                     for k in ("full_name", "base_ref", "new_branch"):
                         extra_branch.pop(k, None)
@@ -235,7 +280,9 @@ async def workspace_batch(
                         **extra_branch,
                     }
                     steps["create_branch"] = await workspace_create_branch(
-                        **_filter_kwargs_for_callable(workspace_create_branch, branch_call)
+                        **_filter_kwargs_for_callable(
+                            workspace_create_branch, branch_call
+                        )
                     )
 
             if isinstance(plan.get("apply_ops"), dict):
@@ -244,7 +291,9 @@ async def workspace_batch(
                 if operations is None:
                     operations = ao.get("ops")
                 if operations is None:
-                    raise ValueError("apply_ops.operations is required when apply_ops is provided")
+                    raise ValueError(
+                        "apply_ops.operations is required when apply_ops is provided"
+                    )
                 if not isinstance(operations, list) or any(
                     not isinstance(op, dict) for op in operations
                 ):
@@ -258,9 +307,16 @@ async def workspace_batch(
                 extra.pop("ops", None)
                 extra.setdefault("fail_fast", True)
                 extra.setdefault("rollback_on_error", True)
-                extra.setdefault("preview_only", _as_bool(ao.get("preview_only"), False))
+                extra.setdefault(
+                    "preview_only", _as_bool(ao.get("preview_only"), False)
+                )
                 extra.setdefault("create_parents", True)
-                call = {"full_name": full_name, "ref": ref, "operations": operations, **extra}
+                call = {
+                    "full_name": full_name,
+                    "ref": ref,
+                    "operations": operations,
+                    **extra,
+                }
                 steps["apply_ops"] = await apply_workspace_operations(
                     **_filter_kwargs_for_callable(apply_workspace_operations, call)
                 )
@@ -274,8 +330,12 @@ async def workspace_batch(
                 for k in ("full_name", "ref"):
                     extra.pop(k, None)
                 extra["paths"] = paths
-                extra.setdefault("allow_missing", _as_bool(dp.get("allow_missing"), True))
-                extra.setdefault("allow_recursive", _as_bool(dp.get("allow_recursive"), True))
+                extra.setdefault(
+                    "allow_missing", _as_bool(dp.get("allow_missing"), True)
+                )
+                extra.setdefault(
+                    "allow_recursive", _as_bool(dp.get("allow_recursive"), True)
+                )
                 call = {"full_name": full_name, "ref": ref, **extra}
                 steps["delete_paths"] = await delete_workspace_paths(
                     **_filter_kwargs_for_callable(delete_workspace_paths, call)
@@ -287,13 +347,17 @@ async def workspace_batch(
                 if not isinstance(raw_moves, list) or any(
                     not isinstance(m, dict) for m in raw_moves
                 ):
-                    raise TypeError("move_paths.moves must be a list of {src,dst} objects")
+                    raise TypeError(
+                        "move_paths.moves must be a list of {src,dst} objects"
+                    )
                 moves: list[dict[str, str]] = []
                 for m in raw_moves:
                     src = _as_str(m.get("src"))
                     dst = _as_str(m.get("dst"))
                     if not src or not dst:
-                        raise ValueError("move_paths.moves entries must include src and dst")
+                        raise ValueError(
+                            "move_paths.moves entries must include src and dst"
+                        )
                     moves.append({"src": src, "dst": dst})
 
                 extra = dict(mp)
@@ -301,7 +365,9 @@ async def workspace_batch(
                     extra.pop(k, None)
                 extra["moves"] = moves
                 extra.setdefault("overwrite", _as_bool(mp.get("overwrite"), False))
-                extra.setdefault("create_parents", _as_bool(mp.get("create_parents"), True))
+                extra.setdefault(
+                    "create_parents", _as_bool(mp.get("create_parents"), True)
+                )
                 call = {"full_name": full_name, "ref": ref, **extra}
                 steps["move_paths"] = await move_workspace_paths(
                     **_filter_kwargs_for_callable(move_workspace_paths, call)
@@ -311,13 +377,17 @@ async def workspace_batch(
                 st = plan["stage"]
                 raw = st.get("paths")
                 stage_paths = None if raw is None else _as_list_str(raw)
-                steps["stage"] = await _stage_paths(full_name, ref=ref, paths=stage_paths)
+                steps["stage"] = await _stage_paths(
+                    full_name, ref=ref, paths=stage_paths
+                )
 
             if isinstance(plan.get("unstage"), dict):
                 ust = plan["unstage"]
                 raw = ust.get("paths")
                 unstage_paths = None if raw is None else _as_list_str(raw)
-                steps["unstage"] = await _unstage_paths(full_name, ref=ref, paths=unstage_paths)
+                steps["unstage"] = await _unstage_paths(
+                    full_name, ref=ref, paths=unstage_paths
+                )
 
             if isinstance(plan.get("diff"), dict):
                 df = plan["diff"]
@@ -349,23 +419,36 @@ async def workspace_batch(
 
             if isinstance(plan.get("tests"), dict):
                 ts = plan["tests"]
-                cmd = _as_str(ts.get("test_command")) or _as_str(ts.get("command")) or "pytest -q"
+                cmd = (
+                    _as_str(ts.get("test_command"))
+                    or _as_str(ts.get("command"))
+                    or "pytest -q"
+                )
                 extra = dict(ts)
                 for k in ("full_name", "ref"):
                     extra.pop(k, None)
                 extra.setdefault("test_command", cmd)
-                extra.setdefault("timeout_seconds", float(ts.get("timeout_seconds") or 0))
-                extra.setdefault("workdir", _as_str(ts.get("workdir")))
-                extra.setdefault("use_temp_venv", _as_bool(ts.get("use_temp_venv"), True))
                 extra.setdefault(
-                    "installing_dependencies", _as_bool(ts.get("installing_dependencies"), True)
+                    "timeout_seconds", float(ts.get("timeout_seconds") or 0)
+                )
+                extra.setdefault("workdir", _as_str(ts.get("workdir")))
+                extra.setdefault(
+                    "use_temp_venv", _as_bool(ts.get("use_temp_venv"), True)
+                )
+                extra.setdefault(
+                    "installing_dependencies",
+                    _as_bool(ts.get("installing_dependencies"), True),
                 )
                 call = {"full_name": full_name, "ref": ref, **extra}
-                steps["tests"] = await run_tests(**_filter_kwargs_for_callable(run_tests, call))
+                steps["tests"] = await run_tests(
+                    **_filter_kwargs_for_callable(run_tests, call)
+                )
 
             if isinstance(plan.get("commit"), dict):
                 cm = plan["commit"]
-                message = _as_str(cm.get("message")) or _as_str(cm.get("commit_message"))
+                message = _as_str(cm.get("message")) or _as_str(
+                    cm.get("commit_message")
+                )
                 if not message:
                     raise ValueError("commit.message must be a non-empty string")
 

@@ -226,7 +226,11 @@ def _simplify_schema_aliases(schema: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(props, dict):
         return schema
     required = schema.get("required")
-    req_list = [r for r in required if isinstance(r, str)] if isinstance(required, list) else []
+    req_list = (
+        [r for r in required if isinstance(r, str)]
+        if isinstance(required, list)
+        else []
+    )
 
     def drop(name: str) -> None:
         props.pop(name, None)
@@ -250,7 +254,9 @@ def _simplify_schema_aliases(schema: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
-def _simplify_input_schema_for_tool(schema: Mapping[str, Any], *, tool_name: str) -> dict[str, Any]:
+def _simplify_input_schema_for_tool(
+    schema: Mapping[str, Any], *, tool_name: str
+) -> dict[str, Any]:
     """Return a cleaned-up schema intended for external tool consumption."""
     if not isinstance(schema, Mapping):
         return {}
@@ -602,7 +608,9 @@ def _build_tool_docstring(
     props = schema.get("properties") if schema is not None else None
     required = schema.get("required") if schema is not None else None
     required_set = (
-        {n for n in required if isinstance(n, str)} if isinstance(required, list) else set()
+        {n for n in required if isinstance(n, str)}
+        if isinstance(required, list)
+        else set()
     )
 
     if isinstance(props, Mapping) and props:
@@ -801,7 +809,9 @@ def _annotation_to_schema(annotation: Any) -> dict[str, Any]:
     # Union types: avoid anyOf, which some client validators treat as strict.
     # Returning an open schema prevents client-side rejection while the server
     # continues to accept and forward the raw JSON values.
-    if origin is __import__("typing").Union or origin is getattr(types, "UnionType", None):
+    if origin is __import__("typing").Union or origin is getattr(
+        types, "UnionType", None
+    ):
         return {}
 
     return {}

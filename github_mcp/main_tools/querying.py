@@ -42,7 +42,9 @@ def _resolve_main_helper(name: str, default):
     return default
 
 
-async def graphql_query(query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
+async def graphql_query(
+    query: str, variables: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Execute a GitHub GraphQL query using the shared HTTP client."""
 
     github_request = _resolve_main_helper("_github_request", _default_github_request)
@@ -153,7 +155,9 @@ async def search(
             context="search",
         )
     if per_page <= 0:
-        return structured_tool_error(ValueError("per_page must be > 0"), context="search")
+        return structured_tool_error(
+            ValueError("per_page must be > 0"), context="search"
+        )
     if page <= 0:
         return structured_tool_error(ValueError("page must be > 0"), context="search")
 

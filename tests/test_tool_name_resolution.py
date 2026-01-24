@@ -25,7 +25,9 @@ def test_find_registered_tool_resolves_common_name_variants(monkeypatch: Any) ->
 
     # Module-qualified variant.
     assert (
-        mcp_registry._find_registered_tool("github_mcp.workspace_tools.git_ops.terminal_command")
+        mcp_registry._find_registered_tool(
+            "github_mcp.workspace_tools.git_ops.terminal_command"
+        )
         is not None
     )
 
@@ -33,7 +35,9 @@ def test_find_registered_tool_resolves_common_name_variants(monkeypatch: Any) ->
     assert mcp_registry._find_registered_tool("Terminal_Command") is not None
 
 
-def test_find_registered_tool_does_not_silently_choose_ambiguous_matches(monkeypatch: Any) -> None:
+def test_find_registered_tool_does_not_silently_choose_ambiguous_matches(
+    monkeypatch: Any,
+) -> None:
     from github_mcp.mcp_server import registry as mcp_registry
 
     class ToolA:

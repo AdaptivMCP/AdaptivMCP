@@ -46,7 +46,9 @@ def test_file_cache_evicts_by_byte_budget() -> None:
     assert cache.get("c") is not None
 
 
-def test_cache_payload_records_metadata_and_size(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cache_payload_records_metadata_and_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cache = fc.FileCache(max_entries=10, max_bytes=10_000)
     monkeypatch.setattr(fc, "FILE_CACHE", cache)
 
@@ -54,7 +56,9 @@ def test_cache_payload_records_metadata_and_size(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(time, "time", lambda: now)
 
     decoded = {"decoded_bytes": b"hello", "json": {"sha": "abc"}}
-    entry = fc.cache_payload(full_name="o/r", ref="main", path="README.md", decoded=decoded)
+    entry = fc.cache_payload(
+        full_name="o/r", ref="main", path="README.md", decoded=decoded
+    )
 
     assert entry["size_bytes"] == 5
     assert entry["sha"] == "abc"

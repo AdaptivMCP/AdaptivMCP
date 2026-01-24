@@ -65,7 +65,9 @@ async def delete_file(
                 "path": normalized_path,
                 "branch": effective_branch,
             }
-        raise FileNotFoundError(f"File not found: {normalized_path} on {effective_branch}")
+        raise FileNotFoundError(
+            f"File not found: {normalized_path} on {effective_branch}"
+        )
 
     payload = {"message": message, "sha": sha, "branch": effective_branch}
     result = await _github_request(
@@ -102,7 +104,10 @@ async def update_file_from_workspace(
     else:
         workspace_file = (workspace_root / workspace_path).resolve()
 
-    if workspace_root not in workspace_file.parents and workspace_file != workspace_root:
+    if (
+        workspace_root not in workspace_file.parents
+        and workspace_file != workspace_root
+    ):
         raise ValueError("workspace_path must stay within the workspace root")
 
     if not workspace_file.is_file():

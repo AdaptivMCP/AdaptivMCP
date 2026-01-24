@@ -114,7 +114,9 @@ def _find_registered_tool(tool_name: str) -> tuple[Any, Any] | None:
 
     # 3) Canonicalized match (hyphens, camelCase, etc.).
     candidates: list[tuple[Any, Any]] = []
-    canon_inputs = {c: _canonicalize_tool_name(c) for c in _tool_name_variants(tool_name)}
+    canon_inputs = {
+        c: _canonicalize_tool_name(c) for c in _tool_name_variants(tool_name)
+    }
     canon_inputs = {k: v for k, v in canon_inputs.items() if v}
 
     if not canon_inputs:

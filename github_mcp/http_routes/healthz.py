@@ -89,7 +89,13 @@ def build_healthz_endpoint() -> Callable[[Request], Response]:
         qp = getattr(request, "query_params", None)
         verbose = False
         if qp is not None:
-            verbose = str(qp.get("verbose", "")).strip().lower() in {"1", "true", "yes", "y", "on"}
+            verbose = str(qp.get("verbose", "")).strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "y",
+                "on",
+            }
 
         oneshot = _oneshot_enabled()
         if oneshot and _healthz_served_once and not verbose:

@@ -12,7 +12,9 @@ class DummyWorkspaceTools:
             return self.repo_dir
 
         async def apply_patch_to_repo(repo_dir, patch):
-            raise AssertionError("apply_patch_to_repo should not be called in these tests")
+            raise AssertionError(
+                "apply_patch_to_repo should not be called in these tests"
+            )
 
         return {"clone_repo": clone_repo, "apply_patch_to_repo": apply_patch_to_repo}
 

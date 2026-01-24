@@ -26,7 +26,9 @@ from github_mcp.utils import _normalize_timeout_seconds
 from ._shared import _tw
 
 
-def _step_status_from_exit_code(*, exit_code: int | None, allow_missing_command: bool) -> str:
+def _step_status_from_exit_code(
+    *, exit_code: int | None, allow_missing_command: bool
+) -> str:
     if exit_code is None:
         return "failed"
     if allow_missing_command and exit_code == 127:
@@ -54,7 +56,9 @@ def _parse_marked_steps(stdout: str) -> list[dict[str, Any]]:
     for line in (stdout or "").splitlines(keepends=True):
         if line.startswith(begin_prefix):
             if current_name is not None:
-                steps.append({"name": current_name, "exit_code": None, "output": "".join(buf)})
+                steps.append(
+                    {"name": current_name, "exit_code": None, "output": "".join(buf)}
+                )
             current_name = line[len(begin_prefix) :].strip()
             buf = []
             continue
@@ -178,8 +182,12 @@ def _slim_terminal_command_payload(payload: Any) -> dict[str, Any]:
         return {"raw": str(payload)}
 
     res = payload.get("result") if isinstance(payload.get("result"), dict) else {}
-    stdout = _normalize_stream_text((res.get("stdout") or "") if isinstance(res, dict) else "")
-    stderr = _normalize_stream_text((res.get("stderr") or "") if isinstance(res, dict) else "")
+    stdout = _normalize_stream_text(
+        (res.get("stdout") or "") if isinstance(res, dict) else ""
+    )
+    stderr = _normalize_stream_text(
+        (res.get("stderr") or "") if isinstance(res, dict) else ""
+    )
     out_chars, out_lines = _text_stats(stdout)
     err_chars, err_lines = _text_stats(stderr)
 
@@ -269,13 +277,17 @@ async def run_tests(
 
     effective_command = test_command
 
-    if (coverage or cov_fail_under is not None) and not _has_flag(effective_command, "--cov"):
+    if (coverage or cov_fail_under is not None) and not _has_flag(
+        effective_command, "--cov"
+    ):
         effective_command += f" --cov={cov_target or '.'}"
 
     if coverage and cov_report and not _has_flag(effective_command, "--cov-report"):
         effective_command += f" --cov-report={cov_report}"
 
-    if cov_fail_under is not None and not _has_flag(effective_command, "--cov-fail-under"):
+    if cov_fail_under is not None and not _has_flag(
+        effective_command, "--cov-fail-under"
+    ):
         effective_command += f" --cov-fail-under={int(cov_fail_under)}"
 
     if (
@@ -285,7 +297,9 @@ async def run_tests(
     ):
         effective_command += f" -n {parallel_workers}"
 
-    if timeout_per_test_seconds is not None and not _has_flag(effective_command, "--timeout"):
+    if timeout_per_test_seconds is not None and not _has_flag(
+        effective_command, "--timeout"
+    ):
         effective_command += f" --timeout={int(timeout_per_test_seconds)}"
 
     timeout_seconds_i = _normalize_timeout_seconds(
@@ -308,7 +322,9 @@ async def run_tests(
     summary = step.get("summary") if isinstance(step, dict) else {}
     exit_code = (summary or {}).get("exit_code")
     status = (
-        "no_tests" if exit_code == 5 else ("passed" if step.get("status") == "passed" else "failed")
+        "no_tests"
+        if exit_code == 5
+        else ("passed" if step.get("status") == "passed" else "failed")
     )
 
     return {
@@ -317,7 +333,10 @@ async def run_tests(
         "exit_code": exit_code,
         "workdir": workdir,
         "summary": summary,
-        "result": {"exit_code": exit_code, "timed_out": (summary or {}).get("timed_out")},
+        "result": {
+            "exit_code": exit_code,
+            "timed_out": (summary or {}).get("timed_out"),
+        },
         "steps": [step],
         "controller_log": [
             "Completed test command in repo mirror:",
@@ -421,7 +440,9 @@ async def run_lint_suite(
             "command": combined_command,
             "exit_code": exit_code,
             "workdir": workdir,
-            "summary": (lint_step.get("summary") if isinstance(lint_step, dict) else {}),
+            "summary": (
+                lint_step.get("summary") if isinstance(lint_step, dict) else {}
+            ),
             "result": {
                 "exit_code": exit_code,
                 "timed_out": ((lint_step.get("summary") or {}).get("timed_out")),
@@ -473,7 +494,9 @@ async def run_lint_suite(
             return await _run_multi_command_suite()
 
         if not parsed:
-            controller_log.append("- Failed: runner did not emit step markers (unexpected output)")
+            controller_log.append(
+                "- Failed: runner did not emit step markers (unexpected output)"
+            )
             if include_raw_step_outputs:
                 return {
                     "status": "failed",
@@ -500,7 +523,9 @@ async def run_lint_suite(
             }
 
         parsed_by_name: dict[str, dict[str, Any]] = {
-            str(p.get("name")): p for p in parsed if isinstance(p, dict) and p.get("name")
+            str(p.get("name")): p
+            for p in parsed
+            if isinstance(p, dict) and p.get("name")
         }
 
         exit_code: int | None = 0
@@ -540,7 +565,9 @@ async def run_lint_suite(
                 exit_code = step_exit
 
         lint_step = next((s for s in steps if s.get("name") == "lint"), None)
-        lint_summary = (lint_step or {}).get("summary") if isinstance(lint_step, dict) else {}
+        lint_summary = (
+            (lint_step or {}).get("summary") if isinstance(lint_step, dict) else {}
+        )
 
         controller_log.append(f"- Status: {status}")
 
@@ -550,7 +577,10 @@ async def run_lint_suite(
             "exit_code": exit_code,
             "workdir": workdir,
             "summary": lint_summary,
-            "result": {"exit_code": exit_code, "timed_out": (lint_summary or {}).get("timed_out")},
+            "result": {
+                "exit_code": exit_code,
+                "timed_out": (lint_summary or {}).get("timed_out"),
+            },
             "steps": steps,
             "controller_log": controller_log,
         }
@@ -587,7 +617,9 @@ async def run_quality_suite(
         timeout_seconds_i,
     )
     preflight_step_timeout = (
-        preflight_timeout if (preflight_timeout and preflight_timeout > 0) else timeout_seconds_i
+        preflight_timeout
+        if (preflight_timeout and preflight_timeout > 0)
+        else timeout_seconds_i
     )
 
     run_id = uuid.uuid4().hex
@@ -812,7 +844,8 @@ async def run_quality_suite(
 
         if status in {"passed", "no_tests"} and optional_failures:
             controller_log.append(
-                "- Warnings: optional steps failed: " + ", ".join(sorted(set(optional_failures)))
+                "- Warnings: optional steps failed: "
+                + ", ".join(sorted(set(optional_failures)))
             )
             if status == "passed":
                 status = "passed_with_warnings"
@@ -964,7 +997,9 @@ async def run_quality_suite(
         # failure rather than re-entering the multi-command path (which would
         # re-introduce repeated dependency installs).
         if use_single_runner and not parsed:
-            controller_log.append("- Failed: runner did not emit step markers (unexpected output)")
+            controller_log.append(
+                "- Failed: runner did not emit step markers (unexpected output)"
+            )
             if include_raw_step_outputs:
                 return {
                     "status": "failed",
@@ -992,7 +1027,9 @@ async def run_quality_suite(
                 "controller_log": controller_log,
             }
         parsed_by_name: dict[str, dict[str, Any]] = {
-            str(p.get("name")): p for p in parsed if isinstance(p, dict) and p.get("name")
+            str(p.get("name")): p
+            for p in parsed
+            if isinstance(p, dict) and p.get("name")
         }
 
         for step_def in runner_steps:
@@ -1061,11 +1098,14 @@ async def run_quality_suite(
         if tests_exit == 5:
             status = "no_tests"
         else:
-            status = "passed" if (tests_step or {}).get("status") == "passed" else "failed"
+            status = (
+                "passed" if (tests_step or {}).get("status") == "passed" else "failed"
+            )
 
         if status in {"passed", "no_tests"} and optional_failures:
             controller_log.append(
-                "- Warnings: optional steps failed: " + ", ".join(sorted(set(optional_failures)))
+                "- Warnings: optional steps failed: "
+                + ", ".join(sorted(set(optional_failures)))
             )
             if status == "passed":
                 status = "passed_with_warnings"

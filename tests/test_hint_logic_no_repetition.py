@@ -14,7 +14,9 @@ async def test_workspace_git_apply_error_sets_hint_without_appending_to_message(
         return {"exit_code": 1, "stderr": "Only garbage was found in the patch input."}
 
     monkeypatch.setattr(workspace, "_run_shell", _fake_run_shell)
-    monkeypatch.setattr(workspace, "_patch_has_hunk_header_with_ranges", lambda _p: False)
+    monkeypatch.setattr(
+        workspace, "_patch_has_hunk_header_with_ranges", lambda _p: False
+    )
     monkeypatch.setattr(workspace, "_looks_like_rangeless_git_patch", lambda _p: False)
 
     repo_dir = tmp_path / "repo"
@@ -72,7 +74,9 @@ async def test_load_body_sandbox_missing_without_rewrite_preserves_sandbox_hint(
     missing = tmp_path / "does-not-exist.txt"
 
     with pytest.raises(GitHubAPIError) as excinfo:
-        await github_content._load_body_from_content_url(f"sandbox:{str(missing)}", context="test")
+        await github_content._load_body_from_content_url(
+            f"sandbox:{str(missing)}", context="test"
+        )
 
     exc = excinfo.value
     hint = getattr(exc, "hint", None)

@@ -91,7 +91,9 @@ def test_get_repo_dashboard_uses_repo_defaults_and_filters(monkeypatch):
 def test_get_repo_dashboard_resolves_explicit_branch(monkeypatch):
     class _BranchMain(_FakeMain):
         async def get_repo_defaults(self, full_name: str):
-            raise AssertionError("get_repo_defaults should not be called when branch is provided")
+            raise AssertionError(
+                "get_repo_defaults should not be called when branch is provided"
+            )
 
     fake = _BranchMain()
 

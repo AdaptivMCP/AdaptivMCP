@@ -236,7 +236,11 @@ async def get_workflow_run_overview(
             break
 
         page_job_ids = [job.get("id") for job in raw_jobs if isinstance(job, dict)]
-        if page_job_ids and last_page_job_ids is not None and page_job_ids == last_page_job_ids:
+        if (
+            page_job_ids
+            and last_page_job_ids is not None
+            and page_job_ids == last_page_job_ids
+        ):
             break
         last_page_job_ids = page_job_ids
 
@@ -401,7 +405,9 @@ async def wait_for_workflow_run(
                 f"/repos/{full_name}/actions/runs/{run_id}",
             )
         if resp.status_code >= 400:
-            raise GitHubAPIError(f"GitHub workflow run error {resp.status_code}: {resp.text}")
+            raise GitHubAPIError(
+                f"GitHub workflow run error {resp.status_code}: {resp.text}"
+            )
 
         data = resp.json()
         status = data.get("status")
@@ -458,7 +464,9 @@ async def trigger_workflow_dispatch(
             json=payload,
         )
     if resp.status_code not in (204, 201):
-        raise GitHubAPIError(f"GitHub workflow dispatch error {resp.status_code}: {resp.text}")
+        raise GitHubAPIError(
+            f"GitHub workflow dispatch error {resp.status_code}: {resp.text}"
+        )
 
     summary_lines = [
         "Triggered workflow dispatch:",

@@ -150,7 +150,9 @@ async def get_file_excerpt(
                 message = None
                 try:
                     payload = resp.json()
-                    if isinstance(payload, dict) and isinstance(payload.get("message"), str):
+                    if isinstance(payload, dict) and isinstance(
+                        payload.get("message"), str
+                    ):
                         message = payload.get("message")
                 except Exception:
                     message = None

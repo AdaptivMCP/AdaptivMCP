@@ -52,7 +52,9 @@ def test_get_workspace_file_contents_truncates_bytes_and_chars(tmp_path, monkeyp
     assert result["max_bytes"] == 200
 
 
-def test_read_workspace_file_excerpt_returns_line_numbers_and_limits(tmp_path, monkeypatch):
+def test_read_workspace_file_excerpt_returns_line_numbers_and_limits(
+    tmp_path, monkeypatch
+):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     p = repo_dir / "lines.txt"
@@ -95,7 +97,9 @@ def test_read_workspace_file_excerpt_returns_line_numbers_and_limits(tmp_path, m
     assert result2["excerpt"]["truncated"] is True
 
 
-def test_read_workspace_file_with_line_numbers_formats_text_and_end_line(tmp_path, monkeypatch):
+def test_read_workspace_file_with_line_numbers_formats_text_and_end_line(
+    tmp_path, monkeypatch
+):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     p = repo_dir / "lines.txt"

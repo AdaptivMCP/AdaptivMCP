@@ -33,7 +33,9 @@ def test_unknown_tool_includes_suggested_tool_and_warnings(monkeypatch: Any) -> 
     assert any("Did you mean" in w for w in warnings)
 
 
-def test_unknown_tool_ambiguous_does_not_force_single_suggestion(monkeypatch: Any) -> None:
+def test_unknown_tool_ambiguous_does_not_force_single_suggestion(
+    monkeypatch: Any,
+) -> None:
     """When multiple close matches exist, avoid anchoring on a single tool."""
 
     import github_mcp.http_routes.tool_registry as tool_registry
@@ -52,7 +54,9 @@ def test_unknown_tool_ambiguous_does_not_force_single_suggestion(monkeypatch: An
 
     # Force the invoke path to treat the requested name as unknown.
     monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: None)
-    monkeypatch.setattr(mcp_registry, "_REGISTERED_MCP_TOOLS", [(ToolA(), func), (ToolB(), func)])
+    monkeypatch.setattr(
+        mcp_registry, "_REGISTERED_MCP_TOOLS", [(ToolA(), func), (ToolB(), func)]
+    )
 
     client = TestClient(main.app)
     resp = client.post("/tools/terminal_comand", json={"args": {}})
@@ -82,7 +86,9 @@ def test_invalid_tool_args_includes_expected_args_warning(monkeypatch: Any) -> N
     def func(a: int, b: int = 1) -> dict[str, Any]:
         return {"status": "success", "ok": True, "result": a + b}
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
 
     client = TestClient(main.app)
     resp = client.post("/tools/fake_sig", json={"args": {"aa": 1}})

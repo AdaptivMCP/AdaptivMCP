@@ -55,7 +55,9 @@ def test_every_registered_tool_reports_write_gate_metadata(monkeypatch):
         assert entry.get("approval_required") is False
 
     assert not missing, f"Catalog missing registered tools: {sorted(missing)}"
-    assert not mismatched, f"Catalog write_action mismatch for tools: {sorted(mismatched)}"
+    assert not mismatched, (
+        f"Catalog write_action mismatch for tools: {sorted(mismatched)}"
+    )
 
     _set_auto_approve(monkeypatch, False)
     catalog = introspection.list_all_actions(include_parameters=True, compact=False)
@@ -97,8 +99,12 @@ def test_tools_with_write_action_resolver_are_always_write_gated(monkeypatch):
             continue
 
         # Wrapper metadata must exist.
-        assert hasattr(func, "__mcp_tool__"), f"{name} missing __mcp_tool__ wrapper metadata"
-        assert hasattr(func, "__mcp_input_schema__"), f"{name} missing __mcp_input_schema__"
+        assert hasattr(func, "__mcp_tool__"), (
+            f"{name} missing __mcp_tool__ wrapper metadata"
+        )
+        assert hasattr(func, "__mcp_input_schema__"), (
+            f"{name} missing __mcp_input_schema__"
+        )
         assert hasattr(func, "__mcp_input_schema_hash__"), (
             f"{name} missing __mcp_input_schema_hash__"
         )
@@ -111,12 +117,16 @@ def test_tools_with_write_action_resolver_are_always_write_gated(monkeypatch):
 
         resolver_tool_names.append(str(name))
 
-    assert resolver_tool_names, "Expected at least one registered tool with write_action_resolver"
+    assert resolver_tool_names, (
+        "Expected at least one registered tool with write_action_resolver"
+    )
 
     # Auto-approve enabled: no approval required.
     _set_auto_approve(monkeypatch, True)
     catalog = introspection.list_all_actions(include_parameters=True, compact=False)
-    idx = {str(t.get("name")): t for t in (catalog.get("tools", []) or []) if t.get("name")}
+    idx = {
+        str(t.get("name")): t for t in (catalog.get("tools", []) or []) if t.get("name")
+    }
     for name in resolver_tool_names:
         entry = idx.get(name)
         assert entry is not None, f"Catalog missing resolver tool: {name}"
@@ -129,7 +139,9 @@ def test_tools_with_write_action_resolver_are_always_write_gated(monkeypatch):
     # Auto-approve disabled: approval required for write-capable tools.
     _set_auto_approve(monkeypatch, False)
     catalog = introspection.list_all_actions(include_parameters=True, compact=False)
-    idx = {str(t.get("name")): t for t in (catalog.get("tools", []) or []) if t.get("name")}
+    idx = {
+        str(t.get("name")): t for t in (catalog.get("tools", []) or []) if t.get("name")
+    }
     for name in resolver_tool_names:
         entry = idx.get(name)
         assert entry is not None, f"Catalog missing resolver tool: {name}"

@@ -20,7 +20,9 @@ def test_invoke_endpoint_maps_structured_error_status(monkeypatch: Any) -> None:
     def func(**_kwargs: Any) -> dict[str, Any]:
         return {"error": "bad args"}
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
 
     client = TestClient(main.app)
     resp = client.post("/tools/fake_tool", json={"args": {"x": 1}})
@@ -46,7 +48,9 @@ def test_invoke_endpoint_wraps_bare_error_detail(monkeypatch: Any) -> None:
     def func(**_kwargs: Any) -> dict[str, Any]:
         return {"category": "validation", "message": "missing required arg"}
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
 
     client = TestClient(main.app)
     resp = client.post("/tools/detail_only", json={"args": {}})
@@ -78,7 +82,9 @@ def test_invoke_endpoint_does_not_double_wrap_error_envelopes(monkeypatch: Any) 
             "hint": "use {args: {...}}",
         }
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
 
     client = TestClient(main.app)
     resp = client.post("/tools/enveloped", json={"args": {"x": 1}})
@@ -109,9 +115,13 @@ def test_invoke_endpoint_maps_uppercase_rate_limit_codes(monkeypatch: Any) -> No
         write_action = False
 
     def func(**_kwargs: Any) -> dict[str, Any]:
-        return {"error_detail": {"code": "GITHUB_RATE_LIMITED", "message": "rate limited"}}
+        return {
+            "error_detail": {"code": "GITHUB_RATE_LIMITED", "message": "rate limited"}
+        }
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
 
     client = TestClient(main.app)
     resp = client.post("/tools/ratey", json={"args": {}})
@@ -134,11 +144,15 @@ def test_invoke_endpoint_retries_retryable_structured_errors(monkeypatch: Any) -
     async def fake_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
     client = TestClient(main.app)
-    resp = client.post("/tools/flaky_tool", json={"args": {}}, params={"max_attempts": 2})
+    resp = client.post(
+        "/tools/flaky_tool", json={"args": {}}, params={"max_attempts": 2}
+    )
     assert resp.status_code == 500
     assert resp.json().get("error") == "upstream"
     assert calls["n"] == 1
@@ -160,7 +174,9 @@ def test_invoke_endpoint_does_not_retry_write_tools(monkeypatch: Any) -> None:
     async def fake_sleep(_seconds: float) -> None:
         raise AssertionError("sleep should not be called for write tools")
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
     client = TestClient(main.app)
@@ -192,7 +208,9 @@ def test_invoke_endpoint_returns_200_for_openai_clients_on_structured_errors(
             }
         }
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
 
     client = TestClient(main.app)
     resp = client.post(

@@ -62,4 +62,3 @@ __all__ = [
     "normalize_base_path",
     "request_base_path",
 ]
-

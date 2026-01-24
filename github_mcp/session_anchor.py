@@ -79,7 +79,9 @@ def get_server_anchor(*, refresh: bool = False) -> tuple[str, dict[str, Any]]:
             return _ANCHOR_CACHE
 
         payload = build_server_anchor_payload()
-        blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        blob = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        )
         anchor = hashlib.sha256(blob.encode("utf-8")).hexdigest()
         _ANCHOR_CACHE = (anchor, payload)
         return _ANCHOR_CACHE

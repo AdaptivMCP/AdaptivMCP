@@ -14,7 +14,9 @@ class _FakeTW:
         return ref
 
     def _workspace_deps(self) -> dict[str, Any]:
-        async def clone_repo(_full_name: str, *, ref: str, preserve_changes: bool) -> str:
+        async def clone_repo(
+            _full_name: str, *, ref: str, preserve_changes: bool
+        ) -> str:
             self.calls.append(
                 {
                     "fn": "clone_repo",
@@ -25,7 +27,9 @@ class _FakeTW:
             )
             return "/tmp/fake-repo"
 
-        async def run_shell(cmd: str, *, cwd: str, timeout_seconds: float) -> dict[str, Any]:
+        async def run_shell(
+            cmd: str, *, cwd: str, timeout_seconds: float
+        ) -> dict[str, Any]:
             self.calls.append({"fn": "run_shell", "cmd": cmd, "cwd": cwd})
             # First call is the diff, second is numstat.
             if "--numstat" in cmd:

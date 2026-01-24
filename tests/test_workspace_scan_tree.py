@@ -21,14 +21,18 @@ class _FakeTW:
         return ref
 
     def _workspace_deps(self) -> dict[str, Any]:
-        async def clone_repo(_full_name: str, *, ref: str, preserve_changes: bool) -> str:
+        async def clone_repo(
+            _full_name: str, *, ref: str, preserve_changes: bool
+        ) -> str:
             return self.repo_dir
 
         return {"clone_repo": clone_repo}
 
 
 @pytest.mark.anyio
-async def test_scan_workspace_tree_basic(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+async def test_scan_workspace_tree_basic(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     from github_mcp.workspace_tools import listing
 
     # Create a small repo-like tree.

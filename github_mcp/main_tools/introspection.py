@@ -211,11 +211,20 @@ def list_all_actions(
     from types import SimpleNamespace
 
     forced_entries = [
-        (SimpleNamespace(name="list_all_actions", write_action=False), list_all_actions),
+        (
+            SimpleNamespace(name="list_all_actions", write_action=False),
+            list_all_actions,
+        ),
         (SimpleNamespace(name="list_tools", write_action=False), list_tools),
         (SimpleNamespace(name="list_resources", write_action=False), list_resources),
-        (SimpleNamespace(name="list_write_actions", write_action=False), list_write_actions),
-        (SimpleNamespace(name="list_write_tools", write_action=False), list_write_tools),
+        (
+            SimpleNamespace(name="list_write_actions", write_action=False),
+            list_write_actions,
+        ),
+        (
+            SimpleNamespace(name="list_write_tools", write_action=False),
+            list_write_tools,
+        ),
     ]
 
     for tool, func in forced_entries + list(registry_entries):
@@ -319,7 +328,9 @@ def list_write_actions(
     """Enumerate write-capable MCP tools with optional schemas."""
 
     catalog = list_all_actions(include_parameters=include_parameters, compact=compact)
-    tools = [tool for tool in catalog.get("tools", []) or [] if tool.get("write_action")]
+    tools = [
+        tool for tool in catalog.get("tools", []) or [] if tool.get("write_action")
+    ]
     return {
         "compact": catalog.get("compact"),
         "tools": tools,
@@ -384,8 +395,6 @@ async def list_tools(
     return payload
 
 
-
-
 def list_resources(
     base_path: str | None = None,
     include_parameters: bool = False,
@@ -437,11 +446,20 @@ def list_resources(
     from types import SimpleNamespace
 
     forced_entries = [
-        (SimpleNamespace(name="list_all_actions", write_action=False), list_all_actions),
+        (
+            SimpleNamespace(name="list_all_actions", write_action=False),
+            list_all_actions,
+        ),
         (SimpleNamespace(name="list_tools", write_action=False), list_tools),
         (SimpleNamespace(name="list_resources", write_action=False), list_resources),
-        (SimpleNamespace(name="list_write_actions", write_action=False), list_write_actions),
-        (SimpleNamespace(name="list_write_tools", write_action=False), list_write_tools),
+        (
+            SimpleNamespace(name="list_write_actions", write_action=False),
+            list_write_actions,
+        ),
+        (
+            SimpleNamespace(name="list_write_tools", write_action=False),
+            list_write_tools,
+        ),
     ]
 
     seen_names: set[str] = set()
@@ -461,7 +479,9 @@ def list_resources(
         if compact_mode and description:
             description = description.splitlines()[0].strip() or description
 
-        items.append({"name": name_str, "description": description, "tool": tool, "func": func})
+        items.append(
+            {"name": name_str, "description": description, "tool": tool, "func": func}
+        )
 
     items.sort(key=lambda entry: entry["name"])
     total = len(items)
@@ -478,7 +498,9 @@ def list_resources(
         if entry.get("description"):
             resource["description"] = entry.get("description")
         if include_parameters:
-            safe_schema = _schema_for_callable(entry["func"], entry["tool"], tool_name=name)
+            safe_schema = _schema_for_callable(
+                entry["func"], entry["tool"], tool_name=name
+            )
             resource["input_schema"] = safe_schema
             resource["inputSchema"] = safe_schema
         resources.append(resource)
@@ -561,7 +583,9 @@ async def describe_tool(
     return result
 
 
-def _validate_single_tool_args(tool_name: str, args: Mapping[str, Any] | None) -> dict[str, Any]:
+def _validate_single_tool_args(
+    tool_name: str, args: Mapping[str, Any] | None
+) -> dict[str, Any]:
     """Validate a single candidate payload against a tool's input schema."""
 
     if args is not None and not isinstance(args, Mapping):
@@ -576,9 +600,15 @@ def _validate_single_tool_args(tool_name: str, args: Mapping[str, Any] | None) -
             break
     if tool is None or func is None:
         available = sorted(
-            {name for tool, func in _tool_registry() if (name := _registered_tool_name(tool, func))}
+            {
+                name
+                for tool, func in _tool_registry()
+                if (name := _registered_tool_name(tool, func))
+            }
         )
-        raise ValueError(f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}")
+        raise ValueError(
+            f"Unknown tool {tool_name!r}. Available tools: {', '.join(available)}"
+        )
 
     # Keep this consistent with list_all_actions: prefer a dynamically-derived schema.
     schema = _schema_for_callable(func, tool, tool_name=tool_name)

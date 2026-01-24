@@ -76,11 +76,15 @@ async def ensure_branch(
     if resp.status_code == 404:
         return await create_branch(full_name, branch, from_ref)
     if resp.status_code >= 400:
-        raise m.GitHubAPIError(f"GitHub ensure_branch error {resp.status_code}: {resp.text}")
+        raise m.GitHubAPIError(
+            f"GitHub ensure_branch error {resp.status_code}: {resp.text}"
+        )
     return {"status_code": resp.status_code, "json": resp.json()}
 
 
-async def get_branch_summary(full_name: str, branch: str, base: str = "main") -> dict[str, Any]:
+async def get_branch_summary(
+    full_name: str, branch: str, base: str = "main"
+) -> dict[str, Any]:
     """Return PRs and latest workflow run for a branch."""
 
     m = _main()
@@ -112,7 +116,9 @@ async def get_branch_summary(full_name: str, branch: str, base: str = "main") ->
     workflow_error: str | None = None
     latest_workflow_run: dict[str, Any] | None = None
     try:
-        runs_resp = await m.list_workflow_runs(full_name, branch=effective_branch, per_page=1)
+        runs_resp = await m.list_workflow_runs(
+            full_name, branch=effective_branch, per_page=1
+        )
         runs_json = runs_resp.get("json") or {}
         runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
         if runs:

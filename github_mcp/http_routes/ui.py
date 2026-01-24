@@ -66,7 +66,8 @@ def build_ui_json_endpoint() -> Any:
                         or os.getenv("GIT_COMMIT")
                         or os.getenv("RENDER_GIT_COMMIT")
                     ),
-                    "git_branch": os.getenv("GIT_BRANCH") or os.getenv("RENDER_GIT_BRANCH"),
+                    "git_branch": os.getenv("GIT_BRANCH")
+                    or os.getenv("RENDER_GIT_BRANCH"),
                 },
                 "runtime": {
                     "server_time_utc": _iso_utc(now),

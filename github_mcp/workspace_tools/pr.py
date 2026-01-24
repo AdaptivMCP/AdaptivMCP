@@ -112,7 +112,9 @@ async def commit_and_open_pr_from_workspace(
             "commit": commit_result,
             "pr": pr_result,
             "pr_url": pr_result.get("pr_url") if isinstance(pr_result, dict) else None,
-            "pr_number": pr_result.get("pr_number") if isinstance(pr_result, dict) else None,
+            "pr_number": pr_result.get("pr_number")
+            if isinstance(pr_result, dict)
+            else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="commit_and_open_pr_from_workspace")

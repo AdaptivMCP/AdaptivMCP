@@ -42,7 +42,10 @@ def test_infer_write_action_from_shell_pip_read_only_subcommands() -> None:
     assert infer_write_action_from_shell("python -m pip list") is False
 
     assert infer_write_action_from_shell("pip install -r dev-requirements.txt") is True
-    assert infer_write_action_from_shell("python -m pip install -r dev-requirements.txt") is True
+    assert (
+        infer_write_action_from_shell("python -m pip install -r dev-requirements.txt")
+        is True
+    )
 
 
 def test_infer_write_action_from_shell_pipeline_write_stage() -> None:
@@ -65,7 +68,10 @@ def test_terminal_command_write_action_resolver_edge_cases() -> None:
 
     assert resolver({"command": "pytest -q", "installing_dependencies": False}) is False
     assert resolver({"command": "pip check", "installing_dependencies": False}) is False
-    assert resolver({"command": "python -m pip check", "installing_dependencies": False}) is False
+    assert (
+        resolver({"command": "python -m pip check", "installing_dependencies": False})
+        is False
+    )
     assert resolver({"command": 'rg ">" .', "installing_dependencies": False}) is False
 
     assert resolver({"command": "pip install -r dev-requirements.txt"}) is True
@@ -129,12 +135,19 @@ def test_core_tool_gating_metadata_is_consistent() -> None:
 
     from github_mcp.workspace_tools.batch import workspace_batch
     from github_mcp.workspace_tools.commands import terminal_command
-    from github_mcp.workspace_tools.suites import run_lint_suite, run_quality_suite, run_tests
+    from github_mcp.workspace_tools.suites import (
+        run_lint_suite,
+        run_quality_suite,
+        run_tests,
+    )
     from github_mcp.workspace_tools.workflows import workspace_apply_ops_and_open_pr
 
     # Orchestration/workflow tools are inherently write-capable.
     assert bool(getattr(workspace_batch, "__mcp_write_action__", None)) is True
-    assert bool(getattr(workspace_apply_ops_and_open_pr, "__mcp_write_action__", None)) is True
+    assert (
+        bool(getattr(workspace_apply_ops_and_open_pr, "__mcp_write_action__", None))
+        is True
+    )
 
     # Suites are explicitly read-gated even though they may execute commands.
     assert bool(getattr(run_tests, "__mcp_write_action__", None)) is False

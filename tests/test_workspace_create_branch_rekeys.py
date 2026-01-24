@@ -41,7 +41,9 @@ async def test_workspace_create_branch_rekeys_workspace_dir(
         with open(os.path.join(base_dir, "local.txt"), "w", encoding="utf-8") as f:
             f.write("hello")
 
-        async def clone_repo(full_name: str, ref: str, preserve_changes: bool = True) -> str:
+        async def clone_repo(
+            full_name: str, ref: str, preserve_changes: bool = True
+        ) -> str:
             assert full_name == "octo-org/octo-repo"
             assert ref in {"main", "feature/test"}
             if ref == "main":
@@ -49,13 +51,17 @@ async def test_workspace_create_branch_rekeys_workspace_dir(
                     shutil.rmtree(base_dir, ignore_errors=True)
                 os.makedirs(base_dir, exist_ok=True)
                 if not preserve_changes:
-                    with open(os.path.join(base_dir, "clean.txt"), "w", encoding="utf-8") as f:
+                    with open(
+                        os.path.join(base_dir, "clean.txt"), "w", encoding="utf-8"
+                    ) as f:
                         f.write("clean")
                 return base_dir
             os.makedirs(new_dir, exist_ok=True)
             return new_dir
 
-        async def run_shell(command: str, cwd: str, timeout_seconds: float = 0) -> dict[str, Any]:
+        async def run_shell(
+            command: str, cwd: str, timeout_seconds: float = 0
+        ) -> dict[str, Any]:
             # Ensure we are running commands in the base dir prior to re-key.
             assert cwd in {base_dir, new_dir}
             if command.startswith("git checkout -b"):
@@ -114,11 +120,15 @@ async def test_workspace_create_branch_errors_if_target_mirror_exists(
         os.makedirs(base_dir, exist_ok=True)
         os.makedirs(new_dir, exist_ok=True)  # pre-existing target dir
 
-        async def clone_repo(full_name: str, ref: str, preserve_changes: bool = True) -> str:
+        async def clone_repo(
+            full_name: str, ref: str, preserve_changes: bool = True
+        ) -> str:
             assert full_name == "octo-org/octo-repo"
             return base_dir
 
-        async def run_shell(command: str, cwd: str, timeout_seconds: float = 0) -> dict[str, Any]:
+        async def run_shell(
+            command: str, cwd: str, timeout_seconds: float = 0
+        ) -> dict[str, Any]:
             if command.startswith("git checkout -b"):
                 return {"exit_code": 0, "stdout": "", "stderr": ""}
             return {"exit_code": 0, "stdout": "", "stderr": ""}
@@ -126,7 +136,9 @@ async def test_workspace_create_branch_errors_if_target_mirror_exists(
         deps: dict[str, Any] = {"clone_repo": clone_repo, "run_shell": run_shell}
 
         monkeypatch.setattr(git_ops, "_tw", lambda: _TW())
-        monkeypatch.setattr(git_ops, "_workspace_path", lambda _full_name, _ref: new_dir)
+        monkeypatch.setattr(
+            git_ops, "_workspace_path", lambda _full_name, _ref: new_dir
+        )
 
         res = await git_ops.workspace_create_branch(
             full_name="octo-org/octo-repo",

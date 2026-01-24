@@ -32,7 +32,9 @@ def sha1_8(text: str) -> str:
     """
 
     # 4 bytes -> 8 hex characters.
-    return hashlib.blake2s(text.encode("utf-8", errors="replace"), digest_size=4).hexdigest()
+    return hashlib.blake2s(
+        text.encode("utf-8", errors="replace"), digest_size=4
+    ).hexdigest()
 
 
 def build_unified_diff(

@@ -21,7 +21,12 @@ class _FakeTW:
                 "ref": kwargs.get("ref"),
                 "path": path,
                 "exists": False,
-                "sections": {"start_line": 1, "end_line": 1, "parts": [], "truncated": False},
+                "sections": {
+                    "start_line": 1,
+                    "end_line": 1,
+                    "parts": [],
+                    "truncated": False,
+                },
             }
         return {
             "full_name": kwargs.get("full_name"),
@@ -50,7 +55,9 @@ class _FakeTW:
 
 
 @pytest.mark.anyio
-async def test_workspace_read_files_in_sections_aggregates(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_read_files_in_sections_aggregates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import workflows
 
     fake = _FakeTW()

@@ -40,11 +40,17 @@ class _FakeTW:
 
     async def commit_and_open_pr_from_workspace(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "commit_and_open_pr_from_workspace", "kwargs": kwargs})
-        return {"status": "ok", "pr_url": "https://example.invalid/pull/1", "pr_number": 1}
+        return {
+            "status": "ok",
+            "pr_url": "https://example.invalid/pull/1",
+            "pr_number": 1,
+        }
 
 
 @pytest.mark.anyio
-async def test_workspace_apply_ops_and_open_pr_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_apply_ops_and_open_pr_happy_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import workflows
 
     fake = _FakeTW()

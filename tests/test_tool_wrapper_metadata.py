@@ -62,7 +62,9 @@ def test_all_registered_tools_have_docstring_metadata_schema_and_signature() -> 
         if getattr(func, "__mcp_tool__", None) is None:
             failures.append(f"{name}: missing func.__mcp_tool__")
         if getattr(func, "__mcp_tool__", None) is not tool_obj:
-            failures.append(f"{name}: func.__mcp_tool__ does not match registry tool_obj")
+            failures.append(
+                f"{name}: func.__mcp_tool__ does not match registry tool_obj"
+            )
 
         # 2) Docstring exists and contains a metadata section.
         doc = (inspect.getdoc(func) or "").strip()
@@ -70,7 +72,9 @@ def test_all_registered_tools_have_docstring_metadata_schema_and_signature() -> 
             failures.append(f"{name}: missing wrapper docstring")
         else:
             if "Tool metadata:" not in doc:
-                failures.append(f"{name}: wrapper docstring missing 'Tool metadata' section")
+                failures.append(
+                    f"{name}: wrapper docstring missing 'Tool metadata' section"
+                )
             if f"- name: {name}" not in doc:
                 failures.append(f"{name}: wrapper docstring missing tool name line")
             if "- write_action:" not in doc:
@@ -106,10 +110,13 @@ def test_all_registered_tools_have_docstring_metadata_schema_and_signature() -> 
             sig = inspect.signature(func)
             params = list(sig.parameters.values())
             if len(params) == 2 and all(
-                p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+                p.kind
+                in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
                 for p in params
             ):
-                failures.append(f"{name}: wrapper signature collapsed to *args/**kwargs")
+                failures.append(
+                    f"{name}: wrapper signature collapsed to *args/**kwargs"
+                )
         except Exception:
             failures.append(f"{name}: wrapper signature not inspectable")
 

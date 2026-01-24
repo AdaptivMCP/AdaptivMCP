@@ -27,7 +27,9 @@ def test_workspace_safe_join_rejects_absolute_path_outside_repo(tmp_path):
     try:
         fs._workspace_safe_join(str(repo_dir), abs_outside)
     except ValueError as exc:
-        assert "inside the workspace repository" in str(exc) or "repository-relative" in str(exc)
+        assert "inside the workspace repository" in str(
+            exc
+        ) or "repository-relative" in str(exc)
     else:
         raise AssertionError("expected ValueError")
 
@@ -57,7 +59,9 @@ def test_workspace_safe_join_clamps_parent_directory_segments(tmp_path):
 
     # Previously this could hard-fail; now it clamps back into the repo.
     resolved = fs._workspace_safe_join(str(repo_dir), "../docs/usage.md")
-    assert os.path.realpath(resolved) == os.path.realpath(str(repo_dir / "docs" / "usage.md"))
+    assert os.path.realpath(resolved) == os.path.realpath(
+        str(repo_dir / "docs" / "usage.md")
+    )
 
     # Traversal beyond root should clamp to root, not escape.
     resolved_root = fs._workspace_safe_join(str(repo_dir), "../../../")

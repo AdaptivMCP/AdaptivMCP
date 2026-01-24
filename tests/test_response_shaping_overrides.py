@@ -100,7 +100,9 @@ def test_stream_limits_clip_raw_stdout(monkeypatch):
     assert isinstance(shaped.get("stdout_colored"), str) and shaped["stdout_colored"]
 
 
-def test_chatgpt_shaping_returns_single_structured_report_without_duplication(monkeypatch):
+def test_chatgpt_shaping_returns_single_structured_report_without_duplication(
+    monkeypatch,
+):
     _enable_shaping(monkeypatch)
     monkeypatch.setattr(dec, "RESPONSE_MODE_DEFAULT", "raw")
 

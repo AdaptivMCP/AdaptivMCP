@@ -214,7 +214,9 @@ async def list_workspace_files(
         # Normalize branch/ref the same way as other workspace-backed tools.
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         root = os.path.realpath(repo_dir)
         normalized_path, start = _resolve_workspace_start(repo_dir, path)
@@ -367,7 +369,9 @@ async def find_workspace_paths(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         if not isinstance(pattern, str) or not pattern:
             raise ValueError("pattern must be a non-empty string")
@@ -423,7 +427,9 @@ async def find_workspace_paths(
 
             if include_dirs:
                 for d in dirnames:
-                    rp = os.path.relpath(os.path.join(cur_dir, d), root).replace("\\", "/")
+                    rp = os.path.relpath(os.path.join(cur_dir, d), root).replace(
+                        "\\", "/"
+                    )
                     if not include_hidden and os.path.basename(rp).startswith("."):
                         continue
                     scanned += 1
@@ -439,7 +445,9 @@ async def find_workspace_paths(
                     if include_metadata:
                         abs_path = os.path.join(root, rp)
                         st = os.stat(abs_path)
-                        results.append({"path": rp, "type": "dir", "size_bytes": int(st.st_size)})
+                        results.append(
+                            {"path": rp, "type": "dir", "size_bytes": int(st.st_size)}
+                        )
                     else:
                         results.append(rp)
                 if truncated:
@@ -449,7 +457,9 @@ async def find_workspace_paths(
                 for f in filenames:
                     if not include_hidden and f.startswith("."):
                         continue
-                    rp = os.path.relpath(os.path.join(cur_dir, f), root).replace("\\", "/")
+                    rp = os.path.relpath(os.path.join(cur_dir, f), root).replace(
+                        "\\", "/"
+                    )
                     scanned += 1
                     if not _match(rp):
                         continue
@@ -463,7 +473,9 @@ async def find_workspace_paths(
                     if include_metadata:
                         abs_path = os.path.join(root, rp)
                         st = os.stat(abs_path)
-                        results.append({"path": rp, "type": "file", "size_bytes": int(st.st_size)})
+                        results.append(
+                            {"path": rp, "type": "file", "size_bytes": int(st.st_size)}
+                        )
                     else:
                         results.append(rp)
                 if truncated:
@@ -525,7 +537,9 @@ async def search_workspace(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         if max_results is None:
             max_results = 200
@@ -539,7 +553,11 @@ async def search_workspace(
 
         # Allow searching a single file path.
         single_file = os.path.isfile(start)
-        if single_file and (not include_hidden) and os.path.basename(start).startswith("."):
+        if (
+            single_file
+            and (not include_hidden)
+            and os.path.basename(start).startswith(".")
+        ):
             return {
                 "full_name": full_name,
                 "ref": effective_ref,
@@ -722,7 +740,9 @@ async def scan_workspace_tree(
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         if not isinstance(max_entries, int) or max_entries < 1:
             raise ValueError("max_entries must be an int >= 1")
@@ -767,7 +787,9 @@ async def scan_workspace_tree(
 
             if include_dirs:
                 for d in dirnames:
-                    rp = os.path.relpath(os.path.join(cur_dir, d), root).replace("\\", "/")
+                    rp = os.path.relpath(os.path.join(cur_dir, d), root).replace(
+                        "\\", "/"
+                    )
                     if not include_hidden and os.path.basename(rp).startswith("."):
                         continue
                     if skipped < cursor:
@@ -780,7 +802,9 @@ async def scan_workspace_tree(
                     abs_p = os.path.join(root, rp)
                     try:
                         st = os.stat(abs_p)
-                        results.append({"path": rp, "type": "dir", "size_bytes": int(st.st_size)})
+                        results.append(
+                            {"path": rp, "type": "dir", "size_bytes": int(st.st_size)}
+                        )
                     except Exception:
                         results.append({"path": rp, "type": "dir", "size_bytes": None})
                     yielded += 1
@@ -790,7 +814,9 @@ async def scan_workspace_tree(
             for fname in filenames:
                 if not include_hidden and fname.startswith("."):
                     continue
-                rp = os.path.relpath(os.path.join(cur_dir, fname), root).replace("\\", "/")
+                rp = os.path.relpath(os.path.join(cur_dir, fname), root).replace(
+                    "\\", "/"
+                )
                 if skipped < cursor:
                     skipped += 1
                     continue
@@ -813,16 +839,22 @@ async def scan_workspace_tree(
                     "is_binary": bool(is_bin),
                 }
                 if include_hash:
-                    sha, sha_trunc = _sha256_limited(abs_p, max_bytes=int(hash_max_bytes))
+                    sha, sha_trunc = _sha256_limited(
+                        abs_p, max_bytes=int(hash_max_bytes)
+                    )
                     entry["sha256"] = sha
                     entry["sha256_truncated"] = bool(sha_trunc)
                 if include_line_count and (not is_bin):
-                    lc, lc_trunc = _count_lines_limited(abs_p, max_bytes=int(line_count_max_bytes))
+                    lc, lc_trunc = _count_lines_limited(
+                        abs_p, max_bytes=int(line_count_max_bytes)
+                    )
                     entry["line_count"] = lc
                     entry["line_count_truncated"] = bool(lc_trunc)
                 if include_head and (not is_bin):
                     head, head_trunc = _read_first_lines(
-                        abs_p, max_lines=int(head_max_lines), max_chars=int(head_max_chars)
+                        abs_p,
+                        max_lines=int(head_max_lines),
+                        max_chars=int(head_max_chars),
                     )
                     entry["head"] = {
                         "lines": head,

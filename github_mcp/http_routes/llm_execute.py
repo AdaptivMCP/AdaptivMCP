@@ -73,7 +73,9 @@ def build_llm_execute_endpoint():
                 for c in calls
             ]
 
-        dry_run = bool(payload.get("dry_run")) or request.query_params.get("dry_run") in {
+        dry_run = bool(payload.get("dry_run")) or request.query_params.get(
+            "dry_run"
+        ) in {
             "1",
             "true",
             "yes",

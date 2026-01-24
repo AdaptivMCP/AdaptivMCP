@@ -71,7 +71,9 @@ def _ensure_pip(python_exe: Path, *, cwd: Path) -> None:
     # Bootstrap pip when missing.
     _run([str(python_exe), "-m", "ensurepip", "--upgrade"], cwd=cwd)
     if not _pip_ok(python_exe, cwd=cwd):
-        raise SystemExit("pip is unavailable after ensurepip; check your Python installation")
+        raise SystemExit(
+            "pip is unavailable after ensurepip; check your Python installation"
+        )
     _run(
         [
             str(python_exe),
@@ -87,7 +89,9 @@ def _ensure_pip(python_exe: Path, *, cwd: Path) -> None:
     )
 
 
-def _create_or_repair_venv(python: str, *, venv_dir: Path, cwd: Path) -> tuple[Path, bool]:
+def _create_or_repair_venv(
+    python: str, *, venv_dir: Path, cwd: Path
+) -> tuple[Path, bool]:
     vpy = _venv_python(venv_dir)
     created = False
 
@@ -151,7 +155,9 @@ def _record_requirements_marker(venv_dir: Path, requirements_path: Path) -> None
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Bootstrap a local development environment")
+    parser = argparse.ArgumentParser(
+        description="Bootstrap a local development environment"
+    )
     parser.add_argument(
         "--python",
         default=os.environ.get("PYTHON", sys.executable),
@@ -188,14 +194,19 @@ def main() -> int:
             requirements_path,
             venv_created=venv_created,
         ):
-            _run([str(vpy), "-m", "pip", "install", "-r", str(requirements_path)], cwd=root)
+            _run(
+                [str(vpy), "-m", "pip", "install", "-r", str(requirements_path)],
+                cwd=root,
+            )
             _record_requirements_marker(venv_dir, requirements_path)
 
     if args.run_tests:
         _run([str(vpy), "-m", "pytest", "-q"], cwd=root)
 
     activate_hint = (
-        f"{venv_dir}\\Scripts\\activate" if os.name == "nt" else f"source {venv_dir}/bin/activate"
+        f"{venv_dir}\\Scripts\\activate"
+        if os.name == "nt"
+        else f"source {venv_dir}/bin/activate"
     )
     print("Bootstrap complete.")
     print(f"Activate the venv: {activate_hint}")

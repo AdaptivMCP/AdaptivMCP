@@ -70,7 +70,9 @@ def test_workspace_batch_passes_dynamic_step_kwargs(monkeypatch):
             return ref
 
     monkeypatch.setattr(batch, "_tw", lambda: DummyTW())
-    monkeypatch.setattr(batch, "apply_workspace_operations", fake_apply_workspace_operations)
+    monkeypatch.setattr(
+        batch, "apply_workspace_operations", fake_apply_workspace_operations
+    )
     monkeypatch.setattr(batch, "run_tests", fake_run_tests)
 
     result = asyncio.run(

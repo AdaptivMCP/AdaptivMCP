@@ -29,7 +29,10 @@ class _FakeTW:
 
     async def rg_search_workspace(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "rg_search_workspace", "kwargs": kwargs})
-        return {"status": "success", "matches": [{"path": "README.md", "line": 1, "text": "hello"}]}
+        return {
+            "status": "success",
+            "matches": [{"path": "README.md", "line": 1, "text": "hello"}],
+        }
 
     async def workspace_sync_to_remote(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "workspace_sync_to_remote", "kwargs": kwargs})
@@ -61,7 +64,11 @@ class _FakeTW:
 
     async def commit_and_open_pr_from_workspace(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "commit_and_open_pr_from_workspace", "kwargs": kwargs})
-        return {"status": "ok", "pr_url": "https://example.invalid/pull/123", "pr_number": 123}
+        return {
+            "status": "ok",
+            "pr_url": "https://example.invalid/pull/123",
+            "pr_number": 123,
+        }
 
     async def commit_workspace(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"fn": "commit_workspace", "kwargs": kwargs})
@@ -97,7 +104,9 @@ async def test_workspace_task_plan_collects_tree_and_search(
 
 
 @pytest.mark.anyio
-async def test_workspace_task_apply_edits_passes_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_task_apply_edits_passes_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import task_workflows
 
     fake = _FakeTW()
@@ -120,7 +129,9 @@ async def test_workspace_task_apply_edits_passes_defaults(monkeypatch: pytest.Mo
 
 
 @pytest.mark.anyio
-async def test_workspace_task_execute_pr_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_task_execute_pr_happy_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import task_workflows
 
     fake = _FakeTW()
@@ -155,7 +166,9 @@ async def test_workspace_task_execute_pr_happy_path(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.anyio
-async def test_workspace_task_execute_commit_only(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_task_execute_commit_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import task_workflows
 
     fake = _FakeTW()

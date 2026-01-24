@@ -10,7 +10,9 @@ async def test_cache_files_uses_existing_cache_when_refresh_false(monkeypatch):
     from github_mcp.main_tools import content_cache
 
     # Keep paths stable/easy to reason about.
-    monkeypatch.setattr(content_cache, "_normalize_repo_path_for_repo", lambda _full, p: p)
+    monkeypatch.setattr(
+        content_cache, "_normalize_repo_path_for_repo", lambda _full, p: p
+    )
 
     async def _fake_resolve(_full_name: str, _ref: str | None):
         return {"requested_ref": "main", "resolved_ref": "sha-1", "tree_sha": None}
@@ -18,10 +20,17 @@ async def test_cache_files_uses_existing_cache_when_refresh_false(monkeypatch):
     monkeypatch.setattr(content_cache, "_resolve_ref_snapshot", _fake_resolve)
 
     cached_existing = {
-        "a.txt": {"full_name": "o/r", "ref": "sha-1", "path": "a.txt", "decoded": {"t": "cached"}},
+        "a.txt": {
+            "full_name": "o/r",
+            "ref": "sha-1",
+            "path": "a.txt",
+            "decoded": {"t": "cached"},
+        },
     }
 
-    monkeypatch.setattr(content_cache, "bulk_get_cached", lambda *_args, **_kwargs: cached_existing)
+    monkeypatch.setattr(
+        content_cache, "bulk_get_cached", lambda *_args, **_kwargs: cached_existing
+    )
     monkeypatch.setattr(content_cache, "cache_stats", lambda: {"entries": 1})
 
     decode_calls: list[str] = []
@@ -40,7 +49,9 @@ async def test_cache_files_uses_existing_cache_when_refresh_false(monkeypatch):
 
     monkeypatch.setattr(content_cache, "cache_payload", _fake_cache_payload)
 
-    out = await content_cache.cache_files("o/r", ["a.txt", "b.txt"], ref="main", refresh=False)
+    out = await content_cache.cache_files(
+        "o/r", ["a.txt", "b.txt"], ref="main", refresh=False
+    )
 
     assert out["resolved_ref"] == "sha-1"
     assert out["files"]["a.txt"]["cached"] is True
@@ -63,7 +74,11 @@ async def test_list_repository_tree_filters_and_normalizes_prefix(monkeypatch):
     from github_mcp.main_tools import content_cache
 
     async def _fake_resolve(_full_name: str, _ref: str | None):
-        return {"requested_ref": "main", "resolved_ref": "sha-1", "tree_sha": "tree-sha"}
+        return {
+            "requested_ref": "main",
+            "resolved_ref": "sha-1",
+            "tree_sha": "tree-sha",
+        }
 
     monkeypatch.setattr(content_cache, "_resolve_ref_snapshot", _fake_resolve)
 
@@ -116,7 +131,11 @@ async def test_list_repository_tree_filters_and_normalizes_prefix(monkeypatch):
     )
 
     assert out_root["entry_count"] == 3
-    assert {e["path"] for e in out_root["entries"]} == {"src/app.py", "src/pkg", "docs/readme.md"}
+    assert {e["path"] for e in out_root["entries"]} == {
+        "src/app.py",
+        "src/pkg",
+        "docs/readme.md",
+    }
 
     # Now filter to only src/*.
     out_src = await content_cache.list_repository_tree(
@@ -135,12 +154,21 @@ async def test_list_repository_tree_returns_empty_when_types_excluded(monkeypatc
     from github_mcp.main_tools import content_cache
 
     async def _fake_resolve(_full_name: str, _ref: str | None):
-        return {"requested_ref": "main", "resolved_ref": "sha-1", "tree_sha": "tree-sha"}
+        return {
+            "requested_ref": "main",
+            "resolved_ref": "sha-1",
+            "tree_sha": "tree-sha",
+        }
 
     monkeypatch.setattr(content_cache, "_resolve_ref_snapshot", _fake_resolve)
 
     async def _fake_github_request(method: str, path: str, params=None):
-        return {"json": {"sha": "tree-sha", "tree": [{"path": "a", "type": "blob", "sha": "x"}]}}
+        return {
+            "json": {
+                "sha": "tree-sha",
+                "tree": [{"path": "a", "type": "blob", "sha": "x"}],
+            }
+        }
 
     monkeypatch.setattr(content_cache, "_github_request", _fake_github_request)
 

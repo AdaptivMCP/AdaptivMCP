@@ -44,7 +44,9 @@ def test_normalize_repo_path_for_repo_repo_root_like_values_strict(value, monkey
     "value",
     ["/", "", ".", "./", "https://github.com/octo-org/octo-repo"],
 )
-def test_normalize_repo_path_for_repo_repo_root_like_values_permissive(value, monkeypatch):
+def test_normalize_repo_path_for_repo_repo_root_like_values_permissive(
+    value, monkeypatch
+):
     from github_mcp import utils
 
     full_name = "octo-org/octo-repo"

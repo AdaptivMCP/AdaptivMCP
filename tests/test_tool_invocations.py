@@ -12,7 +12,9 @@ TestClient = pytest.importorskip("starlette.testclient").TestClient
 import main  # noqa: E402
 
 
-def _wait_for_status(client: TestClient, invocation_id: str, target: str) -> dict[str, Any]:
+def _wait_for_status(
+    client: TestClient, invocation_id: str, target: str
+) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     for _ in range(100):
         resp = client.get(f"/tool_invocations/{invocation_id}")
@@ -33,10 +35,14 @@ def test_async_tool_invocation_completes(monkeypatch: Any) -> None:
     async def func(**kwargs: Any) -> dict[str, Any]:
         return {"ok": True, "echo": kwargs.get("value")}
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
 
     client = TestClient(main.app)
-    resp = client.post("/tools/async_tool/invocations", json={"args": {"value": "hello"}})
+    resp = client.post(
+        "/tools/async_tool/invocations", json={"args": {"value": "hello"}}
+    )
     assert resp.status_code == 202
 
     invocation_id = resp.json()["invocation_id"]
@@ -66,7 +72,9 @@ def test_async_tool_invocation_cancelled(monkeypatch: Any) -> None:
             raise
         return {"ok": True}
 
-    monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: (Tool(), func))
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
 
     client = TestClient(main.app)
     resp = client.post("/tools/slow_tool/invocations", json={"args": {}})

@@ -71,19 +71,25 @@ def _pick_registered_write_tool():
 def test_write_gate_metadata_refreshes_when_auto_approve_changes(monkeypatch):
     context = _reload_context()
     tool_obj, func = _pick_registered_write_tool()
-    tool_name = _registered_tool_name(tool_obj, func) or getattr(tool_obj, "name", "unknown")
+    tool_name = _registered_tool_name(tool_obj, func) or getattr(
+        tool_obj, "name", "unknown"
+    )
 
     monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "false")
     assert context.get_auto_approve_enabled() is False
     doc = func.__doc__ or ""
-    assert "write_allowed: false" in doc, f"{tool_name} docstring not updated for gate off"
+    assert "write_allowed: false" in doc, (
+        f"{tool_name} docstring not updated for gate off"
+    )
     description = getattr(tool_obj, "description", "") or ""
     assert "write_allowed: false" in description
 
     monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
     assert context.get_auto_approve_enabled() is True
     doc = func.__doc__ or ""
-    assert "write_allowed: true" in doc, f"{tool_name} docstring not updated for gate on"
+    assert "write_allowed: true" in doc, (
+        f"{tool_name} docstring not updated for gate on"
+    )
     description = getattr(tool_obj, "description", "") or ""
     assert "write_allowed: true" in description
 

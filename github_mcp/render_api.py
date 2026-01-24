@@ -125,7 +125,9 @@ def _get_render_token() -> str:
 
     token = token.strip()
     if not token:
-        raise RenderAuthError(f"Render authentication failed: {token_source or 'token'} is empty")
+        raise RenderAuthError(
+            f"Render authentication failed: {token_source or 'token'} is empty"
+        )
 
     return token
 
@@ -155,13 +157,21 @@ def _safe_render_headers(headers: dict[str, str] | None) -> dict[str, str] | Non
     return {k: v for k, v in headers.items() if k and k.lower() != "authorization"}
 
 
-def _render_http_header(kind: str, method: str, path: str, *, inline_ctx: str = "") -> str:
+def _render_http_header(
+    kind: str, method: str, path: str, *, inline_ctx: str = ""
+) -> str:
     """Human-readable, colored header for Render HTTP logs."""
 
     verb = str(method).upper()
     p = str(path)
     if LOG_TOOL_COLOR:
-        head = _ansi(kind, ANSI_CYAN) + " " + _ansi(verb, ANSI_GREEN) + " " + _ansi(p, ANSI_CYAN)
+        head = (
+            _ansi(kind, ANSI_CYAN)
+            + " "
+            + _ansi(verb, ANSI_GREEN)
+            + " "
+            + _ansi(p, ANSI_CYAN)
+        )
         if inline_ctx:
             head = head + " " + _ansi(inline_ctx, ANSI_DIM)
         return head
@@ -274,7 +284,9 @@ def _extract_response_body(resp: httpx.Response) -> Any | None:
     return extract_response_json(resp)
 
 
-def _build_response_payload(resp: httpx.Response, *, body: Any | None = None) -> dict[str, Any]:
+def _build_response_payload(
+    resp: httpx.Response, *, body: Any | None = None
+) -> dict[str, Any]:
     # Backward-compatible wrapper for shared response payload builder.
     from github_mcp.http_utils import build_response_payload
 
@@ -333,7 +345,9 @@ async def render_request(
     # START (dev-facing)
     if LOG_RENDER_HTTP:
         bits = []
-        bits.append(_render_http_header("RENDER", method, effective_path, inline_ctx=inline_ctx))
+        bits.append(
+            _render_http_header("RENDER", method, effective_path, inline_ctx=inline_ctx)
+        )
         if normalized_base:
             bits.append(
                 _ansi(f"base={normalized_base}", ANSI_DIM)
@@ -370,7 +384,9 @@ async def render_request(
             msg="\n".join(bits),
             extra={
                 "event": "render_http_started",
-                "request": summarize_request_context(req) if isinstance(req, dict) else {},
+                "request": summarize_request_context(req)
+                if isinstance(req, dict)
+                else {},
                 "log_context": inline_ctx or None,
                 "method": str(method).upper(),
                 "path": effective_path,
@@ -413,7 +429,9 @@ async def render_request(
                 ),
                 extra={
                     "event": "render_http_exception",
-                    "request": summarize_request_context(req) if isinstance(req, dict) else {},
+                    "request": summarize_request_context(req)
+                    if isinstance(req, dict)
+                    else {},
                     "log_context": inline_ctx or None,
                     "method": str(method).upper(),
                     "path": effective_path,
@@ -454,7 +472,9 @@ async def render_request(
             rl_remaining = resp_headers.get("Ratelimit-Remaining") or resp_headers.get(
                 "X-RateLimit-Remaining"
             )
-            rl_reset = resp_headers.get("Ratelimit-Reset") or resp_headers.get("X-RateLimit-Reset")
+            rl_reset = resp_headers.get("Ratelimit-Reset") or resp_headers.get(
+                "X-RateLimit-Reset"
+            )
             rl_bits: list[str] = []
             if rl_remaining is not None:
                 rl_bits.append(f"remaining={rl_remaining}")
@@ -464,7 +484,9 @@ async def render_request(
             rl = _ansi(rl, ANSI_DIM) if (rl and LOG_TOOL_COLOR) else rl
 
             line = (
-                _render_http_header("RENDER_RES", method, effective_path, inline_ctx=inline_ctx)
+                _render_http_header(
+                    "RENDER_RES", method, effective_path, inline_ctx=inline_ctx
+                )
                 + " "
                 + status_txt
                 + " "
@@ -505,7 +527,9 @@ async def render_request(
             if LOG_RENDER_HTTP_BODIES and not body_lines:
                 preview = body if body is not None else getattr(resp, "text", "")
                 body_lines.append(
-                    _ansi("body", ANSI_CYAN) + "\n" + _truncate_text(preview, limit=2000)
+                    _ansi("body", ANSI_CYAN)
+                    + "\n"
+                    + _truncate_text(preview, limit=2000)
                     if LOG_TOOL_COLOR
                     else "body\n" + _truncate_text(preview, limit=2000)
                 )
@@ -514,7 +538,9 @@ async def render_request(
 
             payload: dict[str, Any] = {
                 "event": "render_http_completed",
-                "request": summarize_request_context(req) if isinstance(req, dict) else {},
+                "request": summarize_request_context(req)
+                if isinstance(req, dict)
+                else {},
                 "log_context": inline_ctx or None,
                 "method": str(method).upper(),
                 "path": effective_path,
@@ -531,7 +557,9 @@ async def render_request(
                 payload["headers"] = safe_headers
             if LOG_RENDER_HTTP_BODIES:
                 payload["response_headers"] = resp_headers
-                payload["response_body"] = body if body is not None else getattr(resp, "text", "")
+                payload["response_body"] = (
+                    body if body is not None else getattr(resp, "text", "")
+                )
             _log_render_http(level=lvl, msg=msg, extra=payload)
         if status_code in (401, 403):
             message = None
@@ -547,7 +575,10 @@ async def render_request(
             if retry_delay is None:
                 retry_delay = RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
 
-            if attempt < max_attempts and retry_delay <= RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS:
+            if (
+                attempt < max_attempts
+                and retry_delay <= RENDER_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS
+            ):
                 # Apply jitter to reduce synchronized retry storms.
                 from .retry_utils import jitter_sleep_seconds
 
@@ -560,7 +591,10 @@ async def render_request(
                     )
                     msg = (
                         _render_http_header(
-                            "RENDER_RETRY", method, effective_path, inline_ctx=inline_ctx
+                            "RENDER_RETRY",
+                            method,
+                            effective_path,
+                            inline_ctx=inline_ctx,
                         )
                         + " "
                         + (_ansi("429", ANSI_YELLOW) if LOG_TOOL_COLOR else "429")

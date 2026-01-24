@@ -79,13 +79,17 @@ def suggest_close_matches(
     return out
 
 
-def suggest_best_name(requested: str, options: Iterable[str], *, cutoff: float = 0.6) -> str | None:
+def suggest_best_name(
+    requested: str, options: Iterable[str], *, cutoff: float = 0.6
+) -> str | None:
     """Return the closest matching option to `requested`, if any.
 
     This is retained for backward compatibility; prefer `suggest_close_matches`.
     """
 
-    matches = suggest_close_matches(requested, options, cutoff=cutoff, max_suggestions=1)
+    matches = suggest_close_matches(
+        requested, options, cutoff=cutoff, max_suggestions=1
+    )
     return matches[0] if matches else None
 
 
@@ -105,8 +109,12 @@ def expected_args_from_signature(signature: inspect.Signature | None) -> dict[st
 
     try:
         params = list(signature.parameters.values())
-        accepts_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
-        accepts_var_args = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params)
+        accepts_var_kwargs = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in params
+        )
+        accepts_var_args = any(
+            p.kind == inspect.Parameter.VAR_POSITIONAL for p in params
+        )
         out["accepts_var_kwargs"] = accepts_var_kwargs
         out["accepts_var_args"] = accepts_var_args
 
@@ -116,7 +124,10 @@ def expected_args_from_signature(signature: inspect.Signature | None) -> dict[st
         for p in params:
             if p.name in {"self", "cls"}:
                 continue
-            if p.kind in {inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL}:
+            if p.kind in {
+                inspect.Parameter.VAR_KEYWORD,
+                inspect.Parameter.VAR_POSITIONAL,
+            }:
                 continue
             names.append(p.name)
             if p.default is inspect._empty:
@@ -159,7 +170,9 @@ def _high_confidence_single_match(
     return matches[0]
 
 
-def build_unknown_tool_payload(tool_name: str, available_tools: Iterable[str]) -> dict[str, Any]:
+def build_unknown_tool_payload(
+    tool_name: str, available_tools: Iterable[str]
+) -> dict[str, Any]:
     """Return a structured error payload for an unknown tool with suggestions.
 
     Key behavior:
@@ -172,7 +185,9 @@ def build_unknown_tool_payload(tool_name: str, available_tools: Iterable[str]) -
 
     available = [str(t) for t in available_tools if t is not None and str(t).strip()]
     ranked = rank_names(tool_name, available)
-    close_matches = suggest_close_matches(tool_name, available, cutoff=0.66, max_suggestions=5)
+    close_matches = suggest_close_matches(
+        tool_name, available, cutoff=0.66, max_suggestions=5
+    )
     single = _high_confidence_single_match(ranked, close_matches)
 
     warnings: list[str] = []
@@ -231,14 +246,22 @@ def augment_structured_error_for_bad_args(
         accepts_var_kwargs = bool(expected.get("accepts_var_kwargs"))
 
         provided_keys = [str(k) for k in provided_kwargs.keys() if k is not None]
-        unknown = [k for k in provided_keys if (not accepts_var_kwargs) and k not in expected_all]
-        missing = [k for k in (expected.get("required") or []) if k not in provided_keys]
+        unknown = [
+            k
+            for k in provided_keys
+            if (not accepts_var_kwargs) and k not in expected_all
+        ]
+        missing = [
+            k for k in (expected.get("required") or []) if k not in provided_keys
+        ]
 
         warnings: list[str] = []
         if unknown:
             per_key: list[str] = []
             for key in unknown[:10]:
-                guesses = suggest_close_matches(key, expected_all, cutoff=0.66, max_suggestions=3)
+                guesses = suggest_close_matches(
+                    key, expected_all, cutoff=0.66, max_suggestions=3
+                )
                 if guesses and guesses[0] != key:
                     per_key.append(f"{key!r} -> {', '.join(repr(g) for g in guesses)}")
             if per_key:
@@ -246,15 +269,21 @@ def augment_structured_error_for_bad_args(
                     f"Invalid argument name(s) for {tool_name}: {', '.join(unknown)}. Closest matches: {', '.join(per_key)}"
                 )
             else:
-                warnings.append(f"Invalid argument name(s) for {tool_name}: {', '.join(unknown)}")
+                warnings.append(
+                    f"Invalid argument name(s) for {tool_name}: {', '.join(unknown)}"
+                )
 
         if missing:
-            warnings.append(f"Missing required argument(s) for {tool_name}: {', '.join(missing)}")
+            warnings.append(
+                f"Missing required argument(s) for {tool_name}: {', '.join(missing)}"
+            )
 
         # Always include the authoritative arg list when we have it.
         req = ", ".join(expected.get("required") or []) or "(none)"
         opt = ", ".join(expected.get("optional") or []) or "(none)"
-        warnings.append(f"Valid args for {tool_name}: required=[{req}], optional=[{opt}]")
+        warnings.append(
+            f"Valid args for {tool_name}: required=[{req}], optional=[{opt}]"
+        )
 
         if warnings:
             structured_error.setdefault("warnings", [])

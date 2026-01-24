@@ -424,7 +424,9 @@ async def list_open_issues_graphql(
 
     data = response.get("data")
     repo_data = data.get("repository") if isinstance(data, dict) else None
-    issues_data = (repo_data.get("issues") if isinstance(repo_data, dict) else None) or {}
+    issues_data = (
+        repo_data.get("issues") if isinstance(repo_data, dict) else None
+    ) or {}
     nodes = issues_data.get("nodes") if isinstance(issues_data, dict) else []
     page_info = issues_data.get("pageInfo") if isinstance(issues_data, dict) else {}
 
@@ -436,8 +438,12 @@ async def list_open_issues_graphql(
         "issues": issues,
         "total_count": issues_data.get("totalCount"),
         "page_info": {
-            "has_next_page": page_info.get("hasNextPage") if isinstance(page_info, dict) else None,
-            "end_cursor": page_info.get("endCursor") if isinstance(page_info, dict) else None,
+            "has_next_page": page_info.get("hasNextPage")
+            if isinstance(page_info, dict)
+            else None,
+            "end_cursor": page_info.get("endCursor")
+            if isinstance(page_info, dict)
+            else None,
         },
     }
 
@@ -475,7 +481,9 @@ async def list_workflow_runs_graphql(
 
     data = response.get("data")
     repo_data = data.get("repository") if isinstance(data, dict) else None
-    runs_data = (repo_data.get("workflowRuns") if isinstance(repo_data, dict) else None) or {}
+    runs_data = (
+        repo_data.get("workflowRuns") if isinstance(repo_data, dict) else None
+    ) or {}
     nodes = runs_data.get("nodes") if isinstance(runs_data, dict) else []
     page_info = runs_data.get("pageInfo") if isinstance(runs_data, dict) else {}
 
@@ -489,8 +497,12 @@ async def list_workflow_runs_graphql(
         "runs": runs,
         "total_count": runs_data.get("totalCount"),
         "page_info": {
-            "has_next_page": page_info.get("hasNextPage") if isinstance(page_info, dict) else None,
-            "end_cursor": page_info.get("endCursor") if isinstance(page_info, dict) else None,
+            "has_next_page": page_info.get("hasNextPage")
+            if isinstance(page_info, dict)
+            else None,
+            "end_cursor": page_info.get("endCursor")
+            if isinstance(page_info, dict)
+            else None,
         },
     }
 
@@ -640,7 +652,9 @@ async def get_repo_dashboard_graphql(
 
     prs_data = repo_data.get("pullRequests") if isinstance(repo_data, dict) else {}
     pr_nodes = prs_data.get("nodes") if isinstance(prs_data, dict) else []
-    pull_requests = [_normalize_pull_request(node) for node in pr_nodes if isinstance(node, dict)]
+    pull_requests = [
+        _normalize_pull_request(node) for node in pr_nodes if isinstance(node, dict)
+    ]
 
     issues_data = repo_data.get("issues") if isinstance(repo_data, dict) else {}
     issue_nodes = issues_data.get("nodes") if isinstance(issues_data, dict) else []
@@ -648,9 +662,13 @@ async def get_repo_dashboard_graphql(
 
     runs_data = repo_data.get("workflowRuns") if isinstance(repo_data, dict) else {}
     run_nodes = runs_data.get("nodes") if isinstance(runs_data, dict) else []
-    workflows = [_normalize_workflow_run(node) for node in run_nodes if isinstance(node, dict)]
+    workflows = [
+        _normalize_workflow_run(node) for node in run_nodes if isinstance(node, dict)
+    ]
     if effective_branch:
-        workflows = [run for run in workflows if run.get("head_branch") == effective_branch]
+        workflows = [
+            run for run in workflows if run.get("head_branch") == effective_branch
+        ]
 
     tree_object = repo_data.get("object") if isinstance(repo_data, dict) else {}
     entries = tree_object.get("entries") if isinstance(tree_object, dict) else []

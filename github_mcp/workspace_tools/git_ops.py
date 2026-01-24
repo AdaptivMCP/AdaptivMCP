@@ -66,7 +66,9 @@ async def _workspace_sync_snapshot(
     repo_dir: str,
     branch: str,
 ) -> dict[str, Any]:
-    t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+    t_default = _normalize_timeout_seconds(
+        config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+    )
     fetch = await _run_shell_ok(
         deps,
         "git fetch --prune origin",
@@ -74,7 +76,9 @@ async def _workspace_sync_snapshot(
         timeout_seconds=t_default,
     )
     remote_ref = f"origin/{branch}"
-    head = await _run_shell_ok(deps, "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=t_default)
+    head = await _run_shell_ok(
+        deps, "git rev-parse HEAD", cwd=repo_dir, timeout_seconds=t_default
+    )
     remote = await _run_shell_ok(
         deps,
         f"git rev-parse {shlex.quote(remote_ref)}",
@@ -101,7 +105,9 @@ async def _workspace_sync_snapshot(
         cwd=repo_dir,
         timeout_seconds=t_default,
     )
-    status_lines = [line for line in (status.get("stdout", "") or "").splitlines() if line.strip()]
+    status_lines = [
+        line for line in (status.get("stdout", "") or "").splitlines() if line.strip()
+    ]
 
     return {
         "fetch": _slim_shell_result(fetch),
@@ -187,10 +193,18 @@ async def workspace_git_diff(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
-        left = left_ref.strip() if isinstance(left_ref, str) and left_ref.strip() else None
-        right = right_ref.strip() if isinstance(right_ref, str) and right_ref.strip() else None
+        left = (
+            left_ref.strip() if isinstance(left_ref, str) and left_ref.strip() else None
+        )
+        right = (
+            right_ref.strip()
+            if isinstance(right_ref, str) and right_ref.strip()
+            else None
+        )
         path_args = ""
         if paths:
             quoted = " ".join(shlex.quote(p.strip()) for p in paths if p.strip())
@@ -274,7 +288,9 @@ async def workspace_create_branch(
     """
 
     try:
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
         base_ref = _resolve_ref(base_ref, branch=branch)
         deps = _tw()._workspace_deps()
@@ -291,7 +307,9 @@ async def workspace_create_branch(
         # 1) create the branch in the base mirror (preserves uncommitted changes)
         # 2) move that working copy directory to the new branch mirror directory
         # 3) recreate a clean base mirror directory from origin
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_base, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_base, preserve_changes=True
+        )
 
         checkout = await deps["run_shell"](
             f"git checkout -b {shlex.quote(new_branch)}",
@@ -340,7 +358,9 @@ async def workspace_create_branch(
             "base_repo_dir": base_repo_dir,
             "moved_workspace": moved,
             "checkout": _slim_shell_result(checkout),
-            "push": _slim_shell_result(push_result) if push_result is not None else None,
+            "push": _slim_shell_result(push_result)
+            if push_result is not None
+            else None,
         }
     except Exception as exc:
         return _structured_tool_error(exc, context="workspace_create_branch")
@@ -361,7 +381,9 @@ async def workspace_delete_branch(
     """
 
     try:
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
         deps = _tw()._workspace_deps()
 
@@ -381,7 +403,9 @@ async def workspace_delete_branch(
         # checked out on the branch we are about to delete.
         effective_ref = _tw()._effective_ref_for_repo(full_name, default_branch)
 
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         # Ensure the working copy is on the effective ref.
         await deps["run_shell"](
@@ -447,7 +471,9 @@ async def workspace_self_heal_branch(
     """
 
     try:
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
         deps = _tw()._workspace_deps()
 
@@ -473,7 +499,9 @@ async def workspace_self_heal_branch(
             f"Checking whether branch '{branch}' is in a safe git state (repo {full_name}).",
         )
 
-        branch_repo_dir = await deps["clone_repo"](full_name, ref=branch, preserve_changes=True)
+        branch_repo_dir = await deps["clone_repo"](
+            full_name, ref=branch, preserve_changes=True
+        )
         diag = await _diagnose_workspace_branch(
             deps, repo_dir=branch_repo_dir, expected_branch=branch
         )
@@ -630,7 +658,9 @@ async def workspace_self_heal_branch(
             # Top-level entries (trim to keep responses small).
             try:
                 entries = [
-                    e for e in sorted(os.listdir(new_repo_dir)) if e not in {".git", ".venv-mcp"}
+                    e
+                    for e in sorted(os.listdir(new_repo_dir))
+                    if e not in {".git", ".venv-mcp"}
                 ]
             except Exception:
                 entries = []
@@ -684,8 +714,12 @@ async def workspace_sync_status(
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
-        snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        snapshot = await _workspace_sync_snapshot(
+            deps, repo_dir=repo_dir, branch=effective_ref
+        )
         snapshot.update(
             {
                 "branch": effective_ref,
@@ -710,16 +744,24 @@ async def workspace_sync_to_remote(
 ) -> dict[str, Any]:
     """Reset a repo mirror (workspace clone) to match the remote branch."""
     try:
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
-        before = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+        before = await _workspace_sync_snapshot(
+            deps, repo_dir=repo_dir, branch=effective_ref
+        )
 
-        if (not discard_local_changes) and (not before["is_clean"] or before["ahead"] > 0):
+        if (not discard_local_changes) and (
+            not before["is_clean"] or before["ahead"] > 0
+        ):
             raise GitHubAPIError(
                 "Repo mirror has local changes or unpushed commits. "
                 "Re-run with discard_local_changes=true to force sync."
@@ -739,7 +781,9 @@ async def workspace_sync_to_remote(
                 timeout_seconds=t_default,
             )
 
-        after = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+        after = await _workspace_sync_snapshot(
+            deps, repo_dir=repo_dir, branch=effective_ref
+        )
         return {
             "branch": effective_ref,
             "full_name": full_name,
@@ -767,15 +811,21 @@ async def workspace_sync_bidirectional(
 ) -> dict[str, Any]:
     """Sync repo mirror changes to the remote and refresh local state from GitHub."""
     try:
-        t_default = _normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0)
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _resolve_ref(ref, branch=branch)
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         actions: list[str] = []
-        before = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+        before = await _workspace_sync_snapshot(
+            deps, repo_dir=repo_dir, branch=effective_ref
+        )
         snapshot = before
 
         if snapshot["behind"] > 0:
@@ -809,7 +859,9 @@ async def workspace_sync_bidirectional(
                     cwd=repo_dir,
                     timeout_seconds=t_default,
                 )
-            snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+            snapshot = await _workspace_sync_snapshot(
+                deps, repo_dir=repo_dir, branch=effective_ref
+            )
 
         if not snapshot["is_clean"]:
             if add_all:
@@ -832,15 +884,21 @@ async def workspace_sync_bidirectional(
                     raise _shell_error("git commit", commit_result)
                 actions.append("committed_local_changes")
 
-            snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+            snapshot = await _workspace_sync_snapshot(
+                deps, repo_dir=repo_dir, branch=effective_ref
+            )
 
         if push and snapshot["ahead"] > 0:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](push_cmd, cwd=repo_dir, timeout_seconds=t_default)
+            push_result = await deps["run_shell"](
+                push_cmd, cwd=repo_dir, timeout_seconds=t_default
+            )
             if push_result.get("exit_code", 0) != 0:
                 raise _shell_error("git push", push_result)
             actions.append("pushed_to_remote")
-            snapshot = await _workspace_sync_snapshot(deps, repo_dir=repo_dir, branch=effective_ref)
+            snapshot = await _workspace_sync_snapshot(
+                deps, repo_dir=repo_dir, branch=effective_ref
+            )
 
         return {
             "branch": effective_ref,

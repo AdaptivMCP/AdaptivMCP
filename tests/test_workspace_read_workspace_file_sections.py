@@ -13,7 +13,9 @@ class _FakeTW:
         return ref
 
     def _workspace_deps(self):
-        async def clone_repo(_full_name: str, *, ref: str, preserve_changes: bool) -> str:
+        async def clone_repo(
+            _full_name: str, *, ref: str, preserve_changes: bool
+        ) -> str:
             return self._repo_dir
 
         return {"clone_repo": clone_repo}

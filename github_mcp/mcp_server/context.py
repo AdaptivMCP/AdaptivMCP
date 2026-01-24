@@ -17,8 +17,12 @@ except Exception:  # pragma: no cover
 # Request-scoped context (used for correlation/logging/dedupe)
 # ------------------------------------------------------------------------------
 
-REQUEST_MESSAGE_ID: ContextVar[str | None] = ContextVar("REQUEST_MESSAGE_ID", default=None)
-REQUEST_SESSION_ID: ContextVar[str | None] = ContextVar("REQUEST_SESSION_ID", default=None)
+REQUEST_MESSAGE_ID: ContextVar[str | None] = ContextVar(
+    "REQUEST_MESSAGE_ID", default=None
+)
+REQUEST_SESSION_ID: ContextVar[str | None] = ContextVar(
+    "REQUEST_SESSION_ID", default=None
+)
 # Optional idempotency/dedupe keys for correlating retries across transport boundaries.
 # These are intentionally kept separate from REQUEST_ID (per-HTTP-request) and
 # MESSAGE_ID (per JSON-RPC message) because upstream clients may choose to
@@ -36,7 +40,9 @@ REQUEST_ID: ContextVar[str | None] = ContextVar("REQUEST_ID", default=None)
 
 # These are imported by main.py in your repo; keep names stable.
 REQUEST_PATH: ContextVar[str | None] = ContextVar("REQUEST_PATH", default=None)
-REQUEST_RECEIVED_AT: ContextVar[float | None] = ContextVar("REQUEST_RECEIVED_AT", default=None)
+REQUEST_RECEIVED_AT: ContextVar[float | None] = ContextVar(
+    "REQUEST_RECEIVED_AT", default=None
+)
 
 
 def get_request_context() -> dict[str, Any]:

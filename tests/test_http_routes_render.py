@@ -22,7 +22,9 @@ def test_render_owners_route_success(monkeypatch) -> None:
 def test_render_deploy_create_route_success(monkeypatch) -> None:
     observed = {}
 
-    async def _create(service_id: str, clear_cache: bool = False, commit_id=None, image_url=None):
+    async def _create(
+        service_id: str, clear_cache: bool = False, commit_id=None, image_url=None
+    ):
         observed.update(
             {
                 "service_id": service_id,

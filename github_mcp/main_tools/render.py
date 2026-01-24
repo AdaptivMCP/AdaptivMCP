@@ -118,7 +118,9 @@ def _normalize_iso8601(ts: str | None, *, name: str) -> str | None:
     return parsed.isoformat()
 
 
-async def list_render_owners(cursor: str | None = None, limit: int = 20) -> dict[str, Any]:
+async def list_render_owners(
+    cursor: str | None = None, limit: int = 20
+) -> dict[str, Any]:
     """List Render owners (workspaces + personal owners).
 
     Render's API exposes workspaces via the "owners" collection.
@@ -238,7 +240,9 @@ async def create_render_deploy(
         if image_url:
             body["imageUrl"] = image_url
 
-    return await render_request("POST", f"/services/{service_id}/deploys", json_body=body)
+    return await render_request(
+        "POST", f"/services/{service_id}/deploys", json_body=body
+    )
 
 
 async def cancel_render_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
@@ -414,7 +418,10 @@ async def get_render_logs(
         owner_id: str | None = None
         if isinstance(svc, dict):
             owner_id = (
-                svc.get("ownerId") or svc.get("owner_id") or svc.get("owner") or svc.get("ownerID")
+                svc.get("ownerId")
+                or svc.get("owner_id")
+                or svc.get("owner")
+                or svc.get("ownerID")
             )
         if not owner_id:
             raise ValueError(

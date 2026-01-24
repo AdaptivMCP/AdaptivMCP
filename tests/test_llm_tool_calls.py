@@ -60,14 +60,14 @@ def test_normalize_call_object_args_precedence_and_recursive_lists() -> None:
     ) == [("t", {"a": 1})]
 
     # parameters should be accepted.
-    assert llm_tool_calls._normalize_call_object({"tool_name": "p", "parameters": {"k": 9}}) == [
-        ("p", {"k": 9})
-    ]
+    assert llm_tool_calls._normalize_call_object(
+        {"tool_name": "p", "parameters": {"k": 9}}
+    ) == [("p", {"k": 9})]
 
     # Lists should be flattened and non-dict entries ignored.
-    assert llm_tool_calls._normalize_call_object([None, {"name": "t2", "args": {"b": 2}}]) == [
-        ("t2", {"b": 2})
-    ]
+    assert llm_tool_calls._normalize_call_object(
+        [None, {"name": "t2", "args": {"b": 2}}]
+    ) == [("t2", {"b": 2})]
 
 
 def test_extract_tool_calls_from_text_filters_and_positions() -> None:
@@ -80,7 +80,9 @@ def test_extract_tool_calls_from_text_filters_and_positions() -> None:
         "suffix"
     )
 
-    calls = llm_tool_calls.extract_tool_calls_from_text([("assistant", text), ("tool", None)])
+    calls = llm_tool_calls.extract_tool_calls_from_text(
+        [("assistant", text), ("tool", None)]
+    )
 
     assert [(c.tool_name, c.args, c.channel) for c in calls] == [
         ("alpha", {"x": 1}, "assistant"),
@@ -102,7 +104,9 @@ def test_extract_tool_calls_respects_max_calls() -> None:
         '```json\n{"tool": "c", "args": {}}\n```\n'
     )
 
-    calls = llm_tool_calls.extract_tool_calls_from_text([("assistant", text)], max_calls=1)
+    calls = llm_tool_calls.extract_tool_calls_from_text(
+        [("assistant", text)], max_calls=1
+    )
     assert [c.tool_name for c in calls] == ["a"]
 
 
@@ -138,7 +142,7 @@ def test_extract_file_blocks_from_text_and_resolve_references() -> None:
         "line2\n"
         "```\n"
         "```json\n"
-        "{\"tool\": \"set_workspace_file_contents\", \"args\": {\"path\": \"foo/bar.txt\", \"content\": \"@file:foo/bar.txt\"}}\n"
+        '{"tool": "set_workspace_file_contents", "args": {"path": "foo/bar.txt", "content": "@file:foo/bar.txt"}}\n'
         "```\n"
         "suffix"
     )

@@ -214,7 +214,9 @@ async def open_issue_context(full_name: str, issue_number: int) -> dict[str, Any
             continue
         branch_name = pr.get("head", {}).get("ref")
         text = f"{pr.get('title', '')}\n{pr.get('body', '')}"
-        if issue_str in text or (isinstance(branch_name, str) and issue_str in branch_name):
+        if issue_str in text or (
+            isinstance(branch_name, str) and issue_str in branch_name
+        ):
             target_list = open_prs if pr.get("state") == "open" else closed_prs
             target_list.append(
                 {
@@ -303,7 +305,11 @@ async def get_issue_overview(full_name: str, issue_number: int) -> dict[str, Any
         items: list[dict[str, Any]] = []
         for raw_line in text.splitlines():
             line = raw_line.lstrip()
-            if line.startswith("- [ ") or line.startswith("- [") or line.startswith("* ["):
+            if (
+                line.startswith("- [ ")
+                or line.startswith("- [")
+                or line.startswith("* [")
+            ):
                 checked = "[x]" in line.lower() or "[X]" in line
                 # Strip the leading marker (e.g. "- [ ]" / "- [x]")
                 after = line.split("]", 1)

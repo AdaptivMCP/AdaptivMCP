@@ -20,7 +20,8 @@ from .utils import _get_main_module
 def _is_git_rate_limit_error(message: str) -> bool:
     lowered = (message or "").lower()
     return any(
-        marker in lowered for marker in ("rate limit", "secondary rate limit", "abuse detection")
+        marker in lowered
+        for marker in ("rate limit", "secondary rate limit", "abuse detection")
     )
 
 
@@ -79,9 +80,15 @@ async def _run_shell(
     main_module = _get_main_module()
     proc_env = {
         **os.environ,
-        "GIT_AUTHOR_NAME": getattr(main_module, "GIT_AUTHOR_NAME", config.GIT_AUTHOR_NAME),
-        "GIT_AUTHOR_EMAIL": getattr(main_module, "GIT_AUTHOR_EMAIL", config.GIT_AUTHOR_EMAIL),
-        "GIT_COMMITTER_NAME": getattr(main_module, "GIT_COMMITTER_NAME", config.GIT_COMMITTER_NAME),
+        "GIT_AUTHOR_NAME": getattr(
+            main_module, "GIT_AUTHOR_NAME", config.GIT_AUTHOR_NAME
+        ),
+        "GIT_AUTHOR_EMAIL": getattr(
+            main_module, "GIT_AUTHOR_EMAIL", config.GIT_AUTHOR_EMAIL
+        ),
+        "GIT_COMMITTER_NAME": getattr(
+            main_module, "GIT_COMMITTER_NAME", config.GIT_COMMITTER_NAME
+        ),
         "GIT_COMMITTER_EMAIL": getattr(
             main_module, "GIT_COMMITTER_EMAIL", config.GIT_COMMITTER_EMAIL
         ),
@@ -352,7 +359,9 @@ async def _clone_repo(
             # existing repo mirror. When preserving changes we avoid destructive
             # resets, but we still enforce the requested branch when the repo mirror
             # is clean.
-            git_timeout = int(getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
+            git_timeout = int(
+                getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0
+            )
             fetch_result = await _run_git_with_retry(
                 run_shell,
                 "git fetch origin --prune",
@@ -361,7 +370,9 @@ async def _clone_repo(
                 env=git_env,
             )
             if fetch_result["exit_code"] != 0:
-                stderr = fetch_result.get("stderr", "") or fetch_result.get("stdout", "")
+                stderr = fetch_result.get("stderr", "") or fetch_result.get(
+                    "stdout", ""
+                )
                 if _is_git_auth_error(stderr) and _git_env_has_auth_header(git_env):
                     fetch_result = await _run_git_with_retry(
                         run_shell,
@@ -373,7 +384,9 @@ async def _clone_repo(
                     if fetch_result["exit_code"] == 0:
                         git_env = no_auth_env
                         return workspace_dir
-                    stderr = fetch_result.get("stderr", "") or fetch_result.get("stdout", "")
+                    stderr = fetch_result.get("stderr", "") or fetch_result.get(
+                        "stdout", ""
+                    )
                 _raise_git_auth_error("Repo mirror fetch", stderr)
                 raise GitHubAPIError(
                     f"Repo mirror fetch failed for {full_name}@{effective_ref}: {stderr}"
@@ -419,7 +432,9 @@ async def _clone_repo(
                         env=git_env,
                     )
                     if checkout.get("exit_code", 0) != 0:
-                        stderr = checkout.get("stderr", "") or checkout.get("stdout", "")
+                        stderr = checkout.get("stderr", "") or checkout.get(
+                            "stdout", ""
+                        )
                         raise GitHubAPIError(
                             "Failed to restore workspace branch checkout. "
                             f"Tried to check out '{effective_ref}'. git error: {stderr}"
@@ -430,7 +445,9 @@ async def _clone_repo(
         q_ref = shlex.quote(effective_ref)
         # When not preserving changes, ensure we are on the requested branch/ref and
         # hard-reset to match origin.
-        git_timeout = int(getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
+        git_timeout = int(
+            getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0
+        )
         refresh_steps = [
             ("git fetch origin --prune", git_timeout),
             (f"git checkout -B {q_ref} origin/{q_ref}", git_timeout),
@@ -570,7 +587,9 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
             upgrade = await run_shell(
                 f"{vpy} -m pip install --upgrade pip setuptools wheel",
                 cwd=repo_dir,
-                timeout_seconds=getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+                timeout_seconds=getattr(
+                    config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0
+                ),
             )
             if upgrade.get("exit_code", 0) != 0:
                 stderr = upgrade.get("stderr", "") or upgrade.get("stdout", "")
@@ -637,11 +656,15 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
         )
         if result.get("exit_code", 0) != 0:
             # Fallback for older/stripped venv modules.
-            create_cmd2 = f"{shlex.quote(sys.executable)} -m venv {shlex.quote(venv_dir)}"
+            create_cmd2 = (
+                f"{shlex.quote(sys.executable)} -m venv {shlex.quote(venv_dir)}"
+            )
             result2 = await run_shell(
                 create_cmd2,
                 cwd=repo_dir,
-                timeout_seconds=getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0),
+                timeout_seconds=getattr(
+                    config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0
+                ),
             )
             if result2.get("exit_code", 0) != 0:
                 stderr = result2.get("stderr", "") or result2.get("stdout", "")
@@ -895,7 +918,9 @@ def _parse_rangeless_git_patch(patch: str) -> list[dict[str, Any]]:
         if not hunks:
             raise GitHubAPIError("Malformed patch: no hunks found for diff")
 
-        blocks.append({"action": "update", "path": path, "move_to": move_to, "hunks": hunks})
+        blocks.append(
+            {"action": "update", "path": path, "move_to": move_to, "hunks": hunks}
+        )
 
     if not blocks:
         raise GitHubAPIError("Malformed patch: no diffs found")
@@ -998,7 +1023,9 @@ def _find_subsequence(lines: list[str], subseq: list[str], start: int) -> int | 
     return None
 
 
-def _apply_patch_hunks(lines: list[str], hunks: list[list[str]], path: str) -> list[str]:
+def _apply_patch_hunks(
+    lines: list[str], hunks: list[list[str]], path: str
+) -> list[str]:
     search_start = 0
     for hunk in hunks:
         old_seq = [line[1:] for line in hunk if line[:1] in (" ", "-")]
@@ -1074,7 +1101,9 @@ def _parse_apply_patch_blocks(patch: str) -> list[dict[str, Any]]:
                 idx += 1
             if current_hunk:
                 hunks.append(current_hunk)
-            blocks.append({"action": "update", "path": path, "move_to": move_to, "hunks": hunks})
+            blocks.append(
+                {"action": "update", "path": path, "move_to": move_to, "hunks": hunks}
+            )
             continue
 
         raise GitHubAPIError("Unexpected patch content")
@@ -1167,12 +1196,16 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
         patch = patch + "\n"
 
     # A unique temporary file avoids cross-call interference.
-    patch_fd, patch_path = tempfile.mkstemp(prefix="mcp_patch_", suffix=".diff", dir=repo_dir)
+    patch_fd, patch_path = tempfile.mkstemp(
+        prefix="mcp_patch_", suffix=".diff", dir=repo_dir
+    )
     try:
         with os.fdopen(patch_fd, "w", encoding="utf-8") as f:
             f.write(patch)
 
-        apply_timeout = int(getattr(config, "WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", 0) or 0)
+        apply_timeout = int(
+            getattr(config, "WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS", 0) or 0
+        )
         apply_result = await _run_shell(
             f"git apply --recount --whitespace=nowarn {shlex.quote(patch_path)}",
             cwd=repo_dir,
@@ -1186,7 +1219,11 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
             code = "PATCH_APPLY_FAILED"
 
             # Heuristics to improve categorization for LLM + dev tooling.
-            if "only garbage" in lowered or "corrupt patch" in lowered or "malformed" in lowered:
+            if (
+                "only garbage" in lowered
+                or "corrupt patch" in lowered
+                or "malformed" in lowered
+            ):
                 category = "validation"
                 code = "PATCH_MALFORMED"
             elif "does not exist" in lowered or "no such file" in lowered:
@@ -1202,7 +1239,9 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
                     "Standard unified diff hunk headers look like '@@ -1,3 +1,3 @@', "
                     "or use the MCP tool patch format ('*** Begin Patch')."
                 )
-            exc = GitHubAPIError(f"git apply failed while preparing workspace: {stderr}")
+            exc = GitHubAPIError(
+                f"git apply failed while preparing workspace: {stderr}"
+            )
             exc.category = category
             exc.code = code
             exc.origin = "workspace_patch"

@@ -67,7 +67,9 @@ def _parse_unified_diff_hunks(
     return {p: hs for p, hs in files.items() if hs}
 
 
-def _excerpt_window(*, start: int, length: int, context: int, max_lines: int) -> tuple[int, int]:
+def _excerpt_window(
+    *, start: int, length: int, context: int, max_lines: int
+) -> tuple[int, int]:
     """Compute (start_line, max_lines) for an excerpt window around a hunk."""
 
     if start < 1:
@@ -166,7 +168,9 @@ async def workspace_apply_ops_and_open_pr(
     try:
         if operations is None:
             operations = []
-        if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
+        if not isinstance(operations, list) or any(
+            not isinstance(op, dict) for op in operations
+        ):
             raise TypeError("operations must be a list of dicts")
         operations = _normalize_workspace_operations(operations)
         if not operations:
@@ -313,7 +317,10 @@ async def workspace_apply_ops_and_open_pr(
             quality_res = await tw.run_quality_suite(
                 **_filter_kwargs_for_callable(tw.run_quality_suite, quality_call)
             )
-            if isinstance(quality_res, dict) and quality_res.get("status") in {"failed", "error"}:
+            if isinstance(quality_res, dict) and quality_res.get("status") in {
+                "failed",
+                "error",
+            }:
                 return _error_return(
                     steps=steps,
                     action="Quality suite",
@@ -439,9 +446,13 @@ async def workspace_manage_folders_and_open_pr(
         if delete_paths is None:
             delete_paths = []
 
-        if not isinstance(create_paths, list) or any(not isinstance(p, str) for p in create_paths):
+        if not isinstance(create_paths, list) or any(
+            not isinstance(p, str) for p in create_paths
+        ):
             raise TypeError("create_paths must be a list of strings")
-        if not isinstance(delete_paths, list) or any(not isinstance(p, str) for p in delete_paths):
+        if not isinstance(delete_paths, list) or any(
+            not isinstance(p, str) for p in delete_paths
+        ):
             raise TypeError("delete_paths must be a list of strings")
 
         def _clean_paths(values: list[str]) -> list[str]:
@@ -492,7 +503,9 @@ async def workspace_manage_folders_and_open_pr(
             operations.append(op)
 
         if not operations:
-            raise ValueError("At least one create_paths or delete_paths entry is required")
+            raise ValueError(
+                "At least one create_paths or delete_paths entry is required"
+            )
 
         tw = _tw()
         extra_flow = dict(workflow_args or {})
@@ -518,7 +531,9 @@ async def workspace_manage_folders_and_open_pr(
             **_filter_kwargs_for_callable(tw.workspace_apply_ops_and_open_pr, flow_call)
         )
     except Exception as exc:
-        return _structured_tool_error(exc, context="workspace_manage_folders_and_open_pr")
+        return _structured_tool_error(
+            exc, context="workspace_manage_folders_and_open_pr"
+        )
 
 
 @mcp_tool(write_action=False)
@@ -605,7 +620,9 @@ async def workspace_change_report(
             )
 
         diff_text = (diff_res.get("diff") if isinstance(diff_res, dict) else "") or ""
-        numstat = (diff_res.get("numstat") if isinstance(diff_res, dict) else None) or []
+        numstat = (
+            diff_res.get("numstat") if isinstance(diff_res, dict) else None
+        ) or []
 
         hunks_by_path = _parse_unified_diff_hunks(
             diff_text,
@@ -620,7 +637,9 @@ async def workspace_change_report(
                 continue
 
             if path not in hunks_by_path:
-                files.append({"path": path, "numstat": entry, "hunks": [], "excerpts": []})
+                files.append(
+                    {"path": path, "numstat": entry, "hunks": [], "excerpts": []}
+                )
                 continue
 
             excerpts: list[dict[str, Any]] = []
@@ -723,7 +742,9 @@ async def workspace_change_report(
         for path, hunks in hunks_by_path.items():
             if any(f.get("path") == path for f in files):
                 continue
-            files.append({"path": path, "numstat": None, "hunks": hunks, "excerpts": []})
+            files.append(
+                {"path": path, "numstat": None, "hunks": hunks, "excerpts": []}
+            )
 
         _step(steps, "Assemble", f"Prepared report for {len(files)} file(s).")
 
@@ -734,7 +755,9 @@ async def workspace_change_report(
             "head_ref": effective_head,
             "numstat": numstat,
             "files": files,
-            "truncated": bool(diff_res.get("truncated")) if isinstance(diff_res, dict) else False,
+            "truncated": bool(diff_res.get("truncated"))
+            if isinstance(diff_res, dict)
+            else False,
             "steps": steps,
         }
         if include_diff:
@@ -742,7 +765,10 @@ async def workspace_change_report(
         return out
     except Exception as exc:
         _step(
-            steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error"
+            steps,
+            "Error",
+            f"Unhandled exception: {exc.__class__.__name__}: {exc}",
+            status="error",
         )
         payload = _structured_tool_error(exc, context="workspace_change_report")
         if isinstance(payload, dict) and "steps" not in payload:

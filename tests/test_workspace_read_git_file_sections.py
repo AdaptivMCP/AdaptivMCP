@@ -13,7 +13,9 @@ class _FakeTW:
         return ref
 
     def _workspace_deps(self) -> dict[str, Any]:
-        async def clone_repo(_full_name: str, *, ref: str, preserve_changes: bool) -> str:
+        async def clone_repo(
+            _full_name: str, *, ref: str, preserve_changes: bool
+        ) -> str:
             self.calls.append(
                 {
                     "fn": "clone_repo",
@@ -28,13 +30,17 @@ class _FakeTW:
 
 
 @pytest.mark.anyio
-async def test_read_git_file_sections_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_read_git_file_sections_happy_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import fs
 
     fake = _FakeTW()
     monkeypatch.setattr(fs, "_tw", lambda: fake)
 
-    def _fake_git_show(*args: Any, **kwargs: Any) -> tuple[bool, dict[str, Any], str | None]:
+    def _fake_git_show(
+        *args: Any, **kwargs: Any
+    ) -> tuple[bool, dict[str, Any], str | None]:
         return (
             True,
             {
@@ -103,7 +109,9 @@ async def test_read_git_file_sections_missing(monkeypatch: pytest.MonkeyPatch) -
     fake = _FakeTW()
     monkeypatch.setattr(fs, "_tw", lambda: fake)
 
-    def _fake_git_show(*args: Any, **kwargs: Any) -> tuple[bool, dict[str, Any], str | None]:
+    def _fake_git_show(
+        *args: Any, **kwargs: Any
+    ) -> tuple[bool, dict[str, Any], str | None]:
         return (
             False,
             {

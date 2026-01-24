@@ -27,7 +27,9 @@ def test_resolve_full_name_requires_owner_and_repo_together() -> None:
 def test_resolve_full_name_accepts_owner_repo_and_strips() -> None:
     from github_mcp.workspace_tools._shared import _resolve_full_name
 
-    assert _resolve_full_name(None, owner="  octo  ", repo="  example  ") == "octo/example"
+    assert (
+        _resolve_full_name(None, owner="  octo  ", repo="  example  ") == "octo/example"
+    )
 
 
 def test_ensure_workspace_clone_schema_does_not_require_full_name(monkeypatch) -> None:

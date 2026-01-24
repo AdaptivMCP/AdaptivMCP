@@ -18,7 +18,15 @@ def _step(
     status: str = "ok",
     **extra: Any,
 ) -> None:
-    steps.append({"ts": time.time(), "action": action, "detail": detail, "status": status, **extra})
+    steps.append(
+        {
+            "ts": time.time(),
+            "action": action,
+            "detail": detail,
+            "status": status,
+            **extra,
+        }
+    )
 
 
 def _error_return(
@@ -55,7 +63,9 @@ async def workspace_task_plan(
     try:
         if queries is None:
             queries = []
-        if not isinstance(queries, list) or any(not isinstance(q, str) for q in queries):
+        if not isinstance(queries, list) or any(
+            not isinstance(q, str) for q in queries
+        ):
             raise TypeError("queries must be a list[str]")
         if not isinstance(max_tree_files, int) or max_tree_files < 1:
             raise ValueError("max_tree_files must be an int >= 1")
@@ -67,7 +77,11 @@ async def workspace_task_plan(
         tw = _tw()
         effective_ref = tw._effective_ref_for_repo(full_name, ref)
 
-        _step(steps, "Plan", f"Collecting planning context for '{full_name}' at '{effective_ref}'.")
+        _step(
+            steps,
+            "Plan",
+            f"Collecting planning context for '{full_name}' at '{effective_ref}'.",
+        )
 
         _step(steps, "Tree scan", "Scanning workspace tree (bounded).")
         tree = await tw.scan_workspace_tree(
@@ -134,7 +148,10 @@ async def workspace_task_plan(
         }
     except Exception as exc:
         _step(
-            steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error"
+            steps,
+            "Error",
+            f"Unhandled exception: {exc.__class__.__name__}: {exc}",
+            status="error",
         )
         payload = _structured_tool_error(exc, context="workspace_task_plan")
         if isinstance(payload, dict) and "steps" not in payload:
@@ -159,7 +176,9 @@ async def workspace_task_apply_edits(
     try:
         if operations is None:
             operations = []
-        if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
+        if not isinstance(operations, list) or any(
+            not isinstance(op, dict) for op in operations
+        ):
             raise TypeError("operations must be a list of dicts")
         if not operations:
             raise ValueError("operations must contain at least one operation")
@@ -219,7 +238,10 @@ async def workspace_task_apply_edits(
         }
     except Exception as exc:
         _step(
-            steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error"
+            steps,
+            "Error",
+            f"Unhandled exception: {exc.__class__.__name__}: {exc}",
+            status="error",
         )
         payload = _structured_tool_error(exc, context="workspace_task_apply_edits")
         if isinstance(payload, dict) and "steps" not in payload:
@@ -268,14 +290,18 @@ async def workspace_task_execute(
     try:
         if operations is None:
             operations = []
-        if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
+        if not isinstance(operations, list) or any(
+            not isinstance(op, dict) for op in operations
+        ):
             raise TypeError("operations must be a list of dicts")
         if not operations:
             raise ValueError("operations must contain at least one operation")
 
         if plan_queries is None:
             plan_queries = []
-        if not isinstance(plan_queries, list) or any(not isinstance(q, str) for q in plan_queries):
+        if not isinstance(plan_queries, list) or any(
+            not isinstance(q, str) for q in plan_queries
+        ):
             raise TypeError("plan_queries must be a list[str]")
 
         if finalize_mode not in {"pr", "commit_only"}:
@@ -294,7 +320,9 @@ async def workspace_task_execute(
 
         # Plan: lightweight search on base.
         searches: list[dict[str, Any]] = []
-        for q in [qq.strip() for qq in plan_queries if isinstance(qq, str) and qq.strip()]:
+        for q in [
+            qq.strip() for qq in plan_queries if isinstance(qq, str) and qq.strip()
+        ]:
             _step(steps, "Plan search", f"rg: {q}")
             res = await tw.rg_search_workspace(
                 full_name=full_name,
@@ -337,12 +365,17 @@ async def workspace_task_execute(
             _step(steps, "Sync base", "Base workspace clone is ready.")
         else:
             _step(
-                steps, "Sync base", "Skipped base sync (sync_base_to_remote=false).", status="skip"
+                steps,
+                "Sync base",
+                "Skipped base sync (sync_base_to_remote=false).",
+                status="skip",
             )
 
         # Create a unique feature branch if none was provided.
         if feature_ref is None or not str(feature_ref).strip():
-            feature_ref = f"task/{_safe_branch_slug(commit_message)}-{tw.uuid.uuid4().hex[:10]}"
+            feature_ref = (
+                f"task/{_safe_branch_slug(commit_message)}-{tw.uuid.uuid4().hex[:10]}"
+            )
         feature_ref = _safe_branch_slug(str(feature_ref))
 
         _step(
@@ -437,7 +470,10 @@ async def workspace_task_execute(
             quality_res = await tw.run_quality_suite(
                 **_filter_kwargs_for_callable(tw.run_quality_suite, quality_call)
             )
-            if isinstance(quality_res, dict) and quality_res.get("status") in {"failed", "error"}:
+            if isinstance(quality_res, dict) and quality_res.get("status") in {
+                "failed",
+                "error",
+            }:
                 return _error_return(
                     steps=steps,
                     action="Quality suite",
@@ -452,7 +488,10 @@ async def workspace_task_execute(
             _step(steps, "Quality suite", "Quality suite passed.")
         else:
             _step(
-                steps, "Quality suite", "Skipped quality suite (run_quality=false).", status="skip"
+                steps,
+                "Quality suite",
+                "Skipped quality suite (run_quality=false).",
+                status="skip",
             )
 
         # Change report + PR summary are useful in both finalize modes.
@@ -485,7 +524,9 @@ async def workspace_task_execute(
                 **extra_pr,
             }
             finalize_res = await tw.commit_and_open_pr_from_workspace(
-                **_filter_kwargs_for_callable(tw.commit_and_open_pr_from_workspace, pr_call)
+                **_filter_kwargs_for_callable(
+                    tw.commit_and_open_pr_from_workspace, pr_call
+                )
             )
             if isinstance(finalize_res, dict) and finalize_res.get("status") == "error":
                 return _error_return(
@@ -555,7 +596,10 @@ async def workspace_task_execute(
         }
     except Exception as exc:
         _step(
-            steps, "Error", f"Unhandled exception: {exc.__class__.__name__}: {exc}", status="error"
+            steps,
+            "Error",
+            f"Unhandled exception: {exc.__class__.__name__}: {exc}",
+            status="error",
         )
         payload = _structured_tool_error(exc, context="workspace_task_execute")
         if isinstance(payload, dict) and "steps" not in payload:

@@ -253,7 +253,9 @@ def _git_state_markers(repo_dir: str) -> dict[str, bool]:
         "merge_in_progress": os.path.exists(os.path.join(git_dir, "MERGE_HEAD")),
         "rebase_in_progress": os.path.isdir(os.path.join(git_dir, "rebase-apply"))
         or os.path.isdir(os.path.join(git_dir, "rebase-merge")),
-        "cherry_pick_in_progress": os.path.exists(os.path.join(git_dir, "CHERRY_PICK_HEAD")),
+        "cherry_pick_in_progress": os.path.exists(
+            os.path.join(git_dir, "CHERRY_PICK_HEAD")
+        ),
         "revert_in_progress": os.path.exists(os.path.join(git_dir, "REVERT_HEAD")),
     }
 
@@ -283,7 +285,9 @@ async def _diagnose_workspace_branch(
         "git diff --name-only --diff-filter=U", cwd=repo_dir, timeout_seconds=t_default
     )
     conflicted_files = [
-        line.strip() for line in (conflicted.get("stdout", "") or "").splitlines() if line.strip()
+        line.strip()
+        for line in (conflicted.get("stdout", "") or "").splitlines()
+        if line.strip()
     ]
     diag["conflicted_files"] = conflicted_files
     diag["has_conflicts"] = bool(conflicted_files)
@@ -314,17 +318,23 @@ async def _delete_branch_via_workspace(
         raise GitHubAPIError(f"Refusing to delete default branch {default_branch!r}")
 
     effective_ref = _tw()._effective_ref_for_repo(full_name, default_branch)
-    repo_dir = await deps["clone_repo"](full_name, ref=effective_ref, preserve_changes=True)
+    repo_dir = await deps["clone_repo"](
+        full_name, ref=effective_ref, preserve_changes=True
+    )
     await deps["run_shell"](
         f"git checkout {shlex.quote(effective_ref)}",
         cwd=repo_dir,
-        timeout_seconds=_normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+        timeout_seconds=_normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        ),
     )
 
     delete_remote = await deps["run_shell"](
         f"git push origin --delete {shlex.quote(branch)}",
         cwd=repo_dir,
-        timeout_seconds=_normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+        timeout_seconds=_normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        ),
     )
     if delete_remote.get("exit_code", 0) != 0:
         stderr = delete_remote.get("stderr", "") or delete_remote.get("stdout", "")
@@ -333,7 +343,9 @@ async def _delete_branch_via_workspace(
     delete_local = await deps["run_shell"](
         f"git branch -D {shlex.quote(branch)}",
         cwd=repo_dir,
-        timeout_seconds=_normalize_timeout_seconds(config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0),
+        timeout_seconds=_normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        ),
     )
     return {
         "default_branch": default_branch,
@@ -354,8 +366,12 @@ def _workspace_deps() -> dict[str, Any]:
     main_module = _get_main_module()
     clone_repo_fn = getattr(main_module, "_clone_repo", _clone_repo)
     base_run_shell = getattr(main_module, "_run_shell", _run_shell)
-    prepare_venv_fn = getattr(main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv)
-    stop_venv_fn = getattr(main_module, "_stop_workspace_virtualenv", _stop_workspace_virtualenv)
+    prepare_venv_fn = getattr(
+        main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv
+    )
+    stop_venv_fn = getattr(
+        main_module, "_stop_workspace_virtualenv", _stop_workspace_virtualenv
+    )
     venv_status_fn = getattr(
         main_module, "_workspace_virtualenv_status", _workspace_virtualenv_status
     )

@@ -32,4 +32,3 @@ def test_tool_catalog_uses_relative_uris_for_stability() -> None:
         href = res.get("href")
         assert isinstance(href, str)
         assert "/tools/" in href
-

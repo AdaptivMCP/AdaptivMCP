@@ -63,7 +63,8 @@ def build_session_anchor_endpoint() -> Callable[[Request], Response]:
 def build_session_assert_endpoint() -> Callable[[Request], Response]:
     async def _endpoint(request: Request) -> Response:
         expected = normalize_anchor(
-            request.query_params.get("anchor") or request.headers.get("x-session-anchor")
+            request.query_params.get("anchor")
+            or request.headers.get("x-session-anchor")
         )
         current, payload = get_server_anchor()
         if not expected:

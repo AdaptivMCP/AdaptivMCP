@@ -17,7 +17,9 @@ def test_decode_zipped_job_logs_reports_errors() -> None:
     assert result.startswith("[error decoding job logs archive:")
 
 
-def test_get_job_logs_uses_fallback_client_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_job_logs_uses_fallback_client_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     @asynccontextmanager
     async def _noop_semaphore() -> None:
         yield
@@ -37,12 +39,16 @@ def test_get_job_logs_uses_fallback_client_factory(monkeypatch: pytest.MonkeyPat
         def __init__(self) -> None:
             self.requests: list[object] = []
 
-        def build_request(self, method: str, url: str, headers: dict[str, str]) -> dict[str, str]:
+        def build_request(
+            self, method: str, url: str, headers: dict[str, str]
+        ) -> dict[str, str]:
             request = {"method": method, "url": url, "headers": headers}
             self.requests.append(request)
             return request
 
-        async def send(self, request: object, follow_redirects: bool = True) -> DummyResponse:
+        async def send(
+            self, request: object, follow_redirects: bool = True
+        ) -> DummyResponse:
             self.requests.append({"send": follow_redirects, "request": request})
             return DummyResponse()
 
@@ -53,7 +59,9 @@ def test_get_job_logs_uses_fallback_client_factory(monkeypatch: pytest.MonkeyPat
         return DummyClient()
 
     monkeypatch.setattr(workflows, "_main", lambda: dummy)
-    monkeypatch.setattr("github_mcp.http_clients._github_client_instance", _fake_factory)
+    monkeypatch.setattr(
+        "github_mcp.http_clients._github_client_instance", _fake_factory
+    )
 
     result = asyncio.run(workflows.get_job_logs("octo/repo", 123))
 

@@ -52,7 +52,9 @@ async def test_open_pr_for_existing_branch_returns_noop_on_no_commits(
         return {"json": []}
 
     monkeypatch.setattr(pull_requests, "create_pull_request", fake_create_pull_request)
-    monkeypatch.setattr(main_mod, "list_pull_requests", fake_list_pull_requests, raising=False)
+    monkeypatch.setattr(
+        main_mod, "list_pull_requests", fake_list_pull_requests, raising=False
+    )
 
     result = await pull_requests.open_pr_for_existing_branch(
         full_name="octo-org/octo-repo",
@@ -101,7 +103,9 @@ async def test_open_pr_for_existing_branch_reuses_existing_pr_on_conflict(
         }
 
     monkeypatch.setattr(pull_requests, "create_pull_request", fake_create_pull_request)
-    monkeypatch.setattr(main_mod, "list_pull_requests", fake_list_pull_requests, raising=False)
+    monkeypatch.setattr(
+        main_mod, "list_pull_requests", fake_list_pull_requests, raising=False
+    )
 
     result = await pull_requests.open_pr_for_existing_branch(
         full_name="octo-org/octo-repo",
