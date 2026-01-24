@@ -176,7 +176,10 @@ _PARAM_DOCS: dict[str, dict[str, Any]] = {
 # Parameters that should remain required in the public schema even if the
 # Python signature supplies a default for backwards compatibility.
 _REQUIRED_PARAM_OVERRIDES: dict[str, set[str]] = {
+    # Some tools keep defaults in the Python signature for backwards compatibility,
+    # but enforce non-empty values at runtime. Keep the public schema honest.
     "search_workspace": {"query"},
+    "rg_search_workspace": {"query"},
 }
 
 
