@@ -1,9 +1,0 @@
-[bandit]
-# Bandit is valuable, but this repository contains infrastructure/tooling code
-# where some patterns (e.g., subprocess for calling git, best-effort cleanup,
-# and non-cryptographic randomness for backoff jitter) are intentional.
-#
-# We keep Bandit in CI, but disable a small set of low-signal checks to avoid
-# drowning out real findings.
-exclude = .venv,.venv-mcp,build,dist
-skips = B101,B104,B105,B110,B112,B311,B404,B603,B607
