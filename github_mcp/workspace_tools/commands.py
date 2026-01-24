@@ -196,14 +196,30 @@ def _normalize_command_payload(
     - command_lines_out: list of command lines (never contains newlines)
     """
 
-    requested = command
+    # Prefer permissive coercion over raising on common client mistakes.
+    requested = (
+        command
+        if isinstance(command, str)
+        else (str(command) if command is not None else "")
+    )
     if command_lines is not None:
-        if not isinstance(command_lines, list) or any(
-            (not isinstance(line, str)) for line in command_lines
-        ):
-            raise ValueError("command_lines must be a list[str]")
-        requested = chr(10).join(command_lines)
-        lines_out = list(command_lines)
+        # Accept strings, list/tuples, or any iterable. Coerce each element to str.
+        if isinstance(command_lines, str):
+            raw_lines: list[str] = command_lines.splitlines()
+        elif isinstance(command_lines, (list, tuple)):
+            raw_lines = [line if isinstance(line, str) else str(line) for line in command_lines]
+        else:
+            try:
+                raw_lines = [str(line) for line in list(command_lines)]  # type: ignore[arg-type]
+            except Exception:
+                raw_lines = []
+
+        # Ensure the output list never contains embedded newlines.
+        lines_out: list[str] = []
+        for line in raw_lines:
+            split = (line or "").splitlines()
+            lines_out.extend(split if split else [""])
+        requested = "\n".join(lines_out)
     else:
         lines_out = requested.splitlines() if requested else []
 
@@ -220,11 +236,13 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
     """
 
     repo_real = os.path.realpath(repo_dir)
-    strict = _env_flag("ADAPTIV_MCP_STRICT_CONTRACTS", default=False)
     if not workdir:
         return repo_real
     if not isinstance(workdir, str):
-        raise ValueError("workdir must be a string")
+        try:
+            workdir = str(workdir)
+        except Exception:
+            return repo_real
 
     normalized = workdir.strip().replace("\\", "/")
     if not normalized or normalized in {".", "./", "/"}:
@@ -235,8 +253,6 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
         candidate_abs = os.path.realpath(normalized)
         if candidate_abs == repo_real or candidate_abs.startswith(repo_real + os.sep):
             if not os.path.isdir(candidate_abs):
-                if strict:
-                    raise ValueError("workdir must point to a directory")
                 return repo_real
             return candidate_abs
 
@@ -261,10 +277,9 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
 
     candidate = os.path.realpath(os.path.join(repo_real, normalized))
     if candidate != repo_real and not candidate.startswith(repo_real + os.sep):
-        raise ValueError("workdir must resolve inside the workspace repository")
+        # Clamp traversal/escape attempts back to repo root.
+        return repo_real
     if not os.path.isdir(candidate):
-        if strict:
-            raise ValueError("workdir must point to a directory")
         return repo_real
     return candidate
 
@@ -608,11 +623,16 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
     Prevent absolute paths and path traversal outside the repo mirror.
     """
 
+    # Be permissive: coerce common non-string inputs instead of raising.
     if not isinstance(path, str):
-        raise ValueError("path must be a string")
-    normalized = path.strip().replace("\\", "/")
+        try:
+            path = str(path)
+        except Exception:
+            path = ""
+
+    normalized = (path or "").strip().replace("\\", "/")
     if not normalized:
-        raise ValueError("path must be non-empty")
+        return ".mcp_tmp/invalid_path"
     repo_real = os.path.realpath(repo_dir)
 
     # Accept absolute paths as long as they resolve inside the repo mirror.
@@ -620,14 +640,14 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
         candidate = os.path.realpath(normalized)
         if candidate != repo_real and candidate.startswith(repo_real + os.sep):
             rel = os.path.relpath(candidate, repo_real).replace("\\", "/")
-            if not rel or rel in {".", "./"}:
-                raise ValueError("path must be repo-relative")
-            return rel
+            if rel and rel not in {".", "./"}:
+                return rel
+            return ".mcp_tmp/invalid_path"
 
         # Common caller intent: "/foo/bar" means repo-relative "foo/bar".
         normalized = normalized.lstrip("/")
         if not normalized:
-            raise ValueError("path must be repo-relative")
+            return ".mcp_tmp/invalid_path"
 
     # Clamp traversal attempts back to repo root so LLM callers don't hard-fail.
     parts: list[str] = []
@@ -641,12 +661,12 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
         parts.append(part)
     normalized = "/".join(parts)
     if not normalized:
-        raise ValueError("path must be repo-relative")
+        return ".mcp_tmp/invalid_path"
 
     candidate = os.path.realpath(os.path.join(repo_real, normalized))
     repo_real = os.path.realpath(repo_dir)
     if candidate == repo_real or not candidate.startswith(repo_real + os.sep):
-        raise ValueError("path must resolve inside the repo mirror")
+        return ".mcp_tmp/invalid_path"
     return normalized
 
 
@@ -683,12 +703,23 @@ async def run_python(
         timeout_seconds, config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS
     )
 
-    if not isinstance(script, str) or not script.strip():
-        raise ValueError("script must be a non-empty string")
+    # Be permissive with tool inputs: coerce and let downstream execution handle failures.
+    if not isinstance(script, str):
+        try:
+            script = str(script)
+        except Exception:
+            script = ""
 
     if args is not None:
-        if not isinstance(args, list) or any(not isinstance(a, str) for a in args):
-            raise ValueError("args must be a list[str]")
+        if isinstance(args, str):
+            args = [args]
+        elif isinstance(args, (list, tuple)):
+            args = [a if isinstance(a, str) else str(a) for a in args]
+        else:
+            try:
+                args = [str(a) for a in list(args)]  # type: ignore[arg-type]
+            except Exception:
+                args = None
 
     env: dict[str, str] | None = None
     created_temp_file = False
