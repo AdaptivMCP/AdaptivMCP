@@ -97,15 +97,29 @@ def _tool_catalog(
         catalog_error = str(exc) or "Failed to build tool catalog."
         catalog_errors = None
 
-    resources = []
+    # NOTE: Keep resource URIs stable across reverse-proxy path rewrites.
+    #
+    # Some deployments are mounted under an ephemeral path prefix (for example,
+    # a per-link id). If we embed that prefix in the resource URI, clients that
+    # cache the catalog can become "stuck" calling stale URLs when the prefix
+    # changes mid-workflow.
+    #
+    # To prevent that failure mode, we expose a *relative* `uri` (no leading
+    # slash) that a client can resolve against its current base URL.
+    #
+    # We also include a best-effort `href` that is fully qualified to the
+    # current request base path for clients that want an explicit HTTP path.
+    resources: list[dict[str, Any]] = []
     base_path = _normalize_base_path(base_path)
+    href_prefix = f"{base_path}/tools" if base_path else "/tools"
     for entry in tools:
         name = entry.get("name")
         if not name:
             continue
         resources.append(
             {
-                "uri": f"{base_path}/tools/{name}",
+                "uri": f"tools/{name}",
+                "href": f"{href_prefix}/{name}",
                 "name": name,
                 "description": entry.get("description"),
                 "mimeType": "application/json",

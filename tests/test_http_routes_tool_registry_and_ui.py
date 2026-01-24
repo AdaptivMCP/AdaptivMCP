@@ -25,6 +25,19 @@ def test_tools_endpoint_includes_tools_and_resources() -> None:
     assert isinstance(payload.get("tools"), list)
     assert isinstance(payload.get("resources"), list)
 
+    # Resource URIs should be stable across reverse-proxy base path changes.
+    # We intentionally expose relative URIs so callers resolve against their
+    # current base URL instead of caching an ephemeral prefix.
+    resources = payload.get("resources") or []
+    assert resources, "Expected at least one resource entry"
+    first = resources[0]
+    assert isinstance(first.get("uri"), str)
+    assert first["uri"].startswith("tools/")
+    assert not first["uri"].startswith("/")
+    # href remains a best-effort absolute path for diagnostics.
+    assert isinstance(first.get("href"), str)
+    assert first["href"].endswith(f"/tools/{first.get('name')}")
+
 
 def test_ui_routes_exist() -> None:
     client = TestClient(main.app)
