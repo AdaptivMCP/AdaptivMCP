@@ -29,15 +29,15 @@ def test_normalize_repo_path_for_repo_strips_raw_github_url():
     "value",
     ["/", "", ".", "./", "https://github.com/octo-org/octo-repo"],
 )
-def test_normalize_repo_path_for_repo_repo_root_like_values_strict(value, monkeypatch):
+def test_normalize_repo_path_for_repo_repo_root_like_values_are_permissive(
+    value, monkeypatch
+):
     from github_mcp import utils
 
     full_name = "octo-org/octo-repo"
+    # Legacy env var should not change behavior; normalization is always permissive.
     monkeypatch.setenv("ADAPTIV_MCP_STRICT_CONTRACTS", "1")
-    with pytest.raises(Exception) as excinfo:
-        utils._normalize_repo_path_for_repo(full_name, value)
-
-    assert "expected a repository-relative file path" in str(excinfo.value)
+    assert utils._normalize_repo_path_for_repo(full_name, value) == ""
 
 
 @pytest.mark.parametrize(

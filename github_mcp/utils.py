@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from .exceptions import GitHubAPIError, ToolPreflightValidationError
+from .exceptions import GitHubAPIError
 
 
 def _get_main_module():
@@ -146,18 +146,7 @@ def _default_branch_for_repo(full_name: str) -> str:
 def _normalize_repo_path(path: str) -> str:
     """Normalize a repo-relative path and enforce basic safety invariants."""
 
-    # Contract policy:
-    # Historically we raised ToolPreflightValidationError for any non-string or
-    # empty/invalid paths. For a developer-facing, self-hosted MCP server we
-    # prefer to be permissive and avoid hard-failing on common client mistakes.
-    #
-    # Strict mode can be re-enabled via:
-    #   ADAPTIV_MCP_STRICT_CONTRACTS=1
-    strict = _env_flag("ADAPTIV_MCP_STRICT_CONTRACTS", default=False)
-
     if not isinstance(path, str):
-        if strict:
-            raise ToolPreflightValidationError("<server>", "path must be a string")
         # Best-effort stringification.
         try:
             path = str(path)
@@ -171,10 +160,8 @@ def _normalize_repo_path(path: str) -> str:
     # Normalize segments.
     #
     # Safety policy: disallow escaping the repository root.
-    # - In strict mode, reject any usage of "..".
-    # - In permissive mode (default), *clamp* traversal attempts back to the
-    #   repository root by treating ".." as "pop a segment if possible" and
-    #   otherwise ignoring it.
+    # We *clamp* traversal attempts back to the repository root by treating
+    # ".." as "pop a segment if possible" and otherwise ignoring it.
     #
     # This keeps the server safe while preventing brittle "path rejection"
     # failures when LLM clients accidentally include parent-directory segments.
@@ -183,11 +170,6 @@ def _normalize_repo_path(path: str) -> str:
         if part in ("", "."):
             continue
         if part == "..":
-            if strict:
-                raise ToolPreflightValidationError(
-                    "<server>",
-                    f"Invalid path {path!r}: parent-directory segments are not allowed.",
-                )
             if parts:
                 parts.pop()
             continue
@@ -195,10 +177,6 @@ def _normalize_repo_path(path: str) -> str:
 
     normalized = "/".join(parts)
     if not normalized:
-        if strict:
-            raise ToolPreflightValidationError(
-                "<server>", "Path must not be empty after normalization."
-            )
         # Permissive mode: allow empty/root path and let higher-level tools
         # decide whether that is meaningful for the specific operation.
         return ""
@@ -209,11 +187,7 @@ def _normalize_repo_path(path: str) -> str:
 def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
     """Normalize a repo-relative path while forgiving common URL prefixes."""
 
-    strict = _env_flag("ADAPTIV_MCP_STRICT_CONTRACTS", default=False)
-
     if not isinstance(path, str):
-        if strict:
-            raise ToolPreflightValidationError("<server>", "path must be a string")
         try:
             path = str(path)
         except Exception:
@@ -309,11 +283,6 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
     # clearer error than "empty after normalization".
     cleaned = normalized.strip().replace("\\", "/")
     if cleaned in {"", "/", ".", "./"}:
-        if strict:
-            raise ToolPreflightValidationError(
-                "<server>",
-                f"Invalid path {path!r}: expected a repository-relative file path (for example 'docs/readme.md'), got an empty/root path.",
-            )
         return ""
 
     return _normalize_repo_path(normalized)
@@ -322,25 +291,15 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
 def _normalize_branch(full_name: str, branch: str | None) -> str:
     """Normalize a branch name while honoring controller defaults."""
 
-    strict = _env_flag("ADAPTIV_MCP_STRICT_CONTRACTS", default=False)
-
     normalized_branch = branch.strip() if isinstance(branch, str) else None
     effective = _effective_ref_for_repo(full_name, normalized_branch)
 
     # Let higher layers decide whether writes to the default branch are allowed.
     # The normalizer only ensures we have a stable, explicit ref.
     if not effective:
-        if strict:
-            raise ToolPreflightValidationError(
-                "<server>", "Effective branch name resolved to an empty value."
-            )
         effective = "main"
 
     if any(ord(ch) < 32 for ch in effective):
-        if strict:
-            raise ToolPreflightValidationError(
-                "<server>", f"Branch name contains control characters: {effective!r}"
-            )
         # Permissive mode: strip control characters.
         effective = "".join(ch for ch in effective if ord(ch) >= 32).strip() or "main"
 
