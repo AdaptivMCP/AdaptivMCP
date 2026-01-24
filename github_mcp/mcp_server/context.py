@@ -34,6 +34,12 @@ REQUEST_CHATGPT_METADATA: ContextVar[dict[str, str] | None] = ContextVar(
     "REQUEST_CHATGPT_METADATA", default=None
 )
 
+# When auto-approve is disabled, some clients perform an explicit approval step.
+# This flag allows per-request overrides without mutating global environment state.
+REQUEST_WRITE_APPROVED: ContextVar[bool | None] = ContextVar(
+    "REQUEST_WRITE_APPROVED", default=None
+)
+
 # End-to-end correlation identifier for each HTTP request.
 # Derived from the incoming X-Request-Id header when present; otherwise generated server-side.
 REQUEST_ID: ContextVar[str | None] = ContextVar("REQUEST_ID", default=None)
@@ -70,6 +76,7 @@ __all__ = [
     "REQUEST_SESSION_ID",
     "REQUEST_IDEMPOTENCY_KEY",
     "REQUEST_CHATGPT_METADATA",
+    "REQUEST_WRITE_APPROVED",
     "get_request_context",
     "get_request_id",
     "get_auto_approve_enabled",
@@ -189,19 +196,37 @@ def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     refresh_after_seconds is ignored but kept for backwards compatibility.
     """
     del refresh_after_seconds
-    value, _source = _auto_approve_from_env()
-    _update_write_gate_cache(value)
-    return value
+    env_value, _source = _auto_approve_from_env()
+    # Keep global caches in sync with environment (used for tool metadata refresh).
+    _update_write_gate_cache(env_value)
+
+    # If the environment enables auto-approve, it is authoritative. Request-scoped
+    # overrides are only meaningful when auto-approve is disabled.
+    if env_value:
+        return True
+
+    # Request-scoped override: used when a human explicitly approves a write
+    # action in the client while auto-approve is disabled.
+    override = REQUEST_WRITE_APPROVED.get()
+    if override is not None:
+        return bool(override)
+
+    return False
 
 
 def set_write_allowed(approved: bool) -> bool:
     """
     Compatibility shim for legacy callers.
     """
-    del approved
-    value, _source = _auto_approve_from_env()
-    _update_write_gate_cache(value)
-    return value
+    # Only meaningful when auto-approve is disabled.
+    env_value, _source = _auto_approve_from_env()
+    _update_write_gate_cache(env_value)
+    if env_value:
+        # Preserve historical return type: write is allowed.
+        return True
+
+    REQUEST_WRITE_APPROVED.set(bool(approved))
+    return bool(approved)
 
 
 def get_auto_approve_enabled(*, refresh_after_seconds: float = 0.5) -> bool:

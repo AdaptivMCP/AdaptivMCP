@@ -36,7 +36,7 @@ from github_mcp.exceptions import UsageError, WriteApprovalRequiredError
 from github_mcp.mcp_server.context import (
     FASTMCP_AVAILABLE,
     WRITE_ALLOWED,
-    get_auto_approve_enabled,
+    get_write_allowed,
     get_request_context,
     mcp,
     peek_auto_approve_enabled,
@@ -1973,7 +1973,7 @@ def _invocation_messages(
 def _tool_write_allowed(write_action: bool) -> bool:
     # Used for metadata/introspection.
     del write_action
-    return bool(get_auto_approve_enabled())
+    return bool(get_write_allowed())
 
 
 def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
@@ -1993,7 +1993,7 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
     if not write_action:
         return
-    if get_auto_approve_enabled():
+    if get_write_allowed():
         return
     exc = WriteApprovalRequiredError(
         f"Write approval required to run tool {tool_name!r}."
