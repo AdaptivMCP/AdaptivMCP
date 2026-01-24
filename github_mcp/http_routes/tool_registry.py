@@ -914,6 +914,13 @@ def build_tool_registry_endpoint() -> Callable[[Request], Response]:
         if include_parameters is None:
             include_parameters = _default_include_parameters(request)
         compact = _parse_bool(request.query_params.get("compact"))
+        # Default to *expanded* metadata for OpenAI clients.
+        #
+        # In compact mode, tools are often reduced to their first-line summaries,
+        # which can cause LLMs to misclassify or misuse tools with similar names.
+        # OpenAI clients benefit from richer descriptions and examples.
+        if compact is None and _is_openai_client(request):
+            compact = False
         base_path = _request_base_path(request, ("/tools",))
         return JSONResponse(
             _tool_catalog(
@@ -938,6 +945,12 @@ def build_resources_endpoint() -> Callable[[Request], Response]:
         if include_parameters is None:
             include_parameters = _default_include_parameters(request)
         compact = _parse_bool(request.query_params.get("compact"))
+        if compact is None:
+            try:
+                if REQUEST_CHATGPT_METADATA.get():
+                    compact = False
+            except Exception:
+                pass
         base_path = _request_base_path(request, ("/resources",))
         catalog = _tool_catalog(
             include_parameters=include_parameters,
