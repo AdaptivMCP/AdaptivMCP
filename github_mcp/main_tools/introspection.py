@@ -6,6 +6,7 @@ from typing import Any
 from github_mcp.mcp_server.context import get_auto_approve_enabled
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.mcp_server.schemas import _schema_for_callable
+from github_mcp.path_utils import normalize_base_path as _normalize_base_path
 
 from ._main import _main
 
@@ -383,13 +384,6 @@ async def list_tools(
     return payload
 
 
-def _normalize_base_path(base_path: str | None) -> str:
-    if not base_path:
-        return ""
-    cleaned = base_path.strip()
-    if cleaned in {"", "/"}:
-        return ""
-    return "/" + cleaned.strip("/")
 
 
 def list_resources(

@@ -13,6 +13,9 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from github_mcp.path_utils import normalize_base_path as _normalize_base_path
+from github_mcp.path_utils import request_base_path as _request_base_path
+
 from github_mcp.mcp_server import registry as mcp_registry
 from github_mcp.mcp_server.context import REQUEST_CHATGPT_METADATA
 from github_mcp.mcp_server.suggestions import (
@@ -32,34 +35,6 @@ except Exception:  # noqa: BLE001
 
     def redact_any(value: Any, *args: Any, **kwargs: Any) -> Any:  # type: ignore[override]
         return value
-
-
-def _normalize_base_path(base_path: str | None) -> str:
-    if not base_path:
-        return ""
-    cleaned = base_path.strip()
-    if cleaned in {"", "/"}:
-        return ""
-    return "/" + cleaned.strip("/")
-
-
-def _request_base_path(request: Request, suffixes: Iterable[str]) -> str:
-    forwarded_prefix = request.headers.get("x-forwarded-prefix") or request.headers.get(
-        "x-forwarded-path"
-    )
-    if forwarded_prefix:
-        return _normalize_base_path(forwarded_prefix)
-
-    path = request.url.path or ""
-    for suffix in suffixes:
-        if path.endswith(suffix):
-            candidate = path[: -len(suffix)]
-            return _normalize_base_path(candidate)
-
-    root_path = request.scope.get("root_path") if isinstance(request.scope, dict) else None
-    return _normalize_base_path(root_path)
-
-
 def _parse_bool(value: str | None) -> bool | None:
     if value is None:
         return None

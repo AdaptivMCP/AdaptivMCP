@@ -8,6 +8,7 @@ from typing import Any
 from starlette.responses import FileResponse, JSONResponse, Response
 
 from github_mcp.config import SERVER_GIT_COMMIT, SERVER_START_TIME
+from github_mcp.path_utils import request_base_path as _request_base_path
 from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO
 
 
@@ -48,15 +49,7 @@ def build_ui_index_endpoint() -> Any:
 def build_ui_json_endpoint() -> Any:
     async def _endpoint(request) -> Response:
         # Avoid guessing hostnames. This endpoint is purely descriptive.
-        base_path = request.headers.get("x-forwarded-prefix") or request.headers.get(
-            "x-forwarded-path"
-        )
-        if not base_path:
-            path = request.url.path or ""
-            if path.endswith("/ui.json"):
-                base_path = path[: -len("/ui.json")]
-        base_path = base_path.strip("/") if isinstance(base_path, str) else ""
-        base_prefix = f"/{base_path}" if base_path else ""
+        base_prefix = _request_base_path(request, ["/ui.json"])
         now = time.time()
         uptime_seconds = max(0, int(now - float(SERVER_START_TIME)))
 
