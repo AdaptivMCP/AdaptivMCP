@@ -639,9 +639,8 @@ def _build_tool_docstring(
         "    Set ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=0 to preserve them.",
         "  - The server returns the tool's raw JSON-serializable result; client UIs may render summaries.",
         "",
-        "LLM invocation requirements:",
-        "  - Use the exact tool path/URI as published by the tool registry; do not guess or improvise paths.",
-        "  - Provide arguments exactly as declared in the Parameters section (names, types, and required fields).",
+        "LLM invocation guidance:",
+        " 
         "  - If unsure about args/params/paths, call describe_tool first and follow the returned schema.",
         "",
         "Returns:",
