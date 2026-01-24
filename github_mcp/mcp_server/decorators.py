@@ -213,7 +213,7 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag(
 # the decorator can wrap scalar outputs, add ok/status when missing, and
 # truncate very large nested "json" payloads.
 RESPONSE_MODE_DEFAULT = (
-    os.environ.get("ADAPTIV_MCP_RESPONSE_MODE", "raw").strip().lower()
+    os.environ.get("ADAPTIV_MCP_RESPONSE_MODE", "compact").strip().lower()
 )
 CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int(
     "ADAPTIV_MCP_RESPONSE_MAX_LIST_ITEMS", default=0
@@ -2375,8 +2375,8 @@ def _chatgpt_friendly_result(
     This is opt-in via ADAPTIV_MCP_RESPONSE_MODE=chatgpt.
 
     Goals:
-    - Preserve tool outputs (raw) without adding extra wrapper fields.
-    - Add ANSI-colored stdout/stderr previews when present.
+    - Return production-ready, LLM-friendly payloads with consistent shape.
+    - Keep payloads compact while still offering structured context.
     """
 
     mode = _effective_response_mode(req)
@@ -2384,13 +2384,29 @@ def _chatgpt_friendly_result(
         return result
 
     try:
-        # Preserve non-mapping payloads verbatim in chatgpt/compact modes.
-        if not isinstance(result, Mapping):
-            return result
+        shaped_payload: dict[str, Any]
+        if isinstance(result, Mapping):
+            shaped_payload = dict(_strip_internal_log_fields(result))
+        else:
+            shaped_payload = {"result": result}
 
-        out: dict[str, Any] = dict(_strip_internal_log_fields(result))
-        _inject_coloured_streams(out, req=req)
-        return out
+        outcome = _tool_result_outcome(shaped_payload)
+        if "status" not in shaped_payload:
+            if outcome == "error":
+                shaped_payload["status"] = "error"
+            elif outcome == "warning":
+                shaped_payload["status"] = "warning"
+            else:
+                shaped_payload["status"] = "success"
+        if "ok" not in shaped_payload:
+            shaped_payload["ok"] = outcome != "error"
+
+        return _llm_scan_friendly_payload(
+            tool_name=tool_name,
+            shaped_payload=shaped_payload,
+            all_args=all_args,
+            req=req,
+        )
     except Exception as exc:
         # Best-effort: never break tool behavior if the shaper fails.
         # However, failures here are otherwise invisible and can look like

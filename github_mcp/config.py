@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import os
 import re
@@ -87,8 +88,8 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
 
     full_raw = os.environ.get("ADAPTIV_MCP_LOG_FULL_FIDELITY")
     if full_raw is None:
-        # Default to full fidelity so logs keep enough context for debugging and tooling.
-        full_fidelity = True
+        # Default to compact logs to reduce provider log noise in production.
+        full_fidelity = False
     else:
         full_fidelity = str(full_raw).strip().lower() in (
             "1",
@@ -510,7 +511,7 @@ LOG_HTTP_REQUESTS = _env_flag("LOG_HTTP_REQUESTS", _log_http_default)
 #
 # Default to enabled when HUMAN_LOGS are enabled so developer-facing deployments
 # capture raw inbound/outbound payloads for debugging.
-_log_http_bodies_default = "true" if HUMAN_LOGS else "false"
+_log_http_bodies_default = "false"
 LOG_HTTP_BODIES = _env_flag("LOG_HTTP_BODIES", _log_http_bodies_default)
 
 # Maximum bytes of request/response body to capture for inbound HTTP logs.
@@ -537,9 +538,9 @@ LOG_RENDER_HTTP_BODIES = _env_flag("LOG_RENDER_HTTP_BODIES", "false")
 
 # Append structured extras to provider log lines.
 #
-# Render log viewers and similar UIs are optimized for humans; emitting raw JSON
-# blobs makes logs significantly harder to read. This server therefore formats
-# extras as a YAML-like block (no JSON) when appended.
+# Render log viewers and similar UIs are optimized for humans; emitting large
+# multi-line blocks makes logs significantly harder to read. This server formats
+# appended extras as compact JSON.
 #
 # Defaults:
 # - When HUMAN_LOGS=true: append extras for tool events (tool_call_*) and for
@@ -864,90 +865,30 @@ class _StructuredFormatter(logging.Formatter):
 
 
 def _format_extras_block(payload: Mapping[str, Any]) -> str:
-    """Render log extras as a YAML-like block (no JSON)."""
+    """Render log extras as a compact JSON payload (no YAML)."""
 
     if not isinstance(payload, Mapping) or not payload:
         return ""
 
-    # Helper to render scalars safely.
-    def scalar(v: object) -> str:
-        if v is None:
-            return "null"
-        if isinstance(v, bool):
-            return "true" if v else "false"
-        if isinstance(v, (int, float)):
-            return str(v)
-        s = str(v)
-        # Normalize CRLF/CR but preserve newlines for raw payload readability.
-        return s.replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = {
+        k: v
+        for k, v in payload.items()
+        if v not in (None, "", [], {})
+    }
+    if not cleaned:
+        return ""
 
-    lines: list[str] = []
-    max_lines = max(20, int(LOG_EXTRAS_MAX_LINES))
     max_chars = max(2000, int(LOG_EXTRAS_MAX_CHARS))
+    try:
+        rendered = json.dumps(
+            cleaned, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        )
+    except Exception:
+        rendered = json.dumps(str(cleaned), ensure_ascii=False)
 
-    # Optional ANSI coloring for extras blocks (developer-tail workflows).
-    ansi = bool(HUMAN_LOGS and LOG_COLOR)
-    reset = "\x1b[0m" if ansi else ""
-    dim = "\x1b[2m" if ansi else ""
-    cyan = "\x1b[36m" if ansi else ""
-
-    def emit(line: str) -> None:
-        if len(lines) >= max_lines:
-            return
-        lines.append(line)
-
-    def walk(key: str, value: object, indent: int) -> None:
-        prefix = "  " * indent
-        label = f"{dim}{cyan}{key}{reset}" if ansi else key
-        if isinstance(value, Mapping):
-            emit(f"{prefix}{label}:")
-            for k2, v2 in list(value.items()):
-                if len(lines) >= max_lines:
-                    break
-                walk(str(k2), v2, indent + 1)
-            return
-        if isinstance(value, list):
-            emit(f"{prefix}{label}:")
-            for item in value[:50]:
-                if len(lines) >= max_lines:
-                    break
-                if isinstance(item, (Mapping, list)):
-                    emit(f"{prefix}  -")
-                    if isinstance(item, Mapping):
-                        for k2, v2 in list(item.items()):
-                            if len(lines) >= max_lines:
-                                break
-                            walk(str(k2), v2, indent + 2)
-                    else:
-                        emit(f"{prefix}    - {scalar(item)}")
-                else:
-                    emit(f"{prefix}  - {scalar(item)}")
-            if len(value) > 50 and len(lines) < max_lines:
-                emit(f"{prefix}  - … ({len(value) - 50} more)")
-            return
-
-        rendered = scalar(value)
-        if "\n" in rendered:
-            # YAML-like block scalar for multiline values.
-            emit(f"{prefix}{label}: |-")
-            for ln in rendered.split("\n"):
-                if len(lines) >= max_lines:
-                    break
-                emit(f"{prefix}  {ln}")
-            return
-        emit(f"{prefix}{label}: {rendered}")
-
-    # Sort for stable output.
-    emit(f"{dim}{cyan}extras{reset}:")
-    for k, v in sorted(payload.items(), key=lambda kv: str(kv[0])):
-        if len(lines) >= max_lines:
-            break
-        walk(str(k), v, 1)
-
-    out = "\n".join(lines)
-    if len(out) > max_chars:
-        out = out[: max(0, max_chars - 1)] + "…"
-    return out
+    if len(rendered) > max_chars:
+        rendered = rendered[: max(0, max_chars - 1)] + "…"
+    return f"extras={rendered}"
 
 
 _STANDARD_LOG_FIELDS = set(
