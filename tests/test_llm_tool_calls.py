@@ -125,3 +125,36 @@ def test_extract_tool_calls_accepts_whitelisted_languages(lang: str) -> None:
     assert len(calls) == 1
     assert calls[0].tool_name == "x"
     assert calls[0].args == {"n": 1}
+
+
+def test_extract_file_blocks_from_text_and_resolve_references() -> None:
+    text = (
+        "prefix\n"
+        "```file\n"
+        "path: foo/bar.txt\n"
+        "name: bar\n"
+        "\n"
+        "line1\n"
+        "line2\n"
+        "```\n"
+        "```json\n"
+        "{\"tool\": \"set_workspace_file_contents\", \"args\": {\"path\": \"foo/bar.txt\", \"content\": \"@file:foo/bar.txt\"}}\n"
+        "```\n"
+        "suffix"
+    )
+
+    blocks = llm_tool_calls.extract_file_blocks_from_text([("assistant", text)])
+    assert blocks["foo/bar.txt"].strip() == "line1\nline2"
+    assert blocks["bar"].strip() == "line1\nline2"
+
+    calls = llm_tool_calls.extract_tool_calls_from_text([("assistant", text)])
+    assert len(calls) == 1
+    resolved = llm_tool_calls.resolve_block_references(calls[0].args, blocks)
+    assert resolved["content"].strip() == "line1\nline2"
+
+
+def test_resolve_block_references_supports_dict_sentinel_form() -> None:
+    blocks = {"x": "CONTENT"}
+    payload = {"a": {"$file": "x"}, "b": [{"$block": "x"}]}
+    resolved = llm_tool_calls.resolve_block_references(payload, blocks)
+    assert resolved == {"a": "CONTENT", "b": ["CONTENT"]}

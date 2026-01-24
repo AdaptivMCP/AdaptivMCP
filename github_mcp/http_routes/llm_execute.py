@@ -6,7 +6,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from github_mcp.http_routes.tool_registry import _execute_tool
-from github_mcp.llm_tool_calls import ParsedToolCall, extract_tool_calls_from_text
+from github_mcp.llm_tool_calls import (
+    ParsedToolCall,
+    extract_file_blocks_from_text,
+    extract_tool_calls_from_text,
+    resolve_block_references,
+)
 
 
 def _serialize_call(call: ParsedToolCall) -> dict[str, Any]:
@@ -52,6 +57,21 @@ def build_llm_execute_endpoint():
             max_calls = 20
 
         calls = extract_tool_calls_from_text(texts, max_calls=max_calls)
+
+        # Extract optional whole-file content blocks and resolve any references
+        # within tool call args before execution.
+        blocks = extract_file_blocks_from_text(texts)
+        if blocks and calls:
+            calls = [
+                ParsedToolCall(
+                    tool_name=c.tool_name,
+                    args=resolve_block_references(c.args, blocks),
+                    channel=c.channel,
+                    start=c.start,
+                    end=c.end,
+                )
+                for c in calls
+            ]
 
         dry_run = bool(payload.get("dry_run")) or request.query_params.get("dry_run") in {
             "1",
