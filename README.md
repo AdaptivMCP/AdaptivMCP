@@ -1,1 +1,1 @@
-Adaptiv MCP Server
+Adaptiv MCP Server - Self Hosted MCP Server
