@@ -966,7 +966,12 @@ def build_tool_registry_endpoint() -> Callable[[Request], Response]:
         # OpenAI clients benefit from richer descriptions and examples.
         if compact is None and _is_openai_client(request):
             compact = False
-        base_path = _request_base_path(request, ("/tools",))
+        # Support legacy discovery paths used by some LLM runtimes.
+        #
+        # Some clients call GET /list_tools instead of GET /tools. We treat the
+        # former as an alias and normalize base_path stripping for both so the
+        # returned `href` fields remain correct.
+        base_path = _request_base_path(request, ("/tools", "/list_tools"))
         return JSONResponse(
             _tool_catalog(
                 include_parameters=include_parameters,
@@ -996,7 +1001,12 @@ def build_resources_endpoint() -> Callable[[Request], Response]:
                     compact = False
             except Exception:
                 pass
-        base_path = _request_base_path(request, ("/resources",))
+        # Support legacy discovery paths used by some LLM runtimes.
+        #
+        # Some clients call GET /list_resources instead of GET /resources. We
+        # treat the former as an alias and normalize base_path stripping for
+        # both so returned `href` fields remain correct.
+        base_path = _request_base_path(request, ("/resources", "/list_resources"))
         catalog = _tool_catalog(
             include_parameters=include_parameters,
             compact=compact,
@@ -1126,8 +1136,17 @@ def register_tool_registry_routes(app: Any) -> None:
     invocation_status_endpoint = build_tool_invocation_status_endpoint()
     invocation_cancel_endpoint = build_tool_invocation_cancel_endpoint()
 
+    # Primary discovery endpoints.
     app.add_route("/tools", registry_endpoint, methods=["GET"])
     app.add_route("/resources", resources_endpoint, methods=["GET"])
+    # Backward-compatible aliases used by some LLM tool runtimes.
+    #
+    # In some deployments the agent runtime attempts /list_resources (and
+    # occasionally /list_tools) during discovery. Without these aliases, the
+    # runtime can surface a confusing "resources not found" error and abort
+    # tool use.
+    app.add_route("/list_tools", registry_endpoint, methods=["GET"])
+    app.add_route("/list_resources", resources_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", detail_endpoint, methods=["GET"])
     app.add_route("/tools/{tool_name:str}", invoke_endpoint, methods=["POST"])
     app.add_route(
