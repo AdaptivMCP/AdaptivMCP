@@ -354,10 +354,6 @@ async def list_tools(
     # clients that just want application tools, while still exposing
     # list_all_actions as the canonical schema registry.
     hidden_when_only_read = {
-        "list_tools",
-        "list_resources",
-        "list_write_actions",
-        "list_write_tools",
     }
     for entry in catalog.get("tools", []) or []:
         name = entry.get("name")
