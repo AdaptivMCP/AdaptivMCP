@@ -640,7 +640,6 @@ def _build_tool_docstring(
         "  - The server returns the tool's raw JSON-serializable result; client UIs may render summaries.",
         "",
         "LLM invocation guidance:",
-        " 
         "  - If unsure about args/params/paths, call describe_tool first and follow the returned schema.",
         "",
         "Returns:",
