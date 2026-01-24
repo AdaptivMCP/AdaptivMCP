@@ -717,6 +717,14 @@ async def scan_workspace_tree(
     ref: str = "main",
     path: str = "",
     *,
+    # Back-compat / convenience aliases:
+    # - max_files maps to max_entries
+    # - max_lines/max_chars map to head_max_lines/head_max_chars
+    # - max_bytes maps to hash_max_bytes + line_count_max_bytes
+    max_files: int | None = None,
+    max_lines: int | None = None,
+    max_chars: int | None = None,
+    max_bytes: int | None = None,
     include_hidden: bool = True,
     include_dirs: bool = False,
     max_entries: int = 2000,
@@ -743,6 +751,21 @@ async def scan_workspace_tree(
         repo_dir = await deps["clone_repo"](
             full_name, ref=effective_ref, preserve_changes=True
         )
+
+        # Normalize alias args.
+        # Note: We intentionally keep the canonical parameter names in the
+        # response payload (max_entries/head_max_lines/head_max_chars/etc.).
+        if max_files is not None:
+            max_entries = max_files
+        if max_lines is not None:
+            head_max_lines = max_lines
+            include_head = True
+        if max_chars is not None:
+            head_max_chars = max_chars
+            include_head = True
+        if max_bytes is not None:
+            hash_max_bytes = max_bytes
+            line_count_max_bytes = max_bytes
 
         if not isinstance(max_entries, int) or max_entries < 1:
             raise ValueError("max_entries must be an int >= 1")
