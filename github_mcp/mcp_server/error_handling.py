@@ -155,6 +155,36 @@ def _sanitize_debug_value(
     return value
 
 
+_MISSING_PATH_RE = re.compile(
+    r"(?i)(?:\[errno\s*2\]\s*)?(?:no such file or directory|file not found|path not found)[:\s]+['\"]?(?P<path>[^'\"\n]+)['\"]?"
+)
+
+
+def _infer_missing_path_from_message(message: str) -> str | None:
+    """Best-effort extraction of a missing path from a FileNotFound-style message."""
+
+    if not isinstance(message, str) or not message.strip():
+        return None
+
+    match = _MISSING_PATH_RE.search(message)
+    if not match:
+        return None
+
+    path = match.group("path")
+    if not isinstance(path, str):
+        return None
+
+    path = path.strip()
+    if not path or path == ".":
+        return None
+
+    # Avoid returning extremely long / surprising values.
+    if len(path) > 4096:
+        return None
+
+    return path
+
+
 def _structured_tool_error(
     exc: BaseException,
     *,
@@ -233,7 +263,25 @@ def _structured_tool_error(
         details.update(val)
 
     # 2) Provider/permission categories.
-    if isinstance(exc, (GitHubAuthError, RenderAuthError)):
+    if isinstance(exc, FileNotFoundError):
+        category = "not_found"
+        code = code or "FILE_NOT_FOUND"
+        missing_path = (
+            path
+            or getattr(exc, "filename", None)
+            or _infer_missing_path_from_message(message)
+        )
+        if isinstance(missing_path, str) and missing_path.strip():
+            details.setdefault("missing_path", missing_path.strip())
+        errno = getattr(exc, "errno", None)
+        if errno is not None:
+            details.setdefault("errno", errno)
+        hint = hint or (
+            "File/path not found. Verify the path and ref (branch/commit), or "
+            "list/search available paths and retry."
+        )
+
+    elif isinstance(exc, (GitHubAuthError, RenderAuthError)):
         category = "auth"
     elif isinstance(exc, GitHubRateLimitError):
         category = "rate_limited"
@@ -300,7 +348,12 @@ def _structured_tool_error(
             code = code or "PATH_INVALID"
 
         # Missing files referenced by patches.
-        elif "file does not exist" in lowered or "no such file" in lowered:
+        elif (
+            "file does not exist" in lowered
+            or "no such file" in lowered
+            or "path not found" in lowered
+            or ("not found" in lowered and "path" in lowered)
+        ):
             category = "not_found"
             code = code or "FILE_NOT_FOUND"
 

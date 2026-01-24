@@ -18,6 +18,11 @@ def _err_code(payload: dict) -> str | None:
     return detail.get("code")
 
 
+def _err_details(payload: dict) -> dict:
+    detail = payload.get("error_detail") or {}
+    return dict(detail.get("details") or {})
+
+
 @pytest.mark.parametrize(
     "message, expected_category, expected_code",
     [
@@ -45,6 +50,18 @@ def test_github_api_error_explicit_category_is_preserved() -> None:
     payload = _structured_tool_error(exc, context="unit:test")
     assert _err_category(payload) == "conflict"
     assert _err_code(payload) == "PATCH_DOES_NOT_APPLY"
+
+
+def test_python_file_not_found_error_is_llm_friendly_not_found() -> None:
+    exc = FileNotFoundError(2, "No such file or directory", "missing.txt")
+    payload = _structured_tool_error(exc, context="unit:test")
+
+    assert _err_category(payload) == "not_found"
+    assert _err_code(payload) == "FILE_NOT_FOUND"
+
+    details = _err_details(payload)
+    assert details.get("missing_path") == "missing.txt"
+    assert details.get("errno") == 2
 
 
 def test_apply_patch_empty_patch_is_validation_with_code() -> None:
