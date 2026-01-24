@@ -286,6 +286,13 @@ class _RequestContextMiddleware:
         response_body_total = 0
         response_body_truncated = False
 
+        def _compact_http_payload(payload: dict[str, Any]) -> dict[str, Any]:
+            return {
+                key: value
+                for key, value in payload.items()
+                if value not in (None, "", [], {})
+            }
+
         async def send_access_wrapper(message):
             nonlocal access_logged
             nonlocal response_status, response_headers
@@ -310,16 +317,18 @@ class _RequestContextMiddleware:
                 if not access_logged:
                     access_logged = True
                     duration_ms = (time.perf_counter() - access_started_at) * 1000
-                    payload = {
-                        "event": "http_request",
-                        "request_id": request_id,
-                        "session_id": REQUEST_SESSION_ID.get(),
-                        "message_id": REQUEST_MESSAGE_ID.get(),
-                        "method": scope.get("method"),
-                        "path": path,
-                        "status_code": response_status,
-                        "duration_ms": duration_ms,
-                    }
+                    payload = _compact_http_payload(
+                        {
+                            "event": "http_request",
+                            "request_id": request_id,
+                            "session_id": REQUEST_SESSION_ID.get(),
+                            "message_id": REQUEST_MESSAGE_ID.get(),
+                            "method": scope.get("method"),
+                            "path": path,
+                            "status_code": response_status,
+                            "duration_ms": duration_ms,
+                        }
+                    )
                     if HUMAN_LOGS:
                         rid = shorten_token(request_id)
                         sid = shorten_token(REQUEST_SESSION_ID.get())
@@ -358,16 +367,18 @@ class _RequestContextMiddleware:
                 if not message.get("more_body") and not access_logged:
                     access_logged = True
                     duration_ms = (time.perf_counter() - access_started_at) * 1000
-                    payload = {
-                        "event": "http_request",
-                        "request_id": request_id,
-                        "session_id": REQUEST_SESSION_ID.get(),
-                        "message_id": REQUEST_MESSAGE_ID.get(),
-                        "method": scope.get("method"),
-                        "path": path,
-                        "status_code": response_status,
-                        "duration_ms": duration_ms,
-                    }
+                    payload = _compact_http_payload(
+                        {
+                            "event": "http_request",
+                            "request_id": request_id,
+                            "session_id": REQUEST_SESSION_ID.get(),
+                            "message_id": REQUEST_MESSAGE_ID.get(),
+                            "method": scope.get("method"),
+                            "path": path,
+                            "status_code": response_status,
+                            "duration_ms": duration_ms,
+                        }
+                    )
 
                     if captured_body is not None:
                         try:
@@ -508,7 +519,8 @@ class _RequestContextMiddleware:
             except Exception as exc:
                 if LOG_HTTP_REQUESTS:
                     duration_ms = (time.perf_counter() - access_started_at) * 1000
-                    payload = {
+                    payload = _compact_http_payload(
+                        {
                         "event": "http_exception",
                         "request_id": request_id,
                         "session_id": REQUEST_SESSION_ID.get(),
@@ -517,7 +529,8 @@ class _RequestContextMiddleware:
                         "path": path,
                         "duration_ms": duration_ms,
                         "exception_type": type(exc).__name__,
-                    }
+                        }
+                    )
                     LOGGER.info(
                         (
                             "http_exception "
@@ -534,7 +547,8 @@ class _RequestContextMiddleware:
         except Exception as exc:
             if LOG_HTTP_REQUESTS:
                 duration_ms = (time.perf_counter() - access_started_at) * 1000
-                payload = {
+                payload = _compact_http_payload(
+                    {
                     "event": "http_exception",
                     "request_id": request_id,
                     "session_id": REQUEST_SESSION_ID.get(),
@@ -543,7 +557,8 @@ class _RequestContextMiddleware:
                     "path": path,
                     "duration_ms": duration_ms,
                     "exception_type": type(exc).__name__,
-                }
+                    }
+                )
                 LOGGER.info(
                     (
                         "http_exception "
