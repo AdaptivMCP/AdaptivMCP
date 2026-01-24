@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Adaptiv MCP – GitHub Server</title>
+  <meta name="description" content="Adaptiv MCP server for GitHub + Render automation." />
+  <link rel="icon" href="static/logo/adaptiv-icon-128.png" />
+  <style>
+    :root{
+      --bg:#0b0d12;
+      --panel:#111525;
+      --panel2:#0f1320;
+      --text:#e7e9ee;
+      --muted:#b8c0d8;
+      --faint:#7f8aa8;
+      --border:#26304a;
+      --accent:#6ea8fe;
+      --ok:#6ee7b7;
+      --bad:#fb7185;
+      --mono:ui-monospace,Menlo,Monaco,Consolas,monospace;
+      --sans:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+    }
+    @media (prefers-color-scheme: light){
+      :root{--bg:#f7f8fb;--panel:#ffffff;--panel2:#fbfcff;--text:#0a0b10;--muted:#36415c;--faint:#5d6a8a;--border:#e3e8f5;--accent:#2563eb;}
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
+    a{color:var(--accent);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .wrap{max-width:1100px;margin:0 auto;padding:28px 18px 48px;}
+    .top{display:flex;gap:16px;align-items:center;flex-wrap:wrap;}
+    .brand{display:flex;gap:14px;align-items:center;}
+    .logo{width:54px;height:54px;border-radius:14px;overflow:hidden;background:var(--panel);border:1px solid var(--border);display:grid;place-items:center;}
+    .logo img{width:40px;height:40px;object-fit:contain;}
+    h1{font-size:22px;margin:0;}
+    .sub{color:var(--muted);margin-top:4px;}
+    .pillrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 0;}
+    .pill{font-family:var(--mono);font-size:12px;border:1px solid var(--border);background:linear-gradient(180deg,var(--panel),var(--panel2));padding:6px 10px;border-radius:999px;color:var(--muted);}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:18px;}
+    .card{border:1px solid var(--border);background:linear-gradient(180deg,var(--panel),var(--panel2));border-radius:14px;padding:14px;}
+    .card h2{font-size:14px;margin:0 0 10px;color:var(--text);}
+    .links{display:flex;flex-direction:column;gap:8px;}
+    .link{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,0.02);}
+    .link code{font-family:var(--mono);font-size:12px;color:var(--muted);}
+    .hint{font-size:12px;color:var(--faint);line-height:1.5;}
+    pre{margin:10px 0 0;overflow:auto;border-radius:14px;border:1px solid var(--border);background:#070912;padding:12px;font-family:var(--mono);font-size:12px;color:#dbe2ff;}
+    @media (prefers-color-scheme: light){pre{background:#0b1020;color:#e8efff;}}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+    button{cursor:pointer;border:1px solid var(--border);background:linear-gradient(180deg,var(--panel),var(--panel2));color:var(--text);padding:8px 10px;border-radius:12px;font-family:var(--mono);font-size:12px;}
+    button:hover{filter:brightness(1.08);}
+    .status{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;}
+    .dot{width:10px;height:10px;border-radius:999px;background:var(--faint);border:1px solid var(--border);}
+    .dot.ok{background:var(--ok);}
+    .dot.bad{background:var(--bad);}
+    footer{margin-top:18px;color:var(--faint);font-size:12px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <img src="static/logo/adaptiv-icon-256.png" alt="" />
+        </div>
+        <div>
+          <h1>Adaptiv MCP – GitHub Server</h1>
+          <div class="sub">Connector-oriented MCP server exposing GitHub + Render automation tools.</div>
+          <div class="pillrow">
+            <div class="pill" id="pill-service">service=adaptiv-mcp-github</div>
+            <div class="pill" id="pill-repo">repo=—</div>
+            <div class="pill" id="pill-version">commit=—</div>
+            <div class="pill" id="pill-uptime">uptime=—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Core endpoints</h2>
+        <div class="links">
+          <a class="link" href="healthz"><span>Health check</span><code>/healthz</code></a>
+          <a class="link" href="ui.json"><span>Service metadata</span><code>/ui.json</code></a>
+          <a class="link" href="ui/tools"><span>Tool catalog (UI)</span><code>/ui/tools</code></a>
+          <a class="link" href="ui/tools.json"><span>Tool catalog (JSON)</span><code>/ui/tools.json</code></a>
+          <a class="link" href="tools"><span>Tools endpoint</span><code>/tools</code></a>
+          <a class="link" href="resources"><span>Resources endpoint</span><code>/resources</code></a>
+          <a class="link" href="sse"><span>Server-Sent Events stream</span><code>/sse</code></a>
+        </div>
+        <div class="status">
+          <span class="dot" id="health-dot" aria-hidden="true"></span>
+          <span class="hint" id="health-text">Health status not checked yet.</span>
+          <button id="health-refresh" type="button">Recheck</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Render integration</h2>
+        <div class="links">
+          <a class="link" href="render/owners"><span>Render owners</span><code>/render/owners</code></a>
+          <a class="link" href="render/services"><span>Render services</span><code>/render/services</code></a>
+          <a class="link" href="render/logs"><span>Render logs</span><code>/render/logs</code></a>
+        </div>
+        <p class="hint">
+          Render endpoints require a configured token (e.g. <code>RENDER_API_KEY</code> or <code>RENDER_API_TOKEN</code>) on the deployment.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Quick commands</h2>
+        <div class="row">
+          <button id="copy-tools" type="button">Copy: list tools</button>
+          <button id="copy-ui" type="button">Copy: service metadata</button>
+        </div>
+        <pre id="cmd-tools">curl -sS "${BASE}tools" | jq</pre>
+        <pre id="cmd-ui">curl -sS "${BASE}ui.json" | jq</pre>
+        <p class="hint">
+          Use these endpoints for diagnostics and discovery; tool invocation happens via POST <code>/tools/&lt;tool_name&gt;</code>.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Notes</h2>
+        <ul class="hint">
+          <li>This page is served from <code>assets/index.html</code> and does not require a build step.</li>
+          <li>All links are relative to support reverse-proxy base paths (e.g. <code>/some/prefix</code>).</li>
+          <li>For a machine-readable overview, prefer <code>/ui.json</code>.</li>
+        </ul>
+        <footer id="footer">Loaded.</footer>
+      </section>
+    </div>
+  </div>
+
+<script>
+(function(){
+  function basePrefix(){
+    // The UI routes may be mounted at / or /ui (and possibly under a proxy prefix).
+    // Using URL('.') normalizes to the directory of the current location.
+    return new URL('.', window.location.href).toString();
+  }
+
+  const BASE = basePrefix();
+  const cmdTools = document.getElementById('cmd-tools');
+  const cmdUi = document.getElementById('cmd-ui');
+  cmdTools.textContent = `curl -sS "${BASE}tools" | jq`;
+  cmdUi.textContent = `curl -sS "${BASE}ui.json" | jq`;
+
+  async function copy(text){
+    try{
+      await navigator.clipboard.writeText(text);
+      return true;
+    }catch(e){
+      // Fallback for restricted clipboard contexts.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position='fixed';
+      ta.style.top='-1000px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      let ok = false;
+      try{ ok = document.execCommand('copy'); }catch(_){ ok = false; }
+      document.body.removeChild(ta);
+      return ok;
+    }
+  }
+
+  document.getElementById('copy-tools').addEventListener('click', async ()=>{
+    await copy(`curl -sS "${BASE}tools" | jq`);
+  });
+  document.getElementById('copy-ui').addEventListener('click', async ()=>{
+    await copy(`curl -sS "${BASE}ui.json" | jq`);
+  });
+
+  function setText(id, text){
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  async function loadUiJson(){
+    try{
+      const resp = await fetch('ui.json', {cache: 'no-store'});
+      if (!resp.ok) throw new Error(`ui.json status ${resp.status}`);
+      const data = await resp.json();
+      setText('pill-service', `service=${data.service || 'adaptiv-mcp-github'}`);
+      const repo = data.repo && data.repo.full_name ? data.repo.full_name : '—';
+      const branch = data.repo && data.repo.default_branch ? data.repo.default_branch : '';
+      setText('pill-repo', branch ? `repo=${repo}@${branch}` : `repo=${repo}`);
+      const commit = data.version && data.version.git_commit ? data.version.git_commit : '—';
+      setText('pill-version', `commit=${String(commit).slice(0, 12)}`);
+      const up = data.runtime && typeof data.runtime.uptime_seconds === 'number' ? data.runtime.uptime_seconds : null;
+      setText('pill-uptime', up == null ? 'uptime=—' : `uptime=${up}s`);
+    }catch(e){
+      // Keep defaults; this page should still be useful without ui.json.
+    }
+  }
+
+  async function checkHealth(){
+    const dot = document.getElementById('health-dot');
+    const text = document.getElementById('health-text');
+    dot.classList.remove('ok','bad');
+    text.textContent = 'Checking /healthz…';
+    try{
+      const resp = await fetch('healthz', {cache: 'no-store'});
+      if (!resp.ok) throw new Error(`healthz status ${resp.status}`);
+      const data = await resp.json().catch(()=>null);
+      dot.classList.add('ok');
+      text.textContent = data && data.status ? `Healthy (${data.status})` : 'Healthy.';
+    }catch(e){
+      dot.classList.add('bad');
+      text.textContent = 'Health check failed.';
+    }
+  }
+
+  document.getElementById('health-refresh').addEventListener('click', checkHealth);
+
+  const footer = document.getElementById('footer');
+  const now = new Date();
+  footer.textContent = `Loaded ${now.toISOString()}. Base: ${BASE}`;
+
+  loadUiJson();
+  checkHealth();
+})();
+</script>
+</body>
+</html>
