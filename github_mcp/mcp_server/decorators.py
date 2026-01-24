@@ -1916,6 +1916,38 @@ def _refresh_tool_annotations_for_invocation(
         return
 
 
+def _restore_tool_annotations_after_invocation(
+    func: Any, *, base_write_action: bool
+) -> None:
+    """Restore a tool's registered (base) UI annotations after an invocation.
+
+    Some MCP clients (including ChatGPT) will read tool annotations from the tool
+    registry to decide whether an action is READ vs WRITE, DESTRUCTIVE, etc. We
+    temporarily refresh these annotations to reflect the invocation-level
+    classification (e.g. tools with a dynamic write_action_resolver).
+
+    However, those dynamic hints must not "stick" after the call completes.
+    Otherwise, a read-classified invocation can permanently mark a write tool as
+    READ, causing incorrect client-side gating on subsequent calls.
+    """
+
+    try:
+        tool_obj = getattr(func, "__mcp_tool__", None)
+    except Exception:
+        tool_obj = None
+    if tool_obj is None:
+        return
+
+    try:
+        annotations = _resolve_invocation_annotations(
+            func, effective_write_action=bool(base_write_action)
+        )
+        _attach_tool_annotations(tool_obj, annotations)
+    except Exception:
+        # Best-effort: never break tool behavior.
+        return
+
+
 def _schema_summary(schema: Mapping[str, Any], *, max_fields: int = 8) -> str:
     """Create a compact, UI-friendly parameter summary from a JSON schema."""
 
@@ -2379,6 +2411,8 @@ def _chatgpt_friendly_result(
     req: Mapping[str, Any] | None = None,
     tool_name: str | None = None,
     all_args: Mapping[str, Any] | None = None,
+    tool_func: Any | None = None,
+    base_write_action: bool | None = None,
 ) -> Any:
     """Return a ChatGPT-friendly version of a tool result.
 
@@ -2389,11 +2423,11 @@ def _chatgpt_friendly_result(
     - Add ANSI-colored stdout/stderr previews when present.
     """
 
-    mode = _effective_response_mode(req)
-    if mode not in {"chatgpt", "compact"}:
-        return result
-
     try:
+        mode = _effective_response_mode(req)
+        if mode not in {"chatgpt", "compact"}:
+            return result
+
         # Preserve non-mapping payloads verbatim in chatgpt/compact modes.
         if not isinstance(result, Mapping):
             return result
@@ -2421,6 +2455,12 @@ def _chatgpt_friendly_result(
         except Exception:
             pass
         return result
+    finally:
+        # Ensure dynamic READ/WRITE annotations do not "stick" across invocations.
+        if tool_func is not None and base_write_action is not None:
+            _restore_tool_annotations_after_invocation(
+                tool_func, base_write_action=bool(base_write_action)
+            )
 
 
 def _log_tool_warning(
@@ -3914,6 +3954,9 @@ def mcp_tool(
                         exc=exc,
                         all_args=all_args,
                     )
+                    _restore_tool_annotations_after_invocation(
+                        wrapper, base_write_action=bool(write_action)
+                    )
                     raise
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
@@ -3983,6 +4026,8 @@ def mcp_tool(
                         req=req,
                         tool_name=tool_name,
                         all_args=all_args,
+                        tool_func=wrapper,
+                        base_write_action=write_action,
                     )
 
                 try:
@@ -4096,6 +4141,8 @@ def mcp_tool(
                         req=req,
                         tool_name=tool_name,
                         all_args=all_args,
+                        tool_func=wrapper,
+                        base_write_action=write_action,
                     )
 
                 # Preserve scalar return types for tools that naturally return scalars.
@@ -4183,6 +4230,8 @@ def mcp_tool(
                     req=req,
                     tool_name=tool_name,
                     all_args=all_args,
+                    tool_func=wrapper,
+                    base_write_action=write_action,
                 )
 
             wrapper.__mcp_tool__ = _register_with_fastmcp(
@@ -4337,6 +4386,9 @@ def mcp_tool(
                     exc=exc,
                     all_args=all_args,
                 )
+                _restore_tool_annotations_after_invocation(
+                    wrapper, base_write_action=bool(write_action)
+                )
                 raise
             except Exception as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
@@ -4399,6 +4451,8 @@ def mcp_tool(
                     req=req,
                     tool_name=tool_name,
                     all_args=all_args,
+                    tool_func=wrapper,
+                    base_write_action=write_action,
                 )
 
             try:
@@ -4503,6 +4557,8 @@ def mcp_tool(
                     req=req,
                     tool_name=tool_name,
                     all_args=all_args,
+                    tool_func=wrapper,
+                    base_write_action=write_action,
                 )
 
             # Preserve scalar return types for tools that naturally return scalars.
@@ -4582,6 +4638,8 @@ def mcp_tool(
                 req=req,
                 tool_name=tool_name,
                 all_args=all_args,
+                tool_func=wrapper,
+                base_write_action=write_action,
             )
 
         wrapper.__mcp_tool__ = _register_with_fastmcp(

@@ -123,7 +123,11 @@ def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) ->
 
 
 def test_registered_tool_annotations_update_on_invocation(monkeypatch) -> None:
-    """Tool registry annotations should reflect the latest invocation classification."""
+    """Tool registry annotations must reset to the registered baseline after a call.
+
+    The invocation payload should still reflect the effective READ/WRITE
+    classification for the call.
+    """
 
     _set_auto_approve(monkeypatch, False)
 
@@ -163,24 +167,36 @@ def test_registered_tool_annotations_update_on_invocation(monkeypatch) -> None:
 
     out_read = dyn_tool_obj(mode="read")
     assert out_read.get("gating", {}).get("effective_write_action") is False
-    ann_read = tool_obj.get("annotations", {})
-    assert ann_read.get("readOnlyHint") is True
-    assert ann_read.get("destructiveHint") is False
+    # Invocation-level gating is READ.
+    ann_read_gating = out_read.get("gating", {}).get("annotations", {})
+    assert ann_read_gating.get("readOnlyHint") is True
+    assert ann_read_gating.get("destructiveHint") is False
+
+    # Registry-level tool annotations must be restored to the base WRITE tag.
+    ann_read_registry = tool_obj.get("annotations", {})
+    assert ann_read_registry.get("readOnlyHint") is False
+    assert ann_read_registry.get("destructiveHint") is True
 
     out_write = dyn_tool_obj(mode="write")
     assert out_write.get("gating", {}).get("effective_write_action") is True
-    ann_write = tool_obj.get("annotations", {})
-    assert ann_write.get("readOnlyHint") is False
-    assert ann_write.get("destructiveHint") is True
+    ann_write_gating = out_write.get("gating", {}).get("annotations", {})
+    assert ann_write_gating.get("readOnlyHint") is False
+    assert ann_write_gating.get("destructiveHint") is True
+
+    # Registry-level annotations remain base WRITE after any invocation.
+    ann_write_registry = tool_obj.get("annotations", {})
+    assert ann_write_registry.get("readOnlyHint") is False
+    assert ann_write_registry.get("destructiveHint") is True
 
 
 def test_tool_obj_meta_annotations_overwrite_on_invocation(monkeypatch) -> None:
-    """Tool objects without a writable `.annotations` must still toggle hints.
+    """Tool objects without a writable `.annotations` must still avoid stuck hints.
 
     Some FastMCP tool implementations expose annotations via `meta["annotations"]`
     and either omit `.annotations` or provide it as a read-only property.
-    In those cases, the decorators fallback path must overwrite the meta entry
-    each invocation so READ/WRITE UI tags do not get stuck.
+    In those cases, the decorators fallback path must refresh invocation
+    annotations (for client gating) and then restore baseline registry
+    annotations after the call completes.
     """
 
     _set_auto_approve(monkeypatch, False)
@@ -221,15 +237,27 @@ def test_tool_obj_meta_annotations_overwrite_on_invocation(monkeypatch) -> None:
     tool_obj = meta_ann_tool.__mcp_tool__
     assert isinstance(tool_obj, ToolObj)
 
-    _ = meta_ann_tool(mode="read")
-    ann_read = tool_obj.meta.get("annotations", {})
-    assert ann_read.get("readOnlyHint") is True
-    assert ann_read.get("destructiveHint") is False
+    out_read = meta_ann_tool(mode="read")
+    assert out_read.get("gating", {}).get("effective_write_action") is False
+    ann_read_gating = out_read.get("gating", {}).get("annotations", {})
+    assert ann_read_gating.get("readOnlyHint") is True
+    assert ann_read_gating.get("destructiveHint") is False
 
-    _ = meta_ann_tool(mode="write")
-    ann_write = tool_obj.meta.get("annotations", {})
-    assert ann_write.get("readOnlyHint") is False
-    assert ann_write.get("destructiveHint") is True
+    # Registry annotations are restored to baseline WRITE.
+    ann_read_registry = tool_obj.meta.get("annotations", {})
+    assert ann_read_registry.get("readOnlyHint") is False
+    assert ann_read_registry.get("destructiveHint") is True
+
+    out_write = meta_ann_tool(mode="write")
+    assert out_write.get("gating", {}).get("effective_write_action") is True
+    ann_write_gating = out_write.get("gating", {}).get("annotations", {})
+    assert ann_write_gating.get("readOnlyHint") is False
+    assert ann_write_gating.get("destructiveHint") is True
+
+    # Registry annotations remain baseline WRITE.
+    ann_write_registry = tool_obj.meta.get("annotations", {})
+    assert ann_write_registry.get("readOnlyHint") is False
+    assert ann_write_registry.get("destructiveHint") is True
 
 
 def test_http_tool_registry_uses_effective_write_action_for_retries(
