@@ -856,11 +856,109 @@ class _StructuredFormatter(logging.Formatter):
         if not should_append:
             return base
 
+        # Provider logs can include both scan-friendly inline context in the
+        # message and the same data in structured extras. Prune redundant
+        # fields for human-facing logs to keep output compact.
+        if HUMAN_LOGS:
+            extra_payload = _prune_redundant_extras(event, extra_payload)
+
         extra_payload = _sanitize_for_logs(extra_payload)
         extras_block = _format_extras_block(extra_payload)
         if extras_block:
             return f"{base}\n{extras_block}"
         return base
+
+
+def _prune_redundant_extras(event: object, payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Remove duplicated / redundant keys from structured extras for HUMAN_LOGS.
+
+    The logger message already includes a compact summary for tool + HTTP events
+    (e.g. REQ/RES lines and request_id). When LOG_APPEND_EXTRAS is enabled, the
+    same fields can appear again in the extras block. This helper trims fields
+    that are already present in the base message while preserving high-signal
+    debugging payloads (e.g. request/response bodies, raw tool results).
+    """
+
+    if not isinstance(payload, Mapping) or not payload:
+        return {}
+
+    out: dict[str, Any] = dict(payload)
+    ev = event if isinstance(event, str) else ""
+
+    # Tool lifecycle events already embed tool name, call id (optionally),
+    # write badge, and log context inline in the message.
+    if ev.startswith("tool_"):
+        # The event name is already available via the formatted line prefix and
+        # does not add value in the extras block for humans.
+        out.pop("event", None)
+
+        # IDs/context are already present inline (REQ/RES) when enabled.
+        out.pop("tool", None)
+        out.pop("call_id", None)
+        out.pop("schema_hash", None)
+        out.pop("schema_present", None)
+        out.pop("log_context", None)
+        if LOG_INLINE_CONTEXT:
+            out.pop("request", None)
+
+        # Duration is shown in the message for completed/failed events.
+        out.pop("duration_ms", None)
+
+        # Collapse/no-op gating details when they add no information beyond the
+        # inline write badge.
+        gating = out.get("gating")
+        if isinstance(gating, Mapping):
+            base = gating.get("base_write_action")
+            effective = gating.get("effective_write_action")
+            annotations = gating.get("annotations")
+            nonempty_annotations: dict[str, Any] = {}
+            if isinstance(annotations, Mapping):
+                nonempty_annotations = {k: v for k, v in annotations.items() if v}
+
+            if base == effective and not nonempty_annotations:
+                out.pop("gating", None)
+            else:
+                collapsed: dict[str, Any] = {}
+                if base == effective:
+                    collapsed["write_action"] = bool(effective)
+                else:
+                    collapsed["base_write_action"] = bool(base)
+                    collapsed["effective_write_action"] = bool(effective)
+                if nonempty_annotations:
+                    collapsed["annotations"] = nonempty_annotations
+                out["gating"] = collapsed
+
+        # The inline message already includes the report summary; keep the rest.
+        report = out.get("report")
+        if isinstance(report, Mapping):
+            report_out = dict(report)
+            report_out.pop("tool", None)
+            report_out.pop("summary", None)
+            # Avoid repeating gating in two places.
+            report_out.pop("gating", None)
+            if report_out:
+                out["report"] = report_out
+            else:
+                out.pop("report", None)
+
+        return out
+
+    # HTTP request middleware already prints method/path/status/duration + IDs.
+    if ev in {"http_request", "http_exception", "render_http"}:
+        out.pop("event", None)
+        for key in (
+            "request_id",
+            "session_id",
+            "message_id",
+            "method",
+            "path",
+            "status_code",
+            "duration_ms",
+        ):
+            out.pop(key, None)
+        return out
+
+    return out
 
 
 def _format_extras_block(payload: Mapping[str, Any]) -> str:
