@@ -258,10 +258,6 @@ STRIP_INTERNAL_LOG_FIELDS = _env_flag(
 
 def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
     """Determine response shaping mode.
-
-    - If ADAPTIV_MCP_RESPONSE_MODE is set to a non-raw value, honor it.
-    - Otherwise, if the inbound request includes ChatGPT metadata, default to
-      'chatgpt' (ChatGPT-hosted connectors benefit from consistent, compact outputs).
     """
     if _running_under_pytest():
         return "raw"
@@ -361,9 +357,6 @@ def _parse_bool(value: object) -> bool | None:
 
 def _effective_redact_tool_outputs(req: Mapping[str, Any] | None) -> bool:
     """Determine whether to redact client-facing tool outputs.
-
-    For this replacement we explicitly disable redaction and per-request overrides so
-    that the runtime never redacts tool outputs returned to clients.
     """
     # Explicitly always return False: redaction is disabled.
     return False
@@ -390,9 +383,6 @@ _PROVIDER_METADATA = {
 
 def _inject_provider_metadata(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     """Inject provider metadata into a mapping payload.
-
-    This is the single canonical provider surface. Backwards-compatibility
-    aliases are intentionally not emitted.
     """
 
     if not isinstance(payload, Mapping):
