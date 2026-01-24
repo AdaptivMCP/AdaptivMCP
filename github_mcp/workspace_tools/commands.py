@@ -11,7 +11,7 @@ from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
-from github_mcp.utils import _env_flag, _normalize_timeout_seconds
+from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import (
     _cmd_invokes_git,
@@ -94,7 +94,9 @@ def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
                         try:
                             os.remove(os.path.join(root, fn))
                         except Exception as exc:
-                            errors.append(f"remove_file:{os.path.relpath(os.path.join(root, fn), repo_real)}:{exc}")
+                            errors.append(
+                                f"remove_file:{os.path.relpath(os.path.join(root, fn), repo_real)}:{exc}"
+                            )
                     for dn in dirs:
                         try:
                             os.rmdir(os.path.join(root, dn))
@@ -151,9 +153,7 @@ def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
                 os.rmdir(pyc_dir)
                 removed_dirs += 1
             except Exception as exc:
-                errors.append(
-                    f"remove_dir:{os.path.relpath(pyc_dir, repo_real)}:{exc}"
-                )
+                errors.append(f"remove_dir:{os.path.relpath(pyc_dir, repo_real)}:{exc}")
             try:
                 dirs.remove("__pycache__")
             except ValueError:
@@ -207,7 +207,9 @@ def _normalize_command_payload(
         if isinstance(command_lines, str):
             raw_lines: list[str] = command_lines.splitlines()
         elif isinstance(command_lines, (list, tuple)):
-            raw_lines = [line if isinstance(line, str) else str(line) for line in command_lines]
+            raw_lines = [
+                line if isinstance(line, str) else str(line) for line in command_lines
+            ]
         else:
             try:
                 raw_lines = [str(line) for line in list(command_lines)]  # type: ignore[arg-type]

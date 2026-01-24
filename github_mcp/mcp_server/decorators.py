@@ -257,8 +257,7 @@ STRIP_INTERNAL_LOG_FIELDS = _env_flag(
 
 
 def _effective_response_mode(req: Mapping[str, Any] | None = None) -> str:
-    """Determine response shaping mode.
-    """
+    """Determine response shaping mode."""
     if _running_under_pytest():
         return "raw"
 
@@ -356,8 +355,7 @@ def _parse_bool(value: object) -> bool | None:
 
 
 def _effective_redact_tool_outputs(req: Mapping[str, Any] | None) -> bool:
-    """Determine whether to redact client-facing tool outputs.
-    """
+    """Determine whether to redact client-facing tool outputs."""
     # Explicitly always return False: redaction is disabled.
     return False
 
@@ -382,8 +380,7 @@ _PROVIDER_METADATA = {
 
 
 def _inject_provider_metadata(payload: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Inject provider metadata into a mapping payload.
-    """
+    """Inject provider metadata into a mapping payload."""
 
     if not isinstance(payload, Mapping):
         return {}

@@ -870,11 +870,7 @@ def _format_extras_block(payload: Mapping[str, Any]) -> str:
     if not isinstance(payload, Mapping) or not payload:
         return ""
 
-    cleaned = {
-        k: v
-        for k, v in payload.items()
-        if v not in (None, "", [], {})
-    }
+    cleaned = {k: v for k, v in payload.items() if v not in (None, "", [], {})}
     if not cleaned:
         return ""
 

@@ -151,7 +151,9 @@ async def test_run_python_preserves_user_filename(monkeypatch, tmp_path):
 
 
 @pytest.mark.anyio
-async def test_terminal_command_pytest_cleans_artifacts_and_sets_env(monkeypatch, tmp_path):
+async def test_terminal_command_pytest_cleans_artifacts_and_sets_env(
+    monkeypatch, tmp_path
+):
     import github_mcp.workspace_tools.commands as commands
 
     repo_dir = tmp_path / "repo"

@@ -521,14 +521,14 @@ class _RequestContextMiddleware:
                     duration_ms = (time.perf_counter() - access_started_at) * 1000
                     payload = _compact_http_payload(
                         {
-                        "event": "http_exception",
-                        "request_id": request_id,
-                        "session_id": REQUEST_SESSION_ID.get(),
-                        "message_id": REQUEST_MESSAGE_ID.get(),
-                        "method": scope.get("method"),
-                        "path": path,
-                        "duration_ms": duration_ms,
-                        "exception_type": type(exc).__name__,
+                            "event": "http_exception",
+                            "request_id": request_id,
+                            "session_id": REQUEST_SESSION_ID.get(),
+                            "message_id": REQUEST_MESSAGE_ID.get(),
+                            "method": scope.get("method"),
+                            "path": path,
+                            "duration_ms": duration_ms,
+                            "exception_type": type(exc).__name__,
                         }
                     )
                     LOGGER.info(
@@ -549,14 +549,14 @@ class _RequestContextMiddleware:
                 duration_ms = (time.perf_counter() - access_started_at) * 1000
                 payload = _compact_http_payload(
                     {
-                    "event": "http_exception",
-                    "request_id": request_id,
-                    "session_id": REQUEST_SESSION_ID.get(),
-                    "message_id": REQUEST_MESSAGE_ID.get(),
-                    "method": scope.get("method"),
-                    "path": path,
-                    "duration_ms": duration_ms,
-                    "exception_type": type(exc).__name__,
+                        "event": "http_exception",
+                        "request_id": request_id,
+                        "session_id": REQUEST_SESSION_ID.get(),
+                        "message_id": REQUEST_MESSAGE_ID.get(),
+                        "method": scope.get("method"),
+                        "path": path,
+                        "duration_ms": duration_ms,
+                        "exception_type": type(exc).__name__,
                     }
                 )
                 LOGGER.info(
