@@ -376,9 +376,8 @@ async def run_lint_suite(
         f"- Ref: {ref}",
     ]
 
-    combined_command = lint_command
     if include_format_check and format_command:
-        combined_command = f"{format_command} && {lint_command}"
+        pass
 
     use_single_runner = bool(use_temp_venv) and bool(installing_dependencies)
 
@@ -422,7 +421,7 @@ async def run_lint_suite(
         )
         steps.append(lint_step)
 
-        exit_code = (lint_step.get("summary") or {}).get("exit_code")
+        (lint_step.get("summary") or {}).get("exit_code")
         status = "passed" if lint_step.get("status") == "passed" else "failed"
         controller_log.append(f"- Status: {status}")
 
@@ -506,7 +505,6 @@ async def run_lint_suite(
             if isinstance(p, dict) and p.get("name")
         }
 
-        exit_code: int | None = 0
         status = "passed"
 
         for step_def in runner_steps:
@@ -540,10 +538,9 @@ async def run_lint_suite(
 
             if step_status == "failed" and status != "failed":
                 status = "failed"
-                exit_code = step_exit
 
         lint_step = next((s for s in steps if s.get("name") == "lint"), None)
-        lint_summary = (
+        (
             (lint_step or {}).get("summary") if isinstance(lint_step, dict) else {}
         )
 
