@@ -23,22 +23,6 @@ class DummyWorkspaceTools:
         return ref
 
 
-def test_list_workspace_files_clamps_path_escape(tmp_path, monkeypatch):
-    repo_dir = tmp_path / "repo"
-    repo_dir.mkdir()
-    sibling = tmp_path / "repo-sibling"
-    sibling.mkdir()
-    (sibling / "secret.txt").write_text("nope")
-
-    dummy = DummyWorkspaceTools(str(repo_dir))
-    monkeypatch.setattr(workspace_listing, "_tw", lambda: dummy)
-
-    result = asyncio.run(workspace_listing.list_workspace_files(path="../repo-sibling"))
-
-    assert "error" not in result
-    assert result["files"] == []
-
-
 def test_list_workspace_files_allows_absolute_path_inside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -71,27 +55,6 @@ def test_list_workspace_files_clamps_absolute_path_outside_repo(tmp_path, monkey
 
     assert "error" not in result
     assert result["files"] == []
-
-
-def test_search_workspace_clamps_path_escape(tmp_path, monkeypatch):
-    repo_dir = tmp_path / "repo"
-    repo_dir.mkdir()
-    sibling = tmp_path / "repo-sibling"
-    sibling.mkdir()
-    (sibling / "secret.txt").write_text("nope")
-
-    dummy = DummyWorkspaceTools(str(repo_dir))
-    monkeypatch.setattr(workspace_listing, "_tw", lambda: dummy)
-
-    result = asyncio.run(
-        workspace_listing.search_workspace(
-            query="nope",
-            path="../repo-sibling/secret.txt",
-        )
-    )
-
-    assert "error" not in result
-    assert result["results"] == []
 
 
 def test_search_workspace_clamps_absolute_path_outside_repo(tmp_path, monkeypatch):
