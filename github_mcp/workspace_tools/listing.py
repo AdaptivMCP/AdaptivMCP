@@ -521,6 +521,8 @@ async def search_workspace(
 ) -> dict[str, Any]:
     """Search text files in the repo mirror (workspace clone) (bounded, no shell).
 
+    Searches are always case-insensitive.
+
     Behavior for `query`:
     - When regex=true, `query` is treated as a Python regular expression.
     - Otherwise `query` is treated as a literal substring match.
@@ -533,6 +535,9 @@ async def search_workspace(
         raise ValueError("query must be a non-empty string")
 
     try:
+        # Searches are always case-insensitive; ignore case_sensitive input.
+        case_sensitive = False
+
         deps = _tw()._workspace_deps()
         full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _tw()._resolve_ref(ref, branch=branch)

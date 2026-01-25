@@ -476,9 +476,14 @@ async def rg_search_workspace(
     Returns structured matches with {path, line, column, text}. When
     context_lines > 0, each match includes an `excerpt` object with surrounding
     lines and line numbers.
+
+    Searches are always case-insensitive.
     """
 
     try:
+        # Searches are always case-insensitive; ignore case_sensitive input.
+        case_sensitive = False
+
         if not isinstance(query, str) or not query.strip():
             raise ValueError("query must be a non-empty string")
         if not isinstance(max_results, int) or max_results < 1:
