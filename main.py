@@ -293,6 +293,27 @@ class _RequestContextMiddleware:
                 if value not in (None, "", [], {})
             }
 
+        def _sanitize_log_text(text: str) -> str:
+            """Sanitize strings that may be rendered verbatim by log sinks.
+
+            We collapse all whitespace (including newlines/tabs) into single
+            spaces and remove backticks to avoid markdown/code-fence rendering
+            in some log viewers.
+            """
+
+            return " ".join(text.replace("`", "'").split())
+
+        def _sanitize_log_value(value: Any) -> Any:
+            """Recursively sanitize log payloads while keeping structure."""
+
+            if isinstance(value, str):
+                return _sanitize_log_text(value)
+            if isinstance(value, dict):
+                return {k: _sanitize_log_value(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_sanitize_log_value(v) for v in value]
+            return value
+
         async def send_access_wrapper(message):
             nonlocal access_logged
             nonlocal response_status, response_headers
@@ -382,9 +403,13 @@ class _RequestContextMiddleware:
 
                     if captured_body is not None:
                         try:
-                            payload["request_body"] = captured_body.decode(
-                                "utf-8", errors="replace"
-                            )
+                            decoded = captured_body.decode("utf-8", errors="replace")
+                            try:
+                                payload["request_json"] = _sanitize_log_value(
+                                    json.loads(decoded)
+                                )
+                            except Exception:
+                                payload["request_body"] = _sanitize_log_text(decoded)
                         except Exception:
                             payload["request_body"] = repr(captured_body)
                         if captured_body_truncated:
@@ -393,9 +418,13 @@ class _RequestContextMiddleware:
                     resp_bytes = b"".join(response_body_chunks)
                     if resp_bytes:
                         try:
-                            payload["response_body"] = resp_bytes.decode(
-                                "utf-8", errors="replace"
-                            )
+                            decoded = resp_bytes.decode("utf-8", errors="replace")
+                            try:
+                                payload["response_json"] = _sanitize_log_value(
+                                    json.loads(decoded)
+                                )
+                            except Exception:
+                                payload["response_body"] = _sanitize_log_text(decoded)
                         except Exception:
                             payload["response_body"] = repr(resp_bytes)
                         if response_body_truncated:
