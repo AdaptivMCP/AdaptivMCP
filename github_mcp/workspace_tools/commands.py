@@ -840,7 +840,7 @@ async def run_command_alias(
     This exists for older MCP clients that still invoke `run_command`.
     """
 
-    return await terminal_command(
+    payload = await terminal_command(
         full_name=full_name,
         ref=ref,
         command=command,
@@ -850,6 +850,12 @@ async def run_command_alias(
         use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
     )
+    if isinstance(payload, dict):
+        if payload.get("command_input") == payload.get("command"):
+            payload.pop("command_input", None)
+        if command_lines is None:
+            payload.pop("command_lines", None)
+    return payload
 
 
 @mcp_tool(
