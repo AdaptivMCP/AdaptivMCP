@@ -357,7 +357,9 @@ _ARG_WRAPPER_KEYS = ("arguments", "args", "parameters", "input", "kwargs")
 def _extract_wrapped_args(container: dict[str, Any]) -> Any | None:
     for key in _ARG_WRAPPER_KEYS:
         if key in container:
-            return container.get(key)
+            value = container.get(key)
+            if value is not None:
+                return value
     return None
 
 
@@ -394,7 +396,12 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
     if args is None:
         return {}
     if isinstance(args, dict):
-        return {k: v for k, v in args.items() if k != "_meta"}
+        sanitized = {
+            k: v
+            for k, v in args.items()
+            if not (k in _ARG_WRAPPER_KEYS and v is None)
+        }
+        return {k: v for k, v in sanitized.items() if k != "_meta"}
     if isinstance(args, (list, tuple)):
         normalized: dict[str, Any] = {}
         for entry in args:
