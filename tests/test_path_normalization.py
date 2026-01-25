@@ -52,3 +52,14 @@ def test_normalize_repo_path_for_repo_repo_root_like_values_permissive(
     full_name = "octo-org/octo-repo"
     monkeypatch.delenv("ADAPTIV_MCP_STRICT_CONTRACTS", raising=False)
     assert utils._normalize_repo_path_for_repo(full_name, value) == ""
+
+
+def test_normalize_repo_path_rejects_parent_traversal():
+    from github_mcp import utils
+    from github_mcp.exceptions import GitHubAPIError
+
+    with pytest.raises(GitHubAPIError):
+        utils._normalize_repo_path("../secrets.txt")
+
+    with pytest.raises(GitHubAPIError):
+        utils._normalize_repo_path("docs/../secrets.txt")

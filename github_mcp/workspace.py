@@ -312,27 +312,29 @@ def _workspace_path(full_name: str, ref: str) -> str:
 
 
 def _sanitize_workspace_ref(ref: str) -> str:
-    """Convert an arbitrary ref string into a safe workspace directory name.
-
-    The returned value is guaranteed to be a single path segment (no path
-    separators) and stable for the same input.
-    """
+    """Convert an arbitrary ref string into a safe workspace directory name."""
 
     if not isinstance(ref, str) or not ref.strip():
         return "main"
 
-    raw = ref.strip()
+    raw = ref.strip().replace("\\", "/")
+    if raw.startswith("/"):
+        raise GitHubAPIError("ref must not be an absolute path")
 
-    # Normalize separators and strip leading slashes to avoid absolute paths.
-    raw = raw.replace("\\", "/").lstrip("/")
+    parts: list[str] = []
+    for part in raw.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            raise GitHubAPIError("ref must not contain '..' segments")
+        if ":" in part:
+            raise GitHubAPIError("ref must not contain ':' characters")
+        parts.append(part)
 
-    # Collapse separators and Windows drive markers into safe tokens.
-    raw = raw.replace("/", "__").replace(":", "__")
-
-    if not raw.strip():
+    if not parts:
         return "main"
 
-    return raw.strip()
+    return "/".join(parts)
 
 
 async def _clone_repo(
@@ -978,17 +980,13 @@ def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
         candidate = ""
 
     if not candidate:
-        # Clamp traversal attempts back to repo root to avoid brittle hard-fails
-        # from LLM clients that produce "../" paths.
         rel_path = raw_path.lstrip("/\\")
         parts: list[str] = []
         for part in rel_path.split("/"):
             if part in ("", "."):
                 continue
             if part == "..":
-                if parts:
-                    parts.pop()
-                continue
+                raise GitHubAPIError("path must not contain '..' segments")
             parts.append(part)
         rel_path = "/".join(parts)
         if not rel_path:

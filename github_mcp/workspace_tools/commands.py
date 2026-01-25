@@ -263,15 +263,13 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
         if not normalized:
             return repo_real
 
-    # Clamp any parent-directory traversal attempts back to repo root.
+    # Reject parent-directory traversal rather than clamping.
     parts: list[str] = []
     for part in normalized.split("/"):
         if part in ("", "."):
             continue
         if part == "..":
-            if parts:
-                parts.pop()
-            continue
+            raise ValueError("workdir must not contain '..' segments")
         parts.append(part)
     normalized = "/".join(parts)
     if not normalized:
@@ -279,8 +277,7 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
 
     candidate = os.path.realpath(os.path.join(repo_real, normalized))
     if candidate != repo_real and not candidate.startswith(repo_real + os.sep):
-        # Clamp traversal/escape attempts back to repo root.
-        return repo_real
+        raise ValueError("workdir must resolve inside the workspace repository")
     if not os.path.isdir(candidate):
         return repo_real
     return candidate
@@ -651,15 +648,13 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
         if not normalized:
             return ".mcp_tmp/invalid_path"
 
-    # Clamp traversal attempts back to repo root so LLM callers don't hard-fail.
+    # Reject parent-directory traversal rather than clamping.
     parts: list[str] = []
     for part in normalized.split("/"):
         if part in ("", "."):
             continue
         if part == "..":
-            if parts:
-                parts.pop()
-            continue
+            raise ValueError("path must not contain '..' segments")
         parts.append(part)
     normalized = "/".join(parts)
     if not normalized:
