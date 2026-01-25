@@ -397,9 +397,7 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
         return {}
     if isinstance(args, dict):
         sanitized = {
-            k: v
-            for k, v in args.items()
-            if not (k in _ARG_WRAPPER_KEYS and v is None)
+            k: v for k, v in args.items() if not (k in _ARG_WRAPPER_KEYS and v is None)
         }
         return {k: v for k, v in sanitized.items() if k != "_meta"}
     if isinstance(args, (list, tuple)):

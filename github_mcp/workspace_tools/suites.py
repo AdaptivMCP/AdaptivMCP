@@ -540,9 +540,7 @@ async def run_lint_suite(
                 status = "failed"
 
         lint_step = next((s for s in steps if s.get("name") == "lint"), None)
-        (
-            (lint_step or {}).get("summary") if isinstance(lint_step, dict) else {}
-        )
+        ((lint_step or {}).get("summary") if isinstance(lint_step, dict) else {})
 
         controller_log.append(f"- Status: {status}")
 

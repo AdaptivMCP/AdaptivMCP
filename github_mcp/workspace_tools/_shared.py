@@ -123,7 +123,11 @@ def _build_quality_suite_payload(
     for key, value, default in (
         ("test_command", test_command, _QUALITY_SUITE_DEFAULTS["test_command"]),
         ("lint_command", lint_command, _QUALITY_SUITE_DEFAULTS["lint_command"]),
-        ("timeout_seconds", timeout_seconds, _QUALITY_SUITE_DEFAULTS["timeout_seconds"]),
+        (
+            "timeout_seconds",
+            timeout_seconds,
+            _QUALITY_SUITE_DEFAULTS["timeout_seconds"],
+        ),
         ("fail_fast", fail_fast, _QUALITY_SUITE_DEFAULTS["fail_fast"]),
         (
             "developer_defaults",
