@@ -68,9 +68,11 @@ that should surface as clear, single-line messages.【F:github_mcp/exceptions.py
 
 Patch application in the workspace layer performs explicit validation for
 common patch failures and assigns category/code metadata so errors are stable
-for callers:
+for callers. Patch-related failures are categorized as `patch` errors (rather
+than validation errors) to make it clear they are resolved by fixing the patch
+contents or target paths:
 
-- Empty patches raise a validation error with `PATCH_EMPTY`.
+- Empty patches raise a `patch` error with `PATCH_EMPTY`.
 - Malformed patches map to `PATCH_MALFORMED`.
 - Missing files map to `FILE_NOT_FOUND`.
 - Conflicts map to `PATCH_APPLY_FAILED` / `PATCH_DOES_NOT_APPLY`.
@@ -88,7 +90,7 @@ error_detail}` payload. The logic:
 - Maps upstream API errors (`APIError`) to categories based on HTTP status
   (e.g., 400/422 → validation, 404 → not_found, 409 → conflict).
 - Uses heuristic parsing for patch-related `GitHubAPIError` messages.
-- Sanitizes validation error arguments to avoid leaking token-like data.
+- Sanitizes validation and patch error arguments to avoid leaking token-like data.
 
 See `_structured_tool_error` for the detailed mapping and sanitization
 behavior.【F:github_mcp/mcp_server/error_handling.py†L86-L436】

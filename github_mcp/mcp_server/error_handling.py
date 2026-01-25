@@ -339,7 +339,7 @@ def _structured_tool_error(
             or "received empty patch" in lowered
             or "unsupported patch action" in lowered
         ):
-            category = "validation"
+            category = "patch"
             code = code or "PATCH_MALFORMED"
 
         # Path validation errors.
@@ -354,12 +354,12 @@ def _structured_tool_error(
             or "path not found" in lowered
             or ("not found" in lowered and "path" in lowered)
         ):
-            category = "not_found"
+            category = "patch"
             code = code or "FILE_NOT_FOUND"
 
         # Patch hunks not applying cleanly.
         elif "does not apply" in lowered or "patch does not apply" in lowered:
-            category = "conflict"
+            category = "patch"
             code = code or "PATCH_DOES_NOT_APPLY"
 
     # 4) UsageError is a user-facing error by default.
@@ -389,7 +389,7 @@ def _structured_tool_error(
     # including tokens or other high-entropy strings). To avoid upstream safety
     # blocks in hosted connector environments, sanitize these argument values.
     if args is not None:
-        if category == "validation":
+        if category in {"validation", "patch"}:
             try:
                 error_detail["debug"] = {
                     "args": _sanitize_debug_value(args),

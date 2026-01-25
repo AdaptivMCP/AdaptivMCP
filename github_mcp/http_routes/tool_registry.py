@@ -185,6 +185,10 @@ def _infer_error_category(code: str, category: str, message: str) -> str:
         return "validation"
     if "preflight validation" in msg:
         return "validation"
+    if code_norm.startswith("patch_"):
+        return "patch"
+    if "patch" in msg and ("apply" in msg or "diff" in msg):
+        return "patch"
 
     return "internal"
 
@@ -520,6 +524,12 @@ def _status_code_for_error(error: dict[str, Any]) -> int:
         return 404
     if category == "conflict":
         return 409
+    if category == "patch":
+        if code_norm in {"file_not_found"}:
+            return 404
+        if code_norm in {"patch_does_not_apply", "patch_apply_failed"}:
+            return 409
+        return 400
     if category == "timeout":
         return 504
     if category == "upstream":
