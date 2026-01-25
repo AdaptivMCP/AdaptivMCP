@@ -213,7 +213,7 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag(
 # the decorator can wrap scalar outputs, add ok/status when missing, and
 # truncate very large nested "json" payloads.
 RESPONSE_MODE_DEFAULT = (
-    os.environ.get("ADAPTIV_MCP_RESPONSE_MODE", "compact").strip().lower()
+    os.environ.get("ADAPTIV_MCP_RESPONSE_MODE", "raw").strip().lower()
 )
 CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int(
     "ADAPTIV_MCP_RESPONSE_MAX_LIST_ITEMS", default=0
