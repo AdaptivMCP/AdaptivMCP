@@ -108,6 +108,9 @@ apply_workspace_operations = _fs.apply_workspace_operations
 compare_workspace_files = _fs.compare_workspace_files
 make_workspace_diff = _fs.make_workspace_diff
 make_workspace_patch = _fs.make_workspace_patch
+make_diff = _fs.make_diff
+make_patch = _fs.make_patch
+apply_diff = _fs.apply_diff
 
 list_workspace_files = _listing.list_workspace_files
 search_workspace = _listing.search_workspace

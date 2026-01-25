@@ -2349,6 +2349,79 @@ async def make_workspace_patch(
         return _structured_tool_error(exc, context="make_workspace_patch", path=path)
 
 
+@mcp_tool(write_action=False, name="make_diff")
+async def make_diff(
+    full_name: str,
+    ref: str = "main",
+    *,
+    path: str | None = None,
+    before: str | None = None,
+    after: str | None = None,
+    updated_content: str | None = None,
+    context_lines: int = 3,
+    max_chars_per_side: int = 200_000,
+    max_diff_chars: int = 200_000,
+    fromfile: str | None = None,
+    tofile: str | None = None,
+) -> dict[str, Any]:
+    """Backward-compatible alias for :func:`make_workspace_diff`."""
+
+    try:
+        return await _build_workspace_diff_payload(
+            full_name=full_name,
+            ref=ref,
+            path=path,
+            before=before,
+            after=after,
+            updated_content=updated_content,
+            context_lines=context_lines,
+            max_chars_per_side=max_chars_per_side,
+            max_diff_chars=max_diff_chars,
+            fromfile=fromfile,
+            tofile=tofile,
+        )
+    except Exception as exc:
+        return _structured_tool_error(exc, context="make_diff", path=path)
+
+
+@mcp_tool(write_action=False, name="make_patch")
+async def make_patch(
+    full_name: str,
+    ref: str = "main",
+    *,
+    path: str | None = None,
+    before: str | None = None,
+    after: str | None = None,
+    updated_content: str | None = None,
+    context_lines: int = 3,
+    max_chars_per_side: int = 200_000,
+    max_diff_chars: int = 200_000,
+    fromfile: str | None = None,
+    tofile: str | None = None,
+) -> dict[str, Any]:
+    """Backward-compatible alias for :func:`make_workspace_patch`."""
+
+    try:
+        payload = await _build_workspace_diff_payload(
+            full_name=full_name,
+            ref=ref,
+            path=path,
+            before=before,
+            after=after,
+            updated_content=updated_content,
+            context_lines=context_lines,
+            max_chars_per_side=max_chars_per_side,
+            max_diff_chars=max_diff_chars,
+            fromfile=fromfile,
+            tofile=tofile,
+        )
+        patch = payload.pop("diff", "")
+        payload["patch"] = patch
+        return payload
+    except Exception as exc:
+        return _structured_tool_error(exc, context="make_patch", path=path)
+
+
 @mcp_tool(write_action=True)
 async def set_workspace_file_contents(
     full_name: str,
@@ -3269,6 +3342,44 @@ async def apply_workspace_diff(
         push=push,
         check_changes=check_changes,
         context="apply_workspace_diff",
+    )
+
+
+@mcp_tool(
+    write_action=True,
+    name="apply_diff",
+    open_world_hint=True,
+    destructive_hint=True,
+    ui={
+        "group": "workspace",
+        "icon": "🧩",
+        "label": "Apply Diff",
+        "danger": "high",
+    },
+)
+async def apply_diff(
+    full_name: str,
+    ref: str = "main",
+    *,
+    diff: str | list[str],
+    add: bool = False,
+    commit: bool = False,
+    commit_message: str = "Apply diff",
+    push: bool = False,
+    check_changes: bool = False,
+) -> dict[str, Any]:
+    """Backward-compatible alias for :func:`apply_workspace_diff`."""
+
+    return await _apply_patch_impl(
+        full_name=full_name,
+        ref=ref,
+        patch=diff,
+        add=add,
+        commit=commit,
+        commit_message=commit_message,
+        push=push,
+        check_changes=check_changes,
+        context="apply_diff",
     )
 
 
