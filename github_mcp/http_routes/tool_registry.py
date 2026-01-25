@@ -351,6 +351,16 @@ def _log_http_structured_error(
         return
 
 
+_ARG_WRAPPER_KEYS = ("arguments", "args", "parameters", "input", "kwargs")
+
+
+def _extract_wrapped_args(container: dict[str, Any]) -> Any | None:
+    for key in _ARG_WRAPPER_KEYS:
+        if key in container:
+            return container.get(key)
+    return None
+
+
 def _normalize_payload(payload: Any) -> dict[str, Any]:
     """Normalize incoming tool invocation payloads.
 
@@ -371,29 +381,15 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
         # JSON-RPC envelope: {"id": ..., "params": {"arguments": {...}}}
         params = payload.get("params")
         if isinstance(params, dict):
-            if "arguments" in params:
-                args = params.get("arguments")
-            elif "args" in params:
-                args = params.get("args")
-            elif "parameters" in params:
-                args = params.get("parameters")
-            elif "input" in params:
-                args = params.get("input")
-            elif "kwargs" in params:
-                args = params.get("kwargs")
-            else:
+            args = _extract_wrapped_args(params)
+            if args is None:
                 # Some clients send args directly under params.
                 args = params
-        elif "arguments" in payload:
-            args = payload.get("arguments")
-        elif "args" in payload:
-            args = payload.get("args")
-        elif "parameters" in payload:
-            args = payload.get("parameters")
-        elif "input" in payload:
-            args = payload.get("input")
-        elif "kwargs" in payload:
-            args = payload.get("kwargs")
+        else:
+            wrapped = _extract_wrapped_args(payload)
+            if wrapped is not None:
+                args = wrapped
+
     args = _coerce_json_args(args)
     if args is None:
         return {}
