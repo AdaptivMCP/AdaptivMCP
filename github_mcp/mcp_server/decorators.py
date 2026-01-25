@@ -1893,8 +1893,26 @@ def _refresh_tool_annotations_for_invocation(
         annotations = _resolve_invocation_annotations(
             func, effective_write_action=effective_write_action
         )
-        if annotations:
-            _attach_tool_annotations(tool_obj, annotations)
+        if not annotations:
+            return
+        if not effective_write_action:
+            existing = None
+            try:
+                existing = getattr(tool_obj, "annotations", None)
+            except Exception:
+                existing = None
+            if existing is None and isinstance(tool_obj, Mapping):
+                existing = tool_obj.get("annotations")
+            if existing is None:
+                meta = getattr(tool_obj, "meta", None)
+                if isinstance(meta, Mapping):
+                    existing = meta.get("annotations")
+            if isinstance(existing, Mapping):
+                destructive_hint = existing.get("destructiveHint")
+                read_only_hint = existing.get("readOnlyHint")
+                if destructive_hint is True or read_only_hint is False:
+                    return
+        _attach_tool_annotations(tool_obj, annotations)
     except Exception:
         # Best-effort: do not interfere with tool execution.
         return
