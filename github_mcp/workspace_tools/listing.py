@@ -187,7 +187,7 @@ async def list_workspace_files(
     repo: str | None = None,
     branch: str | None = None,
 ) -> dict[str, Any]:
-    """List files in the repo mirror (workspace clone).
+    """List files in the repo mirror.
 
     This endpoint is designed to work for very large repos:
     - Enforces `max_files` and `max_depth` (unlike earlier versions).
@@ -512,7 +512,7 @@ async def search_workspace(
     repo: str | None = None,
     branch: str | None = None,
 ) -> dict[str, Any]:
-    """Search text files in the repo mirror (workspace clone) (bounded, no shell).
+    """Search text files in the repo mirror (bounded, no shell).
 
     Searches are always case-insensitive.
 

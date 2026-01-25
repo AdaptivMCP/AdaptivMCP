@@ -1,6 +1,6 @@
 """Workspace mirror tool surface (developer-facing).
 
-This module re-exports the persistent-repo-mirror (workspace clone) tools under
+This module re-exports the persistent repo mirror tools under
 a stable import path for callers and tests. The actual implementations live
 under `github_mcp.workspace_tools.*` and are registered via `@mcp_tool` at
 import time.

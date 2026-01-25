@@ -340,7 +340,7 @@ def _sanitize_workspace_ref(ref: str) -> str:
 async def _clone_repo(
     full_name: str, ref: str | None = None, *, preserve_changes: bool = False
 ) -> str:
-    """Clone or return a persistent repo mirror (workspace clone) for ``full_name``/``ref``."""
+    """Create or return a persistent repo mirror for ``full_name``/``ref``."""
     from .utils import _effective_ref_for_repo  # Local import to avoid cycles
 
     effective_ref = _effective_ref_for_repo(full_name, ref)
@@ -356,7 +356,7 @@ async def _clone_repo(
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
         if preserve_changes:
             # Workspace directories are keyed by ref, so callers expect the repo mirror
-            # (workspace clone) to be checked out on ``effective_ref``. Some tools
+            # (workspace mirror) to be checked out on ``effective_ref``. Some tools
             # (e.g. shells that create branches) can mutate the checkout inside an
             # existing repo mirror. When preserving changes we avoid destructive
             # resets, but we still enforce the requested branch when the repo mirror

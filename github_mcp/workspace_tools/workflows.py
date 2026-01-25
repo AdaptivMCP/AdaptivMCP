@@ -154,7 +154,7 @@ async def workspace_apply_ops_and_open_pr(
 
     This is a convenience workflow that chains together the common sequence:
 
-      1) Optionally reset the base workspace clone to match origin.
+      1) Optionally reset the base workspace mirror to match origin.
       2) Create a fresh feature branch (or reuse `feature_ref`).
       3) Apply a list of `apply_workspace_operations` edits.
       4) Optionally run the quality suite.
@@ -197,7 +197,7 @@ async def workspace_apply_ops_and_open_pr(
             _step(
                 steps,
                 "Sync base",
-                f"Resetting workspace clone for '{effective_base}' to match origin.",
+                f"Resetting workspace mirror for '{effective_base}' to match origin.",
             )
             extra_sync = dict(sync_args or {})
             extra_sync.pop("full_name", None)
@@ -215,11 +215,11 @@ async def workspace_apply_ops_and_open_pr(
                 return _error_return(
                     steps=steps,
                     action="Sync base",
-                    detail="Failed to sync base workspace clone.",
+                    detail="Failed to sync base workspace mirror.",
                     reason="sync_base_failed",
                     sync=sync_res,
                 )
-            _step(steps, "Sync base", "Base workspace clone is ready.", sync=sync_res)
+            _step(steps, "Sync base", "Base workspace mirror is ready.", sync=sync_res)
         else:
             _step(
                 steps,
