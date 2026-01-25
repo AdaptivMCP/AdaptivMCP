@@ -6,7 +6,7 @@ from typing import Any
 
 from github_mcp.server import _structured_tool_error, mcp_tool
 
-from ._shared import _tw
+from ._shared import _build_quality_suite_payload, _tw
 
 
 @mcp_tool(write_action=True)
@@ -40,13 +40,15 @@ async def commit_and_open_pr_from_workspace(
         quality: dict[str, Any] | None = None
         if run_quality:
             quality = await tw.run_quality_suite(
-                full_name=full_name,
-                ref=effective_ref,
-                test_command=test_command,
-                lint_command=lint_command,
-                timeout_seconds=quality_timeout_seconds,
-                fail_fast=True,
-                developer_defaults=True,
+                **_build_quality_suite_payload(
+                    full_name=full_name,
+                    ref=effective_ref,
+                    test_command=test_command,
+                    lint_command=lint_command,
+                    timeout_seconds=quality_timeout_seconds,
+                    fail_fast=True,
+                    developer_defaults=True,
+                )
             )
             if isinstance(quality, dict) and quality.get("status") in {
                 "failed",

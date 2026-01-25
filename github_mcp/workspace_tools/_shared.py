@@ -98,6 +98,49 @@ def _filter_kwargs_for_callable(fn: Any, kwargs: dict[str, Any]) -> dict[str, An
     return {k: v for k, v in kwargs.items() if k in allowed}
 
 
+_QUALITY_SUITE_DEFAULTS = {
+    "test_command": "pytest -q",
+    "lint_command": "ruff check .",
+    "timeout_seconds": 0,
+    "fail_fast": True,
+    "developer_defaults": True,
+}
+
+
+def _build_quality_suite_payload(
+    *,
+    full_name: str,
+    ref: str,
+    test_command: str = _QUALITY_SUITE_DEFAULTS["test_command"],
+    lint_command: str = _QUALITY_SUITE_DEFAULTS["lint_command"],
+    timeout_seconds: float = _QUALITY_SUITE_DEFAULTS["timeout_seconds"],
+    fail_fast: bool = _QUALITY_SUITE_DEFAULTS["fail_fast"],
+    developer_defaults: bool = _QUALITY_SUITE_DEFAULTS["developer_defaults"],
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"full_name": full_name, "ref": ref}
+
+    for key, value, default in (
+        ("test_command", test_command, _QUALITY_SUITE_DEFAULTS["test_command"]),
+        ("lint_command", lint_command, _QUALITY_SUITE_DEFAULTS["lint_command"]),
+        ("timeout_seconds", timeout_seconds, _QUALITY_SUITE_DEFAULTS["timeout_seconds"]),
+        ("fail_fast", fail_fast, _QUALITY_SUITE_DEFAULTS["fail_fast"]),
+        (
+            "developer_defaults",
+            developer_defaults,
+            _QUALITY_SUITE_DEFAULTS["developer_defaults"],
+        ),
+    ):
+        if value != default:
+            payload[key] = value
+
+    extra_payload = dict(extra or {})
+    extra_payload.pop("full_name", None)
+    extra_payload.pop("ref", None)
+    payload.update(extra_payload)
+    return payload
+
+
 def _tw():
     from github_mcp import tools_workspace as tw
 
