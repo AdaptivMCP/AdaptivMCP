@@ -668,52 +668,95 @@ async def run_quality_suite(
     # temp venv is created once and dependencies are installed once.
     use_single_runner = bool(use_temp_venv) and bool(installing_dependencies)
 
-    runner_steps: list[dict[str, Any]] = []
+    def _build_step_plan() -> list[dict[str, Any]]:
+        plan: list[dict[str, Any]] = []
+        if preflight:
+            controller_log.append("- Preflight: enabled")
+            plan.extend(
+                [
+                    {
+                        "name": "python_version",
+                        "command": "python --version",
+                        "allow_missing": False,
+                        "stop_on_fail": False,
+                        "kind": "preflight",
+                        "timeout_seconds": preflight_step_timeout,
+                        "installing_dependencies": False,
+                    },
+                    {
+                        "name": "pip_version",
+                        "command": "python -m pip --version",
+                        "allow_missing": False,
+                        "stop_on_fail": False,
+                        "kind": "preflight",
+                        "timeout_seconds": preflight_step_timeout,
+                        "installing_dependencies": False,
+                    },
+                    {
+                        "name": "ruff_version",
+                        "command": "ruff --version",
+                        "allow_missing": True,
+                        "stop_on_fail": False,
+                        "kind": "preflight",
+                        "timeout_seconds": min(60, timeout_seconds_i),
+                        "installing_dependencies": False,
+                    },
+                    {
+                        "name": "pytest_version",
+                        "command": "pytest --version",
+                        "allow_missing": True,
+                        "stop_on_fail": False,
+                        "kind": "preflight",
+                        "timeout_seconds": min(60, timeout_seconds_i),
+                        "installing_dependencies": False,
+                    },
+                ]
+            )
 
-    def _add_runner_step(
-        *,
-        name: str,
-        command: str,
-        allow_missing: bool,
-        stop_on_fail: bool,
-    ) -> None:
-        runner_steps.append(
-            {
-                "name": name,
-                "command": command,
-                "allow_missing": bool(allow_missing),
-                "stop_on_fail": bool(stop_on_fail),
-            }
+        optional_steps = [
+            ("format", format_command),
+            ("typecheck", typecheck_command),
+            ("security", security_command),
+        ]
+        for name, cmd in optional_steps:
+            if cmd:
+                plan.append(
+                    {
+                        "name": name,
+                        "command": cmd,
+                        "allow_missing": True,
+                        "stop_on_fail": bool(gate_optional_steps and fail_fast),
+                        "kind": "optional",
+                        "timeout_seconds": timeout_seconds_i,
+                        "installing_dependencies": installing_dependencies,
+                    }
+                )
+
+        plan.extend(
+            [
+                {
+                    "name": "lint",
+                    "command": lint_command,
+                    "allow_missing": False,
+                    "stop_on_fail": True,
+                    "kind": "required",
+                    "timeout_seconds": timeout_seconds_i,
+                    "installing_dependencies": installing_dependencies,
+                },
+                {
+                    "name": "tests",
+                    "command": test_command,
+                    "allow_missing": False,
+                    "stop_on_fail": False,
+                    "kind": "required",
+                    "timeout_seconds": timeout_seconds_i,
+                    "installing_dependencies": installing_dependencies,
+                },
+            ]
         )
+        return plan
 
-    async def run_optional(name: str, command: str | None) -> dict[str, Any] | None:
-        if not command:
-            return None
-        step = await _run_named_step(
-            name=name,
-            full_name=full_name,
-            ref=ref,
-            command=command,
-            timeout_seconds=timeout_seconds_i,
-            workdir=workdir,
-            use_temp_venv=use_temp_venv,
-            installing_dependencies=installing_dependencies,
-            include_raw=include_raw_step_outputs,
-            allow_missing_command=True,
-        )
-        steps.append(step)
-
-        # Optional steps are informative by default. When they fail, surface a
-        # warning signal without failing the overall suite unless explicitly
-        # requested via gate_optional_steps.
-        if step.get("status") == "failed" and not gate_optional_steps:
-            optional_failures.append(name)
-
-        # Optional steps are informative by default; do not gate the suite unless explicitly requested.
-        if gate_optional_steps and fail_fast and step.get("status") == "failed":
-            controller_log.append(f"- Aborted: {name} failed")
-            return step
-        return step
+    step_plan = _build_step_plan()
 
     async def _run_multi_command_suite() -> dict[str, Any]:
         """Legacy per-step implementation.
@@ -725,47 +768,36 @@ async def run_quality_suite(
         steps.clear()
         optional_failures.clear()
 
-        if preflight:
-            # Diagnostics only; no gating.
-            steps.append(
-                await _run_named_step(
-                    name="python_version",
-                    full_name=full_name,
-                    ref=ref,
-                    command="python --version",
-                    timeout_seconds=preflight_step_timeout,
-                    workdir=workdir,
-                    use_temp_venv=use_temp_venv,
-                    installing_dependencies=False,
-                    include_raw=include_raw_step_outputs,
-                )
+        for step_def in step_plan:
+            step = await _run_named_step(
+                name=step_def["name"],
+                full_name=full_name,
+                ref=ref,
+                command=step_def["command"],
+                timeout_seconds=step_def["timeout_seconds"],
+                workdir=workdir,
+                use_temp_venv=use_temp_venv,
+                installing_dependencies=step_def["installing_dependencies"],
+                include_raw=include_raw_step_outputs,
+                allow_missing_command=step_def["allow_missing"],
             )
-            steps.append(
-                await _run_named_step(
-                    name="pip_version",
-                    full_name=full_name,
-                    ref=ref,
-                    command="python -m pip --version",
-                    timeout_seconds=preflight_step_timeout,
-                    workdir=workdir,
-                    use_temp_venv=use_temp_venv,
-                    installing_dependencies=False,
-                    include_raw=include_raw_step_outputs,
-                )
-            )
+            steps.append(step)
+            step_kind = step_def.get("kind")
 
-        for name, cmd in (
-            ("format", format_command),
-            ("typecheck", typecheck_command),
-            ("security", security_command),
-        ):
-            step = await run_optional(name, cmd)
-            if (
-                gate_optional_steps
-                and step is not None
-                and fail_fast
-                and step.get("status") == "failed"
-            ):
+            if step_kind == "optional" and step.get("status") == "failed":
+                if gate_optional_steps and fail_fast and step_def.get("stop_on_fail"):
+                    controller_log.append(f"- Aborted: {step_def['name']} failed")
+                    return {
+                        "status": "failed",
+                        "suite": suite,
+                        "steps": steps,
+                        "controller_log": controller_log,
+                    }
+                if not gate_optional_steps:
+                    optional_failures.append(step_def["name"])
+
+            if step_def["name"] == "lint" and step.get("status") == "failed":
+                controller_log.append("- Aborted: lint failed")
                 return {
                     "status": "failed",
                     "suite": suite,
@@ -773,39 +805,7 @@ async def run_quality_suite(
                     "controller_log": controller_log,
                 }
 
-        lint_step = await _run_named_step(
-            name="lint",
-            full_name=full_name,
-            ref=ref,
-            command=lint_command,
-            timeout_seconds=timeout_seconds_i,
-            workdir=workdir,
-            use_temp_venv=use_temp_venv,
-            installing_dependencies=installing_dependencies,
-            include_raw=include_raw_step_outputs,
-        )
-        steps.append(lint_step)
-        if lint_step.get("status") == "failed":
-            controller_log.append("- Aborted: lint failed")
-            return {
-                "status": "failed",
-                "suite": suite,
-                "steps": steps,
-                "controller_log": controller_log,
-            }
-
-        tests_step = await _run_named_step(
-            name="tests",
-            full_name=full_name,
-            ref=ref,
-            command=test_command,
-            timeout_seconds=timeout_seconds_i,
-            workdir=workdir,
-            use_temp_venv=use_temp_venv,
-            installing_dependencies=installing_dependencies,
-            include_raw=include_raw_step_outputs,
-        )
-        steps.append(tests_step)
+        tests_step = next((s for s in steps if s.get("name") == "tests"), None)
 
         tests_exit = (tests_step.get("summary") or {}).get("exit_code")
         if tests_exit == 5:
@@ -829,118 +829,16 @@ async def run_quality_suite(
             "controller_log": controller_log,
         }
 
-    if preflight:
-        controller_log.append("- Preflight: enabled")
-        if use_single_runner:
-            _add_runner_step(
-                name="python_version",
-                command="python --version",
-                allow_missing=False,
-                stop_on_fail=False,
-            )
-            _add_runner_step(
-                name="pip_version",
-                command="python -m pip --version",
-                allow_missing=False,
-                stop_on_fail=False,
-            )
-            _add_runner_step(
-                name="ruff_version",
-                command="ruff --version",
-                allow_missing=True,
-                stop_on_fail=False,
-            )
-            _add_runner_step(
-                name="pytest_version",
-                command="pytest --version",
-                allow_missing=True,
-                stop_on_fail=False,
-            )
-        else:
-            # Diagnostics only; no gating.
-            steps.append(
-                await _run_named_step(
-                    name="python_version",
-                    full_name=full_name,
-                    ref=ref,
-                    command="python --version",
-                    timeout_seconds=preflight_step_timeout,
-                    workdir=workdir,
-                    use_temp_venv=use_temp_venv,
-                    installing_dependencies=False,
-                    include_raw=include_raw_step_outputs,
-                )
-            )
-            steps.append(
-                await _run_named_step(
-                    name="pip_version",
-                    full_name=full_name,
-                    ref=ref,
-                    command="python -m pip --version",
-                    timeout_seconds=preflight_step_timeout,
-                    workdir=workdir,
-                    use_temp_venv=use_temp_venv,
-                    installing_dependencies=False,
-                    include_raw=include_raw_step_outputs,
-                )
-            )
-            steps.append(
-                await _run_named_step(
-                    name="ruff_version",
-                    full_name=full_name,
-                    ref=ref,
-                    command="ruff --version",
-                    timeout_seconds=min(60, timeout_seconds_i),
-                    workdir=workdir,
-                    use_temp_venv=use_temp_venv,
-                    installing_dependencies=False,
-                    include_raw=include_raw_step_outputs,
-                    allow_missing_command=True,
-                )
-            )
-            steps.append(
-                await _run_named_step(
-                    name="pytest_version",
-                    full_name=full_name,
-                    ref=ref,
-                    command="pytest --version",
-                    timeout_seconds=min(60, timeout_seconds_i),
-                    workdir=workdir,
-                    use_temp_venv=use_temp_venv,
-                    installing_dependencies=False,
-                    include_raw=include_raw_step_outputs,
-                    allow_missing_command=True,
-                )
-            )
-
     if use_single_runner:
-        # Optional developer checks.
-        for name, cmd in (
-            ("format", format_command),
-            ("typecheck", typecheck_command),
-            ("security", security_command),
-        ):
-            if cmd:
-                _add_runner_step(
-                    name=name,
-                    command=cmd,
-                    allow_missing=True,
-                    stop_on_fail=bool(gate_optional_steps and fail_fast),
-                )
-        # Lint is required.
-        _add_runner_step(
-            name="lint",
-            command=lint_command,
-            allow_missing=False,
-            stop_on_fail=True,
-        )
-        # Tests are required.
-        _add_runner_step(
-            name="tests",
-            command=test_command,
-            allow_missing=False,
-            stop_on_fail=False,
-        )
+        runner_steps = [
+            {
+                "name": step["name"],
+                "command": step["command"],
+                "allow_missing": step["allow_missing"],
+                "stop_on_fail": step["stop_on_fail"],
+            }
+            for step in step_plan
+        ]
 
         runner_command = _build_quality_suite_runner_command(steps=runner_steps)
         raw = await _tw().terminal_command(
@@ -1002,6 +900,7 @@ async def run_quality_suite(
             for p in parsed
             if isinstance(p, dict) and p.get("name")
         }
+        plan_by_name = {step["name"]: step for step in step_plan}
 
         for step_def in runner_steps:
             name = step_def["name"]
@@ -1034,26 +933,18 @@ async def run_quality_suite(
                 step["raw"] = raw
             steps.append(step)
 
-            if (
-                name in {"format", "typecheck", "security"}
-                and status == "failed"
-                and not gate_optional_steps
-            ):
-                optional_failures.append(name)
-
-            if (
-                gate_optional_steps
-                and fail_fast
-                and name in {"format", "typecheck", "security"}
-                and status == "failed"
-            ):
-                controller_log.append(f"- Aborted: {name} failed")
-                return {
-                    "status": "failed",
-                    "suite": suite,
-                    "steps": steps,
-                    "controller_log": controller_log,
-                }
+            step_kind = (plan_by_name.get(name) or {}).get("kind")
+            if step_kind == "optional" and status == "failed":
+                if not gate_optional_steps:
+                    optional_failures.append(name)
+                elif fail_fast:
+                    controller_log.append(f"- Aborted: {name} failed")
+                    return {
+                        "status": "failed",
+                        "suite": suite,
+                        "steps": steps,
+                        "controller_log": controller_log,
+                    }
 
             if name == "lint" and status == "failed":
                 controller_log.append("- Aborted: lint failed")
