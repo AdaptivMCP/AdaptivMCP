@@ -282,7 +282,7 @@ async def workspace_create_branch(
     repo: str | None = None,
     branch: str | None = None,
 ) -> dict[str, Any]:
-    """Create a branch using the repo mirror (workspace clone), optionally pushing to origin.
+    """Create a branch using the repo mirror, optionally pushing to origin.
 
     This exists because some direct GitHub-API branch-creation calls can be unavailable in some environments.
     """
@@ -374,7 +374,7 @@ async def workspace_delete_branch(
     owner: str | None = None,
     repo: str | None = None,
 ) -> dict[str, Any]:
-    """Delete a non-default branch using the repo mirror (workspace clone).
+    """Delete a non-default branch using the repo mirror.
 
     This is the workspace counterpart to branch-creation helpers and is intended
     for closing out ephemeral feature branches once their work has been merged.
@@ -457,7 +457,7 @@ async def workspace_self_heal_branch(
 ) -> dict[str, Any]:
     """Detect a mangled repo mirror branch and recover to a fresh branch.
 
-    This tool targets cases where a repo mirror (workspace clone) becomes inconsistent (wrong
+    This tool targets cases where a repo mirror becomes inconsistent (wrong
     branch checked out, merge/rebase state, conflicts, etc.). When healing, it:
 
     1) Diagnoses the repo mirror for ``branch``.
@@ -708,7 +708,7 @@ async def workspace_sync_status(
     repo: str | None = None,
     branch: str | None = None,
 ) -> dict[str, Any]:
-    """Report how a repo mirror (workspace clone) differs from its remote branch."""
+    """Report how a repo mirror differs from its remote branch."""
     try:
         full_name = _resolve_full_name(full_name, owner=owner, repo=repo)
         ref = _resolve_ref(ref, branch=branch)
@@ -742,7 +742,7 @@ async def workspace_sync_to_remote(
     repo: str | None = None,
     branch: str | None = None,
 ) -> dict[str, Any]:
-    """Reset a repo mirror (workspace clone) to match the remote branch."""
+    """Reset a repo mirror to match the remote branch."""
     try:
         t_default = _normalize_timeout_seconds(
             config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0

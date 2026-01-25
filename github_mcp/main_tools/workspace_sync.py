@@ -23,7 +23,7 @@ async def _perform_github_commit_and_refresh_workspace(
 ) -> dict[str, Any]:
     """Perform a Contents API commit and then refresh the repo mirror.
 
-    This keeps the long-lived repo mirror (workspace clone) in sync with the branch when
+    This keeps the long-lived repo mirror in sync with the branch when
     writes happen directly via the GitHub Contents API. Repo mirror refresh
     failures are logged but do not fail the commit itself.
     """

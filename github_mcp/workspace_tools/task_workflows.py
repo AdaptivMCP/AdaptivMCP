@@ -344,7 +344,7 @@ async def workspace_task_execute(
             _step(
                 steps,
                 "Sync base",
-                f"Resetting workspace clone for '{effective_base}' to match origin.",
+                f"Resetting workspace mirror for '{effective_base}' to match origin.",
             )
             extra_sync = dict(sync_args or {})
             extra_sync.pop("full_name", None)
@@ -362,12 +362,12 @@ async def workspace_task_execute(
                 return _error_return(
                     steps=steps,
                     action="Sync base",
-                    detail="Failed to sync base workspace clone.",
+                    detail="Failed to sync base workspace mirror.",
                     reason="sync_base_failed",
                     sync=sync_res,
                     searches=searches,
                 )
-            _step(steps, "Sync base", "Base workspace clone is ready.")
+            _step(steps, "Sync base", "Base workspace mirror is ready.")
         else:
             _step(
                 steps,

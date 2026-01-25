@@ -92,7 +92,7 @@ _PARAM_DOCS: dict[str, dict[str, Any]] = {
     },
     "command": {
         "description": (
-            "Shell command to execute in the repo mirror (workspace clone) on the server. "
+            "Shell command to execute in the repo mirror on the server. "
             "The repo mirror lives under MCP_WORKSPACE_BASE_DIR (defaults to "
             "~/.cache/mcp-github-workspaces)."
         ),

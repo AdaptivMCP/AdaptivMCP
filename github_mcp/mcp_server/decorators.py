@@ -1555,7 +1555,6 @@ def _apply_tool_metadata(
             "git",
             "workspace",
             "mirror",
-            "clone",
             "remote",
             "workflow",
             "tool",
@@ -1600,10 +1599,8 @@ def _apply_tool_metadata(
             levels.add("workflow")
 
         # Repo topology / sync concepts
-        if "mirror" in lowered:
+        if "mirror" in lowered or "clone" in lowered:
             levels.add("mirror")
-        if "clone" in lowered:
-            levels.add("clone")
         if "remote" in lowered or "origin" in lowered or "sync" in lowered:
             levels.add("remote")
 

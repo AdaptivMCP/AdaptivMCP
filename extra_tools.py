@@ -93,7 +93,7 @@ async def update_file_from_workspace(
     branch: str,
     message: str,
 ) -> dict[str, Any]:
-    """Commit a repo mirror (workspace clone) file to a target path in the repository."""
+    """Commit a repo mirror file to a target path in the repository."""
 
     effective_ref = _effective_ref_for_repo(full_name, branch)
 

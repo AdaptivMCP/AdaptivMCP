@@ -3512,7 +3512,7 @@ async def apply_workspace_operations(
     preview_only: bool = False,
     create_parents: bool = True,
 ) -> dict[str, Any]:
-    """Apply multiple file operations in a single workspace clone.
+    """Apply multiple file operations in a single workspace mirror.
 
     This is a higher-level, multi-file alternative to calling the single-file
     primitives repeatedly.

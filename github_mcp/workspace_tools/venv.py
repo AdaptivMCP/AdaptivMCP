@@ -1,6 +1,6 @@
 """Workspace virtualenv lifecycle tools.
 
-The repo mirror (workspace clone) persists across calls, and so can its
+The repo mirror persists across calls, and so can its
 associated Python virtualenv. This module exposes explicit start/stop/status
 operations so callers can manage that lifecycle instead of relying on implicit
 creation during command execution.

@@ -2,7 +2,7 @@
 """Workspace git porcelain helpers.
 
 These tools exist to make common git operations ergonomic for MCP clients
-operating against the persistent repo mirror ("workspace clone").
+operating against the persistent repo mirror ("workspace mirror").
 
 Why these wrappers exist (instead of asking clients to run arbitrary git
 commands):
@@ -942,7 +942,7 @@ async def workspace_git_checkout(
 ) -> dict[str, Any]:
     """Checkout a branch/ref in the workspace mirror.
 
-    Important: workspace clones are keyed by `ref`. If you checkout a different
+    Important: workspace mirrors are keyed by `ref`. If you checkout a different
     branch inside the current mirror directory, subsequent calls using
     `ref=<new-branch>` would otherwise operate on a different directory. When
     `rekey_workspace=true` (default) this tool moves the working copy directory
