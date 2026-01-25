@@ -8,7 +8,12 @@ from typing import Any
 
 from github_mcp.server import _structured_tool_error, mcp_tool
 
-from ._shared import _filter_kwargs_for_callable, _safe_branch_slug, _tw
+from ._shared import (
+    _build_quality_suite_payload,
+    _filter_kwargs_for_callable,
+    _safe_branch_slug,
+    _tw,
+)
 from .fs import _normalize_workspace_operations
 
 _HUNK_RE = re.compile(r"^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@")
@@ -301,19 +306,16 @@ async def workspace_apply_ops_and_open_pr(
         quality_res: Any = None
         if run_quality:
             _step(steps, "Quality suite", "Running lint/tests before commit.")
-            extra_quality = dict(quality_args or {})
-            extra_quality.pop("full_name", None)
-            extra_quality.pop("ref", None)
-            quality_call = {
-                "full_name": full_name,
-                "ref": feature_ref,
-                "test_command": test_command,
-                "lint_command": lint_command,
-                "timeout_seconds": quality_timeout_seconds,
-                "fail_fast": True,
-                "developer_defaults": True,
-                **extra_quality,
-            }
+            quality_call = _build_quality_suite_payload(
+                full_name=full_name,
+                ref=feature_ref,
+                test_command=test_command,
+                lint_command=lint_command,
+                timeout_seconds=quality_timeout_seconds,
+                fail_fast=True,
+                developer_defaults=True,
+                extra=quality_args,
+            )
             quality_res = await tw.run_quality_suite(
                 **_filter_kwargs_for_callable(tw.run_quality_suite, quality_call)
             )
