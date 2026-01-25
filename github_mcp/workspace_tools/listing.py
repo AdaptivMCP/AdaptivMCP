@@ -116,21 +116,14 @@ def _normalize_workspace_path(path: str) -> str:
     if normalized in (".", "/"):
         return ""
 
-    # Be permissive with parent-directory segments in *relative* paths.
-    # LLM clients often produce "../" paths; clamp them safely back into the
-    # workspace root rather than hard-failing.
-    #
-    # Safety invariant is still enforced later when we resolve against repo_dir.
+    # Reject parent-directory traversal in relative paths rather than clamping.
     if not normalized.startswith("/"):
         parts: list[str] = []
         for part in normalized.split("/"):
             if part in ("", "."):
                 continue
             if part == "..":
-                if parts:
-                    parts.pop()
-                # Clamp attempts to traverse beyond root.
-                continue
+                raise ValueError("path must not contain '..' segments")
             parts.append(part)
         normalized = "/".join(parts)
     return normalized

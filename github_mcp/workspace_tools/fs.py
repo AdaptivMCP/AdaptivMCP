@@ -206,20 +206,13 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
         # Treat paths that collapse to "" (e.g. "/" after stripping) as root.
         return root
 
-    # Be permissive with caller-provided relative paths that include parent
-    # directory segments. LLM clients frequently prepend "../" when referring to
-    # files, which previously caused hard "path must resolve inside" failures.
-    #
-    # Safety invariant: never allow escaping the workspace root.
+    # Reject parent-directory traversal in caller-provided relative paths.
     parts: list[str] = []
     for part in rel_path.split("/"):
         if part in ("", "."):
             continue
         if part == "..":
-            if parts:
-                parts.pop()
-            # Clamp attempts to traverse beyond the root.
-            continue
+            raise ValueError("path must not contain '..' segments")
         parts.append(part)
     rel_path = "/".join(parts)
     if not rel_path:
