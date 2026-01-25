@@ -329,14 +329,7 @@ async def run_tests(
 
     return {
         "status": status,
-        "command": effective_command,
-        "exit_code": exit_code,
         "workdir": workdir,
-        "summary": summary,
-        "result": {
-            "exit_code": exit_code,
-            "timed_out": (summary or {}).get("timed_out"),
-        },
         "steps": [step],
         "controller_log": [
             "Completed test command in repo mirror:",
@@ -410,8 +403,6 @@ async def run_lint_suite(
                 controller_log.append("- Aborted: format failed")
                 return {
                     "status": "failed",
-                    "command": combined_command,
-                    "exit_code": (fmt_step.get("summary") or {}).get("exit_code"),
                     "workdir": workdir,
                     "steps": steps,
                     "controller_log": controller_log,
@@ -437,16 +428,7 @@ async def run_lint_suite(
 
         return {
             "status": status,
-            "command": combined_command,
-            "exit_code": exit_code,
             "workdir": workdir,
-            "summary": (
-                lint_step.get("summary") if isinstance(lint_step, dict) else {}
-            ),
-            "result": {
-                "exit_code": exit_code,
-                "timed_out": ((lint_step.get("summary") or {}).get("timed_out")),
-            },
             "steps": steps,
             "controller_log": controller_log,
         }
@@ -500,8 +482,6 @@ async def run_lint_suite(
             if include_raw_step_outputs:
                 return {
                     "status": "failed",
-                    "command": combined_command,
-                    "exit_code": slim.get("exit_code"),
                     "workdir": workdir,
                     "steps": [
                         {
@@ -515,8 +495,6 @@ async def run_lint_suite(
                 }
             return {
                 "status": "failed",
-                "command": combined_command,
-                "exit_code": slim.get("exit_code"),
                 "workdir": workdir,
                 "steps": [{"name": "runner", "status": "failed", "summary": slim}],
                 "controller_log": controller_log,
@@ -573,14 +551,7 @@ async def run_lint_suite(
 
         return {
             "status": status,
-            "command": combined_command,
-            "exit_code": exit_code,
             "workdir": workdir,
-            "summary": lint_summary,
-            "result": {
-                "exit_code": exit_code,
-                "timed_out": (lint_summary or {}).get("timed_out"),
-            },
             "steps": steps,
             "controller_log": controller_log,
         }
