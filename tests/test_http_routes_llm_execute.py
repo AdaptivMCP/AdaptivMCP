@@ -10,7 +10,7 @@ def test_llm_execute_invalid_json_body_returns_executed_false() -> None:
 
     resp = client.post(
         "/llm/execute",
-        data="not-json",
+        content="not-json",
         headers={"content-type": "application/json"},
     )
     assert resp.status_code == 200
