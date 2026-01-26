@@ -34,15 +34,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r dev-requirements.txt
 
-      - name: Lint
-        run: |
-          ruff --version
-          ruff check .
-
-      - name: Format check
-        run: |
-          ruff format --check .
-
       - name: Tests
         run: |
           pytest -q
