@@ -192,20 +192,20 @@ def build_unknown_tool_payload(
 
     warnings: list[str] = []
     if single:
-        warnings.append(f"Unknown tool {tool_name!r}. Did you mean {single!r}?")
+        warnings.append(f"Did you mean {single!r}?")
     elif close_matches:
         rendered = ", ".join(repr(x) for x in close_matches)
         warnings.append(
-            f"Unknown tool {tool_name!r}. Close matches: {rendered}. If none fit, call GET /tools to discover the full catalog."
+            f"Close matches: {rendered}. If none fit, call GET /tools to discover the full catalog."
         )
     elif available:
         # Keep this bounded; callers can always hit /tools for the full list.
         top = ", ".join(repr(name) for _score, name in ranked[:15])
         warnings.append(
-            f"Unknown tool {tool_name!r}. Most similar available tools: {top}. (For the full list, call GET /tools.)"
+            f"Most similar available tools: {top}. (For the full list, call GET /tools.)"
         )
     else:
-        warnings.append(f"Unknown tool {tool_name!r}.")
+        warnings.append("No tools are registered on this server.")
 
     payload: dict[str, Any] = {
         "status": "error",
