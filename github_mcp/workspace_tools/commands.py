@@ -228,6 +228,30 @@ def _normalize_command_payload(
     return requested, lines_out
 
 
+def _compact_command_payload(
+    payload: dict[str, Any],
+    *,
+    command_lines_out: list[str],
+) -> dict[str, Any]:
+    """Remove redundant command fields from tool payloads."""
+
+    if payload.get("command_input") == payload.get("command"):
+        payload.pop("command_input", None)
+
+    if not command_lines_out:
+        payload.pop("command_lines", None)
+        return payload
+
+    if len(command_lines_out) == 1:
+        command = payload.get("command")
+        if command is None or str(command) == str(command_lines_out[0]):
+            payload.pop("command_lines", None)
+            return payload
+
+    payload["command_lines"] = command_lines_out
+    return payload
+
+
 def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
     """Resolve a working directory inside the repo mirror.
 
@@ -392,7 +416,7 @@ async def render_shell(
             if isinstance(cleaned_command, dict)
             else None,
         }
-        return out
+        return _compact_command_payload(out, command_lines_out=command_lines_out)
     except asyncio.CancelledError:
         raise
     except Exception as exc:
@@ -606,8 +630,7 @@ async def terminal_command(
             **({"auto_push_branch": auto_push} if auto_push is not None else {}),
             **({"test_artifact_cleanup": cleanup_summary} if cleanup_summary else {}),
         }
-
-        return out
+        return _compact_command_payload(out, command_lines_out=command_lines_out)
     except asyncio.CancelledError:
         raise
     except Exception as exc:
@@ -851,10 +874,12 @@ async def run_command_alias(
         installing_dependencies=installing_dependencies,
     )
     if isinstance(payload, dict):
-        if payload.get("command_input") == payload.get("command"):
-            payload.pop("command_input", None)
-        if command_lines is None:
-            payload.pop("command_lines", None)
+        command_lines_out = payload.get("command_lines")
+        if not isinstance(command_lines_out, list):
+            command_lines_out = (
+                str(payload.get("command") or "").splitlines() if payload else []
+            )
+        return _compact_command_payload(payload, command_lines_out=command_lines_out)
     return payload
 
 
