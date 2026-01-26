@@ -3,8 +3,7 @@
 # This file is intended for deployment/runtime installs.
 # Developer/test tooling lives in dev-requirements.txt.
 
-# 0.28.1 metadata-only fetch returns 404 from PyPI; pin to 0.28.0 until fixed.
-httpx[http2]==0.28.0
+httpx[http2]==0.28.1
 pydantic[email]>=2.11.7,<3.0.0
 
 # Concurrency / async helpers
