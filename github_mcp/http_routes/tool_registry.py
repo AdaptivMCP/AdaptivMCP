@@ -374,7 +374,7 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
       - {"args": {...}} (legacy)
       - {"arguments": {...}} (JSON-RPC/MCP style)
       - {"params": {"arguments": {...}}} (JSON-RPC envelope)
-      - {"parameters": {...}} (common LLM client variant)
+      - {"parameters": {...}} (common client variant)
       - {"input": {...}} (common tool-call wrapper)
       - {"kwargs": {...}} (kwargs-style wrapper)
       - raw dict of arguments
@@ -432,8 +432,8 @@ def _normalize_payload(payload: Any) -> dict[str, Any]:
 def _default_include_parameters(request: Request) -> bool:
     """Decide whether to include tool schemas by default.
 
-    LLM clients (including ChatGPT-hosted connectors) typically require the
-    input schema to reliably invoke tools. When we detect ChatGPT metadata,
+    Some client runtimes require the input schema to reliably invoke tools.
+    When we detect hosted-connector metadata,
     default include_parameters=True even if the query parameter is omitted.
     """
 
@@ -463,14 +463,14 @@ def _default_include_parameters(request: Request) -> bool:
 
 
 def _is_openai_client(request: Request) -> bool:
-    """Best-effort detection for ChatGPT-hosted / OpenAI tool clients.
+    """Best-effort detection for hosted tool clients using provider headers.
 
-    Many LLM tool runtimes treat non-2xx HTTP responses as a hard tool failure and
-    may stop the agent loop entirely. For these clients, it's better to return a
-    200 with a structured error payload than a 4xx/5xx.
+    Many tool runtimes treat non-2xx HTTP responses as a hard tool failure and
+    may stop the loop entirely. For these clients, it's better to return a 200
+    with a structured error payload than a 4xx/5xx.
 
-    We detect ChatGPT via request-scoped metadata when available, with a header
-    fallback for deployments that don't install middleware.
+    We detect hosted connectors via request-scoped metadata when available,
+    with a header fallback for deployments that don't install middleware.
     """
 
     try:
@@ -949,11 +949,11 @@ def _llm_safe_json_response(
     *,
     headers: dict[str, str] | None = None,
 ) -> Response:
-    """Return JSON responses in an LLM-safe way for OpenAI clients.
+    """Return JSON responses in a tool-runtime-safe way for hosted clients.
 
-    The OpenAI agent runtime can abort tool usage on non-2xx responses.
-    When we detect an OpenAI client, we keep the payload intact but convert
-    HTTP errors into 200s and preserve the original status code in a header.
+    Some hosted runtimes can abort tool usage on non-2xx responses. When we
+    detect a hosted client, we keep the payload intact but convert HTTP
+    errors into 200s and preserve the original status code in a header.
     """
 
     if int(status_code) >= 400 and _is_openai_client(request):
@@ -970,14 +970,14 @@ def build_tool_registry_endpoint() -> Callable[[Request], Response]:
         if include_parameters is None:
             include_parameters = _default_include_parameters(request)
         compact = _parse_bool(request.query_params.get("compact"))
-        # Default to *expanded* metadata for OpenAI clients.
+        # Default to *expanded* metadata for hosted clients.
         #
         # In compact mode, tools are often reduced to their first-line summaries,
-        # which can cause LLMs to misclassify or misuse tools with similar names.
-        # OpenAI clients benefit from richer descriptions and examples.
+        # which can cause clients to misclassify or misuse tools with similar names.
+        # Hosted clients benefit from richer descriptions and examples.
         if compact is None and _is_openai_client(request):
             compact = False
-        # Support legacy discovery paths used by some LLM runtimes.
+        # Support legacy discovery paths used by some client runtimes.
         #
         # Some clients call GET /list_tools instead of GET /tools. We treat the
         # former as an alias and normalize base_path stripping for both so the
@@ -1012,7 +1012,7 @@ def build_resources_endpoint() -> Callable[[Request], Response]:
                     compact = False
             except Exception:
                 pass
-        # Support legacy discovery paths used by some LLM runtimes.
+        # Support legacy discovery paths used by some client runtimes.
         #
         # Some clients call GET /list_resources instead of GET /resources. We
         # treat the former as an alias and normalize base_path stripping for
@@ -1150,7 +1150,7 @@ def register_tool_registry_routes(app: Any) -> None:
     # Primary discovery endpoints.
     app.add_route("/tools", registry_endpoint, methods=["GET"])
     app.add_route("/resources", resources_endpoint, methods=["GET"])
-    # Backward-compatible aliases used by some LLM tool runtimes.
+    # Backward-compatible aliases used by some tool runtimes.
     #
     # In some deployments the agent runtime attempts /list_resources (and
     # occasionally /list_tools) during discovery. Without these aliases, the

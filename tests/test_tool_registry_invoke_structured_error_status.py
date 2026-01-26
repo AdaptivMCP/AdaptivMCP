@@ -188,7 +188,7 @@ def test_invoke_endpoint_does_not_retry_write_tools(monkeypatch: Any) -> None:
 def test_invoke_endpoint_returns_200_for_openai_clients_on_structured_errors(
     monkeypatch: Any,
 ) -> None:
-    """ChatGPT-style clients may treat non-2xx as a hard tool failure.
+    """Hosted clients may treat non-2xx as a hard tool failure.
 
     For these clients we keep the structured error payload but return 200 and
     include the original status in a header.

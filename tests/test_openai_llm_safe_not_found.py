@@ -6,7 +6,7 @@ import main
 
 
 def test_openai_client_unknown_tool_detail_is_llm_safe() -> None:
-    """OpenAI clients should not receive non-2xx responses for missing tools."""
+    """Hosted clients should not receive non-2xx responses for missing tools."""
 
     client = TestClient(main.app)
     resp = client.get(

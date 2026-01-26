@@ -1,7 +1,7 @@
 """GitHub MCP server exposing connector-friendly tools and workflows.
 
 This module is the entry point for the GitHub Model Context Protocol server
-used by ChatGPT connectors. It lists the tools, arguments, and behaviors in a
+used by hosted connectors. It lists the tools, arguments, and behaviors in a
 single place so clients can see how to interact with the server.
 """
 

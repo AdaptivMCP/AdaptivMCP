@@ -187,7 +187,7 @@ def _normalize_call_object(obj: Any) -> list[tuple[str, dict[str, Any]]]:
     if not isinstance(obj, dict):
         return []
 
-    # OpenAI-ish wrapper: {"tool_calls": [{"function": {"name": ..., "arguments": "{...}"}}]}
+    # Common wrapper: {"tool_calls": [{"function": {"name": ..., "arguments": "{...}"}}]}
     tool_calls = obj.get("tool_calls")
     if isinstance(tool_calls, list):
         out: list[tuple[str, dict[str, Any]]] = []
@@ -244,7 +244,7 @@ def extract_tool_calls_from_text(
     *,
     max_calls: int = 20,
 ) -> list[ParsedToolCall]:
-    """Extract tool calls from LLM text.
+    """Extract tool calls from model-generated text.
 
     This helper exists for runtimes that cannot use structured tool-calling.
     It scans fenced code blocks (```...```) and attempts to parse JSON payloads

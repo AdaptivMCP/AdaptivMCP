@@ -28,9 +28,9 @@ from typing import Any, get_args, get_origin
 # ---------------------------------------------------------------------------
 # Schema ergonomics
 #
-# The MCP tool surface is consumed by both developers and LLMs. We intentionally
-# keep implementation signatures permissive for backwards-compat (e.g. legacy
-# alias args), while exposing a cleaner, more consistent input schema.
+# The MCP tool surface is consumed by both developers and client runtimes. We
+# intentionally keep implementation signatures permissive for backwards-compat
+# (e.g. legacy alias args), while exposing a cleaner, more consistent input schema.
 #
 # This module therefore:
 # - Derives a baseline JSON schema from function signatures.
@@ -219,7 +219,7 @@ def _simplify_schema_aliases(schema: dict[str, Any]) -> dict[str, Any]:
     Many tools accept legacy aliases like (owner, repo) in addition to full_name,
     or (branch) in addition to ref. Those aliases remain supported at runtime
     (for backwards compatibility), but are intentionally hidden from the tool
-    input schema so developer/LLM callers see a single canonical surface.
+    input schema so developer and client callers see a single canonical surface.
     """
 
     props = schema.get("properties")
@@ -528,8 +528,8 @@ def _build_tool_docstring(
     """Build a developer-oriented MCP tool docstring.
 
     This repository treats Python tool implementations as the governing reference for behavior.
-    Tool documentation is assembled at registration time so that clients
-    (including ChatGPT-style UIs) can display a consistent, detailed surface.
+    Tool documentation is assembled at registration time so that clients can
+    display a consistent, detailed surface.
 
     Design goals:
     - Compact first line (many clients show only a summary in tool pickers).
@@ -540,7 +540,7 @@ def _build_tool_docstring(
     High-level runtime behavior:
     - Tools are registered via the @mcp_tool decorator which attaches a JSON
       Schema-like input schema (plus a stable schema hash for observability).
-    - In ChatGPT-oriented response modes, results may be normalized to include
+    - In compact response modes, results may be normalized to include
       ok/status/summary and common streams (stdout/stderr) may be surfaced when
       present.
 
@@ -647,7 +647,7 @@ def _build_tool_docstring(
         "    Set ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=0 to preserve them.",
         "  - The server returns the tool's raw JSON-serializable result; client UIs may render summaries.",
         "",
-        "LLM invocation guidance:",
+        "Client invocation guidance:",
         "  - If unsure about args/params/paths, call describe_tool first and follow the returned schema.",
         "",
         "Returns:",

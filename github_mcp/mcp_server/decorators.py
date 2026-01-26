@@ -203,7 +203,7 @@ TOOL_RESULT_ENVELOPE_SCALARS = _env_flag(
 
 # Tool response shaping
 #
-# Some clients (including ChatGPT-hosted connectors) benefit from consistently
+# Some clients (including hosted connectors) benefit from consistently
 # shaped tool responses that:
 # - always include ok/status
 # - avoid huge nested blobs (e.g., raw upstream JSON)
@@ -222,9 +222,9 @@ CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int(
 # Tool stream shaping
 #
 # Some tools (notably shell/terminal helpers) can emit very large stdout/stderr
-# payloads. In ChatGPT/compact response modes this can easily cause context
-# overflow and degrade downstream tool use. We therefore clip stdout/stderr in
-# these modes by default.
+# payloads. In compact response modes this can easily cause context overflow
+# and degrade downstream tool use. We therefore clip stdout/stderr in these
+# modes by default.
 RESPONSE_STREAM_MAX_LINES = _env_int(
     "ADAPTIV_MCP_RESPONSE_STREAM_MAX_LINES", default=200
 )
@@ -232,7 +232,7 @@ RESPONSE_STREAM_MAX_CHARS = _env_int(
     "ADAPTIV_MCP_RESPONSE_STREAM_MAX_CHARS", default=20000
 )
 
-# In hosted LLM connector environments, returning token-like strings (even from
+# In hosted connector environments, returning token-like strings (even from
 # test fixtures or diffs) can trigger upstream safety filters and block tool
 # outputs. Redaction used to be enabled by default; we explicitly disable redaction
 # here so client payloads are not masked.
@@ -867,7 +867,7 @@ def _format_stream_block(
     elif 'File "' in text and "line" in text and "Error" in text:
         kind = "traceback"
 
-    # ChatGPT-facing payloads benefit from ANSI coloring even when provider logs
+    # Client-facing payloads benefit from ANSI coloring even when provider logs
     # disable it. Additionally, prefer basic ANSI (16-color) for broad UI
     # compatibility (some clients do not render 256-color sequences correctly).
     highlighted = _highlight_code(text, kind=kind, enabled=True, use_256=False)
@@ -954,9 +954,9 @@ def _preview_render_logs(items: list[Any]) -> str:
 def _inject_stdout_stderr(
     out: dict[str, Any], *, req: Mapping[str, Any] | None = None
 ) -> None:
-    """Attach stdout/stderr to ChatGPT-friendly responses.
+    """Attach stdout/stderr to client-friendly responses.
 
-    Many tools return process outputs nested under `result`. ChatGPT UIs often
+    Many tools return process outputs nested under `result`. Client UIs often
     benefit from having these streams available at the top-level.
 
     Adds:
@@ -1020,7 +1020,7 @@ def _inject_stdout_stderr(
         out["stderr"] = stderr
 
     # Render colorized blocks (even when LOG_TOOL_COLOR is off) because this is
-    # explicitly requested for ChatGPT-facing payloads.
+    # explicitly requested for client-facing payloads.
     max_lines = max(1, LOG_TOOL_VISUAL_MAX_LINES)
     max_chars = max(1, LOG_TOOL_VISUAL_MAX_CHARS)
 
@@ -1116,7 +1116,7 @@ def _llm_dev_report(
     all_args: Mapping[str, Any] | None,
     req: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    """Build a single structured report for LLM consumption and developer debugging.
+    """Build a single structured report for client consumption and developer debugging.
 
     The intent is to avoid duplicating large payload fields (stdout/stderr, nested
     `result` envelopes, and secondary summary strings) while still providing a
@@ -1200,7 +1200,7 @@ def _llm_scan_friendly_payload(
     all_args: Mapping[str, Any] | None,
     req: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    """Return a flat, LLM-scan-friendly response payload.
+    """Return a flat, client-scan-friendly response payload.
 
     Design goals:
     - single top-level mapping with predictable keys
@@ -1800,8 +1800,8 @@ def _tool_annotations(
 ) -> dict[str, Any]:
     """Return MCP-style tool annotations used by UIs.
 
-    ChatGPT and other MCP clients commonly read these booleans to render badges
-    like READ/WRITE, OPEN WORLD, and DESTRUCTIVE.
+    MCP clients commonly read these booleans to render badges like READ/WRITE,
+    OPEN WORLD, and DESTRUCTIVE.
     """
 
     # Defaults
@@ -2001,7 +2001,7 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
         f"Write approval required to run tool {tool_name!r}."
     )
     exc.hint = (
-        "Approve the action in ChatGPT or enable auto-approve to allow write tools."
+        "Approve the action in the client UI or enable auto-approve to allow write tools."
     )
     raise exc
 
@@ -2382,12 +2382,12 @@ def _chatgpt_friendly_result(
     tool_name: str | None = None,
     all_args: Mapping[str, Any] | None = None,
 ) -> Any:
-    """Return a ChatGPT-friendly version of a tool result.
+    """Return a client-friendly version of a tool result.
 
     This is opt-in via ADAPTIV_MCP_RESPONSE_MODE=chatgpt.
 
     Goals:
-    - Return production-ready, LLM-friendly payloads with consistent shape.
+    - Return production-ready, client-friendly payloads with consistent shape.
     - Keep payloads compact while still offering structured context.
     """
 
@@ -4167,7 +4167,7 @@ def mcp_tool(
                 if isinstance(result, Mapping):
                     client_payload = _strip_internal_log_fields(result)
                     try:
-                        # Keep ChatGPT/compact responses as close to raw tool output as possible.
+                        # Keep compact responses as close to raw tool output as possible.
                         if _effective_response_mode(req) not in {"chatgpt", "compact"}:
                             client_payload = _merge_invocation_metadata(
                                 client_payload,

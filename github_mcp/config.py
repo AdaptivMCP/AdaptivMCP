@@ -518,7 +518,7 @@ LOG_HTTP_BODIES = _env_flag("LOG_HTTP_BODIES", _log_http_bodies_default)
 # Bodies above this limit are truncated.
 LOG_HTTP_MAX_BODY_BYTES = int(os.environ.get("LOG_HTTP_MAX_BODY_BYTES", "1000000"))
 
-# Include compact request correlation fields (request_id + ChatGPT ids) inline
+# Include compact request correlation fields (request_id + client ids) inline
 # in single-line provider logs (tool calls, outbound HTTP, etc.).
 LOG_INLINE_CONTEXT = _env_flag(
     "ADAPTIV_MCP_LOG_CONTEXT",
@@ -899,7 +899,7 @@ class _InfoOnlyFilter(logging.Filter):
     severity level to improve scanability in UIs like Render.
 
     In practice, suppressing WARNING/ERROR makes both humans and automated
-    consumers (LLMs, log processors) miss important signals.
+    consumers (log processors, monitoring tools) miss important signals.
 
     This filter is retained for backward compatibility but is no longer applied
     by default.
