@@ -14,7 +14,7 @@ from typing import Any
 from . import config
 from .exceptions import GitHubAPIError, GitHubAuthError
 from .http_clients import _get_github_token
-from .utils import _get_main_module
+from .utils import _get_main_module, _parse_github_remote_repo
 
 
 def _is_git_rate_limit_error(message: str) -> bool:
@@ -337,6 +337,67 @@ def _sanitize_workspace_ref(ref: str) -> str:
     return "/".join(parts)
 
 
+async def _ensure_repo_remote(
+    run_shell,
+    repo_dir: str,
+    full_name: str,
+    *,
+    timeout_seconds: int,
+    env: dict[str, str] | None = None,
+) -> None:
+    expected_url = f"https://github.com/{full_name}.git"
+    q_url = shlex.quote(expected_url)
+    get_url = await run_shell(
+        "git remote get-url origin",
+        cwd=repo_dir,
+        timeout_seconds=timeout_seconds,
+        env=env,
+    )
+    current_url = (get_url.get("stdout", "") or "").strip()
+    if get_url.get("exit_code", 0) != 0:
+        add_remote = await run_shell(
+            f"git remote add origin {q_url}",
+            cwd=repo_dir,
+            timeout_seconds=timeout_seconds,
+            env=env,
+        )
+        if add_remote.get("exit_code", 0) != 0:
+            set_remote = await run_shell(
+                f"git remote set-url origin {q_url}",
+                cwd=repo_dir,
+                timeout_seconds=timeout_seconds,
+                env=env,
+            )
+            if set_remote.get("exit_code", 0) != 0:
+                stderr = set_remote.get("stderr", "") or set_remote.get("stdout", "")
+                raise GitHubAPIError(
+                    f"Failed to reset origin remote for {full_name}: {stderr}"
+                )
+        return
+
+    parsed = _parse_github_remote_repo(current_url)
+    matches = False
+    if parsed:
+        matches = parsed.lower() == full_name.lower()
+    else:
+        matches = current_url == expected_url
+
+    if matches:
+        return
+
+    set_remote = await run_shell(
+        f"git remote set-url origin {q_url}",
+        cwd=repo_dir,
+        timeout_seconds=timeout_seconds,
+        env=env,
+    )
+    if set_remote.get("exit_code", 0) != 0:
+        stderr = set_remote.get("stderr", "") or set_remote.get("stdout", "")
+        raise GitHubAPIError(
+            f"Failed to reset origin remote for {full_name}: {stderr}"
+        )
+
+
 async def _clone_repo(
     full_name: str, ref: str | None = None, *, preserve_changes: bool = False
 ) -> str:
@@ -354,6 +415,16 @@ async def _clone_repo(
     git_env = auth_env
 
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
+        git_timeout = int(
+            getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0
+        )
+        await _ensure_repo_remote(
+            run_shell,
+            workspace_dir,
+            full_name,
+            timeout_seconds=git_timeout,
+            env=git_env,
+        )
         if preserve_changes:
             # Workspace directories are keyed by ref, so callers expect the repo mirror
             # (workspace mirror) to be checked out on ``effective_ref``. Some tools
@@ -361,9 +432,6 @@ async def _clone_repo(
             # existing repo mirror. When preserving changes we avoid destructive
             # resets, but we still enforce the requested branch when the repo mirror
             # is clean.
-            git_timeout = int(
-                getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0
-            )
             fetch_result = await _run_git_with_retry(
                 run_shell,
                 "git fetch origin --prune",
@@ -447,9 +515,6 @@ async def _clone_repo(
         q_ref = shlex.quote(effective_ref)
         # When not preserving changes, ensure we are on the requested branch/ref and
         # hard-reset to match origin.
-        git_timeout = int(
-            getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0
-        )
         refresh_steps = [
             ("git fetch origin --prune", git_timeout),
             (f"git checkout -B {q_ref} origin/{q_ref}", git_timeout),
@@ -525,6 +590,13 @@ async def _clone_repo(
         raise GitHubAPIError(f"git clone failed: {stderr}")
 
     shutil.move(tmpdir, workspace_dir)
+    await _ensure_repo_remote(
+        run_shell,
+        workspace_dir,
+        full_name,
+        timeout_seconds=git_timeout,
+        env=git_env,
+    )
     return workspace_dir
 
 
