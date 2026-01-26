@@ -20,7 +20,7 @@ This project requires Python 3.11+ (needed for `typing.NotRequired` and
 ```bash
 python -m venv .venv
 . .venv/bin/activate
-pip install -r dev-requirements.txt
+pip install -r requirements.txt
 ```
 
 Run the test suite with:
