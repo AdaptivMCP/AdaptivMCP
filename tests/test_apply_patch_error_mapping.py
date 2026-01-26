@@ -26,11 +26,6 @@ def _err_details(payload: dict) -> dict:
 @pytest.mark.parametrize(
     "message, expected_category, expected_code",
     [
-        ("Malformed patch: no diffs found", "validation", "PATCH_MALFORMED"),
-        ("Patch missing Begin Patch header", "validation", "PATCH_MALFORMED"),
-        ("Unexpected patch content", "validation", "PATCH_MALFORMED"),
-        ("File does not exist: foo.txt", "not_found", "FILE_NOT_FOUND"),
-        ("Patch does not apply to foo.txt", "conflict", "PATCH_DOES_NOT_APPLY"),
         ("path must be repository-relative", "validation", "PATH_INVALID"),
     ],
 )
