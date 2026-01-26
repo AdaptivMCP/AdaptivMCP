@@ -432,6 +432,120 @@ def _read_lines_excerpt(
     }
 
 
+def _cap_overlap_lines(overlap_lines: int, max_lines_per_section: int) -> int:
+    if overlap_lines >= max_lines_per_section:
+        overlap_lines = max_lines_per_section - 1
+        if overlap_lines < 0:
+            overlap_lines = 0
+    return overlap_lines
+
+
+def _clamp_section_params(
+    *,
+    start_line: int,
+    max_sections: int,
+    max_lines_per_section: int,
+    max_chars_per_section: int,
+    overlap_lines: int,
+) -> dict[str, int]:
+    start_line = int(start_line)
+    max_sections = int(max_sections)
+    max_lines_per_section = int(max_lines_per_section)
+    max_chars_per_section = int(max_chars_per_section)
+    overlap_lines = int(overlap_lines)
+
+    params = _clamp_section_params(
+        start_line=start_line,
+        max_sections=max_sections,
+        max_lines_per_section=max_lines_per_section,
+        max_chars_per_section=max_chars_per_section,
+        overlap_lines=overlap_lines,
+    )
+    start_line = params["start_line"]
+    max_sections = params["max_sections"]
+    max_lines_per_section = params["max_lines_per_section"]
+    max_chars_per_section = params["max_chars_per_section"]
+    overlap_lines = params["overlap_lines"]
+
+    overlap_lines = _cap_overlap_lines(overlap_lines, max_lines_per_section)
+
+    return {
+        "start_line": start_line,
+        "max_sections": max_sections,
+        "max_lines_per_section": max_lines_per_section,
+        "max_chars_per_section": max_chars_per_section,
+        "overlap_lines": overlap_lines,
+    }
+
+
+def _validate_section_params(
+    *,
+    start_line: int,
+    max_sections: int,
+    max_lines_per_section: int,
+    max_chars_per_section: int,
+    overlap_lines: int,
+) -> dict[str, int]:
+    if not isinstance(start_line, int) or start_line < 1:
+        raise ValueError("start_line must be an int >= 1")
+    if not isinstance(max_sections, int) or max_sections < 1:
+        raise ValueError("max_sections must be an int >= 1")
+    if not isinstance(max_lines_per_section, int) or max_lines_per_section < 1:
+        raise ValueError("max_lines_per_section must be an int >= 1")
+    if not isinstance(max_chars_per_section, int) or max_chars_per_section < 1:
+        raise ValueError("max_chars_per_section must be an int >= 1")
+    if not isinstance(overlap_lines, int) or overlap_lines < 0:
+        raise ValueError("overlap_lines must be an int >= 0")
+
+    return _clamp_section_params(
+        start_line=start_line,
+        max_sections=max_sections,
+        max_lines_per_section=max_lines_per_section,
+        max_chars_per_section=max_chars_per_section,
+        overlap_lines=overlap_lines,
+    )
+
+
+def _section_params_from_operation(op: Mapping[str, Any]) -> dict[str, int]:
+    def _default_if_falsy(value: Any, default: int) -> Any:
+        return value if value else default
+
+    return _clamp_section_params(
+        start_line=_default_if_falsy(op.get("start_line", 1), 1),
+        max_sections=_default_if_falsy(op.get("max_sections", 5), 5),
+        max_lines_per_section=_default_if_falsy(
+            op.get("max_lines_per_section", 200), 200
+        ),
+        max_chars_per_section=_default_if_falsy(
+            op.get("max_chars_per_section", 80_000), 80_000
+        ),
+        overlap_lines=_default_if_falsy(op.get("overlap_lines", 20), 20),
+    )
+
+
+def _empty_sections_payload(
+    *,
+    start_line: int,
+    max_sections: int,
+    max_lines_per_section: int,
+    max_chars_per_section: int,
+    overlap_lines: int,
+    had_decoding_errors: bool = False,
+) -> dict[str, Any]:
+    return {
+        "start_line": int(start_line),
+        "end_line": int(start_line),
+        "parts": [],
+        "truncated": False,
+        "next_start_line": None,
+        "max_sections": int(max_sections),
+        "max_lines_per_section": int(max_lines_per_section),
+        "max_chars_per_section": int(max_chars_per_section),
+        "overlap_lines": int(overlap_lines),
+        "had_decoding_errors": bool(had_decoding_errors),
+    }
+
+
 def _sections_from_line_iter(
     line_iter: Any,
     *,
@@ -447,23 +561,18 @@ def _sections_from_line_iter(
     numbers are assigned based on iteration order starting at 1.
     """
 
-    if start_line < 1:
-        raise ValueError("start_line must be >= 1")
-    if max_sections < 1:
-        raise ValueError("max_sections must be >= 1")
-    if max_lines_per_section < 1:
-        raise ValueError("max_lines_per_section must be >= 1")
-    if max_chars_per_section < 1:
-        raise ValueError("max_chars_per_section must be >= 1")
-
-    overlap = int(overlap_lines)
-    if overlap < 0:
-        overlap = 0
-    # Prevent degenerate overlap that would stall pagination.
-    if overlap >= max_lines_per_section:
-        overlap = max_lines_per_section - 1
-        if overlap < 0:
-            overlap = 0
+    params = _validate_section_params(
+        start_line=start_line,
+        max_sections=max_sections,
+        max_lines_per_section=max_lines_per_section,
+        max_chars_per_section=max_chars_per_section,
+        overlap_lines=overlap_lines,
+    )
+    start_line = params["start_line"]
+    max_sections = params["max_sections"]
+    max_lines_per_section = params["max_lines_per_section"]
+    max_chars_per_section = params["max_chars_per_section"]
+    overlap = params["overlap_lines"]
 
     parts: list[dict[str, Any]] = []
     current_lines: list[dict[str, Any]] = []
@@ -619,18 +728,14 @@ def _read_lines_sections(
             )
     except UnicodeDecodeError:
         # errors="replace" should avoid this, but keep schema stable.
-        return {
-            "start_line": int(start_line),
-            "end_line": int(start_line),
-            "parts": [],
-            "truncated": False,
-            "next_start_line": None,
-            "max_sections": int(max_sections),
-            "max_lines_per_section": int(max_lines_per_section),
-            "max_chars_per_section": int(max_chars_per_section),
-            "overlap_lines": int(overlap_lines),
-            "had_decoding_errors": True,
-        }
+        return _empty_sections_payload(
+            start_line=int(start_line),
+            max_sections=int(max_sections),
+            max_lines_per_section=int(max_lines_per_section),
+            max_chars_per_section=int(max_chars_per_section),
+            overlap_lines=int(overlap_lines),
+            had_decoding_errors=True,
+        )
 
 
 def _sanitize_git_ref(ref: str) -> str:
@@ -1406,16 +1511,18 @@ async def read_workspace_file_sections(
     try:
         if not isinstance(path, str) or not path.strip():
             raise ValueError("path must be a non-empty string")
-        if not isinstance(start_line, int) or start_line < 1:
-            raise ValueError("start_line must be an int >= 1")
-        if not isinstance(max_sections, int) or max_sections < 1:
-            raise ValueError("max_sections must be an int >= 1")
-        if not isinstance(max_lines_per_section, int) or max_lines_per_section < 1:
-            raise ValueError("max_lines_per_section must be an int >= 1")
-        if not isinstance(max_chars_per_section, int) or max_chars_per_section < 1:
-            raise ValueError("max_chars_per_section must be an int >= 1")
-        if not isinstance(overlap_lines, int) or overlap_lines < 0:
-            raise ValueError("overlap_lines must be an int >= 0")
+        params = _validate_section_params(
+            start_line=start_line,
+            max_sections=max_sections,
+            max_lines_per_section=max_lines_per_section,
+            max_chars_per_section=max_chars_per_section,
+            overlap_lines=overlap_lines,
+        )
+        start_line = params["start_line"]
+        max_sections = params["max_sections"]
+        max_lines_per_section = params["max_lines_per_section"]
+        max_chars_per_section = params["max_chars_per_section"]
+        overlap_lines = params["overlap_lines"]
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
@@ -1430,18 +1537,13 @@ async def read_workspace_file_sections(
                 "ref": effective_ref,
                 "path": path,
                 "exists": False,
-                "sections": {
-                    "start_line": int(start_line),
-                    "end_line": int(start_line),
-                    "parts": [],
-                    "truncated": False,
-                    "next_start_line": None,
-                    "max_sections": int(max_sections),
-                    "max_lines_per_section": int(max_lines_per_section),
-                    "max_chars_per_section": int(max_chars_per_section),
-                    "overlap_lines": int(overlap_lines),
-                    "had_decoding_errors": False,
-                },
+                "sections": _empty_sections_payload(
+                    start_line=start_line,
+                    max_sections=max_sections,
+                    max_lines_per_section=max_lines_per_section,
+                    max_chars_per_section=max_chars_per_section,
+                    overlap_lines=overlap_lines,
+                ),
             }
 
         if os.path.isdir(abs_path):
@@ -1454,18 +1556,13 @@ async def read_workspace_file_sections(
                 "exists": True,
                 "is_binary": True,
                 "size_bytes": os.path.getsize(abs_path),
-                "sections": {
-                    "start_line": int(start_line),
-                    "end_line": int(start_line),
-                    "parts": [],
-                    "truncated": False,
-                    "next_start_line": None,
-                    "max_sections": int(max_sections),
-                    "max_lines_per_section": int(max_lines_per_section),
-                    "max_chars_per_section": int(max_chars_per_section),
-                    "overlap_lines": int(overlap_lines),
-                    "had_decoding_errors": False,
-                },
+                "sections": _empty_sections_payload(
+                    start_line=start_line,
+                    max_sections=max_sections,
+                    max_lines_per_section=max_lines_per_section,
+                    max_chars_per_section=max_chars_per_section,
+                    overlap_lines=overlap_lines,
+                ),
             }
 
         sections = _read_lines_sections(
@@ -1746,16 +1843,18 @@ def _git_show_lines_sections_limited(
     Returns: (exists, sections, error)
     """
 
-    if start_line < 1:
-        start_line = 1
-    if max_sections < 1:
-        max_sections = 1
-    if max_lines_per_section < 1:
-        max_lines_per_section = 1
-    if max_chars_per_section < 1:
-        max_chars_per_section = 1
-    if overlap_lines < 0:
-        overlap_lines = 0
+    params = _clamp_section_params(
+        start_line=start_line,
+        max_sections=max_sections,
+        max_lines_per_section=max_lines_per_section,
+        max_chars_per_section=max_chars_per_section,
+        overlap_lines=overlap_lines,
+    )
+    start_line = params["start_line"]
+    max_sections = params["max_sections"]
+    max_lines_per_section = params["max_lines_per_section"]
+    max_chars_per_section = params["max_chars_per_section"]
+    overlap_lines = params["overlap_lines"]
 
     cmd = ["git", "show", f"{git_ref}:{path}"]
     proc = subprocess.Popen(
@@ -1794,18 +1893,13 @@ def _git_show_lines_sections_limited(
         err = (stderr or "").strip() or None
         return (
             False,
-            {
-                "start_line": int(start_line),
-                "end_line": int(start_line),
-                "parts": [],
-                "truncated": False,
-                "next_start_line": None,
-                "max_sections": int(max_sections),
-                "max_lines_per_section": int(max_lines_per_section),
-                "max_chars_per_section": int(max_chars_per_section),
-                "overlap_lines": int(overlap_lines),
-                "had_decoding_errors": False,
-            },
+            _empty_sections_payload(
+                start_line=start_line,
+                max_sections=max_sections,
+                max_lines_per_section=max_lines_per_section,
+                max_chars_per_section=max_chars_per_section,
+                overlap_lines=overlap_lines,
+            ),
             err,
         )
 
@@ -1916,16 +2010,18 @@ async def read_git_file_sections(
             raise ValueError("path must be a non-empty string")
         if not isinstance(git_ref, str) or not git_ref.strip():
             raise ValueError("git_ref must be a non-empty string")
-        if not isinstance(start_line, int) or start_line < 1:
-            raise ValueError("start_line must be an int >= 1")
-        if not isinstance(max_sections, int) or max_sections < 1:
-            raise ValueError("max_sections must be an int >= 1")
-        if not isinstance(max_lines_per_section, int) or max_lines_per_section < 1:
-            raise ValueError("max_lines_per_section must be an int >= 1")
-        if not isinstance(max_chars_per_section, int) or max_chars_per_section < 1:
-            raise ValueError("max_chars_per_section must be an int >= 1")
-        if not isinstance(overlap_lines, int) or overlap_lines < 0:
-            raise ValueError("overlap_lines must be an int >= 0")
+        params = _validate_section_params(
+            start_line=start_line,
+            max_sections=max_sections,
+            max_lines_per_section=max_lines_per_section,
+            max_chars_per_section=max_chars_per_section,
+            overlap_lines=overlap_lines,
+        )
+        start_line = params["start_line"]
+        max_sections = params["max_sections"]
+        max_lines_per_section = params["max_lines_per_section"]
+        max_chars_per_section = params["max_chars_per_section"]
+        overlap_lines = params["overlap_lines"]
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
@@ -3659,26 +3755,12 @@ async def apply_workspace_operations(
                             "read_sections.path must be a non-empty string"
                         )
 
-                    start_line = int(op.get("start_line", 1) or 1)
-                    max_sections = int(op.get("max_sections", 5) or 5)
-                    max_lines_per_section = int(
-                        op.get("max_lines_per_section", 200) or 200
-                    )
-                    max_chars_per_section = int(
-                        op.get("max_chars_per_section", 80_000) or 80_000
-                    )
-                    overlap_lines = int(op.get("overlap_lines", 20) or 0)
-
-                    if start_line < 1:
-                        start_line = 1
-                    if max_sections < 1:
-                        max_sections = 1
-                    if max_lines_per_section < 1:
-                        max_lines_per_section = 1
-                    if max_chars_per_section < 1:
-                        max_chars_per_section = 1
-                    if overlap_lines < 0:
-                        overlap_lines = 0
+                    params = _section_params_from_operation(op)
+                    start_line = params["start_line"]
+                    max_sections = params["max_sections"]
+                    max_lines_per_section = params["max_lines_per_section"]
+                    max_chars_per_section = params["max_chars_per_section"]
+                    overlap_lines = params["overlap_lines"]
 
                     abs_path = _workspace_safe_join(repo_dir, path)
                     if not os.path.exists(abs_path):
@@ -3688,18 +3770,13 @@ async def apply_workspace_operations(
                                 "op": "read_sections",
                                 "path": path,
                                 "status": "missing",
-                                "sections": {
-                                    "start_line": int(start_line),
-                                    "end_line": int(start_line),
-                                    "parts": [],
-                                    "truncated": False,
-                                    "next_start_line": None,
-                                    "max_sections": int(max_sections),
-                                    "max_lines_per_section": int(max_lines_per_section),
-                                    "max_chars_per_section": int(max_chars_per_section),
-                                    "overlap_lines": int(overlap_lines),
-                                    "had_decoding_errors": False,
-                                },
+                                "sections": _empty_sections_payload(
+                                    start_line=start_line,
+                                    max_sections=max_sections,
+                                    max_lines_per_section=max_lines_per_section,
+                                    max_chars_per_section=max_chars_per_section,
+                                    overlap_lines=overlap_lines,
+                                ),
                             }
                         )
                         continue
@@ -3713,18 +3790,13 @@ async def apply_workspace_operations(
                                 "op": "read_sections",
                                 "path": path,
                                 "status": "binary",
-                                "sections": {
-                                    "start_line": int(start_line),
-                                    "end_line": int(start_line),
-                                    "parts": [],
-                                    "truncated": False,
-                                    "next_start_line": None,
-                                    "max_sections": int(max_sections),
-                                    "max_lines_per_section": int(max_lines_per_section),
-                                    "max_chars_per_section": int(max_chars_per_section),
-                                    "overlap_lines": int(overlap_lines),
-                                    "had_decoding_errors": False,
-                                },
+                                "sections": _empty_sections_payload(
+                                    start_line=start_line,
+                                    max_sections=max_sections,
+                                    max_lines_per_section=max_lines_per_section,
+                                    max_chars_per_section=max_chars_per_section,
+                                    overlap_lines=overlap_lines,
+                                ),
                             }
                         )
                         continue

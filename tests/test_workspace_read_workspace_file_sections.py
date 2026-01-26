@@ -90,3 +90,30 @@ async def test_apply_workspace_operations_read_sections(
     assert res["results"][0]["op"] == "read_sections"
     assert res["results"][0]["status"] == "ok"
     assert "parts" in res["results"][0]["sections"]
+
+
+@pytest.mark.anyio
+async def test_read_workspace_file_sections_caps_overlap_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from github_mcp.workspace_tools import fs
+
+    p = tmp_path / "demo.txt"
+    p.write_text("\n".join([f"L{i}" for i in range(1, 8)]) + "\n", encoding="utf-8")
+
+    fake = _FakeTW(str(tmp_path))
+    monkeypatch.setattr(fs, "_tw", lambda: fake)
+
+    res = await fs.read_workspace_file_sections(
+        full_name="octo-org/octo-repo",
+        ref="main",
+        path="demo.txt",
+        start_line=1,
+        max_sections=2,
+        max_lines_per_section=3,
+        max_chars_per_section=10_000,
+        overlap_lines=10,
+    )
+
+    sections = res["sections"]
+    assert sections["overlap_lines"] == 2
