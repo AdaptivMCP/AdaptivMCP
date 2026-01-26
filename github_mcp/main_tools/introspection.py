@@ -650,6 +650,85 @@ def _validate_single_tool_args(
     }
 
 
+def _extract_validation_requests(
+    *args: Any, **kwargs: Any
+) -> tuple[list[Mapping[str, Any]], bool]:
+    """Normalize inputs for validate_tool_args.
+
+    Returns a tuple of (requests, is_batch).
+    """
+
+    if args and kwargs:
+        raise TypeError("validate_tool_args accepts either args or kwargs, not both")
+
+    if args:
+        if len(args) == 1:
+            payload = args[0]
+            if isinstance(payload, list):
+                return payload, True
+            if isinstance(payload, Mapping):
+                if "tools" in payload:
+                    tools = payload.get("tools")
+                    if not isinstance(tools, list):
+                        raise TypeError("tools must be a list")
+                    return tools, True
+                if "requests" in payload:
+                    requests = payload.get("requests")
+                    if not isinstance(requests, list):
+                        raise TypeError("requests must be a list")
+                    return requests, True
+                return [payload], False
+        if len(args) == 2:
+            tool_name, tool_args = args
+            return [{"tool": tool_name, "args": tool_args}], False
+        raise TypeError("validate_tool_args accepts at most two positional arguments")
+
+    if "tools" in kwargs or "requests" in kwargs:
+        if "tools" in kwargs and "requests" in kwargs:
+            raise TypeError("Specify only one of tools or requests")
+        key = "tools" if "tools" in kwargs else "requests"
+        items = kwargs.get(key)
+        if not isinstance(items, list):
+            raise TypeError(f"{key} must be a list")
+        return items, True
+
+    tool_name = kwargs.get("tool") or kwargs.get("tool_name") or kwargs.get("name")
+    if tool_name is not None:
+        tool_args = (
+            kwargs.get("args")
+            if "args" in kwargs
+            else kwargs.get("arguments") or kwargs.get("input")
+        )
+        return [{"tool": tool_name, "args": tool_args}], False
+
+    raise TypeError("validate_tool_args requires a tool name or batch of tools")
+
+
 async def validate_tool_args(*args: Any, **kwargs: Any) -> dict[str, Any]:
-    """Deprecated. Schema validation has been removed."""
-    raise NotImplementedError("validate_tool_args has been removed")
+    """Validate tool inputs using lightweight shape checks.
+
+    This helper keeps backwards-compatible semantics for clients that still
+    call validate_tool_args, while delegating to the minimal validation logic
+    in _validate_single_tool_args.
+    """
+
+    requests, is_batch = _extract_validation_requests(*args, **kwargs)
+    results: list[dict[str, Any]] = []
+
+    for entry in requests:
+        if not isinstance(entry, Mapping):
+            raise TypeError("tool validation requests must be mappings")
+        tool_name = entry.get("tool") or entry.get("tool_name") or entry.get("name")
+        if not isinstance(tool_name, str) or not tool_name:
+            raise TypeError("tool name must be a non-empty string")
+        tool_args = (
+            entry.get("args")
+            if "args" in entry
+            else entry.get("arguments") or entry.get("input")
+        )
+        results.append(_validate_single_tool_args(tool_name, tool_args))
+
+    if is_batch:
+        return {"valid": all(result["valid"] for result in results), "results": results}
+
+    return results[0]
