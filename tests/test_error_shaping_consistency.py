@@ -17,7 +17,7 @@ def test_chatgpt_friendly_result_overwrites_conflicting_ok(monkeypatch):
     shaped = dec._chatgpt_friendly_result(payload, req={"headers": {}})
     assert isinstance(shaped, dict)
     assert shaped["status"] == "error"
-    # ChatGPT shaping preserves raw tool payloads; it does not normalize ok/status.
+    # Compact shaping preserves raw tool payloads; it does not normalize ok/status.
     assert shaped["ok"] is True
 
 

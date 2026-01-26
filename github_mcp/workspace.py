@@ -1216,7 +1216,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
             category = "conflict"
             code = "PATCH_APPLY_FAILED"
 
-            # Heuristics to improve categorization for LLM + dev tooling.
+            # Heuristics to improve categorization for client + dev tooling.
             if (
                 "only garbage" in lowered
                 or "corrupt patch" in lowered

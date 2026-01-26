@@ -30,7 +30,7 @@ def _registered_tool_name(tool: Any, func: Any) -> str | None:
 
 
 def _tool_name_variants(tool_name: str) -> list[str]:
-    """Generate common variants of a tool name produced by LLMs/clients.
+    """Generate common variants of a tool name produced by clients.
 
     We see several common failure modes in the wild:
     - Leading slashes ("/terminal_command")

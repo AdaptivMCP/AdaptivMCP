@@ -1,6 +1,6 @@
 """Helpers for turning common tool invocation mistakes into actionable warnings.
 
-These warnings are intended to help LLM callers self-correct when they:
+These warnings are intended to help callers self-correct when they:
   - call a non-existent tool name, or
   - call an existing tool with invalid / mismatched argument names.
 

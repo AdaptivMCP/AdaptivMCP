@@ -95,7 +95,7 @@ _CHATGPT_METADATA_HEADERS = {
 
 
 def _extract_chatgpt_metadata(headers: list[tuple[bytes, bytes]]) -> dict[str, str]:
-    """Extract safe ChatGPT metadata headers for logging and request context."""
+    """Extract safe request metadata headers for logging and request context."""
 
     if not headers:
         return {}

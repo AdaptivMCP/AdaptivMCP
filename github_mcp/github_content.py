@@ -151,8 +151,8 @@ def _strip_large_fields_from_commit_response(
     """Remove large fields from GitHub Contents API responses.
 
     The GitHub Contents write endpoints often return base64-encoded file bodies in
-    `response_json['content']['content']`. Returning that blob to ChatGPT can
-    explode tool payload sizes and cause client disconnects/network errors.
+    `response_json['content']['content']`. Returning that blob to clients can
+    explode tool payload sizes and cause disconnects or network errors.
 
     We keep the rest of the response (sha, html_url, commit sha, etc.).
     """
@@ -258,7 +258,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             )
             if missing_hint:
                 # Keep hints separate from the primary error message so clients
-                # can render them without triggering repetitive LLM behaviors.
+                # can render them without triggering repetitive retries.
                 err.hint = str(missing_hint).strip()
             raise err from exc
         except OSError as exc:
@@ -279,8 +279,8 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         return response.content
 
     sandbox_hint = (
-        "In ChatGPT-hosted environments, local files live in the runtime sandbox. "
-        "The sandbox:/ prefix allows the host to rewrite the local path into an "
+        "In hosted environments, local files live in the runtime sandbox. The "
+        "sandbox:/ prefix allows the host to rewrite the local path into an "
         "accessible URL when direct filesystem access is unavailable."
     )
 
@@ -356,9 +356,9 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
 
     raise GitHubAPIError(
         f"{context} content_url must be an absolute http(s) URL, a sandbox:/ path, "
-        "or an absolute local file path. In ChatGPT, pass the sandbox file path "
-        "(e.g. sandbox:/mnt/data/file) and the host will rewrite it to a real URL "
-        "before it reaches this server."
+        "or an absolute local file path. In hosted environments, pass the sandbox "
+        "file path (e.g. sandbox:/mnt/data/file) and the host will rewrite it to a "
+        "real URL before it reaches this server."
     )
 
 
