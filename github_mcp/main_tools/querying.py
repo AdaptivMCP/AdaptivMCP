@@ -10,14 +10,6 @@ from github_mcp.http_clients import (
     _get_concurrency_semaphore as _default_get_concurrency_semaphore,
 )
 
-try:
-    from github_mcp.redaction import redact_any
-except Exception:  # noqa: BLE001
-
-    def redact_any(value: Any, *args: Any, **kwargs: Any) -> Any:
-        return value
-
-
 from github_mcp.server import (
     _github_request as _default_github_request,
 )
@@ -68,7 +60,7 @@ async def graphql_query(
     # main.py historically returned only the parsed JSON for graphql_query.
     payload_json = result.get("json")
     if isinstance(payload_json, dict):
-        return redact_any(payload_json)
+        return payload_json
     return structured_tool_error(
         RuntimeError("GraphQL response did not include a JSON object"),
         context="graphql_query",
@@ -130,7 +122,7 @@ async def fetch_url(url: str) -> dict[str, Any]:
         "size_bytes": len(body),
         "content": content,
     }
-    return redact_any(payload)
+    return payload
 
 
 async def search(
@@ -200,8 +192,7 @@ async def search(
             params=params,
             headers=headers,
         )
-        # Search results can include snippets that contain secrets; redact.
-        return redact_any(result)
+        return result
     except Exception as exc:  # noqa: BLE001
         return structured_tool_error(
             exc,

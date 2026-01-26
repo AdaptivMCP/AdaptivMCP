@@ -29,13 +29,6 @@ try:
 except Exception:  # noqa: BLE001
     ERRORS_LOGGER = logging.getLogger("github_mcp")
 
-try:
-    from github_mcp.redaction import redact_any
-except Exception:  # noqa: BLE001
-
-    def redact_any(value: Any, *args: Any, **kwargs: Any) -> Any:  # type: ignore[override]
-        return value
-
 
 def _parse_bool(value: str | None) -> bool | None:
     if value is None:
@@ -348,7 +341,7 @@ def _log_http_structured_error(
                 "code": code or None,
                 "retryable": bool(retryable) if isinstance(retryable, bool) else None,
                 "invocation_id": invocation_id,
-                "error_detail": redact_any(error_detail),
+                "error_detail": error_detail,
             },
         )
     except Exception:

@@ -421,14 +421,4 @@ def _structured_tool_error(
     if tool_descriptor_text is not None:
         payload["tool_descriptor_text"] = tool_descriptor_text
 
-    # Final pass: redact secrets anywhere in the payload. This reduces the
-    # likelihood of incorrect safety blocks caused by token-like strings in
-    # error messages, upstream payloads, or request debug context.
-    try:
-        from github_mcp.redaction import redact_any
-
-        payload = redact_any(payload)
-    except Exception:
-        pass
-
     return payload
