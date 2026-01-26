@@ -9,11 +9,13 @@ import subprocess
 from collections.abc import Mapping
 from typing import Any, Literal
 
+from github_mcp import config
 from github_mcp.diff_utils import build_unified_diff, diff_stats
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
 )
+from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import _tw
 
@@ -3165,12 +3167,17 @@ async def _apply_patch_impl(
         repo_dir = await deps["clone_repo"](
             full_name, ref=effective_ref, preserve_changes=True
         )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
+        )
 
         for patch_entry in patches:
             await deps["apply_patch_to_repo"](repo_dir, patch_entry)
 
         if add or commit:
-            add_result = await deps["run_shell"]("git add -A", cwd=repo_dir)
+            add_result = await deps["run_shell"](
+                "git add -A", cwd=repo_dir, timeout_seconds=t_default
+            )
             if add_result.get("exit_code") != 0:
                 stderr = add_result.get("stderr", "") or add_result.get("stdout", "")
                 raise ValueError(f"git add failed: {stderr}")
@@ -3178,7 +3185,9 @@ async def _apply_patch_impl(
         status_result = None
         if check_changes or commit:
             status_result = await deps["run_shell"](
-                "git status --porcelain", cwd=repo_dir
+                "git status --porcelain",
+                cwd=repo_dir,
+                timeout_seconds=t_default,
             )
 
         commit_result = None
@@ -3196,7 +3205,9 @@ async def _apply_patch_impl(
                 raise ValueError("No changes to commit after applying patch")
 
             commit_cmd = f"git commit -m {shlex.quote(commit_message)}"
-            commit_result = await deps["run_shell"](commit_cmd, cwd=repo_dir)
+            commit_result = await deps["run_shell"](
+                commit_cmd, cwd=repo_dir, timeout_seconds=t_default
+            )
             if commit_result.get("exit_code") != 0:
                 stderr = commit_result.get("stderr", "") or commit_result.get(
                     "stdout", ""
@@ -3206,7 +3217,9 @@ async def _apply_patch_impl(
             if push:
                 # Disallow pushing from detached HEAD (e.g., when ref is a tag or commit SHA).
                 head_ref = await deps["run_shell"](
-                    "git symbolic-ref --quiet --short HEAD", cwd=repo_dir
+                    "git symbolic-ref --quiet --short HEAD",
+                    cwd=repo_dir,
+                    timeout_seconds=t_default,
                 )
                 branch_name = (head_ref.get("stdout", "") or "").strip()
                 if head_ref.get("exit_code") != 0 or not branch_name:
@@ -3216,7 +3229,9 @@ async def _apply_patch_impl(
 
                 # Push to the requested ref name.
                 push_cmd = f"git push origin {shlex.quote(f'HEAD:{effective_ref}')}"
-                push_result = await deps["run_shell"](push_cmd, cwd=repo_dir)
+                push_result = await deps["run_shell"](
+                    push_cmd, cwd=repo_dir, timeout_seconds=t_default
+                )
                 if push_result.get("exit_code") != 0:
                     stderr = push_result.get("stderr", "") or push_result.get(
                         "stdout", ""
