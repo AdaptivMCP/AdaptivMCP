@@ -454,6 +454,19 @@ def _clamp_section_params(
     max_chars_per_section = int(max_chars_per_section)
     overlap_lines = int(overlap_lines)
 
+    params = _clamp_section_params(
+        start_line=start_line,
+        max_sections=max_sections,
+        max_lines_per_section=max_lines_per_section,
+        max_chars_per_section=max_chars_per_section,
+        overlap_lines=overlap_lines,
+    )
+    start_line = params["start_line"]
+    max_sections = params["max_sections"]
+    max_lines_per_section = params["max_lines_per_section"]
+    max_chars_per_section = params["max_chars_per_section"]
+    overlap_lines = params["overlap_lines"]
+
     overlap_lines = _cap_overlap_lines(overlap_lines, max_lines_per_section)
 
     return {
