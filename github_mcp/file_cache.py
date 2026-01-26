@@ -113,11 +113,9 @@ def get_cached(full_name: str, ref: str, path: str) -> dict | None:
 
 
 def bulk_get_cached(full_name: str, ref: str, paths: Iterable[str]) -> dict[str, dict]:
-    keys = [cache_key(full_name, ref, path) for path in paths]
-    entries = FILE_CACHE.bulk_get(keys)
-    # Map back to paths for easier consumption by callers.
     reverse_lookup = {cache_key(full_name, ref, path): path for path in paths}
-    return {reverse_lookup[k]: v for k, v in entries.items() if k in reverse_lookup}
+    entries = FILE_CACHE.bulk_get(reverse_lookup.keys())
+    return {reverse_lookup[k]: v for k, v in entries.items()}
 
 
 def clear_cache() -> None:

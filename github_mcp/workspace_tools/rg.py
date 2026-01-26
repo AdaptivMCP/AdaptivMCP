@@ -28,14 +28,23 @@ from ._shared import _tw
 from .fs import _is_probably_binary, _read_lines_excerpt, _workspace_safe_join
 
 
+_RG_AVAILABLE: bool | None = None
+
+
 def _rg_available() -> bool:
+    global _RG_AVAILABLE
+    if _RG_AVAILABLE is not None:
+        return _RG_AVAILABLE
+
     path = shutil.which("rg")
     if not path:
-        return False
+        _RG_AVAILABLE = False
+        return _RG_AVAILABLE
     try:
-        return os.access(path, os.X_OK)
+        _RG_AVAILABLE = os.access(path, os.X_OK)
     except Exception:
-        return False
+        _RG_AVAILABLE = False
+    return _RG_AVAILABLE
 
 
 def _safe_communicate(
