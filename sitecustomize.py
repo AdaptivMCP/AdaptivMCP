@@ -1,10 +1,14 @@
+"""Compatibility helpers for older Python runtimes.
+
+This project targets environments that may still be on Python 3.10, which
+doesn't expose `typing.NotRequired` / `typing.Required`. Provide a small
+shim so tests (and runtime code) can import these symbols without depending
+on Python 3.11+.
+"""
+
 from __future__ import annotations
 
-import sys
 import typing
-from datetime import timezone
-import datetime
-from pathlib import Path
 
 try:
     from typing_extensions import NotRequired, Required
@@ -17,10 +21,3 @@ if NotRequired is not None and not hasattr(typing, "NotRequired"):
 
 if Required is not None and not hasattr(typing, "Required"):
     typing.Required = Required  # type: ignore[attr-defined]
-
-if not hasattr(datetime, "UTC"):
-    datetime.UTC = timezone.utc  # type: ignore[attr-defined]
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))

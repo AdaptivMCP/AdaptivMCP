@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import string
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
+
+try:
+    from datetime import UTC
+except ImportError:  # pragma: no cover - Python < 3.11 fallback
+    UTC = timezone.utc
 
 from github_mcp.exceptions import GitHubAPIError
 

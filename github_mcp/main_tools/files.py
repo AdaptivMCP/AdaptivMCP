@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, NotRequired, TypedDict
+from typing import Any, TypedDict
+
+try:
+    from typing import NotRequired
+except ImportError:  # pragma: no cover - Python < 3.11 fallback
+    from typing_extensions import NotRequired
 
 from github_mcp.diff_utils import build_unified_diff
 from github_mcp.utils import _normalize_write_context, extract_sha, require_text
