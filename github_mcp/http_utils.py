@@ -6,14 +6,6 @@ import time
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-_JSON_ERROR_EXCERPT_LIMIT = 500
-
-
-def _excerpt_text(text: str, *, limit: int = _JSON_ERROR_EXCERPT_LIMIT) -> str:
-    if len(text) <= limit:
-        return text
-    return f"{text[:limit]}...({len(text) - limit} more chars)"
-
 
 def build_response_payload(resp: Any, *, body: Any | None = None) -> dict[str, Any]:
     """Build a stable response payload.
@@ -50,17 +42,8 @@ def extract_response_json(resp: Any) -> Any | None:
     try:
         return json_method()
     except Exception as exc:
-        try:
-            text_method = getattr(resp, "text", "")
-            text = text_method() if callable(text_method) else text_method
-        except Exception:
-            text = ""
-        excerpt = _excerpt_text(str(text) if text is not None else "")
-        return {
-            "error": "invalid_json_response",
-            "message": str(exc),
-            "raw_text_excerpt": excerpt,
-        }
+        _ = exc
+        return None
 
 
 def parse_rate_limit_delay_seconds(
