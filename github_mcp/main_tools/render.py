@@ -1,7 +1,12 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
+
+try:
+    from datetime import UTC
+except ImportError:  # pragma: no cover - Python < 3.11 fallback
+    UTC = timezone.utc
 
 from github_mcp.render_api import render_request
 

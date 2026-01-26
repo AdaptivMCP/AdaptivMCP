@@ -175,7 +175,7 @@ async def _run_shell(
         except Exception:
             pass
         raise
-    except TimeoutError:
+    except asyncio.TimeoutError:
         timed_out = True
         # Best-effort termination: kill the whole process group on POSIX so
         # child processes (e.g. pytest workers) don't keep pipes open.
