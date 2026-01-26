@@ -1,13 +1,13 @@
 """Project bootstrap helper.
 
-This script creates (or repairs) a local virtual environment and installs
-dependencies so contributors can run tests and start the server reliably.
+This script creates (or repairs) a local virtual environment so contributors
+can run tests and start the server reliably.
 
 Usage:
   python scripts/bootstrap.py
 
-By default it creates a `.venv` at the repository root and installs
-`dev-requirements.txt`.
+By default it creates a `.venv` at the repository root without installing
+any requirements. Use `--deps` to install requirements on demand.
 """
 
 from __future__ import annotations
@@ -171,8 +171,8 @@ def main() -> int:
     parser.add_argument(
         "--deps",
         choices=["dev", "prod", "none"],
-        default="dev",
-        help="Which dependencies to install (default: dev)",
+        default="none",
+        help="Which dependencies to install (default: none)",
     )
     parser.add_argument(
         "--run-tests",
