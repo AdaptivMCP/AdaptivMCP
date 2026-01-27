@@ -318,7 +318,7 @@ async def render_shell(
     ref: str = "main",
     timeout_seconds: float = 0,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Render-focused shell entry point for interacting with GitHub workspaces.
@@ -445,7 +445,7 @@ async def terminal_command(
     command_lines: list[str] | None = None,
     timeout_seconds: float = 0,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Run a shell command inside the repo mirror and return its result.
@@ -457,7 +457,7 @@ async def terminal_command(
 
     - The command runs within the server-side repo mirror (a persistent git
       working copy).
-    - If ``use_temp_venv=true`` (default), the server ensures a **persistent**
+    - If ``use_temp_venv=true``, the server ensures a **persistent**
       workspace virtualenv exists at ``<repo_dir>/.venv-mcp`` and runs the
       command inside it.
     - If ``installing_dependencies=true`` and ``use_temp_venv=true``, the tool
@@ -709,7 +709,7 @@ async def run_python(
     args: list[str] | None = None,
     timeout_seconds: float = 0,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
     cleanup: bool = True,
 ) -> dict[str, Any]:
@@ -855,7 +855,7 @@ async def run_command_alias(
     command_lines: list[str] | None = None,
     timeout_seconds: float = 0,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Backward-compatible alias for :func:`terminal_command`.
@@ -897,7 +897,7 @@ async def run_shell_alias(
     command_lines: list[str] | None = None,
     timeout_seconds: float = 0,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Backward-compatible alias for :func:`terminal_command`.
@@ -931,7 +931,7 @@ async def terminal_commands_alias(
     command_lines: list[str] | None = None,
     timeout_seconds: float = 0,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Backward-compatible alias for :func:`terminal_command`.
@@ -965,7 +965,7 @@ async def run_terminal_commands_alias(
     command_lines: list[str] | None = None,
     timeout_seconds: float = 0,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Backward-compatible alias for :func:`terminal_command`.

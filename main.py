@@ -828,7 +828,7 @@ async def terminal_command(
     command: str = "pytest",
     timeout_seconds: int = 300,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Run a shell command in the persistent repo mirror (terminal gateway).
@@ -852,7 +852,7 @@ async def run_command(
     command: str = "pytest",
     timeout_seconds: int = 300,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Legacy shim retained for tests/backwards-compat.
@@ -882,7 +882,7 @@ async def run_shell(
     command: str = "pytest",
     timeout_seconds: int = 300,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Legacy shim retained for tests/backwards-compat.
@@ -908,7 +908,7 @@ async def terminal_commands(
     command: str = "pytest",
     timeout_seconds: int = 300,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Legacy shim retained for tests/backwards-compat.
@@ -934,7 +934,7 @@ async def run_tests(
     test_command: str = "pytest -q",
     timeout_seconds: int = 600,
     workdir: str | None = None,
-    use_temp_venv: bool = True,
+    use_temp_venv: bool = False,
     installing_dependencies: bool = False,
 ) -> dict[str, Any]:
     """Forward run_tests calls to the repo mirror helper for test surfaces."""

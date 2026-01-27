@@ -433,7 +433,7 @@ async def workspace_batch(
                 )
                 extra.setdefault("workdir", _as_str(ts.get("workdir")))
                 extra.setdefault(
-                    "use_temp_venv", _as_bool(ts.get("use_temp_venv"), True)
+                    "use_temp_venv", _as_bool(ts.get("use_temp_venv"), False)
                 )
                 extra.setdefault(
                     "installing_dependencies",
