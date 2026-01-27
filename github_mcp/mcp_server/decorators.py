@@ -15,7 +15,6 @@ import inspect
 import json
 import logging
 import os
-import re
 import time
 import uuid
 from collections.abc import Callable, Iterable, Mapping
@@ -35,6 +34,7 @@ from github_mcp.config import (
 from github_mcp.exceptions import UsageError, WriteApprovalRequiredError
 from github_mcp.mcp_server.context import (
     FASTMCP_AVAILABLE,
+    REQUEST_WRITE_APPROVED,
     WRITE_ALLOWED,
     get_write_allowed,
     get_request_context,
@@ -648,6 +648,7 @@ def _inject_stdout_stderr(
                 out.setdefault("stderr_total_chars", raw_chars)
                 out["stderr_truncated"] = True
         out["stderr"] = stderr
+
 
 def _extract_streams_for_report(
     payload: Mapping[str, Any], *, req: Mapping[str, Any] | None
@@ -1414,6 +1415,13 @@ def _tool_annotations(
         # (filesystem/network/hosted provider). Default to True.
         open_world_hint = True
 
+    # If write is allowed (auto-approve enabled or a request-scoped approval was
+    # granted), treat tools as non-destructive in UI. We intentionally avoid
+    # calling `get_write_allowed()` here because it can trigger a tool-metadata
+    # refresh, which would recurse back into this function.
+    if peek_auto_approve_enabled() or bool(REQUEST_WRITE_APPROVED.get() or False):
+        destructive_hint = False
+
     # Operator request: when auto-approve is enabled, suppress all UI hints.
     # This keeps MCP annotations structurally present while preventing clients
     # from rendering hint badges.
@@ -1600,9 +1608,7 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     exc = WriteApprovalRequiredError(
         f"Write approval required to run tool {tool_name!r}."
     )
-    exc.hint = (
-        "Approve the action in the client UI or enable auto-approve to allow write tools."
-    )
+    exc.hint = "Approve the action in the client UI or enable auto-approve to allow write tools."
     raise exc
 
 

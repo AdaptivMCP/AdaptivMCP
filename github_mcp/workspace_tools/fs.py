@@ -2492,10 +2492,6 @@ async def set_workspace_file_contents(
         repo_dir = await deps["clone_repo"](
             full_name, ref=effective_ref, preserve_changes=True
         )
-        before_info = _workspace_read_text(repo_dir, path)
-        before_text = (
-            (before_info.get("text") or "") if before_info.get("exists") else ""
-        )
         write_info = _workspace_write_text(
             repo_dir,
             path,

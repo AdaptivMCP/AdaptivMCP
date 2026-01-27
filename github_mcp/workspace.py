@@ -393,9 +393,7 @@ async def _ensure_repo_remote(
     )
     if set_remote.get("exit_code", 0) != 0:
         stderr = set_remote.get("stderr", "") or set_remote.get("stdout", "")
-        raise GitHubAPIError(
-            f"Failed to reset origin remote for {full_name}: {stderr}"
-        )
+        raise GitHubAPIError(f"Failed to reset origin remote for {full_name}: {stderr}")
 
 
 async def _clone_repo(
