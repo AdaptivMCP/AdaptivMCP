@@ -75,6 +75,3 @@ safety>=3.7.0
 pre-commit>=4.5.1
 python-dotenv>=1.1.0
 ipython>=8.26.0
-
-# Syntax highlighting for developer-facing log visuals
-Pygments>=2.19.2
