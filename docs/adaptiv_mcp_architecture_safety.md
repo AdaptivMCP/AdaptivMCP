@@ -123,13 +123,3 @@ key layers.
 - **Cache-control enforcement**: Middleware ensures dynamic HTTP endpoints are
   marked `no-store` while static assets remain cacheable, reducing the risk of
   proxies caching sensitive tool outputs.【F:main.py†L102-L164】
-
-## How to Extend This Document
-
-When new tools or subsystems are added:
-
-1. Add an entry under **Tool domains and subsystems** describing the new
-   module and its responsibilities.
-2. Document any new safety constraints (gating, validation, rate limiting,
-   logging) under **Safety and Control Measures**.
-3. Reference the relevant implementation files for further reading.
