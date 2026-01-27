@@ -19,15 +19,6 @@ from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import _tw
 
-_LOG_WRITE_DIFFS = os.environ.get(
-    "ADAPTIV_MCP_LOG_WRITE_DIFFS", "1"
-).strip().lower() not in {
-    "0",
-    "false",
-    "no",
-    "off",
-}
-
 
 # Default read limits to avoid loading multi-megabyte files into memory.
 # These are used by the single-file and multi-file read tools unless callers
@@ -112,51 +103,6 @@ def _normalize_workspace_operations(
             raise TypeError("operations must be a list of dicts")
         out.append(_normalize_workspace_operation(op))
     return out
-
-
-def _maybe_diff_for_log(
-    *,
-    path: str,
-    before: str,
-    after: str,
-    before_exists: bool,
-) -> str | None:
-    """Best-effort unified diff for provider logs.
-
-    The diff is attached to tool results under a __log_* key. The tool wrapper
-    preserves these fields in client-visible payloads by default so the user and
-    model see the same data that produced visual tool logs.
-    """
-
-    if not _LOG_WRITE_DIFFS:
-        return None
-    if not isinstance(before, str) or not isinstance(after, str):
-        return None
-    if before == after:
-        return None
-
-    diff = build_unified_diff(
-        before,
-        after,
-        fromfile=(path if before_exists else "/dev/null"),
-        tofile=path,
-    )
-    if not diff:
-        return None
-    return diff
-
-
-def _delete_diff_for_log(*, path: str, before: str) -> str | None:
-    """Best-effort unified diff for deletions."""
-
-    if not _LOG_WRITE_DIFFS:
-        return None
-    if not isinstance(before, str) or before == "":
-        return None
-    diff = build_unified_diff(before, "", fromfile=path, tofile="/dev/null")
-    if not diff:
-        return None
-    return diff
 
 
 def _looks_like_diff(text: str) -> bool:
@@ -2557,17 +2503,9 @@ async def set_workspace_file_contents(
             create_parents=create_parents,
         )
 
-        log_diff = _maybe_diff_for_log(
-            path=path,
-            before=before_text,
-            after=content,
-            before_exists=bool(before_info.get("exists")),
-        )
-
         return {
             "ref": effective_ref,
             "status": "written",
-            "__log_diff": log_diff,
             **write_info,
         }
     except Exception as exc:
@@ -2633,13 +2571,6 @@ async def edit_workspace_text_range(
             create_parents=create_parents,
         )
 
-        log_diff = _maybe_diff_for_log(
-            path=path,
-            before=original,
-            after=updated,
-            before_exists=True,
-        )
-
         return {
             "ref": effective_ref,
             "status": "edited",
@@ -2648,7 +2579,6 @@ async def edit_workspace_text_range(
             "end": {"line": int(end_line), "col": int(end_col)},
             "bytes_before": len(original.encode("utf-8")),
             "bytes_after": len(updated.encode("utf-8")),
-            "__log_diff": log_diff,
             **write_info,
         }
     except Exception as exc:
@@ -2734,12 +2664,6 @@ async def delete_workspace_lines(
             "removed": removed,
             "line_count_before": len(lines),
             "line_count_after": len(_split_lines_keepends(updated)),
-            "__log_diff": _maybe_diff_for_log(
-                path=path,
-                before=original,
-                after=updated,
-                before_exists=True,
-            ),
             **write_info,
         }
     except Exception as exc:
@@ -2814,12 +2738,6 @@ async def delete_workspace_char(
             "removed": removed,
             "bytes_before": len(original.encode("utf-8")),
             "bytes_after": len(updated.encode("utf-8")),
-            "__log_diff": _maybe_diff_for_log(
-                path=path,
-                before=original,
-                after=updated,
-                before_exists=True,
-            ),
             **write_info,
         }
     except Exception as exc:
@@ -2916,12 +2834,6 @@ async def delete_workspace_word(
             "whole_word": bool(whole_word),
             "removed": removed,
             "removed_span": removed_span,
-            "__log_diff": _maybe_diff_for_log(
-                path=path,
-                before=original,
-                after=updated,
-                before_exists=True,
-            ),
             **write_info,
         }
     except Exception as exc:
@@ -3016,12 +2928,6 @@ async def edit_workspace_line(
                 "removed": removed,
                 "line_count_before": len(_split_lines_keepends(original)),
                 "line_count_after": len(updated_lines),
-                "__log_diff": _maybe_diff_for_log(
-                    path=path,
-                    before=original,
-                    after=updated,
-                    before_exists=True,
-                ),
                 **write_info,
             }
 
@@ -3047,12 +2953,6 @@ async def edit_workspace_line(
                 "inserted": payload,
                 "line_count_before": len(_split_lines_keepends(original)),
                 "line_count_after": len(lines),
-                "__log_diff": _maybe_diff_for_log(
-                    path=path,
-                    before=original,
-                    after=updated,
-                    before_exists=True,
-                ),
                 **write_info,
             }
 
@@ -3086,12 +2986,6 @@ async def edit_workspace_line(
             "line_number": line_number,
             "line_count_before": len(_split_lines_keepends(original)),
             "line_count_after": len(_split_lines_keepends(updated)),
-            "__log_diff": _maybe_diff_for_log(
-                path=path,
-                before=original,
-                after=updated,
-                before_exists=True,
-            ),
             **write_info,
         }
     except Exception as exc:
@@ -3186,12 +3080,6 @@ async def replace_workspace_text(
             "replaced": replaced,
             "replace_all": bool(replace_all),
             "occurrence": int(occurrence),
-            "__log_diff": _maybe_diff_for_log(
-                path=path,
-                before=original,
-                after=updated,
-                before_exists=True,
-            ),
             **write_info,
         }
     except Exception as exc:
@@ -3253,7 +3141,7 @@ async def _apply_patch_impl(
         patch_digests = [sha1_8(p) for p in patches]
         debug_args.update({"patches": len(patches), "patch_digests": patch_digests})
 
-        # Only surface unified diffs for visual logs.
+        # Only use unified diffs for diff stats.
         diff_blobs = [p for p in patches if isinstance(p, str) and _looks_like_diff(p)]
         combined_diff = (
             "\n".join(x.rstrip("\n") for x in diff_blobs).strip() if diff_blobs else ""
@@ -3349,7 +3237,6 @@ async def _apply_patch_impl(
         if combined_diff:
             stats = _diff_stats(combined_diff)
             response["diff_stats"] = {"added": stats.added, "removed": stats.removed}
-            response["__log_diff"] = combined_diff
 
         if status_result is not None:
             response["status_output"] = (status_result.get("stdout", "") or "").strip()
@@ -3398,9 +3285,6 @@ async def apply_patch(
       A dict with stable keys: ref, status, ok, patches_applied (+ optional diff_stats/status_output).
 
     Notes:
-      - Visual tool logs look for `__log_diff` in the *raw* tool payload. The decorator wrapper
-        strips `__log_*` fields from the client-facing response by default.
-        Set ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=0 to preserve them.
       - To avoid leaking patch contents in error responses, we only include short digests.
     """
 
@@ -3702,7 +3586,6 @@ async def apply_workspace_operations(
         )
 
         results: list[dict[str, Any]] = []
-        diffs: list[str] = []
 
         for idx, op in enumerate(operations):
             op_name = op.get("op")
@@ -3740,14 +3623,6 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, content, create_parents=create_parents
                         )
-                    d = _maybe_diff_for_log(
-                        path=path,
-                        before=before,
-                        after=after,
-                        before_exists=backups[abs_path] is not None,
-                    )
-                    if isinstance(d, str) and d:
-                        diffs.append(d)
                     results.append(
                         {"index": idx, "op": "write", "path": path, "status": "ok"}
                     )
@@ -3871,11 +3746,6 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
-                    d = _maybe_diff_for_log(
-                        path=path, before=before, after=after, before_exists=True
-                    )
-                    if isinstance(d, str) and d:
-                        diffs.append(d)
                     results.append(
                         {
                             "index": idx,
@@ -3924,11 +3794,6 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
-                    d = _maybe_diff_for_log(
-                        path=path, before=before, after=after, before_exists=True
-                    )
-                    if isinstance(d, str) and d:
-                        diffs.append(d)
                     results.append(
                         {
                             "index": idx,
@@ -3978,11 +3843,6 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
-                    d = _maybe_diff_for_log(
-                        path=path, before=before, after=after, before_exists=True
-                    )
-                    if isinstance(d, str) and d:
-                        diffs.append(d)
                     results.append(
                         {
                             "index": idx,
@@ -4029,11 +3889,6 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
-                    d = _maybe_diff_for_log(
-                        path=path, before=before, after=after, before_exists=True
-                    )
-                    if isinstance(d, str) and d:
-                        diffs.append(d)
                     results.append(
                         {
                             "index": idx,
@@ -4093,11 +3948,6 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
-                    d = _maybe_diff_for_log(
-                        path=path, before=before, after=after, before_exists=True
-                    )
-                    if isinstance(d, str) and d:
-                        diffs.append(d)
                     results.append(
                         {
                             "index": idx,
@@ -4137,9 +3987,6 @@ async def apply_workspace_operations(
                         if backups[abs_path]
                         else ""
                     )
-                    d = _delete_diff_for_log(path=path, before=before)
-                    if isinstance(d, str) and d:
-                        diffs.append(d)
                     if not preview_only:
                         os.remove(abs_path)
                     results.append(
@@ -4253,9 +4100,6 @@ async def apply_workspace_operations(
                         raise ValueError("apply_patch.patch must be a non-empty string")
                     if not preview_only:
                         await deps["apply_patch_to_repo"](repo_dir, patch)
-                    # Prefer letting the provider visual handler render this patch directly.
-                    if _looks_like_diff(patch):
-                        diffs.append(patch)
                     results.append({"index": idx, "op": "apply_patch", "status": "ok"})
                     continue
 
@@ -4273,17 +4117,12 @@ async def apply_workspace_operations(
                     raise
 
         ok = all(r.get("status") not in {"error"} for r in results)
-        combined_diff = "\n".join(diffs).strip() if diffs else None
-        if combined_diff and not combined_diff.endswith("\n"):
-            combined_diff += "\n"
-
         return {
             "ref": effective_ref,
             "status": "ok" if ok else "partial",
             "ok": ok,
             "preview_only": bool(preview_only),
             "results": results,
-            "__log_diff": combined_diff,
         }
 
     except Exception as exc:

@@ -729,7 +729,7 @@ LOG_FORMAT = os.environ.get(
 # ANSI color for log level + logger name (intended for developer-tail workflows).
 #
 # Compatibility:
-# - Docs and tool visual logging use ADAPTIV_MCP_LOG_COLOR.
+# - Docs and tool logging use ADAPTIV_MCP_LOG_COLOR.
 # - Older deployments (and some tests) used LOG_COLOR.
 #
 # Prefer the prefixed variant when present, but keep LOG_COLOR as a fallback.

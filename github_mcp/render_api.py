@@ -44,7 +44,6 @@ from github_mcp.mcp_server.decorators import (
     ANSI_YELLOW,
     LOG_TOOL_COLOR,
     _ansi,
-    _preview_render_logs,
     _truncate_text,
 )
 
@@ -505,25 +504,7 @@ async def render_request(
             if rl:
                 line += " " + rl
 
-            # Only print a body preview by default for /logs; other endpoints can be noisy.
             body_lines: list[str] = []
-            if effective_path.endswith("/logs"):
-                items: Any | None = None
-                if isinstance(body, list):
-                    items = body
-                elif isinstance(body, dict):
-                    # Some proxies/wrappers may nest logs under common keys.
-                    if isinstance(body.get("json"), list):
-                        items = body.get("json")
-                    elif isinstance(body.get("logs"), list):
-                        items = body.get("logs")
-                    elif isinstance(body.get("items"), list):
-                        items = body.get("items")
-                if isinstance(items, list) and items:
-                    try:
-                        body_lines.append(_preview_render_logs(items))
-                    except Exception:
-                        pass
             if LOG_RENDER_HTTP_BODIES and not body_lines:
                 preview = body if body is not None else getattr(resp, "text", "")
                 body_lines.append(
