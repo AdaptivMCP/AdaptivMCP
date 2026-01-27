@@ -462,7 +462,7 @@ async def rg_list_workspace_files(
         return _structured_tool_error(exc, context="rg_list_workspace_files")
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=False, annotations={"readOnlyHint": True})
 async def rg_search_workspace(
     full_name: str,
     ref: str = "main",
