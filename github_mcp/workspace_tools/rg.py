@@ -31,6 +31,44 @@ from .fs import _is_probably_binary, _read_lines_excerpt, _workspace_safe_join
 _RG_AVAILABLE: bool | None = None
 
 
+# Default exclusions for ripgrep-backed tools.
+#
+# Rationale:
+# - The workspace mirror can contain a persistent virtualenv (.venv-mcp) which is
+#   large/noisy and almost never what callers want to search.
+# - Keep defaults conservative and easy to override by explicitly passing
+#   exclude_paths/exclude_glob.
+_DEFAULT_EXCLUDE_PATHS: list[str] = [".venv-mcp"]
+
+
+def _apply_default_excludes(
+    *,
+    exclude_paths: str | list[str] | None,
+    exclude_glob: str | list[str] | None,
+    normalized_exclude_paths: list[str],
+) -> list[str]:
+    """Apply default exclude paths only when the caller didn't specify any.
+
+    If callers pass exclude_paths/exclude_glob explicitly (even as an empty list),
+    we respect that and do not inject defaults.
+    """
+
+    if exclude_paths is None and exclude_glob is None:
+        # Prepend defaults so user-specified includes later (if any) can still
+        # add additional excludes.
+        out = [*_DEFAULT_EXCLUDE_PATHS, *normalized_exclude_paths]
+        # De-dupe while preserving order.
+        seen: set[str] = set()
+        uniq: list[str] = []
+        for p in out:
+            if p in seen:
+                continue
+            seen.add(p)
+            uniq.append(p)
+        return uniq
+    return normalized_exclude_paths
+
+
 def _rg_available() -> bool:
     global _RG_AVAILABLE
     if _RG_AVAILABLE is not None:
@@ -353,7 +391,7 @@ async def rg_list_workspace_files(
     ref: str = "main",
     path: str = "",
     *,
-    include_hidden: bool = True,
+    include_hidden: bool = False,
     glob: str | list[str] | None = None,
     exclude_glob: str | list[str] | None = None,
     include_paths: str | list[str] | None = None,
@@ -376,6 +414,11 @@ async def rg_list_workspace_files(
         excl_globs = _normalize_globs(exclude_glob)
         incl_paths = _normalize_paths(include_paths)
         excl_paths = _normalize_paths(exclude_paths)
+        excl_paths = _apply_default_excludes(
+            exclude_paths=exclude_paths,
+            exclude_glob=exclude_glob,
+            normalized_exclude_paths=excl_paths,
+        )
         # Ensure exclude_paths are also applied to rg via glob patterns.
         excl_globs = [*excl_globs, *_exclude_globs_from_paths(excl_paths)]
 
@@ -471,7 +514,7 @@ async def rg_search_workspace(
     *,
     regex: bool = False,
     case_sensitive: bool = True,
-    include_hidden: bool = True,
+    include_hidden: bool = False,
     glob: str | list[str] | None = None,
     exclude_glob: str | list[str] | None = None,
     include_paths: str | list[str] | None = None,
@@ -513,6 +556,11 @@ async def rg_search_workspace(
         excl_globs = _normalize_globs(exclude_glob)
         incl_paths = _normalize_paths(include_paths)
         excl_paths = _normalize_paths(exclude_paths)
+        excl_paths = _apply_default_excludes(
+            exclude_paths=exclude_paths,
+            exclude_glob=exclude_glob,
+            normalized_exclude_paths=excl_paths,
+        )
         excl_globs = [*excl_globs, *_exclude_globs_from_paths(excl_paths)]
 
         # When include_paths is provided, we run from repo root and pass explicit

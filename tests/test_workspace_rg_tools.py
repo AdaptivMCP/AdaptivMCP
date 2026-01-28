@@ -50,6 +50,36 @@ def test_rg_list_workspace_files_falls_back_to_python(tmp_path, monkeypatch):
     assert "sub/c.py" not in result["files"]
 
 
+def test_rg_tools_default_excludes_skip_venv_mcp_even_when_hidden_enabled(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "a.txt").write_text("a", encoding="utf-8")
+    (repo_dir / ".venv-mcp").mkdir()
+    (repo_dir / ".venv-mcp" / "venv.txt").write_text("venv", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_rg, "_tw", lambda: dummy)
+    monkeypatch.setattr(workspace_rg, "_rg_available", lambda: False)
+
+    # include_hidden=True would normally include .venv-mcp, but we now apply a
+    # default exclude for it when callers don't supply exclude_* filters.
+    result = asyncio.run(
+        workspace_rg.rg_list_workspace_files(
+            full_name="octo/example",
+            ref="main",
+            include_hidden=True,
+            glob=["*.txt"],
+            max_results=50,
+        )
+    )
+
+    assert result.get("error") is None
+    assert "a.txt" in result["files"]
+    assert ".venv-mcp/venv.txt" not in result["files"]
+
+
 def test_rg_search_workspace_returns_line_numbers_and_context(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -120,6 +150,45 @@ def test_rg_search_workspace_falls_back_when_rg_popen_fails(tmp_path, monkeypatc
     assert result["engine"] == "python"
     assert result["matches"]
     assert result["matches"][0]["text"] == "foo"
+
+
+def test_rg_search_workspace_default_excludes_can_be_overridden(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "a.txt").write_text("foo\n", encoding="utf-8")
+    (repo_dir / ".venv-mcp").mkdir()
+    (repo_dir / ".venv-mcp" / "venv.txt").write_text("foo\n", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_rg, "_tw", lambda: dummy)
+    monkeypatch.setattr(workspace_rg, "_rg_available", lambda: False)
+
+    # Default behavior (include_hidden=True): .venv-mcp is still excluded.
+    result = asyncio.run(
+        workspace_rg.rg_search_workspace(
+            full_name="octo/example",
+            ref="main",
+            query="foo",
+            include_hidden=True,
+            max_results=50,
+        )
+    )
+    assert result.get("error") is None
+    assert {m["path"] for m in result["matches"]} == {"a.txt"}
+
+    # Explicit exclude_paths (even empty) disables default injection.
+    result2 = asyncio.run(
+        workspace_rg.rg_search_workspace(
+            full_name="octo/example",
+            ref="main",
+            query="foo",
+            include_hidden=True,
+            exclude_paths=[],
+            max_results=50,
+        )
+    )
+    assert result2.get("error") is None
+    assert {m["path"] for m in result2["matches"]} == {"a.txt", ".venv-mcp/venv.txt"}
 
 
 def test_safe_communicate_kills_on_timeout(monkeypatch):
