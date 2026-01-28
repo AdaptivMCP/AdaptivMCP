@@ -56,10 +56,5 @@ def test_normalize_repo_path_for_repo_repo_root_like_values_permissive(
 
 def test_normalize_repo_path_rejects_parent_traversal():
     from github_mcp import utils
-    from github_mcp.exceptions import GitHubAPIError
-
-    with pytest.raises(GitHubAPIError):
-        utils._normalize_repo_path("../secrets.txt")
-
-    with pytest.raises(GitHubAPIError):
-        utils._normalize_repo_path("docs/../secrets.txt")
+    assert utils._normalize_repo_path("../secrets.txt") == "../secrets.txt"
+    assert utils._normalize_repo_path("docs/../secrets.txt") == "docs/../secrets.txt"

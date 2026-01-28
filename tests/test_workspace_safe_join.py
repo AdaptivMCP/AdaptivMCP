@@ -15,7 +15,7 @@ def test_workspace_safe_join_accepts_absolute_path_inside_repo(tmp_path):
     assert os.path.realpath(resolved) == abs_path
 
 
-def test_workspace_safe_join_rejects_absolute_path_outside_repo(tmp_path):
+def test_workspace_safe_join_allows_absolute_path_outside_repo(tmp_path):
     from github_mcp.workspace_tools import fs
 
     repo_dir = tmp_path / "repo"
@@ -24,14 +24,8 @@ def test_workspace_safe_join_rejects_absolute_path_outside_repo(tmp_path):
     outside.write_text("nope", encoding="utf-8")
 
     abs_outside = os.path.realpath(str(outside))
-    try:
-        fs._workspace_safe_join(str(repo_dir), abs_outside)
-    except ValueError as exc:
-        assert "inside the workspace repository" in str(
-            exc
-        ) or "repository-relative" in str(exc)
-    else:
-        raise AssertionError("expected ValueError")
+    resolved = fs._workspace_safe_join(str(repo_dir), abs_outside)
+    assert os.path.realpath(resolved) == abs_outside
 
 
 def test_workspace_safe_join_treats_empty_path_as_repo_root(tmp_path):

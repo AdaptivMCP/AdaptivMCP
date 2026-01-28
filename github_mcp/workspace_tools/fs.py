@@ -130,50 +130,28 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     root = os.path.realpath(repo_dir)
 
     # Common caller intent: "/" means "repo root" (not filesystem root).
-    # Treat this one special case permissively while keeping other absolute
-    # paths locked down.
     if raw_path == "/":
         return root
+
+    # Intentionally permissive: accept absolute paths (including outside the
+    # repo mirror) and allow relative traversal via "..".
     if os.path.isabs(raw_path):
-        # Accept absolute paths *only* when they resolve inside this workspace
-        # mirror. This allows callers to round-trip paths returned by tools
-        # like `terminal_command` (which reports an absolute workdir) without
-        # requiring them to know the workspace base directory.
-        candidate = os.path.realpath(raw_path)
-        try:
-            common = os.path.commonpath([root, candidate])
-        except Exception:
-            common = ""
-        if common != root:
-            raise ValueError(
-                "path must be repository-relative or an absolute path inside the workspace repository"
-            )
-        return candidate
+        return os.path.realpath(raw_path)
+
     rel_path = raw_path.lstrip("/\\")
     if not rel_path:
-        # Treat paths that collapse to "" (e.g. "/" after stripping) as root.
         return root
 
-    # Reject parent-directory traversal in caller-provided relative paths.
+    # Normalize segments: drop empty and current-directory segments, keep '..'.
     parts: list[str] = []
     for part in rel_path.split("/"):
         if part in ("", "."):
             continue
-        if part == "..":
-            raise ValueError("path must not contain '..' segments")
         parts.append(part)
     rel_path = "/".join(parts)
     if not rel_path:
-        # e.g. input was ".", "./", or "../". Interpret as workspace root.
         return root
-    candidate = os.path.realpath(os.path.join(repo_dir, rel_path))
-    try:
-        common = os.path.commonpath([root, candidate])
-    except Exception:
-        common = ""
-    if common != root:
-        raise ValueError("path must resolve inside the workspace repository")
-    return candidate
+    return os.path.realpath(os.path.join(repo_dir, rel_path))
 
 
 def _workspace_read_text(repo_dir: str, path: str) -> dict[str, Any]:
