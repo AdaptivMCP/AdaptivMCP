@@ -108,7 +108,13 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
     max_str_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_STR", "5000000") or "5000000")
 
     def _clip_str(s: str) -> str:
+        # Keep provider logs strictly single-line and scan-friendly.
+        # - Normalize newlines
+        # - Collapse all whitespace runs (incl. newlines/tabs) into single spaces
+        # This avoids log viewers showing escaped \n or other backslash-heavy sequences.
         s = s.replace("\r\n", "\n").replace("\r", "\n")
+        s = s.replace("\n", " ").replace("\t", " ")
+        s = re.sub(r"\s+", " ", s).strip()
         if max_str_cfg > 0 and len(s) > max_str_cfg:
             return s[: max(0, max_str_cfg - 1)] + "…"
         return s
@@ -831,7 +837,9 @@ class _StructuredFormatter(logging.Formatter):
         extra_payload = _sanitize_for_logs(extra_payload)
         extras_block = _format_extras_block(extra_payload)
         if extras_block:
-            return f"{base}\n{extras_block}"
+            # Keep provider logs single-line. Multi-line entries are hard to scan
+            # and many UIs render them with escaped newlines / backslashes.
+            return f"{base} {extras_block}"
         return base
 
 
