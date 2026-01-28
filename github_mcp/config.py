@@ -108,8 +108,6 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
     max_str_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_STR", "5000000") or "5000000")
 
     def _clip_str(s: str) -> str:
-        # Preserve newlines and whitespace so developer-facing logs can include
-        # raw request/response payloads. Normalize CRLF/CR to LF.
         s = s.replace("\r\n", "\n").replace("\r", "\n")
         if max_str_cfg > 0 and len(s) > max_str_cfg:
             return s[: max(0, max_str_cfg - 1)] + "…"
@@ -122,7 +120,6 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
             return _clip_str(v)
 
         if d >= max(0, max_depth_cfg):
-            # Depth cap: keep a short scalar-ish representation.
             try:
                 return _clip_str(str(v))
             except Exception:
@@ -155,15 +152,6 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
 
 
 def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Return request context for provider logs.
-
-    Defaults:
-      - Render: compact snapshot (correlation fields only)
-      - Self-hosted: full request context
-
-    Override via:
-      - ADAPTIV_MCP_LOG_FULL_REQUEST_CONTEXT=1|0
-    """
 
     if not isinstance(req, Mapping):
         return {}
@@ -184,14 +172,6 @@ def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 def snapshot_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Return a compact request context snapshot for provider logs.
-
-    Provider log UIs (e.g., Render) are optimized for scanning. Full request
-    context includes many null/unset fields; this snapshot keeps only stable
-    correlation keys that are typically populated.
-
-    This does not affect tool outputs returned to clients.
-    """
 
     if not isinstance(req, Mapping) or not req:
         return {}
@@ -210,13 +190,11 @@ def snapshot_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
         if val is None or val == "":
             continue
         if key == "path" and isinstance(val, str) and val.startswith("/sse"):
-            # Avoid repeating transport-level SSE paths.
             continue
         out[key] = val
 
     chatgpt = req.get("chatgpt")
     if isinstance(chatgpt, Mapping) and chatgpt:
-        # Keep only IDs that help correlate across systems.
         cg_out: dict[str, Any] = {}
         for k in (
             "conversation_id",
@@ -250,7 +228,6 @@ def _humanize_id_for_log_line(value: object, *, head: int = 8, tail: int = 4) ->
     if len(raw) <= head + tail + 2:
         return raw
     if _UUID_RE.match(raw):
-        # Render request IDs are frequently UUIDs; show the first segment.
         return raw.split("-")[0]
     return f"{raw[:head]}…{raw[-tail:]}"
 
@@ -390,8 +367,8 @@ GITHUB_REQUEST_TIMEOUT_SECONDS = HTTPX_TIMEOUT
 HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", 300))
 HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", 200))
 
-MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 80))
-FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "80"))
+MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 200))
+FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "200"))
 # File cache eviction caps. Set to 0 (or negative) to disable eviction.
 FILE_CACHE_MAX_ENTRIES = int(os.environ.get("FILE_CACHE_MAX_ENTRIES", "0"))
 FILE_CACHE_MAX_BYTES = int(os.environ.get("FILE_CACHE_MAX_BYTES", "0"))
