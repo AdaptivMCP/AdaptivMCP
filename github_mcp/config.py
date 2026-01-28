@@ -103,9 +103,9 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
     if full_fidelity:
         return _jsonable(value)
 
-    max_depth_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_DEPTH", "4") or "4")
-    max_list_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_LIST", "50") or "50")
-    max_str_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_STR", "500") or "500")
+    max_depth_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_DEPTH", "10") or "10")
+    max_list_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_LIST", "500") or "500")
+    max_str_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_STR", "5000000") or "5000000")
 
     def _clip_str(s: str) -> str:
         # Preserve newlines and whitespace so developer-facing logs can include
@@ -516,7 +516,7 @@ LOG_HTTP_BODIES = _env_flag("LOG_HTTP_BODIES", _log_http_bodies_default)
 
 # Maximum bytes of request/response body to capture for inbound HTTP logs.
 # Bodies above this limit are truncated.
-LOG_HTTP_MAX_BODY_BYTES = int(os.environ.get("LOG_HTTP_MAX_BODY_BYTES", "1000000"))
+LOG_HTTP_MAX_BODY_BYTES = int(os.environ.get("LOG_HTTP_MAX_BODY_BYTES", "10000000"))
 
 # Include compact request correlation fields (request_id + client ids) inline
 # in single-line provider logs (tool calls, outbound HTTP, etc.).
@@ -552,8 +552,8 @@ LOG_APPEND_EXTRAS = _env_flag(
 )
 
 # Cap appended extras to keep provider log ingestion healthy.
-LOG_EXTRAS_MAX_LINES = int(os.environ.get("LOG_EXTRAS_MAX_LINES", "200"))
-LOG_EXTRAS_MAX_CHARS = int(os.environ.get("LOG_EXTRAS_MAX_CHARS", "20000"))
+LOG_EXTRAS_MAX_LINES = int(os.environ.get("LOG_EXTRAS_MAX_LINES", "2000000"))
+LOG_EXTRAS_MAX_CHARS = int(os.environ.get("LOG_EXTRAS_MAX_CHARS", "10000000"))
 
 # Backwards-compat: deprecated.
 LOG_APPEND_EXTRAS_JSON = _env_flag("LOG_APPEND_EXTRAS_JSON", "false")
@@ -893,17 +893,6 @@ _STANDARD_LOG_FIELDS = set(
 
 
 class _InfoOnlyFilter(logging.Filter):
-    """Legacy filter that allowed only INFO log records.
-
-    Historically, this server tried to keep provider log streams on a single
-    severity level to improve scanability in UIs like Render.
-
-    In practice, suppressing WARNING/ERROR makes both humans and automated
-    consumers (log processors, monitoring tools) miss important signals.
-
-    This filter is retained for backward compatibility but is no longer applied
-    by default.
-    """
 
     def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003 - matches logging.Filter
         return record.levelno == logging.INFO
