@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Adaptiv MCP – GitHub Server</title>
   <meta name="description" content="Adaptiv MCP server for GitHub + Render automation." />
   <link rel="icon" href="static/logo/adaptiv-icon-128.png" />
@@ -180,7 +183,8 @@
 
   async function loadUiJson(){
     try{
-      const resp = await fetch('ui.json', {cache: 'no-store'});
+      // Defensive cache-busting: some proxies/CDNs can ignore request cache hints.
+      const resp = await fetch(`ui.json?ts=${Date.now()}`, {cache: 'no-store'});
       if (!resp.ok) throw new Error(`ui.json status ${resp.status}`);
       const data = await resp.json();
       setText('pill-service', `service=${data.service || 'adaptiv-mcp-github'}`);
@@ -202,7 +206,8 @@
     dot.classList.remove('ok','bad');
     text.textContent = 'Checking /healthz…';
     try{
-      const resp = await fetch('healthz', {cache: 'no-store'});
+      // Defensive cache-busting: avoid stale health payloads behind aggressive caches.
+      const resp = await fetch(`healthz?ts=${Date.now()}`, {cache: 'no-store'});
       if (!resp.ok) throw new Error(`healthz status ${resp.status}`);
       const data = await resp.json().catch(()=>null);
       dot.classList.add('ok');

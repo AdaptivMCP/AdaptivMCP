@@ -146,11 +146,22 @@ class _CacheControlMiddleware:
                     return any(k.lower() == b"cache-control" for k, _ in hdrs)
 
                 if path.startswith("/static/"):
-                    # Honor any explicit Cache-Control set upstream; otherwise make static assets cacheable.
-                    if not _has_cache_control(headers):
-                        headers.append(
-                            (b"cache-control", b"public, max-age=31536000, immutable")
-                        )
+                    # Static assets are generally safe to cache aggressively, but HTML should not be.
+                    # If clients (or proxies) hit /static/index.html directly and we mark it immutable,
+                    # they'll keep serving a stale UI after deploy.
+                    if path.endswith(".html"):
+                        headers = [
+                            (k, v)
+                            for (k, v) in headers
+                            if k.lower() != b"cache-control"
+                        ]
+                        headers.append((b"cache-control", b"no-store"))
+                    else:
+                        # Honor any explicit Cache-Control set upstream; otherwise make static assets cacheable.
+                        if not _has_cache_control(headers):
+                            headers.append(
+                                (b"cache-control", b"public, max-age=31536000, immutable")
+                            )
                 else:
                     # Default to no-store for everything else so edge caching (or proxies) never cache dynamic endpoints.
                     headers = [
