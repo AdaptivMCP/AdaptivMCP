@@ -806,12 +806,6 @@ class _StructuredFormatter(logging.Formatter):
         if not extra_payload:
             return base
 
-        # Keep INFO lines scan-friendly for humans while ensuring key tool/http
-        # events are self-contained for debugging in provider logs.
-        #
-        # NOTE:
-        # These are intentionally limited to high-signal events so enabling
-        # LOG_APPEND_EXTRAS does not explode log volume.
         always_append_events = {
             # Tool lifecycle events (INFO).
             "tool_call_started",
