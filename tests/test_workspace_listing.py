@@ -40,7 +40,7 @@ def test_list_workspace_files_allows_absolute_path_inside_repo(tmp_path, monkeyp
     assert result["path"] == "docs/readme.md"
 
 
-def test_list_workspace_files_clamps_absolute_path_outside_repo(tmp_path, monkeypatch):
+def test_list_workspace_files_allows_absolute_path_outside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     outside = tmp_path / "outside"
@@ -54,10 +54,11 @@ def test_list_workspace_files_clamps_absolute_path_outside_repo(tmp_path, monkey
     result = asyncio.run(workspace_listing.list_workspace_files(path=str(target)))
 
     assert "error" not in result
-    assert result["files"] == []
+    assert result["files"] == ["../outside/secret.txt"]
+    assert result["path"] == "../outside/secret.txt"
 
 
-def test_search_workspace_clamps_absolute_path_outside_repo(tmp_path, monkeypatch):
+def test_search_workspace_allows_absolute_path_outside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     outside = tmp_path / "outside"
@@ -76,4 +77,5 @@ def test_search_workspace_clamps_absolute_path_outside_repo(tmp_path, monkeypatc
     )
 
     assert "error" not in result
-    assert result["results"] == []
+    assert len(result["results"]) == 1
+    assert result["results"][0]["file"] == "../outside/secret.txt"

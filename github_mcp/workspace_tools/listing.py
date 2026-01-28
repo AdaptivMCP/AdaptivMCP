@@ -116,14 +116,13 @@ def _normalize_workspace_path(path: str) -> str:
     if normalized in (".", "/"):
         return ""
 
-    # Reject parent-directory traversal in relative paths rather than clamping.
+    # Remove empty and current-directory segments but keep '..' segments so
+    # callers can explicitly traverse outside the repo if desired.
     if not normalized.startswith("/"):
         parts: list[str] = []
         for part in normalized.split("/"):
             if part in ("", "."):
                 continue
-            if part == "..":
-                raise ValueError("path must not contain '..' segments")
             parts.append(part)
         normalized = "/".join(parts)
     return normalized
@@ -137,37 +136,12 @@ def _resolve_workspace_start(repo_dir: str, path: str) -> tuple[str, str]:
 
     if os.path.isabs(normalized_path):
         start = os.path.realpath(normalized_path)
-        try:
-            common = os.path.commonpath([root, start])
-        except Exception:
-            common = ""
-        if common != root:
-            # Heuristic fallback: many callers send "/subdir" intending a
-            # repo-relative path. If the absolute path doesn't resolve inside
-            # the workspace root, try interpreting it as repo-relative.
-            rel = normalized_path.lstrip("/")
-            if not rel:
-                return "", root
-            start = os.path.realpath(os.path.join(repo_dir, rel))
-            try:
-                common = os.path.commonpath([root, start])
-            except Exception:
-                common = ""
-            if common != root:
-                raise ValueError("path must resolve inside the workspace repository")
-            return rel, start
-        display_path = os.path.relpath(start, root)
+        display_path = os.path.relpath(start, root).replace("\\", "/")
         if display_path == ".":
             display_path = ""
         return display_path, start
 
     start = os.path.realpath(os.path.join(repo_dir, normalized_path))
-    try:
-        common = os.path.commonpath([root, start])
-    except Exception:
-        common = ""
-    if common != root:
-        raise ValueError("path must resolve inside the workspace repository")
     return normalized_path, start
 
 

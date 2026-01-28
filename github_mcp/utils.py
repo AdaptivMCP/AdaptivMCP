@@ -159,14 +159,11 @@ def _normalize_repo_path(path: str) -> str:
 
     # Normalize segments.
     #
-    # Safety policy: disallow parent-directory traversal outright instead of
-    # silently clamping back into the repository root.
+    # Keep path segments as-is (including "..") to avoid clamping.
     parts: list[str] = []
     for part in normalized.split("/"):
         if part in ("", "."):
             continue
-        if part == "..":
-            raise GitHubAPIError("path must not contain '..' segments")
         parts.append(part)
 
     normalized = "/".join(parts)

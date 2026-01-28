@@ -253,12 +253,12 @@ def _compact_command_payload(
 
 
 def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
-    """Resolve a working directory inside the repo mirror.
+    """Resolve a working directory for command execution.
 
-    For consistency across tools, ``workdir`` is expected to be repository-relative.
-    However, some callers pass the absolute `workdir` returned by prior tool
-    invocations back into subsequent calls. To make this round-trip safe,
-    absolute paths are accepted when they resolve inside the repo mirror.
+    Intentionally permissive:
+    - Accept absolute paths (including outside the repo mirror).
+    - Allow relative traversal via "..".
+    - If the resolved path is not a directory, fall back to the repo root.
     """
 
     repo_real = os.path.realpath(repo_dir)
@@ -274,37 +274,14 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
     if not normalized or normalized in {".", "./", "/"}:
         return repo_real
 
-    # Accept absolute paths that point inside the repo mirror.
-    if os.path.isabs(normalized) or normalized.startswith("/"):
-        candidate_abs = os.path.realpath(normalized)
-        if candidate_abs == repo_real or candidate_abs.startswith(repo_real + os.sep):
-            if not os.path.isdir(candidate_abs):
-                return repo_real
-            return candidate_abs
+    if os.path.isabs(normalized):
+        candidate = os.path.realpath(normalized)
+    else:
+        candidate = os.path.realpath(os.path.join(repo_real, normalized))
 
-        # Common caller intent: "/subdir" means repo-relative "subdir".
-        normalized = normalized.lstrip("/")
-        if not normalized:
-            return repo_real
-
-    # Reject parent-directory traversal rather than clamping.
-    parts: list[str] = []
-    for part in normalized.split("/"):
-        if part in ("", "."):
-            continue
-        if part == "..":
-            raise ValueError("workdir must not contain '..' segments")
-        parts.append(part)
-    normalized = "/".join(parts)
-    if not normalized:
-        return repo_real
-
-    candidate = os.path.realpath(os.path.join(repo_real, normalized))
-    if candidate != repo_real and not candidate.startswith(repo_real + os.sep):
-        raise ValueError("workdir must resolve inside the workspace repository")
-    if not os.path.isdir(candidate):
-        return repo_real
-    return candidate
+    if os.path.isdir(candidate):
+        return candidate
+    return repo_real
 
 
 @mcp_tool(write_action=True)
@@ -640,9 +617,9 @@ async def terminal_command(
 
 
 def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
-    """Return a repo-relative, safe path.
+    """Return a normalized path for workspace file operations.
 
-    Prevent absolute paths and path traversal outside the repo mirror.
+    Intentionally permissive: keeps absolute paths and allows ".." traversal.
     """
 
     # Be permissive: coerce common non-string inputs instead of raising.
@@ -655,37 +632,17 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
     normalized = (path or "").strip().replace("\\", "/")
     if not normalized:
         return ".mcp_tmp/invalid_path"
-    repo_real = os.path.realpath(repo_dir)
+    # Absolute paths are preserved.
+    if os.path.isabs(normalized):
+        return os.path.realpath(normalized)
 
-    # Accept absolute paths as long as they resolve inside the repo mirror.
-    if os.path.isabs(normalized) or normalized.startswith("/"):
-        candidate = os.path.realpath(normalized)
-        if candidate != repo_real and candidate.startswith(repo_real + os.sep):
-            rel = os.path.relpath(candidate, repo_real).replace("\\", "/")
-            if rel and rel not in {".", "./"}:
-                return rel
-            return ".mcp_tmp/invalid_path"
-
-        # Common caller intent: "/foo/bar" means repo-relative "foo/bar".
-        normalized = normalized.lstrip("/")
-        if not normalized:
-            return ".mcp_tmp/invalid_path"
-
-    # Reject parent-directory traversal rather than clamping.
     parts: list[str] = []
     for part in normalized.split("/"):
         if part in ("", "."):
             continue
-        if part == "..":
-            raise ValueError("path must not contain '..' segments")
         parts.append(part)
     normalized = "/".join(parts)
     if not normalized:
-        return ".mcp_tmp/invalid_path"
-
-    candidate = os.path.realpath(os.path.join(repo_real, normalized))
-    repo_real = os.path.realpath(repo_dir)
-    if candidate == repo_real or not candidate.startswith(repo_real + os.sep):
         return ".mcp_tmp/invalid_path"
     return normalized
 
@@ -768,7 +725,10 @@ async def run_python(
         created_rel_path = rel_path
 
         rel_path = _safe_repo_relative_path(repo_dir, rel_path)
-        abs_path = os.path.realpath(os.path.join(repo_dir, rel_path))
+        if os.path.isabs(rel_path):
+            abs_path = os.path.realpath(rel_path)
+        else:
+            abs_path = os.path.realpath(os.path.join(repo_dir, rel_path))
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
         with open(abs_path, "w", encoding="utf-8") as handle:
             handle.write(script)
@@ -784,7 +744,7 @@ async def run_python(
             use_temp_venv=use_temp_venv,
         )
 
-        cmd = "python " + shlex.quote(rel_path)
+        cmd = "python " + shlex.quote(abs_path)
         if args:
             cmd += " " + " ".join(shlex.quote(a) for a in args)
 
@@ -820,7 +780,10 @@ async def run_python(
                 )
                 if created_temp_file and created_rel_path:
                     rel_path2 = _safe_repo_relative_path(repo_dir, created_rel_path)
-                    abs_path2 = os.path.realpath(os.path.join(repo_dir, rel_path2))
+                    if os.path.isabs(rel_path2):
+                        abs_path2 = os.path.realpath(rel_path2)
+                    else:
+                        abs_path2 = os.path.realpath(os.path.join(repo_dir, rel_path2))
                     if os.path.isfile(abs_path2):
                         os.remove(abs_path2)
             except Exception:

@@ -1036,38 +1036,21 @@ def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
     raw_path = rel_path.strip().replace("\\", "/")
     repo_root = os.path.realpath(repo_dir)
 
-    # Prefer treating true absolute paths as absolute only if they resolve inside
-    # the repo mirror. If they don't, fall back to interpreting them as
-    # repo-relative (common caller intent for "/subdir/file").
-    if os.path.isabs(raw_path) or raw_path.startswith("/"):
-        candidate_abs = os.path.realpath(raw_path)
-        if candidate_abs != repo_root and candidate_abs.startswith(repo_root + os.sep):
-            candidate = candidate_abs
-        else:
-            raw_path = raw_path.lstrip("/")
-            if not raw_path:
-                raise GitHubAPIError("path must be repository-relative")
-            candidate = ""
-    else:
-        candidate = ""
+    # Intentionally permissive: accept absolute paths (including outside the repo
+    # mirror) and allow traversal via ".." in relative paths.
+    if os.path.isabs(raw_path):
+        return os.path.realpath(raw_path)
 
-    if not candidate:
-        rel_path = raw_path.lstrip("/\\")
-        parts: list[str] = []
-        for part in rel_path.split("/"):
-            if part in ("", "."):
-                continue
-            if part == "..":
-                raise GitHubAPIError("path must not contain '..' segments")
-            parts.append(part)
-        rel_path = "/".join(parts)
-        if not rel_path:
-            raise GitHubAPIError("path must be repository-relative")
-        candidate = os.path.realpath(os.path.join(repo_root, rel_path))
-
-    if candidate == repo_root or not candidate.startswith(repo_root + os.sep):
-        raise GitHubAPIError("path must resolve inside the workspace repository")
-    return candidate
+    rel_path = raw_path.lstrip("/\\")
+    parts: list[str] = []
+    for part in rel_path.split("/"):
+        if part in ("", "."):
+            continue
+        parts.append(part)
+    rel_path = "/".join(parts)
+    if not rel_path:
+        raise GitHubAPIError("path must be repository-relative")
+    return os.path.realpath(os.path.join(repo_root, rel_path))
 
 
 def _split_text_lines(text: str) -> tuple[list[str], bool]:
