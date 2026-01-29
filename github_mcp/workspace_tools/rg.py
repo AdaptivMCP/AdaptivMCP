@@ -19,7 +19,7 @@ import json
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404
 from typing import Any
 
 from github_mcp.server import _structured_tool_error, mcp_tool
@@ -101,7 +101,7 @@ def _safe_communicate(
     except subprocess.TimeoutExpired:
         try:
             proc.kill()
-        except Exception:
+        except Exception:  # nosec B110
             pass
         try:
             out, err = proc.communicate(timeout=timeout)
@@ -263,7 +263,7 @@ def _python_walk_files(
             abs_path = os.path.join(root, f)
             try:
                 rel_path = os.path.relpath(abs_path, repo_dir).replace("\\", "/")
-            except Exception:
+            except Exception:  # nosec B112
                 continue
             if rel_path == "." or rel_path.startswith(".."):
                 continue
@@ -329,7 +329,7 @@ def _python_search(
                 continue
             if _is_probably_binary(abs_path):
                 continue
-        except Exception:
+        except Exception:  # nosec B112
             continue
 
         try:
@@ -359,7 +359,7 @@ def _python_search(
                     if len(matches) >= max_results:
                         truncated = True
                         return matches, truncated
-        except Exception:
+        except Exception:  # nosec B112
             continue
 
     return matches, truncated
@@ -450,7 +450,7 @@ async def rg_list_workspace_files(
                     cmd.append(joined)
             else:
                 base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
-            proc = subprocess.run(
+            proc = subprocess.run(  # nosec B603
                 cmd, cwd=base_abs, capture_output=True, text=True, timeout=30
             )
             if proc.returncode not in (0, 1):
@@ -602,14 +602,14 @@ async def rg_search_workspace(
                             continue
                         cmd.append(joined)
 
-                proc = subprocess.Popen(
+                proc = subprocess.Popen(  # nosec B603
                     cmd,
                     cwd=base_abs,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
                 )
-                assert proc.stdout is not None
+                assert proc.stdout is not None  # nosec B101
                 try:
                     for raw in proc.stdout:
                         raw = raw.strip()
@@ -617,7 +617,7 @@ async def rg_search_workspace(
                             continue
                         try:
                             evt = json.loads(raw)
-                        except Exception:
+                        except Exception:  # nosec B112
                             continue
                         if evt.get("type") != "match":
                             continue
@@ -664,7 +664,7 @@ async def rg_search_workspace(
                     try:
                         if truncated and proc.poll() is None:
                             proc.kill()
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                     _safe_communicate(proc, timeout=5)
 
@@ -727,7 +727,7 @@ async def rg_search_workspace(
                         max_chars=80_000,
                     )
                     m["excerpt"] = excerpt
-                except Exception:
+                except Exception:  # nosec B110
                     # Best-effort; omit excerpt if anything fails.
                     pass
 

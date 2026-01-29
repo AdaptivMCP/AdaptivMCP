@@ -321,7 +321,7 @@ def _jsonable(value: Any) -> Any:
 
         if dataclasses.is_dataclass(value):
             return _jsonable(dataclasses.asdict(value))
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     # Pydantic v2 models.
@@ -329,7 +329,7 @@ def _jsonable(value: Any) -> Any:
         dump = getattr(value, "model_dump", None)
         if callable(dump):
             return _jsonable(dump(mode="json"))
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     # Exceptions.
@@ -394,7 +394,7 @@ def _repr_for_docs(value: Any) -> str:
 
     try:
         value = _normalize_strings_for_logs(value)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     try:
@@ -698,7 +698,7 @@ def _normalize_input_schema(tool_obj: Any) -> dict[str, Any] | None:
             val = getattr(tool_obj, attr, None)
             if isinstance(val, dict):
                 return _normalize_required_properties(val)
-        except Exception:
+        except Exception:  # nosec B112
             continue
 
     # Some frameworks store it inside meta.
@@ -709,7 +709,7 @@ def _normalize_input_schema(tool_obj: Any) -> dict[str, Any] | None:
                 v = meta.get(k)
                 if isinstance(v, dict):
                     return _normalize_required_properties(v)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return None

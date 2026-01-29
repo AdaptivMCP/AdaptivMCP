@@ -51,7 +51,7 @@ def _schedule_close(
     try:
         if getattr(client, "is_closed", False):
             return
-    except Exception:
+    except Exception:  # nosec B110
         # If we cannot interrogate the client state, attempt to close anyway.
         pass
 

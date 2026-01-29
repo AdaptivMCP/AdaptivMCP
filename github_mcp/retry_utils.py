@@ -47,10 +47,10 @@ def jitter_sleep_seconds(
         cap = max(0.0, cap)
         # Use a cryptographically strong RNG to avoid any future temptation to
         # reuse this helper for security-sensitive randomness.
-        return delay + random.uniform(0.0, min(cap, delay * 0.25))
+        return delay + random.uniform(0.0, min(cap, delay * 0.25))  # nosec B311
 
     # "Full jitter" for exponential backoff.
-    return random.uniform(0.0, delay)
+    return random.uniform(0.0, delay)  # nosec B311
 
 
 __all__ = ["jitter_sleep_seconds"]

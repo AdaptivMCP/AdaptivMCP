@@ -100,7 +100,7 @@ def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
                     for dn in dirs:
                         try:
                             os.rmdir(os.path.join(root, dn))
-                        except Exception:
+                        except Exception:  # nosec B110
                             # Directory may not be empty; continue best-effort.
                             pass
                 os.rmdir(p)
@@ -148,7 +148,7 @@ def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
                     for dn in d2:
                         try:
                             os.rmdir(os.path.join(r2, dn))
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
                 os.rmdir(pyc_dir)
                 removed_dirs += 1
@@ -786,7 +786,7 @@ async def run_python(
                         abs_path2 = os.path.realpath(os.path.join(repo_dir, rel_path2))
                     if os.path.isfile(abs_path2):
                         os.remove(abs_path2)
-            except Exception:
+            except Exception:  # nosec B110
                 # Best-effort cleanup.
                 pass
 

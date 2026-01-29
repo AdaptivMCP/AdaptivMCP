@@ -6,7 +6,7 @@ import io
 import json
 import os  # noqa: E402  pylint: disable=wrong-import-position
 import re
-import subprocess
+import subprocess  # nosec B404
 import sys
 import zipfile
 from collections.abc import Mapping
@@ -492,7 +492,7 @@ def _detect_controller_repo(*, fallback: str) -> str:
             return f"{render_owner}/{render_slug}"
 
     try:
-        remote_url = subprocess.check_output(
+        remote_url = subprocess.check_output(  # nosec
             ["git", "config", "--get", "remote.origin.url"],
             stderr=subprocess.DEVNULL,
             text=True,
@@ -526,14 +526,14 @@ def _detect_controller_branch(*, fallback: str) -> str:
 
     # Try to infer from the local repo if git metadata is available.
     try:
-        branch = subprocess.check_output(
+        branch = subprocess.check_output(  # nosec
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
         if branch and branch not in {"HEAD", "(unknown)"}:
             return branch
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return fallback

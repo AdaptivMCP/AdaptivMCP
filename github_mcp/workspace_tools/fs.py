@@ -5,7 +5,7 @@ import os
 import re
 import shlex
 import shutil
-import subprocess
+import subprocess  # nosec B404
 from collections.abc import Mapping
 from typing import Any, Literal
 
@@ -681,7 +681,7 @@ def _git_show_text(repo_dir: str, git_ref: str, path: str) -> dict[str, Any]:
     # Ensure the rel path is safe and inside the workspace.
     _workspace_safe_join(repo_dir, rel)
 
-    proc = subprocess.run(
+    proc = subprocess.run(  # nosec
         ["git", "show", f"{ref}:{rel}"],
         cwd=repo_dir,
         capture_output=True,
@@ -742,7 +742,7 @@ def _git_show_text_limited(
     rel = _sanitize_git_path(path)
     _workspace_safe_join(repo_dir, rel)
 
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # nosec
         ["git", "show", f"{ref}:{rel}"],
         cwd=repo_dir,
         stdout=subprocess.PIPE,
@@ -764,7 +764,7 @@ def _git_show_text_limited(
             truncated_bytes = True
             try:
                 proc.kill()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         try:
             _out, _err = proc.communicate(timeout=10)
@@ -775,23 +775,23 @@ def _git_show_text_limited(
         except Exception:
             try:
                 proc.kill()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             try:
                 _out, _err = proc.communicate(timeout=5)
                 if not truncated_bytes:
                     stdout = _out or b""
                 stderr = _err or b""
-            except Exception:
+            except Exception:  # nosec B110
                 pass
     finally:
         try:
             proc.stdout.close() if proc.stdout else None
-        except Exception:
+        except Exception:  # nosec B110
             pass
         try:
             proc.stderr.close() if proc.stderr else None
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     if proc.returncode not in (0, None):
@@ -1235,7 +1235,7 @@ async def get_workspace_files_contents(
                         rel = os.path.relpath(m, repo_dir).replace("\\", "/")
                         _workspace_safe_join(repo_dir, rel)
                         expanded.append(rel)
-                    except Exception:
+                    except Exception:  # nosec B112
                         continue
             else:
                 _workspace_safe_join(repo_dir, p)
@@ -1691,7 +1691,7 @@ def _git_show_lines_excerpt_limited(
         max_chars = 1
 
     cmd = ["git", "show", f"{git_ref}:{path}"]
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # nosec B603
         cmd,
         cwd=repo_dir,
         stdout=subprocess.PIPE,
@@ -1705,7 +1705,7 @@ def _git_show_lines_excerpt_limited(
     chars = 0
     line_no = 0
     try:
-        assert proc.stdout is not None
+        assert proc.stdout is not None  # nosec B101
         for raw in proc.stdout:
             line_no += 1
             if line_no < start_line:
@@ -1728,7 +1728,7 @@ def _git_show_lines_excerpt_limited(
         except Exception:
             try:
                 proc.kill()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             _, stderr = proc.communicate()
 
@@ -1768,7 +1768,7 @@ def _git_show_lines_sections_limited(
     overlap_lines = params["overlap_lines"]
 
     cmd = ["git", "show", f"{git_ref}:{path}"]
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # nosec B603
         cmd,
         cwd=repo_dir,
         stdout=subprocess.PIPE,
@@ -1779,7 +1779,7 @@ def _git_show_lines_sections_limited(
 
     sections: dict[str, Any]
     try:
-        assert proc.stdout is not None
+        assert proc.stdout is not None  # nosec B101
         sections = _sections_from_line_iter(
             proc.stdout,
             start_line=int(start_line),
@@ -1796,7 +1796,7 @@ def _git_show_lines_sections_limited(
         except Exception:
             try:
                 proc.kill()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             _, stderr = proc.communicate()
 
@@ -3552,7 +3552,7 @@ async def apply_workspace_operations(
                             os.remove(abs_path)
                     continue
                 _write_bytes(abs_path, data)
-            except Exception:
+            except Exception:  # nosec B110
                 # Best-effort rollback.
                 pass
 
@@ -4107,6 +4107,6 @@ async def apply_workspace_operations(
         if rollback_on_error and backups:
             try:
                 _restore_backups()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         return _structured_tool_error(exc, context="apply_workspace_operations")

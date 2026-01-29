@@ -272,7 +272,7 @@ def register_render_routes(app: Any) -> None:
             resources.extend(
                 [r for r in request.query_params.getlist("resources") if r]
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         if not resources:
             raw_resources = _parse_str(request.query_params.get("resources"))

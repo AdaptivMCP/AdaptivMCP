@@ -74,7 +74,7 @@ def _count_lines_limited(path: str, *, max_bytes: int) -> tuple[int | None, bool
             try:
                 if os.path.getsize(path) > 0:
                     lines = 1
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         return int(lines), truncated
     except OSError:

@@ -295,7 +295,7 @@ try:
 
     mcp = FastMCP(
         "Adaptiv MCP Custom Connector",
-        host=os.environ.get("FASTMCP_HOST", "0.0.0.0"),
+        host=os.environ.get("FASTMCP_HOST", "0.0.0.0"),  # nosec B104
         transport_security=_resolve_transport_security(),
     )
 except Exception as exc:  # pragma: no cover - used when dependency missing

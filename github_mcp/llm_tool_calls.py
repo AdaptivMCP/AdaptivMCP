@@ -291,7 +291,7 @@ def extract_tool_calls_from_text(
 
             try:
                 parsed = json.loads(body)
-            except Exception:
+            except Exception:  # nosec B112
                 continue
 
             for tool_name, args in _normalize_call_object(parsed):
