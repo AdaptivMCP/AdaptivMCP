@@ -382,7 +382,7 @@ FILE_CACHE_MAX_BYTES = int(os.environ.get("FILE_CACHE_MAX_BYTES", "0"))
 # Workspace / command timeouts.
 # Semantics: 0 (or negative) disables timeouts.
 ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS = int(
-    os.environ.get("ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", "0")
+    os.environ.get("ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", "300")
 )
 ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS = int(
     os.environ.get("ADAPTIV_MCP_DEP_INSTALL_TIMEOUT_SECONDS", "0")
