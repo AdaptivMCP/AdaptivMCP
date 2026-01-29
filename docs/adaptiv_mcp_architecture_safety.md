@@ -75,51 +75,38 @@ key layers.
   when auto-approve is enabled.【F:github_mcp/mcp_server/context.py†L120-L212】
 - **Runtime enforcement**: Tool wrappers enforce write approval when
   auto-approve is disabled, raising a `WriteApprovalRequiredError` if a write
-  tool is invoked without explicit approval.【F:github_mcp/mcp_server/decorators.py†L1970-L2030】
-
-### 2. Path traversal protection
-
-- **Repo-relative normalization**: `_normalize_repo_path` rejects parent
-  directory traversal (`..`) when normalizing repository paths, preventing
-  escape from the repo root.【F:github_mcp/utils.py†L144-L189】
-- **Workspace-safe joins**: `_workspace_safe_join` enforces that absolute paths
-  resolve inside the workspace root and rejects `..` segments for relative
-  paths, preventing unsafe filesystem access during workspace operations.
-  【F:github_mcp/workspace_tools/fs.py†L126-L198】
+  tool is invoked without explicit approval.
 
 ### 3. Patch and write validation
 
 - **Patch validation**: `_apply_patch_to_repo` rejects empty patches and
   categorizes failures with explicit error codes like `PATCH_EMPTY`,
   `PATCH_MALFORMED`, and `PATCH_APPLY_FAILED`, ensuring patch errors are
-  explicit and actionable.【F:github_mcp/workspace.py†L1216-L1297】
+  explicit and actionable.
 
 ### 4. Read safety limits
 
 - **Default read caps**: Workspace file reads use default byte and character
   limits (`_DEFAULT_MAX_READ_BYTES`, `_DEFAULT_MAX_READ_CHARS`) to avoid loading
   overly large files into memory unless the caller explicitly overrides them.
-  【F:github_mcp/workspace_tools/fs.py†L28-L38】
 
 ### 5. Log and error redaction
 
 - **Sensitive data filtering**: `_args_summary` intentionally avoids logging
   payload-sized fields and secret-like keys unless `ADAPTIV_MCP_LOG_SENSITIVE`
   is enabled, preventing accidental leakage of tokens or secrets in logs.
-  【F:github_mcp/mcp_server/decorators.py†L1340-L1398】
 - **Error sanitization**: `_sanitize_debug_value` redacts token-like values,
   truncates long strings, and removes high-entropy secret candidates from error
   details to avoid triggering upstream safety filters or leaking secrets.
-  【F:github_mcp/mcp_server/error_handling.py†L79-L151】
 
 ### 6. Request de-duplication
 
 - **Dedupe control**: `_maybe_dedupe_call` coalesces identical tool invocations
   within a TTL window to prevent duplicate work when upstream clients retry
-  requests during long-running operations.【F:github_mcp/mcp_server/decorators.py†L2032-L2098】
+  requests during long-running operations.
 
 ### 7. Cache safety for dynamic responses
 
 - **Cache-control enforcement**: Middleware ensures dynamic HTTP endpoints are
   marked `no-store` while static assets remain cacheable, reducing the risk of
-  proxies caching sensitive tool outputs.【F:main.py†L102-L164】
+  proxies caching sensitive tool outputs.
