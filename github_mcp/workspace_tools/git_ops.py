@@ -164,7 +164,7 @@ async def workspace_git_diff(
     staged: bool = False,
     paths: list[str] | None = None,
     context_lines: int = 3,
-    max_chars: int = 200_000,
+    max_chars: int = 2000000,
     owner: str | None = None,
     repo: str | None = None,
     branch: str | None = None,
