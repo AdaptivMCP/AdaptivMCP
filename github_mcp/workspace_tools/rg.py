@@ -724,7 +724,7 @@ async def rg_search_workspace(
                         abs_path,
                         start_line=int(start),
                         max_lines=int(context_lines) * 2 + 1,
-                        max_chars=80_000,
+                        max_chars=2000000,
                     )
                     m["excerpt"] = excerpt
                 except Exception:  # nosec B110

@@ -216,10 +216,10 @@ CHATGPT_RESPONSE_MAX_LIST_ITEMS = _env_int(
 # and degrade downstream tool use. We therefore clip stdout/stderr in these
 # modes by default.
 RESPONSE_STREAM_MAX_LINES = _env_int(
-    "ADAPTIV_MCP_RESPONSE_STREAM_MAX_LINES", default=200
+    "ADAPTIV_MCP_RESPONSE_STREAM_MAX_LINES", default=1000000
 )
 RESPONSE_STREAM_MAX_CHARS = _env_int(
-    "ADAPTIV_MCP_RESPONSE_STREAM_MAX_CHARS", default=20000
+    "ADAPTIV_MCP_RESPONSE_STREAM_MAX_CHARS", default=2000000
 )
 
 # In hosted connector environments, returning token-like strings (even from
@@ -555,8 +555,14 @@ def _clip_text(
 ) -> str:
     if not text:
         return ""
+
+    if not isinstance(max_lines, int) or max_lines < 0:
+        raise ValueError("max_lines must be an int >= 0")
+    if not isinstance(max_chars, int) or max_chars < 0:
+        raise ValueError("max_chars must be an int >= 0")
+
     lines = text.splitlines()
-    clipped = lines[: max(0, max_lines)]
+    clipped = lines[:max_lines]
     out = "\n".join(clipped)
     if len(lines) > max_lines:
         out += "\n" + _ansi(
@@ -566,7 +572,7 @@ def _clip_text(
         )
     if max_chars > 0 and len(out) > max_chars:
         if max_chars < 12:
-            out = out[: max(0, max_chars - 1)] + "…"
+            out = out[: max_chars - 1] + "…"
         else:
             omitted = len(out) - max_chars
             marker = _ansi(

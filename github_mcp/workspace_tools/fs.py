@@ -23,10 +23,8 @@ from ._shared import _tw
 # Default read limits to avoid loading multi-megabyte files into memory.
 # These are used by the single-file and multi-file read tools unless callers
 # override them.
-_DEFAULT_MAX_READ_BYTES = 2_000_000
-_DEFAULT_MAX_READ_CHARS = 300_000
-
-
+_DEFAULT_MAX_READ_BYTES = 8_000_000
+_DEFAULT_MAX_READ_CHARS = 2000000
 # ---------------------------------------------------------------------------
 # Workspace operation normalization
 # ---------------------------------------------------------------------------
@@ -356,39 +354,6 @@ def _read_lines_excerpt(
     }
 
 
-def _cap_overlap_lines(overlap_lines: int, max_lines_per_section: int) -> int:
-    if overlap_lines >= max_lines_per_section:
-        overlap_lines = max_lines_per_section - 1
-        if overlap_lines < 0:
-            overlap_lines = 0
-    return overlap_lines
-
-
-def _clamp_section_params(
-    *,
-    start_line: int,
-    max_sections: int,
-    max_lines_per_section: int,
-    max_chars_per_section: int,
-    overlap_lines: int,
-) -> dict[str, int]:
-    start_line = max(int(start_line), 1)
-    max_sections = max(int(max_sections), 1)
-    max_lines_per_section = max(int(max_lines_per_section), 1)
-    max_chars_per_section = max(int(max_chars_per_section), 1)
-    overlap_lines = max(int(overlap_lines), 0)
-
-    overlap_lines = _cap_overlap_lines(overlap_lines, max_lines_per_section)
-
-    return {
-        "start_line": start_line,
-        "max_sections": max_sections,
-        "max_lines_per_section": max_lines_per_section,
-        "max_chars_per_section": max_chars_per_section,
-        "overlap_lines": overlap_lines,
-    }
-
-
 def _validate_section_params(
     *,
     start_line: int,
@@ -407,30 +372,28 @@ def _validate_section_params(
         raise ValueError("max_chars_per_section must be an int >= 1")
     if not isinstance(overlap_lines, int) or overlap_lines < 0:
         raise ValueError("overlap_lines must be an int >= 0")
+    if overlap_lines >= max_lines_per_section:
+        raise ValueError("overlap_lines must be < max_lines_per_section")
 
-    return _clamp_section_params(
-        start_line=start_line,
-        max_sections=max_sections,
-        max_lines_per_section=max_lines_per_section,
-        max_chars_per_section=max_chars_per_section,
-        overlap_lines=overlap_lines,
-    )
+    return {
+        "start_line": start_line,
+        "max_sections": max_sections,
+        "max_lines_per_section": max_lines_per_section,
+        "max_chars_per_section": max_chars_per_section,
+        "overlap_lines": overlap_lines,
+    }
 
 
 def _section_params_from_operation(op: Mapping[str, Any]) -> dict[str, int]:
-    def _default_if_falsy(value: Any, default: int) -> Any:
-        return value if value else default
+    def _default_if_none(value: Any, default: int) -> Any:
+        return default if value is None else value
 
-    return _clamp_section_params(
-        start_line=_default_if_falsy(op.get("start_line", 1), 1),
-        max_sections=_default_if_falsy(op.get("max_sections", 5), 5),
-        max_lines_per_section=_default_if_falsy(
-            op.get("max_lines_per_section", 200), 200
-        ),
-        max_chars_per_section=_default_if_falsy(
-            op.get("max_chars_per_section", 80_000), 80_000
-        ),
-        overlap_lines=_default_if_falsy(op.get("overlap_lines", 20), 20),
+    return _validate_section_params(
+        start_line=_default_if_none(op.get("start_line", 1), 1),
+        max_sections=_default_if_none(op.get("max_sections", 5), 5),
+        max_lines_per_section=_default_if_none(op.get("max_lines_per_section", 200), 200),
+        max_chars_per_section=_default_if_none(op.get("max_chars_per_section", 80_000), 80_000),
+        overlap_lines=_default_if_none(op.get("overlap_lines", 20), 20),
     )
 
 
@@ -1143,7 +1106,7 @@ async def get_workspace_file_contents(
     ref: str = "main",
     path: str = "",
     *,
-    max_chars: int = _DEFAULT_MAX_READ_CHARS,
+    max_chars: int = 2000000,
     max_bytes: int = _DEFAULT_MAX_READ_BYTES,
 ) -> dict[str, Any]:
     """Read a file from the persistent repo mirror (no shell).
@@ -1313,8 +1276,8 @@ async def read_workspace_file_excerpt(
     path: str = "",
     *,
     start_line: int = 1,
-    max_lines: int = 200,
-    max_chars: int = 80_000,
+    max_lines: int = 1000000,
+    max_chars: int = 2000000,
 ) -> dict[str, Any]:
     """Read an excerpt of a file with line numbers (safe for very large files).
 
@@ -1531,8 +1494,8 @@ async def read_workspace_file_with_line_numbers(
     *,
     start_line: int = 1,
     end_line: int | None = None,
-    max_lines: int = 200,
-    max_chars: int = 80_000,
+    max_lines: int = 1000000,
+    max_chars: int = 2000000,
     separator: str = ": ",
     include_text: bool = True,
 ) -> dict[str, Any]:
@@ -1684,11 +1647,11 @@ def _git_show_lines_excerpt_limited(
       (exists, lines, truncated, error)
     """
     if start_line < 1:
-        start_line = 1
+        raise ValueError("start_line must be >= 1")
     if max_lines < 1:
-        max_lines = 1
+        raise ValueError("max_lines must be >= 1")
     if max_chars < 1:
-        max_chars = 1
+        raise ValueError("max_chars must be >= 1")
 
     cmd = ["git", "show", f"{git_ref}:{path}"]
     proc = subprocess.Popen(  # nosec B603
@@ -1754,7 +1717,7 @@ def _git_show_lines_sections_limited(
     Returns: (exists, sections, error)
     """
 
-    params = _clamp_section_params(
+    params = _validate_section_params(
         start_line=start_line,
         max_sections=max_sections,
         max_lines_per_section=max_lines_per_section,
@@ -1825,8 +1788,8 @@ async def read_git_file_excerpt(
     *,
     git_ref: str = "HEAD",
     start_line: int = 1,
-    max_lines: int = 200,
-    max_chars: int = 80_000,
+    max_lines: int = 1000000,
+    max_chars: int = 2000000,
 ) -> dict[str, Any]:
     """Read an excerpt of a file as it exists at a git ref, with line numbers.
 

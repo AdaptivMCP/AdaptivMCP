@@ -44,8 +44,8 @@ def _clip_text(text: str, *, max_chars: int) -> tuple[str, bool]:
     if max_chars <= 0 or len(raw) <= max_chars:
         return (raw, False)
     if max_chars < 4:
-        return (raw[: max(0, max_chars)], True)
-    return (raw[: max(0, max_chars - 1)] + "…", True)
+        return (raw[:max_chars], True)
+    return (raw[: max_chars - 1] + "…", True)
 
 
 def _parse_tabbed_rows(lines: list[str], *, expected_cols: int) -> list[list[str]]:
@@ -277,7 +277,7 @@ async def workspace_git_log(
     rev_range: str = "HEAD",
     max_entries: int = 50,
     paths: list[str] | None = None,
-    max_chars: int = 120000,
+    max_chars: int = 2000000,
     owner: str | None = None,
     repo: str | None = None,
     branch: str | None = None,
@@ -364,7 +364,7 @@ async def workspace_git_show(
     git_ref: str = "HEAD",
     include_patch: bool = True,
     paths: list[str] | None = None,
-    max_chars: int = 200000,
+    max_chars: int = 2000000,
     owner: str | None = None,
     repo: str | None = None,
     branch: str | None = None,
@@ -431,7 +431,7 @@ async def workspace_git_blame(
     git_ref: str = "HEAD",
     start_line: int = 1,
     end_line: int | None = None,
-    max_lines: int = 200,
+    max_lines: int = 1000000,
     owner: str | None = None,
     repo: str | None = None,
     branch: str | None = None,
