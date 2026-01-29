@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import platform
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 import uuid
@@ -61,15 +61,15 @@ def _get_controller_revision_info() -> dict[str, Any]:
         repo_root = _find_repo_root(Path(__file__).resolve())
         git_bin = shutil.which("git")
         if repo_root is not None and git_bin:
-            sha = subprocess.check_output(
+            sha = subprocess.check_output(  # nosec B603
                 [git_bin, "rev-parse", "HEAD"], cwd=repo_root, text=True
             ).strip()
             info["git_commit"] = sha
-            branch = subprocess.check_output(
+            branch = subprocess.check_output(  # nosec B603
                 [git_bin, "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root, text=True
             ).strip()
             info["git_branch"] = branch
-    except Exception:
+    except Exception:  # nosec B110
         # Avoid failing env validation when git metadata is unavailable.
         pass
 
@@ -524,8 +524,8 @@ async def validate_environment() -> dict[str, Any]:
                         s.strip() for s in accepted.split(",") if s.strip()
                     ]
 
-                token_details["token_type_inferred"] = "github_app_token"
-                token_type_inferred = "github_app_token"
+                token_details["token_type_inferred"] = "github_app_token"  # nosec B105
+                token_type_inferred = "github_app_token"  # nosec B105
                 token_details["user_lookup_error"] = {
                     "error_type": type(user_error).__name__ if user_error else None,
                     "error": str(user_error) if user_error else None,
@@ -561,17 +561,17 @@ async def validate_environment() -> dict[str, Any]:
                 ]
 
             # Infer token type.
-            token_type = "unknown"
+            token_type = "unknown"  # nosec B105
             if scope_list:
-                token_type = "classic_pat_or_oauth"
+                token_type = "classic_pat_or_oauth"  # nosec B105
             else:
                 # Detect GitHub App tokens via /app (works only for app auth).
                 try:
                     await m._github_request("GET", "/app")
                 except Exception:
-                    token_type = "fine_grained_pat_or_unknown"
+                    token_type = "fine_grained_pat_or_unknown"  # nosec B105
                 else:
-                    token_type = "github_app_token"
+                    token_type = "github_app_token"  # nosec B105
             token_details["token_type_inferred"] = token_type
             token_type_inferred = token_type
 

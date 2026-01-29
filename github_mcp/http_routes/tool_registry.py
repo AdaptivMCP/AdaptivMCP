@@ -434,7 +434,7 @@ def _default_include_parameters(request: Request) -> bool:
     try:
         if REQUEST_CHATGPT_METADATA.get():
             return True
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     # Fallback: detect headers directly (in case middleware is disabled).
@@ -449,7 +449,7 @@ def _default_include_parameters(request: Request) -> bool:
         ):
             if request.headers.get(hdr):
                 return True
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return False
@@ -469,7 +469,7 @@ def _is_openai_client(request: Request) -> bool:
     try:
         if REQUEST_CHATGPT_METADATA.get():
             return True
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     try:
@@ -483,7 +483,7 @@ def _is_openai_client(request: Request) -> bool:
         ):
             if request.headers.get(hdr):
                 return True
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return False
@@ -1003,7 +1003,7 @@ def build_resources_endpoint() -> Callable[[Request], Response]:
             try:
                 if REQUEST_CHATGPT_METADATA.get():
                     compact = False
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         # Support legacy discovery paths used by some client runtimes.
         #

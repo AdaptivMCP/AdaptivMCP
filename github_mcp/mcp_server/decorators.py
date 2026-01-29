@@ -398,7 +398,7 @@ def _inline_context(req: Mapping[str, Any]) -> str:
                 extra={"severity": "warning"},
                 exc_info=exc,
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return ""
 
@@ -1087,7 +1087,7 @@ def _schema_needs_update(
 
     try:
         return _schema_hash(existing) != _schema_hash(desired)
-    except Exception:
+    except Exception:  # nosec B110
         # Best-effort fallback for non-JSONable schema variants.
         pass
 
@@ -1296,7 +1296,7 @@ def _apply_tool_metadata(
             # Some clients/framework versions prefer camelCase.
             try:
                 tool_obj.inputSchema = schema
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         except Exception:
             meta = getattr(tool_obj, "meta", None)
@@ -1367,7 +1367,7 @@ def _attach_tool_annotations(tool_obj: Any, annotations: Mapping[str, Any]) -> N
     try:
         tool_obj.annotations = ann
         return
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     # Mapping style (used by tests / some stubs)
@@ -1375,9 +1375,9 @@ def _attach_tool_annotations(tool_obj: Any, annotations: Mapping[str, Any]) -> N
         if isinstance(tool_obj, Mapping):
             try:
                 tool_obj["annotations"] = ann  # type: ignore[index]
-            except Exception:
+            except Exception:  # nosec B110
                 pass
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     # As a final fallback, stash under meta.
@@ -1721,7 +1721,7 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
 
         try:
             fut.add_done_callback(_finalize_done)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     # Await the shared task. If the caller is cancelled (e.g. upstream disconnect),
@@ -1984,7 +1984,7 @@ def _chatgpt_friendly_result(
                 },
                 exc_info=exc if LOG_TOOL_EXC_INFO else None,
             )
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return result
 
@@ -2425,7 +2425,7 @@ def _result_snapshot(result: Any) -> dict[str, Any]:
                 ):
                     if key in inner_payload and inner_payload.get(key) is not None:
                         out[key] = inner_payload.get(key)
-        except Exception:
+        except Exception:  # nosec B110
             # Best-effort only; snapshot must not raise.
             pass
 
@@ -3186,7 +3186,7 @@ def _register_with_fastmcp(
         if isinstance(annotations, Mapping):
             try:
                 tool_obj.annotations = dict(annotations)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         _REGISTERED_MCP_TOOLS[:] = [
             (t, f)
@@ -3378,7 +3378,7 @@ def mcp_tool(
         if isinstance(ui, Mapping) and ui:
             try:
                 ui_meta.update(dict(ui))
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         if not ui_meta:
             # Heuristic defaults for better tool discoverability in MCP clients.
@@ -3524,7 +3524,7 @@ def mcp_tool(
                                     base_write_action=bool(write_action),
                                     effective_write_action=bool(effective_write_action),
                                 )
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
                     else:
                         client_payload = structured_error
@@ -3637,7 +3637,7 @@ def mcp_tool(
                                     base_write_action=bool(write_action),
                                     effective_write_action=bool(effective_write_action),
                                 )
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
                     else:
                         client_payload = structured_error
@@ -3723,7 +3723,7 @@ def mcp_tool(
                                 base_write_action=bool(write_action),
                                 effective_write_action=bool(effective_write_action),
                             )
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                 else:
                     client_payload = result
@@ -3829,7 +3829,7 @@ def mcp_tool(
                 # Best-effort; do not break tool registration.
                 try:
                     wrapper.__doc__ = normalized_description
-                except Exception:
+                except Exception:  # nosec B110
                     pass
 
             # Keep the tool registry description aligned with the docstring.
@@ -3837,7 +3837,7 @@ def mcp_tool(
                 wrapper.__mcp_tool__.description = (
                     wrapper.__doc__ or normalized_description
                 )
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             return wrapper
@@ -3940,7 +3940,7 @@ def mcp_tool(
                             base_write_action=bool(write_action),
                             effective_write_action=bool(effective_write_action),
                         )
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                 else:
                     client_payload = structured_error
@@ -4044,7 +4044,7 @@ def mcp_tool(
                             base_write_action=bool(write_action),
                             effective_write_action=bool(effective_write_action),
                         )
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                 else:
                     client_payload = structured_error
@@ -4123,7 +4123,7 @@ def mcp_tool(
                         base_write_action=bool(write_action),
                         effective_write_action=bool(effective_write_action),
                     )
-                except Exception:
+                except Exception:  # nosec B110
                     pass
             else:
                 client_payload = result
@@ -4223,13 +4223,13 @@ def mcp_tool(
         except Exception:
             try:
                 wrapper.__doc__ = normalized_description
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         # Keep the tool registry description aligned with the docstring.
         try:
             wrapper.__mcp_tool__.description = wrapper.__doc__ or normalized_description
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         return wrapper
@@ -4316,7 +4316,7 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 )
                 if annotations:
                     _attach_tool_annotations(tool_obj, annotations)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             description = getattr(func, "__mcp_description__", None)
@@ -4338,13 +4338,13 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                     tags=tags if isinstance(tags, (list, tuple)) else None,
                     ui=ui if isinstance(ui, Mapping) else None,
                 )
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             try:
                 if getattr(func, "__doc__", None):
                     tool_obj.description = func.__doc__
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             # Keep the tool description aligned (for UIs that only render description).
@@ -4357,7 +4357,7 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                             first, *rest = desc.splitlines()
                             first = (first or "").strip() + f"  Schema: {schema_inline}"
                             tool_obj.description = "\n".join([first] + rest).strip()
-                except Exception:
+                except Exception:  # nosec B110
                     pass
         except Exception as exc:
             name = None

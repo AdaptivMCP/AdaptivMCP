@@ -18,10 +18,10 @@ def _main() -> ModuleType:
         # Ensure tools are registered even if `main` cannot be imported.
         try:
             importlib.import_module("github_mcp.tools_workspace")
-        except Exception:
+        except Exception:  # nosec B110
             pass
         try:
             importlib.import_module("github_mcp.tools_main")
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return importlib.import_module("github_mcp.server")

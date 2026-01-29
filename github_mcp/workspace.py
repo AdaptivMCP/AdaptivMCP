@@ -114,7 +114,7 @@ async def _run_shell(
                 if parent == candidate:
                     break
                 candidate = parent
-        except Exception:
+        except Exception:  # nosec B110
             # Avoid failing the tool due to PATH decoration.
             pass
 
@@ -142,7 +142,7 @@ async def _run_shell(
 
             try:
                 os.killpg(proc.pid, signal.SIGTERM)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             try:
                 await asyncio.wait_for(proc.wait(), timeout=3)
@@ -150,12 +150,12 @@ async def _run_shell(
             except Exception:
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
-                except Exception:
+                except Exception:  # nosec B110
                     pass
         else:
             try:
                 proc.kill()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
     try:
@@ -172,7 +172,7 @@ async def _run_shell(
         # running in the background and consuming resources.
         try:
             await _terminate_process()
-        except Exception:
+        except Exception:  # nosec B110
             pass
         raise
     except asyncio.TimeoutError:
@@ -181,7 +181,7 @@ async def _run_shell(
         # child processes (e.g. pytest workers) don't keep pipes open.
         try:
             await _terminate_process()
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Best-effort output collection after timeout. Keep configurable.
@@ -1306,7 +1306,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     finally:
         try:
             os.remove(patch_path)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
 
