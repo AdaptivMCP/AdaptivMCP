@@ -35,6 +35,7 @@ from github_mcp.config import (
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
     HUMAN_LOGS,
+    LOG_APPEND_EXTRAS,
     LOG_HTTP_BODIES,
     LOG_HTTP_MAX_BODY_BYTES,
     LOG_HTTP_REQUESTS,
@@ -160,7 +161,10 @@ class _CacheControlMiddleware:
                         # Honor any explicit Cache-Control set upstream; otherwise make static assets cacheable.
                         if not _has_cache_control(headers):
                             headers.append(
-                                (b"cache-control", b"public, max-age=31536000, immutable")
+                                (
+                                    b"cache-control",
+                                    b"public, max-age=31536000, immutable",
+                                )
                             )
                 else:
                     # Default to no-store for everything else so edge caching (or proxies) never cache dynamic endpoints.
@@ -341,6 +345,12 @@ class _RequestContextMiddleware:
         def _emit_http_request(payload: dict[str, Any]) -> None:
             duration_ms = payload.get("duration_ms", 0)
             status_code = payload.get("status_code")
+            # When we know the formatter will append a structured extras block
+            # (LOG_APPEND_EXTRAS + event=http_request), keep the message minimal
+            # to avoid duplicating the same fields both inline and in JSON.
+            if LOG_APPEND_EXTRAS:
+                LOGGER.info("http_request", extra=payload)
+                return
             if HUMAN_LOGS:
                 rid = shorten_token(request_id)
                 sid = shorten_token(REQUEST_SESSION_ID.get())
@@ -361,6 +371,15 @@ class _RequestContextMiddleware:
 
         def _emit_http_exception(payload: dict[str, Any], exc: Exception) -> None:
             duration_ms = payload.get("duration_ms", 0)
+            # Same strategy as http_request: when extras are appended, avoid
+            # embedding redundant key=value pairs in the message.
+            if LOG_APPEND_EXTRAS:
+                LOGGER.info(
+                    "http_exception",
+                    extra={"severity": "error", **payload},
+                    exc_info=exc,
+                )
+                return
             LOGGER.info(
                 (
                     "http_exception "
