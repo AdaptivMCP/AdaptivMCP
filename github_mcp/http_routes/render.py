@@ -75,15 +75,15 @@ def register_render_routes(app: Any) -> None:
     async def owners(request: Request) -> Response:
         from github_mcp.main_tools.render import list_render_owners
 
-        cursor = _parse_str(request.query_params.get("cursor"))
-        limit = _parse_int(
-            request.query_params.get("limit"),
-            default=20,
-            min_value=1,
-            max_value=100,
-            name="limit",
-        )
         try:
+            cursor = _parse_str(request.query_params.get("cursor"))
+            limit = _parse_int(
+                request.query_params.get("limit"),
+                default=20,
+                min_value=1,
+                max_value=100,
+                name="limit",
+            )
             result = await list_render_owners(cursor=cursor, limit=limit)
             return JSONResponse(result)
         except Exception as exc:
@@ -92,16 +92,16 @@ def register_render_routes(app: Any) -> None:
     async def services(request: Request) -> Response:
         from github_mcp.main_tools.render import list_render_services
 
-        owner_id = _parse_str(request.query_params.get("owner_id"))
-        cursor = _parse_str(request.query_params.get("cursor"))
-        limit = _parse_int(
-            request.query_params.get("limit"),
-            default=20,
-            min_value=1,
-            max_value=100,
-            name="limit",
-        )
         try:
+            owner_id = _parse_str(request.query_params.get("owner_id"))
+            cursor = _parse_str(request.query_params.get("cursor"))
+            limit = _parse_int(
+                request.query_params.get("limit"),
+                default=20,
+                min_value=1,
+                max_value=100,
+                name="limit",
+            )
             result = await list_render_services(
                 owner_id=owner_id, cursor=cursor, limit=limit
             )
@@ -132,15 +132,16 @@ def register_render_routes(app: Any) -> None:
                 UsageError("service_id is required"), context="http:render_deploys"
             )
 
-        cursor = _parse_str(request.query_params.get("cursor"))
-        limit = _parse_int(
-            request.query_params.get("limit"),
-            default=20,
-            min_value=1,
-            max_value=100,
-            name="limit",
-        )
+
         try:
+            cursor = _parse_str(request.query_params.get("cursor"))
+            limit = _parse_int(
+                request.query_params.get("limit"),
+                default=20,
+                min_value=1,
+                max_value=100,
+                name="limit",
+            )
             result = await list_render_deploys(
                 service_id=service_id, cursor=cursor, limit=limit
             )
@@ -253,65 +254,79 @@ def register_render_routes(app: Any) -> None:
 
         from github_mcp.main_tools.render import list_render_logs
 
-        owner_id = _parse_str(request.query_params.get("owner_id"))
-        start_time = _parse_str(request.query_params.get("start_time"))
-        end_time = _parse_str(request.query_params.get("end_time"))
-        direction = _parse_str(request.query_params.get("direction")) or "backward"
-        limit = _parse_int(
-            request.query_params.get("limit"),
-            default=200,
-            min_value=1,
-            max_value=1000,
-            name="limit",
-        )
-
-        # Accept `resources` as either comma-separated or repeated query params.
-        resources: list[str] = []
         try:
-            # Starlette's QueryParams supports multi-values.
-            resources.extend(
-                [r for r in request.query_params.getlist("resources") if r]
+            owner_id = _parse_str(request.query_params.get("owner_id"))
+            start_time = _parse_str(request.query_params.get("start_time"))
+            end_time = _parse_str(request.query_params.get("end_time"))
+            direction = _parse_str(request.query_params.get("direction")) or "backward"
+            limit = _parse_int(
+                request.query_params.get("limit"),
+                default=200,
+                min_value=1,
+                max_value=1000,
+                name="limit",
             )
-        except Exception:  # nosec B110
-            pass
-        if not resources:
-            raw_resources = _parse_str(request.query_params.get("resources"))
-            if raw_resources:
-                resources = [r.strip() for r in raw_resources.split(",") if r.strip()]
-        resources = [r.strip() for r in resources if isinstance(r, str) and r.strip()]
 
-        # Optional filters (best-effort).
-        instance = _parse_str(request.query_params.get("instance"))
-        host = _parse_str(request.query_params.get("host"))
-        level = _parse_str(request.query_params.get("level"))
-        method = _parse_str(request.query_params.get("method"))
-        path = _parse_str(request.query_params.get("path"))
-        text = _parse_str(request.query_params.get("text"))
-        log_type = _parse_str(request.query_params.get("log_type"))
-        if not log_type:
-            log_type = _parse_str(request.query_params.get("logType"))
-        if not log_type:
-            log_type = _parse_str(request.query_params.get("type"))
-        status_code_raw = _parse_str(request.query_params.get("status_code"))
-        status_code = None
-        if status_code_raw:
+            # Accept `resources` as either comma-separated or repeated query params.
+            resources: list[str] = []
             try:
-                status_code = int(status_code_raw)
-            except Exception:
+                # Starlette's QueryParams supports multi-values.
+                resources.extend(
+                    [r for r in request.query_params.getlist("resources") if r]
+                )
+            except Exception:  # nosec B110
+                pass
+            if not resources:
+                raw_resources = _parse_str(request.query_params.get("resources"))
+                if raw_resources:
+                    resources = [
+                        r.strip() for r in raw_resources.split(",") if r.strip()
+                    ]
+            resources = [
+                r.strip() for r in resources if isinstance(r, str) and r.strip()
+            ]
+
+            # Support comma-separated resource lists even when provided as a
+            # single query parameter value.
+            flattened: list[str] = []
+            for rid in resources:
+                if "," in rid:
+                    flattened.extend([p.strip() for p in rid.split(",") if p.strip()])
+                else:
+                    flattened.append(rid)
+            resources = flattened
+
+            # Optional filters (best-effort).
+            instance = _parse_str(request.query_params.get("instance"))
+            host = _parse_str(request.query_params.get("host"))
+            level = _parse_str(request.query_params.get("level"))
+            method = _parse_str(request.query_params.get("method"))
+            path = _parse_str(request.query_params.get("path"))
+            text = _parse_str(request.query_params.get("text"))
+            log_type = _parse_str(request.query_params.get("log_type"))
+            if not log_type:
+                log_type = _parse_str(request.query_params.get("logType"))
+            if not log_type:
+                log_type = _parse_str(request.query_params.get("type"))
+            status_code_raw = _parse_str(request.query_params.get("status_code"))
+            status_code = None
+            if status_code_raw:
+                try:
+                    status_code = int(status_code_raw)
+                except Exception:
+                    return _error_response(
+                        UsageError("status_code must be an integer"),
+                        context="http:render_list_logs",
+                    )
+
+            if not owner_id or not resources:
                 return _error_response(
-                    UsageError("status_code must be an integer"),
+                    UsageError(
+                        "Provide owner_id and resources. Example: /render/logs?owner_id=<id>&resources=srv-..."
+                    ),
                     context="http:render_list_logs",
                 )
 
-        if not owner_id or not resources:
-            return _error_response(
-                UsageError(
-                    "Provide owner_id and resources. Example: /render/logs?owner_id=<id>&resources=srv-..."
-                ),
-                context="http:render_list_logs",
-            )
-
-        try:
             result = await list_render_logs(
                 owner_id=owner_id,
                 resources=resources,
