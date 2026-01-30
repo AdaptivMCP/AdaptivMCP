@@ -522,6 +522,7 @@ def _build_tool_docstring(
     write_action: bool,
     visibility: str,
     write_allowed: bool | None = None,
+    write_auto_approved: bool | None = None,
     tags: Sequence[str] | None = None,
     ui: Mapping[str, Any] | None = None,
 ) -> str:
@@ -597,6 +598,8 @@ def _build_tool_docstring(
     lines.append(f"- write_action: {_fmt_bool(write_action)}")
     if write_allowed is not None:
         lines.append(f"- write_allowed: {_fmt_bool(write_allowed)}")
+    if write_auto_approved is not None:
+        lines.append(f"- write_auto_approved: {_fmt_bool(write_auto_approved)}")
 
     if tags:
         tag_list = [t for t in tags if isinstance(t, str) and t.strip()]

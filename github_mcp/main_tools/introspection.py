@@ -119,7 +119,8 @@ def _write_gate_state() -> dict[str, bool]:
         "write_auto_approved": auto_approved,
         "write_actions_enabled": True,
         "write_enabled": True,
-        "write_allowed": auto_approved,
+        # Write tools are always available; approval (if required) is enforced at runtime.
+        "write_allowed": True,
     }
 
 

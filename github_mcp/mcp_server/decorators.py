@@ -1417,9 +1417,8 @@ def _tool_annotations(
         # (filesystem/network/hosted provider). Default to True.
         open_world_hint = True
 
-    # Operator request: when auto-approve is enabled, suppress all UI hints.
-    # This keeps MCP annotations structurally present while preventing clients
-    # from rendering hint badges.
+    # When auto-approve is enabled, suppress all UI hint flags. This preserves
+    # stable READ/WRITE tagging while avoiding extra UI badges.
     if peek_auto_approve_enabled():
         read_only_hint = False
         open_world_hint = False
@@ -1573,9 +1572,11 @@ def _invocation_messages(
 
 
 def _tool_write_allowed(write_action: bool) -> bool:
-    # Used for metadata/introspection.
+    # Used for discovery metadata only.
+    # Write tools are always present in the catalog; runtime enforcement may
+    # still require approval depending on server configuration.
     del write_action
-    return bool(get_write_allowed())
+    return True
 
 
 def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
@@ -3819,6 +3820,7 @@ def mcp_tool(
                     write_action=bool(write_action),
                     visibility=str(visibility),
                     write_allowed=_tool_write_allowed(write_action),
+                    write_auto_approved=peek_auto_approve_enabled(),
                     tags=tag_list,
                     ui=ui_meta or None,
                 )
@@ -4213,6 +4215,7 @@ def mcp_tool(
                 write_action=bool(write_action),
                 visibility=str(visibility),
                 write_allowed=_tool_write_allowed(write_action),
+                write_auto_approved=peek_auto_approve_enabled(),
                 tags=tag_list,
                 ui=ui_meta or None,
             )
