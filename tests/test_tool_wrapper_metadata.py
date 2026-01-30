@@ -36,7 +36,7 @@ def test_all_registered_tools_have_docstring_metadata_schema_and_signature() -> 
     - stamps a developer-oriented docstring containing tool metadata
     - exposes a JSON-schema-like input schema on the tool object
     - preserves a sensible signature (inspectable) for the wrapper
-    - attaches UI annotations (readOnlyHint/destructiveHint/openWorldHint)
+    - attaches UI annotations (readOnlyHint/openWorldHint)
     """
 
     import main  # noqa: F401
@@ -101,7 +101,7 @@ def test_all_registered_tools_have_docstring_metadata_schema_and_signature() -> 
         if not isinstance(ann, Mapping):
             failures.append(f"{name}: missing tool annotations")
         else:
-            for k in ("readOnlyHint", "destructiveHint", "openWorldHint"):
+            for k in ("readOnlyHint", "openWorldHint"):
                 if k not in ann:
                     failures.append(f"{name}: annotations missing {k}")
 

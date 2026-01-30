@@ -112,13 +112,11 @@ def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) ->
     out_read = dyn_ann_tool(mode="read")
     ann_read = out_read.get("gating", {}).get("annotations", {})
     assert ann_read.get("readOnlyHint") is True
-    assert ann_read.get("destructiveHint") is False
     assert ann_read.get("openWorldHint") is True
 
     out_write = dyn_ann_tool(mode="write")
     ann_write = out_write.get("gating", {}).get("annotations", {})
     assert ann_write.get("readOnlyHint") is False
-    assert ann_write.get("destructiveHint") is True
     assert ann_write.get("openWorldHint") is True
 
 
@@ -223,5 +221,4 @@ def test_auto_approve_suppresses_all_ui_hints(monkeypatch) -> None:
     out = hint_suppression_tool()
     ann = out.get("gating", {}).get("annotations", {})
     assert ann.get("readOnlyHint") is False
-    assert ann.get("destructiveHint") is False
     assert ann.get("openWorldHint") is False

@@ -407,7 +407,6 @@ async def render_shell(
     write_action_resolver=_terminal_command_write_action,
     # terminal commands execute in the workspace environment.
     open_world_hint=True,
-    destructive_hint=True,
     ui={
         "group": "workspace",
         "icon": "🖥️",
@@ -809,7 +808,6 @@ async def run_python(
     write_action_resolver=_terminal_command_write_action,
     # Match the behavioral/safety hints from `terminal_command`.
     open_world_hint=True,
-    destructive_hint=True,
 )
 async def run_command_alias(
     full_name: str,
@@ -851,7 +849,6 @@ async def run_command_alias(
     name="run_shell",
     write_action_resolver=_terminal_command_write_action,
     open_world_hint=True,
-    destructive_hint=True,
 )
 async def run_shell_alias(
     full_name: str,
@@ -885,7 +882,6 @@ async def run_shell_alias(
     name="terminal_commands",
     write_action_resolver=_terminal_command_write_action,
     open_world_hint=True,
-    destructive_hint=True,
 )
 async def terminal_commands_alias(
     full_name: str,
@@ -919,7 +915,6 @@ async def terminal_commands_alias(
     name="run_terminal_commands",
     write_action_resolver=_terminal_command_write_action,
     open_world_hint=True,
-    destructive_hint=True,
 )
 async def run_terminal_commands_alias(
     full_name: str,

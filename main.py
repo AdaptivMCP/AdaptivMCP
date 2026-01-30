@@ -1288,7 +1288,6 @@ async def render_get_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
     write_action=True,
     name="render_create_deploy",
     open_world_hint=True,
-    destructive_hint=True,
     ui={"group": "render", "icon": "🚀", "label": "Create Deploy", "danger": "high"},
 )
 async def render_create_deploy(
@@ -1309,7 +1308,6 @@ async def render_create_deploy(
     write_action=True,
     name="render_cancel_deploy",
     open_world_hint=True,
-    destructive_hint=True,
     ui={"group": "render", "icon": "🛑", "label": "Cancel Deploy", "danger": "high"},
 )
 async def render_cancel_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
@@ -1320,7 +1318,6 @@ async def render_cancel_deploy(service_id: str, deploy_id: str) -> dict[str, Any
     write_action=True,
     name="render_rollback_deploy",
     open_world_hint=True,
-    destructive_hint=True,
     ui={"group": "render", "icon": "⏪", "label": "Rollback Deploy", "danger": "high"},
 )
 async def render_rollback_deploy(service_id: str, deploy_id: str) -> dict[str, Any]:
@@ -1331,7 +1328,6 @@ async def render_rollback_deploy(service_id: str, deploy_id: str) -> dict[str, A
     write_action=True,
     name="render_restart_service",
     open_world_hint=True,
-    destructive_hint=True,
     ui={"group": "render", "icon": "🔁", "label": "Restart Service", "danger": "high"},
 )
 async def render_restart_service(service_id: str) -> dict[str, Any]:
@@ -1342,7 +1338,6 @@ async def render_restart_service(service_id: str) -> dict[str, Any]:
     write_action=True,
     name="render_create_service",
     open_world_hint=True,
-    destructive_hint=True,
     ui={"group": "render", "icon": "🧱", "label": "Create Service", "danger": "high"},
 )
 async def render_create_service(service_spec: dict[str, Any]) -> dict[str, Any]:
@@ -1362,7 +1357,6 @@ async def render_list_env_vars(service_id: str) -> dict[str, Any]:
     write_action=True,
     name="render_set_env_vars",
     open_world_hint=True,
-    destructive_hint=True,
     ui={"group": "render", "icon": "🧪", "label": "Set Env Vars", "danger": "high"},
 )
 async def render_set_env_vars(
@@ -1375,7 +1369,6 @@ async def render_set_env_vars(
     write_action=True,
     name="render_patch_service",
     open_world_hint=True,
-    destructive_hint=True,
     ui={"group": "render", "icon": "🧩", "label": "Patch Service", "danger": "high"},
 )
 async def render_patch_service(

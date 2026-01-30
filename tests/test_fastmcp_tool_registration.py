@@ -14,7 +14,6 @@ def test_register_with_fastmcp_skips_unsupported_kwargs(monkeypatch):
             assert isinstance(annotations, dict)
             assert set(annotations.keys()) >= {
                 "readOnlyHint",
-                "destructiveHint",
                 "openWorldHint",
             }
 
@@ -36,7 +35,6 @@ def test_register_with_fastmcp_skips_unsupported_kwargs(monkeypatch):
         description="sample description",
         annotations={
             "readOnlyHint": True,
-            "destructiveHint": False,
             "openWorldHint": True,
         },
     )
@@ -52,7 +50,6 @@ def test_register_with_fastmcp_requires_fn_positional(monkeypatch):
             assert isinstance(annotations, dict)
             assert set(annotations.keys()) >= {
                 "readOnlyHint",
-                "destructiveHint",
                 "openWorldHint",
             }
             return {"fn": fn, "name": name}
@@ -70,7 +67,6 @@ def test_register_with_fastmcp_requires_fn_positional(monkeypatch):
         description="positional description",
         annotations={
             "readOnlyHint": True,
-            "destructiveHint": False,
             "openWorldHint": True,
         },
     )
@@ -116,7 +112,6 @@ def test_register_with_fastmcp_does_not_emit_tags(monkeypatch):
         tags=["alpha", "beta"],
         annotations={
             "readOnlyHint": True,
-            "destructiveHint": False,
             "openWorldHint": True,
         },
     )
@@ -146,7 +141,7 @@ def test_mcp_tool_preserves_scalar_returns_sync(monkeypatch):
     if not isinstance(ann, dict) and isinstance(tool_obj, dict):
         ann = tool_obj.get("annotations")
     assert isinstance(ann, dict)
-    assert set(ann.keys()) >= {"readOnlyHint", "destructiveHint", "openWorldHint"}
+    assert set(ann.keys()) >= {"readOnlyHint", "openWorldHint"}
 
 
 @pytest.mark.anyio
@@ -172,7 +167,7 @@ async def test_mcp_tool_preserves_scalar_returns_async(monkeypatch):
     if not isinstance(ann, dict) and isinstance(tool_obj, dict):
         ann = tool_obj.get("annotations")
     assert isinstance(ann, dict)
-    assert set(ann.keys()) >= {"readOnlyHint", "destructiveHint", "openWorldHint"}
+    assert set(ann.keys()) >= {"readOnlyHint", "openWorldHint"}
 
 
 def test_mcp_tool_does_not_inject_ui_fields_for_mapping_returns(monkeypatch):
@@ -200,6 +195,5 @@ def test_mcp_tool_does_not_inject_ui_fields_for_mapping_returns(monkeypatch):
     assert meta["effective_write_action"] is False
     assert set(meta["annotations"].keys()) >= {
         "readOnlyHint",
-        "destructiveHint",
         "openWorldHint",
     }

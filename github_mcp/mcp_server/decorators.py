@@ -1401,20 +1401,17 @@ def _tool_annotations(
     *,
     write_action: bool,
     open_world_hint: bool | None = None,
-    destructive_hint: bool | None = None,
     read_only_hint: bool | None = None,
 ) -> dict[str, Any]:
     """Return MCP-style tool annotations used by UIs.
 
     MCP clients commonly read these booleans to render badges like READ/WRITE,
-    OPEN WORLD, and DESTRUCTIVE.
+    and OPEN WORLD.
     """
 
     # Defaults
     if read_only_hint is None:
         read_only_hint = not bool(write_action)
-    if destructive_hint is None:
-        destructive_hint = bool(write_action)
     if open_world_hint is None:
         # Tools represent actions that interact with something outside the model
         # (filesystem/network/hosted provider). Default to True.
@@ -1425,12 +1422,10 @@ def _tool_annotations(
     # from rendering hint badges.
     if peek_auto_approve_enabled():
         read_only_hint = False
-        destructive_hint = False
         open_world_hint = False
 
     return {
         "readOnlyHint": bool(read_only_hint),
-        "destructiveHint": bool(destructive_hint),
         "openWorldHint": bool(open_world_hint),
     }
 
@@ -1443,12 +1438,10 @@ def _resolve_invocation_annotations(
     """Return dynamic annotations for a specific invocation."""
 
     open_world_hint = getattr(func, "__mcp_open_world_hint__", None)
-    destructive_hint = getattr(func, "__mcp_destructive_hint__", None)
     read_only_hint = getattr(func, "__mcp_read_only_hint__", None)
     return _tool_annotations(
         write_action=bool(effective_write_action),
         open_world_hint=open_world_hint,
-        destructive_hint=destructive_hint,
         read_only_hint=read_only_hint,
     )
 
@@ -1514,9 +1507,10 @@ def _refresh_tool_annotations_for_invocation(
                 if isinstance(meta, Mapping):
                     existing = meta.get("annotations")
             if isinstance(existing, Mapping):
-                destructive_hint = existing.get("destructiveHint")
                 read_only_hint = existing.get("readOnlyHint")
-                if destructive_hint is True or read_only_hint is False:
+                # If a prior invocation has already marked this tool as write-ish,
+                # don't overwrite it with read-only hints.
+                if read_only_hint is False:
                     return
         _attach_tool_annotations(tool_obj, annotations)
     except Exception:
@@ -3347,7 +3341,6 @@ def mcp_tool(
     write_action: bool,
     write_action_resolver: Callable[[Mapping[str, Any]], bool] | None = None,
     open_world_hint: bool | None = None,
-    destructive_hint: bool | None = None,
     read_only_hint: bool | None = None,
     ui: Mapping[str, Any] | None = None,
     show_schema_in_description: bool = True,
@@ -3376,7 +3369,6 @@ def mcp_tool(
         annotations = _tool_annotations(
             write_action=bool(write_action),
             open_world_hint=open_world_hint,
-            destructive_hint=destructive_hint,
             read_only_hint=read_only_hint,
         )
 
@@ -3778,7 +3770,6 @@ def mcp_tool(
             wrapper.__mcp_write_action__ = bool(write_action)
             wrapper.__mcp_write_action_resolver__ = write_action_resolver
             wrapper.__mcp_open_world_hint__ = open_world_hint
-            wrapper.__mcp_destructive_hint__ = destructive_hint
             wrapper.__mcp_read_only_hint__ = read_only_hint
             wrapper.__mcp_visibility__ = visibility
             wrapper.__mcp_tags__ = tag_list
@@ -4175,7 +4166,6 @@ def mcp_tool(
         wrapper.__mcp_write_action__ = bool(write_action)
         wrapper.__mcp_write_action_resolver__ = write_action_resolver
         wrapper.__mcp_open_world_hint__ = open_world_hint
-        wrapper.__mcp_destructive_hint__ = destructive_hint
         wrapper.__mcp_read_only_hint__ = read_only_hint
         wrapper.__mcp_visibility__ = visibility
         wrapper.__mcp_tags__ = tag_list
