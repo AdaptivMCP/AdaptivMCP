@@ -323,7 +323,7 @@ async def workspace_git_log(
             rev_range,
         ]
         if paths:
-            clean = [p for p in paths if isinstance(p, str) and p.strip()]
+            clean = [p.strip() for p in paths if isinstance(p, str) and p.strip()]
             if clean:
                 cmd_parts.append("--")
                 cmd_parts.extend(clean)
@@ -394,7 +394,7 @@ async def workspace_git_show(
             cmd_parts.extend(["--name-status", "--no-patch"])
         cmd_parts.append(git_ref)
         if paths:
-            clean = [p for p in paths if isinstance(p, str) and p.strip()]
+            clean = [p.strip() for p in paths if isinstance(p, str) and p.strip()]
             if clean:
                 cmd_parts.append("--")
                 cmd_parts.extend(clean)
@@ -553,11 +553,13 @@ async def workspace_git_branches(
             stderr = res.get("stderr", "") or res.get("stdout", "")
             raise GitHubAPIError(f"git for-each-ref failed: {stderr}")
 
-        lines = [
-            ln.strip()
-            for ln in (res.get("stdout", "") or "").splitlines()
-            if ln.strip()
-        ]
+        raw_lines = (res.get("stdout", "") or "").splitlines()
+        lines: list[str] = []
+        for ln in raw_lines:
+            if not ln.strip():
+                continue
+            # Preserve trailing tabs so empty columns survive parsing.
+            lines.append(ln.rstrip("\r"))
         rows = _parse_tabbed_rows(lines, expected_cols=6)
         branches_out = [
             {
@@ -1249,7 +1251,7 @@ async def workspace_git_reset(
         if isinstance(target, str) and target.strip():
             cmd_parts.append(target.strip())
         if paths:
-            clean = [p for p in paths if isinstance(p, str) and p.strip()]
+            clean = [p.strip() for p in paths if isinstance(p, str) and p.strip()]
             if clean:
                 cmd_parts.append("--")
                 cmd_parts.extend(clean)
@@ -1366,7 +1368,7 @@ async def workspace_git_restore(
 
         if not paths:
             raise ValueError("paths is required")
-        clean = [p for p in paths if isinstance(p, str) and p.strip()]
+        clean = [p.strip() for p in paths if isinstance(p, str) and p.strip()]
         if not clean:
             raise ValueError("paths must contain at least one non-empty path")
 
