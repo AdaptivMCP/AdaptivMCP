@@ -4,12 +4,4 @@ App User: MCP clients
 Adaptiv MCP provides tools for developers of MCP servers and other Applications,
 to use ChatGPT as a coding assistant to create, test and develop
 new applications, MCP servers, or MCP tools. 
-## Documentation
 
-- [Validation logic](docs/validation.md)
-
-## Workspace mirrors
-
-Workspace mirrors ensure the local git `origin` remote stays aligned with the
-repo slug used to create the mirror so follow-on fetch/push operations target
-the expected GitHub repository.
