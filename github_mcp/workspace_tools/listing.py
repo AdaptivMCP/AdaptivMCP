@@ -14,6 +14,23 @@ from github_mcp.server import (
 from ._shared import _tw
 
 
+def _has_hidden_segment(rel_path: str) -> bool:
+    """Return True if any path segment is hidden (starts with '.').
+
+    Treat '.' and '..' segments as non-hidden.
+    """
+
+    if not isinstance(rel_path, str) or not rel_path:
+        return False
+    parts = rel_path.replace("\\", "/").split("/")
+    for part in parts:
+        if not part or part in (".", ".."):
+            continue
+        if part.startswith("."):
+            return True
+    return False
+
+
 def _is_probably_binary(path: str) -> bool:
     try:
         with open(path, "rb") as bf:
@@ -116,16 +133,27 @@ def _normalize_workspace_path(path: str) -> str:
     if normalized in (".", "/"):
         return ""
 
-    # Remove empty and current-directory segments but keep '..' segments so
-    # callers can explicitly traverse outside the repo if desired.
+    # Remove empty and current-directory segments.
+    # Security note: we intentionally reject '..' segments for relative paths.
     if not normalized.startswith("/"):
         parts: list[str] = []
         for part in normalized.split("/"):
             if part in ("", "."):
                 continue
+            if part == "..":
+                raise ValueError("path must be within the repository")
             parts.append(part)
         normalized = "/".join(parts)
     return normalized
+
+
+def _is_within_dir(path: str, root: str) -> bool:
+    try:
+        root_real = os.path.realpath(root)
+        path_real = os.path.realpath(path)
+        return os.path.commonpath([root_real, path_real]) == root_real
+    except Exception:
+        return False
 
 
 def _resolve_workspace_start(repo_dir: str, path: str) -> tuple[str, str]:
@@ -136,12 +164,16 @@ def _resolve_workspace_start(repo_dir: str, path: str) -> tuple[str, str]:
 
     if os.path.isabs(normalized_path):
         start = os.path.realpath(normalized_path)
+        if not _is_within_dir(start, root):
+            raise ValueError("path must be within the repository")
         display_path = os.path.relpath(start, root).replace("\\", "/")
         if display_path == ".":
             display_path = ""
         return display_path, start
 
     start = os.path.realpath(os.path.join(repo_dir, normalized_path))
+    if not _is_within_dir(start, root):
+        raise ValueError("path must be within the repository")
     return normalized_path, start
 
 
@@ -188,10 +220,68 @@ async def list_workspace_files(
         root = os.path.realpath(repo_dir)
         normalized_path, start = _resolve_workspace_start(repo_dir, path)
 
+        if not include_hidden:
+            start_rel = os.path.relpath(start, root).replace("\\", "/")
+            if start_rel == ".":
+                start_rel = ""
+            if _has_hidden_segment(start_rel):
+                return {
+                    "full_name": full_name,
+                    "ref": effective_ref,
+                    "path": normalized_path if path else "",
+                    "files": [],
+                    "truncated": False,
+                    "cursor": int(cursor),
+                    "next_cursor": None,
+                    "max_files": max_files,
+                    "max_depth": max_depth,
+                }
+
+        if not include_hidden:
+            start_rel = os.path.relpath(start, root).replace("\\", "/")
+            if start_rel == ".":
+                start_rel = ""
+            if _has_hidden_segment(start_rel):
+                return {
+                    "full_name": full_name,
+                    "ref": effective_ref,
+                    "path": normalized_path if path else "",
+                    "pattern": pattern,
+                    "pattern_type": pattern_type,
+                    "cursor": int(cursor),
+                    "next_cursor": None,
+                    "max_results": int(max_results),
+                    "max_depth": int(max_depth),
+                    "include_files": bool(include_files),
+                    "include_dirs": bool(include_dirs),
+                    "include_metadata": bool(include_metadata),
+                    "results": [],
+                    "truncated": False,
+                    "scanned": 0,
+                }
+
+        if not include_hidden:
+            start_rel = os.path.relpath(start, root).replace("\\", "/")
+            if start_rel == ".":
+                start_rel = ""
+            if _has_hidden_segment(start_rel):
+                return {
+                    "full_name": full_name,
+                    "ref": effective_ref,
+                    "path": normalized_path if path else "",
+                    "files": [],
+                    "truncated": False,
+                    "cursor": int(cursor),
+                    "next_cursor": None,
+                    "max_files": max_files,
+                    "max_depth": max_depth,
+                }
+
         # If path points to a file, return that file (subject to include_hidden).
         if os.path.isfile(start):
             rp = os.path.relpath(start, root)
-            if not include_hidden and os.path.basename(rp).startswith("."):
+            rp_norm = rp.replace("\\", "/")
+            if not include_hidden and _has_hidden_segment(rp_norm):
                 return {
                     "full_name": full_name,
                     "ref": effective_ref,
@@ -498,10 +588,10 @@ async def search_workspace(
     - max_file_bytes is enforced as a per-file safety limit.
     """
 
-    if not isinstance(query, str) or not query:
-        raise ValueError("query must be a non-empty string")
-
     try:
+        if not isinstance(query, str) or not query:
+            raise ValueError("query must be a non-empty string")
+
         # Searches are always case-insensitive; ignore case_sensitive input.
         case_sensitive = False
 
@@ -523,13 +613,32 @@ async def search_workspace(
         root = os.path.realpath(repo_dir)
         normalized_path, start = _resolve_workspace_start(repo_dir, path)
 
+        start_rel = os.path.relpath(start, root).replace("\\", "/")
+        if start_rel == ".":
+            start_rel = ""
+
+        if not include_hidden:
+            if _has_hidden_segment(start_rel):
+                return {
+                    "full_name": full_name,
+                    "ref": effective_ref,
+                    "path": normalized_path if path else "",
+                    "query": query,
+                    "case_sensitive": case_sensitive,
+                    "used_regex": bool(regex),
+                    "results": [],
+                    "truncated": False,
+                    "cursor": int(cursor),
+                    "next_cursor": None,
+                    "files_scanned": 0,
+                    "files_skipped": 0,
+                    "max_results": max_results,
+                    "max_file_bytes": max_file_bytes,
+                }
+
         # Allow searching a single file path.
         single_file = os.path.isfile(start)
-        if (
-            single_file
-            and (not include_hidden)
-            and os.path.basename(start).startswith(".")
-        ):
+        if single_file and (not include_hidden) and _has_hidden_segment(start_rel):
             return {
                 "full_name": full_name,
                 "ref": effective_ref,

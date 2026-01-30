@@ -40,7 +40,7 @@ def test_list_workspace_files_allows_absolute_path_inside_repo(tmp_path, monkeyp
     assert result["path"] == "docs/readme.md"
 
 
-def test_list_workspace_files_allows_absolute_path_outside_repo(tmp_path, monkeypatch):
+def test_list_workspace_files_rejects_absolute_path_outside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     outside = tmp_path / "outside"
@@ -53,12 +53,13 @@ def test_list_workspace_files_allows_absolute_path_outside_repo(tmp_path, monkey
 
     result = asyncio.run(workspace_listing.list_workspace_files(path=str(target)))
 
-    assert "error" not in result
-    assert result["files"] == ["../outside/secret.txt"]
-    assert result["path"] == "../outside/secret.txt"
+    assert result.get("status") == "error"
+    assert "within the repository" in (
+        str(result.get("error", "")) + " " + str(result.get("error_detail", {}))
+    )
 
 
-def test_search_workspace_allows_absolute_path_outside_repo(tmp_path, monkeypatch):
+def test_search_workspace_rejects_absolute_path_outside_repo(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     outside = tmp_path / "outside"
@@ -76,6 +77,24 @@ def test_search_workspace_allows_absolute_path_outside_repo(tmp_path, monkeypatc
         )
     )
 
+    assert result.get("status") == "error"
+    assert "within the repository" in (
+        str(result.get("error", "")) + " " + str(result.get("error_detail", {}))
+    )
+
+
+def test_list_workspace_files_honors_include_hidden_false_for_hidden_file(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    target = repo_dir / ".secret.txt"
+    target.write_text("shh")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_listing, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_listing.list_workspace_files(path=str(target), include_hidden=False)
+    )
+
     assert "error" not in result
-    assert len(result["results"]) == 1
-    assert result["results"][0]["file"] == "../outside/secret.txt"
+    assert result["files"] == []
