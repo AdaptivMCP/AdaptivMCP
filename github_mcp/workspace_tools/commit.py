@@ -210,90 +210,118 @@ async def get_workspace_changes_summary(
     ref: str = "main",
     path_prefix: str | None = None,
     max_files: int = 200,
+    *,
+    owner: str | None = None,
+    repo: str | None = None,
+    branch: str | None = None,
 ) -> dict[str, Any]:
     """Summarize modified, added, deleted, renamed, and untracked files in the repo mirror."""
 
-    deps = _tw()._workspace_deps()
-    effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-    repo_dir = await deps["clone_repo"](
-        full_name, ref=effective_ref, preserve_changes=True
-    )
-    t_default = _normalize_timeout_seconds(
-        config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
-    )
-
-    status_result = await deps["run_shell"](
-        "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=t_default
-    )
-    raw_status = status_result.get("stdout", "")
-    lines = [line for line in raw_status.splitlines() if line.strip()]
-
-    def _within_prefix(path: str) -> bool:
-        if not path_prefix:
-            return True
-        prefix = path_prefix.rstrip("/")
-        return path == prefix or path.startswith(prefix + "/")
-
-    changes: list[dict[str, Any]] = []
-    summary = {
-        "modified": 0,
-        "added": 0,
-        "deleted": 0,
-        "renamed": 0,
-        "untracked": 0,
-    }
-
-    for line in lines:
-        if len(line) < 3:
-            continue
-        x = line[0]
-        y = line[1]
-        rest = line[3:]
-
-        if " -> " in rest:
-            src, dst = rest.split(" -> ", 1)
-            path = dst
-            change_type = "R"
-        else:
-            src = rest
-            dst = None
-            path = src
-            change_type = "??" if x == "?" and y == "?" else "M"
-
-        if not _within_prefix(path):
-            continue
-
-        if x == "?" and y == "?":
-            summary["untracked"] += 1
-        elif x == "A" or y == "A":
-            change_type = "A"
-            summary["added"] += 1
-        elif x == "D" or y == "D":
-            change_type = "D"
-            summary["deleted"] += 1
-        elif x == "R" or y == "R":
-            change_type = "R"
-            summary["renamed"] += 1
-        else:
-            change_type = "M"
-            summary["modified"] += 1
-
-        changes.append(
-            {
-                "status": change_type,
-                "path": path,
-                "src": src,
-                "dst": dst,
-            }
+    try:
+        deps = _tw()._workspace_deps()
+        full_name = _tw()._resolve_full_name(full_name, owner=owner, repo=repo)
+        ref = _tw()._resolve_ref(ref, branch=branch)
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
+        t_default = _normalize_timeout_seconds(
+            config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
         )
 
-    has_changes = any(summary.values())
-    return {
-        "ref": effective_ref,
-        "has_changes": has_changes,
-        "summary": summary,
-        "changes": changes,
-    }
+        status_result = await deps["run_shell"](
+            "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=t_default
+        )
+        if not isinstance(status_result, dict) or status_result.get("exit_code", 0) != 0:
+            stderr = ""
+            if isinstance(status_result, dict):
+                stderr = status_result.get("stderr", "") or status_result.get("stdout", "")
+            raise GitHubAPIError(f"git status failed: {stderr}")
+
+        raw_status = status_result.get("stdout", "")
+        lines = [line for line in raw_status.splitlines() if line.strip()]
+
+        def _within_prefix(path: str) -> bool:
+            if not path_prefix:
+                return True
+            prefix = path_prefix.rstrip("/")
+            return path == prefix or path.startswith(prefix + "/")
+
+        changes: list[dict[str, Any]] = []
+        summary = {
+            "modified": 0,
+            "added": 0,
+            "deleted": 0,
+            "renamed": 0,
+            "untracked": 0,
+        }
+
+        for line in lines:
+            if len(line) < 3:
+                continue
+            x = line[0]
+            y = line[1]
+            rest = line[3:]
+
+            if " -> " in rest:
+                src, dst = rest.split(" -> ", 1)
+                path = dst
+                change_type = "R"
+            else:
+                src = rest
+                dst = None
+                path = src
+                change_type = "??" if x == "?" and y == "?" else "M"
+
+            if not _within_prefix(path):
+                continue
+
+            if x == "?" and y == "?":
+                summary["untracked"] += 1
+                change_type = "??"
+            elif x == "A" or y == "A":
+                change_type = "A"
+                summary["added"] += 1
+            elif x == "D" or y == "D":
+                change_type = "D"
+                summary["deleted"] += 1
+            elif x == "R" or y == "R":
+                change_type = "R"
+                summary["renamed"] += 1
+            else:
+                change_type = "M"
+                summary["modified"] += 1
+
+            changes.append(
+                {
+                    "status": change_type,
+                    "path": path,
+                    "src": src,
+                    "dst": dst,
+                }
+            )
+
+        has_changes = any(summary.values())
+
+        # Bound the returned change list without losing summary totals.
+        n = int(max_files)
+        if n <= 0:
+            n = 1
+        if n > 5000:
+            n = 5000
+        truncated = len(changes) > n
+        changes_out = changes[:n]
+
+        return {
+            "ref": effective_ref,
+            "has_changes": has_changes,
+            "summary": summary,
+            "changes": changes_out,
+            "changes_truncated": truncated,
+            "max_files": n,
+        }
+    except Exception as exc:
+        return _structured_tool_error(exc, context="get_workspace_changes_summary")
 
 
 @mcp_tool(write_action=False)
