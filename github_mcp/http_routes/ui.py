@@ -169,7 +169,6 @@ def build_ui_tools_endpoint() -> Any:
       <option value=\"all\">All</option>
       <option value=\"read\">Read</option>
       <option value=\"write\">Write</option>
-      <option value=\"destructive\">Destructive</option>
     </select>
     <button id=\"refresh\">Refresh</button>
   </div>
@@ -197,7 +196,6 @@ function toolBadges(t){
   const write = !!t.write_action;
   b.appendChild(badge(write ? 'WRITE' : 'READ'));
   if (ann.openWorldHint) b.appendChild(badge('OPEN WORLD'));
-  if (ann.destructiveHint) b.appendChild(badge('DESTRUCTIVE'));
   if (t.visibility) b.appendChild(badge(String(t.visibility).toUpperCase()));
   if (t.invoking_message) b.appendChild(badge('INVOKING'));
   return b;
@@ -242,7 +240,6 @@ function matchesMode(t){
   if (mode === 'all') return true;
   if (mode === 'read') return !t.write_action;
   if (mode === 'write') return !!t.write_action;
-  if (mode === 'destructive') return !!ann.destructiveHint;
   return true;
 }
 

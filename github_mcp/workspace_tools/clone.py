@@ -13,7 +13,6 @@ from ._shared import _tw
 @mcp_tool(
     write_action=True,
     open_world_hint=True,
-    destructive_hint=True,
     ui={
         "group": "workspace",
         "icon": "📦",

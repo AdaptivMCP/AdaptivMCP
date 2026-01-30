@@ -3194,7 +3194,6 @@ async def _apply_patch_impl(
 @mcp_tool(
     write_action=True,
     open_world_hint=True,
-    destructive_hint=True,
     ui={
         "group": "workspace",
         "icon": "🧩",
@@ -3245,7 +3244,6 @@ async def apply_patch(
 @mcp_tool(
     write_action=True,
     open_world_hint=True,
-    destructive_hint=True,
     ui={
         "group": "workspace",
         "icon": "🧩",
@@ -3283,7 +3281,6 @@ async def apply_workspace_diff(
     write_action=True,
     name="apply_diff",
     open_world_hint=True,
-    destructive_hint=True,
     ui={
         "group": "workspace",
         "icon": "🧩",
