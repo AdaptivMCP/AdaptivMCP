@@ -31,14 +31,18 @@ class _FakeMain:
     def CONTROLLER_DEFAULT_BRANCH(self) -> str:  # noqa: N802
         return self.controller_default_branch
 
-    async def get_repo_defaults(self, *, full_name: str | None = None) -> dict[str, Any]:
+    async def get_repo_defaults(
+        self, *, full_name: str | None = None
+    ) -> dict[str, Any]:
         return {"defaults": dict(self.defaults_payload)}
 
     def _normalize_repo_path(self, path: str) -> str:
         self.normalize_calls.append(path)
         return self.normalized_path
 
-    async def ensure_branch(self, *, full_name: str, branch: str, from_ref: str) -> dict[str, Any]:
+    async def ensure_branch(
+        self, *, full_name: str, branch: str, from_ref: str
+    ) -> dict[str, Any]:
         self.ensure_calls.append(
             {"full_name": full_name, "branch": branch, "from_ref": from_ref}
         )
@@ -93,7 +97,9 @@ class _FakeUUID:
 
 
 @pytest.mark.anyio
-async def test_pr_smoke_test_uses_repo_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_pr_smoke_test_uses_repo_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake = _FakeMain(
         defaults_payload={"full_name": "o/r", "default_branch": "develop"},
         pr_response={"json": {"number": 42, "html_url": "https://example/pr/42"}},
@@ -104,7 +110,9 @@ async def test_pr_smoke_test_uses_repo_defaults(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(diagnostics, "_main", lambda: fake)
     monkeypatch.setattr(_stdlib_uuid, "uuid4", lambda: _FakeUUID("deadbeef" * 4))
 
-    result = await diagnostics.pr_smoke_test(full_name=None, base_branch=None, draft=True)
+    result = await diagnostics.pr_smoke_test(
+        full_name=None, base_branch=None, draft=True
+    )
 
     assert result["status"] == "ok"
     assert result["repository"] == "o/r"
@@ -160,7 +168,9 @@ async def test_pr_smoke_test_error_when_pr_payload_is_invalid(
     monkeypatch.setattr(diagnostics, "_main", lambda: fake)
     monkeypatch.setattr(_stdlib_uuid, "uuid4", lambda: _FakeUUID("aaaaaaaa" * 4))
 
-    result = await diagnostics.pr_smoke_test(full_name=None, base_branch=None, draft=True)
+    result = await diagnostics.pr_smoke_test(
+        full_name=None, base_branch=None, draft=True
+    )
 
     assert result["status"] == "error"
     assert result["ok"] is False
@@ -168,4 +178,3 @@ async def test_pr_smoke_test_error_when_pr_payload_is_invalid(
     assert result["base"] == "main"
     assert result["branch"] == "mcp-pr-smoke-aaaaaaaa"
     assert result["raw_response"] == {"json": {}}
-

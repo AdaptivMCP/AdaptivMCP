@@ -44,7 +44,9 @@ def test_workspace_git_log_clips_and_parses(monkeypatch):
             if "git log" in cmd:
                 # Two entries; make it long so clipping triggers.
                 stdout = (
-                    """aaaaaaaa\tauthor\t2020-01-01T00:00:00+00:00\t""" + "x" * 200 + "\n"
+                    """aaaaaaaa\tauthor\t2020-01-01T00:00:00+00:00\t"""
+                    + "x" * 200
+                    + "\n"
                     "bbbbbbbb\tauthor\t2020-01-02T00:00:00+00:00\tsecond\n"
                 )
                 return {"exit_code": 0, "stdout": stdout, "stderr": ""}
@@ -84,7 +86,9 @@ def test_workspace_git_checkout_rekeys_workspace(monkeypatch):
         calls = []
 
         class DummyDeps:
-            async def clone_repo(self, full_name: str, ref: str, preserve_changes: bool = True):
+            async def clone_repo(
+                self, full_name: str, ref: str, preserve_changes: bool = True
+            ):
                 calls.append(("clone_repo", ref, preserve_changes))
                 if preserve_changes:
                     return old_dir
@@ -92,7 +96,9 @@ def test_workspace_git_checkout_rekeys_workspace(monkeypatch):
                 os.makedirs(recreated, exist_ok=True)
                 return recreated
 
-            async def run_shell(self, cmd: str, *, cwd: str, timeout_seconds: float = 0):
+            async def run_shell(
+                self, cmd: str, *, cwd: str, timeout_seconds: float = 0
+            ):
                 calls.append(("run_shell", cmd, cwd))
                 return {"exit_code": 0, "stdout": "", "stderr": ""}
 

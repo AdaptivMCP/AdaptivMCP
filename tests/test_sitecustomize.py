@@ -60,7 +60,9 @@ def _load_sitecustomize(
     spec.loader.exec_module(mod)
 
 
-def test_sitecustomize_injects_notrequired_and_required(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sitecustomize_injects_notrequired_and_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     typing_mod = types.ModuleType("typing")
 
     typing_extensions_mod = types.ModuleType("typing_extensions")
@@ -100,7 +102,9 @@ def test_sitecustomize_does_not_override_existing_typing_symbols(
     assert typing_mod.Required == "present"  # type: ignore[attr-defined]
 
 
-def test_sitecustomize_handles_missing_typing_extensions(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sitecustomize_handles_missing_typing_extensions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     typing_mod = types.ModuleType("typing")
 
     _load_sitecustomize(

@@ -1,6 +1,4 @@
-import asyncio
-import time
-from typing import Any, Callable, List, Optional
+from typing import Any, List, Optional
 
 import pytest
 
@@ -41,7 +39,9 @@ class DummyAsyncClient:
 
 
 def _install_simple_body_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(http_clients, "_extract_response_body", lambda resp: getattr(resp, "body", None))
+    monkeypatch.setattr(
+        http_clients, "_extract_response_body", lambda resp: getattr(resp, "body", None)
+    )
 
     def _build_payload(resp: Any, *, body: Any = None) -> dict[str, Any]:
         return {
@@ -55,19 +55,40 @@ def _install_simple_body_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_allow_rate_limit_retries_defaults() -> None:
-    assert http_clients._allow_rate_limit_retries("GET", "/repos", allow_retries=None) is True
-    assert http_clients._allow_rate_limit_retries("HEAD", "/repos", allow_retries=None) is True
+    assert (
+        http_clients._allow_rate_limit_retries("GET", "/repos", allow_retries=None)
+        is True
+    )
+    assert (
+        http_clients._allow_rate_limit_retries("HEAD", "/repos", allow_retries=None)
+        is True
+    )
 
     # GraphQL queries are POST but should be retryable by default.
-    assert http_clients._allow_rate_limit_retries("POST", "/graphql", allow_retries=None) is True
-    assert http_clients._allow_rate_limit_retries("POST", "/graphql/", allow_retries=None) is True
+    assert (
+        http_clients._allow_rate_limit_retries("POST", "/graphql", allow_retries=None)
+        is True
+    )
+    assert (
+        http_clients._allow_rate_limit_retries("POST", "/graphql/", allow_retries=None)
+        is True
+    )
 
     # Non-idempotent by default.
-    assert http_clients._allow_rate_limit_retries("POST", "/repos", allow_retries=None) is False
+    assert (
+        http_clients._allow_rate_limit_retries("POST", "/repos", allow_retries=None)
+        is False
+    )
 
     # Explicit override.
-    assert http_clients._allow_rate_limit_retries("POST", "/repos", allow_retries=True) is True
-    assert http_clients._allow_rate_limit_retries("GET", "/repos", allow_retries=False) is False
+    assert (
+        http_clients._allow_rate_limit_retries("POST", "/repos", allow_retries=True)
+        is True
+    )
+    assert (
+        http_clients._allow_rate_limit_retries("GET", "/repos", allow_retries=False)
+        is False
+    )
 
 
 def test_is_rate_limit_response_detection() -> None:
@@ -76,12 +97,16 @@ def test_is_rate_limit_response_detection() -> None:
         resp=resp_429, message_lower="rate limit", error_flag=True
     )
 
-    resp_remaining_0 = DummyResponse(403, headers={"X-RateLimit-Remaining": "0"}, body={"message": "nope"})
+    resp_remaining_0 = DummyResponse(
+        403, headers={"X-RateLimit-Remaining": "0"}, body={"message": "nope"}
+    )
     assert http_clients._is_rate_limit_response(
         resp=resp_remaining_0, message_lower="nope", error_flag=True
     )
 
-    resp_marker = DummyResponse(403, headers={}, body={"message": "Secondary rate limit"})
+    resp_marker = DummyResponse(
+        403, headers={}, body={"message": "Secondary rate limit"}
+    )
     assert http_clients._is_rate_limit_response(
         resp=resp_marker, message_lower="secondary rate limit", error_flag=True
     )
@@ -89,7 +114,9 @@ def test_is_rate_limit_response_detection() -> None:
     # Should not treat success responses as rate-limited.
     resp_ok = DummyResponse(200, headers={}, body={"message": "rate limit"})
     assert (
-        http_clients._is_rate_limit_response(resp=resp_ok, message_lower="rate limit", error_flag=False)
+        http_clients._is_rate_limit_response(
+            resp=resp_ok, message_lower="rate limit", error_flag=False
+        )
         is False
     )
 
@@ -128,15 +155,21 @@ async def test_throttle_search_requests_waits(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.anyio
-async def test_github_request_retries_on_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_github_request_retries_on_rate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _install_simple_body_helpers(monkeypatch)
 
     # Keep retries deterministic.
     monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS", 3)
     monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS", 10.0)
     monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS", 0.1)
-    monkeypatch.setattr(http_clients, "_parse_rate_limit_delay_seconds", lambda resp: 0.25)
-    monkeypatch.setattr(http_clients, "_jitter_sleep_seconds", lambda delay, *, respect_min: delay)
+    monkeypatch.setattr(
+        http_clients, "_parse_rate_limit_delay_seconds", lambda resp: 0.25
+    )
+    monkeypatch.setattr(
+        http_clients, "_jitter_sleep_seconds", lambda delay, *, respect_min: delay
+    )
 
     sleeps: list[float] = []
 
@@ -158,14 +191,18 @@ async def test_github_request_retries_on_rate_limit(monkeypatch: pytest.MonkeyPa
     def _factory() -> DummyAsyncClient:
         return client
 
-    result = await http_clients._github_request("GET", "/repos", client_factory=_factory)
+    result = await http_clients._github_request(
+        "GET", "/repos", client_factory=_factory
+    )
     assert result["json"] == {"ok": True}
     assert sleeps == [0.25]
     assert client.calls == [("GET", "/repos"), ("GET", "/repos")]
 
 
 @pytest.mark.anyio
-async def test_github_request_rate_limit_disabled_for_post(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_github_request_rate_limit_disabled_for_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _install_simple_body_helpers(monkeypatch)
 
     sleeps: list[float] = []
@@ -185,7 +222,9 @@ async def test_github_request_rate_limit_disabled_for_post(monkeypatch: pytest.M
     client = DummyAsyncClient([rate_limited])
 
     with pytest.raises(GitHubRateLimitError) as excinfo:
-        await http_clients._github_request("POST", "/repos", client_factory=lambda: client)
+        await http_clients._github_request(
+            "POST", "/repos", client_factory=lambda: client
+        )
 
     assert "retries disabled" in str(excinfo.value).lower()
     assert sleeps == []
@@ -205,13 +244,17 @@ async def test_github_request_auth_error(monkeypatch: pytest.MonkeyPatch) -> Non
     client = DummyAsyncClient([unauthorized])
 
     with pytest.raises(GitHubAuthError) as excinfo:
-        await http_clients._github_request("GET", "/repos", client_factory=lambda: client)
+        await http_clients._github_request(
+            "GET", "/repos", client_factory=lambda: client
+        )
 
     assert "401" in str(excinfo.value)
 
 
 @pytest.mark.anyio
-async def test_github_request_error_flag_fallback_when_is_error_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_github_request_error_flag_fallback_when_is_error_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _install_simple_body_helpers(monkeypatch)
 
     # Remove is_error attribute so the fallback branch runs.
@@ -226,7 +269,9 @@ async def test_github_request_error_flag_fallback_when_is_error_missing(monkeypa
     client = DummyAsyncClient([server_error])
 
     with pytest.raises(GitHubAPIError) as excinfo:
-        await http_clients._github_request("GET", "/repos", client_factory=lambda: client)
+        await http_clients._github_request(
+            "GET", "/repos", client_factory=lambda: client
+        )
 
     assert excinfo.value.status_code == 500
     assert excinfo.value.response_payload is not None

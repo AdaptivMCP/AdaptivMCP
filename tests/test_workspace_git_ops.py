@@ -14,11 +14,15 @@ class _FakeDeps:
     run_shell_calls: list[dict[str, Any]] = field(default_factory=list)
     clone_calls: list[tuple[str, str, bool]] = field(default_factory=list)
 
-    async def clone_repo(self, full_name: str, *, ref: str, preserve_changes: bool) -> str:
+    async def clone_repo(
+        self, full_name: str, *, ref: str, preserve_changes: bool
+    ) -> str:
         self.clone_calls.append((full_name, ref, preserve_changes))
         return self.repo_dir
 
-    async def run_shell(self, cmd: str, *, cwd: str, timeout_seconds: int | float | None = None):
+    async def run_shell(
+        self, cmd: str, *, cwd: str, timeout_seconds: int | float | None = None
+    ):
         self.run_shell_calls.append(
             {"cmd": cmd, "cwd": cwd, "timeout_seconds": timeout_seconds}
         )
@@ -78,7 +82,12 @@ def test_shell_error_formats_message_and_trims_detail() -> None:
 def test_parse_git_numstat_parses_text_and_binary() -> None:
     stdout = "1\t2\tfile.txt\n-\t-\tbin.dat\nX\tY\tweird\n1\t2\n\n"
     parsed = git_ops._parse_git_numstat(stdout)
-    assert parsed[0] == {"path": "file.txt", "added": 1, "removed": 2, "is_binary": False}
+    assert parsed[0] == {
+        "path": "file.txt",
+        "added": 1,
+        "removed": 2,
+        "is_binary": False,
+    }
     assert parsed[1]["path"] == "bin.dat"
     assert parsed[1]["added"] is None and parsed[1]["removed"] is None
     assert parsed[1]["is_binary"] is True
@@ -88,7 +97,9 @@ def test_parse_git_numstat_parses_text_and_binary() -> None:
 
 
 @pytest.mark.anyio
-async def test_workspace_sync_to_remote_refuses_without_discard(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_workspace_sync_to_remote_refuses_without_discard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     deps = _FakeDeps()
     tw = _FakeTW(deps)
 
@@ -104,7 +115,9 @@ async def test_workspace_sync_to_remote_refuses_without_discard(monkeypatch: pyt
     }
     monkeypatch.setattr(git_ops, "_workspace_sync_snapshot", _seq_provider([before]))
 
-    res = await git_ops.workspace_sync_to_remote("o/r", ref="main", discard_local_changes=False)
+    res = await git_ops.workspace_sync_to_remote(
+        "o/r", ref="main", discard_local_changes=False
+    )
     assert res["status"] == "error"
     assert "discard_local_changes" in (res.get("error") or "")
     assert deps.run_shell_calls == []
@@ -142,9 +155,13 @@ async def test_workspace_sync_to_remote_forced_calls_reset_and_clean(
         "ahead": 0,
         "behind": 0,
     }
-    monkeypatch.setattr(git_ops, "_workspace_sync_snapshot", _seq_provider([before, after]))
+    monkeypatch.setattr(
+        git_ops, "_workspace_sync_snapshot", _seq_provider([before, after])
+    )
 
-    res = await git_ops.workspace_sync_to_remote("o/r", ref="main", discard_local_changes=True)
+    res = await git_ops.workspace_sync_to_remote(
+        "o/r", ref="main", discard_local_changes=True
+    )
     assert res["discard_local_changes"] is True
     assert "git reset --hard" in calls[0]
     assert calls[1] == "git clean -fd"
@@ -205,7 +222,9 @@ async def test_workspace_sync_bidirectional_fast_forward_from_remote(
         "ahead": 0,
         "behind": 0,
     }
-    monkeypatch.setattr(git_ops, "_workspace_sync_snapshot", _seq_provider([before, after]))
+    monkeypatch.setattr(
+        git_ops, "_workspace_sync_snapshot", _seq_provider([before, after])
+    )
 
     res = await git_ops.workspace_sync_bidirectional("o/r", ref="main", push=False)
     assert res.get("status") != "error"
@@ -271,4 +290,3 @@ async def test_workspace_sync_bidirectional_commit_then_push(
     assert res.get("error") is None
     assert "committed_local_changes" in res["actions"]
     assert "pushed_to_remote" in res["actions"]
-

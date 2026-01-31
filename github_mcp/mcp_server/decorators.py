@@ -15,7 +15,6 @@ import inspect
 import json
 import logging
 import os
-import re
 import time
 import uuid
 from collections.abc import Callable, Iterable, Mapping
@@ -654,6 +653,7 @@ def _inject_stdout_stderr(
                 out.setdefault("stderr_total_chars", raw_chars)
                 out["stderr_truncated"] = True
         out["stderr"] = stderr
+
 
 def _extract_streams_for_report(
     payload: Mapping[str, Any], *, req: Mapping[str, Any] | None
@@ -1601,9 +1601,7 @@ def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     exc = WriteApprovalRequiredError(
         f"Write approval required to run tool {tool_name!r}."
     )
-    exc.hint = (
-        "Approve the action in the client UI or enable auto-approve to allow write tools."
-    )
+    exc.hint = "Approve the action in the client UI or enable auto-approve to allow write tools."
     raise exc
 
 

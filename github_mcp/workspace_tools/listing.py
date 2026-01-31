@@ -237,46 +237,6 @@ async def list_workspace_files(
                     "max_depth": max_depth,
                 }
 
-        if not include_hidden:
-            start_rel = os.path.relpath(start, root).replace("\\", "/")
-            if start_rel == ".":
-                start_rel = ""
-            if _has_hidden_segment(start_rel):
-                return {
-                    "full_name": full_name,
-                    "ref": effective_ref,
-                    "path": normalized_path if path else "",
-                    "pattern": pattern,
-                    "pattern_type": pattern_type,
-                    "cursor": int(cursor),
-                    "next_cursor": None,
-                    "max_results": int(max_results),
-                    "max_depth": int(max_depth),
-                    "include_files": bool(include_files),
-                    "include_dirs": bool(include_dirs),
-                    "include_metadata": bool(include_metadata),
-                    "results": [],
-                    "truncated": False,
-                    "scanned": 0,
-                }
-
-        if not include_hidden:
-            start_rel = os.path.relpath(start, root).replace("\\", "/")
-            if start_rel == ".":
-                start_rel = ""
-            if _has_hidden_segment(start_rel):
-                return {
-                    "full_name": full_name,
-                    "ref": effective_ref,
-                    "path": normalized_path if path else "",
-                    "files": [],
-                    "truncated": False,
-                    "cursor": int(cursor),
-                    "next_cursor": None,
-                    "max_files": max_files,
-                    "max_depth": max_depth,
-                }
-
         # If path points to a file, return that file (subject to include_hidden).
         if os.path.isfile(start):
             rp = os.path.relpath(start, root)

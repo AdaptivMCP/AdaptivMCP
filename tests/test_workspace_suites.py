@@ -8,11 +8,26 @@ def test_suites_module_imports():
 def test_step_status_from_exit_code_cases():
     from github_mcp.workspace_tools import suites
 
-    assert suites._step_status_from_exit_code(exit_code=0, allow_missing_command=False) == "passed"
-    assert suites._step_status_from_exit_code(exit_code=3, allow_missing_command=False) == "failed"
-    assert suites._step_status_from_exit_code(exit_code=None, allow_missing_command=False) == "failed"
-    assert suites._step_status_from_exit_code(exit_code=127, allow_missing_command=True) == "skipped"
-    assert suites._step_status_from_exit_code(exit_code=127, allow_missing_command=False) == "failed"
+    assert (
+        suites._step_status_from_exit_code(exit_code=0, allow_missing_command=False)
+        == "passed"
+    )
+    assert (
+        suites._step_status_from_exit_code(exit_code=3, allow_missing_command=False)
+        == "failed"
+    )
+    assert (
+        suites._step_status_from_exit_code(exit_code=None, allow_missing_command=False)
+        == "failed"
+    )
+    assert (
+        suites._step_status_from_exit_code(exit_code=127, allow_missing_command=True)
+        == "skipped"
+    )
+    assert (
+        suites._step_status_from_exit_code(exit_code=127, allow_missing_command=False)
+        == "failed"
+    )
 
 
 def test_parse_marked_steps_captures_output_and_durations():
@@ -83,7 +98,11 @@ def test_run_tests_adds_cov_flags_and_no_tests_status(monkeypatch):
     async def fake_run_named_step(**kwargs):
         seen.update(kwargs)
         # exit_code=5 means "no tests collected"
-        return {"name": "tests", "status": "passed", "summary": {"exit_code": 5, "duration_ms": 1}}
+        return {
+            "name": "tests",
+            "status": "passed",
+            "summary": {"exit_code": 5, "duration_ms": 1},
+        }
 
     monkeypatch.setattr(suites, "_run_named_step", fake_run_named_step)
 
@@ -117,7 +136,11 @@ def test_run_lint_suite_falls_back_when_terminal_command_is_mocked(monkeypatch):
 
     async def fake_run_named_step(*, name: str, **kwargs):
         calls.append(name)
-        return {"name": name, "status": "passed", "summary": {"exit_code": 0, "duration_ms": 1}}
+        return {
+            "name": name,
+            "status": "passed",
+            "summary": {"exit_code": 0, "duration_ms": 1},
+        }
 
     monkeypatch.setattr(suites, "_tw", lambda: DummyTW())
     monkeypatch.setattr(suites, "_run_named_step", fake_run_named_step)

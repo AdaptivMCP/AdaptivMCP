@@ -70,7 +70,9 @@ def test_build_range_header_validation_errors() -> None:
     with pytest.raises(ValueError, match="tail_bytes must be > 0"):
         large_files._build_range_header(start_byte=None, max_bytes=10, tail_bytes=0)
 
-    with pytest.raises(ValueError, match="Provide only one of start_byte or tail_bytes"):
+    with pytest.raises(
+        ValueError, match="Provide only one of start_byte or tail_bytes"
+    ):
         large_files._build_range_header(start_byte=0, max_bytes=10, tail_bytes=1)
 
 
@@ -110,18 +112,26 @@ def test_build_range_header_capped_variants() -> None:
 
 
 @pytest.mark.anyio
-async def test_get_content_metadata_best_effort(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_content_metadata_best_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def _raise(*_args, **_kwargs):
         raise RuntimeError("network")
 
     monkeypatch.setattr(large_files, "_github_request", _raise)
-    assert await large_files._get_content_metadata(full_name="o/r", path="p", ref="main") == {}
+    assert (
+        await large_files._get_content_metadata(full_name="o/r", path="p", ref="main")
+        == {}
+    )
 
     async def _bad_shape(*_args, **_kwargs):
         return {"json": ["not", "a", "dict"]}
 
     monkeypatch.setattr(large_files, "_github_request", _bad_shape)
-    assert await large_files._get_content_metadata(full_name="o/r", path="p", ref="main") == {}
+    assert (
+        await large_files._get_content_metadata(full_name="o/r", path="p", ref="main")
+        == {}
+    )
 
     async def _ok(*_args, **_kwargs):
         return {
@@ -146,7 +156,9 @@ async def test_get_content_metadata_best_effort(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.anyio
-async def test_get_file_excerpt_streams_and_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_file_excerpt_streams_and_truncates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     resp = _FakeResp(
         status_code=200,
         headers={
@@ -161,8 +173,12 @@ async def test_get_file_excerpt_streams_and_truncates(monkeypatch: pytest.Monkey
     client = _FakeClient(resp)
 
     monkeypatch.setattr(large_files, "_github_client_instance", lambda: client)
-    monkeypatch.setattr(large_files, "_effective_ref_for_repo", lambda *_a: "refs/heads/dev")
-    monkeypatch.setattr(large_files, "_normalize_repo_path_for_repo", lambda *_a: "norm.txt")
+    monkeypatch.setattr(
+        large_files, "_effective_ref_for_repo", lambda *_a: "refs/heads/dev"
+    )
+    monkeypatch.setattr(
+        large_files, "_normalize_repo_path_for_repo", lambda *_a: "norm.txt"
+    )
     monkeypatch.setattr(large_files, "_with_numbered_lines", lambda t: f"NUM:{t}")
 
     async def _fake_meta(**_kwargs):
@@ -251,7 +267,9 @@ async def test_get_file_excerpt_truncates_text_by_max_text_chars(
 
 
 @pytest.mark.anyio
-async def test_get_file_excerpt_tail_bytes_sets_note(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_file_excerpt_tail_bytes_sets_note(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     resp = _FakeResp(status_code=200, chunks=[b"hello"])
     client = _FakeClient(resp)
     monkeypatch.setattr(large_files, "_github_client_instance", lambda: client)
@@ -289,14 +307,18 @@ async def test_get_file_excerpt_as_text_false(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(large_files, "_get_content_metadata", _fake_meta)
 
-    result = await large_files.get_file_excerpt(full_name="o/r", path="p", as_text=False)
+    result = await large_files.get_file_excerpt(
+        full_name="o/r", path="p", as_text=False
+    )
 
     assert result["text"] is None
     assert result["numbered_lines"] is None
 
 
 @pytest.mark.anyio
-async def test_get_file_excerpt_http_error_includes_message(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_file_excerpt_http_error_includes_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     resp = _FakeResp(status_code=404, json_data={"message": "Not Found"})
     client = _FakeClient(resp)
     monkeypatch.setattr(large_files, "_github_client_instance", lambda: client)
@@ -308,7 +330,9 @@ async def test_get_file_excerpt_http_error_includes_message(monkeypatch: pytest.
 
 
 @pytest.mark.anyio
-async def test_get_file_excerpt_http_error_without_json(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_file_excerpt_http_error_without_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     resp = _FakeResp(status_code=500, json_data=None, json_raises=True)
     client = _FakeClient(resp)
     monkeypatch.setattr(large_files, "_github_client_instance", lambda: client)
@@ -320,7 +344,9 @@ async def test_get_file_excerpt_http_error_without_json(monkeypatch: pytest.Monk
 
 
 @pytest.mark.anyio
-async def test_get_file_excerpt_wraps_stream_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_file_excerpt_wraps_stream_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     client = _FakeClient(_FakeResp(), raise_in_stream=RuntimeError("explode"))
     monkeypatch.setattr(large_files, "_github_client_instance", lambda: client)
     monkeypatch.setattr(large_files, "_effective_ref_for_repo", lambda *_a: "main")
@@ -343,4 +369,3 @@ async def test_get_file_excerpt_rejects_invalid_full_name_and_path() -> None:
 
     with pytest.raises(ValueError, match="non-empty"):
         await large_files.get_file_excerpt(full_name="o/r", path=" ")
-

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
-import logging
 import os
 import sys
 import time
@@ -321,10 +320,10 @@ def _refresh_async_client(
     from .async_utils import refresh_async_client
 
     def _log_debug(msg: str) -> None:
-        logging.info(msg)
+        GITHUB_LOGGER.debug(msg)
 
     def _log_debug_exc(msg: str) -> None:
-        logging.info(msg, exc_info=True)
+        GITHUB_LOGGER.debug(msg, exc_info=True)
 
     refreshed, loop = refresh_async_client(
         client,

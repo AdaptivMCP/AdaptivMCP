@@ -8,7 +8,9 @@ def test_commit_module_imports():
 def test_slim_shell_result_strips_and_handles_non_dict():
     from github_mcp.workspace_tools import commit
 
-    slim = commit._slim_shell_result({"exit_code": 0, "stdout": " ok \n", "stderr": "  \n"})
+    slim = commit._slim_shell_result(
+        {"exit_code": 0, "stdout": " ok \n", "stderr": "  \n"}
+    )
     assert slim == {"exit_code": 0, "timed_out": False, "stdout": "ok", "stderr": ""}
 
     assert commit._slim_shell_result("nope")["raw"] == "nope"
@@ -55,7 +57,9 @@ def test_get_workspace_changes_summary_parses_and_filters_prefix(monkeypatch):
 
     monkeypatch.setattr(commit, "_tw", lambda: DummyTW())
 
-    all_out = asyncio.run(commit.get_workspace_changes_summary(full_name="o/r", ref="main"))
+    all_out = asyncio.run(
+        commit.get_workspace_changes_summary(full_name="o/r", ref="main")
+    )
     assert all_out["has_changes"] is True
     assert all_out["summary"] == {
         "modified": 2,
@@ -66,7 +70,9 @@ def test_get_workspace_changes_summary_parses_and_filters_prefix(monkeypatch):
     }
 
     pref = asyncio.run(
-        commit.get_workspace_changes_summary(full_name="o/r", ref="main", path_prefix="sub")
+        commit.get_workspace_changes_summary(
+            full_name="o/r", ref="main", path_prefix="sub"
+        )
     )
     assert pref["summary"]["modified"] == 1
     assert pref["changes"] == [

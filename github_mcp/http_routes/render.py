@@ -132,7 +132,6 @@ def register_render_routes(app: Any) -> None:
                 UsageError("service_id is required"), context="http:render_deploys"
             )
 
-
         try:
             cursor = _parse_str(request.query_params.get("cursor"))
             limit = _parse_int(

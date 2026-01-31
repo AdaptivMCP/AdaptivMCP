@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,7 +15,9 @@ class StructuredError(Exception):
 class FakeMain:
     def __init__(self):
         self.calls: list[tuple[str, Any]] = []
-        self._github_request_calls: list[tuple[str, str, dict[str, Any] | None, dict[str, Any] | None]] = []
+        self._github_request_calls: list[
+            tuple[str, str, dict[str, Any] | None, dict[str, Any] | None]
+        ] = []
 
         # Queues for high-level helpers used by pull_requests.
         self.ensure_branch_calls: list[tuple[str, str, str]] = []
@@ -43,7 +44,9 @@ class FakeMain:
     def _effective_ref_for_repo(self, _full_name: str, base: str) -> str:
         return f"effective-{base}"  # make normalization visible
 
-    def _structured_tool_error(self, exc: Exception, *, context: str, path: str | None = None):
+    def _structured_tool_error(
+        self, exc: Exception, *, context: str, path: str | None = None
+    ):
         return {
             "status": "error",
             "ok": False,
@@ -60,14 +63,22 @@ class FakeMain:
         json_body: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self._github_request_calls.append((method, path, params, json_body))
-        return {"method": method, "path": path, "params": params, "json_body": json_body, "json": {}}
+        return {
+            "method": method,
+            "path": path,
+            "params": params,
+            "json_body": json_body,
+            "json": {},
+        }
 
     async def ensure_branch(self, full_name: str, branch: str, from_ref: str = "main"):
         self.ensure_branch_calls.append((full_name, branch, from_ref))
         return {"status": "ok"}
 
     async def _load_body_from_content_url(self, content_url: str, context: str):
-        self.calls.append(("load_body", {"content_url": content_url, "context": context}))
+        self.calls.append(
+            ("load_body", {"content_url": content_url, "context": context})
+        )
         return b"from-url"
 
     async def _resolve_file_sha(self, full_name: str, path: str, branch: str):
@@ -106,21 +117,40 @@ class FakeMain:
             return self._queue_fetch_pr.pop(0)
         return {"json": {}}
 
-    async def list_pr_changed_filenames(self, full_name: str, pull_number: int, per_page: int = 100, page: int = 1):
+    async def list_pr_changed_filenames(
+        self, full_name: str, pull_number: int, per_page: int = 100, page: int = 1
+    ):
         self.list_pr_files_calls.append((full_name, pull_number, per_page))
         if self._queue_list_files:
             return self._queue_list_files.pop(0)
         return {"json": []}
 
-    async def get_commit_combined_status(self, full_name: str, ref: str) -> dict[str, Any]:
+    async def get_commit_combined_status(
+        self, full_name: str, ref: str
+    ) -> dict[str, Any]:
         self.status_calls.append((full_name, ref))
         if self._queue_status:
             return self._queue_status.pop(0)
         return {"json": {"state": "success"}}
 
-    async def list_workflow_runs(self, full_name: str, branch: str | None = None, status: str | None = None, event: str | None = None, per_page: int = 30, page: int = 1):
+    async def list_workflow_runs(
+        self,
+        full_name: str,
+        branch: str | None = None,
+        status: str | None = None,
+        event: str | None = None,
+        per_page: int = 30,
+        page: int = 1,
+    ):
         self.list_runs_calls.append(
-            {"full_name": full_name, "branch": branch, "status": status, "event": event, "per_page": per_page, "page": page}
+            {
+                "full_name": full_name,
+                "branch": branch,
+                "status": status,
+                "event": event,
+                "per_page": per_page,
+                "page": page,
+            }
         )
         if self._queue_runs:
             return self._queue_runs.pop(0)
@@ -162,7 +192,9 @@ async def test_head_helpers_normalize_and_parse():
 
 
 @pytest.mark.asyncio
-async def test_list_pull_requests_validates_and_builds_params(monkeypatch: pytest.MonkeyPatch):
+async def test_list_pull_requests_validates_and_builds_params(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from github_mcp.main_tools import pull_requests
 
     fake = FakeMain()
@@ -174,7 +206,18 @@ async def test_list_pull_requests_validates_and_builds_params(monkeypatch: pytes
 
     assert out["path"] == "/repos/o/r/pulls"
     assert fake._github_request_calls == [
-        ("GET", "/repos/o/r/pulls", {"state": "open", "per_page": 5, "page": 2, "head": "octo:feat", "base": "main"}, None)
+        (
+            "GET",
+            "/repos/o/r/pulls",
+            {
+                "state": "open",
+                "per_page": 5,
+                "page": 2,
+                "head": "octo:feat",
+                "base": "main",
+            },
+            None,
+        )
     ]
 
     with pytest.raises(ValueError):
@@ -245,7 +288,9 @@ async def test_get_pr_info_extracts_summary(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
-async def test_create_pull_request_normalizes_base_and_default_body(monkeypatch: pytest.MonkeyPatch):
+async def test_create_pull_request_normalizes_base_and_default_body(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from github_mcp.main_tools import pull_requests
 
     fake = FakeMain()
@@ -276,7 +321,9 @@ async def test_create_pull_request_normalizes_base_and_default_body(monkeypatch:
 
 
 @pytest.mark.asyncio
-async def test_create_pull_request_structured_error_on_exception(monkeypatch: pytest.MonkeyPatch):
+async def test_create_pull_request_structured_error_on_exception(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from github_mcp.main_tools import pull_requests
 
     fake = FakeMain()
@@ -297,7 +344,9 @@ async def test_create_pull_request_structured_error_on_exception(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_recent_prs_for_branch_builds_head_filter_and_normalizes(monkeypatch: pytest.MonkeyPatch):
+async def test_recent_prs_for_branch_builds_head_filter_and_normalizes(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from github_mcp.main_tools import pull_requests
 
     fake = FakeMain()
@@ -375,7 +424,9 @@ async def test_update_files_and_open_pr_happy_path(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
-async def test_update_files_and_open_pr_validates_file_entries(monkeypatch: pytest.MonkeyPatch):
+async def test_update_files_and_open_pr_validates_file_entries(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from github_mcp.main_tools import pull_requests
 
     fake = FakeMain()
@@ -402,7 +453,9 @@ async def test_update_files_and_open_pr_validates_file_entries(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
-async def test_update_files_and_open_pr_structured_error_on_load(monkeypatch: pytest.MonkeyPatch):
+async def test_update_files_and_open_pr_structured_error_on_load(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from github_mcp.main_tools import pull_requests
 
     fake = FakeMain()
@@ -426,7 +479,9 @@ async def test_update_files_and_open_pr_structured_error_on_load(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_get_pr_overview_happy_path_and_fallbacks(monkeypatch: pytest.MonkeyPatch):
+async def test_get_pr_overview_happy_path_and_fallbacks(
+    monkeypatch: pytest.MonkeyPatch,
+):
     from github_mcp.main_tools import pull_requests
 
     fake = FakeMain()
@@ -450,7 +505,13 @@ async def test_get_pr_overview_happy_path_and_fallbacks(monkeypatch: pytest.Monk
     fake._queue_list_files.append(
         {
             "json": [
-                {"filename": "a", "status": "modified", "additions": 1, "deletions": 0, "changes": 1},
+                {
+                    "filename": "a",
+                    "status": "modified",
+                    "additions": 1,
+                    "deletions": 0,
+                    "changes": 1,
+                },
                 "skip",
             ]
         }
@@ -482,7 +543,13 @@ async def test_get_pr_overview_happy_path_and_fallbacks(monkeypatch: pytest.Monk
 
     assert out["pr"]["user"]["login"] == "octo"
     assert out["files"] == [
-        {"filename": "a", "status": "modified", "additions": 1, "deletions": 0, "changes": 1}
+        {
+            "filename": "a",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 0,
+            "changes": 1,
+        }
     ]
     assert out["status_checks"]["state"] == "failure"
     assert out["workflow_runs"][0]["id"] == 1

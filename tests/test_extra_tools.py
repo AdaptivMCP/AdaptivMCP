@@ -57,7 +57,9 @@ async def test_delete_file_raises_when_missing_and_if_missing_error(
 
     monkeypatch.setattr(extra_tools, "_resolve_file_sha", fake_resolve)
 
-    with pytest.raises(FileNotFoundError, match=r"File not found: docs/missing.txt on main"):
+    with pytest.raises(
+        FileNotFoundError, match=r"File not found: docs/missing.txt on main"
+    ):
         await extra_tools.delete_file(
             full_name="octo-org/octo-repo",
             path="docs/missing.txt",
@@ -117,7 +119,9 @@ async def test_update_file_from_workspace_rejects_path_escape(
     monkeypatch.setattr(extra_tools, "_effective_ref_for_repo", lambda _n, b: b)
     monkeypatch.setattr(extra_tools, "_workspace_path", lambda _n, _r: str(tmp_path))
 
-    with pytest.raises(ValueError, match="workspace_path must stay within the workspace root"):
+    with pytest.raises(
+        ValueError, match="workspace_path must stay within the workspace root"
+    ):
         await extra_tools.update_file_from_workspace(
             full_name="octo-org/octo-repo",
             workspace_path="../outside.txt",
@@ -135,7 +139,9 @@ async def test_update_file_from_workspace_raises_when_missing(
     monkeypatch.setattr(extra_tools, "_effective_ref_for_repo", lambda _n, b: b)
     monkeypatch.setattr(extra_tools, "_workspace_path", lambda _n, _r: str(tmp_path))
 
-    with pytest.raises(FileNotFoundError, match=r"Repo mirror file 'missing.txt' not found"):
+    with pytest.raises(
+        FileNotFoundError, match=r"Repo mirror file 'missing.txt' not found"
+    ):
         await extra_tools.update_file_from_workspace(
             full_name="octo-org/octo-repo",
             workspace_path="missing.txt",
@@ -207,7 +213,9 @@ async def test_update_file_from_workspace_includes_sha_when_updating(
 
     monkeypatch.setattr(extra_tools, "_resolve_file_sha", fake_resolve)
 
-    async def fake_request(_method: str, _endpoint: str, **kwargs: Any) -> dict[str, Any]:
+    async def fake_request(
+        _method: str, _endpoint: str, **kwargs: Any
+    ) -> dict[str, Any]:
         return {"ok": True, "payload": kwargs["json_body"]}
 
     monkeypatch.setattr(extra_tools, "_github_request", fake_request)
@@ -242,7 +250,9 @@ async def test_update_file_from_workspace_allows_absolute_path_inside_workspace_
 
     monkeypatch.setattr(extra_tools, "_resolve_file_sha", fake_resolve)
 
-    async def fake_request(_method: str, _endpoint: str, **_kwargs: Any) -> dict[str, Any]:
+    async def fake_request(
+        _method: str, _endpoint: str, **_kwargs: Any
+    ) -> dict[str, Any]:
         return {"ok": True}
 
     monkeypatch.setattr(extra_tools, "_github_request", fake_request)

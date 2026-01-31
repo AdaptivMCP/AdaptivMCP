@@ -391,8 +391,12 @@ def _section_params_from_operation(op: Mapping[str, Any]) -> dict[str, int]:
     return _validate_section_params(
         start_line=_default_if_none(op.get("start_line", 1), 1),
         max_sections=_default_if_none(op.get("max_sections", 5), 5),
-        max_lines_per_section=_default_if_none(op.get("max_lines_per_section", 200), 200),
-        max_chars_per_section=_default_if_none(op.get("max_chars_per_section", 80_000), 80_000),
+        max_lines_per_section=_default_if_none(
+            op.get("max_lines_per_section", 200), 200
+        ),
+        max_chars_per_section=_default_if_none(
+            op.get("max_chars_per_section", 80_000), 80_000
+        ),
         overlap_lines=_default_if_none(op.get("overlap_lines", 20), 20),
     )
 
@@ -2432,10 +2436,6 @@ async def set_workspace_file_contents(
 
         repo_dir = await deps["clone_repo"](
             full_name, ref=effective_ref, preserve_changes=True
-        )
-        before_info = _workspace_read_text(repo_dir, path)
-        before_text = (
-            (before_info.get("text") or "") if before_info.get("exists") else ""
         )
         write_info = _workspace_write_text(
             repo_dir,

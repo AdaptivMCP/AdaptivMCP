@@ -76,18 +76,27 @@ def test_workspace_batch_shorthand_ops_maps_to_apply_ops(monkeypatch):
             return ref
 
     monkeypatch.setattr(batch, "_tw", lambda: DummyTW())
-    monkeypatch.setattr(batch, "apply_workspace_operations", fake_apply_workspace_operations)
+    monkeypatch.setattr(
+        batch, "apply_workspace_operations", fake_apply_workspace_operations
+    )
 
     out = asyncio.run(
         batch.workspace_batch(
             full_name="o/r",
-            plans=[{"ref": "b", "operations": [{"op": "write", "path": "a", "content": "c"}]}],
+            plans=[
+                {
+                    "ref": "b",
+                    "operations": [{"op": "write", "path": "a", "content": "c"}],
+                }
+            ],
         )
     )
 
     assert out["ok"] is True
     assert seen["ref"] == "b"
-    assert isinstance(seen["operations"], list) and seen["operations"][0]["op"] == "write"
+    assert (
+        isinstance(seen["operations"], list) and seen["operations"][0]["op"] == "write"
+    )
     assert seen["preview_only"] is False
 
 
