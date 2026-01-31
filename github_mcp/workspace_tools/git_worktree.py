@@ -540,7 +540,7 @@ async def workspace_git_branches(
         if include_remote:
             refs.append("refs/remotes/origin")
 
-        fmt = "%(_refname)\t%(refname:short)\t%(objectname)\t%(upstream:short)\t%(upstream:track)\t%(HEAD)"
+        fmt = "%(refname)\t%(refname:short)\t%(objectname)\t%(upstream:short)\t%(upstream:track)\t%(HEAD)"
         # Use a stable format line; git treats percent-parens as placeholders.
         cmd = (
             "git for-each-ref --format="
