@@ -61,7 +61,7 @@ async def list_recent_failures(
 
     m = _main()
 
-    per_page = min(max(limit, 10), 50)
+    per_page = limit
 
     runs_resp = await m.list_workflow_runs(
         full_name=full_name,

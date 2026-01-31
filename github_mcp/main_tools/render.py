@@ -78,10 +78,8 @@ def _normalize_limit(
             limit = int(limit)
     if not isinstance(limit, int):
         raise TypeError(f"{name} must be an integer")
-    if limit < min_value:
-        return min_value
-    if limit > max_value:
-        return max_value
+    if limit < min_value or limit > max_value:
+        raise ValueError(f"{name} must be between {min_value} and {max_value}")
     return limit
 
 
@@ -323,7 +321,7 @@ async def list_render_logs(
       resources: One or more Render resource ids (service/job/postgres/etc.).
       start_time/end_time: ISO8601 timestamps (examples: 2026-01-14T12:34:56Z).
       direction: "backward" (default) or "forward".
-      limit: Max log lines to return (clamped to [1, 1000]).
+      limit: Max log lines to return (must be between 1 and 1000).
 
     Optional filters are best-effort and passed through when present.
     """
@@ -399,7 +397,7 @@ async def get_render_logs(
       resource_type: "service" or "job".
       resource_id: Resource id corresponding to the type.
       start_time/end_time: ISO8601 timestamps (examples: 2026-01-14T12:34:56Z).
-      limit: Max log lines to return (clamped to [1, 1000]).
+      limit: Max log lines to return (must be between 1 and 1000).
     """
 
     resource_type = _require_non_empty_str("resource_type", resource_type).lower()

@@ -154,7 +154,12 @@ async def search(
         return structured_tool_error(ValueError("page must be > 0"), context="search")
 
     # GitHub Search API constraints: per_page max 100.
-    per_page = min(int(per_page), 100)
+    per_page = int(per_page)
+    if per_page > 100:
+        return structured_tool_error(
+            ValueError("per_page must be <= 100"),
+            context="search",
+        )
 
     # GitHub's Search API only returns up to 1,000 results. We therefore cap
     # pages to 10 when per_page=100 (and proportionally otherwise).

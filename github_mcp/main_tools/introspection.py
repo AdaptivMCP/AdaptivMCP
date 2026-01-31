@@ -443,7 +443,7 @@ def list_resources(
     if limit_i <= 0:
         limit_i = 200
     if limit_i > max_limit:
-        limit_i = max_limit
+        raise ValueError(f"limit must be <= {max_limit}")
 
     registry_entries, registry_errors = _iter_tool_registry()
 

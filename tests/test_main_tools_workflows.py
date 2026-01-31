@@ -241,9 +241,8 @@ async def test_list_recent_failures_filters_and_limits(monkeypatch):
     assert out["limit"] == 2
     assert [r["id"] for r in out["runs"]] == [2, 5]
 
-    # limit=2 => per_page is clamped to at least 10.
     assert fake._list_runs_calls == [
-        {"full_name": "o/r", "branch": "main", "per_page": 10, "page": 1}
+        {"full_name": "o/r", "branch": "main", "per_page": 2, "page": 1}
     ]
 
     with pytest.raises(ValueError):

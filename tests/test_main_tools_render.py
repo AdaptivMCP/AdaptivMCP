@@ -59,11 +59,10 @@ def test_normalize_limit() -> None:
         render_tools._normalize_limit(" 7 ", default=20, min_value=1, max_value=100)
         == 7
     )
-    assert render_tools._normalize_limit(0, default=20, min_value=1, max_value=100) == 1
-    assert (
+    with pytest.raises(ValueError):
+        render_tools._normalize_limit(0, default=20, min_value=1, max_value=100)
+    with pytest.raises(ValueError):
         render_tools._normalize_limit(999, default=20, min_value=1, max_value=100)
-        == 100
-    )
     with pytest.raises(TypeError):
         render_tools._normalize_limit(True, default=20, min_value=1, max_value=100)
     with pytest.raises(TypeError):
@@ -158,7 +157,7 @@ async def test_list_render_logs_validates_and_builds_params(
         start_time="2026-01-14T00:00:00Z",
         end_time="2026-01-14T01:00:00Z",
         direction="forward",
-        limit=5000,
+        limit=500,
         instance="i",
         host="h",
         level="info",
@@ -176,12 +175,16 @@ async def test_list_render_logs_validates_and_builds_params(
     assert params["ownerId"] == "owner"
     assert params["resource"] == ["r1", "r2"]
     assert params["direction"] == "forward"
-    # limit is clamped to 1000
-    assert params["limit"] == 1000
+    assert params["limit"] == 500
     assert params["startTime"].endswith("Z")
     assert params["endTime"].endswith("Z")
     assert params["statusCode"] == 200
     assert params["logType"] == "app"
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 1000"):
+        await render_tools.list_render_logs(
+            owner_id="owner", resources=["r"], limit=5000
+        )
 
     with pytest.raises(ValueError, match="resources must be a non-empty"):
         await render_tools.list_render_logs(owner_id="owner", resources=[])
@@ -217,15 +220,21 @@ async def test_list_render_endpoints_build_params(
 
     monkeypatch.setattr(render_tools, "render_request", _fake)
 
-    await render_tools.list_render_owners(cursor="  c ", limit=0)
+    await render_tools.list_render_owners(cursor="  c ", limit=1)
     assert calls[-1]["path"] == "/owners"
     assert calls[-1]["params"]["limit"] == 1
     assert calls[-1]["params"]["cursor"] == "c"
 
-    await render_tools.list_render_services(owner_id="  o ", cursor=None, limit=999)
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        await render_tools.list_render_owners(cursor="c", limit=0)
+
+    await render_tools.list_render_services(owner_id="  o ", cursor=None, limit=99)
     assert calls[-1]["path"] == "/services"
-    assert calls[-1]["params"]["limit"] == 100
+    assert calls[-1]["params"]["limit"] == 99
     assert calls[-1]["params"]["ownerId"] == "o"
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        await render_tools.list_render_services(owner_id="o", cursor=None, limit=999)
 
     await render_tools.list_render_deploys(service_id="svc", cursor="x", limit="10")
     assert calls[-1]["path"] == "/services/svc/deploys"
