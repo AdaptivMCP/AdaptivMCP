@@ -1,0 +1,9 @@
+[bandit]
+# Bandit is invoked with: bandit -q -r github_mcp --ini .bandit
+# Provide a minimal config so Bandit can parse the file without warnings.
+
+# Skip assertion warnings in tests and developer tooling.
+skips = B101
+
+# These paths are not part of the runtime surface.
+exclude = tests,vendor,.venv,.venv-mcp
