@@ -417,7 +417,7 @@ def list_resources(
             consider paginating via cursor/limit.
         compact: When True, shorten descriptions.
         cursor: Integer offset into the sorted resource list.
-        limit: Maximum number of resources to return (bounded).
+        limit: Maximum number of resources to return.
     """
 
     m = _main()
@@ -425,25 +425,16 @@ def list_resources(
     prefix = _normalize_base_path(base_path)
     href_prefix = f"{prefix}/tools" if prefix else "/tools"
 
-    # Validate + clamp pagination inputs.
+    # Normalize pagination inputs.
     try:
-        cursor_i = int(cursor or 0)
+        cursor_i = int(0 if cursor is None else cursor)
     except (TypeError, ValueError):
-        cursor_i = 0
-    if cursor_i < 0:
         cursor_i = 0
 
     try:
-        limit_i = int(limit or 200)
+        limit_i = int(200 if limit is None else limit)
     except (TypeError, ValueError):
         limit_i = 200
-
-    # Safety cap: avoid giant payloads that can overwhelm clients.
-    max_limit = 500
-    if limit_i <= 0:
-        limit_i = 200
-    if limit_i > max_limit:
-        raise ValueError(f"limit must be <= {max_limit}")
 
     registry_entries, registry_errors = _iter_tool_registry()
 
