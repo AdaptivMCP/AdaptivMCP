@@ -455,9 +455,23 @@ class _RequestContextMiddleware:
                                     json.loads(decoded)
                                 )
                             except Exception:
-                                payload["request_body"] = _sanitize_log_text(decoded)
+                                # Keep binary/garbage bodies compact.
+                                if "\x00" in decoded or "\ufffd" in decoded:
+                                    payload["request_body"] = (
+                                        f"<bytes len={len(captured_body)}>"
+                                    )
+                                else:
+                                    payload["request_body"] = _sanitize_log_text(
+                                        decoded
+                                    )
                         except Exception:
-                            payload["request_body"] = repr(captured_body)
+                            # As a last resort, don't dump repr(...) into logs.
+                            try:
+                                payload["request_body"] = (
+                                    f"<bytes len={len(captured_body)}>"
+                                )
+                            except Exception:
+                                payload["request_body"] = "<bytes>"
                         if captured_body_truncated:
                             payload["request_body_truncated"] = True
 
@@ -470,9 +484,21 @@ class _RequestContextMiddleware:
                                     json.loads(decoded)
                                 )
                             except Exception:
-                                payload["response_body"] = _sanitize_log_text(decoded)
+                                if "\x00" in decoded or "\ufffd" in decoded:
+                                    payload["response_body"] = (
+                                        f"<bytes len={len(resp_bytes)}>"
+                                    )
+                                else:
+                                    payload["response_body"] = _sanitize_log_text(
+                                        decoded
+                                    )
                         except Exception:
-                            payload["response_body"] = repr(resp_bytes)
+                            try:
+                                payload["response_body"] = (
+                                    f"<bytes len={len(resp_bytes)}>"
+                                )
+                            except Exception:
+                                payload["response_body"] = "<bytes>"
                         if response_body_truncated:
                             payload["response_body_truncated"] = True
 
