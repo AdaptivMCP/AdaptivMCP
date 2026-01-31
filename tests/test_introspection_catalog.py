@@ -110,7 +110,10 @@ def test_list_introspection_reports_registry_errors(monkeypatch):
     resources = introspection.list_resources(base_path="/api")
     assert "errors" in resources
     uris = {resource.get("uri") for resource in resources.get("resources", [])}
-    assert "/api/tools/good_tool" in uris
+    assert "tools/good_tool" in uris
+    # The optional href field retains the HTTP base path for clients that need it.
+    hrefs = {resource.get("href") for resource in resources.get("resources", [])}
+    assert "/api/tools/good_tool" in hrefs
 
 
 def test_list_write_tools_tracks_registry_and_categories(monkeypatch):
