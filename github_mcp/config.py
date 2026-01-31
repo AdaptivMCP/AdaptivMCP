@@ -111,8 +111,19 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
         # Keep provider logs strictly single-line and scan-friendly.
         # - Normalize newlines
         # - Collapse all whitespace runs (incl. newlines/tabs) into single spaces
+        # - Normalize common escaped sequences ("\\n", "\\t", ...) which frequently
+        #   show up in JSON-encoded payloads.
         # This avoids log viewers showing escaped \n or other backslash-heavy sequences.
+        s = s.replace("`", "'")
         s = s.replace("\r\n", "\n").replace("\r", "\n")
+        # If payloads already contain escaped sequences (e.g. "foo\\nbar"),
+        # normalize them to keep provider logs readable.
+        s = (
+            s.replace(r"\r\n", " ")
+            .replace(r"\r", " ")
+            .replace(r"\n", " ")
+            .replace(r"\t", " ")
+        )
         s = s.replace("\n", " ").replace("\t", " ")
         s = re.sub(r"\s+", " ", s).strip()
         if max_str_cfg > 0 and len(s) > max_str_cfg:
