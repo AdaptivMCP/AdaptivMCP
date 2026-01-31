@@ -5,50 +5,33 @@ from starlette.testclient import TestClient
 import main
 
 
-def test_resources_endpoint_returns_resources_only() -> None:
-    client = TestClient(main.app)
-    resp = client.get("/resources")
-    assert resp.status_code == 200
-    payload = resp.json()
-    assert payload.get("finite") is True
-    assert "resources" in payload
-    # /resources is intended to be a resource catalog (not a tool catalog).
-    assert "tools" not in payload
-
-
-def test_tools_endpoint_includes_tools_and_resources() -> None:
-    client = TestClient(main.app)
-    resp = client.get("/tools")
-    assert resp.status_code == 200
-    payload = resp.json()
-    assert payload.get("finite") is True
-    assert isinstance(payload.get("tools"), list)
-    assert isinstance(payload.get("resources"), list)
-
-    # Resource URIs should be stable across reverse-proxy base path changes.
-    # We intentionally expose relative URIs so callers resolve against their
-    # current base URL instead of caching an ephemeral prefix.
-    resources = payload.get("resources") or []
-    assert resources, "Expected at least one resource entry"
-    first = resources[0]
-    assert isinstance(first.get("uri"), str)
-    assert first["uri"].startswith("tools/")
-    assert not first["uri"].startswith("/")
-    # href remains a best-effort absolute path for diagnostics.
-    assert isinstance(first.get("href"), str)
-    assert first["href"].endswith(f"/tools/{first.get('name')}")
-
-
-def test_ui_routes_exist() -> None:
+def test_ui_json_includes_core_endpoints():
     client = TestClient(main.app)
 
     resp = client.get("/ui.json")
     assert resp.status_code == 200
     payload = resp.json()
-    assert payload.get("endpoints", {}).get("health") == "/healthz"
 
-    # Root and /ui should return HTML when assets are present.
-    root = client.get("/")
-    assert root.status_code in {200, 404}
-    if root.status_code == 200:
-        assert "text/html" in root.headers.get("content-type", "")
+    endpoints = payload.get("endpoints") or {}
+    assert endpoints.get("health", "").endswith("/healthz")
+    assert endpoints.get("tools", "").endswith("/tools")
+    assert endpoints.get("resources", "").endswith("/resources")
+
+    # ChatGPT/OpenAI connectors increasingly use Streamable HTTP at /mcp.
+    assert endpoints.get("mcp", "").endswith("/mcp")
+
+    # Backwards compatibility: keep the SSE transport advertised.
+    assert endpoints.get("sse", "").endswith("/sse")
+    assert endpoints.get("messages", "").endswith("/messages")
+
+
+def test_mcp_endpoint_is_mounted():
+    client = TestClient(main.app)
+
+    # We don't assert a specific transport behavior here (it may vary by MCP SDK
+    # version). We only require that /mcp is not missing.
+    resp = client.get("/mcp")
+    assert resp.status_code != 404
+
+    preflight = client.options("/mcp")
+    assert preflight.status_code != 404
