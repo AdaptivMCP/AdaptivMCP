@@ -78,8 +78,6 @@ def _normalize_limit(
             limit = int(limit)
     if not isinstance(limit, int):
         raise TypeError(f"{name} must be an integer")
-    if limit < min_value or limit > max_value:
-        raise ValueError(f"{name} must be between {min_value} and {max_value}")
     return limit
 
 
@@ -130,7 +128,7 @@ async def list_render_owners(
 
     Args:
       cursor: Optional pagination cursor from a previous response.
-      limit: Page size (clamped to [1, 100]).
+      limit: Page size to request.
     """
 
     params: dict[str, Any] = {
@@ -154,7 +152,7 @@ async def list_render_services(
     Args:
       owner_id: Optional Render owner/workspace id.
       cursor: Optional pagination cursor from a previous response.
-      limit: Page size (clamped to [1, 100]).
+      limit: Page size to request.
     """
 
     params: dict[str, Any] = {
@@ -186,7 +184,7 @@ async def list_render_deploys(
     Args:
       service_id: Render service id.
       cursor: Optional pagination cursor.
-      limit: Page size (clamped to [1, 100]).
+      limit: Page size to request.
     """
 
     service_id = _require_non_empty_str("service_id", service_id)
@@ -321,7 +319,7 @@ async def list_render_logs(
       resources: One or more Render resource ids (service/job/postgres/etc.).
       start_time/end_time: ISO8601 timestamps (examples: 2026-01-14T12:34:56Z).
       direction: "backward" (default) or "forward".
-      limit: Max log lines to return (must be between 1 and 1000).
+      limit: Max log lines to return.
 
     Optional filters are best-effort and passed through when present.
     """
