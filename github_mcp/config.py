@@ -385,10 +385,26 @@ def _default_workspace_base_dir() -> str:
     return os.path.join(base_dir, "mcp-github-workspaces")
 
 
-WORKSPACE_BASE_DIR = os.environ.get(
-    "MCP_WORKSPACE_BASE_DIR",
-    _default_workspace_base_dir(),
-)
+def _resolve_workspace_base_dir() -> str:
+    """Resolve the workspace base dir.
+
+    Important nuance: some deployment platforms can set environment variables
+    to the empty string. Treat empty/whitespace values as "unset" so we do not
+    accidentally build *relative* workspace paths.
+    """
+
+    raw = os.environ.get("MCP_WORKSPACE_BASE_DIR")
+    if raw is None or not str(raw).strip():
+        base_dir = _default_workspace_base_dir()
+    else:
+        # Support "~" and "$VAR" in env-provided paths.
+        base_dir = os.path.expanduser(os.path.expandvars(str(raw).strip()))
+
+    # Ensure an absolute path so repo mirrors never resolve relative to CWD.
+    return os.path.abspath(base_dir)
+
+
+WORKSPACE_BASE_DIR = _resolve_workspace_base_dir()
 
 # NOTE: For outbound HTTP (GitHub/Render), timeouts are configurable via env.
 # Semantics:
