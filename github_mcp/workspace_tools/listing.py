@@ -237,7 +237,6 @@ async def list_workspace_files(
                     "max_depth": max_depth,
                 }
 
-
         # If path points to a file, return that file (subject to include_hidden).
         if os.path.isfile(start):
             rp = os.path.relpath(start, root)
