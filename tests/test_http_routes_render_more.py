@@ -66,7 +66,11 @@ def test_render_deploy_create_invalid_json_body_defaults(monkeypatch) -> None:
     monkeypatch.setattr("github_mcp.main_tools.render.create_render_deploy", _create)
 
     client = TestClient(main.app)
-    resp = client.post("/render/services/svc123/deploys", data="not-json")
+    resp = client.post(
+        "/render/services/svc123/deploys",
+        content="not-json",
+        headers={"content-type": "application/json"},
+    )
     assert resp.status_code == 200
     assert resp.json()["json"]["deploy"] == "d1"
     assert observed["service_id"] == "svc123"

@@ -855,6 +855,7 @@ register_render_routes(app)
 register_session_routes(app)
 register_llm_execute_routes(app)
 
+
 def _register_mcp_method_fallbacks(app_instance: Any) -> None:
     """Register GET/OPTIONS fallbacks for FastMCP transport endpoints.
 
@@ -906,7 +907,6 @@ def _register_mcp_method_fallbacks(app_instance: Any) -> None:
 
 
 _register_mcp_method_fallbacks(app)
-
 
 
 def _reset_file_cache_for_tests() -> None:
