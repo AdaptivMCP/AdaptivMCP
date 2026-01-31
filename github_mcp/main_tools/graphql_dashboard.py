@@ -517,7 +517,7 @@ async def list_recent_failures_graphql(
     if limit <= 0:
         raise ValueError("limit must be > 0")
 
-    per_page = min(max(limit, 10), 50)
+    per_page = limit
 
     runs_payload = await list_workflow_runs_graphql(
         full_name=full_name,
