@@ -11,7 +11,7 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 from urllib.parse import parse_qs
 
 import anyio
@@ -789,6 +789,160 @@ else:
     app = Starlette()
 
 
+def _register_mcp_fallback_route(app_instance: Any) -> None:
+    """Ensure /mcp exists even if streamable transport isn't available.
+
+    Some deployments pin MCP SDK versions that do not expose the Streamable HTTP
+    transport. Connector flows may still probe `/mcp` with GET/OPTIONS, so we
+    provide a non-404 fallback that points to `/sse` + `/messages`.
+    """
+
+    if app_instance is None or not callable(getattr(app_instance, "add_route", None)):
+        return
+
+    for route in getattr(app_instance, "routes", []) or []:
+        if getattr(route, "path", None) in {"/mcp", "/mcp/"}:
+            return
+
+    async def _mcp_options(_request) -> Response:
+        return Response(
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Max-Age": "86400",
+                "Cache-Control": "no-store",
+            },
+        )
+
+    async def _mcp_probe(_request) -> Response:
+        return JSONResponse(
+            {
+                "ok": False,
+                "endpoint": "/mcp",
+                "reason": "streamable-http-unavailable",
+                "hint": "Streamable HTTP MCP is not available here. Use /sse + /messages.",
+                "alternates": {"sse": "/sse", "messages": "/messages"},
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def _mcp_not_supported(_request) -> Response:
+        return JSONResponse(
+            {
+                "ok": False,
+                "endpoint": "/mcp",
+                "reason": "streamable-http-unavailable",
+                "hint": "Configure your client for /sse + /messages.",
+            },
+            status_code=501,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    for path in ("/mcp", "/mcp/"):
+        app_instance.add_route(path, _mcp_options, methods=["OPTIONS"])
+        app_instance.add_route(path, _mcp_probe, methods=["GET", "HEAD"])
+        app_instance.add_route(path, _mcp_not_supported, methods=["POST"])
+
+
+def _try_mount_streamable_http(app_instance: Any) -> None:
+    """Mount Streamable HTTP at /mcp for ChatGPT-style MCP clients.
+
+    The server historically exposed only SSE transport at ``/sse`` (plus
+    ``/messages``). OpenAI/ChatGPT MCP connector guidance increasingly
+    references the Streamable HTTP transport at ``/mcp``.
+
+    We keep ``/sse`` working for existing clients while also providing ``/mcp``.
+    """
+
+    if app_instance is None:
+        return
+
+    mcp = getattr(server, "mcp", None)
+    http_app_factory = getattr(mcp, "http_app", None)
+    if not callable(http_app_factory):
+        _register_mcp_fallback_route(app_instance)
+        return
+
+    def _build_streamable_app() -> Optional[Any]:
+        # Different SDK versions have used different transport names.
+        for transport in ("streamable-http", "streamable_http", "http"):
+            # Prefer an app rooted at '/' so it can be mounted under '/mcp'.
+            for kwargs in (
+                {"path": "/", "transport": transport},
+                {"transport": transport},
+                {"path": "/"},
+                {},
+            ):
+                try:
+                    return http_app_factory(**kwargs)
+                except TypeError:
+                    continue
+                except Exception:
+                    continue
+        return None
+
+    streamable_app = _build_streamable_app()
+    if streamable_app is None:
+        _register_mcp_fallback_route(app_instance)
+        return
+
+    # Avoid double-mounting if a higher-level wrapper already attached /mcp.
+    for route in getattr(app_instance, "routes", []) or []:
+        if getattr(route, "path", None) == "/mcp":
+            return
+
+    try:
+        app_instance.mount("/mcp", streamable_app, name="mcp")
+    except Exception:
+        _register_mcp_fallback_route(app_instance)
+        return
+
+    def _has_method(path: str, method: str) -> bool:
+        for r in getattr(streamable_app, "routes", []) or []:
+            if getattr(r, "path", None) != path:
+                continue
+            methods = getattr(r, "methods", None) or set()
+            if method in methods:
+                return True
+        return False
+
+    # Provide permissive CORS preflight for connectors and load balancers.
+    if not _has_method("/", "OPTIONS"):
+
+        async def _options(_request) -> Response:
+            return Response(
+                status_code=204,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Max-Age": "86400",
+                    "Cache-Control": "no-store",
+                },
+            )
+
+        streamable_app.add_route("/", _options, methods=["OPTIONS"])
+
+    # Some environments probe /mcp with GET/HEAD.
+    if not _has_method("/", "GET") and not _has_method("/", "HEAD"):
+
+        async def _probe(_request) -> Response:
+            return JSONResponse(
+                {
+                    "ok": True,
+                    "transport": "streamable-http",
+                    "endpoint": "/mcp",
+                    "hint": "Use this endpoint as the MCP server_url for ChatGPT/OpenAI connectors.",
+                    "alternates": {"sse": "/sse", "messages": "/messages"},
+                },
+                headers={"Cache-Control": "no-store"},
+            )
+
+        streamable_app.add_route("/", _probe, methods=["GET", "HEAD"])
+
+
 def _configure_trusted_hosts(app_instance) -> None:
     del app_instance
     return
@@ -796,6 +950,8 @@ def _configure_trusted_hosts(app_instance) -> None:
 
 if app is not None:
     _configure_trusted_hosts(app)
+if app is not None:
+    _try_mount_streamable_http(app)
 if app is not None:
     app.add_middleware(_CacheControlMiddleware)
 if app is not None:
