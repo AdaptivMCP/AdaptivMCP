@@ -43,6 +43,7 @@ from github_mcp.config import (
     LOG_RENDER_HTTP_BODIES,  # noqa: F401
     MAX_CONCURRENCY,
     WORKSPACE_BASE_DIR,  # noqa: F401
+    _sanitize_for_logs,
     shorten_token,
 )
 from github_mcp.exceptions import (
@@ -321,28 +322,8 @@ class _RequestContextMiddleware:
                 }
             )
 
-        def _sanitize_log_text(text: str) -> str:
-            """Sanitize strings that may be rendered verbatim by log sinks.
-
-            We collapse all whitespace (including newlines/tabs) into single
-            spaces and remove backticks to avoid markdown/code-fence rendering
-            in some log viewers.
-            """
-
-            return " ".join(text.replace("`", "'").split())
-
-        def _sanitize_log_value(value: Any) -> Any:
-            """Recursively sanitize log payloads while keeping structure."""
-
-            if isinstance(value, str):
-                return _sanitize_log_text(value)
-            if isinstance(value, dict):
-                return {k: _sanitize_log_value(v) for k, v in value.items()}
-            if isinstance(value, list):
-                return [_sanitize_log_value(v) for v in value]
-            return value
-
         def _emit_http_request(payload: dict[str, Any]) -> None:
+            payload = _sanitize_for_logs(payload)  # type: ignore[assignment]
             duration_ms = payload.get("duration_ms", 0)
             status_code = payload.get("status_code")
             # When we know the formatter will append a structured extras block
@@ -370,6 +351,7 @@ class _RequestContextMiddleware:
                 )
 
         def _emit_http_exception(payload: dict[str, Any], exc: Exception) -> None:
+            payload = _sanitize_for_logs(payload)  # type: ignore[assignment]
             duration_ms = payload.get("duration_ms", 0)
             # Same strategy as http_request: when extras are appended, avoid
             # embedding redundant key=value pairs in the message.
@@ -451,7 +433,7 @@ class _RequestContextMiddleware:
                         try:
                             decoded = captured_body.decode("utf-8", errors="replace")
                             try:
-                                payload["request_json"] = _sanitize_log_value(
+                                payload["request_json"] = _sanitize_for_logs(
                                     json.loads(decoded)
                                 )
                             except Exception:
@@ -461,7 +443,7 @@ class _RequestContextMiddleware:
                                         f"<bytes len={len(captured_body)}>"
                                     )
                                 else:
-                                    payload["request_body"] = _sanitize_log_text(
+                                    payload["request_body"] = _sanitize_for_logs(
                                         decoded
                                     )
                         except Exception:
@@ -480,7 +462,7 @@ class _RequestContextMiddleware:
                         try:
                             decoded = resp_bytes.decode("utf-8", errors="replace")
                             try:
-                                payload["response_json"] = _sanitize_log_value(
+                                payload["response_json"] = _sanitize_for_logs(
                                     json.loads(decoded)
                                 )
                             except Exception:
@@ -489,7 +471,7 @@ class _RequestContextMiddleware:
                                         f"<bytes len={len(resp_bytes)}>"
                                     )
                                 else:
-                                    payload["response_body"] = _sanitize_log_text(
+                                    payload["response_body"] = _sanitize_for_logs(
                                         decoded
                                     )
                         except Exception:

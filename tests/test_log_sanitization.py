@@ -11,6 +11,15 @@ def test_sanitize_for_logs_collapses_whitespace(monkeypatch):
     assert out == "hello world from logs"
 
 
+def test_sanitize_for_logs_collapses_escaped_sequences(monkeypatch):
+    monkeypatch.delenv("ADAPTIV_MCP_LOG_FULL_FIDELITY", raising=False)
+
+    from github_mcp import config
+
+    out = config._sanitize_for_logs(r"hello\nworld\tfrom\r\nlogs")
+    assert out == "hello world from logs"
+
+
 def test_sanitize_for_logs_bytes_decoded_single_line(monkeypatch):
     monkeypatch.delenv("ADAPTIV_MCP_LOG_FULL_FIDELITY", raising=False)
 
