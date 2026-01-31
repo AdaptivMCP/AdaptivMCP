@@ -408,7 +408,10 @@ def list_resources(
     This is intentionally lightweight and supports pagination.
 
     Args:
-        base_path: Optional prefix prepended to each resource URI.
+        base_path: Optional HTTP prefix used to populate `href`.
+            The canonical `uri` field is kept relative ("tools/<name>") so
+            clients do not get stuck with stale absolute URLs when deployments
+            are mounted under ephemeral reverse-proxy prefixes.
         include_parameters: When True, include the tool input schema for each
             returned resource. This can be expensive for very large catalogs;
             consider paginating via cursor/limit.
@@ -420,6 +423,7 @@ def list_resources(
     m = _main()
     compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
     prefix = _normalize_base_path(base_path)
+    href_prefix = f"{prefix}/tools" if prefix else "/tools"
 
     # Validate + clamp pagination inputs.
     try:
@@ -492,7 +496,19 @@ def list_resources(
     for entry in page:
         name = entry["name"]
         resource: dict[str, Any] = {
-            "uri": f"{prefix}/tools/{name}",
+            # NOTE: Keep URIs stable across reverse-proxy path rewrites.
+            #
+            # Some deployments mount the service under an ephemeral path prefix
+            # (for example a per-link id). If we bake that prefix into the
+            # canonical `uri`, clients that cache the catalog can later fail to
+            # resolve resources when the prefix changes mid-session.
+            #
+            # We therefore expose `uri` as a relative path and provide `href`
+            # (plus a legacy absolute variant) for callers that need it.
+            "uri": f"tools/{name}",
+            "href": f"{href_prefix}/{name}",
+            "legacy_uri": f"{prefix}/tools/{name}",
+            "legacyUri": f"{prefix}/tools/{name}",
             "name": name,
             "mimeType": "application/json",
         }
