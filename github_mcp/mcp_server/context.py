@@ -288,16 +288,47 @@ def _resolve_transport_security() -> Any:
     return None
 
 
+# ------------------------------------------------------------------------------
+# Server identity (exposed to clients)
+# ------------------------------------------------------------------------------
+
+SERVER_NAME = os.environ.get("ADAPTIV_MCP_SERVER_NAME", "Adaptiv MCP")
+
+_raw_version = (
+    os.environ.get("ADAPTIV_MCP_SERVER_VERSION")
+    or os.environ.get("ADAPTIV_MCP_VERSION")
+    or os.environ.get("RENDER_GIT_COMMIT")
+    or os.environ.get("GITHUB_SHA")
+    or os.environ.get("COMMIT_SHA")
+    or "dev"
+)
+SERVER_VERSION = _raw_version.strip() if isinstance(_raw_version, str) else "dev"
+if re.fullmatch(r"[0-9a-fA-F]{7,40}", SERVER_VERSION):
+    SERVER_VERSION = f"git-{SERVER_VERSION[:12].lower()}"
+
+
+def _apply_server_identity(server_obj: object | None) -> None:
+    if server_obj is None:
+        return
+    try:
+        setattr(server_obj, "name", SERVER_NAME)
+        setattr(server_obj, "version", SERVER_VERSION)
+    except Exception:
+        return
+
+
 try:
     from mcp.server.fastmcp import FastMCP  # type: ignore
 
     FASTMCP_AVAILABLE = True
 
     mcp = FastMCP(
-        "Adaptiv MCP Custom Connector",
+        SERVER_NAME,
         host=os.environ.get("FASTMCP_HOST", "0.0.0.0"),  # nosec B104
         transport_security=_resolve_transport_security(),
     )
+
+    _apply_server_identity(getattr(mcp, "_mcp_server", None))
 except Exception as exc:  # pragma: no cover - used when dependency missing
     FASTMCP_AVAILABLE = False
     missing_exc = exc
