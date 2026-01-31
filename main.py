@@ -18,7 +18,7 @@ import anyio
 import httpx  # noqa: F401
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.staticfiles import StaticFiles
 
 import github_mcp.server as server  # noqa: F401
@@ -854,6 +854,59 @@ register_ui_routes(app)
 register_render_routes(app)
 register_session_routes(app)
 register_llm_execute_routes(app)
+
+def _register_mcp_method_fallbacks(app_instance: Any) -> None:
+    """Register GET/OPTIONS fallbacks for FastMCP transport endpoints.
+
+    Some upstream probes and load balancers send GET/HEAD/OPTIONS requests to
+    MCP transport endpoints (notably ``/messages`` and ``/sse``). FastMCP only
+    registers the strict transport methods (POST for messages, GET for SSE), so
+    these probes can generate noisy 405 responses and, in some environments,
+    interfere with client capability checks.
+
+    These lightweight handlers avoid 405s while keeping the real transport
+    behavior unchanged.
+    """
+
+    def _preflight(allow_methods: str) -> Response:
+        return Response(
+            status_code=204,
+            headers={
+                # Keep this permissive: most callers are non-browser probes,
+                # but allowing CORS preflight avoids surprising failures.
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": allow_methods,
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Max-Age": "600",
+            },
+        )
+
+    async def _messages_get(_request) -> Response:
+        return JSONResponse(
+            {
+                "ok": True,
+                "endpoint": "/messages",
+                "method": "POST",
+                "note": "MCP JSON-RPC endpoint. Send requests via POST.",
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def _messages_options(_request) -> Response:
+        return _preflight("POST, OPTIONS, GET")
+
+    async def _sse_options(_request) -> Response:
+        return _preflight("GET, OPTIONS")
+
+    # FastMCP provides /messages (POST) and /sse (GET). Add method-specific
+    # fallbacks without overriding the primary handlers.
+    app_instance.add_route("/messages", _messages_get, methods=["GET", "HEAD"])
+    app_instance.add_route("/messages", _messages_options, methods=["OPTIONS"])
+    app_instance.add_route("/sse", _sse_options, methods=["OPTIONS"])
+
+
+_register_mcp_method_fallbacks(app)
+
 
 
 def _reset_file_cache_for_tests() -> None:
