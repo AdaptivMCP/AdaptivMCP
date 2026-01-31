@@ -123,7 +123,34 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
         if v is None or isinstance(v, (bool, int, float)):
             return v
         if isinstance(v, str):
+            # _jsonable() decodes bytes into strings using errors="replace".
+            # If that produced replacement characters or embedded control chars
+            # (common with binary payloads), keep logs compact.
+            if "\ufffd" in v or any(
+                (ord(ch) < 32 and ch not in ("\t", "\n", "\r")) or ord(ch) == 127
+                for ch in v
+            ):
+                return f"<bytes len={len(v)}>"
             return _clip_str(v)
+
+        # Avoid Python's bytes repr (e.g. b"foo\\nbar") which is noisy in logs
+        # and tends to introduce lots of backslashes/escape sequences.
+        if isinstance(v, (bytes, bytearray, memoryview)):
+            try:
+                bb = v.tobytes() if isinstance(v, memoryview) else bytes(v)
+                if not bb:
+                    return ""
+                decoded = bb.decode("utf-8", errors="replace")
+                # Treat NUL bytes or decode replacement chars as binary/garbage.
+                if "\x00" in decoded or "\ufffd" in decoded:
+                    return f"<bytes len={len(bb)}>"
+                return _clip_str(decoded)
+            except Exception:
+                try:
+                    ln = len(v)  # type: ignore[arg-type]
+                except Exception:
+                    ln = 0
+                return f"<bytes len={ln}>" if ln else "<bytes>"
 
         if d >= max(0, max_depth_cfg):
             try:
