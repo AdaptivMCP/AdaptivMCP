@@ -145,6 +145,26 @@ workspace_sync_bidirectional = _git_ops.workspace_sync_bidirectional
 workspace_git_status = _git_worktree.workspace_git_status
 workspace_git_stage = _git_worktree.workspace_git_stage
 workspace_git_unstage = _git_worktree.workspace_git_unstage
+workspace_git_log = _git_worktree.workspace_git_log
+workspace_git_show = _git_worktree.workspace_git_show
+workspace_git_blame = _git_worktree.workspace_git_blame
+workspace_git_branches = _git_worktree.workspace_git_branches
+workspace_git_tags = _git_worktree.workspace_git_tags
+workspace_git_stash_list = _git_worktree.workspace_git_stash_list
+workspace_git_stash_save = _git_worktree.workspace_git_stash_save
+workspace_git_stash_pop = _git_worktree.workspace_git_stash_pop
+workspace_git_stash_apply = _git_worktree.workspace_git_stash_apply
+workspace_git_stash_drop = _git_worktree.workspace_git_stash_drop
+workspace_git_checkout = _git_worktree.workspace_git_checkout
+workspace_git_commit = _git_worktree.workspace_git_commit
+workspace_git_fetch = _git_worktree.workspace_git_fetch
+workspace_git_reset = _git_worktree.workspace_git_reset
+workspace_git_clean = _git_worktree.workspace_git_clean
+workspace_git_restore = _git_worktree.workspace_git_restore
+workspace_git_merge = _git_worktree.workspace_git_merge
+workspace_git_rebase = _git_worktree.workspace_git_rebase
+workspace_git_cherry_pick = _git_worktree.workspace_git_cherry_pick
+workspace_git_revert = _git_worktree.workspace_git_revert
 workspace_git_pull = _git_worktree.workspace_git_pull
 workspace_git_push = _git_worktree.workspace_git_push
 workspace_open_pr_from_workspace = _git_worktree.workspace_open_pr_from_workspace
@@ -229,6 +249,7 @@ __all__ = [
     "list_workspace_files",
     "search_workspace",
     "find_workspace_paths",
+    "scan_workspace_tree",
     "rg_list_workspace_files",
     "rg_search_workspace",
     "render_shell",
@@ -245,6 +266,26 @@ __all__ = [
     "workspace_git_status",
     "workspace_git_stage",
     "workspace_git_unstage",
+    "workspace_git_log",
+    "workspace_git_show",
+    "workspace_git_blame",
+    "workspace_git_branches",
+    "workspace_git_tags",
+    "workspace_git_stash_list",
+    "workspace_git_stash_save",
+    "workspace_git_stash_pop",
+    "workspace_git_stash_apply",
+    "workspace_git_stash_drop",
+    "workspace_git_checkout",
+    "workspace_git_commit",
+    "workspace_git_fetch",
+    "workspace_git_reset",
+    "workspace_git_clean",
+    "workspace_git_restore",
+    "workspace_git_merge",
+    "workspace_git_rebase",
+    "workspace_git_cherry_pick",
+    "workspace_git_revert",
     "workspace_git_pull",
     "workspace_git_push",
     "workspace_open_pr_from_workspace",
