@@ -188,4 +188,3 @@ async def test_commit_and_open_pr_wraps_unexpected_exception(
     assert result["ok"] is False
     assert result.get("context") == "commit_and_open_pr_from_workspace"
     assert "unexpected" in result.get("error", "")
-

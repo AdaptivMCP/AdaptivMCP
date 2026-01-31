@@ -24,7 +24,9 @@ def test_extract_trailing_int_non_digit_suffix() -> None:
     assert _extract_trailing_int("-123") == 123  # scans digits only
 
 
-def test_extract_trailing_int_int_conversion_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_extract_trailing_int_int_conversion_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Force the int(...) conversion to raise to hit the defensive except branch.
     import github_mcp.main_tools.handles as handles_mod
 
@@ -58,9 +60,7 @@ def test_parse_handle_plain_digits() -> None:
 
 
 def test_parse_handle_urls_and_freeform() -> None:
-    assert (
-        parse_handle("https://github.com/o/r/issues/99").canonical == "#99"
-    )
+    assert parse_handle("https://github.com/o/r/issues/99").canonical == "#99"
     assert parse_handle("issue #77").canonical == "#77"
     assert parse_handle("https://github.com/o/r/pull/55").number == 55
     assert parse_handle("no number here").canonical == "no number here"
@@ -70,4 +70,3 @@ def test_coerce_issue_or_pr_number() -> None:
     assert coerce_issue_or_pr_number("#1") == 1
     assert coerce_issue_or_pr_number("https://x/y/2") == 2
     assert coerce_issue_or_pr_number("abc") is None
-

@@ -15,13 +15,17 @@ def test_workspace_read_text_limited_missing(tmp_path: pytest.TempPathFactory) -
     assert res["truncated"] is False
 
 
-def test_workspace_read_text_limited_binary_detection(tmp_path: pytest.TempPathFactory) -> None:
+def test_workspace_read_text_limited_binary_detection(
+    tmp_path: pytest.TempPathFactory,
+) -> None:
     repo_dir = str(tmp_path)
     p = os.path.join(repo_dir, "bin.dat")
     with open(p, "wb") as f:
         f.write(b"ABC\x00DEF" * 100)
 
-    res = fs._workspace_read_text_limited(repo_dir, "bin.dat", max_chars=10, max_bytes=64)
+    res = fs._workspace_read_text_limited(
+        repo_dir, "bin.dat", max_chars=10, max_bytes=64
+    )
     assert res["exists"] is True
     assert res["encoding"] == "binary"
     assert res.get("is_binary") is True
@@ -32,14 +36,18 @@ def test_workspace_read_text_limited_binary_detection(tmp_path: pytest.TempPathF
     assert res["truncated_chars"] is False
 
 
-def test_workspace_read_text_limited_text_decode_and_truncation(tmp_path: pytest.TempPathFactory) -> None:
+def test_workspace_read_text_limited_text_decode_and_truncation(
+    tmp_path: pytest.TempPathFactory,
+) -> None:
     repo_dir = str(tmp_path)
     p = os.path.join(repo_dir, "bad.txt")
     # Invalid UTF-8 to trigger replacement decode.
     with open(p, "wb") as f:
         f.write(b"hello\n" + b"\xff\xfe\xff" + b"world\n")
 
-    res = fs._workspace_read_text_limited(repo_dir, "bad.txt", max_chars=6, max_bytes=1024)
+    res = fs._workspace_read_text_limited(
+        repo_dir, "bad.txt", max_chars=6, max_bytes=1024
+    )
     assert res["exists"] is True
     assert res["encoding"] == "utf-8"
     assert res["had_decoding_errors"] is True
@@ -48,10 +56,12 @@ def test_workspace_read_text_limited_text_decode_and_truncation(tmp_path: pytest
     assert len(res["text"]) == 6
 
 
-def test_read_lines_excerpt_truncates_on_char_budget(tmp_path: pytest.TempPathFactory) -> None:
+def test_read_lines_excerpt_truncates_on_char_budget(
+    tmp_path: pytest.TempPathFactory,
+) -> None:
     p = os.path.join(str(tmp_path), "a.txt")
     with open(p, "w", encoding="utf-8") as f:
-        f.write("one\n" "two\n" "three\n")
+        f.write("one\ntwo\nthree\n")
 
     res = fs._read_lines_excerpt(p, start_line=1, max_lines=10, max_chars=5)
     assert res["truncated"] is True
@@ -136,7 +146,9 @@ def test_apply_workspace_operations_write_action_resolver_more() -> None:
     assert fs._apply_workspace_operations_write_action_resolver(None) is True
 
     assert (
-        fs._apply_workspace_operations_write_action_resolver({"preview_only": True, "operations": []})
+        fs._apply_workspace_operations_write_action_resolver(
+            {"preview_only": True, "operations": []}
+        )
         is False
     )
 

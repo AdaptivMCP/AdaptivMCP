@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 
@@ -37,7 +37,9 @@ class FakeClient:
     def queue_send(self, *resps: FakeResp) -> None:
         self._send_queue.extend(resps)
 
-    def build_request(self, method: str, path: str, headers: dict[str, str] | None = None):
+    def build_request(
+        self, method: str, path: str, headers: dict[str, str] | None = None
+    ):
         # Just return a small, inspectable payload.
         return {"method": method, "path": path, "headers": headers or {}}
 
@@ -99,7 +101,9 @@ class FakeMain:
     def _github_client_instance(self):
         return self.client
 
-    async def _github_request(self, method: str, path: str, params: dict[str, Any] | None = None):
+    async def _github_request(
+        self, method: str, path: str, params: dict[str, Any] | None = None
+    ):
         self._github_request_calls.append((method, path, params))
         return {"method": method, "path": path, "params": params or {}, "json": {}}
 
@@ -115,9 +119,16 @@ class FakeMain:
     def queue_list_workflow_run_jobs(self, *responses: dict[str, Any]) -> None:
         self._list_jobs_queue.extend(responses)
 
-    async def list_workflow_run_jobs(self, full_name: str, run_id: int, per_page: int = 30, page: int = 1):
+    async def list_workflow_run_jobs(
+        self, full_name: str, run_id: int, per_page: int = 30, page: int = 1
+    ):
         self._list_jobs_calls.append(
-            {"full_name": full_name, "run_id": run_id, "per_page": per_page, "page": page}
+            {
+                "full_name": full_name,
+                "run_id": run_id,
+                "per_page": per_page,
+                "page": page,
+            }
         )
         if self._list_jobs_queue:
             return self._list_jobs_queue.pop(0)
@@ -151,7 +162,17 @@ async def test_list_workflow_runs_builds_params_and_validates(monkeypatch):
 
     assert out["path"].endswith("/repos/o/r/actions/runs")
     assert fake._github_request_calls == [
-        ("GET", "/repos/o/r/actions/runs", {"per_page": 5, "page": 2, "branch": "main", "status": "completed", "event": "push"})
+        (
+            "GET",
+            "/repos/o/r/actions/runs",
+            {
+                "per_page": 5,
+                "page": 2,
+                "branch": "main",
+                "status": "completed",
+                "event": "push",
+            },
+        )
     ]
 
     with pytest.raises(ValueError):
@@ -173,13 +194,43 @@ async def test_list_recent_failures_filters_and_limits(monkeypatch):
         {
             "json": {
                 "workflow_runs": [
-                    {"id": 1, "status": "completed", "conclusion": "success", "name": "ok"},
-                    {"id": 2, "status": "completed", "conclusion": "failure", "name": "bad"},
-                    {"id": 3, "status": "completed", "conclusion": "neutral", "name": "neutral"},
-                    {"id": 4, "status": "in_progress", "conclusion": None, "name": "running"},
-                    {"id": 5, "status": "completed", "conclusion": "cancelled", "name": "cancel"},
+                    {
+                        "id": 1,
+                        "status": "completed",
+                        "conclusion": "success",
+                        "name": "ok",
+                    },
+                    {
+                        "id": 2,
+                        "status": "completed",
+                        "conclusion": "failure",
+                        "name": "bad",
+                    },
+                    {
+                        "id": 3,
+                        "status": "completed",
+                        "conclusion": "neutral",
+                        "name": "neutral",
+                    },
+                    {
+                        "id": 4,
+                        "status": "in_progress",
+                        "conclusion": None,
+                        "name": "running",
+                    },
+                    {
+                        "id": 5,
+                        "status": "completed",
+                        "conclusion": "cancelled",
+                        "name": "cancel",
+                    },
                     # Included via the second condition (completed + non-success-ish conclusion).
-                    {"id": 6, "status": "completed", "conclusion": "stale", "name": "weird"},
+                    {
+                        "id": 6,
+                        "status": "completed",
+                        "conclusion": "stale",
+                        "name": "weird",
+                    },
                 ]
             }
         }
@@ -338,7 +389,9 @@ async def test_wait_for_workflow_run_completes_and_times_out(monkeypatch):
     # First: completes after one poll.
     fake.client.queue_get(
         FakeResp(status_code=200, json_data={"status": "queued", "conclusion": None}),
-        FakeResp(status_code=200, json_data={"status": "completed", "conclusion": "success"}),
+        FakeResp(
+            status_code=200, json_data={"status": "completed", "conclusion": "success"}
+        ),
     )
 
     out_done = await workflows.wait_for_workflow_run(
@@ -349,9 +402,15 @@ async def test_wait_for_workflow_run_completes_and_times_out(monkeypatch):
 
     # Second: times out (uses > end_time comparison).
     fake.client.queue_get(
-        FakeResp(status_code=200, json_data={"status": "in_progress", "conclusion": None}),
-        FakeResp(status_code=200, json_data={"status": "in_progress", "conclusion": None}),
-        FakeResp(status_code=200, json_data={"status": "in_progress", "conclusion": None}),
+        FakeResp(
+            status_code=200, json_data={"status": "in_progress", "conclusion": None}
+        ),
+        FakeResp(
+            status_code=200, json_data={"status": "in_progress", "conclusion": None}
+        ),
+        FakeResp(
+            status_code=200, json_data={"status": "in_progress", "conclusion": None}
+        ),
     )
 
     loop.now = 0
@@ -378,7 +437,10 @@ async def test_trigger_workflow_dispatch_success_and_failure(monkeypatch):
 
     assert out["status_code"] == 204
     assert fake.client.post_calls == [
-        ("/repos/o/r/actions/workflows/ci.yml/dispatches", {"ref": "main", "inputs": {"b": 2, "a": 1}})
+        (
+            "/repos/o/r/actions/workflows/ci.yml/dispatches",
+            {"ref": "main", "inputs": {"b": 2, "a": 1}},
+        )
     ]
     log = "\n".join(out["controller_log"])
     assert "Inputs keys" in log
@@ -404,8 +466,14 @@ async def test_trigger_and_wait_for_workflow_picks_most_recent(monkeypatch):
     async def _fake_dispatch(full_name: str, workflow: str, ref: str, inputs=None):
         dispatch_calls.append((full_name, workflow, ref))
 
-    async def _fake_wait(full_name: str, run_id: int, timeout_seconds=0, poll_interval_seconds=0):
-        return {"status": "completed", "conclusion": "success", "controller_log": ["done"]}
+    async def _fake_wait(
+        full_name: str, run_id: int, timeout_seconds=0, poll_interval_seconds=0
+    ):
+        return {
+            "status": "completed",
+            "conclusion": "success",
+            "controller_log": ["done"],
+        }
 
     monkeypatch.setattr(workflows, "trigger_workflow_dispatch", _fake_dispatch)
     monkeypatch.setattr(workflows, "wait_for_workflow_run", _fake_wait)
@@ -484,5 +552,9 @@ async def test_trigger_and_wait_for_workflow_raises_when_no_run_found(monkeypatc
 
     with pytest.raises(GitHubAPIError):
         await workflows.trigger_and_wait_for_workflow(
-            "o/r", workflow="ci.yml", ref="main", timeout_seconds=10, poll_interval_seconds=1
+            "o/r",
+            workflow="ci.yml",
+            ref="main",
+            timeout_seconds=10,
+            poll_interval_seconds=1,
         )

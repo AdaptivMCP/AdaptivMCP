@@ -232,10 +232,15 @@ async def get_workspace_changes_summary(
         status_result = await deps["run_shell"](
             "git status --porcelain=v1", cwd=repo_dir, timeout_seconds=t_default
         )
-        if not isinstance(status_result, dict) or status_result.get("exit_code", 0) != 0:
+        if (
+            not isinstance(status_result, dict)
+            or status_result.get("exit_code", 0) != 0
+        ):
             stderr = ""
             if isinstance(status_result, dict):
-                stderr = status_result.get("stderr", "") or status_result.get("stdout", "")
+                stderr = status_result.get("stderr", "") or status_result.get(
+                    "stdout", ""
+                )
             raise GitHubAPIError(f"git status failed: {stderr}")
 
         raw_status = status_result.get("stdout", "")

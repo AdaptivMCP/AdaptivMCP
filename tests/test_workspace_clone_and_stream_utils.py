@@ -37,7 +37,9 @@ class _FakeTW:
         self._deps = deps
         self._base_dir = base_dir
 
-    def _resolve_full_name(self, full_name: str | None, *, owner: str | None, repo: str | None) -> str:
+    def _resolve_full_name(
+        self, full_name: str | None, *, owner: str | None, repo: str | None
+    ) -> str:
         if full_name:
             return full_name
         assert owner and repo
@@ -57,7 +59,9 @@ class _FakeTW:
 
 
 @pytest.mark.anyio
-async def test_ensure_workspace_clone_created_and_reset(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+async def test_ensure_workspace_clone_created_and_reset(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     calls: list[dict[str, Any]] = []
     deps = _FakeDeps(called_with=calls)
     tw = _FakeTW(deps, str(tmp_path))
@@ -79,13 +83,16 @@ async def test_ensure_workspace_clone_created_and_reset(monkeypatch: pytest.Monk
 
 
 @pytest.mark.anyio
-async def test_ensure_workspace_clone_resolves_owner_repo(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+async def test_ensure_workspace_clone_resolves_owner_repo(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     calls: list[dict[str, Any]] = []
     deps = _FakeDeps(called_with=calls)
     tw = _FakeTW(deps, str(tmp_path))
     monkeypatch.setattr(clone_mod, "_tw", lambda: tw)
 
-    res = await clone_mod.ensure_workspace_clone(None, owner="acme", repo="demo", branch="dev")
+    res = await clone_mod.ensure_workspace_clone(
+        None, owner="acme", repo="demo", branch="dev"
+    )
     assert res["ref"] == "dev"
     assert calls[-1]["full_name"] == "acme/demo"
-

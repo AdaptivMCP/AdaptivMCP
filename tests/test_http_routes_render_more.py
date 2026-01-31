@@ -87,7 +87,9 @@ def test_render_logs_resources_parsing_comma_separated(monkeypatch) -> None:
     observed = {}
 
     async def _logs(owner_id: str, resources: list[str], **kwargs):
-        observed.update({"owner_id": owner_id, "resources": resources, "kwargs": kwargs})
+        observed.update(
+            {"owner_id": owner_id, "resources": resources, "kwargs": kwargs}
+        )
         return {"status_code": 200, "json": {"lines": []}, "headers": {}}
 
     monkeypatch.setattr("github_mcp.main_tools.render.list_render_logs", _logs)
@@ -104,7 +106,9 @@ def test_render_logs_resources_parsing_repeated_params(monkeypatch) -> None:
     observed = {}
 
     async def _logs(owner_id: str, resources: list[str], **kwargs):
-        observed.update({"owner_id": owner_id, "resources": resources, "kwargs": kwargs})
+        observed.update(
+            {"owner_id": owner_id, "resources": resources, "kwargs": kwargs}
+        )
         return {"status_code": 200, "json": {"lines": []}, "headers": {}}
 
     monkeypatch.setattr("github_mcp.main_tools.render.list_render_logs", _logs)
@@ -122,4 +126,3 @@ def test_render_logs_invalid_status_code_returns_400() -> None:
     payload = resp.json()
     detail = payload.get("error_detail") or {}
     assert detail.get("category") == "validation"
-

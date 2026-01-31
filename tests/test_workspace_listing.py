@@ -83,7 +83,9 @@ def test_search_workspace_rejects_absolute_path_outside_repo(tmp_path, monkeypat
     )
 
 
-def test_list_workspace_files_honors_include_hidden_false_for_hidden_file(tmp_path, monkeypatch):
+def test_list_workspace_files_honors_include_hidden_false_for_hidden_file(
+    tmp_path, monkeypatch
+):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     target = repo_dir / ".secret.txt"

@@ -51,10 +51,19 @@ def test_require_non_empty_helpers() -> None:
 
 
 def test_normalize_limit() -> None:
-    assert render_tools._normalize_limit(None, default=20, min_value=1, max_value=100) == 20
-    assert render_tools._normalize_limit(" 7 ", default=20, min_value=1, max_value=100) == 7
+    assert (
+        render_tools._normalize_limit(None, default=20, min_value=1, max_value=100)
+        == 20
+    )
+    assert (
+        render_tools._normalize_limit(" 7 ", default=20, min_value=1, max_value=100)
+        == 7
+    )
     assert render_tools._normalize_limit(0, default=20, min_value=1, max_value=100) == 1
-    assert render_tools._normalize_limit(999, default=20, min_value=1, max_value=100) == 100
+    assert (
+        render_tools._normalize_limit(999, default=20, min_value=1, max_value=100)
+        == 100
+    )
     with pytest.raises(TypeError):
         render_tools._normalize_limit(True, default=20, min_value=1, max_value=100)
     with pytest.raises(TypeError):
@@ -136,7 +145,9 @@ async def test_list_render_logs_validates_and_builds_params(
     observed: dict[str, Any] = {}
 
     async def _fake(method: str, path: str, *, params=None, json_body=None):
-        observed.update({"method": method, "path": path, "params": params, "json_body": json_body})
+        observed.update(
+            {"method": method, "path": path, "params": params, "json_body": json_body}
+        )
         return {"status_code": 200, "json": {"lines": []}, "headers": {}}
 
     monkeypatch.setattr(render_tools, "render_request", _fake)
@@ -193,11 +204,15 @@ async def test_list_render_logs_validates_and_builds_params(
 
 
 @pytest.mark.anyio
-async def test_list_render_endpoints_build_params(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_list_render_endpoints_build_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[dict[str, Any]] = []
 
     async def _fake(method: str, path: str, *, params=None, json_body=None):
-        calls.append({"method": method, "path": path, "params": params, "json_body": json_body})
+        calls.append(
+            {"method": method, "path": path, "params": params, "json_body": json_body}
+        )
         return {"status_code": 200, "json": {"ok": True}, "headers": {}}
 
     monkeypatch.setattr(render_tools, "render_request", _fake)
@@ -223,7 +238,9 @@ async def test_simple_render_service_calls(monkeypatch: pytest.MonkeyPatch) -> N
     calls: list[dict[str, Any]] = []
 
     async def _fake(method: str, path: str, *, params=None, json_body=None):
-        calls.append({"method": method, "path": path, "params": params, "json_body": json_body})
+        calls.append(
+            {"method": method, "path": path, "params": params, "json_body": json_body}
+        )
         return {"status_code": 200, "json": {"ok": True}, "headers": {}}
 
     monkeypatch.setattr(render_tools, "render_request", _fake)
@@ -249,7 +266,9 @@ async def test_env_var_and_patch_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, Any]] = []
 
     async def _fake(method: str, path: str, *, params=None, json_body=None):
-        calls.append({"method": method, "path": path, "params": params, "json_body": json_body})
+        calls.append(
+            {"method": method, "path": path, "params": params, "json_body": json_body}
+        )
         return {"status_code": 200, "json": {"ok": True}, "headers": {}}
 
     monkeypatch.setattr(render_tools, "render_request", _fake)
@@ -337,4 +356,3 @@ async def test_get_render_logs_rejects_job_without_owner_id() -> None:
 
     with pytest.raises(ValueError, match="resource_type must be one of"):
         await render_tools.get_render_logs("other", "x")
-

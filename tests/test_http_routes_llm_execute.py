@@ -50,7 +50,9 @@ def test_llm_execute_executes_calls_and_resolves_file_blocks(monkeypatch) -> Non
     observed: dict[str, object] = {}
 
     async def _execute_tool(tool_name: str, args: dict, *, max_attempts=None):
-        observed.update({"tool_name": tool_name, "args": args, "max_attempts": max_attempts})
+        observed.update(
+            {"tool_name": tool_name, "args": args, "max_attempts": max_attempts}
+        )
         return {"ok": True}, 201, {"x-test": "1"}
 
     monkeypatch.setattr(llm_execute, "_execute_tool", _execute_tool)
@@ -84,7 +86,9 @@ hello world
     assert payload["results"][0]["result"] == {"ok": True}
 
 
-def test_llm_execute_messages_format_filters_non_text_and_coerces_max_calls(monkeypatch) -> None:
+def test_llm_execute_messages_format_filters_non_text_and_coerces_max_calls(
+    monkeypatch,
+) -> None:
     import github_mcp.http_routes.llm_execute as llm_execute
 
     def _extract(texts, *, max_calls: int = 20):

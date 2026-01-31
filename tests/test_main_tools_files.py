@@ -80,7 +80,9 @@ class FakeMain:
             raise FakeGitHubAPIError("Not Found", status_code=404)
         return self.store[key]["sha"]
 
-    async def _github_request(self, method: str, endpoint: str, **kwargs: Any) -> dict[str, Any]:
+    async def _github_request(
+        self, method: str, endpoint: str, **kwargs: Any
+    ) -> dict[str, Any]:
         self.requests.append({"method": method, "endpoint": endpoint, **kwargs})
 
         if method != "DELETE":
@@ -153,7 +155,9 @@ async def test_create_file_existing_raises(fake_main: FakeMain) -> None:
 
 
 @pytest.mark.anyio
-async def test_apply_text_update_and_commit_create_then_update(fake_main: FakeMain) -> None:
+async def test_apply_text_update_and_commit_create_then_update(
+    fake_main: FakeMain,
+) -> None:
     created = await files_mod.apply_text_update_and_commit(
         "acme/repo",
         "new.txt",

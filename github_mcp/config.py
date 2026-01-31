@@ -158,7 +158,6 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
 
 
 def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
-
     if not isinstance(req, Mapping):
         return {}
 
@@ -178,7 +177,6 @@ def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 def snapshot_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
-
     if not isinstance(req, Mapping) or not req:
         return {}
 
@@ -872,7 +870,6 @@ _STANDARD_LOG_FIELDS = set(
 
 
 class _InfoOnlyFilter(logging.Filter):
-
     def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003 - matches logging.Filter
         return record.levelno == logging.INFO
 
