@@ -1,4 +1,5 @@
 import asyncio
+import builtins
 
 from github_mcp.workspace_tools import fs as workspace_fs
 from github_mcp.workspace_tools import listing as workspace_listing
@@ -296,3 +297,178 @@ def test_find_workspace_paths_glob_and_pagination(tmp_path, monkeypatch):
     assert len(page2["results"]) == 1
     assert page2["truncated"] is False
     assert page2["next_cursor"] is None
+
+
+def test_read_workspace_file_sections_paginates_with_overlap(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    p = repo_dir / "lines.txt"
+    p.write_text("".join(f"line-{i}\n" for i in range(1, 31)), encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    # First page: 2 sections, 10 lines each, with 2 lines overlap.
+    page1 = asyncio.run(
+        workspace_fs.read_workspace_file_sections(
+            full_name="octo/example",
+            ref="feature",
+            path="lines.txt",
+            start_line=1,
+            max_sections=2,
+            max_lines_per_section=10,
+            max_chars_per_section=80_000,
+            overlap_lines=2,
+        )
+    )
+    assert page1.get("error") is None
+    sections1 = page1["sections"]
+    assert sections1["truncated"] is True
+    assert sections1["start_line"] == 1
+    assert sections1["end_line"] == 18
+    assert sections1["next_start_line"] == 17
+
+    parts1 = sections1["parts"]
+    assert len(parts1) == 2
+    assert parts1[0]["start_line"] == 1
+    assert parts1[0]["end_line"] == 10
+    assert [x["line"] for x in parts1[0]["lines"]] == list(range(1, 11))
+    assert parts1[1]["start_line"] == 9
+    assert parts1[1]["end_line"] == 18
+    assert [x["line"] for x in parts1[1]["lines"]] == list(range(9, 19))
+
+    # Second page should begin at next_start_line and should not be truncated
+    # once it naturally hits EOF.
+    page2 = asyncio.run(
+        workspace_fs.read_workspace_file_sections(
+            full_name="octo/example",
+            ref="feature",
+            path="lines.txt",
+            start_line=sections1["next_start_line"],
+            max_sections=2,
+            max_lines_per_section=10,
+            max_chars_per_section=80_000,
+            overlap_lines=2,
+        )
+    )
+    assert page2.get("error") is None
+    sections2 = page2["sections"]
+    assert sections2["truncated"] is False
+    assert sections2["start_line"] == 17
+    assert sections2["end_line"] == 30
+    assert sections2["next_start_line"] is None
+
+    parts2 = sections2["parts"]
+    assert len(parts2) == 2
+    assert parts2[0]["start_line"] == 17
+    assert parts2[0]["end_line"] == 26
+    assert [x["line"] for x in parts2[0]["lines"]] == list(range(17, 27))
+    assert parts2[1]["start_line"] == 25
+    assert parts2[1]["end_line"] == 30
+    assert [x["line"] for x in parts2[1]["lines"]] == list(range(25, 31))
+
+
+def test_read_workspace_file_sections_clips_single_long_line(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    p = repo_dir / "long.txt"
+    p.write_text("X" * 50 + "\n", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.read_workspace_file_sections(
+            full_name="octo/example",
+            ref="feature",
+            path="long.txt",
+            start_line=1,
+            max_sections=5,
+            max_lines_per_section=200,
+            max_chars_per_section=10,
+            overlap_lines=0,
+        )
+    )
+    assert result.get("error") is None
+    sections = result["sections"]
+    assert sections["truncated"] is True
+    assert sections["next_start_line"] == 2
+
+    part = sections["parts"][0]
+    assert part["start_line"] == 1
+    assert part["end_line"] == 1
+    assert len(part["lines"]) == 1
+    assert part["lines"][0]["line"] == 1
+    assert part["lines"][0]["truncated"] is True
+    assert len(part["lines"][0]["text"]) == 9  # max_chars_per_section - 1
+
+
+def test_read_workspace_file_sections_clips_within_section_budget(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    p = repo_dir / "clip.txt"
+    p.write_text("".join(["A" * 8 + "\n", "B" * 8 + "\n", "C" * 8 + "\n"]), encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    # With a small section char budget, the second line should be clipped.
+    result = asyncio.run(
+        workspace_fs.read_workspace_file_sections(
+            full_name="octo/example",
+            ref="feature",
+            path="clip.txt",
+            start_line=1,
+            max_sections=1,
+            max_lines_per_section=200,
+            max_chars_per_section=12,
+            overlap_lines=0,
+        )
+    )
+    assert result.get("error") is None
+    sections = result["sections"]
+    assert sections["truncated"] is True
+    # In this edge case, the section budget is exhausted after the first line,
+    # so the implementation returns the first line only and advances by 1.
+    assert sections["next_start_line"] == 2
+
+    part = sections["parts"][0]
+    assert [x["line"] for x in part["lines"]] == [1]
+    assert part["lines"][0]["text"] == "A" * 8
+
+
+def test_read_workspace_file_sections_reports_decode_errors(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    p = repo_dir / "lines.txt"
+    p.write_text("hello\nworld\n", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    real_open = builtins.open
+
+    def fake_open(file, mode="r", *args, **kwargs):
+        # Only poison the *text* read path used by _read_lines_sections.
+        if kwargs.get("encoding") == "utf-8" and kwargs.get("errors") == "replace":
+            raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "forced")
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", fake_open)
+
+    result = asyncio.run(
+        workspace_fs.read_workspace_file_sections(
+            full_name="octo/example",
+            ref="feature",
+            path="lines.txt",
+            start_line=1,
+            max_sections=2,
+            max_lines_per_section=10,
+            max_chars_per_section=80_000,
+            overlap_lines=0,
+        )
+    )
+    assert result.get("error") is None
+    sections = result["sections"]
+    assert sections["had_decoding_errors"] is True
+    assert sections["parts"] == []
