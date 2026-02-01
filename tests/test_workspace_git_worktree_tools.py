@@ -324,3 +324,130 @@ async def test_workspace_git_restore_requires_paths(
     )
 
     assert out["ok"] is False
+
+
+@pytest.mark.anyio
+async def test_workspace_git_tags_parses_rows(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from github_mcp.workspace_tools import git_worktree
+
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    async def clone_repo(
+        _full_name: str, ref: str, preserve_changes: bool = True
+    ) -> str:
+        assert ref == "main"
+        return str(repo_dir)
+
+    async def run_shell(
+        command: str, cwd: str, timeout_seconds: float = 0
+    ) -> dict[str, Any]:
+        assert cwd == str(repo_dir)
+        if command.startswith("git checkout"):
+            return {"exit_code": 0, "stdout": "", "stderr": ""}
+        if command.startswith("git tag"):
+            return {
+                "exit_code": 0,
+                "stdout": "v1.0.0\t" + "a" * 40 + "\t2024-01-01T00:00:00+00:00\n",
+                "stderr": "",
+            }
+        raise AssertionError(f"Unexpected command: {command}")
+
+    class _TW:
+        def _effective_ref_for_repo(self, _full_name: str, ref: str) -> str:
+            return ref
+
+        def _workspace_deps(self) -> dict[str, Any]:
+            return {"clone_repo": clone_repo, "run_shell": run_shell}
+
+    monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
+
+    out = await git_worktree.workspace_git_tags(
+        full_name="octo-org/octo-repo", ref="main", max_entries=1
+    )
+
+    assert out["ok"] is True
+    assert out["tags"][0]["name"] == "v1.0.0"
+    assert "head -n 1" in out["command"]
+
+
+@pytest.mark.anyio
+async def test_workspace_git_stash_list_parses_entries(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from github_mcp.workspace_tools import git_worktree
+
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    async def clone_repo(
+        _full_name: str, ref: str, preserve_changes: bool = True
+    ) -> str:
+        assert ref == "main"
+        return str(repo_dir)
+
+    async def run_shell(
+        command: str, cwd: str, timeout_seconds: float = 0
+    ) -> dict[str, Any]:
+        assert cwd == str(repo_dir)
+        if command.startswith("git checkout"):
+            return {"exit_code": 0, "stdout": "", "stderr": ""}
+        if command.startswith("git stash list"):
+            return {
+                "exit_code": 0,
+                "stdout": "\n".join(
+                    [
+                        "stash@{0}: On main: wip",
+                        "stash@{1}: WIP on feature: msg",
+                        "unexpected-format",
+                    ]
+                ),
+                "stderr": "",
+            }
+        raise AssertionError(f"Unexpected command: {command}")
+
+    class _TW:
+        def _effective_ref_for_repo(self, _full_name: str, ref: str) -> str:
+            return ref
+
+        def _workspace_deps(self) -> dict[str, Any]:
+            return {"clone_repo": clone_repo, "run_shell": run_shell}
+
+    monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
+
+    out = await git_worktree.workspace_git_stash_list(
+        full_name="octo-org/octo-repo", ref="main", max_entries=10
+    )
+
+    assert out["ok"] is True
+    assert out["stashes"][0]["ref"] == "stash@{0}"
+    assert out["stashes"][1]["description"].startswith("WIP on feature")
+    assert out["stashes"][2]["ref"] is None
+
+
+@pytest.mark.anyio
+async def test_workspace_git_reset_rejects_invalid_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.workspace_tools import git_worktree
+
+    class _TW:
+        def _effective_ref_for_repo(self, _full_name: str, ref: str) -> str:
+            raise AssertionError("should not resolve ref for invalid mode")
+
+        def _workspace_deps(self) -> dict[str, Any]:
+            raise AssertionError("deps should not be called for invalid mode")
+
+    monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
+
+    out = await git_worktree.workspace_git_reset(
+        full_name="octo-org/octo-repo",
+        ref="main",
+        mode="nope",
+    )
+
+    assert out["ok"] is False
