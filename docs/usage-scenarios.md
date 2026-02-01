@@ -104,7 +104,3 @@ This document highlights practical ways to use Adaptiv MCP in day-to-day operati
 3. Track approvals through your operational process.
 
 **Why Adaptiv MCP helps:** The server separates read/write actions and supports explicit approval workflows.
-
----
-
-Want another scenario? Add it by following the same structure: **Objective**, **When to use**, **Typical flow**, and **Why Adaptiv MCP helps**.
