@@ -106,3 +106,32 @@ def test_invalid_tool_args_includes_expected_args_warning(monkeypatch: Any) -> N
     assert isinstance(expected, dict)
     assert expected.get("required") == ["a"]
     assert "b" in (expected.get("optional") or [])
+
+
+def test_expected_args_excludes_positional_only(monkeypatch: Any) -> None:
+    import github_mcp.http_routes.tool_registry as tool_registry
+
+    class Tool:
+        name = "positional_only_sig"
+        write_action = False
+
+    def func(a: int, /, b: int, c: int = 3) -> dict[str, Any]:
+        return {"status": "success", "ok": True, "result": a + b + c}
+
+    monkeypatch.setattr(
+        tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
+    )
+
+    client = TestClient(main.app)
+    resp = client.post("/tools/positional_only_sig", json={"args": {"b": 2}})
+    assert resp.status_code == 400
+    payload = resp.json()
+    detail = payload.get("error_detail")
+    assert isinstance(detail, dict)
+    details = detail.get("details")
+    assert isinstance(details, dict)
+    expected = details.get("expected_args")
+    assert isinstance(expected, dict)
+    assert expected.get("required") == ["b"]
+    assert "c" in (expected.get("optional") or [])
+    assert "a" not in (expected.get("all") or [])
