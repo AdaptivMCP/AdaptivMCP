@@ -486,21 +486,19 @@ GITHUB_SEARCH_MIN_INTERVAL_SECONDS = float(
 # In practice, hosted environments (Render) already expose request-level logs,
 # and operators typically need application/tool-level traces for debugging.
 #
-# Default to verbose (QUIET_LOGS=false) so Render application logs include
-# startup diagnostics, tool traces, and structured errors. Set QUIET_LOGS=true
-# explicitly if you want a near-silent log stream.
-QUIET_LOGS = _env_flag("QUIET_LOGS", "false")
+# Default to quiet (QUIET_LOGS=true) so hosted provider logs stay concise.
+# Set QUIET_LOGS=false explicitly if you want a verbose log stream.
+QUIET_LOGS = _env_flag("QUIET_LOGS", "true")
 
 
 # Emit richer tool call logs (args/result metadata) suitable for humans reading Render logs.
-HUMAN_LOGS = _env_flag("HUMAN_LOGS", "true")
+HUMAN_LOGS = _env_flag("HUMAN_LOGS", "false")
 
 # Log tool call start/completion lines to provider logs.
 # When disabled, only warnings/errors (tool_call_failed) are emitted.
 #
-# Default to enabled so operators can correlate behavior in Render logs without
-# turning on additional flags.
-LOG_TOOL_CALLS = _env_flag("LOG_TOOL_CALLS", "true")
+# Default to enabled only when HUMAN_LOGS=true to keep hosted logs concise.
+LOG_TOOL_CALLS = _env_flag("LOG_TOOL_CALLS", "true" if HUMAN_LOGS else "false")
 
 # Whether to emit tool_call_started lines.
 #
@@ -508,18 +506,17 @@ LOG_TOOL_CALLS = _env_flag("LOG_TOOL_CALLS", "true")
 # (success/failure) which already includes correlation ids + duration.
 # Whether to emit tool_call_started lines.
 #
-# In developer-facing environments, the start line is the most actionable
-# signal (it answers: what is the server doing right now?). Keep it on by
-# default when HUMAN_LOGS are enabled.
-_log_tool_call_starts_default = "true" if HUMAN_LOGS else "false"
+# In developer-facing environments, the start line can be helpful, but it is
+# still optional. Keep it off by default to avoid noisy double-lines.
+_log_tool_call_starts_default = "false"
 LOG_TOOL_CALL_STARTS = _env_flag("LOG_TOOL_CALL_STARTS", _log_tool_call_starts_default)
 
 # When enabled, include full tool args and full tool results in logs.
 # WARNING: This can create very large log output and may stress hosted log ingestion.
 #
-# Default to enabled when HUMAN_LOGS are enabled so developer-facing deployments
-# capture raw request/response payloads without additional configuration.
-_log_tool_payloads_default = "true" if HUMAN_LOGS else "false"
+# Default to disabled to avoid overly verbose log output unless explicitly
+# requested.
+_log_tool_payloads_default = "false"
 LOG_TOOL_PAYLOADS = _env_flag("LOG_TOOL_PAYLOADS", _log_tool_payloads_default)
 
 # When enabled, include outbound GitHub HTTP request/response details in logs.
@@ -544,8 +541,7 @@ LOG_HTTP_REQUESTS = _env_flag("LOG_HTTP_REQUESTS", _log_http_default)
 # in logs.
 # WARNING: Can be large. This does not modify tool outputs.
 #
-# Default to enabled when HUMAN_LOGS are enabled so developer-facing deployments
-# capture raw inbound/outbound payloads for debugging.
+# Default to disabled to prevent large payload logs unless explicitly enabled.
 _log_http_bodies_default = "false"
 LOG_HTTP_BODIES = _env_flag("LOG_HTTP_BODIES", _log_http_bodies_default)
 
@@ -562,9 +558,8 @@ LOG_INLINE_CONTEXT = _env_flag(
 
 # When enabled, include outbound Render HTTP request/response details in logs.
 #
-# Default to enabled when HUMAN_LOGS are enabled so developer-facing
-# deployments have immediate visibility into Render API calls.
-_log_render_http_default = "true" if HUMAN_LOGS else "false"
+# Default to disabled to keep provider logs concise unless explicitly enabled.
+_log_render_http_default = "false"
 LOG_RENDER_HTTP = _env_flag("LOG_RENDER_HTTP", _log_render_http_default)
 
 # When enabled, include response bodies for Render HTTP logs.
@@ -578,12 +573,11 @@ LOG_RENDER_HTTP_BODIES = _env_flag("LOG_RENDER_HTTP_BODIES", "false")
 # appended extras as compact JSON.
 #
 # Defaults:
-# - When HUMAN_LOGS=true: append extras for tool events (tool_call_*) and for
-#   WARNING/ERROR.
-# - When HUMAN_LOGS=false: keep extras off by default.
+# - Keep extras off by default to avoid multi-line provider logs.
+# - Enable explicitly when troubleshooting.
 LOG_APPEND_EXTRAS = _env_flag(
     "LOG_APPEND_EXTRAS",
-    "true" if HUMAN_LOGS else "false",
+    "false",
 )
 
 # Cap appended extras to keep provider log ingestion healthy.
