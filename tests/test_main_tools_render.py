@@ -59,10 +59,7 @@ def test_normalize_limit() -> None:
         render_tools._normalize_limit(" 7 ", default=20, min_value=1, max_value=100)
         == 7
     )
-    assert (
-        render_tools._normalize_limit(0, default=20, min_value=1, max_value=100)
-        == 0
-    )
+    assert render_tools._normalize_limit(0, default=20, min_value=1, max_value=100) == 0
     assert (
         render_tools._normalize_limit(999, default=20, min_value=1, max_value=100)
         == 999

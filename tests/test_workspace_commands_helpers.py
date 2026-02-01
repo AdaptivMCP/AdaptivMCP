@@ -69,8 +69,7 @@ def test_safe_repo_relative_path_handles_invalid_values(tmp_path: Path) -> None:
     repo_dir.mkdir()
 
     assert (
-        commands._safe_repo_relative_path(str(repo_dir), " ")
-        == ".mcp_tmp/invalid_path"
+        commands._safe_repo_relative_path(str(repo_dir), " ") == ".mcp_tmp/invalid_path"
     )
 
     abs_path = str((repo_dir / "abs").resolve())

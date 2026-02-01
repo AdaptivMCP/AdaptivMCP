@@ -96,6 +96,7 @@ async def test_load_body_from_content_url_rejects_empty_sandbox_prefix():
     with pytest.raises(GitHubAPIError, match="sandbox: content_url must include"):
         await _load_body_from_content_url("sandbox:   ", context="test")
 
+
 @pytest.mark.asyncio
 async def test_load_body_from_content_url_sandbox_missing_uses_rewrite(
     monkeypatch, tmp_path

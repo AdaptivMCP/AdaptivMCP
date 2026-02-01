@@ -9,7 +9,9 @@ import pytest
 import github_mcp.workspace_tools.fs as fs
 
 
-def test_read_lines_sections_unicode_decode_error(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+def test_read_lines_sections_unicode_decode_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     # _read_lines_sections uses errors="replace", but keeps a defensive except.
     # Force the except branch by making open() raise UnicodeDecodeError.
     abs_path = str(tmp_path / "file.txt")
@@ -85,7 +87,9 @@ def test_git_show_text_decode_error(monkeypatch: pytest.MonkeyPatch, tmp_path) -
 
 
 class _FakePopen:
-    def __init__(self, stdout_bytes: bytes, stderr_bytes: bytes, *, returncode: int | None = None):
+    def __init__(
+        self, stdout_bytes: bytes, stderr_bytes: bytes, *, returncode: int | None = None
+    ):
         self.stdout = io.BytesIO(stdout_bytes)
         self.stderr = io.BytesIO(stderr_bytes)
         self.returncode = returncode
@@ -110,10 +114,14 @@ def test_git_show_text_limited_validates_inputs(tmp_path) -> None:
         fs._git_show_text_limited(str(tmp_path), "main", "x.txt", max_chars="nope")  # type: ignore[arg-type]
 
     with pytest.raises(ValueError):
-        fs._git_show_text_limited(str(tmp_path), "main", "x.txt", max_chars=10, max_bytes="nope")  # type: ignore[arg-type]
+        fs._git_show_text_limited(
+            str(tmp_path), "main", "x.txt", max_chars=10, max_bytes="nope"
+        )  # type: ignore[arg-type]
 
 
-def test_git_show_text_limited_nonzero_returncode(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+def test_git_show_text_limited_nonzero_returncode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     repo_dir = str(tmp_path)
 
     def _fake_popen(*args, **kwargs):  # noqa: ANN001
@@ -121,13 +129,17 @@ def test_git_show_text_limited_nonzero_returncode(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(subprocess, "Popen", _fake_popen)
 
-    res = fs._git_show_text_limited(repo_dir, "main", "x.txt", max_chars=10, max_bytes=10)
+    res = fs._git_show_text_limited(
+        repo_dir, "main", "x.txt", max_chars=10, max_bytes=10
+    )
     assert res["exists"] is False
     assert res["truncated"] is False
     assert res["error"]
 
 
-def test_git_show_text_limited_truncates_bytes(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+def test_git_show_text_limited_truncates_bytes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     repo_dir = str(tmp_path)
 
     def _fake_popen(*args, **kwargs):  # noqa: ANN001
@@ -136,7 +148,9 @@ def test_git_show_text_limited_truncates_bytes(monkeypatch: pytest.MonkeyPatch, 
 
     monkeypatch.setattr(subprocess, "Popen", _fake_popen)
 
-    res = fs._git_show_text_limited(repo_dir, "main", "x.txt", max_chars=0, max_bytes=10)
+    res = fs._git_show_text_limited(
+        repo_dir, "main", "x.txt", max_chars=0, max_bytes=10
+    )
     assert res["exists"] is True
     assert res["truncated"] is True
     assert res["truncated_bytes"] is True
@@ -145,7 +159,9 @@ def test_git_show_text_limited_truncates_bytes(monkeypatch: pytest.MonkeyPatch, 
     assert len(res["text"]) == 10
 
 
-def test_git_show_text_limited_truncates_chars(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+def test_git_show_text_limited_truncates_chars(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     repo_dir = str(tmp_path)
 
     def _fake_popen(*args, **kwargs):  # noqa: ANN001
@@ -153,7 +169,9 @@ def test_git_show_text_limited_truncates_chars(monkeypatch: pytest.MonkeyPatch, 
 
     monkeypatch.setattr(subprocess, "Popen", _fake_popen)
 
-    res = fs._git_show_text_limited(repo_dir, "main", "x.txt", max_chars=5, max_bytes=1024)
+    res = fs._git_show_text_limited(
+        repo_dir, "main", "x.txt", max_chars=5, max_bytes=1024
+    )
     assert res["exists"] is True
     assert res["truncated"] is True
     assert res["truncated_chars"] is True

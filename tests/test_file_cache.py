@@ -66,7 +66,9 @@ def test_cache_payload_records_metadata_and_size(
     assert fc.get_cached("o/r", "main", "README.md") is entry
 
 
-def test_cache_payload_ignores_non_mapping_json(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cache_payload_ignores_non_mapping_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cache = fc.FileCache(max_entries=10, max_bytes=10_000)
     monkeypatch.setattr(fc, "FILE_CACHE", cache)
 

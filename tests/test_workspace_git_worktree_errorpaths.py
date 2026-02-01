@@ -50,12 +50,16 @@ async def test_workspace_git_stage_and_unstage_command_building(
     repo_dir.mkdir()
     calls: list[str] = []
 
-    async def clone_repo(_full_name: str, ref: str, preserve_changes: bool = True) -> str:
+    async def clone_repo(
+        _full_name: str, ref: str, preserve_changes: bool = True
+    ) -> str:
         assert ref == "main"
         assert preserve_changes is True
         return str(repo_dir)
 
-    async def run_shell(command: str, cwd: str, timeout_seconds: float = 0) -> dict[str, Any]:
+    async def run_shell(
+        command: str, cwd: str, timeout_seconds: float = 0
+    ) -> dict[str, Any]:
         assert cwd == str(repo_dir)
         calls.append(command)
         if command.startswith("git add"):
@@ -66,9 +70,13 @@ async def test_workspace_git_stage_and_unstage_command_building(
             return {"exit_code": 0, "stdout": "a.txt\n", "stderr": ""}
         raise AssertionError(f"Unexpected command: {command}")
 
-    monkeypatch.setattr(git_worktree, "_tw", lambda: _mk_tw(clone_repo=clone_repo, run_shell=run_shell))
+    monkeypatch.setattr(
+        git_worktree, "_tw", lambda: _mk_tw(clone_repo=clone_repo, run_shell=run_shell)
+    )
 
-    out = await git_worktree.workspace_git_stage(full_name="o/r", ref="main", paths=None)
+    out = await git_worktree.workspace_git_stage(
+        full_name="o/r", ref="main", paths=None
+    )
     assert out["ok"] is True
     assert out["command"] == "git add -A"
     assert out["staged_files"] == ["a.txt"]
@@ -99,20 +107,30 @@ async def test_workspace_git_show_and_blame_bounds_and_validation(
     repo_dir.mkdir()
     calls: list[str] = []
 
-    async def clone_repo(_full_name: str, ref: str, preserve_changes: bool = True) -> str:
+    async def clone_repo(
+        _full_name: str, ref: str, preserve_changes: bool = True
+    ) -> str:
         return str(repo_dir)
 
-    async def run_shell(command: str, cwd: str, timeout_seconds: float = 0) -> dict[str, Any]:
+    async def run_shell(
+        command: str, cwd: str, timeout_seconds: float = 0
+    ) -> dict[str, Any]:
         calls.append(command)
         if command.startswith("git checkout"):
             return {"exit_code": 0, "stdout": "", "stderr": ""}
         if command.startswith("git show"):
             return {"exit_code": 0, "stdout": "SHOW\n", "stderr": ""}
         if command.startswith("git blame"):
-            return {"exit_code": 0, "stdout": "abcd (A 2024-01-01T00:00:00+00:00 1) x\n", "stderr": ""}
+            return {
+                "exit_code": 0,
+                "stdout": "abcd (A 2024-01-01T00:00:00+00:00 1) x\n",
+                "stderr": "",
+            }
         raise AssertionError(f"Unexpected command: {command}")
 
-    monkeypatch.setattr(git_worktree, "_tw", lambda: _mk_tw(clone_repo=clone_repo, run_shell=run_shell))
+    monkeypatch.setattr(
+        git_worktree, "_tw", lambda: _mk_tw(clone_repo=clone_repo, run_shell=run_shell)
+    )
 
     out = await git_worktree.workspace_git_show(
         full_name="o/r",
@@ -140,7 +158,9 @@ async def test_workspace_git_show_and_blame_bounds_and_validation(
     assert blame["end_line"] == 2000
     assert "-L 1,2000" in blame["command"]
 
-    invalid = await git_worktree.workspace_git_blame(full_name="o/r", ref="main", path="")
+    invalid = await git_worktree.workspace_git_blame(
+        full_name="o/r", ref="main", path=""
+    )
     assert invalid["ok"] is False
 
 
@@ -156,10 +176,14 @@ async def test_workspace_git_stash_save_and_apply_like_helper(
     repo_dir.mkdir()
     calls: list[str] = []
 
-    async def clone_repo(_full_name: str, ref: str, preserve_changes: bool = True) -> str:
+    async def clone_repo(
+        _full_name: str, ref: str, preserve_changes: bool = True
+    ) -> str:
         return str(repo_dir)
 
-    async def run_shell(command: str, cwd: str, timeout_seconds: float = 0) -> dict[str, Any]:
+    async def run_shell(
+        command: str, cwd: str, timeout_seconds: float = 0
+    ) -> dict[str, Any]:
         calls.append(command)
         if command.startswith("git checkout"):
             return {"exit_code": 0, "stdout": "", "stderr": ""}
@@ -171,7 +195,9 @@ async def test_workspace_git_stash_save_and_apply_like_helper(
             return {"exit_code": 1, "stdout": "", "stderr": "boom"}
         raise AssertionError(f"Unexpected command: {command}")
 
-    monkeypatch.setattr(git_worktree, "_tw", lambda: _mk_tw(clone_repo=clone_repo, run_shell=run_shell))
+    monkeypatch.setattr(
+        git_worktree, "_tw", lambda: _mk_tw(clone_repo=clone_repo, run_shell=run_shell)
+    )
 
     out = await git_worktree.workspace_git_stash_save(
         full_name="o/r",
@@ -186,7 +212,9 @@ async def test_workspace_git_stash_save_and_apply_like_helper(
     assert "--keep-index" in out["command"]
     assert "-m" in out["command"]
 
-    pop = await git_worktree.workspace_git_stash_pop(full_name="o/r", ref="main", stash_ref="stash@{0}")
+    pop = await git_worktree.workspace_git_stash_pop(
+        full_name="o/r", ref="main", stash_ref="stash@{0}"
+    )
     assert pop["ok"] is True
     assert pop["command"].startswith("git stash pop")
 
@@ -215,10 +243,14 @@ async def test_workspace_git_commit_fetch_clean_push_and_pull(
 
     calls: list[str] = []
 
-    async def clone_repo(_full_name: str, ref: str, preserve_changes: bool = True) -> str:
+    async def clone_repo(
+        _full_name: str, ref: str, preserve_changes: bool = True
+    ) -> str:
         return str(repo_dir)
 
-    async def run_shell(command: str, cwd: str, timeout_seconds: float = 0) -> dict[str, Any]:
+    async def run_shell(
+        command: str, cwd: str, timeout_seconds: float = 0
+    ) -> dict[str, Any]:
         calls.append(command)
         if command.startswith("git checkout"):
             return {"exit_code": 0, "stdout": "", "stderr": ""}
@@ -240,7 +272,9 @@ async def test_workspace_git_commit_fetch_clean_push_and_pull(
             return {"exit_code": 0, "stdout": "Pushed", "stderr": ""}
         raise AssertionError(f"Unexpected command: {command}")
 
-    monkeypatch.setattr(git_worktree, "_tw", lambda: _mk_tw(clone_repo=clone_repo, run_shell=run_shell))
+    monkeypatch.setattr(
+        git_worktree, "_tw", lambda: _mk_tw(clone_repo=clone_repo, run_shell=run_shell)
+    )
 
     commit = await git_worktree.workspace_git_commit(
         full_name="o/r",
@@ -281,14 +315,18 @@ async def test_workspace_git_commit_fetch_clean_push_and_pull(
     assert "--force-with-lease" in push["command"]
     assert "-u" in push["command"]
 
-    pull = await git_worktree.workspace_git_pull(full_name="o/r", ref="main", strategy="rebase")
+    pull = await git_worktree.workspace_git_pull(
+        full_name="o/r", ref="main", strategy="rebase"
+    )
     assert pull["ok"] is True
     assert pull["strategy"] == "rebase"
     assert any(cmd == "git fetch --prune origin" for cmd in calls)
 
 
 @pytest.mark.anyio
-async def test_validation_short_circuits_where_applicable(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_validation_short_circuits_where_applicable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from github_mcp.workspace_tools import git_worktree
 
     class _TW:
@@ -300,12 +338,17 @@ async def test_validation_short_circuits_where_applicable(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
 
-    out = await git_worktree.workspace_git_commit(full_name="o/r", ref="main", message="")
+    out = await git_worktree.workspace_git_commit(
+        full_name="o/r", ref="main", message=""
+    )
     assert out["ok"] is False
 
-    out2 = await git_worktree.workspace_git_merge(full_name="o/r", ref="main", target=" ")
+    out2 = await git_worktree.workspace_git_merge(
+        full_name="o/r", ref="main", target=" "
+    )
     assert out2["ok"] is False
 
-    out3 = await git_worktree.workspace_git_revert(full_name="o/r", ref="main", commits=[])
+    out3 = await git_worktree.workspace_git_revert(
+        full_name="o/r", ref="main", commits=[]
+    )
     assert out3["ok"] is False
-

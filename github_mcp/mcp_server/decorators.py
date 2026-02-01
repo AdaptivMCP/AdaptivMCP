@@ -787,15 +787,6 @@ def _llm_dev_report(
             if key in result and result.get(key) is not None:
                 out.setdefault("highlights", {})[key] = result.get(key)
 
-    # Include write gating inside the report for easy inspection.
-    gating = shaped_payload.get("gating")
-    if isinstance(gating, Mapping):
-        out["gating"] = {
-            "base_write_action": gating.get("base_write_action"),
-            "effective_write_action": gating.get("effective_write_action"),
-            "annotations": gating.get("annotations"),
-        }
-
     return out
 
 
@@ -832,20 +823,12 @@ def _llm_scan_friendly_payload(
     }
 
     # Optional structured fields.
-    for k in ("warnings", "error", "streams", "highlights", "inputs", "gating"):
+    for k in ("warnings", "error", "streams", "highlights", "inputs"):
         val = report.get(k)
         if val not in (None, "") and not (isinstance(val, list) and not val):
             out[k] = val
 
-    # Provider metadata + write gating metadata (when present).
-    gating = shaped_payload.get("gating")
-    if isinstance(gating, Mapping):
-        out["gating"] = {
-            "base_write_action": gating.get("base_write_action"),
-            "effective_write_action": gating.get("effective_write_action"),
-            "annotations": gating.get("annotations"),
-        }
-
+    # Provider metadata.
     provider = shaped_payload.get("provider")
     if isinstance(provider, Mapping):
         out["provider"] = {
