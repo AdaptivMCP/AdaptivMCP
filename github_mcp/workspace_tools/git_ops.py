@@ -165,6 +165,7 @@ async def workspace_git_diff(
     paths: list[str] | None = None,
     context_lines: int = 3,
     max_chars: int | None = None,
+    color: bool = True,
     owner: str | None = None,
     repo: str | None = None,
     branch: str | None = None,
@@ -184,6 +185,8 @@ async def workspace_git_diff(
             raise ValueError("context_lines must be an int >= 0")
         if max_chars is not None and (not isinstance(max_chars, int) or max_chars < 1):
             raise ValueError("max_chars must be an int >= 1 or None")
+        if not isinstance(color, bool):
+            raise TypeError("color must be a bool")
         if paths is None:
             paths = []
         if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
@@ -211,7 +214,8 @@ async def workspace_git_diff(
             if quoted:
                 path_args = f" -- {quoted}"
 
-        base = f"git diff --no-color --unified={int(context_lines)}"
+        color_flag = "--color=always" if color else "--no-color"
+        base = f"git diff {color_flag} --unified={int(context_lines)}"
         numstat_base = "git diff --numstat"
         if staged:
             diff_cmd = f"{base} --cached{path_args}"
@@ -263,6 +267,7 @@ async def workspace_git_diff(
             "staged": bool(staged),
             "paths": paths,
             "context_lines": int(context_lines),
+            "color": bool(color),
             "diff": diff_text,
             "truncated": bool(truncated),
             "numstat": numstat,

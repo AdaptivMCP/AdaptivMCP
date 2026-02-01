@@ -34,16 +34,189 @@ def _step(
     )
 
 
+def _summarize_tree(tree: Any) -> dict[str, Any] | None:
+    if not isinstance(tree, dict):
+        return None
+    results = tree.get("results")
+    file_count = 0
+    dir_count = 0
+    if isinstance(results, list):
+        for entry in results:
+            if not isinstance(entry, dict):
+                continue
+            entry_type = entry.get("type")
+            if entry_type == "file":
+                file_count += 1
+            elif entry_type == "dir":
+                dir_count += 1
+    return {
+        "full_name": tree.get("full_name"),
+        "ref": tree.get("ref"),
+        "path": tree.get("path"),
+        "cursor": tree.get("cursor"),
+        "next_cursor": tree.get("next_cursor"),
+        "max_entries": tree.get("max_entries"),
+        "max_depth": tree.get("max_depth"),
+        "include_hidden": tree.get("include_hidden"),
+        "include_dirs": tree.get("include_dirs"),
+        "result_count": len(results) if isinstance(results, list) else 0,
+        "file_count": file_count,
+        "dir_count": dir_count,
+        "truncated": tree.get("truncated"),
+    }
+
+
+def _summarize_search_result(result: Any) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    matches = result.get("matches")
+    file_count = 0
+    if isinstance(matches, list):
+        file_count = len(
+            {m.get("path") for m in matches if isinstance(m, dict) and m.get("path")}
+        )
+    return {
+        "query": result.get("query"),
+        "path": result.get("path"),
+        "engine": result.get("engine"),
+        "max_results": result.get("max_results"),
+        "context_lines": result.get("context_lines"),
+        "match_count": len(matches) if isinstance(matches, list) else 0,
+        "file_count": file_count,
+        "truncated": result.get("truncated"),
+    }
+
+
+def _summarize_operations_result(result: Any) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    results = result.get("results")
+    ok_count = 0
+    error_count = 0
+    if isinstance(results, list):
+        for entry in results:
+            if not isinstance(entry, dict):
+                continue
+            status = entry.get("status")
+            if status == "ok":
+                ok_count += 1
+            elif status == "error":
+                error_count += 1
+    return {
+        "ref": result.get("ref"),
+        "status": result.get("status"),
+        "ok": result.get("ok"),
+        "preview_only": result.get("preview_only"),
+        "operation_count": len(results) if isinstance(results, list) else 0,
+        "ok_count": ok_count,
+        "error_count": error_count,
+    }
+
+
+def _summarize_quality_result(result: Any) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    steps = result.get("steps")
+    failed_steps: list[str] = []
+    if isinstance(steps, list):
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            status = step.get("status")
+            name = step.get("name")
+            if status in {"failed", "error"} and isinstance(name, str):
+                failed_steps.append(name)
+    return {
+        "status": result.get("status"),
+        "step_count": len(steps) if isinstance(steps, list) else 0,
+        "failed_steps": failed_steps,
+    }
+
+
+def _summarize_change_report(result: Any) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    files = result.get("files")
+    numstat = result.get("numstat")
+    return {
+        "status": result.get("status"),
+        "full_name": result.get("full_name"),
+        "base_ref": result.get("base_ref"),
+        "head_ref": result.get("head_ref"),
+        "file_count": len(files) if isinstance(files, list) else 0,
+        "numstat_count": len(numstat) if isinstance(numstat, list) else 0,
+        "truncated": result.get("truncated"),
+    }
+
+
+def _summarize_sync_result(result: Any) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    before = result.get("before")
+    after = result.get("after")
+    return {
+        "branch": result.get("branch"),
+        "full_name": result.get("full_name"),
+        "discard_local_changes": result.get("discard_local_changes"),
+        "before": {
+            "ahead": before.get("ahead"),
+            "behind": before.get("behind"),
+            "is_clean": before.get("is_clean"),
+        }
+        if isinstance(before, dict)
+        else None,
+        "after": {
+            "ahead": after.get("ahead"),
+            "behind": after.get("behind"),
+            "is_clean": after.get("is_clean"),
+        }
+        if isinstance(after, dict)
+        else None,
+    }
+
+
+def _summarize_branch_result(result: Any) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    return {
+        "base_ref": result.get("base_ref"),
+        "new_branch": result.get("new_branch"),
+        "moved_workspace": result.get("moved_workspace"),
+    }
+
+
+def _summarize_finalize_result(result: Any) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    summary = {
+        "status": result.get("status"),
+        "reason": result.get("reason"),
+    }
+    if isinstance(result.get("pr_url"), str):
+        summary["pr_url"] = result.get("pr_url")
+    if result.get("pr_number") is not None:
+        summary["pr_number"] = result.get("pr_number")
+    if isinstance(result.get("commit_sha"), str):
+        summary["commit_sha"] = result.get("commit_sha")
+    if isinstance(result.get("commit_summary"), str):
+        summary["commit_summary"] = result.get("commit_summary")
+    return summary
+
+
 def _error_return(
     *,
     steps: list[dict[str, Any]],
     action: str,
     detail: str,
     reason: str,
+    include_steps: bool = True,
     **payload: Any,
 ) -> dict[str, Any]:
     _step(steps, action, detail, status="error", reason=reason)
-    return {"status": "error", "ok": False, "reason": reason, "steps": steps, **payload}
+    base = {"status": "error", "ok": False, "reason": reason, **payload}
+    if include_steps:
+        base["steps"] = steps
+    return base
 
 
 @mcp_tool(write_action=False)
@@ -55,6 +228,8 @@ async def workspace_task_plan(
     max_tree_files: int = 400,
     max_tree_bytes: int = 200_000,
     max_search_results: int = 50,
+    include_details: bool = False,
+    include_steps: bool = False,
 ) -> dict[str, Any]:
     """Gather planning context for a task.
 
@@ -62,6 +237,10 @@ async def workspace_task_plan(
     - a bounded workspace tree scan
     - optional ripgrep searches for provided queries
     - a suggested task workflow template (tool names + intent)
+
+    Payload shaping:
+      - include_details=true returns full tree/search payloads.
+      - include_steps=true includes the workflow step log.
     """
 
     steps: list[dict[str, Any]] = []
@@ -101,6 +280,7 @@ async def workspace_task_plan(
                 action="Tree scan",
                 detail="Failed to scan workspace tree.",
                 reason="tree_scan_failed",
+                include_steps=include_steps,
                 tree=tree,
             )
         _step(steps, "Tree scan", "Tree scan complete.")
@@ -146,10 +326,18 @@ async def workspace_task_plan(
             "ok": True,
             "full_name": full_name,
             "ref": effective_ref,
-            "tree": tree,
-            "searches": searches,
+            "tree_summary": _summarize_tree(tree),
+            "search_summaries": [
+                {
+                    "query": entry.get("query"),
+                    "summary": _summarize_search_result(entry.get("result")),
+                }
+                for entry in searches
+                if isinstance(entry, dict)
+            ],
             "workflow_template": template,
-            "steps": steps,
+            **({"tree": tree, "searches": searches} if include_details else {}),
+            **({"steps": steps} if include_steps else {}),
         }
     except Exception as exc:
         _step(
@@ -159,7 +347,7 @@ async def workspace_task_plan(
             status="error",
         )
         payload = _structured_tool_error(exc, context="workspace_task_plan")
-        if isinstance(payload, dict) and "steps" not in payload:
+        if include_steps and isinstance(payload, dict) and "steps" not in payload:
             payload["steps"] = steps
         return payload
 
@@ -174,8 +362,15 @@ async def workspace_task_apply_edits(
     fail_fast: bool = True,
     rollback_on_error: bool = True,
     apply_ops_args: dict[str, Any] | None = None,
+    include_details: bool = False,
+    include_steps: bool = False,
 ) -> dict[str, Any]:
-    """Apply a list of workspace edit operations with task-friendly defaults."""
+    """Apply a list of workspace edit operations with task-friendly defaults.
+
+    Payload shaping:
+      - include_details=true returns full operation results.
+      - include_steps=true includes the workflow step log.
+    """
 
     steps: list[dict[str, Any]] = []
     try:
@@ -221,6 +416,7 @@ async def workspace_task_apply_edits(
                 action="Apply edits",
                 detail="Failed to apply workspace operations.",
                 reason="apply_edits_failed",
+                include_steps=include_steps,
                 operations=res,
             )
         if isinstance(res, dict) and res.get("ok") is False:
@@ -229,6 +425,7 @@ async def workspace_task_apply_edits(
                 action="Apply edits",
                 detail="Operations applied partially; at least one operation failed.",
                 reason="apply_edits_partial",
+                include_steps=include_steps,
                 operations=res,
             )
 
@@ -238,8 +435,9 @@ async def workspace_task_apply_edits(
             "ok": True,
             "full_name": full_name,
             "ref": effective_ref,
-            "operations": res,
-            "steps": steps,
+            "operations_summary": _summarize_operations_result(res),
+            **({"operations": res} if include_details else {}),
+            **({"steps": steps} if include_steps else {}),
         }
     except Exception as exc:
         _step(
@@ -249,7 +447,7 @@ async def workspace_task_apply_edits(
             status="error",
         )
         payload = _structured_tool_error(exc, context="workspace_task_apply_edits")
-        if isinstance(payload, dict) and "steps" not in payload:
+        if include_steps and isinstance(payload, dict) and "steps" not in payload:
             payload["steps"] = steps
         return payload
 
@@ -282,6 +480,8 @@ async def workspace_task_execute(
     quality_args: dict[str, Any] | None = None,
     pr_args: dict[str, Any] | None = None,
     commit_args: dict[str, Any] | None = None,
+    include_details: bool = False,
+    include_steps: bool = False,
 ) -> dict[str, Any]:
     """End-to-end task workflow: plan -> edit/implement -> test -> finalize.
 
@@ -289,6 +489,10 @@ async def workspace_task_execute(
     - Editing/implementing: applies `operations` onto a new feature branch.
     - Testing: optional lint+tests suite.
     - Finalizing: either opens a PR (`finalize_mode=pr`) or commits+pushes only.
+
+    Payload shaping:
+      - include_details=true returns full sub-tool payloads.
+      - include_steps=true includes the workflow step log.
     """
 
     steps: list[dict[str, Any]] = []
@@ -367,6 +571,7 @@ async def workspace_task_execute(
                     action="Sync base",
                     detail="Failed to sync base workspace mirror.",
                     reason="sync_base_failed",
+                    include_steps=include_steps,
                     sync=sync_res,
                     searches=searches,
                 )
@@ -411,6 +616,7 @@ async def workspace_task_execute(
                 action="Create branch",
                 detail="Failed to create feature branch.",
                 reason="create_branch_failed",
+                include_steps=include_steps,
                 sync=sync_res,
                 branch=branch_res,
                 searches=searches,
@@ -441,6 +647,7 @@ async def workspace_task_execute(
                 action="Apply operations",
                 detail="Failed to apply workspace operations.",
                 reason="apply_operations_failed",
+                include_steps=include_steps,
                 sync=sync_res,
                 branch=branch_res,
                 operations=ops_res,
@@ -452,6 +659,7 @@ async def workspace_task_execute(
                 action="Apply operations",
                 detail="Operations applied partially; at least one operation failed.",
                 reason="apply_operations_partial",
+                include_steps=include_steps,
                 sync=sync_res,
                 branch=branch_res,
                 operations=ops_res,
@@ -484,6 +692,7 @@ async def workspace_task_execute(
                     action="Quality suite",
                     detail="Quality suite failed; changes were not finalized.",
                     reason="quality_suite_failed",
+                    include_steps=include_steps,
                     sync=sync_res,
                     branch=branch_res,
                     operations=ops_res,
@@ -539,6 +748,7 @@ async def workspace_task_execute(
                     action="Finalize",
                     detail="Failed to commit and/or open PR.",
                     reason="commit_or_pr_failed",
+                    include_steps=include_steps,
                     sync=sync_res,
                     branch=branch_res,
                     operations=ops_res,
@@ -571,6 +781,7 @@ async def workspace_task_execute(
                     action="Finalize",
                     detail="Failed to commit and/or push changes.",
                     reason="commit_failed",
+                    include_steps=include_steps,
                     sync=sync_res,
                     branch=branch_res,
                     operations=ops_res,
@@ -588,16 +799,36 @@ async def workspace_task_execute(
             "full_name": full_name,
             "base_ref": effective_base,
             "feature_ref": feature_ref,
-            "searches": searches,
-            "sync": sync_res,
-            "branch": branch_res,
-            "operations": ops_res,
-            "quality": quality_res,
-            "report": change_report,
-            "pr_summary": pr_summary,
             "finalize_mode": finalize_mode,
-            "finalize": finalize_res,
-            "steps": steps,
+            "search_summaries": [
+                {
+                    "query": entry.get("query"),
+                    "summary": _summarize_search_result(entry.get("result")),
+                }
+                for entry in searches
+                if isinstance(entry, dict)
+            ],
+            "sync_summary": _summarize_sync_result(sync_res),
+            "branch_summary": _summarize_branch_result(branch_res),
+            "operations_summary": _summarize_operations_result(ops_res),
+            "quality_summary": _summarize_quality_result(quality_res),
+            "report_summary": _summarize_change_report(change_report),
+            "finalize_summary": _summarize_finalize_result(finalize_res),
+            **(
+                {
+                    "searches": searches,
+                    "sync": sync_res,
+                    "branch": branch_res,
+                    "operations": ops_res,
+                    "quality": quality_res,
+                    "report": change_report,
+                    "pr_summary": pr_summary,
+                    "finalize": finalize_res,
+                }
+                if include_details
+                else {}
+            ),
+            **({"steps": steps} if include_steps else {}),
         }
     except Exception as exc:
         _step(
@@ -607,6 +838,6 @@ async def workspace_task_execute(
             status="error",
         )
         payload = _structured_tool_error(exc, context="workspace_task_execute")
-        if isinstance(payload, dict) and "steps" not in payload:
+        if include_steps and isinstance(payload, dict) and "steps" not in payload:
             payload["steps"] = steps
         return payload

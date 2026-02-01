@@ -609,6 +609,7 @@ async def workspace_change_report(
             "paths": None,
             "context_lines": int(diff_context_lines),
             "max_chars": int(max_diff_chars) if max_diff_chars is not None else None,
+            "color": False,
             **extra_diff,
         }
         diff_res = await tw.workspace_git_diff(

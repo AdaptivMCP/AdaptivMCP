@@ -649,7 +649,6 @@ def _coerce_error_detail(structured: dict[str, Any]) -> dict[str, Any]:
 class ToolInvocation:
     invocation_id: str
     tool_name: str
-    args: dict[str, Any]
     started_at: float
     task: asyncio.Task
     status: str = "running"
@@ -841,9 +840,12 @@ def _invocation_payload(invocation: ToolInvocation) -> dict[str, Any]:
         "finished_at": invocation.finished_at,
     }
     if invocation.status in {"succeeded", "failed", "cancelled"}:
-        payload["result"] = invocation.result
-        payload["status_code"] = invocation.status_code
-        payload["headers"] = invocation.headers or {}
+        if invocation.result is not None:
+            payload["result"] = invocation.result
+        if invocation.status_code is not None:
+            payload["status_code"] = invocation.status_code
+        if invocation.headers:
+            payload["headers"] = invocation.headers
     return payload
 
 
@@ -857,7 +859,6 @@ async def _create_invocation(
     invocation = ToolInvocation(
         invocation_id=invocation_id,
         tool_name=tool_name,
-        args=args,
         started_at=time.time(),
         task=task,
     )
