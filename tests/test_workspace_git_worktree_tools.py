@@ -7,6 +7,64 @@ import pytest
 
 
 @pytest.mark.anyio
+async def test_workspace_git_status_parses_porcelain(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from github_mcp.workspace_tools import git_worktree
+
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    async def clone_repo(
+        _full_name: str, ref: str, preserve_changes: bool = True
+    ) -> str:
+        assert ref == "main"
+        assert preserve_changes is True
+        return str(repo_dir)
+
+    async def run_shell(
+        command: str, cwd: str, timeout_seconds: float = 0
+    ) -> dict[str, Any]:
+        assert cwd == str(repo_dir)
+        if command.startswith("git checkout"):
+            return {"exit_code": 0, "stdout": "", "stderr": ""}
+        if command.startswith("git status"):
+            return {
+                "exit_code": 0,
+                "stdout": "\n".join(
+                    [
+                        "## main...origin/main [ahead 1]",
+                        "M  staged.txt",
+                        " M unstaged.txt",
+                        "?? new.txt",
+                    ]
+                ),
+                "stderr": "",
+            }
+        raise AssertionError(f"Unexpected command: {command}")
+
+    class _TW:
+        def _effective_ref_for_repo(self, _full_name: str, ref: str) -> str:
+            return ref
+
+        def _workspace_deps(self) -> dict[str, Any]:
+            return {"clone_repo": clone_repo, "run_shell": run_shell}
+
+    monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
+
+    out = await git_worktree.workspace_git_status(
+        full_name="octo-org/octo-repo", ref="main"
+    )
+
+    assert out["ok"] is True
+    assert out["branch"] == "## main...origin/main [ahead 1]"
+    assert out["staged"] == ["staged.txt"]
+    assert out["unstaged"] == ["unstaged.txt"]
+    assert out["untracked"] == ["new.txt"]
+
+
+@pytest.mark.anyio
 async def test_workspace_git_log_parses_commits(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
@@ -185,3 +243,84 @@ async def test_workspace_git_checkout_rekeys_workspace(
         assert os.path.exists(os.path.join(target_dir, "local.txt"))
         assert not os.path.exists(os.path.join(base_dir, "local.txt"))
         assert os.path.exists(os.path.join(base_dir, "clean.txt"))
+
+
+@pytest.mark.anyio
+async def test_workspace_git_restore_builds_command(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    from github_mcp.workspace_tools import git_worktree
+
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    commands: list[str] = []
+
+    async def clone_repo(
+        _full_name: str, ref: str, preserve_changes: bool = True
+    ) -> str:
+        assert ref == "main"
+        return str(repo_dir)
+
+    async def run_shell(
+        command: str, cwd: str, timeout_seconds: float = 0
+    ) -> dict[str, Any]:
+        commands.append(command)
+        assert cwd == str(repo_dir)
+        if command.startswith("git checkout"):
+            return {"exit_code": 0, "stdout": "", "stderr": ""}
+        if command.startswith("git restore"):
+            return {"exit_code": 0, "stdout": "", "stderr": ""}
+        raise AssertionError(f"Unexpected command: {command}")
+
+    class _TW:
+        def _effective_ref_for_repo(self, _full_name: str, ref: str) -> str:
+            return ref
+
+        def _workspace_deps(self) -> dict[str, Any]:
+            return {"clone_repo": clone_repo, "run_shell": run_shell}
+
+    monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
+
+    out = await git_worktree.workspace_git_restore(
+        full_name="octo-org/octo-repo",
+        ref="main",
+        paths=["  docs/readme.md ", "src/app.py"],
+        source_ref="HEAD~1",
+        staged=True,
+        worktree=False,
+    )
+
+    assert out["ok"] is True
+    assert out["paths"] == ["docs/readme.md", "src/app.py"]
+    assert "--source" in out["command"]
+    assert "--staged" in out["command"]
+    assert any(cmd.startswith("git restore") for cmd in commands)
+
+
+@pytest.mark.anyio
+async def test_workspace_git_restore_requires_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.workspace_tools import git_worktree
+
+    class _TW:
+        def _effective_ref_for_repo(self, _full_name: str, ref: str) -> str:
+            return ref
+
+        def _workspace_deps(self) -> dict[str, Any]:
+            return {"clone_repo": _fail, "run_shell": _fail}
+
+    async def _fail(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("deps should not be called for invalid input")
+
+    monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
+
+    out = await git_worktree.workspace_git_restore(
+        full_name="octo-org/octo-repo",
+        ref="main",
+        paths=[],
+    )
+
+    assert out["ok"] is False
