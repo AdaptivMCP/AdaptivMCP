@@ -18,3 +18,4 @@ ENV/
 
 # OS
 .DS_Store
+.coverage
