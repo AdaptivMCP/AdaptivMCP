@@ -285,7 +285,9 @@ def _resolve_transport_security() -> Any:
     """
 
     # NOTE: This does not and cannot disable any platform-level safety systems.
-    return None
+    if TransportSecuritySettings is None:
+        return None
+    return TransportSecuritySettings(enable_dns_rebinding_protection=False)
 
 
 # ------------------------------------------------------------------------------
