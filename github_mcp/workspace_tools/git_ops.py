@@ -164,7 +164,7 @@ async def workspace_git_diff(
     staged: bool = False,
     paths: list[str] | None = None,
     context_lines: int = 3,
-    max_chars: int = 2000000,
+    max_chars: int | None = None,
     owner: str | None = None,
     repo: str | None = None,
     branch: str | None = None,
@@ -182,8 +182,8 @@ async def workspace_git_diff(
     try:
         if not isinstance(context_lines, int) or context_lines < 0:
             raise ValueError("context_lines must be an int >= 0")
-        if not isinstance(max_chars, int) or max_chars < 1:
-            raise ValueError("max_chars must be an int >= 1")
+        if max_chars is not None and (not isinstance(max_chars, int) or max_chars < 1):
+            raise ValueError("max_chars must be an int >= 1 or None")
         if paths is None:
             paths = []
         if not isinstance(paths, list) or any(not isinstance(p, str) for p in paths):
@@ -242,7 +242,7 @@ async def workspace_git_diff(
             raise _shell_error("git diff", diff_res)
         diff_text = diff_res.get("stdout", "") or ""
         truncated = False
-        if len(diff_text) > int(max_chars):
+        if max_chars is not None and len(diff_text) > int(max_chars):
             diff_text = diff_text[: int(max_chars)]
             truncated = True
 

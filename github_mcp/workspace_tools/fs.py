@@ -1980,8 +1980,8 @@ async def compare_workspace_files(
     comparisons: list[dict[str, Any]] | None = None,
     *,
     context_lines: int = 3,
-    max_chars_per_side: int = 200000,
-    max_diff_chars: int = 200000,
+    max_chars_per_side: int | None = None,
+    max_diff_chars: int | None = None,
     include_stats: bool = False,
 ) -> dict[str, Any]:
     """Compare multiple file pairs or ref/path variants and return diffs.
@@ -2012,11 +2012,19 @@ async def compare_workspace_files(
             raise ValueError("comparisons must contain at least one item")
         if not isinstance(context_lines, int) or context_lines < 0:
             raise ValueError("context_lines must be an int >= 0")
-        if not isinstance(max_chars_per_side, int) or max_chars_per_side < 1:
-            raise ValueError("max_chars_per_side must be an int >= 1")
-        if not isinstance(max_diff_chars, int) or max_diff_chars < 1:
-            raise ValueError("max_diff_chars must be an int >= 1")
+        if max_chars_per_side is not None and (
+            not isinstance(max_chars_per_side, int) or max_chars_per_side < 1
+        ):
+            raise ValueError("max_chars_per_side must be an int >= 1 or None")
+        if max_diff_chars is not None and (
+            not isinstance(max_diff_chars, int) or max_diff_chars < 1
+        ):
+            raise ValueError("max_diff_chars must be an int >= 1 or None")
         include_stats = bool(include_stats)
+
+        max_chars_per_side_value = (
+            0 if max_chars_per_side is None else int(max_chars_per_side)
+        )
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
@@ -2045,13 +2053,13 @@ async def compare_workspace_files(
                         raise ValueError("base_ref must be a non-empty string")
 
                     ws = _workspace_read_text_limited(
-                        repo_dir, left_path, max_chars=max_chars_per_side
+                        repo_dir, left_path, max_chars=max_chars_per_side_value
                     )
                     base = _git_show_text_limited(
                         repo_dir,
                         base_ref,
                         left_path,
-                        max_chars=max_chars_per_side,
+                        max_chars=max_chars_per_side_value,
                     )
                     if not base.get("exists"):
                         raise FileNotFoundError(f"missing at {base_ref}:{left_path}")
@@ -2077,13 +2085,13 @@ async def compare_workspace_files(
                         repo_dir,
                         left_ref,
                         left_path,
-                        max_chars=max_chars_per_side,
+                        max_chars=max_chars_per_side_value,
                     )
                     right_info = _git_show_text_limited(
                         repo_dir,
                         right_ref,
                         right_path,
-                        max_chars=max_chars_per_side,
+                        max_chars=max_chars_per_side_value,
                     )
                     if not left_info.get("exists"):
                         raise FileNotFoundError(f"missing at {left_ref}:{left_path}")
@@ -2103,10 +2111,10 @@ async def compare_workspace_files(
                     if not isinstance(right_path, str) or not right_path.strip():
                         raise ValueError("right_path must be a non-empty string")
                     left_info = _workspace_read_text_limited(
-                        repo_dir, left_path, max_chars=max_chars_per_side
+                        repo_dir, left_path, max_chars=max_chars_per_side_value
                     )
                     right_info = _workspace_read_text_limited(
-                        repo_dir, right_path, max_chars=max_chars_per_side
+                        repo_dir, right_path, max_chars=max_chars_per_side_value
                     )
                     if not left_info.get("exists"):
                         raise FileNotFoundError(left_path)
@@ -2134,10 +2142,11 @@ async def compare_workspace_files(
                 partial = bool(partial) or bool(left_truncated or right_truncated)
 
                 truncated = False
-                if diff_full and len(diff_full) > int(max_diff_chars):
-                    diff_full = diff_full[: int(max_diff_chars)]
-                    truncated = True
-                    partial = True
+                if max_diff_chars is not None and diff_full:
+                    if len(diff_full) > int(max_diff_chars):
+                        diff_full = diff_full[: int(max_diff_chars)]
+                        truncated = True
+                        partial = True
 
                 stats_obj: dict[str, int] | None = None
                 if include_stats:
@@ -2171,8 +2180,8 @@ async def compare_workspace_files(
             "errors": errors,
             "limits": {
                 "context_lines": int(context_lines),
-                "max_chars_per_side": int(max_chars_per_side),
-                "max_diff_chars": int(max_diff_chars),
+                "max_chars_per_side": max_chars_per_side,
+                "max_diff_chars": max_diff_chars,
                 "include_stats": bool(include_stats),
             },
         }
@@ -2189,22 +2198,30 @@ async def _build_workspace_diff_payload(
     after: str | None,
     updated_content: str | None,
     context_lines: int,
-    max_chars_per_side: int,
-    max_diff_chars: int,
+    max_chars_per_side: int | None,
+    max_diff_chars: int | None,
     fromfile: str | None,
     tofile: str | None,
 ) -> dict[str, Any]:
     if not isinstance(context_lines, int) or context_lines < 0:
         raise ValueError("context_lines must be an int >= 0")
-    if not isinstance(max_chars_per_side, int) or max_chars_per_side < 1:
-        raise ValueError("max_chars_per_side must be an int >= 1")
-    if not isinstance(max_diff_chars, int) or max_diff_chars < 1:
-        raise ValueError("max_diff_chars must be an int >= 1")
+    if max_chars_per_side is not None and (
+        not isinstance(max_chars_per_side, int) or max_chars_per_side < 1
+    ):
+        raise ValueError("max_chars_per_side must be an int >= 1 or None")
+    if max_diff_chars is not None and (
+        not isinstance(max_diff_chars, int) or max_diff_chars < 1
+    ):
+        raise ValueError("max_diff_chars must be an int >= 1 or None")
 
     meta: dict[str, Any] = {
         "context_lines": int(context_lines),
-        "max_diff_chars": int(max_diff_chars),
+        "max_diff_chars": max_diff_chars,
     }
+
+    max_chars_per_side_value = (
+        0 if max_chars_per_side is None else int(max_chars_per_side)
+    )
 
     if path is not None and path != "":
         if not isinstance(path, str) or not path.strip():
@@ -2221,7 +2238,7 @@ async def _build_workspace_diff_payload(
         )
 
         before_info = _workspace_read_text_limited(
-            repo_dir, path, max_chars=max_chars_per_side
+            repo_dir, path, max_chars=max_chars_per_side_value
         )
         before_text = (
             (before_info.get("text") or "") if before_info.get("exists") else ""
@@ -2236,7 +2253,7 @@ async def _build_workspace_diff_payload(
                 "path": path,
                 "before_exists": before_exists,
                 "before_truncated": bool(before_info.get("truncated")),
-                "max_chars_per_side": int(max_chars_per_side),
+                "max_chars_per_side": max_chars_per_side,
             }
         )
         before = before_text
@@ -2257,7 +2274,7 @@ async def _build_workspace_diff_payload(
         n=int(context_lines),
     )
     truncated = False
-    if len(diff_text) > int(max_diff_chars):
+    if max_diff_chars is not None and len(diff_text) > int(max_diff_chars):
         diff_text = diff_text[: int(max_diff_chars)]
         truncated = True
 
@@ -2282,8 +2299,8 @@ async def make_workspace_diff(
     after: str | None = None,
     updated_content: str | None = None,
     context_lines: int = 3,
-    max_chars_per_side: int = 200_000,
-    max_diff_chars: int = 200_000,
+    max_chars_per_side: int | None = None,
+    max_diff_chars: int | None = None,
     fromfile: str | None = None,
     tofile: str | None = None,
 ) -> dict[str, Any]:
@@ -2317,8 +2334,8 @@ async def make_workspace_patch(
     after: str | None = None,
     updated_content: str | None = None,
     context_lines: int = 3,
-    max_chars_per_side: int = 200_000,
-    max_diff_chars: int = 200_000,
+    max_chars_per_side: int | None = None,
+    max_diff_chars: int | None = None,
     fromfile: str | None = None,
     tofile: str | None = None,
 ) -> dict[str, Any]:
@@ -2355,8 +2372,8 @@ async def make_diff(
     after: str | None = None,
     updated_content: str | None = None,
     context_lines: int = 3,
-    max_chars_per_side: int = 200_000,
-    max_diff_chars: int = 200_000,
+    max_chars_per_side: int | None = None,
+    max_diff_chars: int | None = None,
     fromfile: str | None = None,
     tofile: str | None = None,
 ) -> dict[str, Any]:
@@ -2390,8 +2407,8 @@ async def make_patch(
     after: str | None = None,
     updated_content: str | None = None,
     context_lines: int = 3,
-    max_chars_per_side: int = 200_000,
-    max_diff_chars: int = 200_000,
+    max_chars_per_side: int | None = None,
+    max_diff_chars: int | None = None,
     fromfile: str | None = None,
     tofile: str | None = None,
 ) -> dict[str, Any]:

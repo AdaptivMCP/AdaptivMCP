@@ -550,7 +550,7 @@ async def workspace_change_report(
     diff_context_lines: int = 3,
     excerpt_context_lines: int = 8,
     excerpt_max_lines: int = 160,
-    max_diff_chars: int = 200_000,
+    max_diff_chars: int | None = None,
     max_excerpt_chars: int = 80_000,
     include_diff: bool = True,
     git_diff_args: dict[str, Any] | None = None,
@@ -559,7 +559,7 @@ async def workspace_change_report(
     """Single-call "what changed" report between two refs.
 
     Produces:
-      - unified diff + numstat (bounded)
+      - unified diff + numstat
       - parsed hunk ranges per file
       - contextual excerpts around each hunk from both base and head versions
     """
@@ -581,8 +581,10 @@ async def workspace_change_report(
             raise ValueError("excerpt_context_lines must be an int >= 0")
         if not isinstance(excerpt_max_lines, int) or excerpt_max_lines < 1:
             raise ValueError("excerpt_max_lines must be an int >= 1")
-        if not isinstance(max_diff_chars, int) or max_diff_chars < 1:
-            raise ValueError("max_diff_chars must be an int >= 1")
+        if max_diff_chars is not None and (
+            not isinstance(max_diff_chars, int) or max_diff_chars < 1
+        ):
+            raise ValueError("max_diff_chars must be an int >= 1 or None")
         if not isinstance(max_excerpt_chars, int) or max_excerpt_chars < 1:
             raise ValueError("max_excerpt_chars must be an int >= 1")
 
@@ -606,7 +608,7 @@ async def workspace_change_report(
             "staged": False,
             "paths": None,
             "context_lines": int(diff_context_lines),
-            "max_chars": int(max_diff_chars),
+            "max_chars": int(max_diff_chars) if max_diff_chars is not None else None,
             **extra_diff,
         }
         diff_res = await tw.workspace_git_diff(

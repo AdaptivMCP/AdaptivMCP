@@ -48,7 +48,7 @@ class _FakeTW:
 
 
 @pytest.mark.anyio
-async def test_workspace_git_diff_truncates_and_parses_numstat(
+async def test_workspace_git_diff_returns_full_diff_and_parses_numstat(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from github_mcp.workspace_tools import git_ops
@@ -62,14 +62,15 @@ async def test_workspace_git_diff_truncates_and_parses_numstat(
         left_ref="HEAD~1",
         right_ref="HEAD",
         context_lines=3,
-        max_chars=10,
+        max_chars=None,
     )
 
     assert res["full_name"] == "octo-org/octo-repo"
     assert res["left_ref"] == "HEAD~1"
     assert res["right_ref"] == "HEAD"
-    assert res["truncated"] is True
-    assert isinstance(res["diff"], str) and len(res["diff"]) == 10
+    assert res["truncated"] is False
+    assert isinstance(res["diff"], str)
+    assert res["diff"].endswith("\n+b\n")
 
     numstat = res["numstat"]
     assert numstat[0]["path"] == "file_a.txt"
