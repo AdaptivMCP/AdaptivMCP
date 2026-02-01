@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import logging
 import os
 import time
 from typing import Any
@@ -189,8 +190,17 @@ def _log_render_http(
     if not LOG_RENDER_HTTP:
         return
 
-    # Info-only logging policy: always emit INFO.
-    BASE_LOGGER.info(msg, extra=extra)
+    level_name = (level or "info").strip().lower()
+    if level_name in {"warn", "warning"}:
+        log_level = logging.WARNING
+    elif level_name in {"error", "exception", "critical"}:
+        log_level = logging.ERROR
+    elif level_name == "debug":
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+
+    BASE_LOGGER.log(log_level, msg, extra=extra)
 
 
 def _refresh_async_client(
