@@ -33,7 +33,7 @@ Key building blocks:
 ### 4) External API access
 
 - GitHub API calls run through `github_mcp.http_clients._github_request`, which enforces concurrency limits, optional retries, structured error handling, and log correlation via request context metadata.【F:github_mcp/http_clients.py†L420-L720】
-- Retry policy defaults to **idempotent methods** (GET/HEAD/OPTIONS) and treats GraphQL POST as retryable, while non-idempotent writes do **not** retry unless explicitly allowed.【F:github_mcp/http_clients.py†L444-L520】
+- Retry behavior defaults to **idempotent methods** (GET/HEAD/OPTIONS) and treats GraphQL POST as retryable, while non-idempotent writes do **not** retry unless explicitly allowed.【F:github_mcp/http_clients.py†L444-L520】
 
 ### 5) Workspace mirror
 
@@ -45,7 +45,7 @@ Key building blocks:
 ### 1) Write gating and approvals
 
 - Write tools are always present in the catalog, but **runtime enforcement** checks the `WRITE_ALLOWED` gate. When auto-approve is disabled, write calls raise a `WriteApprovalRequiredError` unless a request-scoped approval override is set.【F:github_mcp/mcp_server/context.py†L37-L220】【F:github_mcp/mcp_server/decorators.py†L1576-L1610】
-- The auto-approve gate is controlled by environment variables (`ADAPTIV_MCP_AUTO_APPROVE`, `MCP_AUTO_APPROVE`, `AUTO_APPROVE`). The gate value is cached and also used to refresh tool metadata so discovery reflects current policy.【F:github_mcp/mcp_server/context.py†L120-L207】
+- The auto-approve gate is controlled by environment variables (`ADAPTIV_MCP_AUTO_APPROVE`, `MCP_AUTO_APPROVE`, `AUTO_APPROVE`). The gate value is cached and also used to refresh tool metadata so discovery reflects the current setting.【F:github_mcp/mcp_server/context.py†L120-L207】
 
 ### 2) Idempotency and deduplication
 
