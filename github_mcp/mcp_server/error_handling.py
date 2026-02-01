@@ -389,16 +389,13 @@ def _structured_tool_error(
     # including tokens or other high-entropy strings). To avoid upstream safety
     # blocks in hosted connector environments, sanitize these argument values.
     if args is not None:
-        if category in {"validation", "patch"}:
-            try:
-                error_detail["debug"] = {
-                    "args": _sanitize_debug_value(args),
-                    "arg_keys": sorted(str(k) for k in args.keys()),
-                }
-            except Exception:
-                error_detail["debug"] = {"args": {}, "arg_keys": ["<unavailable>"]}
-        else:
-            error_detail["debug"] = {"args": args}
+        try:
+            error_detail["debug"] = {
+                "args": _sanitize_debug_value(args),
+                "arg_keys": sorted(str(k) for k in args.keys()),
+            }
+        except Exception:
+            error_detail["debug"] = {"args": {}, "arg_keys": ["<unavailable>"]}
 
     payload: dict[str, Any] = {
         "status": "error",
