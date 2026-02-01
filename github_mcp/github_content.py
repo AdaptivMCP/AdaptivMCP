@@ -300,6 +300,10 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
 
     if content_url.startswith("sandbox:"):
         local_path = content_url[len("sandbox:") :]
+        if not local_path.strip():
+            raise GitHubAPIError(
+                "sandbox: content_url must include a file path after the prefix"
+            )
         rewrite_base = SANDBOX_CONTENT_BASE_URL
         try:
             return _read_local(local_path, sandbox_hint)
