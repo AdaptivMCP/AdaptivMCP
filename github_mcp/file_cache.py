@@ -3,7 +3,7 @@
 The cache is intentionally lightweight: it keeps decoded file payloads in
 memory for the lifetime of the process so callers can rehydrate context
 without re-fetching from GitHub on every tool call. Entries are evicted using
-an LRU policy when the cache exceeds configured entry or byte caps.
+an LRU eviction strategy when the cache exceeds configured entry or byte caps.
 """
 
 from __future__ import annotations

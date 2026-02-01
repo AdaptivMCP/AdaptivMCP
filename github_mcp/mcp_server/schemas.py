@@ -536,7 +536,7 @@ def _build_tool_docstring(
     - Compact first line (many clients show only a summary in tool pickers).
     - Developer-facing detail aligned with runtime schema and tool metadata
       (write gates, visibility, UI hints).
-    - Truthful, non-prescriptive language: reference material, not policy.
+    - Truthful, non-prescriptive language: reference material, not mandates.
 
     High-level runtime behavior:
     - Tools are registered via the @mcp_tool decorator which attaches a JSON
@@ -759,7 +759,7 @@ def _annotation_to_schema(annotation: Any) -> dict[str, Any]:
 
     # typing.Literal[...] support.
     #
-    # Contract policy: keep schemas permissive.
+    # Contract guidance: keep schemas permissive.
     # Some MCP clients treat the JSON Schema as a hard validator and will block
     # requests that contain values outside of an enum/anyOf. Since the server
     # does not enforce JSON Schema at runtime, we intentionally avoid emitting
@@ -851,7 +851,7 @@ def _schema_from_signature(
     schema: dict[str, Any] = {
         "type": "object",
         "properties": properties,
-        # Contract policy:
+        # Contract guidance:
         # The server does not enforce JSON Schema at runtime, but some clients
         # and UIs may treat the schema as a hard contract. For a developer-facing
         # MCP server we prefer permissive schemas by default so clients can send
@@ -921,7 +921,7 @@ def _preflight_tool_args(
 ) -> dict[str, Any]:
     """Prepare tool args for display/logging.
 
-    Policy:
+    Notes:
     - No transformation.
     - Ensure JSON-serializable output.
     """
