@@ -309,6 +309,9 @@ async def workspace_task_execute(
         ):
             raise TypeError("plan_queries must be a list[str]")
 
+        if not isinstance(commit_message, str) or not commit_message.strip():
+            raise ValueError("commit_message must be a non-empty string")
+
         if finalize_mode not in {"pr", "commit_only"}:
             raise ValueError("finalize_mode must be one of: pr, commit_only")
 
