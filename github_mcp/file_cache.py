@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from . import config
 
@@ -95,6 +95,11 @@ def cache_payload(
     if isinstance(decoded_bytes, (bytes, bytearray)):
         size_bytes = len(decoded_bytes)
 
+    json_blob = decoded.get("json")
+    sha = decoded.get("sha")
+    if sha is None and isinstance(json_blob, Mapping):
+        sha = json_blob.get("sha")
+
     entry = {
         **decoded,
         "cached_at": time.time(),
@@ -102,7 +107,7 @@ def cache_payload(
         "ref": ref,
         "path": path,
         "size_bytes": size_bytes,
-        "sha": decoded.get("sha") or decoded.get("json", {}).get("sha"),
+        "sha": sha,
     }
     FILE_CACHE.put(cache_key(full_name, ref, path), entry)
     return entry
