@@ -28,6 +28,26 @@ def normalize_base_path(base_path: str | None) -> str:
     return "/" + cleaned.strip("/")
 
 
+def _first_forwarded_prefix(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        candidates = value.split(",")
+    elif isinstance(value, Iterable):
+        candidates = []
+        for item in value:
+            if item is None:
+                continue
+            candidates.extend(str(item).split(","))
+    else:
+        candidates = [str(value)]
+    for candidate in candidates:
+        cleaned = candidate.strip()
+        if cleaned:
+            return cleaned
+    return None
+
+
 def request_base_path(request: Any, suffixes: Iterable[str]) -> str:
     """Best-effort derivation of a base path for the current request.
 
@@ -41,7 +61,7 @@ def request_base_path(request: Any, suffixes: Iterable[str]) -> str:
     headers = getattr(request, "headers", None) or {}
     hdr_prefix = "x-forwarded-" + "prefix"
     hdr_path = "x-forwarded-" + "path"
-    forwarded_prefix = headers.get(hdr_prefix) or headers.get(hdr_path)
+    forwarded_prefix = _first_forwarded_prefix(headers.get(hdr_prefix) or headers.get(hdr_path))
     if forwarded_prefix:
         return normalize_base_path(forwarded_prefix)
 
