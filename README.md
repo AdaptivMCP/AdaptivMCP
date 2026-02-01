@@ -52,22 +52,7 @@ HTTP registry/diagnostics:
 - `GET /ui/tools` – tool catalog UI
 - `GET /ui.json` – machine-readable service metadata (base-path aware)
 
-## Quickstart (local)
-
-### 1) Install
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-
-# Runtime deps only (recommended for running the server)
-pip install -r requirements.txt
-
-# OR: dev deps (includes runtime + tests/lint + python-dotenv)
-# pip install -r dev-requirements.txt
-```
-
-### 2) Configure env vars
+### 1) Configure env vars
 
 Copy the sample env file and set at least a GitHub token:
 
@@ -81,17 +66,6 @@ Notes:
 - If `python-dotenv` is installed, the server will load values from `.env` automatically (see `.env.example` comments).
 - You usually only need **one** of the supported GitHub token variables (commonly `GITHUB_TOKEN`).
 - Render tools require a Render API token (`RENDER_API_KEY` or one of its aliases).
-
-### 3) Run
-
-```bash
-uvicorn main:app --reload --port 8000
-```
-
-Open:
-
-- `http://localhost:8000/ui`
-- `http://localhost:8000/ui.json`
 
 ## Configuration
 
@@ -200,14 +174,3 @@ The fastest way to see what’s enabled on a running instance:
 - `GET /ui/tools` (human-friendly)
 - `GET /tools` (connector-friendly)
 - `GET /resources` (resource discovery)
-
----
-
-### Compatibility note
-
-This server keeps **both** MCP transports available:
-
-- Some clients still reference `/sse`.
-- Newer OpenAI connector flows reference `/mcp`.
-
-If you deploy behind a reverse proxy that adds a base path prefix, `/ui.json` will report the correct prefixed endpoints.
