@@ -43,6 +43,26 @@ def test_request_base_path_prefers_forwarded_prefix():
     assert path_utils.request_base_path(request, ["/api"]) == "/proxy"
 
 
+@pytest.mark.parametrize(
+    ("header_value", "expected"),
+    [
+        ("/proxy/, /other/", "/proxy"),
+        ("  , /proxy/sub/  , /other", "/proxy/sub"),
+        (["/proxy/", "/other/"], "/proxy"),
+    ],
+)
+def test_request_base_path_handles_forwarded_prefix_lists(header_value, expected):
+    from github_mcp import path_utils
+
+    request = DummyRequest(
+        headers={"x-forwarded-prefix": header_value},
+        path="/ignored/api",
+        scope={"root_path": "/root/"},
+    )
+
+    assert path_utils.request_base_path(request, ["/api"]) == expected
+
+
 def test_request_base_path_uses_forwarded_path_header():
     from github_mcp import path_utils
 
