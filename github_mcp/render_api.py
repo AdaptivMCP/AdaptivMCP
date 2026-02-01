@@ -181,6 +181,41 @@ def _render_http_header(
     return head
 
 
+def _render_http_field(
+    label: str,
+    value: str,
+    *,
+    value_color: str | None = None,
+) -> str:
+    if LOG_TOOL_COLOR:
+        label_text = _ansi(f"{label}=", ANSI_DIM)
+        if value_color:
+            return label_text + _ansi(value, value_color)
+        return label_text + value
+    return f"{label}={value}"
+
+
+def _render_http_kv(label: str, value: Any, *, limit: int = 220) -> str | None:
+    if value in (None, "", [], {}):
+        return None
+    rendered = _truncate_text(value, limit=limit)
+    return _render_http_field(label, rendered)
+
+
+def _render_http_line(
+    kind: str,
+    method: str,
+    path: str,
+    *,
+    inline_ctx: str = "",
+    fields: list[str] | None = None,
+) -> str:
+    parts = [_render_http_header(kind, method, path, inline_ctx=inline_ctx)]
+    if fields:
+        parts.extend([field for field in fields if field])
+    return " | ".join(parts)
+
+
 def _log_render_http(
     *,
     level: str,
@@ -353,44 +388,23 @@ async def render_request(
 
     # START (dev-facing)
     if LOG_RENDER_HTTP:
-        bits = []
-        bits.append(
-            _render_http_header("RENDER", method, effective_path, inline_ctx=inline_ctx)
-        )
-        if normalized_base:
-            bits.append(
-                _ansi(f"base={normalized_base}", ANSI_DIM)
-                if LOG_TOOL_COLOR
-                else f"base={normalized_base}"
-            )
-        if token_source:
-            bits.append(
-                _ansi(f"token={token_source}", ANSI_DIM)
-                if LOG_TOOL_COLOR
-                else f"token={token_source}"
-            )
-        if params:
-            bits.append(
-                _ansi(f"params={_truncate_text(params, limit=220)}", ANSI_DIM)
-                if LOG_TOOL_COLOR
-                else f"params={_truncate_text(params, limit=220)}"
-            )
-        if json_body:
-            bits.append(
-                _ansi(f"json={_truncate_text(json_body, limit=220)}", ANSI_DIM)
-                if LOG_TOOL_COLOR
-                else f"json={_truncate_text(json_body, limit=220)}"
-            )
         safe_headers = _safe_render_headers(headers)
-        if safe_headers:
-            bits.append(
-                _ansi(f"headers={_truncate_text(safe_headers, limit=220)}", ANSI_DIM)
-                if LOG_TOOL_COLOR
-                else f"headers={_truncate_text(safe_headers, limit=220)}"
-            )
+        bits = [
+            _render_http_kv("base", normalized_base),
+            _render_http_kv("token", token_source),
+            _render_http_kv("params", params),
+            _render_http_kv("json", json_body),
+            _render_http_kv("headers", safe_headers),
+        ]
         _log_render_http(
             level="info",
-            msg="\n".join(bits),
+            msg=_render_http_line(
+                "RENDER",
+                method,
+                effective_path,
+                inline_ctx=inline_ctx,
+                fields=[bit for bit in bits if bit],
+            ),
             extra={
                 "event": "render_http_started",
                 "request": summarize_request_context(req)
@@ -421,20 +435,26 @@ async def render_request(
             )
         except Exception as exc:
             duration_ms = (time.perf_counter() - started) * 1000
+            error_value = _truncate_text(exc, limit=240)
             _log_render_http(
                 level="error",
-                msg=(
-                    _render_http_header(
-                        "RENDER_FAIL", method, effective_path, inline_ctx=inline_ctx
-                    )
-                    + " "
-                    + (
-                        _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
-                        if LOG_TOOL_COLOR
-                        else f"({duration_ms:.0f}ms)"
-                    )
-                    + "\n"
-                    + (_ansi(str(exc), ANSI_RED) if LOG_TOOL_COLOR else str(exc))
+                msg=_render_http_line(
+                    "RENDER_FAIL",
+                    method,
+                    effective_path,
+                    inline_ctx=inline_ctx,
+                    fields=[
+                        _render_http_field(
+                            "dur",
+                            f"{duration_ms:.0f}ms",
+                            value_color=ANSI_DIM,
+                        ),
+                        _render_http_field(
+                            "error",
+                            error_value,
+                            value_color=ANSI_RED,
+                        ),
+                    ],
                 ),
                 extra={
                     "event": "render_http_exception",
@@ -489,43 +509,31 @@ async def render_request(
                 rl_bits.append(f"remaining={rl_remaining}")
             if rl_reset is not None:
                 rl_bits.append(f"reset={rl_reset}")
-            rl = ("rate_limit " + ", ".join(rl_bits)) if rl_bits else ""
-            rl = _ansi(rl, ANSI_DIM) if (rl and LOG_TOOL_COLOR) else rl
-
-            line = (
-                _render_http_header(
-                    "RENDER_RES", method, effective_path, inline_ctx=inline_ctx
-                )
-                + " "
-                + status_txt
-                + " "
-                + (
-                    _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
-                    if LOG_TOOL_COLOR
-                    else f"({duration_ms:.0f}ms)"
-                )
-            )
-            if attempt:
-                line += " " + (
-                    _ansi(f"attempt={attempt + 1}", ANSI_DIM)
-                    if LOG_TOOL_COLOR
-                    else f"attempt={attempt + 1}"
-                )
-            if rl:
-                line += " " + rl
-
-            body_lines: list[str] = []
-            if LOG_RENDER_HTTP_BODIES and not body_lines:
+            rl_value = ", ".join(rl_bits) if rl_bits else ""
+            body_preview = None
+            if LOG_RENDER_HTTP_BODIES:
                 preview = body if body is not None else getattr(resp, "text", "")
-                body_lines.append(
-                    _ansi("body", ANSI_CYAN)
-                    + "\n"
-                    + _truncate_text(preview, limit=2000)
-                    if LOG_TOOL_COLOR
-                    else "body\n" + _truncate_text(preview, limit=2000)
-                )
+                body_preview = _truncate_text(preview, limit=2000)
 
-            msg = line if not body_lines else (line + "\n" + "\n".join(body_lines))
+            msg = _render_http_line(
+                "RENDER_RES",
+                method,
+                effective_path,
+                inline_ctx=inline_ctx,
+                fields=[
+                    _render_http_field("status", status_txt),
+                    _render_http_field(
+                        "dur",
+                        f"{duration_ms:.0f}ms",
+                        value_color=ANSI_DIM,
+                    ),
+                    _render_http_field("attempt", str(attempt + 1))
+                    if attempt
+                    else "",
+                    _render_http_kv("rate_limit", rl_value) if rl_value else "",
+                    _render_http_kv("body", body_preview) if body_preview else "",
+                ],
+            )
 
             payload: dict[str, Any] = {
                 "event": "render_http_completed",
