@@ -104,6 +104,32 @@ async def test_workspace_task_plan_collects_tree_and_search(
 
 
 @pytest.mark.anyio
+async def test_workspace_task_plan_skips_blank_queries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.workspace_tools import task_workflows
+
+    fake = _FakeTW()
+    monkeypatch.setattr(task_workflows, "_tw", lambda: fake)
+
+    res = await task_workflows.workspace_task_plan(
+        full_name="octo-org/octo-repo",
+        ref="main",
+        queries=["   ", "\n", "README", ""],
+        max_tree_files=10,
+        max_tree_bytes=1000,
+        max_search_results=5,
+    )
+
+    assert res["status"] == "ok"
+    assert res["ok"] is True
+    assert len(res["searches"]) == 1
+    assert res["searches"][0]["query"] == "README"
+    fns = [c["fn"] for c in fake.calls]
+    assert fns == ["scan_workspace_tree", "rg_search_workspace"]
+
+
+@pytest.mark.anyio
 async def test_workspace_task_apply_edits_passes_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -126,6 +152,28 @@ async def test_workspace_task_apply_edits_passes_defaults(
     assert kwargs["fail_fast"] is True
     assert kwargs["rollback_on_error"] is True
     assert kwargs["preview_only"] is True
+
+
+@pytest.mark.anyio
+async def test_workspace_task_execute_rejects_blank_commit_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.workspace_tools import task_workflows
+
+    fake = _FakeTW()
+    monkeypatch.setattr(task_workflows, "_tw", lambda: fake)
+
+    res = await task_workflows.workspace_task_execute(
+        full_name="octo-org/octo-repo",
+        base_ref="main",
+        operations=[{"op": "write", "path": "README.md", "content": "x"}],
+        commit_message="   ",
+    )
+
+    assert res["status"] == "error"
+    assert res["ok"] is False
+    assert res["error_detail"]["category"] == "validation"
+    assert fake.calls == []
 
 
 @pytest.mark.anyio
