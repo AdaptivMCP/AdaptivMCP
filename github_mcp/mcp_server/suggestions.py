@@ -127,6 +127,7 @@ def expected_args_from_signature(signature: inspect.Signature | None) -> dict[st
             if p.kind in {
                 inspect.Parameter.VAR_KEYWORD,
                 inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.POSITIONAL_ONLY,
             }:
                 continue
             names.append(p.name)
