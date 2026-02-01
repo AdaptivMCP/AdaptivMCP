@@ -61,7 +61,9 @@ def request_base_path(request: Any, suffixes: Iterable[str]) -> str:
     headers = getattr(request, "headers", None) or {}
     hdr_prefix = "x-forwarded-" + "prefix"
     hdr_path = "x-forwarded-" + "path"
-    forwarded_prefix = _first_forwarded_prefix(headers.get(hdr_prefix) or headers.get(hdr_path))
+    forwarded_prefix = _first_forwarded_prefix(
+        headers.get(hdr_prefix) or headers.get(hdr_path)
+    )
     if forwarded_prefix:
         return normalize_base_path(forwarded_prefix)
 

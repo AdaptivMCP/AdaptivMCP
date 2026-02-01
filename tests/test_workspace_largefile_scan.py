@@ -403,11 +403,15 @@ def test_read_workspace_file_sections_clips_single_long_line(tmp_path, monkeypat
     assert len(part["lines"][0]["text"]) == 9  # max_chars_per_section - 1
 
 
-def test_read_workspace_file_sections_clips_within_section_budget(tmp_path, monkeypatch):
+def test_read_workspace_file_sections_clips_within_section_budget(
+    tmp_path, monkeypatch
+):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     p = repo_dir / "clip.txt"
-    p.write_text("".join(["A" * 8 + "\n", "B" * 8 + "\n", "C" * 8 + "\n"]), encoding="utf-8")
+    p.write_text(
+        "".join(["A" * 8 + "\n", "B" * 8 + "\n", "C" * 8 + "\n"]), encoding="utf-8"
+    )
 
     dummy = DummyWorkspaceTools(str(repo_dir))
     monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)

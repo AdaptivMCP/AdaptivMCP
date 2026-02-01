@@ -21,7 +21,7 @@ def test_chatgpt_friendly_result_overwrites_conflicting_ok(monkeypatch):
     assert shaped["ok"] is True
 
 
-def test_mcp_tool_error_is_shaped_and_includes_gating(monkeypatch):
+def test_mcp_tool_error_is_shaped_without_gating(monkeypatch):
     import github_mcp.mcp_server.decorators as dec
 
     monkeypatch.setattr(dec, "_running_under_pytest", lambda: False)

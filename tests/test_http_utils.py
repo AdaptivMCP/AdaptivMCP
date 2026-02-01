@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
 
 from github_mcp.http_utils import extract_response_json, parse_rate_limit_delay_seconds
 
@@ -118,7 +117,7 @@ def test_parse_rate_limit_delay_duration_seconds_disallowed_returns_none() -> No
             reset_header_names=("Ratelimit-Reset",),
             allow_duration_seconds=False,
             now=0.0,
-    )
+        )
         is None
     )
 

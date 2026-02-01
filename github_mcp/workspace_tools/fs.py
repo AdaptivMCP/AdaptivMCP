@@ -3912,7 +3912,9 @@ async def apply_workspace_operations(
                     try:
                         occurrence = int(occurrence_raw)
                     except Exception as exc:
-                        raise ValueError("delete_word.occurrence must be an int >= 1") from exc
+                        raise ValueError(
+                            "delete_word.occurrence must be an int >= 1"
+                        ) from exc
                     if occurrence < 1:
                         raise ValueError("delete_word.occurrence must be an int >= 1")
                     replace_all = bool(op.get("replace_all", False))

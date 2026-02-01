@@ -527,11 +527,11 @@ async def render_request(
                         f"{duration_ms:.0f}ms",
                         value_color=ANSI_DIM,
                     ),
-                    _render_http_field("attempt", str(attempt + 1))
-                    if attempt
+                    _render_http_field("attempt", str(attempt + 1)) if attempt else "",
+                    (_render_http_kv("rate_limit", rl_value) or "") if rl_value else "",
+                    (_render_http_kv("body", body_preview) or "")
+                    if body_preview
                     else "",
-                    _render_http_kv("rate_limit", rl_value) if rl_value else "",
-                    _render_http_kv("body", body_preview) if body_preview else "",
                 ],
             )
 

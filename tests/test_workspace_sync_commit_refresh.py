@@ -46,7 +46,9 @@ def test_perform_github_commit_and_refresh_workspace_uses_main_overrides(monkeyp
     }
 
 
-def test_perform_github_commit_and_refresh_workspace_logs_refresh_error(monkeypatch, caplog):
+def test_perform_github_commit_and_refresh_workspace_logs_refresh_error(
+    monkeypatch, caplog
+):
     """Refresh errors should be logged but not fail the commit."""
 
     from github_mcp.main_tools import workspace_sync
@@ -77,11 +79,14 @@ def test_perform_github_commit_and_refresh_workspace_logs_refresh_error(monkeypa
 
     assert result == {"ok": True}
     assert any(
-        "Repo mirror refresh returned an error after commit" in r.message for r in caplog.records
+        "Repo mirror refresh returned an error after commit" in r.message
+        for r in caplog.records
     )
 
 
-def test_perform_github_commit_and_refresh_workspace_swallow_refresh_exception(monkeypatch, caplog):
+def test_perform_github_commit_and_refresh_workspace_swallow_refresh_exception(
+    monkeypatch, caplog
+):
     """Exceptions during refresh should be logged and swallowed."""
 
     from github_mcp.main_tools import workspace_sync
@@ -112,6 +117,6 @@ def test_perform_github_commit_and_refresh_workspace_swallow_refresh_exception(m
 
     assert result == {"ok": True}
     assert any(
-        "Failed to refresh repo mirror after commit" in r.message for r in caplog.records
+        "Failed to refresh repo mirror after commit" in r.message
+        for r in caplog.records
     )
-

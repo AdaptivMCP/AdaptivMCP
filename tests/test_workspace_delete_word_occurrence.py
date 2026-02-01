@@ -47,7 +47,9 @@ def test_delete_workspace_word_occurrence_out_of_range_noop(tmp_path, monkeypatc
     assert p.read_text(encoding="utf-8") == original
 
 
-def test_delete_workspace_word_invalid_occurrence_returns_structured_error(tmp_path, monkeypatch):
+def test_delete_workspace_word_invalid_occurrence_returns_structured_error(
+    tmp_path, monkeypatch
+):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     (repo_dir / "note.txt").write_text("foo\n", encoding="utf-8")
@@ -72,8 +74,9 @@ def test_delete_workspace_word_invalid_occurrence_returns_structured_error(tmp_p
     assert error_detail.get("category") == "validation"
 
 
-
-def test_apply_workspace_operations_delete_word_out_of_range_is_noop(tmp_path, monkeypatch):
+def test_apply_workspace_operations_delete_word_out_of_range_is_noop(
+    tmp_path, monkeypatch
+):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     p = repo_dir / "note.txt"
