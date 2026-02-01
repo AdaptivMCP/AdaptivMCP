@@ -3506,6 +3506,23 @@ async def apply_workspace_operations(
     # Best-effort rollback by restoring prior file bytes.
     backups: dict[str, bytes | None] = {}
 
+    # Track the evolving file contents within this operation batch.
+    # This avoids later operations reading the pre-batch backups instead of
+    # the current state (especially in preview_only mode).
+    current: dict[str, bytes | None] = {}
+
+    def _current_bytes(abs_path: str) -> bytes | None:
+        if abs_path in current:
+            return current[abs_path]
+        if not os.path.exists(abs_path):
+            return None
+        if os.path.isdir(abs_path):
+            return None
+        return _read_bytes(abs_path)
+
+    def _set_current_bytes(abs_path: str, data: bytes | None) -> None:
+        current[abs_path] = data
+
     def _backup_path(abs_path: str) -> None:
         if abs_path in backups:
             return
@@ -3564,12 +3581,14 @@ async def apply_workspace_operations(
 
                     abs_path = _workspace_safe_join(repo_dir, path)
                     _backup_path(abs_path)
+                    before_data = current.get(abs_path, backups[abs_path])
                     before = (
-                        backups[abs_path].decode("utf-8", errors="replace")
-                        if backups[abs_path]
+                        before_data.decode("utf-8", errors="replace")
+                        if before_data
                         else ""
                     )
                     after = content
+                    current[abs_path] = bytes(after, "utf-8")
                     if not preview_only:
                         _workspace_write_text(
                             repo_dir, path, content, create_parents=create_parents
@@ -3661,9 +3680,11 @@ async def apply_workspace_operations(
                     try:
                         occurrence = int(occurrence_raw)
                     except Exception as exc:
-                        raise ValueError("delete_word.occurrence must be an int >= 1") from exc
+                        raise ValueError(
+                            "replace_text.occurrence must be an int >= 1"
+                        ) from exc
                     if occurrence < 1:
-                        raise ValueError("delete_word.occurrence must be an int >= 1")
+                        raise ValueError("replace_text.occurrence must be an int >= 1")
                     if not isinstance(path, str) or not path.strip():
                         raise ValueError("replace_text.path must be a non-empty string")
                     if not isinstance(old, str) or old == "":
@@ -3674,12 +3695,13 @@ async def apply_workspace_operations(
                         raise TypeError("replace_text.new must be a string")
 
                     abs_path = _workspace_safe_join(repo_dir, path)
-                    if not os.path.exists(abs_path):
+                    if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
+                    before_data = current.get(abs_path, backups[abs_path])
                     before = (
-                        backups[abs_path].decode("utf-8", errors="replace")
-                        if backups[abs_path]
+                        before_data.decode("utf-8", errors="replace")
+                        if before_data
                         else ""
                     )
 
@@ -3703,6 +3725,7 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
+                    current[abs_path] = bytes(after, "utf-8")
                     results.append(
                         {
                             "index": idx,
@@ -3732,12 +3755,13 @@ async def apply_workspace_operations(
                     end_col = int(end.get("col"))
 
                     abs_path = _workspace_safe_join(repo_dir, path)
-                    if not os.path.exists(abs_path):
+                    if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
+                    before_data = current.get(abs_path, backups[abs_path])
                     before = (
-                        backups[abs_path].decode("utf-8", errors="replace")
-                        if backups[abs_path]
+                        before_data.decode("utf-8", errors="replace")
+                        if before_data
                         else ""
                     )
                     lines = _split_lines_keepends(before)
@@ -3775,12 +3799,13 @@ async def apply_workspace_operations(
                         raise ValueError("delete_lines.end_line must be >= start_line")
 
                     abs_path = _workspace_safe_join(repo_dir, path)
-                    if not os.path.exists(abs_path):
+                    if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
+                    before_data = current.get(abs_path, backups[abs_path])
                     before = (
-                        backups[abs_path].decode("utf-8", errors="replace")
-                        if backups[abs_path]
+                        before_data.decode("utf-8", errors="replace")
+                        if before_data
                         else ""
                     )
                     lines = _split_lines_keepends(before)
@@ -3825,12 +3850,13 @@ async def apply_workspace_operations(
                         raise ValueError("delete_chars.count must be >= 1")
 
                     abs_path = _workspace_safe_join(repo_dir, path)
-                    if not os.path.exists(abs_path):
+                    if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
+                    before_data = current.get(abs_path, backups[abs_path])
                     before = (
-                        backups[abs_path].decode("utf-8", errors="replace")
-                        if backups[abs_path]
+                        before_data.decode("utf-8", errors="replace")
+                        if before_data
                         else ""
                     )
                     lines = _split_lines_keepends(before)
@@ -3846,6 +3872,7 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
+                    current[abs_path] = bytes(after, "utf-8")
                     results.append(
                         {
                             "index": idx,
