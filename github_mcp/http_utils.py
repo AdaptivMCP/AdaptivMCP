@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import time
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -66,16 +68,34 @@ def parse_rate_limit_delay_seconds(
 
     headers: Mapping[str, str] = getattr(resp, "headers", {}) or {}
 
-    retry_after = headers.get("Retry-After")
+    def _get_header(name: str) -> str | None:
+        value = headers.get(name)
+        if value is not None:
+            return value
+        lowered = name.lower()
+        for key, header_value in headers.items():
+            if key.lower() == lowered:
+                return header_value
+        return None
+
+    retry_after = _get_header("Retry-After")
     if retry_after:
         try:
             return max(0.0, float(retry_after))
         except ValueError:
-            return None
+            try:
+                parsed = parsedate_to_datetime(retry_after)
+            except (TypeError, ValueError):
+                return None
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            if now is None:
+                now = time.time()
+            return max(0.0, parsed.timestamp() - now)
 
     reset_header: str | None = None
     for name in reset_header_names:
-        candidate = headers.get(name)
+        candidate = _get_header(name)
         if candidate:
             reset_header = candidate
             break

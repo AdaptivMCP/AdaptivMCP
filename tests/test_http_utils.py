@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import pytest
+
 from github_mcp.http_utils import extract_response_json, parse_rate_limit_delay_seconds
 
 
@@ -42,6 +44,30 @@ def test_parse_rate_limit_delay_retry_after_takes_precedence() -> None:
             resp, reset_header_names=("X-RateLimit-Reset",), now=0.0
         )
         == 2.0
+    )
+
+
+def test_parse_rate_limit_delay_retry_after_http_date() -> None:
+    now = 1_700_000_000.0
+    resp = _FakeResp(headers={"Retry-After": "Wed, 21 Oct 2015 07:28:00 GMT"})
+    assert (
+        parse_rate_limit_delay_seconds(
+            resp,
+            reset_header_names=("X-RateLimit-Reset",),
+            now=now,
+        )
+        == 0.0
+    )
+
+
+def test_parse_rate_limit_delay_retry_after_invalid_date_returns_none() -> None:
+    resp = _FakeResp(headers={"Retry-After": "nope"})
+    assert (
+        parse_rate_limit_delay_seconds(
+            resp,
+            reset_header_names=("X-RateLimit-Reset",),
+        )
+        is None
     )
 
 
@@ -92,6 +118,19 @@ def test_parse_rate_limit_delay_duration_seconds_disallowed_returns_none() -> No
             reset_header_names=("Ratelimit-Reset",),
             allow_duration_seconds=False,
             now=0.0,
-        )
+    )
         is None
+    )
+
+
+def test_parse_rate_limit_delay_headers_case_insensitive() -> None:
+    now = 1_700_000_000.0
+    resp = _FakeResp(headers={"x-ratelimit-reset": str(now + 12.0)})
+    assert (
+        parse_rate_limit_delay_seconds(
+            resp,
+            reset_header_names=("X-RateLimit-Reset",),
+            now=now,
+        )
+        == 12.0
     )
