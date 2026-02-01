@@ -192,9 +192,7 @@ def test_workspace_task_apply_edits_paths(monkeypatch):
     monkeypatch.setattr(
         task_workflows,
         "_tw",
-        lambda: FakeTW(
-            {"status": "ok", "ok": False, "results": [{"status": "error"}]}
-        ),
+        lambda: FakeTW({"status": "ok", "ok": False, "results": [{"status": "error"}]}),
     )
     res = asyncio.run(
         task_workflows.workspace_task_apply_edits(
