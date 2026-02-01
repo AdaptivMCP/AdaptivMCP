@@ -750,9 +750,11 @@ def _git_show_text_limited(
                     pass
         try:
             _out, _err = proc.communicate(timeout=10)
-            # If we didn't hit truncation, stdout may be fully captured by communicate.
-            if not truncated_bytes:
-                stdout = _out or b""
+            # We may have already streamed some bytes from proc.stdout above.
+            # If we didn't truncate, append any remaining bytes from communicate
+            # rather than overwriting the accumulated buffer.
+            if not truncated_bytes and _out:
+                stdout += _out
             stderr = _err or b""
         except Exception:
             try:
@@ -761,8 +763,8 @@ def _git_show_text_limited(
                 pass
             try:
                 _out, _err = proc.communicate(timeout=5)
-                if not truncated_bytes:
-                    stdout = _out or b""
+                if not truncated_bytes and _out:
+                    stdout += _out
                 stderr = _err or b""
             except Exception:  # nosec B110
                 pass
