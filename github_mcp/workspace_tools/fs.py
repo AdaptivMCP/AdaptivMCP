@@ -20,9 +20,7 @@ from github_mcp.utils import _normalize_timeout_seconds
 from ._shared import _tw
 
 
-# Default read limits to avoid loading multi-megabyte files into memory.
-# These are used by the single-file and multi-file read tools unless callers
-# override them.
+# Default read limits (legacy).
 _DEFAULT_MAX_READ_BYTES = 8_000_000
 _DEFAULT_MAX_READ_CHARS = 2000000
 # ---------------------------------------------------------------------------
@@ -190,21 +188,25 @@ def _workspace_read_text_limited(
     max_chars: int,
     max_bytes: int | None = None,
 ) -> dict[str, Any]:
-    """Read a workspace file as text with hard truncation limits.
+    """Read a workspace file as text with optional truncation limits.
 
-    - max_bytes limits the number of raw bytes read from disk.
-    - max_chars limits the number of decoded characters returned.
+    - max_bytes limits the number of raw bytes read from disk (<=0 disables).
+    - max_chars limits the number of decoded characters returned (<=0 disables).
 
     The returned payload includes a `truncated` boolean.
     """
 
-    if not isinstance(max_chars, int) or max_chars < 1:
-        raise ValueError("max_chars must be an int >= 1")
-    if max_bytes is None:
+    if not isinstance(max_chars, int):
+        raise ValueError("max_chars must be an int")
+    if max_chars <= 0:
+        max_chars = 0
+    if max_bytes is not None and not isinstance(max_bytes, int):
+        raise ValueError("max_bytes must be an int or None")
+    if max_bytes is not None and max_bytes <= 0:
+        max_bytes = None
+    if max_bytes is None and max_chars > 0:
         # Heuristic: assume up to ~4 bytes per char for UTF-8.
         max_bytes = max(_DEFAULT_MAX_READ_BYTES, max_chars * 4)
-    if not isinstance(max_bytes, int) or max_bytes < 1:
-        raise ValueError("max_bytes must be an int >= 1")
 
     abs_path = _workspace_safe_join(repo_dir, path)
     if not os.path.exists(abs_path):
@@ -222,11 +224,12 @@ def _workspace_read_text_limited(
     # sample up-front and return a stable, non-text payload.
     if _is_probably_binary(abs_path):
         size_bytes = os.path.getsize(abs_path)
-        truncated_bytes = size_bytes > max_bytes
+        truncated_bytes = max_bytes is not None and size_bytes > max_bytes
         sample = b""
         try:
             with open(abs_path, "rb") as bf:
-                sample = bf.read(min(4096, int(max_bytes)))
+                limit = 4096 if max_bytes is None else min(4096, int(max_bytes))
+                sample = bf.read(limit)
         except Exception:
             sample = b""
 
@@ -242,14 +245,14 @@ def _workspace_read_text_limited(
             "truncated": bool(truncated_bytes),
             "truncated_bytes": bool(truncated_bytes),
             "truncated_chars": False,
-            "max_bytes": int(max_bytes),
+            "max_bytes": int(max_bytes) if max_bytes is not None else None,
             "max_chars": int(max_chars),
             "text_digest": digest,
         }
 
     size_bytes = os.path.getsize(abs_path)
-    truncated_bytes = size_bytes > max_bytes
-    to_read = min(size_bytes, max_bytes)
+    truncated_bytes = max_bytes is not None and size_bytes > max_bytes
+    to_read = size_bytes if max_bytes is None else min(size_bytes, max_bytes)
     with open(abs_path, "rb") as f:
         data = f.read(to_read)
 
@@ -260,7 +263,7 @@ def _workspace_read_text_limited(
         had_errors = True
         text = data.decode("utf-8", errors="replace")
 
-    truncated_chars = len(text) > max_chars
+    truncated_chars = max_chars > 0 and len(text) > max_chars
     if truncated_chars:
         text = text[:max_chars]
 
@@ -278,7 +281,7 @@ def _workspace_read_text_limited(
         "truncated": bool(truncated_bytes or truncated_chars),
         "truncated_bytes": bool(truncated_bytes),
         "truncated_chars": bool(truncated_chars),
-        "max_bytes": int(max_bytes),
+        "max_bytes": int(max_bytes) if max_bytes is not None else None,
         "max_chars": int(max_chars),
         "text_digest": digest,
     }
@@ -693,17 +696,22 @@ def _git_show_text_limited(
     max_chars: int,
     max_bytes: int | None = None,
 ) -> dict[str, Any]:
-    """Like _git_show_text, but reads at most max_bytes and returns at most max_chars.
+    """Like _git_show_text, but can enforce optional size limits.
 
-    This avoids holding very large blobs in memory.
+    - max_bytes limits the number of raw bytes read (<=0 disables).
+    - max_chars limits the number of decoded characters returned (<=0 disables).
     """
 
-    if not isinstance(max_chars, int) or max_chars < 1:
-        raise ValueError("max_chars must be an int >= 1")
-    if max_bytes is None:
+    if not isinstance(max_chars, int):
+        raise ValueError("max_chars must be an int")
+    if max_chars <= 0:
+        max_chars = 0
+    if max_bytes is not None and not isinstance(max_bytes, int):
+        raise ValueError("max_bytes must be an int or None")
+    if max_bytes is not None and max_bytes <= 0:
+        max_bytes = None
+    if max_bytes is None and max_chars > 0:
         max_bytes = max(_DEFAULT_MAX_READ_BYTES, max_chars * 4)
-    if not isinstance(max_bytes, int) or max_bytes < 1:
-        raise ValueError("max_bytes must be an int >= 1")
 
     ref = _sanitize_git_ref(git_ref)
     rel = _sanitize_git_path(path)
@@ -721,18 +729,25 @@ def _git_show_text_limited(
     try:
         if proc.stdout is None or proc.stderr is None:
             raise RuntimeError("failed to spawn git show")
-        # Read up to max_bytes from stdout.
-        while len(stdout) < max_bytes:
-            chunk = proc.stdout.read(min(65536, max_bytes - len(stdout)))
-            if not chunk:
-                break
-            stdout += chunk
-        if len(stdout) >= max_bytes:
-            truncated_bytes = True
-            try:
-                proc.kill()
-            except Exception:  # nosec B110
-                pass
+        # Read up to max_bytes from stdout (or all output when unlimited).
+        if max_bytes is None:
+            while True:
+                chunk = proc.stdout.read(65536)
+                if not chunk:
+                    break
+                stdout += chunk
+        else:
+            while len(stdout) < max_bytes:
+                chunk = proc.stdout.read(min(65536, max_bytes - len(stdout)))
+                if not chunk:
+                    break
+                stdout += chunk
+            if len(stdout) >= max_bytes:
+                truncated_bytes = True
+                try:
+                    proc.kill()
+                except Exception:  # nosec B110
+                    pass
         try:
             _out, _err = proc.communicate(timeout=10)
             # If we didn't hit truncation, stdout may be fully captured by communicate.
@@ -780,7 +795,7 @@ def _git_show_text_limited(
         had_errors = True
         text = (stdout or b"").decode("utf-8", errors="replace")
 
-    truncated_chars = len(text) > max_chars
+    truncated_chars = max_chars > 0 and len(text) > max_chars
     if truncated_chars:
         text = text[:max_chars]
 
@@ -799,7 +814,7 @@ def _git_show_text_limited(
         "truncated": bool(truncated_bytes or truncated_chars),
         "truncated_bytes": bool(truncated_bytes),
         "truncated_chars": bool(truncated_chars),
-        "max_bytes": int(max_bytes),
+        "max_bytes": int(max_bytes) if max_bytes is not None else None,
         "max_chars": int(max_chars),
         "text_digest": digest,
     }
@@ -1110,8 +1125,8 @@ async def get_workspace_file_contents(
     ref: str = "main",
     path: str = "",
     *,
-    max_chars: int = 2000000,
-    max_bytes: int = _DEFAULT_MAX_READ_BYTES,
+    max_chars: int = 0,
+    max_bytes: int = 0,
 ) -> dict[str, Any]:
     """Read a file from the persistent repo mirror (no shell).
 
@@ -1178,10 +1193,10 @@ async def get_workspace_files_contents(
             raise TypeError("paths must be a list of strings")
         if not paths:
             raise ValueError("paths must contain at least one path")
-        if not isinstance(max_chars_per_file, int) or max_chars_per_file < 1:
-            raise ValueError("max_chars_per_file must be an int >= 1")
-        if not isinstance(max_total_chars, int) or max_total_chars < 1:
-            raise ValueError("max_total_chars must be an int >= 1")
+        if not isinstance(max_chars_per_file, int) or max_chars_per_file < 0:
+            raise ValueError("max_chars_per_file must be an int >= 0")
+        if not isinstance(max_total_chars, int) or max_total_chars < 0:
+            raise ValueError("max_total_chars must be an int >= 0")
 
         deps = _tw()._workspace_deps()
         effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
@@ -1220,22 +1235,16 @@ async def get_workspace_files_contents(
         missing: list[str] = []
         errors: list[dict[str, Any]] = []
         truncated = False
-        remaining_total = int(max_total_chars)
         for p in normalized_paths:
             try:
-                if remaining_total <= 0:
-                    truncated = True
-                    break
-                per_file = min(int(max_chars_per_file), remaining_total)
                 info = _workspace_read_text_limited(
                     repo_dir,
                     p,
-                    max_chars=per_file,
-                    max_bytes=max(_DEFAULT_MAX_READ_BYTES, per_file * 4),
+                    max_chars=0,
+                    max_bytes=0,
                 )
                 if info.get("exists"):
                     files.append(info)
-                    remaining_total -= len(info.get("text") or "")
                     if info.get("truncated"):
                         truncated = True
                 else:
