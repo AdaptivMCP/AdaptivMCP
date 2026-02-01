@@ -67,6 +67,7 @@ def test_with_numbered_lines_and_whitespace_rendering() -> None:
     ("remote", "expected"),
     [
         ("https://github.com/octo/hello.git", "octo/hello"),
+        ("https://github.com/octo/hello.git/", "octo/hello"),
         ("git@github.com:octo/hello.git", "octo/hello"),
         ("git@github.com:octo/hello", "octo/hello"),
         ("", None),

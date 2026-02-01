@@ -442,7 +442,9 @@ def _parse_github_remote_repo(remote_url: str) -> str | None:
     # Common shapes:
     # - https://github.com/<owner>/<repo>.git
     # - git@github.com:<owner>/<repo>.git
-    patterns = (r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$",)
+    patterns = (
+        r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?/?$",
+    )
     for pattern in patterns:
         match = re.search(pattern, url)
         if match:
