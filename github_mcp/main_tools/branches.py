@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ._main import _main
+
+
+_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+def _looks_like_sha(value: str) -> bool:
+    return bool(_SHA_RE.fullmatch(value))
 
 
 async def create_branch(
@@ -45,7 +53,13 @@ async def create_branch(
         )
 
     if base_sha is None:
-        base_sha = from_ref.strip()
+        candidate = from_ref.strip()
+        if _looks_like_sha(candidate):
+            base_sha = candidate
+        else:
+            raise m.GitHubAPIError(
+                f"GitHub create_branch base ref not found: {base_ref}"
+            )
 
     new_ref = f"refs/heads/{branch}"
     body = {"ref": new_ref, "sha": base_sha}
@@ -69,6 +83,10 @@ async def ensure_branch(
     """Idempotently ensure a branch exists, creating it from ``from_ref``."""
 
     m = _main()
+
+    branch = branch.strip()
+    if not branch:
+        raise ValueError("branch must be non-empty")
 
     client = m._github_client_instance()
     async with m._get_concurrency_semaphore():
