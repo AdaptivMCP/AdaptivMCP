@@ -24,7 +24,9 @@ class DummyWorkspaceTools:
         return ref
 
 
-def test_get_workspace_file_contents_truncates_bytes_and_chars(tmp_path, monkeypatch):
+def test_get_workspace_file_contents_reads_full_file_when_limits_disabled(
+    tmp_path, monkeypatch
+):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     p = repo_dir / "big.txt"
@@ -33,23 +35,23 @@ def test_get_workspace_file_contents_truncates_bytes_and_chars(tmp_path, monkeyp
     dummy = DummyWorkspaceTools(str(repo_dir))
     monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
 
-    # Force truncation by chars.
+    # Disable limits.
     result = asyncio.run(
         workspace_fs.get_workspace_file_contents(
             full_name="octo/example",
             ref="feature",
             path="big.txt",
-            max_chars=100,
-            max_bytes=200,
+            max_chars=0,
+            max_bytes=0,
         )
     )
 
     assert result.get("error") is None
     assert result["exists"] is True
-    assert result["truncated"] is True
-    assert len(result["text"]) == 100
-    assert result["max_chars"] == 100
-    assert result["max_bytes"] == 200
+    assert result["truncated"] is False
+    assert len(result["text"]) == 10_000
+    assert result["max_chars"] == 0
+    assert result["max_bytes"] is None
 
 
 def test_read_workspace_file_excerpt_returns_line_numbers_and_limits(
