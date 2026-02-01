@@ -19,7 +19,6 @@ from github_mcp.path_utils import request_base_path as _request_base_path
 from github_mcp.mcp_server import registry as mcp_registry
 from github_mcp.mcp_server.context import REQUEST_CHATGPT_METADATA
 from github_mcp.mcp_server.suggestions import (
-    augment_structured_error_for_bad_args,
     build_unknown_tool_payload,
 )
 from github_mcp.server import _find_registered_tool
@@ -120,6 +119,31 @@ def _coerce_json_args(args: Any) -> Any:
         return json.loads(stripped)
     except json.JSONDecodeError:
         return args
+
+
+def _relax_tool_args(
+    signature: inspect.Signature | None, args: dict[str, Any]
+) -> dict[str, Any]:
+    if signature is None:
+        return args
+    params = list(signature.parameters.values())
+    if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in params):
+        return args
+
+    relaxed: dict[str, Any] = {
+        k: v for k, v in args.items() if k in signature.parameters
+    }
+    for param in params:
+        if param.name in {"self", "cls"}:
+            continue
+        if param.kind not in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        ):
+            continue
+        if param.default is inspect._empty and param.name not in relaxed:
+            relaxed[param.name] = None
+    return relaxed
 
 
 def _coerce_error_message(detail: dict[str, Any]) -> str:
@@ -699,7 +723,8 @@ async def _execute_tool(
     while True:
         attempt += 1
         try:
-            result = func(**args)
+            call_args = _relax_tool_args(signature, dict(args))
+            result = func(**call_args)
             if inspect.isawaitable(result):
                 result = await result
 
@@ -770,14 +795,6 @@ async def _execute_tool(
                 context=f"tool_http:{tool_name}",
                 args=args,
             )
-            structured = augment_structured_error_for_bad_args(
-                structured,
-                tool_name=tool_name,
-                signature=signature,
-                provided_kwargs=args,
-                exc=exc,
-            )
-
             # Prefer structured error details when available.
             err = dict(_coerce_error_detail(structured))
 
