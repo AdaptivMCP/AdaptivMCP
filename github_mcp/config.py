@@ -887,6 +887,8 @@ class _StructuredFormatter(logging.Formatter):
             return base
 
         extra_payload = _sanitize_for_logs(extra_payload)
+        if "log_context" in extra_payload and "request" in extra_payload:
+            extra_payload.pop("log_context", None)
         extras_block = _format_extras_block(extra_payload)
         if extras_block:
             # Keep provider logs single-line. Multi-line entries are hard to scan
@@ -896,7 +898,7 @@ class _StructuredFormatter(logging.Formatter):
 
 
 def _format_extras_block(payload: Mapping[str, Any]) -> str:
-    """Render log extras as a compact JSON payload (no YAML)."""
+    """Render log extras as compact key=value pairs for provider logs."""
 
     if not isinstance(payload, Mapping) or not payload:
         return ""
@@ -905,17 +907,55 @@ def _format_extras_block(payload: Mapping[str, Any]) -> str:
     if not cleaned:
         return ""
 
-    max_chars = max(2000, int(LOG_EXTRAS_MAX_CHARS))
-    try:
-        rendered = json.dumps(
-            cleaned, ensure_ascii=False, separators=(",", ":"), sort_keys=True
-        )
-    except Exception:
-        rendered = json.dumps(str(cleaned), ensure_ascii=False)
+    preferred = (
+        "event",
+        "method",
+        "path",
+        "status_code",
+        "duration_ms",
+        "attempt",
+        "retry_delay_seconds",
+        "max_attempts",
+        "base",
+        "token_source",
+        "params",
+        "json_body",
+        "headers",
+        "response_headers",
+        "response_body",
+        "request",
+        "exception_type",
+        "error",
+    )
+    ordered_keys = [k for k in preferred if k in cleaned]
+    ordered_keys.extend(sorted(k for k in cleaned.keys() if k not in ordered_keys))
 
+    def render_value(value: Any) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, (int, float)):
+            return str(value)
+        if isinstance(value, str):
+            return json.dumps(value, ensure_ascii=False)
+        try:
+            return json.dumps(
+                value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+            )
+        except Exception:
+            return json.dumps(str(value), ensure_ascii=False)
+
+    parts: list[str] = []
+    for key in ordered_keys:
+        parts.append(f"{key}={render_value(cleaned[key])}")
+
+    rendered = "extras={" + " ".join(parts) + "}"
+
+    max_chars = max(2000, int(LOG_EXTRAS_MAX_CHARS))
     if len(rendered) > max_chars:
         rendered = rendered[: max(0, max_chars - 1)] + "…"
-    return f"extras={rendered}"
+    return rendered
 
 
 _STANDARD_LOG_FIELDS = set(
