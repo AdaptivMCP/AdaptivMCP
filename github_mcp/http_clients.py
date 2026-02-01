@@ -452,7 +452,7 @@ async def _send_request(
 
 
 # ---------------------------------------------------------------------------
-# Retry policy helpers
+# Retry helpers
 # ---------------------------------------------------------------------------
 
 _RETRYABLE_GITHUB_METHODS = {"GET", "HEAD", "OPTIONS"}
