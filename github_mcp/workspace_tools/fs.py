@@ -2753,8 +2753,8 @@ async def delete_workspace_word(
             removed_span = None
             updated = re.sub(pat, "", original, flags=flags)
         else:
-            idx = min(len(matches), occurrence) - 1
-            if idx < 0 or idx >= len(matches):
+            idx = occurrence - 1
+            if idx >= len(matches):
                 updated = original
                 removed = ""
                 removed_span = None
@@ -2791,9 +2791,13 @@ async def delete_workspace_word(
             exc,
             context="delete_workspace_word",
             path=path,
-            word=word,
-            occurrence=occurrence,
-            replace_all=replace_all,
+            args={
+                "word": word,
+                "occurrence": occurrence,
+                "replace_all": replace_all,
+                "case_sensitive": case_sensitive,
+                "whole_word": whole_word,
+            },
         )
 
 
@@ -3653,7 +3657,13 @@ async def apply_workspace_operations(
                     old = op.get("old")
                     new = op.get("new")
                     replace_all = bool(op.get("replace_all", False))
-                    occurrence = int(op.get("occurrence", 1) or 1)
+                    occurrence_raw = op.get("occurrence", 1)
+                    try:
+                        occurrence = int(occurrence_raw)
+                    except Exception as exc:
+                        raise ValueError("delete_word.occurrence must be an int >= 1") from exc
+                    if occurrence < 1:
+                        raise ValueError("delete_word.occurrence must be an int >= 1")
                     if not isinstance(path, str) or not path.strip():
                         raise ValueError("replace_text.path must be a non-empty string")
                     if not isinstance(old, str) or old == "":
@@ -3852,7 +3862,13 @@ async def apply_workspace_operations(
                 if op_name == "delete_word":
                     path = op.get("path")
                     word = op.get("word")
-                    occurrence = int(op.get("occurrence", 1) or 1)
+                    occurrence_raw = op.get("occurrence", 1)
+                    try:
+                        occurrence = int(occurrence_raw)
+                    except Exception as exc:
+                        raise ValueError("delete_word.occurrence must be an int >= 1") from exc
+                    if occurrence < 1:
+                        raise ValueError("delete_word.occurrence must be an int >= 1")
                     replace_all = bool(op.get("replace_all", False))
                     case_sensitive = bool(op.get("case_sensitive", True))
                     whole_word = bool(op.get("whole_word", True))
@@ -3884,8 +3900,8 @@ async def apply_workspace_operations(
                     elif replace_all:
                         after = re.sub(pat, "", before, flags=flags)
                     else:
-                        mi = min(len(matches), occurrence) - 1
-                        if mi < 0 or mi >= len(matches):
+                        mi = occurrence - 1
+                        if mi >= len(matches):
                             after = before
                         else:
                             m = matches[mi]
