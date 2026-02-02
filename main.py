@@ -2419,6 +2419,7 @@ async def describe_tool(
     name: str | None = None,
     names: list[str] | None = None,
     include_parameters: bool = True,
+    compact: bool | None = None,
 ) -> dict[str, Any]:
     """Inspect one or more registered MCP tools by name.
 
@@ -2431,12 +2432,15 @@ async def describe_tool(
     10 tools are returned in a single call. Duplicates are ignored
     while preserving order.
     include_parameters: When True, include the serialized input schema for
-    each tool (equivalent to list_all_actions(include_parameters=True)).
+    each tool.
+    compact: When True, shorten descriptions for compact responses.
     """
 
     from github_mcp.main_tools.introspection import describe_tool as _impl
 
-    return await _impl(name=name, names=names, include_parameters=include_parameters)
+    return await _impl(
+        name=name, names=names, include_parameters=include_parameters, compact=compact
+    )
 
 
 @mcp_tool(write_action=False)

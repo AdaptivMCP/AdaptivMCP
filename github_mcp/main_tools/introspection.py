@@ -539,8 +539,20 @@ async def describe_tool(
     name: str | None = None,
     names: list[str] | None = None,
     include_parameters: bool = True,
+    compact: bool | None = None,
 ) -> dict[str, Any]:
-    """Inspect one or more registered MCP tools by name."""
+    """Inspect one or more registered MCP tools by name.
+
+    This endpoint is intended for callers that want a *small* subset of the tool
+    catalog (for example, during long-running sessions where downloading the full
+    catalog repeatedly would be wasteful).
+
+    Notes:
+    - The response is always centered around the "tools" list.
+    - Unlike older versions, this function does *not* mirror the first tool's
+      fields onto the top-level response (that behavior was redundant and could
+      be misleading when requesting multiple tools).
+    """
 
     if names is None or len(names) == 0:
         if not name:
@@ -564,7 +576,10 @@ async def describe_tool(
     if len(names) > 10:
         raise ValueError("describe_tool can return at most 10 tools per call.")
 
-    catalog = list_all_actions(include_parameters=include_parameters, compact=False)
+    catalog = list_all_actions(
+        include_parameters=include_parameters,
+        compact=compact,
+    )
     tools_index = {entry.get("name"): entry for entry in catalog.get("tools", [])}
 
     found: list[dict[str, Any]] = []
@@ -580,10 +595,15 @@ async def describe_tool(
     if not found:
         raise ValueError(f"Unknown tool name(s): {', '.join(sorted(set(missing)))}")
 
-    result: dict[str, Any] = {"tools": found}
-    first = found[0]
-    for key, value in first.items():
-        result.setdefault(key, value)
+    result: dict[str, Any] = {
+        "tools": found,
+        "count": len(found),
+        "compact": catalog.get("compact"),
+        "include_parameters": include_parameters,
+    }
+
+    if isinstance(catalog.get("errors"), list) and catalog.get("errors"):
+        result["errors"] = catalog.get("errors")
 
     if missing:
         result["missing_tools"] = sorted(set(missing))
