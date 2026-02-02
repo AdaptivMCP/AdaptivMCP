@@ -49,6 +49,37 @@ def test_apply_workspace_operations_preview_only_does_not_mutate(tmp_path, monke
     assert not (repo_dir / "b.txt").exists()
 
 
+def test_apply_workspace_operations_preview_only_move_existing_file_then_edit(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "a.txt").write_text("hello world\n", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.apply_workspace_operations(
+            full_name="octo/example",
+            ref="feature",
+            preview_only=True,
+            operations=[
+                {"op": "move", "src": "a.txt", "dst": "b.txt", "overwrite": False},
+                {"op": "replace_text", "path": "b.txt", "old": "world", "new": "there"},
+            ],
+        )
+    )
+
+    assert result.get("error") is None
+    statuses = [entry.get("status") for entry in result.get("results", [])]
+    assert statuses == ["ok", "ok"]
+
+    # preview_only should not mutate the filesystem.
+    assert (repo_dir / "a.txt").read_text(encoding="utf-8") == "hello world\n"
+    assert not (repo_dir / "b.txt").exists()
+
+
 def test_apply_workspace_operations_applies_and_moves(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()

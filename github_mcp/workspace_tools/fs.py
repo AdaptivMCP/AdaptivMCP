@@ -4097,6 +4097,14 @@ async def apply_workspace_operations(
                             raise FileNotFoundError(src)
                     elif not os.path.exists(abs_src):
                         raise FileNotFoundError(src)
+
+                    # This batch tool is intended for file operations (text edits, etc).
+                    # Directory moves are not supported here.
+                    if os.path.isdir(abs_src):
+                        raise IsADirectoryError(src)
+                    if os.path.exists(abs_dst) and os.path.isdir(abs_dst):
+                        raise IsADirectoryError(dst)
+
                     _backup_path(abs_src)
                     _backup_path(abs_dst)
                     dst_exists = False
@@ -4123,10 +4131,13 @@ async def apply_workspace_operations(
                     else:
                         # Preview-only: simulate file moves that were created/edited
                         # earlier in the batch.
+                        if src_data is _missing and os.path.exists(abs_src):
+                            # Safe read: preview-only should still allow simulating moves
+                            # of files that exist on disk.
+                            src_data = _read_bytes(abs_src)
                         if src_data is not _missing and src_data is not None:
                             _set_current_bytes(abs_dst, src_data)
-                        # Even if we don't have in-memory bytes (e.g. directory move),
-                        # mark the source as removed in-batch.
+                        # Mark the source as removed in-batch.
                         _set_current_bytes(abs_src, None)
                     results.append(
                         {
