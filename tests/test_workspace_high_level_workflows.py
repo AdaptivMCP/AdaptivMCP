@@ -115,6 +115,78 @@ async def test_workspace_apply_ops_and_open_pr_skips_quality(
 
 
 @pytest.mark.anyio
+async def test_workspace_apply_ops_and_open_pr_reuses_feature_ref(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.workspace_tools import workflows
+
+    fake = _FakeTW()
+    monkeypatch.setattr(workflows, "_tw", lambda: fake)
+
+    res = await workflows.workspace_apply_ops_and_open_pr(
+        full_name="octo-org/octo-repo",
+        base_ref="main",
+        feature_ref="feature/already-exists",
+        operations=[{"op": "write", "path": "README.md", "content": "x"}],
+        commit_message="Update docs",
+        run_quality=False,
+    )
+
+    assert res["status"] == "ok"
+    fns = [c["fn"] for c in fake.calls]
+    # base sync + feature sync (reuse), then operations + finalize
+    assert fns == [
+        "workspace_sync_to_remote",
+        "workspace_sync_to_remote",
+        "apply_workspace_operations",
+        "commit_and_open_pr_from_workspace",
+    ]
+
+    assert fake.calls[0]["kwargs"]["ref"] == "main"
+    assert fake.calls[1]["kwargs"]["ref"] == "feature/already-exists"
+
+
+@pytest.mark.anyio
+async def test_workspace_apply_ops_and_open_pr_feature_ref_missing_remote_falls_back_to_create(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.workspace_tools import workflows
+
+    class _MissingRemote(_FakeTW):
+        async def workspace_sync_to_remote(self, **kwargs: Any) -> dict[str, Any]:
+            self.calls.append({"fn": "workspace_sync_to_remote", "kwargs": kwargs})
+            if kwargs.get("ref") == "feature/missing":
+                return {
+                    "status": "error",
+                    "error": "fatal: ambiguous argument 'origin/feature/missing': unknown revision",
+                }
+            return {"status": "success"}
+
+    fake = _MissingRemote()
+    monkeypatch.setattr(workflows, "_tw", lambda: fake)
+
+    res = await workflows.workspace_apply_ops_and_open_pr(
+        full_name="octo-org/octo-repo",
+        base_ref="main",
+        feature_ref="feature/missing",
+        operations=[{"op": "write", "path": "README.md", "content": "x"}],
+        commit_message="Update docs",
+        run_quality=False,
+    )
+
+    assert res["status"] == "ok"
+    fns = [c["fn"] for c in fake.calls]
+    # base sync, attempted feature sync (missing), then create branch fallback
+    assert fns == [
+        "workspace_sync_to_remote",
+        "workspace_sync_to_remote",
+        "workspace_create_branch",
+        "apply_workspace_operations",
+        "commit_and_open_pr_from_workspace",
+    ]
+
+
+@pytest.mark.anyio
 async def test_workspace_apply_ops_and_open_pr_validates_operations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
