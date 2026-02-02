@@ -27,11 +27,15 @@ def test_jitter_sleep_seconds_rejects_non_finite_cap(monkeypatch):
 
     # Non-finite caps should be treated as zero additive jitter.
     assert (
-        retry_utils.jitter_sleep_seconds(10.0, respect_min=True, cap_seconds=float("nan"))
+        retry_utils.jitter_sleep_seconds(
+            10.0, respect_min=True, cap_seconds=float("nan")
+        )
         == 10.0
     )
     assert (
-        retry_utils.jitter_sleep_seconds(10.0, respect_min=True, cap_seconds=float("inf"))
+        retry_utils.jitter_sleep_seconds(
+            10.0, respect_min=True, cap_seconds=float("inf")
+        )
         == 12.5
     )
 

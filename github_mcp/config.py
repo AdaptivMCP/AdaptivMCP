@@ -612,8 +612,12 @@ LOG_APPEND_EXTRAS = _env_flag(
 # Cap appended extras to keep provider log ingestion healthy.
 _extras_lines_default = "2000" if _is_render_runtime() else "2000000"
 _extras_chars_default = "200000" if _is_render_runtime() else "10000000"
-LOG_EXTRAS_MAX_LINES = int(os.environ.get("LOG_EXTRAS_MAX_LINES", _extras_lines_default))
-LOG_EXTRAS_MAX_CHARS = int(os.environ.get("LOG_EXTRAS_MAX_CHARS", _extras_chars_default))
+LOG_EXTRAS_MAX_LINES = int(
+    os.environ.get("LOG_EXTRAS_MAX_LINES", _extras_lines_default)
+)
+LOG_EXTRAS_MAX_CHARS = int(
+    os.environ.get("LOG_EXTRAS_MAX_CHARS", _extras_chars_default)
+)
 
 # Backwards-compat: deprecated.
 LOG_APPEND_EXTRAS_JSON = _env_flag("LOG_APPEND_EXTRAS_JSON", "false")

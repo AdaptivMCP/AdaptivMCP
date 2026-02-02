@@ -230,10 +230,10 @@ async def test_github_request_rate_limit_disabled_for_post(
     assert sleeps == []
 
 
-
-
 @pytest.mark.anyio
-async def test_github_request_retries_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_github_request_retries_on_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _install_simple_body_helpers(monkeypatch)
 
     # Deterministic backoff.
