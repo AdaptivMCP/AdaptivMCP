@@ -104,8 +104,11 @@ async def fetch_url(url: str) -> dict[str, Any]:
             )
 
     keep = {"content-type", "content-length", "etag", "last-modified", "cache-control"}
+
+    # Normalize header keys to lower-case so downstream consumers can reliably
+    # access e.g. `content-type` regardless of how the HTTP client cased it.
     headers = {
-        str(k): v
+        k.lower(): v
         for k, v in (response_headers or {}).items()
         if isinstance(k, str) and k.lower() in keep
     }
