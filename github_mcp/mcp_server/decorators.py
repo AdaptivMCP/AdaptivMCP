@@ -444,6 +444,43 @@ _TOOL_FRIENDLY_NAMES: dict[str, str] = {
 }
 
 
+# Short one-liners to make INFO logs self-explanatory for Adaptiv MCP users.
+# These are intentionally concise so they don't drown out arg summaries.
+_TOOL_SHORT_DESCS: dict[str, str] = {
+    "validate_environment": "Validate environment",
+    "get_server_config": "Show effective server config",
+    "ensure_workspace_clone": "Ensure a local repo mirror exists",
+    "workspace_sync_status": "Report mirror ahead/behind vs origin",
+    "workspace_sync_to_remote": "Reset mirror to match origin",
+    "workspace_sync_bidirectional": "Push mirror changes then refresh from origin",
+    "workspace_create_branch": "Create a new branch from a base ref",
+    "workspace_delete_branch": "Delete a non-default branch",
+    "commit_workspace": "Commit mirror changes",
+    "commit_workspace_files": "Commit selected mirror files",
+    "commit_and_open_pr_from_workspace": "Commit mirror changes and open a PR",
+    "workspace_open_pr_from_workspace": "Open (or reuse) a PR for a branch",
+    "run_tests": "Run pytest (optional coverage/parallel)",
+    "run_lint_suite": "Run lint + (optional) format check",
+    "run_quality_suite": "Run format/lint/tests (+ optional auto-fix)",
+    "terminal_command": "Run a command inside the repo mirror",
+    "render_shell": "Run a shell command via the Render mirror",
+    "list_tools": "List available tools (compact)",
+    "list_all_actions": "Enumerate all tools (+ optional schemas)",
+    "describe_tool": "Show tool docs + input schema",
+}
+
+
+def _tool_short_desc(tool_name: str) -> str:
+    return _TOOL_SHORT_DESCS.get(str(tool_name), "")
+
+
+def _tool_desc_bit(tool_name: str) -> str:
+    desc = _tool_short_desc(tool_name)
+    if not desc:
+        return ""
+    return _ansi(f" · {desc}", ANSI_DIM)
+
+
 def _friendly_tool_name(tool_name: str) -> str:
     name = _TOOL_FRIENDLY_NAMES.get(str(tool_name))
     if name:
@@ -2633,7 +2670,7 @@ def _log_tool_start(
         + _ansi(friendly, ANSI_CYAN)
         + _write_badge(bool(effective_write_action))
     )
-    msg = f"{prefix}{suffix}"
+    msg = f"{prefix}{_tool_desc_bit(tool_name)}{suffix}"
     if LOG_TOOL_LOG_IDS:
         msg = msg + " " + _ansi(f"[{shorten_token(call_id)}]", ANSI_DIM)
     inline = payload.get("log_context")
@@ -2792,6 +2829,7 @@ def _log_tool_success(
             + " "
             + _ansi(friendly, ANSI_CYAN)
             + _write_badge(bool(effective_write_action))
+            + _tool_desc_bit(tool_name)
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         msg = f"{prefix} {ms}{suffix} - {_truncate_text(str(report.get('summary') or ''), limit=220)}"
@@ -2887,6 +2925,7 @@ def _log_tool_failure(
             + " "
             + _ansi(friendly, ANSI_CYAN)
             + _write_badge(bool(effective_write_action))
+            + _tool_desc_bit(tool_name)
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         err_type_raw = payload.get("error_type") or exc.__class__.__name__
@@ -2947,7 +2986,10 @@ def _log_tool_failure(
         )
     line = _format_log_kv(kv_map)
     prefix = (
-        _ansi("RES", ANSI_RED) + " " + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+        _ansi("RES", ANSI_RED)
+        + " "
+        + _ansi(_friendly_tool_name(tool_name), ANSI_CYAN)
+        + _tool_desc_bit(tool_name)
     )
     msg = f"{prefix} {line}"
     inline = payload.get("log_context")

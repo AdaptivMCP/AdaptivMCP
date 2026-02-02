@@ -1,7 +1,5 @@
 import asyncio
 
-import pytest
-
 from github_mcp import workspace
 
 
@@ -49,7 +47,9 @@ def test_run_shell_timeout_collect_output_is_bounded(monkeypatch):
             raise asyncio.TimeoutError()
         return await coro
 
-    monkeypatch.setattr(workspace.asyncio, "create_subprocess_shell", fake_create_subprocess_shell)
+    monkeypatch.setattr(
+        workspace.asyncio, "create_subprocess_shell", fake_create_subprocess_shell
+    )
     monkeypatch.setattr(workspace.asyncio, "wait_for", fake_wait_for)
 
     async def run():
@@ -58,4 +58,6 @@ def test_run_shell_timeout_collect_output_is_bounded(monkeypatch):
     result = asyncio.run(asyncio.wait_for(run(), timeout=0.1))
 
     assert result["timed_out"] is True
-    assert "Failed to collect process output after timeout" in (result.get("stderr") or "")
+    assert "Failed to collect process output after timeout" in (
+        result.get("stderr") or ""
+    )

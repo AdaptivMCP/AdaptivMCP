@@ -203,7 +203,9 @@ async def _run_shell(
 
         # Best-effort output collection after timeout. Keep configurable.
         try:
-            collect_timeout = getattr(config, "ADAPTIV_MCP_TIMEOUT_COLLECT_SECONDS", 0) or 0
+            collect_timeout = (
+                getattr(config, "ADAPTIV_MCP_TIMEOUT_COLLECT_SECONDS", 0) or 0
+            )
             try:
                 collect_timeout_int = int(collect_timeout)
             except Exception:
