@@ -290,3 +290,71 @@ async def test_workspace_sync_bidirectional_commit_then_push(
     assert res.get("error") is None
     assert "committed_local_changes" in res["actions"]
     assert "pushed_to_remote" in res["actions"]
+
+
+@pytest.mark.anyio
+async def test_workspace_sync_bidirectional_push_quotes_effective_ref(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deps = _FakeDeps()
+    tw = _FakeTW(deps)
+    monkeypatch.setattr(git_ops, "_tw", lambda: tw)
+    monkeypatch.setattr(git_ops, "_resolve_full_name", lambda full_name, **_: full_name)
+    monkeypatch.setattr(git_ops, "_resolve_ref", lambda ref, **_: ref)
+
+    malicious_ref = "main;echo pwned"
+    before = {
+        "remote_ref": f"origin/{malicious_ref}",
+        "is_clean": True,
+        "ahead": 1,
+        "behind": 0,
+    }
+    after = {
+        "remote_ref": f"origin/{malicious_ref}",
+        "is_clean": True,
+        "ahead": 0,
+        "behind": 0,
+    }
+    monkeypatch.setattr(git_ops, "_workspace_sync_snapshot", _seq_provider([before, after]))
+
+    seen: list[str] = []
+
+    async def _run_shell(cmd: str, *, cwd: str, timeout_seconds: Any):
+        seen.append(cmd)
+        return {"exit_code": 0, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(deps, "run_shell", _run_shell)
+
+    res = await git_ops.workspace_sync_bidirectional(
+        "o/r", ref=malicious_ref, push=True, add_all=False
+    )
+    assert res.get("status") != "error"
+    push_cmds = [c for c in seen if c.startswith("git push origin")]
+    assert len(push_cmds) == 1
+    assert "HEAD:'" in push_cmds[0]
+    assert ";echo pwned" in push_cmds[0]
+
+
+@pytest.mark.anyio
+async def test_workspace_delete_branch_checkout_failure_aborts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deps = _FakeDeps()
+    tw = _FakeTW(deps)
+    monkeypatch.setattr(git_ops, "_tw", lambda: tw)
+    monkeypatch.setattr(git_ops, "_resolve_full_name", lambda full_name, **_: full_name)
+
+    seen: list[str] = []
+
+    async def _run_shell(cmd: str, *, cwd: str, timeout_seconds: Any):
+        seen.append(cmd)
+        if cmd.startswith("git checkout"):
+            return {"exit_code": 1, "stdout": "", "stderr": "nope"}
+        raise AssertionError("unexpected git command after failed checkout")
+
+    monkeypatch.setattr(deps, "run_shell", _run_shell)
+
+    res = await git_ops.workspace_delete_branch("o/r", branch="feature")
+    assert res["status"] == "error"
+    assert "git checkout" in (res.get("error") or "")
+    assert seen and seen[0].startswith("git checkout")

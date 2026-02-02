@@ -413,11 +413,13 @@ async def workspace_delete_branch(
         )
 
         # Ensure the working copy is on the effective ref.
-        await deps["run_shell"](
+        checkout = await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
             cwd=repo_dir,
             timeout_seconds=t_default,
         )
+        if checkout.get("exit_code", 0) != 0:
+            raise _shell_error("git checkout", checkout)
 
         # Delete remote first; if the remote delete fails, surface that.
         delete_remote = await deps["run_shell"](
@@ -894,7 +896,7 @@ async def workspace_sync_bidirectional(
             )
 
         if push and snapshot["ahead"] > 0:
-            push_cmd = f"git push origin HEAD:{effective_ref}"
+            push_cmd = f"git push origin HEAD:{shlex.quote(effective_ref)}"
             push_result = await deps["run_shell"](
                 push_cmd, cwd=repo_dir, timeout_seconds=t_default
             )
