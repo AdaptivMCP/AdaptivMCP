@@ -80,6 +80,39 @@ def test_apply_workspace_operations_preview_only_move_existing_file_then_edit(
     assert not (repo_dir / "b.txt").exists()
 
 
+def test_apply_workspace_operations_delete_directory_reports_error_and_does_not_mutate(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "adir").mkdir()
+    (repo_dir / "adir" / "inner.txt").write_text("hi\n", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.apply_workspace_operations(
+            full_name="octo/example",
+            ref="feature",
+            fail_fast=False,
+            rollback_on_error=True,
+            preview_only=False,
+            operations=[
+                {"op": "delete", "path": "adir", "allow_missing": False},
+            ],
+        )
+    )
+
+    assert result.get("error") is None
+    assert result.get("ok") is False
+    assert result.get("status") == "partial"
+    assert result.get("results")[0]["status"] == "error"
+    # Directory should remain.
+    assert (repo_dir / "adir").is_dir()
+    assert (repo_dir / "adir" / "inner.txt").read_text(encoding="utf-8") == "hi\n"
+
+
 def test_apply_workspace_operations_applies_and_moves(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()

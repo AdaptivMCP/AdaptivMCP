@@ -3983,6 +3983,12 @@ async def apply_workspace_operations(
                     if not isinstance(path, str) or not path.strip():
                         raise ValueError("delete.path must be a non-empty string")
                     abs_path = _workspace_safe_join(repo_dir, path)
+
+                    # This batch tool is intended for file operations (text edits, etc).
+                    # Directory deletion is not supported here.
+                    if abs_path not in current and os.path.exists(abs_path) and os.path.isdir(abs_path):
+                        raise IsADirectoryError(path)
+
                     if abs_path in current:
                         before_data = current[abs_path]
                         exists = before_data is not None
@@ -4008,6 +4014,8 @@ async def apply_workspace_operations(
                     # If the file exists only in the in-batch state (preview_only),
                     # do not attempt to touch the filesystem.
                     if not preview_only and os.path.exists(abs_path):
+                        if os.path.isdir(abs_path):
+                            raise IsADirectoryError(path)
                         os.remove(abs_path)
                     _set_current_bytes(abs_path, None)
                     results.append(
