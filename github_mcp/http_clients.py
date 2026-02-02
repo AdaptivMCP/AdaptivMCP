@@ -521,8 +521,34 @@ async def _github_request(
                 json_body=json_body,
                 headers=headers,
             )
-        except httpx.TimeoutException:
+        except asyncio.CancelledError:
             raise
+        except httpx.TimeoutException:
+            # Timeouts are generally transient; retry idempotent requests within the
+            # shared retry budget, but keep raising the original timeout once the
+            # budget is exhausted so upstream error handling can classify it.
+            if retry_enabled and attempt < max_attempts:
+                retry_delay = GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
+                retry_delay = min(retry_delay, GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS)
+                await asyncio.sleep(
+                    _jitter_sleep_seconds(retry_delay, respect_min=False)
+                )
+                attempt += 1
+                continue
+            raise
+        except getattr(httpx, "RequestError", httpx.HTTPError) as exc:
+            # Transport-level failures (DNS, connection resets, etc.) are also
+            # commonly transient. Retry idempotent requests, then surface a
+            # structured GitHubAPIError for callers.
+            if retry_enabled and attempt < max_attempts:
+                retry_delay = GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS * (2**attempt)
+                retry_delay = min(retry_delay, GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS)
+                await asyncio.sleep(
+                    _jitter_sleep_seconds(retry_delay, respect_min=False)
+                )
+                attempt += 1
+                continue
+            raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
         except httpx.HTTPError as exc:  # pragma: no cover - defensive
             raise GitHubAPIError(f"GitHub request failed: {exc}") from exc
 
