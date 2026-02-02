@@ -67,11 +67,19 @@ def _schedule_close(
             log_debug(msg)
 
     def _schedule_on_running_loop() -> bool:
+        coro = None
         try:
-            task = asyncio.create_task(client.aclose())
+            # Avoid leaking un-awaited coroutine objects if task creation fails.
+            coro = client.aclose()
+            task = asyncio.create_task(coro)
             del task
             return True
         except Exception:
+            try:
+                if coro is not None and hasattr(coro, "close"):
+                    coro.close()
+            except Exception:  # nosec B110
+                pass
             return False
 
     def _try_client_loop() -> bool:
@@ -126,10 +134,16 @@ def _schedule_close(
 
     # Strategy 3: final fallback using asyncio.run.
     if not closed:
-        try:
-            asyncio.run(client.aclose())
-        except Exception:
-            _log("Failed to close async client in fallback asyncio.run")
+        # Only safe when no event loop is running in this thread.
+        if running_loop is None:
+            try:
+                asyncio.run(client.aclose())
+            except Exception:
+                _log("Failed to close async client in fallback asyncio.run")
+        else:
+            _log(
+                "Failed to close async client: cannot call asyncio.run from async context"
+            )
 
 
 def refresh_async_client(  # noqa: PLR0913
