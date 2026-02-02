@@ -716,7 +716,28 @@ async def workspace_task_execute(
             head_ref=feature_ref,
             include_diff=False,
         )
-        pr_summary = await tw.build_pr_summary(full_name=full_name, ref=feature_ref)
+        changed_files: list[str] = []
+        if isinstance(change_report, dict):
+            for f in change_report.get("files", []) or []:
+                if isinstance(f, dict):
+                    p = f.get("path")
+                    if isinstance(p, str) and p:
+                        changed_files.append(p)
+
+        if finalize_mode == "pr":
+            summary_title = pr_title or f"{feature_ref} -> {effective_base}"
+            summary_body = pr_body or ""
+        else:
+            summary_title = commit_message
+            summary_body = ""
+
+        pr_summary = await tw.build_pr_summary(
+            full_name=full_name,
+            ref=feature_ref,
+            title=summary_title,
+            body=summary_body,
+            changed_files=changed_files,
+        )
 
         finalize_res: Any = None
         if finalize_mode == "pr":

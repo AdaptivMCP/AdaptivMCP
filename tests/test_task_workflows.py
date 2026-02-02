@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 
 import pytest
 
@@ -221,3 +222,68 @@ def test_workspace_task_apply_edits_paths(monkeypatch):
     assert res["ok"] is True
     assert res["operations_summary"]["ok_count"] == 1
     assert "operations" in res
+
+
+def test_workspace_task_execute_pr_summary_args_commit_only(monkeypatch):
+    if not context.FASTMCP_AVAILABLE:
+        pytest.skip("FastMCP unavailable; workspace tools are not importable.")
+
+    from github_mcp.workspace_tools import task_workflows
+
+    called: dict[str, object] = {}
+
+    class FakeTW:
+        uuid = uuid
+
+        def _effective_ref_for_repo(self, full_name: str, ref: str) -> str:
+            return ref
+
+        async def workspace_sync_to_remote(self, **kwargs):
+            return {"status": "ok", "ok": True}
+
+        async def workspace_create_branch(self, **kwargs):
+            return {"status": "ok", "ok": True}
+
+        async def apply_workspace_operations(self, **kwargs):
+            return {"status": "ok", "ok": True, "results": [{"status": "ok"}]}
+
+        async def workspace_change_report(self, **kwargs):
+            return {"files": [{"path": "a.py"}, {"path": "b.py"}]}
+
+        async def build_pr_summary(
+            self,
+            *,
+            full_name: str,
+            ref: str,
+            title: str,
+            body: str,
+            changed_files=None,
+            **kwargs,
+        ):
+            called["full_name"] = full_name
+            called["ref"] = ref
+            called["title"] = title
+            called["body"] = body
+            called["changed_files"] = changed_files
+            return {"status": "ok", "ok": True}
+
+        async def commit_workspace(self, **kwargs):
+            return {"status": "ok", "ok": True}
+
+    monkeypatch.setattr(task_workflows, "_tw", lambda: FakeTW())
+
+    result = asyncio.run(
+        task_workflows.workspace_task_execute(
+            full_name="org/repo",
+            operations=[{"op": "mkdir", "path": "x"}],
+            finalize_mode="commit_only",
+            run_quality=False,
+            commit_message="My commit",
+            include_details=True,
+        )
+    )
+
+    assert result["status"] == "ok"
+    assert called["title"] == "My commit"
+    assert called["body"] == ""
+    assert called["changed_files"] == ["a.py", "b.py"]
