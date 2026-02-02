@@ -230,6 +230,123 @@ async def test_github_request_rate_limit_disabled_for_post(
     assert sleeps == []
 
 
+
+
+@pytest.mark.anyio
+async def test_github_request_retries_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_simple_body_helpers(monkeypatch)
+
+    # Deterministic backoff.
+    monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS", 2)
+    monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS", 10.0)
+    monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS", 0.1)
+    monkeypatch.setattr(
+        http_clients, "_jitter_sleep_seconds", lambda delay, *, respect_min: delay
+    )
+
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(http_clients.asyncio, "sleep", _fake_sleep)
+
+    calls: list[str] = []
+
+    async def _fake_send_request(*args: Any, **kwargs: Any) -> DummyResponse:
+        calls.append("call")
+        if len(calls) == 1:
+            raise http_clients.httpx.TimeoutException("request timed out")
+        return DummyResponse(200, headers={}, text="ok", body={"ok": True})
+
+    monkeypatch.setattr(http_clients, "_send_request", _fake_send_request)
+
+    result = await http_clients._github_request(
+        "GET", "/repos", client_factory=lambda: object()
+    )
+
+    assert result["json"] == {"ok": True}
+    assert calls == ["call", "call"]
+    assert sleeps == [0.1]
+
+
+@pytest.mark.anyio
+async def test_github_request_retries_on_transport_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_simple_body_helpers(monkeypatch)
+
+    # Deterministic backoff.
+    monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS", 2)
+    monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS", 10.0)
+    monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS", 0.1)
+    monkeypatch.setattr(
+        http_clients, "_jitter_sleep_seconds", lambda delay, *, respect_min: delay
+    )
+
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(http_clients.asyncio, "sleep", _fake_sleep)
+
+    calls: list[str] = []
+
+    async def _fake_send_request(*args: Any, **kwargs: Any) -> DummyResponse:
+        calls.append("call")
+        if len(calls) == 1:
+            raise http_clients.httpx.ConnectError("connection reset")
+        return DummyResponse(200, headers={}, text="ok", body={"ok": True})
+
+    monkeypatch.setattr(http_clients, "_send_request", _fake_send_request)
+
+    result = await http_clients._github_request(
+        "GET", "/repos", client_factory=lambda: object()
+    )
+
+    assert result["json"] == {"ok": True}
+    assert calls == ["call", "call"]
+    assert sleeps == [0.1]
+
+
+@pytest.mark.anyio
+async def test_github_request_timeout_no_retry_for_non_idempotent_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_simple_body_helpers(monkeypatch)
+
+    monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS", 3)
+    monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS", 10.0)
+    monkeypatch.setattr(http_clients, "GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS", 0.1)
+    monkeypatch.setattr(
+        http_clients, "_jitter_sleep_seconds", lambda delay, *, respect_min: delay
+    )
+
+    sleeps: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(http_clients.asyncio, "sleep", _fake_sleep)
+
+    calls: list[str] = []
+
+    async def _fake_send_request(*args: Any, **kwargs: Any) -> DummyResponse:
+        calls.append("call")
+        raise http_clients.httpx.TimeoutException("request timed out")
+
+    monkeypatch.setattr(http_clients, "_send_request", _fake_send_request)
+
+    with pytest.raises(http_clients.httpx.TimeoutException):
+        await http_clients._github_request(
+            "POST", "/repos", client_factory=lambda: object()
+        )
+
+    assert calls == ["call"]
+    assert sleeps == []
+
+
 @pytest.mark.anyio
 async def test_github_request_auth_error(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_simple_body_helpers(monkeypatch)
