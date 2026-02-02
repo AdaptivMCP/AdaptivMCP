@@ -26,6 +26,7 @@ from github_mcp.config import (
     LOG_INLINE_CONTEXT,
     LOG_RENDER_HTTP,
     LOG_RENDER_HTTP_BODIES,
+    LOG_RENDER_HTTP_DETAILS,
     RENDER_API_BASE,
     RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS,
     RENDER_RATE_LIMIT_RETRY_MAX_ATTEMPTS,
@@ -389,13 +390,36 @@ async def render_request(
     # START (dev-facing)
     if LOG_RENDER_HTTP:
         safe_headers = _safe_render_headers(headers)
-        bits = [
+        bits: list[str | None] = [
             _render_http_kv("base", normalized_base),
             _render_http_kv("token", token_source),
-            _render_http_kv("params", params),
-            _render_http_kv("json", json_body),
-            _render_http_kv("headers", safe_headers),
         ]
+        if LOG_RENDER_HTTP_DETAILS:
+            bits.extend(
+                [
+                    _render_http_kv("params", params),
+                    _render_http_kv("json", json_body),
+                    _render_http_kv("headers", safe_headers),
+                ]
+            )
+
+        payload: dict[str, Any] = {
+            "event": "render_http_started",
+            "request": summarize_request_context(req) if isinstance(req, dict) else {},
+            "log_context": inline_ctx or None,
+            "method": str(method).upper(),
+            "path": effective_path,
+            "base": normalized_base,
+            "token_source": token_source,
+        }
+        if LOG_RENDER_HTTP_DETAILS:
+            if params is not None:
+                payload["params"] = params
+            if json_body is not None:
+                payload["json_body"] = json_body
+            if safe_headers is not None:
+                payload["headers"] = safe_headers
+
         _log_render_http(
             level="info",
             msg=_render_http_line(
@@ -405,20 +429,7 @@ async def render_request(
                 inline_ctx=inline_ctx,
                 fields=[bit for bit in bits if bit],
             ),
-            extra={
-                "event": "render_http_started",
-                "request": summarize_request_context(req)
-                if isinstance(req, dict)
-                else {},
-                "log_context": inline_ctx or None,
-                "method": str(method).upper(),
-                "path": effective_path,
-                "base": normalized_base,
-                "token_source": token_source,
-                "params": params,
-                "json_body": json_body,
-                "headers": safe_headers,
-            },
+            extra=payload,
         )
 
     while True:
@@ -547,13 +558,14 @@ async def render_request(
                 "duration_ms": duration_ms,
                 "attempt": attempt,
             }
-            if params is not None:
-                payload["params"] = params
-            if json_body is not None:
-                payload["json_body"] = json_body
-            safe_headers = _safe_render_headers(headers)
-            if safe_headers is not None:
-                payload["headers"] = safe_headers
+            if LOG_RENDER_HTTP_DETAILS:
+                if params is not None:
+                    payload["params"] = params
+                if json_body is not None:
+                    payload["json_body"] = json_body
+                safe_headers = _safe_render_headers(headers)
+                if safe_headers is not None:
+                    payload["headers"] = safe_headers
             if LOG_RENDER_HTTP_BODIES:
                 payload["response_headers"] = resp_headers
                 payload["response_body"] = (
