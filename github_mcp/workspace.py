@@ -854,14 +854,17 @@ def _is_hunk_header_with_ranges(line: str) -> bool:
     if not isinstance(line, str):
         return False
     s = line.strip()
-    if not (s.startswith("@@") and s.endswith("@@")):
+    if not s.startswith("@@"):
         return False
-    # Expected middle like: "@@ -a,b +c,d @@" (commas optional)
+    # Expected shape: "@@ -a,b +c,d @@" with an optional trailing function/context
+    # description after the closing "@@". (commas optional)
     # Tokenize by whitespace.
     parts = s.split()
     if len(parts) < 4:
         return False
-    if parts[0] != "@@" or parts[-1] != "@@":
+    # The closing @@ is the 4th token in standard unified diffs; any remaining
+    # tokens represent function/context and should not affect range parsing.
+    if parts[0] != "@@" or parts[3] != "@@":
         return False
 
     def _valid_range(tok: str, prefix: str) -> bool:
