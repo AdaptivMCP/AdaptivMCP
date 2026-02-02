@@ -186,3 +186,41 @@ def test_workspace_batch_commit_uses_files_variant_when_files_present(monkeypatc
     assert out["plans"][1]["steps"]["commit"]["commit_sha"] == "def"
     assert seen["files"] == 1
     assert seen["all"] == 1
+
+
+def test_workspace_batch_delete_paths_defaults_allow_recursive_false(monkeypatch):
+    import github_mcp.workspace_tools.batch as batch
+
+    seen = {}
+
+    async def fake_delete_workspace_paths(**kwargs):
+        seen.update(kwargs)
+        return {"status": "deleted", "ok": True}
+
+    class DummyTW:
+        def _effective_ref_for_repo(self, full_name: str, ref: str):
+            return ref
+
+    monkeypatch.setattr(batch, "_tw", lambda: DummyTW())
+    monkeypatch.setattr(batch, "delete_workspace_paths", fake_delete_workspace_paths)
+
+    out = asyncio.run(
+        batch.workspace_batch(
+            full_name="o/r",
+            plans=[
+                {
+                    "ref": "b",
+                    "delete_paths": {
+                        "paths": ["some/dir"],
+                        # omit allow_recursive
+                    },
+                }
+            ],
+        )
+    )
+
+    assert out["ok"] is True
+    assert seen["paths"] == ["some/dir"]
+    assert seen["allow_missing"] is True
+    # Safety: should not default to recursive deletes.
+    assert seen["allow_recursive"] is False

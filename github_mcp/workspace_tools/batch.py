@@ -334,7 +334,7 @@ async def workspace_batch(
                     "allow_missing", _as_bool(dp.get("allow_missing"), True)
                 )
                 extra.setdefault(
-                    "allow_recursive", _as_bool(dp.get("allow_recursive"), True)
+                    "allow_recursive", _as_bool(dp.get("allow_recursive"), False)
                 )
                 call = {"full_name": full_name, "ref": ref, **extra}
                 steps["delete_paths"] = await delete_workspace_paths(
