@@ -145,7 +145,7 @@ class _CacheControlMiddleware:
 
                 # Normalize: remove any existing Cache-Control header if we're overriding.
                 def _has_cache_control(hdrs):
-                    return any(k.lower() == b"cache-control" for k, _ in hdrs)
+                    return any((k or b"").lower() == b"cache-control" for k, _ in hdrs)
 
                 if path.startswith("/static/"):
                     # Static assets are generally safe to cache aggressively, but HTML should not be.
@@ -155,7 +155,7 @@ class _CacheControlMiddleware:
                         headers = [
                             (k, v)
                             for (k, v) in headers
-                            if k.lower() != b"cache-control"
+                            if (k or b"").lower() != b"cache-control"
                         ]
                         headers.append((b"cache-control", b"no-store"))
                     else:
@@ -170,7 +170,9 @@ class _CacheControlMiddleware:
                 else:
                     # Default to no-store for everything else so edge caching (or proxies) never cache dynamic endpoints.
                     headers = [
-                        (k, v) for (k, v) in headers if k.lower() != b"cache-control"
+                        (k, v)
+                        for (k, v) in headers
+                        if (k or b"").lower() != b"cache-control"
                     ]
                     headers.append((b"cache-control", b"no-store"))
                 message["headers"] = headers

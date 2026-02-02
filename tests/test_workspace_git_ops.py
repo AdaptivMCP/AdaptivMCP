@@ -315,7 +315,9 @@ async def test_workspace_sync_bidirectional_push_quotes_effective_ref(
         "ahead": 0,
         "behind": 0,
     }
-    monkeypatch.setattr(git_ops, "_workspace_sync_snapshot", _seq_provider([before, after]))
+    monkeypatch.setattr(
+        git_ops, "_workspace_sync_snapshot", _seq_provider([before, after])
+    )
 
     seen: list[str] = []
 
