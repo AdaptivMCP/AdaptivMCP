@@ -3986,7 +3986,11 @@ async def apply_workspace_operations(
 
                     # This batch tool is intended for file operations (text edits, etc).
                     # Directory deletion is not supported here.
-                    if abs_path not in current and os.path.exists(abs_path) and os.path.isdir(abs_path):
+                    if (
+                        abs_path not in current
+                        and os.path.exists(abs_path)
+                        and os.path.isdir(abs_path)
+                    ):
                         raise IsADirectoryError(path)
 
                     if abs_path in current:
