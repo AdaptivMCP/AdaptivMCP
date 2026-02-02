@@ -127,6 +127,57 @@ def _error_return(
     return {"status": "error", "ok": False, "reason": reason, "steps": steps, **payload}
 
 
+def _extract_error_message(payload: Any) -> str:
+    """Best-effort extraction of an error message from tool payloads."""
+
+    if not isinstance(payload, dict):
+        return ""
+
+    for key in ("error", "message", "detail"):
+        val = payload.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+
+    err_detail = payload.get("error_detail")
+    if isinstance(err_detail, dict):
+        for key in ("message", "detail"):
+            val = err_detail.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+
+    return ""
+
+
+def _is_missing_remote_ref_error(payload: Any, *, ref: str | None = None) -> bool:
+    """Heuristic: does a tool error look like a missing remote ref/branch?"""
+
+    msg = _extract_error_message(payload).lower()
+    if not msg:
+        return False
+
+    needles = (
+        "unknown revision",
+        "unknown revision or path",
+        "ambiguous argument",
+        "could not resolve",
+        "remote ref",
+        "remote branch",
+        "rev-parse",
+    )
+    if not any(n in msg for n in needles):
+        return False
+
+    if ref:
+        ref_l = ref.lower()
+        if f"origin/{ref_l}" in msg:
+            return True
+        if ref_l in msg and "origin/" in msg:
+            return True
+        return False
+
+    return True
+
+
 @mcp_tool(write_action=True)
 async def workspace_apply_ops_and_open_pr(
     full_name: str,
@@ -229,40 +280,88 @@ async def workspace_apply_ops_and_open_pr(
             )
 
         # Create a unique feature branch if none was provided.
-        if feature_ref is None or not str(feature_ref).strip():
+        provided_feature = bool(feature_ref is not None and str(feature_ref).strip())
+        if not provided_feature:
             feature_ref = f"workflow/{_safe_branch_slug(commit_message)}-{tw.uuid.uuid4().hex[:10]}"
         feature_ref = _safe_branch_slug(str(feature_ref))
 
-        _step(
-            steps,
-            "Create branch",
-            f"Creating feature branch '{feature_ref}' from '{effective_base}'.",
-            feature_ref=feature_ref,
-        )
-        extra_branch = dict(create_branch_args or {})
-        extra_branch.pop("full_name", None)
-        extra_branch.pop("base_ref", None)
-        extra_branch.pop("new_branch", None)
-        branch_call = {
-            "full_name": full_name,
-            "base_ref": effective_base,
-            "new_branch": feature_ref,
-            "push": True,
-            **extra_branch,
-        }
-        branch_res = await tw.workspace_create_branch(
-            **_filter_kwargs_for_callable(tw.workspace_create_branch, branch_call)
-        )
-        if isinstance(branch_res, dict) and branch_res.get("status") == "error":
-            return _error_return(
-                steps=steps,
-                action="Create branch",
-                detail="Failed to create feature branch.",
-                reason="create_branch_failed",
-                sync=sync_res,
-                branch=branch_res,
+        branch_res: Any = None
+        if provided_feature:
+            # Idempotency: if the caller supplied a feature branch, assume it may
+            # already exist and avoid hard-failing when it does.
+            _step(
+                steps,
+                "Create branch",
+                f"Reusing existing feature branch '{feature_ref}'.",
+                feature_ref=feature_ref,
             )
-        _step(steps, "Create branch", "Feature branch ready.", branch=branch_res)
+
+            extra_sync = dict(sync_args or {})
+            extra_sync.pop("full_name", None)
+            extra_sync.pop("ref", None)
+            sync_feature_call = {
+                "full_name": full_name,
+                "ref": feature_ref,
+                "discard_local_changes": discard_local_changes,
+                **extra_sync,
+            }
+            feature_sync_res = await tw.workspace_sync_to_remote(
+                **_filter_kwargs_for_callable(tw.workspace_sync_to_remote, sync_feature_call)
+            )
+
+            if isinstance(feature_sync_res, dict) and feature_sync_res.get("status") == "error":
+                # If the branch doesn't exist remotely, fall back to creating it.
+                if _is_missing_remote_ref_error(feature_sync_res, ref=feature_ref):
+                    provided_feature = False
+                else:
+                    return _error_return(
+                        steps=steps,
+                        action="Create branch",
+                        detail="Failed to sync feature branch mirror.",
+                        reason="sync_feature_failed",
+                        sync=sync_res,
+                        branch=feature_sync_res,
+                    )
+            else:
+                branch_res = {"ok": True, "reused": True, "sync": feature_sync_res}
+                _step(
+                    steps,
+                    "Create branch",
+                    "Feature branch mirror is ready.",
+                    branch=branch_res,
+                )
+
+        if not provided_feature:
+            _step(
+                steps,
+                "Create branch",
+                f"Creating feature branch '{feature_ref}' from '{effective_base}'.",
+                feature_ref=feature_ref,
+            )
+            extra_branch = dict(create_branch_args or {})
+            extra_branch.pop("full_name", None)
+            extra_branch.pop("base_ref", None)
+            extra_branch.pop("new_branch", None)
+            branch_call = {
+                "full_name": full_name,
+                "base_ref": effective_base,
+                "new_branch": feature_ref,
+                "push": True,
+                **extra_branch,
+            }
+            branch_res = await tw.workspace_create_branch(
+                **_filter_kwargs_for_callable(tw.workspace_create_branch, branch_call)
+            )
+            if isinstance(branch_res, dict) and branch_res.get("status") == "error":
+                return _error_return(
+                    steps=steps,
+                    action="Create branch",
+                    detail="Failed to create feature branch.",
+                    reason="create_branch_failed",
+                    sync=sync_res,
+                    branch=branch_res,
+                )
+            _step(steps, "Create branch", "Feature branch ready.", branch=branch_res)
 
         _step(steps, "Apply operations", f"Applying {len(operations)} operation(s).")
         extra_ops = dict(apply_ops_args or {})
