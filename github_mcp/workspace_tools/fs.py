@@ -3794,6 +3794,7 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
+                    current[abs_path] = bytes(after, "utf-8")
                     results.append(
                         {
                             "index": idx,
@@ -3844,6 +3845,7 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
+                    current[abs_path] = bytes(after, "utf-8")
                     results.append(
                         {
                             "index": idx,
@@ -3928,12 +3930,13 @@ async def apply_workspace_operations(
                         raise ValueError("delete_word.occurrence must be >= 1")
 
                     abs_path = _workspace_safe_join(repo_dir, path)
-                    if not os.path.exists(abs_path):
+                    if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
+                    before_data = current.get(abs_path, backups[abs_path])
                     before = (
-                        backups[abs_path].decode("utf-8", errors="replace")
-                        if backups[abs_path]
+                        before_data.decode("utf-8", errors="replace")
+                        if before_data
                         else ""
                     )
 
@@ -3959,6 +3962,7 @@ async def apply_workspace_operations(
                         _workspace_write_text(
                             repo_dir, path, after, create_parents=create_parents
                         )
+                    current[abs_path] = bytes(after, "utf-8")
                     results.append(
                         {
                             "index": idx,
@@ -3979,8 +3983,15 @@ async def apply_workspace_operations(
                     if not isinstance(path, str) or not path.strip():
                         raise ValueError("delete.path must be a non-empty string")
                     abs_path = _workspace_safe_join(repo_dir, path)
-                    _backup_path(abs_path)
-                    if backups[abs_path] is None:
+                    if abs_path in current:
+                        before_data = current[abs_path]
+                        exists = before_data is not None
+                    else:
+                        _backup_path(abs_path)
+                        before_data = backups[abs_path]
+                        exists = before_data is not None
+
+                    if not exists:
                         if allow_missing:
                             results.append(
                                 {
@@ -3990,16 +4001,15 @@ async def apply_workspace_operations(
                                     "status": "noop",
                                 }
                             )
+                            _set_current_bytes(abs_path, None)
                             continue
                         raise FileNotFoundError(path)
 
-                    before = (
-                        backups[abs_path].decode("utf-8", errors="replace")
-                        if backups[abs_path]
-                        else ""
-                    )
-                    if not preview_only:
+                    # If the file exists only in the in-batch state (preview_only),
+                    # do not attempt to touch the filesystem.
+                    if not preview_only and os.path.exists(abs_path):
                         os.remove(abs_path)
+                    _set_current_bytes(abs_path, None)
                     results.append(
                         {"index": idx, "op": "delete", "path": path, "status": "ok"}
                     )
@@ -4079,11 +4089,22 @@ async def apply_workspace_operations(
                         raise ValueError("move.dst must be a non-empty string")
                     abs_src = _workspace_safe_join(repo_dir, src)
                     abs_dst = _workspace_safe_join(repo_dir, dst)
-                    if not os.path.exists(abs_src):
+                    _missing = object()
+                    src_data: bytes | None | object = _missing
+                    if abs_src in current:
+                        src_data = current[abs_src]
+                        if src_data is None:
+                            raise FileNotFoundError(src)
+                    elif not os.path.exists(abs_src):
                         raise FileNotFoundError(src)
                     _backup_path(abs_src)
                     _backup_path(abs_dst)
-                    if os.path.exists(abs_dst) and not overwrite:
+                    dst_exists = False
+                    if abs_dst in current:
+                        dst_exists = current[abs_dst] is not None
+                    elif os.path.exists(abs_dst):
+                        dst_exists = True
+                    if dst_exists and not overwrite:
                         raise FileExistsError(dst)
                     if not preview_only:
                         if os.path.exists(abs_dst) and overwrite:
@@ -4094,6 +4115,19 @@ async def apply_workspace_operations(
                         if create_parents:
                             os.makedirs(os.path.dirname(abs_dst), exist_ok=True)
                         shutil.move(abs_src, abs_dst)
+                        if os.path.exists(abs_dst) and not os.path.isdir(abs_dst):
+                            _set_current_bytes(abs_dst, _read_bytes(abs_dst))
+                        else:
+                            _set_current_bytes(abs_dst, None)
+                        _set_current_bytes(abs_src, None)
+                    else:
+                        # Preview-only: simulate file moves that were created/edited
+                        # earlier in the batch.
+                        if src_data is not _missing and src_data is not None:
+                            _set_current_bytes(abs_dst, src_data)
+                        # Even if we don't have in-memory bytes (e.g. directory move),
+                        # mark the source as removed in-batch.
+                        _set_current_bytes(abs_src, None)
                     results.append(
                         {
                             "index": idx,

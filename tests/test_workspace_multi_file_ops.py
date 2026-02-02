@@ -103,6 +103,86 @@ def test_apply_workspace_operations_rolls_back_on_error(tmp_path, monkeypatch):
     assert (repo_dir / "a.txt").read_text(encoding="utf-8") == "stable\n"
 
 
+def test_apply_workspace_operations_preview_only_chained_ops_on_new_file(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.apply_workspace_operations(
+            full_name="octo/example",
+            ref="feature",
+            preview_only=True,
+            operations=[
+                {"op": "write", "path": "new.txt", "content": "hello world\n"},
+                {
+                    "op": "delete_word",
+                    "path": "new.txt",
+                    "word": "world",
+                    "whole_word": True,
+                },
+                {"op": "replace_text", "path": "new.txt", "old": "hello", "new": "hi"},
+                {
+                    "op": "move",
+                    "src": "new.txt",
+                    "dst": "moved.txt",
+                    "overwrite": False,
+                },
+                {"op": "delete", "path": "moved.txt", "allow_missing": False},
+            ],
+        )
+    )
+
+    assert result.get("error") is None
+    assert result.get("ok") is True
+    assert not (repo_dir / "new.txt").exists()
+    assert not (repo_dir / "moved.txt").exists()
+
+    statuses = [entry.get("status") for entry in result.get("results", [])]
+    assert statuses == ["ok", "ok", "ok", "ok", "ok"]
+
+
+def test_apply_workspace_operations_chained_ops_on_new_file(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.apply_workspace_operations(
+            full_name="octo/example",
+            ref="feature",
+            preview_only=False,
+            operations=[
+                {"op": "write", "path": "new.txt", "content": "hello world\n"},
+                {
+                    "op": "delete_word",
+                    "path": "new.txt",
+                    "word": "world",
+                    "whole_word": True,
+                },
+                {"op": "replace_text", "path": "new.txt", "old": "hello", "new": "hi"},
+                {
+                    "op": "move",
+                    "src": "new.txt",
+                    "dst": "moved.txt",
+                    "overwrite": False,
+                },
+            ],
+        )
+    )
+
+    assert result.get("error") is None
+    assert result.get("ok") is True
+    assert not (repo_dir / "new.txt").exists()
+    assert (repo_dir / "moved.txt").read_text(encoding="utf-8") == "hi \n"
+
+
 def test_move_workspace_paths_moves(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
