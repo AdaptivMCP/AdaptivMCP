@@ -203,13 +203,19 @@ async def _run_shell(
 
         # Best-effort output collection after timeout. Keep configurable.
         try:
-            collect_timeout = getattr(config, "ADAPTIV_MCP_TIMEOUT_COLLECT_SECONDS", 0)
-            if collect_timeout and int(collect_timeout) > 0:
-                stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    proc.communicate(), timeout=int(collect_timeout)
-                )
-            else:
-                stdout_bytes, stderr_bytes = await proc.communicate()
+            collect_timeout = getattr(config, "ADAPTIV_MCP_TIMEOUT_COLLECT_SECONDS", 0) or 0
+            try:
+                collect_timeout_int = int(collect_timeout)
+            except Exception:
+                collect_timeout_int = 0
+
+            # Never block indefinitely while collecting output after a timeout.
+            if collect_timeout_int <= 0:
+                collect_timeout_int = 1
+
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=float(collect_timeout_int)
+            )
         except Exception as exc:
             # Do not swallow errors while collecting stdout/stderr after a timeout.
             # When communicate() fails (e.g., pipes already closed), return a
