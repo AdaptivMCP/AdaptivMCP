@@ -3522,6 +3522,11 @@ async def apply_workspace_operations(
         with open(path, "wb") as f:
             f.write(data)
 
+    def _raise_if_directory(abs_path: str, rel_path: str) -> None:
+        if os.path.isdir(abs_path):
+            # Keep tool errors repo-relative (avoid leaking absolute host paths).
+            raise IsADirectoryError(rel_path)
+
     # Best-effort rollback by restoring prior file bytes.
     backups: dict[str, bytes | None] = {}
 
@@ -3599,6 +3604,7 @@ async def apply_workspace_operations(
                         raise TypeError("write.content must be a string")
 
                     abs_path = _workspace_safe_join(repo_dir, path)
+                    _raise_if_directory(abs_path, path)
                     _backup_path(abs_path)
                     before_data = current.get(abs_path, backups[abs_path])
                     before = (
@@ -3714,6 +3720,7 @@ async def apply_workspace_operations(
                         raise TypeError("replace_text.new must be a string")
 
                     abs_path = _workspace_safe_join(repo_dir, path)
+                    _raise_if_directory(abs_path, path)
                     if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
@@ -3774,6 +3781,7 @@ async def apply_workspace_operations(
                     end_col = int(end.get("col"))
 
                     abs_path = _workspace_safe_join(repo_dir, path)
+                    _raise_if_directory(abs_path, path)
                     if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
@@ -3819,6 +3827,7 @@ async def apply_workspace_operations(
                         raise ValueError("delete_lines.end_line must be >= start_line")
 
                     abs_path = _workspace_safe_join(repo_dir, path)
+                    _raise_if_directory(abs_path, path)
                     if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
@@ -3871,6 +3880,7 @@ async def apply_workspace_operations(
                         raise ValueError("delete_chars.count must be >= 1")
 
                     abs_path = _workspace_safe_join(repo_dir, path)
+                    _raise_if_directory(abs_path, path)
                     if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)
@@ -3930,6 +3940,7 @@ async def apply_workspace_operations(
                         raise ValueError("delete_word.occurrence must be >= 1")
 
                     abs_path = _workspace_safe_join(repo_dir, path)
+                    _raise_if_directory(abs_path, path)
                     if abs_path not in current and not os.path.exists(abs_path):
                         raise FileNotFoundError(path)
                     _backup_path(abs_path)

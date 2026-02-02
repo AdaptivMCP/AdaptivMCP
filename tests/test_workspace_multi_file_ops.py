@@ -113,6 +113,76 @@ def test_apply_workspace_operations_delete_directory_reports_error_and_does_not_
     assert (repo_dir / "adir" / "inner.txt").read_text(encoding="utf-8") == "hi\n"
 
 
+def test_apply_workspace_operations_replace_text_on_directory_reports_relative_error(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "adir").mkdir()
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.apply_workspace_operations(
+            full_name="octo/example",
+            ref="feature",
+            fail_fast=False,
+            rollback_on_error=True,
+            preview_only=False,
+            operations=[
+                {"op": "replace_text", "path": "adir", "old": "x", "new": "y"},
+            ],
+        )
+    )
+
+    assert result.get("error") is None
+    assert result.get("ok") is False
+    assert result.get("status") == "partial"
+
+    entry = result.get("results")[0]
+    assert entry["status"] == "error"
+    err = entry.get("error") or ""
+    assert "adir" in err
+    assert str(repo_dir) not in err
+    assert (repo_dir / "adir").is_dir()
+
+
+def test_apply_workspace_operations_write_on_directory_reports_relative_error(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "adir").mkdir()
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.apply_workspace_operations(
+            full_name="octo/example",
+            ref="feature",
+            fail_fast=False,
+            rollback_on_error=True,
+            preview_only=False,
+            operations=[
+                {"op": "write", "path": "adir", "content": "hello\n"},
+            ],
+        )
+    )
+
+    assert result.get("error") is None
+    assert result.get("ok") is False
+    assert result.get("status") == "partial"
+
+    entry = result.get("results")[0]
+    assert entry["status"] == "error"
+    err = entry.get("error") or ""
+    assert "adir" in err
+    assert str(repo_dir) not in err
+    assert (repo_dir / "adir").is_dir()
+
+
 def test_apply_workspace_operations_applies_and_moves(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
