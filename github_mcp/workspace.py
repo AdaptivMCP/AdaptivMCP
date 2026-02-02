@@ -148,8 +148,14 @@ async def _run_shell(
                 await asyncio.wait_for(proc.wait(), timeout=3)
                 return
             except Exception:
+                # If the process group does not stop promptly, escalate.
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
+                except Exception:  # nosec B110
+                    pass
+                # Ensure the process is reaped so pipes close and communicate() does not hang.
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=3)
                 except Exception:  # nosec B110
                     pass
         else:
@@ -171,7 +177,18 @@ async def _run_shell(
         # Client disconnects/cancellation: ensure the subprocess does not keep
         # running in the background and consuming resources.
         try:
-            await _terminate_process()
+            # In Python 3.11+, cancellations are sticky. Clear the cancellation
+            # state so cleanup awaits are allowed to run.
+            task = asyncio.current_task()
+            if task is not None:
+                try:
+                    while task.cancelling():
+                        task.uncancel()
+                except Exception:  # nosec B110
+                    pass
+            # Shield cleanup so the subprocess is terminated even if the caller
+            # is cancelled again mid-cleanup.
+            await asyncio.shield(_terminate_process())
         except Exception:  # nosec B110
             pass
         raise
