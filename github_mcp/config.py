@@ -519,7 +519,14 @@ LOG_TOOL_CALL_STARTS = _env_flag("LOG_TOOL_CALL_STARTS", _log_tool_call_starts_d
 #
 # Default to enabled when HUMAN_LOGS are enabled so developer-facing deployments
 # capture raw request/response payloads without additional configuration.
-_log_tool_payloads_default = "true" if HUMAN_LOGS else "false"
+#
+# Render provider logs are optimized for humans; default to keeping payloads off
+# there unless explicitly enabled.
+_log_tool_payloads_default = (
+    "false"
+    if _is_render_runtime() and os.environ.get("LOG_TOOL_PAYLOADS") is None
+    else ("true" if HUMAN_LOGS else "false")
+)
 LOG_TOOL_PAYLOADS = _env_flag("LOG_TOOL_PAYLOADS", _log_tool_payloads_default)
 
 # When enabled, include outbound GitHub HTTP request/response details in logs.
@@ -571,6 +578,18 @@ LOG_RENDER_HTTP = _env_flag("LOG_RENDER_HTTP", _log_render_http_default)
 # WARNING: This can be very large for log endpoints.
 LOG_RENDER_HTTP_BODIES = _env_flag("LOG_RENDER_HTTP_BODIES", "false")
 
+# When enabled, include Render request details (params/json/headers) in provider
+# logs. Default to OFF on Render to keep logs compact; can be enabled for
+# debugging.
+_log_render_http_details_default = (
+    "false"
+    if _is_render_runtime() and os.environ.get("LOG_RENDER_HTTP_DETAILS") is None
+    else ("true" if HUMAN_LOGS else "false")
+)
+LOG_RENDER_HTTP_DETAILS = _env_flag(
+    "LOG_RENDER_HTTP_DETAILS", _log_render_http_details_default
+)
+
 # Append structured extras to provider log lines.
 #
 # Render log viewers and similar UIs are optimized for humans; emitting large
@@ -583,12 +602,18 @@ LOG_RENDER_HTTP_BODIES = _env_flag("LOG_RENDER_HTTP_BODIES", "false")
 # - When HUMAN_LOGS=false: keep extras off by default.
 LOG_APPEND_EXTRAS = _env_flag(
     "LOG_APPEND_EXTRAS",
-    "true" if HUMAN_LOGS else "false",
+    (
+        "false"
+        if _is_render_runtime() and os.environ.get("LOG_APPEND_EXTRAS") is None
+        else ("true" if HUMAN_LOGS else "false")
+    ),
 )
 
 # Cap appended extras to keep provider log ingestion healthy.
-LOG_EXTRAS_MAX_LINES = int(os.environ.get("LOG_EXTRAS_MAX_LINES", "2000000"))
-LOG_EXTRAS_MAX_CHARS = int(os.environ.get("LOG_EXTRAS_MAX_CHARS", "10000000"))
+_extras_lines_default = "2000" if _is_render_runtime() else "2000000"
+_extras_chars_default = "200000" if _is_render_runtime() else "10000000"
+LOG_EXTRAS_MAX_LINES = int(os.environ.get("LOG_EXTRAS_MAX_LINES", _extras_lines_default))
+LOG_EXTRAS_MAX_CHARS = int(os.environ.get("LOG_EXTRAS_MAX_CHARS", _extras_chars_default))
 
 # Backwards-compat: deprecated.
 LOG_APPEND_EXTRAS_JSON = _env_flag("LOG_APPEND_EXTRAS_JSON", "false")
