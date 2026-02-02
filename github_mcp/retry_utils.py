@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import secrets
 
@@ -31,7 +32,7 @@ def jitter_sleep_seconds(
     except Exception:
         return 0.0
 
-    if delay <= 0:
+    if delay <= 0 or not math.isfinite(delay):
         return 0.0
 
     # Keep tests deterministic.
@@ -44,6 +45,12 @@ def jitter_sleep_seconds(
             cap = float(cap_seconds)
         except Exception:
             cap = 0.0
+        if cap <= 0:
+            cap = 0.0
+        elif not math.isfinite(cap):
+            # Treat +inf as "no cap" (bounded by delay * 0.25 below), and treat
+            # NaN/-inf as no additive jitter.
+            cap = delay * 0.25 if cap > 0 else 0.0
         cap = max(0.0, cap)
         # Use a cryptographically strong RNG to avoid any future temptation to
         # reuse this helper for security-sensitive randomness.

@@ -11,6 +11,31 @@ def test_jitter_sleep_seconds_deterministic_under_pytest(monkeypatch):
     assert retry_utils.jitter_sleep_seconds(1.23, respect_min=False) == 1.23
 
 
+def test_jitter_sleep_seconds_rejects_non_finite_delay(monkeypatch):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+    assert retry_utils.jitter_sleep_seconds(float("nan"), respect_min=True) == 0.0
+    assert retry_utils.jitter_sleep_seconds(float("inf"), respect_min=True) == 0.0
+    assert retry_utils.jitter_sleep_seconds(float("-inf"), respect_min=False) == 0.0
+
+
+def test_jitter_sleep_seconds_rejects_non_finite_cap(monkeypatch):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+    # Force jitter to the maximum possible value for determinism.
+    monkeypatch.setattr(retry_utils.random, "uniform", lambda a, b: b)
+
+    # Non-finite caps should be treated as zero additive jitter.
+    assert (
+        retry_utils.jitter_sleep_seconds(10.0, respect_min=True, cap_seconds=float("nan"))
+        == 10.0
+    )
+    assert (
+        retry_utils.jitter_sleep_seconds(10.0, respect_min=True, cap_seconds=float("inf"))
+        == 12.5
+    )
+
+
 def test_jitter_sleep_seconds_respect_min_adds_capped_jitter(monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
