@@ -94,9 +94,6 @@ def _sanitize_debug_value(
     removing risky payloads.
     """
 
-    if _depth > max_depth:
-        return value
-
     if value is None or isinstance(value, (bool, int, float)):
         return value
 
@@ -129,6 +126,12 @@ def _sanitize_debug_value(
 
     if isinstance(value, (bytes, bytearray)):
         return "<BYTES>"
+
+    # Depth limiting is only relevant for containers. Never return raw nested
+    # containers once we exceed the maximum depth, as they may contain
+    # high-entropy secrets that would otherwise bypass sanitization.
+    if _depth >= max_depth and isinstance(value, (dict, list, tuple)):
+        return "<MAX_DEPTH_REACHED>"
 
     if isinstance(value, dict):
         out: dict[str, Any] = {}
@@ -301,7 +304,8 @@ def _structured_tool_error(
 
     # 3) APIError carries upstream status/payload; map common statuses.
     if isinstance(exc, APIError):
-        details.setdefault("upstream_status_code", exc.status_code)
+        if exc.status_code is not None:
+            details.setdefault("upstream_status_code", exc.status_code)
         if isinstance(exc.response_payload, dict) and exc.response_payload:
             details.setdefault("upstream_payload", exc.response_payload)
 
