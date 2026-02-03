@@ -1059,6 +1059,8 @@ def _register_mcp_method_fallbacks(app_instance: Any) -> None:
     These lightweight handlers avoid 405s while keeping the real transport
     behavior unchanged.
     """
+    if app_instance is None or not callable(getattr(app_instance, "add_route", None)):
+        return
 
     def _preflight(allow_methods: str) -> Response:
         return Response(
