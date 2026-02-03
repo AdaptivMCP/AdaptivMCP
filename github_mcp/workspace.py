@@ -1066,6 +1066,13 @@ def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
     # mirror) and allow traversal via ".." in relative paths.
     if os.path.isabs(raw_path):
         return os.path.realpath(raw_path)
+    if os.name != "nt":
+        import re
+
+        if re.match(r"^[A-Za-z]:/", raw_path):
+            raise GitHubAPIError(
+                "Windows-style absolute paths are not supported on this host"
+            )
 
     rel_path = raw_path.lstrip("/\\")
     parts: list[str] = []
