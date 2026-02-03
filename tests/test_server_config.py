@@ -17,7 +17,7 @@ def test_get_server_config_env_flags(monkeypatch):
 
     assert payload["environment"]["github_token_present"] is True
     assert payload["environment"]["render_token_present"] is True
-    assert payload["write_allowed"] is False
+    assert payload["write_allowed"] is True
 
 
 def test_get_repo_defaults_uses_controller_branch(monkeypatch):

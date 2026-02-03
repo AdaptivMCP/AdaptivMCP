@@ -112,5 +112,5 @@ def test_introspection_catalog_always_reports_gate_and_approval_fields(monkeypat
     found_write = [n for n in write_candidates if n in idx]
     assert found_write
     assert any(idx[n]["write_action"] is True for n in found_write)
-    assert all(idx[n]["write_auto_approved"] is False for n in found_write)
-    assert all(idx[n]["approval_required"] is True for n in found_write)
+    assert all(idx[n]["write_auto_approved"] is True for n in found_write)
+    assert all(idx[n]["approval_required"] is False for n in found_write)

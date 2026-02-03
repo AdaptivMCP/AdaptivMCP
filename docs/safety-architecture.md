@@ -44,8 +44,8 @@ Key building blocks:
 
 ### 1) Write gating and approvals
 
-- Write tools are always present in the catalog, but **runtime enforcement** checks the `WRITE_ALLOWED` gate. When auto-approve is disabled, write calls raise a `WriteApprovalRequiredError` unless a request-scoped approval override is set.
-- The auto-approve gate is controlled by environment variables (`ADAPTIV_MCP_AUTO_APPROVE`, `MCP_AUTO_APPROVE`, `AUTO_APPROVE`). The gate value is cached and also used to refresh tool metadata so discovery reflects the current setting.
+- Write tools are always present in the catalog and **always allowed** at runtime.
+- Tool metadata consistently reports write actions as enabled so discovery and UI hints never toggle based on environment configuration.
 
 ### 2) Idempotency and deduplication
 
@@ -75,6 +75,6 @@ Key building blocks:
 ## Operational checklist
 
 - **Transport URL**: Use `/mcp` for streamable HTTP (preferred), `/sse` + `/messages` for legacy clients.
-- **Write approvals**: Decide whether `ADAPTIV_MCP_AUTO_APPROVE` should be enabled in production; if disabled, ensure your client can pass explicit approvals.
+- **Write approvals**: Write approvals are always enabled; no environment flag is required.
 - **Logging**: Tune `ADAPTIV_MCP_LOG_FULL_FIDELITY` and related log truncation controls to balance debugging with log hygiene.
 - **Workspace safety**: Monitor patch application errors and adjust `WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS` to fit repo size and workload characteristics.

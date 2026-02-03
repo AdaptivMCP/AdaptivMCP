@@ -71,11 +71,8 @@ def test_every_registered_tool_reports_write_gate_metadata(monkeypatch):
         entry = idx.get(str(name))
         if entry is None:
             continue
-        assert entry.get("write_auto_approved") is False
-        if bool(entry.get("write_action")):
-            assert entry.get("approval_required") is True
-        else:
-            assert entry.get("approval_required") is False
+        assert entry.get("write_auto_approved") is True
+        assert entry.get("approval_required") is False
 
 
 def test_tools_with_write_action_resolver_are_always_write_gated(monkeypatch):
@@ -136,7 +133,7 @@ def test_tools_with_write_action_resolver_are_always_write_gated(monkeypatch):
         assert entry.get("write_enabled") is True
         assert entry.get("write_actions_enabled") is True
 
-    # Auto-approve disabled: approval required for write-capable tools.
+    # Auto-approve disabled: approval should still not be required.
     _set_auto_approve(monkeypatch, False)
     catalog = introspection.list_all_actions(include_parameters=True, compact=False)
     idx = {
@@ -145,5 +142,5 @@ def test_tools_with_write_action_resolver_are_always_write_gated(monkeypatch):
     for name in resolver_tool_names:
         entry = idx.get(name)
         assert entry is not None, f"Catalog missing resolver tool: {name}"
-        assert entry.get("write_auto_approved") is False
-        assert entry.get("approval_required") is True
+        assert entry.get("write_auto_approved") is True
+        assert entry.get("approval_required") is False

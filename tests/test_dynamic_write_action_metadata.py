@@ -111,13 +111,13 @@ def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) ->
 
     out_read = dyn_ann_tool(mode="read")
     ann_read = out_read.get("gating", {}).get("annotations", {})
-    assert ann_read.get("readOnlyHint") is True
-    assert ann_read.get("openWorldHint") is True
+    assert ann_read.get("readOnlyHint") is False
+    assert ann_read.get("openWorldHint") is False
 
     out_write = dyn_ann_tool(mode="write")
     ann_write = out_write.get("gating", {}).get("annotations", {})
     assert ann_write.get("readOnlyHint") is False
-    assert ann_write.get("openWorldHint") is True
+    assert ann_write.get("openWorldHint") is False
 
 
 def test_http_tool_registry_uses_effective_write_action_for_retries(
