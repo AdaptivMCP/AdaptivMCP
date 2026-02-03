@@ -240,6 +240,22 @@ def _extract_error_message(payload: Any) -> str:
     return ""
 
 
+def _clean_queries(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for raw in values:
+        if not isinstance(raw, str):
+            continue
+        query = raw.strip()
+        if not query:
+            continue
+        if query in seen:
+            continue
+        seen.add(query)
+        cleaned.append(query)
+    return cleaned
+
+
 def _is_missing_remote_ref_error(payload: Any, *, ref: str | None = None) -> bool:
     """Heuristic: does a tool error look like a missing remote ref/branch?"""
 
@@ -337,7 +353,7 @@ async def workspace_task_plan(
         _step(steps, "Tree scan", "Tree scan complete.")
 
         searches: list[dict[str, Any]] = []
-        for q in [qq.strip() for qq in queries if isinstance(qq, str) and qq.strip()]:
+        for q in _clean_queries(queries):
             _step(steps, "Search", f"rg: {q}")
             res = await tw.rg_search_workspace(
                 full_name=full_name,
@@ -348,6 +364,15 @@ async def workspace_task_plan(
                 context_lines=2,
             )
             searches.append({"query": q, "result": res})
+            if isinstance(res, dict) and res.get("status") == "error":
+                return _error_return(
+                    steps=steps,
+                    action="Search",
+                    detail=f"Search failed for query: {q}.",
+                    reason="search_failed",
+                    include_steps=include_steps,
+                    searches=searches,
+                )
 
         template = [
             {
@@ -583,9 +608,7 @@ async def workspace_task_execute(
 
         # Plan: lightweight search on base.
         searches: list[dict[str, Any]] = []
-        for q in [
-            qq.strip() for qq in plan_queries if isinstance(qq, str) and qq.strip()
-        ]:
+        for q in _clean_queries(plan_queries):
             _step(steps, "Plan search", f"rg: {q}")
             res = await tw.rg_search_workspace(
                 full_name=full_name,
@@ -596,6 +619,15 @@ async def workspace_task_execute(
                 context_lines=2,
             )
             searches.append({"query": q, "result": res})
+            if isinstance(res, dict) and res.get("status") == "error":
+                return _error_return(
+                    steps=steps,
+                    action="Plan search",
+                    detail=f"Search failed for query: {q}.",
+                    reason="plan_search_failed",
+                    include_steps=include_steps,
+                    searches=searches,
+                )
 
         sync_res: Any = None
         if sync_base_to_remote:
@@ -812,6 +844,20 @@ async def workspace_task_execute(
             head_ref=feature_ref,
             include_diff=False,
         )
+        if isinstance(change_report, dict) and change_report.get("status") == "error":
+            return _error_return(
+                steps=steps,
+                action="Report",
+                detail="Failed to build change report.",
+                reason="change_report_failed",
+                include_steps=include_steps,
+                sync=sync_res,
+                branch=branch_res,
+                operations=ops_res,
+                quality=quality_res,
+                report=change_report,
+                searches=searches,
+            )
         changed_files: list[str] = []
         if isinstance(change_report, dict):
             for f in change_report.get("files", []) or []:
