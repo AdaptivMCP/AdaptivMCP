@@ -45,9 +45,7 @@ class _ToolCatalogCacheEntry:
     payload: dict[str, Any]
 
 
-_TOOL_CATALOG_CACHE: dict[
-    tuple[bool, bool | None, str], _ToolCatalogCacheEntry
-] = {}
+_TOOL_CATALOG_CACHE: dict[tuple[bool, bool | None, str], _ToolCatalogCacheEntry] = {}
 
 
 def _tool_catalog_signature() -> tuple[tuple[str, str | None], ...]:
