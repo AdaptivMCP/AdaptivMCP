@@ -149,3 +149,13 @@ def test_read_lines_excerpt_basic_and_truncation(tmp_path):
     with pytest.raises(ValueError):
         workspace_fs._read_lines_excerpt(str(p), start_line=1, max_lines=1, max_chars=0)
 
+
+def test_read_lines_excerpt_exact_max_lines_not_truncated(tmp_path):
+    p = tmp_path / "exact.txt"
+    p.write_text("first\nsecond\n", encoding="utf-8")
+
+    out = workspace_fs._read_lines_excerpt(
+        str(p), start_line=1, max_lines=2, max_chars=100
+    )
+    assert [ln["text"] for ln in out["lines"]] == ["first", "second"]
+    assert out["truncated"] is False
