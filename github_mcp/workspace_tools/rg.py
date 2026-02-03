@@ -458,9 +458,9 @@ async def rg_list_workspace_files(
                 if not line:
                     continue
                 # rg emits paths relative to cwd; normalize to repo root.
-                rel = os.path.normpath(
-                    os.path.join(base_rel_effective, line)
-                ).replace("\\", "/")
+                rel = os.path.normpath(os.path.join(base_rel_effective, line)).replace(
+                    "\\", "/"
+                )
                 if not _passes_filters(
                     rel,
                     include_globs=globs,

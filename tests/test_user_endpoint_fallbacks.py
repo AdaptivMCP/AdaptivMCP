@@ -94,7 +94,9 @@ def test_create_repository_user_owner_blocks_app_tokens(monkeypatch):
     assert "GitHub App tokens cannot create user repositories" in result["error"]
 
 
-def test_create_repository_user_owner_mismatch_normalizes_fallback_full_name(monkeypatch):
+def test_create_repository_user_owner_mismatch_normalizes_fallback_full_name(
+    monkeypatch,
+):
     from github_mcp.main_tools import repositories
 
     calls: list[tuple[str, str, dict]] = []

@@ -33,6 +33,28 @@ def test_safe_repo_path_rejects_windows_absolute_paths_on_posix(tmp_path) -> Non
         workspace._safe_repo_path(str(repo_dir), "C:\\temp\\file.txt")
 
 
+def test_safe_repo_path_rejects_posix_absolute_paths(tmp_path) -> None:
+    if os.name == "nt":
+        pytest.skip("POSIX absolute path handling only relevant on non-Windows hosts")
+
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    with pytest.raises(GitHubAPIError):
+        workspace._safe_repo_path(str(repo_dir), "/absolute/path.txt")
+
+
+def test_safe_repo_path_rejects_traversal_paths(tmp_path) -> None:
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    with pytest.raises(GitHubAPIError):
+        workspace._safe_repo_path(str(repo_dir), "../outside.txt")
+
+    with pytest.raises(GitHubAPIError):
+        workspace._safe_repo_path(str(repo_dir), "folder/../../outside.txt")
+
+
 def test_maybe_unescape_unified_diff_unescapes_diff_payload() -> None:
     raw = (
         "diff --git a/file.txt b/file.txt\\n"

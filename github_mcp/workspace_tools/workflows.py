@@ -306,10 +306,15 @@ async def workspace_apply_ops_and_open_pr(
                 **extra_sync,
             }
             feature_sync_res = await tw.workspace_sync_to_remote(
-                **_filter_kwargs_for_callable(tw.workspace_sync_to_remote, sync_feature_call)
+                **_filter_kwargs_for_callable(
+                    tw.workspace_sync_to_remote, sync_feature_call
+                )
             )
 
-            if isinstance(feature_sync_res, dict) and feature_sync_res.get("status") == "error":
+            if (
+                isinstance(feature_sync_res, dict)
+                and feature_sync_res.get("status") == "error"
+            ):
                 # If the branch doesn't exist remotely, fall back to creating it.
                 if _is_missing_remote_ref_error(feature_sync_res, ref=feature_ref):
                     provided_feature = False
