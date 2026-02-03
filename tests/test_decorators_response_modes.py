@@ -8,7 +8,9 @@ def _prepare_compact_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(dec, "LOG_TOOL_CALLS", False)
     monkeypatch.setattr(dec, "FASTMCP_AVAILABLE", False)
     monkeypatch.setattr(dec, "mcp", None)
-    monkeypatch.setattr(dec, "get_request_context", lambda: {"response_mode": "compact"})
+    monkeypatch.setattr(
+        dec, "get_request_context", lambda: {"response_mode": "compact"}
+    )
     monkeypatch.setattr(dec, "_REGISTERED_MCP_TOOLS", [])
 
 

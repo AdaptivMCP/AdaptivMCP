@@ -564,8 +564,10 @@ async def trigger_and_wait_for_workflow(
         if candidates:
             # Pick the most recent matching run.
             candidates.sort(
-                key=lambda r: _parse_created(r.get("created_at"))
-                or datetime.min.replace(tzinfo=UTC),
+                key=lambda r: (
+                    _parse_created(r.get("created_at"))
+                    or datetime.min.replace(tzinfo=UTC)
+                ),
                 reverse=True,
             )
             run_id = candidates[0].get("id")
