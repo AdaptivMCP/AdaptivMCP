@@ -142,6 +142,8 @@ def _normalize_workspace_path(path: str) -> str:
                 continue
             if part == "..":
                 raise ValueError("path must be within the repository")
+            if ":" in part:
+                raise ValueError("path must not contain ':' characters")
             parts.append(part)
         normalized = "/".join(parts)
     return normalized

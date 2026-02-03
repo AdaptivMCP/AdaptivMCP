@@ -102,6 +102,29 @@ def test_delete_workspace_paths_success_missing_and_nonempty_dir(tmp_path, monke
     )
 
 
+def test_delete_workspace_paths_rejects_outside_repo_paths(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("nope", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        fs.delete_workspace_paths(
+            "octo/example",
+            paths=[str(outside), "../outside.txt"],
+            allow_missing=True,
+        )
+    )
+
+    assert result["status"] == "deleted"
+    assert result["ok"] is False
+    assert any(item["path"] == str(outside) for item in result["failed"])
+    assert any(item["path"] == "../outside.txt" for item in result["failed"])
+
+
 def test_delete_workspace_folders_non_dir_and_missing(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()

@@ -100,3 +100,18 @@ def test_list_workspace_files_honors_include_hidden_false_for_hidden_file(
 
     assert "error" not in result
     assert result["files"] == []
+
+
+def test_list_workspace_files_rejects_colon_in_path(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_listing, "_tw", lambda: dummy)
+
+    result = asyncio.run(workspace_listing.list_workspace_files(path="bad:segment"))
+
+    assert result.get("status") == "error"
+    assert "':'" in (
+        str(result.get("error", "")) + " " + str(result.get("error_detail", {}))
+    )

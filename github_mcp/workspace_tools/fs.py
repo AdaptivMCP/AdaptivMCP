@@ -117,6 +117,15 @@ def _looks_like_diff(text: str) -> bool:
     )
 
 
+def _is_within_dir(path: str, root: str) -> bool:
+    try:
+        root_real = os.path.realpath(root)
+        path_real = os.path.realpath(path)
+        return os.path.commonpath([root_real, path_real]) == root_real
+    except Exception:
+        return False
+
+
 def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if not isinstance(rel_path, str) or not rel_path.strip():
         # Treat empty/whitespace-only paths as the workspace root. Many callers
@@ -129,25 +138,34 @@ def _workspace_safe_join(repo_dir: str, rel_path: str) -> str:
     if raw_path == "/":
         return root
 
-    # Intentionally permissive: accept absolute paths (including outside the
-    # repo mirror) and allow relative traversal via "..".
     if os.path.isabs(raw_path):
-        return os.path.realpath(raw_path)
+        abs_path = os.path.realpath(raw_path)
+        if _is_within_dir(abs_path, root):
+            return abs_path
+        raise ValueError("path must be within the repository")
 
     rel_path = raw_path.lstrip("/\\")
     if not rel_path:
         return root
 
-    # Normalize segments: drop empty and current-directory segments, keep '..'.
+    # Normalize segments: drop empty and current-directory segments, reject "..".
     parts: list[str] = []
     for part in rel_path.split("/"):
         if part in ("", "."):
             continue
+        if part == "..":
+            raise ValueError("path must be within the repository")
+        if ":" in part:
+            raise ValueError("path must not contain ':' characters")
         parts.append(part)
     rel_path = "/".join(parts)
     if not rel_path:
         return root
-    return os.path.realpath(os.path.join(repo_dir, rel_path))
+
+    abs_path = os.path.realpath(os.path.join(repo_dir, rel_path))
+    if not _is_within_dir(abs_path, root):
+        raise ValueError("path must be within the repository")
+    return abs_path
 
 
 def _workspace_read_text(repo_dir: str, path: str) -> dict[str, Any]:
