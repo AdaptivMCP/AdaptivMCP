@@ -160,3 +160,38 @@ def test_request_context_honors_existing_response_request_id_header(monkeypatch)
     # But request-scoped context should still reflect the incoming request id.
     assert payload["request_id"] == "req-xyz"
     assert response.headers["x-server-anchor"] == "anchor-123"
+
+
+@pytest.mark.asyncio
+async def test_request_context_ignores_malformed_headers():
+    captured: dict[str, object] = {}
+
+    async def app(_scope, _receive, send):
+        captured.update(context.get_request_context())
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok", "more_body": False})
+
+    middleware = main._RequestContextMiddleware(app)
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/ctx",
+        "headers": [
+            (b"x-request-id", "bad"),
+            (b"x-request-id", b"good"),
+            (b"idempotency-key", "nope"),
+            (b"idempotency-key", b"idem-good"),
+        ],
+    }
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(_message):
+        pass
+
+    await middleware(scope, receive, send)
+
+    assert captured["request_id"] == "good"
+    assert captured["idempotency_key"] == "idem-good"
