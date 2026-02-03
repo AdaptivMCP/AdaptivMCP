@@ -41,3 +41,37 @@ def test_register_mcp_method_fallbacks_adds_methods():
 
     assert methods_by_path["/messages"] >= {"GET", "HEAD", "OPTIONS", "POST"}
     assert methods_by_path["/sse"] >= {"GET", "OPTIONS"}
+
+
+def _count_routes(app, path: str, method: str) -> int:
+    count = 0
+    for route in app.routes:
+        if getattr(route, "path", None) != path:
+            continue
+        methods = getattr(route, "methods", None) or set()
+        if method in methods:
+            count += 1
+    return count
+
+
+def test_register_mcp_method_fallbacks_is_idempotent():
+    async def messages_post(_request):
+        return Response(status_code=204)
+
+    async def sse_get(_request):
+        return Response(status_code=204)
+
+    app = Starlette(
+        routes=[
+            Route("/messages", messages_post, methods=["POST"]),
+            Route("/sse", sse_get, methods=["GET"]),
+        ]
+    )
+
+    main._register_mcp_method_fallbacks(app)
+    main._register_mcp_method_fallbacks(app)
+
+    assert _count_routes(app, "/messages", "GET") == 1
+    assert _count_routes(app, "/messages", "HEAD") == 1
+    assert _count_routes(app, "/messages", "OPTIONS") == 1
+    assert _count_routes(app, "/sse", "OPTIONS") == 1

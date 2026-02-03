@@ -1062,6 +1062,15 @@ def _register_mcp_method_fallbacks(app_instance: Any) -> None:
     if app_instance is None or not callable(getattr(app_instance, "add_route", None)):
         return
 
+    def _has_method(path: str, method: str) -> bool:
+        for route in getattr(app_instance, "routes", []) or []:
+            if getattr(route, "path", None) != path:
+                continue
+            methods = getattr(route, "methods", None) or set()
+            if method in methods:
+                return True
+        return False
+
     def _preflight(allow_methods: str) -> Response:
         return Response(
             status_code=204,
@@ -1094,9 +1103,19 @@ def _register_mcp_method_fallbacks(app_instance: Any) -> None:
 
     # FastMCP provides /messages (POST) and /sse (GET). Add method-specific
     # fallbacks without overriding the primary handlers.
-    app_instance.add_route("/messages", _messages_get, methods=["GET", "HEAD"])
-    app_instance.add_route("/messages", _messages_options, methods=["OPTIONS"])
-    app_instance.add_route("/sse", _sse_options, methods=["OPTIONS"])
+    missing_messages_methods = [
+        method
+        for method in ("GET", "HEAD")
+        if not _has_method("/messages", method)
+    ]
+    if missing_messages_methods:
+        app_instance.add_route(
+            "/messages", _messages_get, methods=missing_messages_methods
+        )
+    if not _has_method("/messages", "OPTIONS"):
+        app_instance.add_route("/messages", _messages_options, methods=["OPTIONS"])
+    if not _has_method("/sse", "OPTIONS"):
+        app_instance.add_route("/sse", _sse_options, methods=["OPTIONS"])
 
 
 _register_mcp_method_fallbacks(app)
