@@ -675,7 +675,7 @@ __all__ = [
     "CONTROLLER_DEFAULT_BRANCH",
     "_github_request",
 ]
-# Exposed for tests that monkeypatch the external HTTP client used for sandbox: URLs.
+# Exposed for tests that monkeypatch the external HTTP client used for URL fetches.
 _http_client_external: httpx.AsyncClient | None = None
 
 LOGGER = BASE_LOGGER.getChild("main")
@@ -2276,7 +2276,7 @@ async def search(
 
 @mcp_tool(write_action=False)
 async def download_user_content(content_url: str) -> dict[str, Any]:
-    """Download user-provided content (sandbox/local/http) with base64 encoding."""
+    """Download user-provided content (local/http/github) with base64 encoding."""
 
     body_bytes = await _load_body_from_content_url(
         content_url, context="download_user_content"

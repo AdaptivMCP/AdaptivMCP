@@ -330,7 +330,7 @@ def infer_write_action_from_shell(
     Notes:
     - The classification is best-effort and heuristic.
     - The goal is to provide *dynamic metadata* and safer retry behavior,
-      not a perfect sandbox-level guarantee.
+      not a perfect isolation-level guarantee.
     """
 
     if installing_dependencies:

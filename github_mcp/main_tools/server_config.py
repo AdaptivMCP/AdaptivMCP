@@ -18,7 +18,6 @@ from github_mcp.config import (
     HTTPX_MAX_KEEPALIVE,
     HTTPX_TIMEOUT,
     MAX_CONCURRENCY,
-    SANDBOX_CONTENT_BASE_URL,
 )
 from github_mcp.exceptions import GitHubAPIError, GitHubAuthError
 from github_mcp.render_api import _get_optional_render_token
@@ -52,9 +51,6 @@ async def get_server_config() -> dict[str, Any]:
             "committer_email": GIT_COMMITTER_EMAIL,
             "sources": GIT_IDENTITY_SOURCES,
             "placeholder_active": GIT_IDENTITY_PLACEHOLDER_ACTIVE,
-        },
-        "sandbox": {
-            "sandbox_content_base_url_configured": bool(SANDBOX_CONTENT_BASE_URL),
         },
         "environment": {
             "github_token_present": any(
