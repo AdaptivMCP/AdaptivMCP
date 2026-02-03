@@ -1,7 +1,6 @@
 import asyncio
 import os
 
-import pytest
 
 import github_mcp.workspace_tools.fs as fs
 
@@ -77,7 +76,9 @@ def test_read_workspace_file_sections_and_numbered(tmp_path, monkeypatch):
     monkeypatch.setattr(fs, "_tw", lambda: dummy)
 
     missing = asyncio.run(
-        fs.read_workspace_file_sections("octo/example", path="missing.txt", max_sections=2)
+        fs.read_workspace_file_sections(
+            "octo/example", path="missing.txt", max_sections=2
+        )
     )
     assert missing["exists"] is False
     assert missing["sections"]["parts"] == []
@@ -135,6 +136,8 @@ def test_format_numbered_lines_as_text_edge_cases():
     assert "10 | y" in out
 
     out2 = fs._format_numbered_lines_as_text(
-        [{"line": 1, "text": "a"}], width=1, separator=None  # type: ignore[arg-type]
+        [{"line": 1, "text": "a"}],
+        width=1,
+        separator=None,  # type: ignore[arg-type]
     )
     assert out2 == "1: a"

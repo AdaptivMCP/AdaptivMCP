@@ -6,10 +6,15 @@ import github_mcp.workspace_tools.fs as fs
 
 
 def test_normalize_workspace_operation_aliases_and_mkdirp_defaults():
-    assert fs._normalize_workspace_operation({"op": "rm", "path": "a"})["op"] == "delete"
-    assert fs._normalize_workspace_operation({"operation": "mv", "src": "a", "dst": "b"})[
-        "op"
-    ] == "move"
+    assert (
+        fs._normalize_workspace_operation({"op": "rm", "path": "a"})["op"] == "delete"
+    )
+    assert (
+        fs._normalize_workspace_operation({"operation": "mv", "src": "a", "dst": "b"})[
+            "op"
+        ]
+        == "move"
+    )
 
     out = fs._normalize_workspace_operation({"op": "mkdirp", "path": "x"})
     assert out["op"] == "mkdir"
@@ -68,7 +73,9 @@ def test_workspace_read_text_limited_text_truncation(tmp_path):
     p = repo_dir / "t.txt"
     p.write_text("a" * 50, encoding="utf-8")
 
-    out = fs._workspace_read_text_limited(str(repo_dir), "t.txt", max_chars=10, max_bytes=15)
+    out = fs._workspace_read_text_limited(
+        str(repo_dir), "t.txt", max_chars=10, max_bytes=15
+    )
     assert out["exists"] is True
     assert out["encoding"] == "utf-8"
     assert out["text"] == "a" * 10
@@ -86,7 +93,9 @@ def test_workspace_read_text_limited_binary_detection_and_digest(tmp_path):
     # Contains null bytes => binary
     p.write_bytes(b"A\x00B" * 200)
 
-    out = fs._workspace_read_text_limited(str(repo_dir), "bin.dat", max_chars=100, max_bytes=20)
+    out = fs._workspace_read_text_limited(
+        str(repo_dir), "bin.dat", max_chars=100, max_bytes=20
+    )
     assert out["exists"] is True
     assert out["encoding"] == "binary"
     assert out["is_binary"] is True
@@ -116,7 +125,6 @@ def test_read_lines_excerpt_validation_and_truncation(tmp_path):
     # max_lines stops iteration early, so "truncated" is True when more lines exist.
     assert out["truncated"] is True
 
-
     # Char cap truncates within a line.
     out2 = fs._read_lines_excerpt(str(p), start_line=1, max_lines=10, max_chars=5)
     assert out2["truncated"] is True
@@ -144,7 +152,6 @@ def test_sections_from_line_iter_overlap_and_limits():
     assert out["parts"][1]["lines"][0]["text"] == "L3"
     # Continuation begins at the last_end - overlap + 1.
     assert out["next_start_line"] == 5
-
 
 
 def test_sections_from_line_iter_single_long_line_clip_sets_next_start():

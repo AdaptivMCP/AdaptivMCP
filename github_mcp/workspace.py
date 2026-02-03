@@ -1062,18 +1062,17 @@ def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
     raw_path = rel_path.strip().replace("\\", "/")
     repo_root = os.path.realpath(repo_dir)
 
-    # Intentionally permissive: accept absolute paths (including outside the repo
-    # mirror) and allow traversal via ".." in relative paths.
+    # Never allow callers to resolve a path outside the repo mirror.
+    # This helper is used by patch application routines that write to disk.
     if os.path.isabs(raw_path):
-        return os.path.realpath(raw_path)
-    if os.name != "nt":
-        import re
+        raise GitHubAPIError("path must be repository-relative")
+    import re
 
-        if re.match(r"^[A-Za-z]:/", raw_path):
-            raise GitHubAPIError(
-                "Windows-style absolute paths are not supported on this host"
-            )
+    if re.match(r"^[A-Za-z]:/", raw_path):
+        # Drive-qualified paths are treated as absolute.
+        raise GitHubAPIError("path must be repository-relative")
 
+    # Normalize separators and collapse "./" segments.
     rel_path = raw_path.lstrip("/\\")
     parts: list[str] = []
     for part in rel_path.split("/"):
@@ -1083,7 +1082,16 @@ def _safe_repo_path(repo_dir: str, rel_path: str) -> str:
     rel_path = "/".join(parts)
     if not rel_path:
         raise GitHubAPIError("path must be repository-relative")
-    return os.path.realpath(os.path.join(repo_root, rel_path))
+
+    # Reject traversal.
+    if rel_path == ".." or rel_path.startswith("../") or "/../" in f"/{rel_path}/":
+        raise GitHubAPIError("path must be repository-relative")
+
+    resolved = os.path.realpath(os.path.join(repo_root, rel_path))
+    root_prefix = repo_root + os.sep
+    if resolved != repo_root and not resolved.startswith(root_prefix):
+        raise GitHubAPIError("path must be repository-relative")
+    return resolved
 
 
 def _split_text_lines(text: str) -> tuple[list[str], bool]:

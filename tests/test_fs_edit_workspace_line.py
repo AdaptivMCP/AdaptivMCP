@@ -17,7 +17,9 @@ class DummyWorkspaceTools:
         return ref
 
 
-def test_edit_workspace_line_replace_preserves_missing_eol(tmp_path, monkeypatch) -> None:
+def test_edit_workspace_line_replace_preserves_missing_eol(
+    tmp_path, monkeypatch
+) -> None:
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
     path = repo_dir / "note.txt"

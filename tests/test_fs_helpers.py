@@ -7,7 +7,9 @@ from github_mcp.workspace_tools import fs as workspace_fs
 
 def test_normalize_workspace_operation_aliases_and_conveniences():
     # operation key + alias + mkdirp defaults.
-    op = workspace_fs._normalize_workspace_operation({"operation": "mkdirp", "path": "a/b"})
+    op = workspace_fs._normalize_workspace_operation(
+        {"operation": "mkdirp", "path": "a/b"}
+    )
     assert op["op"] == "mkdir"
     assert op["parents"] is True
     assert "operation" not in op
@@ -131,7 +133,9 @@ def test_read_lines_excerpt_basic_and_truncation(tmp_path):
     p = tmp_path / "lines.txt"
     p.write_text("a\n" + "b\n" + "c\n" + "d\n", encoding="utf-8")
 
-    out = workspace_fs._read_lines_excerpt(str(p), start_line=2, max_lines=2, max_chars=100)
+    out = workspace_fs._read_lines_excerpt(
+        str(p), start_line=2, max_lines=2, max_chars=100
+    )
     assert out["start_line"] == 2
     assert out["end_line"] == 3
     assert [ln["text"] for ln in out["lines"]] == ["b", "c"]
@@ -139,7 +143,9 @@ def test_read_lines_excerpt_basic_and_truncation(tmp_path):
     assert out["truncated"] is True
 
     # Truncate by chars.
-    out2 = workspace_fs._read_lines_excerpt(str(p), start_line=1, max_lines=10, max_chars=2)
+    out2 = workspace_fs._read_lines_excerpt(
+        str(p), start_line=1, max_lines=10, max_chars=2
+    )
     assert out2["truncated"] is True
 
     with pytest.raises(ValueError):

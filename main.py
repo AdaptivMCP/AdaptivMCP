@@ -1104,9 +1104,7 @@ def _register_mcp_method_fallbacks(app_instance: Any) -> None:
     # FastMCP provides /messages (POST) and /sse (GET). Add method-specific
     # fallbacks without overriding the primary handlers.
     missing_messages_methods = [
-        method
-        for method in ("GET", "HEAD")
-        if not _has_method("/messages", method)
+        method for method in ("GET", "HEAD") if not _has_method("/messages", method)
     ]
     if missing_messages_methods:
         app_instance.add_route(

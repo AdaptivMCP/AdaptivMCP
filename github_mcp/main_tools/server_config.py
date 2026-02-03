@@ -96,7 +96,9 @@ async def get_repo_defaults(full_name: str | None = None) -> dict[str, Any]:
             try:
                 # Minimal request for repo metadata
                 repo_info = await _github_request("GET", f"/repos/{full_name}")
-                repo_payload = repo_info.get("json") if isinstance(repo_info, dict) else None
+                repo_payload = (
+                    repo_info.get("json") if isinstance(repo_info, dict) else None
+                )
                 default_branch = (
                     repo_payload.get("default_branch")
                     if isinstance(repo_payload, dict)

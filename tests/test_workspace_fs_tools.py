@@ -1,7 +1,6 @@
 import asyncio
 import os
 
-import pytest
 
 import github_mcp.workspace_tools.fs as fs
 
@@ -85,7 +84,6 @@ def test_delete_workspace_paths_success_missing_and_nonempty_dir(tmp_path, monke
     assert result2["removed"] == ["nonempty"]
     assert not os.path.exists(repo_dir / "nonempty")
 
-
     out = asyncio.run(fs.delete_workspace_folders("octo/example", paths=None))
     assert out.get("status") == "error"
     assert "paths must contain at least one path" in (
@@ -102,7 +100,6 @@ def test_delete_workspace_paths_success_missing_and_nonempty_dir(tmp_path, monke
     assert "paths must be a list of strings" in (
         str(out2.get("error", "")) + " " + str(out2.get("error_detail", {}))
     )
-
 
 
 def test_delete_workspace_folders_non_dir_and_missing(tmp_path, monkeypatch):

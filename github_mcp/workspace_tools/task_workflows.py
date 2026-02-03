@@ -646,7 +646,11 @@ async def workspace_task_execute(
         branch_res: Any = None
         if provided_feature:
             # Idempotency: reuse a caller-provided branch instead of hard-failing.
-            _step(steps, "Create branch", f"Reusing existing feature branch '{feature_ref}'.")
+            _step(
+                steps,
+                "Create branch",
+                f"Reusing existing feature branch '{feature_ref}'.",
+            )
             extra_sync = dict(sync_args or {})
             extra_sync.pop("full_name", None)
             extra_sync.pop("ref", None)
@@ -657,9 +661,14 @@ async def workspace_task_execute(
                 **extra_sync,
             }
             feature_sync_res = await tw.workspace_sync_to_remote(
-                **_filter_kwargs_for_callable(tw.workspace_sync_to_remote, sync_feature_call)
+                **_filter_kwargs_for_callable(
+                    tw.workspace_sync_to_remote, sync_feature_call
+                )
             )
-            if isinstance(feature_sync_res, dict) and feature_sync_res.get("status") == "error":
+            if (
+                isinstance(feature_sync_res, dict)
+                and feature_sync_res.get("status") == "error"
+            ):
                 if _is_missing_remote_ref_error(feature_sync_res, ref=feature_ref):
                     provided_feature = False
                 else:
