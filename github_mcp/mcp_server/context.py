@@ -34,8 +34,7 @@ REQUEST_CHATGPT_METADATA: ContextVar[dict[str, str] | None] = ContextVar(
     "REQUEST_CHATGPT_METADATA", default=None
 )
 
-# When auto-approve is disabled, some clients perform an explicit approval step.
-# This flag allows per-request overrides without mutating global environment state.
+# Legacy flag retained for backward compatibility; write approvals are always enabled.
 REQUEST_WRITE_APPROVED: ContextVar[bool | None] = ContextVar(
     "REQUEST_WRITE_APPROVED", default=None
 )
@@ -133,10 +132,14 @@ AUTO_APPROVE_DEFAULT = True
 
 
 def _auto_approve_from_env() -> tuple[bool, str]:
-    for name in AUTO_APPROVE_ENV_VARS:
-        if name in os.environ:
-            return _parse_bool(os.environ.get(name)), name
-    return AUTO_APPROVE_DEFAULT, "default"
+    """Return the effective auto-approve state.
+
+    Adaptiv MCP no longer restricts write access, so auto-approve is always
+    enabled regardless of environment overrides. We still return a source label
+    for debugging/logging purposes.
+    """
+
+    return True, "always_on"
 
 
 class _WriteAllowedFlag:
@@ -146,7 +149,7 @@ class _WriteAllowedFlag:
     - WRITE_ALLOWED.value
     - WRITE_ALLOWED.value = True/False
 
-    Compatibility shim: write approval follows the auto-approve environment gate.
+    Compatibility shim: write approval is always enabled.
     """
 
     def __init__(self) -> None:
@@ -191,7 +194,7 @@ def _update_write_gate_cache(value: bool) -> None:
 
 def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     """
-    Compatibility shim returning the auto-approve gate value.
+    Compatibility shim returning the always-on write approval value.
 
     refresh_after_seconds is ignored but kept for backwards compatibility.
     """
@@ -199,41 +202,25 @@ def get_write_allowed(*, refresh_after_seconds: float = 0.5) -> bool:
     env_value, _source = _auto_approve_from_env()
     # Keep global caches in sync with environment (used for tool metadata refresh).
     _update_write_gate_cache(env_value)
-
-    # If the environment enables auto-approve, it is authoritative. Request-scoped
-    # overrides are only meaningful when auto-approve is disabled.
-    if env_value:
-        return True
-
-    # Request-scoped override: used when a human explicitly approves a write
-    # action in the client while auto-approve is disabled.
-    override = REQUEST_WRITE_APPROVED.get()
-    if override is not None:
-        return bool(override)
-
-    return False
+    return True
 
 
 def set_write_allowed(approved: bool) -> bool:
     """
     Compatibility shim for legacy callers.
     """
-    # Only meaningful when auto-approve is disabled.
+    del approved
     env_value, _source = _auto_approve_from_env()
     _update_write_gate_cache(env_value)
-    if env_value:
-        # Preserve historical return type: write is allowed.
-        return True
-
-    REQUEST_WRITE_APPROVED.set(bool(approved))
-    return bool(approved)
+    # Writes are always allowed.
+    return True
 
 
 def get_auto_approve_enabled(*, refresh_after_seconds: float = 0.5) -> bool:
     del refresh_after_seconds
     value, _source = _auto_approve_from_env()
     _update_write_gate_cache(value)
-    return value
+    return True
 
 
 def peek_auto_approve_enabled() -> bool:
@@ -252,9 +239,9 @@ def peek_auto_approve_enabled() -> bool:
 def get_write_allowed_debug() -> dict[str, Any]:
     value, source = _auto_approve_from_env()
     return {
-        "value": value,
+        "value": True,
         "cache": {
-            "value": WRITE_ALLOWED._cache_value,
+            "value": True,
             "source": source,
         },
     }

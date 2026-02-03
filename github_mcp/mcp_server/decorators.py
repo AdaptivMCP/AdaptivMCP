@@ -1606,8 +1606,8 @@ def _invocation_messages(
 
 def _tool_write_allowed(write_action: bool) -> bool:
     # Used for discovery metadata only.
-    # Write tools are always present in the catalog; runtime enforcement may
-    # still require approval depending on server configuration.
+    # Write tools are always present in the catalog; runtime enforcement always
+    # allows them.
     del write_action
     return True
 
@@ -1625,7 +1625,7 @@ def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
 
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
     """
-    Enforce write approvals when auto-approve is disabled.
+    Compatibility shim: write approvals are always allowed.
     """
     if not write_action:
         return

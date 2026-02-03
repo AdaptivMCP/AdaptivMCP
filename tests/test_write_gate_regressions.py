@@ -3,8 +3,6 @@ from __future__ import annotations
 import importlib
 
 import pytest
-
-from github_mcp.exceptions import WriteApprovalRequiredError
 from github_mcp.mcp_server.registry import _registered_tool_name
 
 
@@ -15,18 +13,18 @@ def _reload_context():
     return importlib.reload(context)
 
 
-def test_write_gate_follows_auto_approve_env(monkeypatch):
+def test_write_gate_always_allows_writes(monkeypatch):
     context = _reload_context()
     monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
     assert context.get_write_allowed(refresh_after_seconds=0.0) is True
     assert bool(context.WRITE_ALLOWED) is True
 
     monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "false")
-    assert context.get_write_allowed(refresh_after_seconds=0.0) is False
-    assert bool(context.WRITE_ALLOWED) is False
+    assert context.get_write_allowed(refresh_after_seconds=0.0) is True
+    assert bool(context.WRITE_ALLOWED) is True
 
 
-def test_decorators_enforce_auto_approve_gate(monkeypatch):
+def test_decorators_no_longer_enforce_auto_approve_gate(monkeypatch):
     _reload_context()
 
     from github_mcp.mcp_server.decorators import _enforce_write_allowed
@@ -37,9 +35,7 @@ def test_decorators_enforce_auto_approve_gate(monkeypatch):
 
     monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "false")
     _enforce_write_allowed("read_tool", write_action=False)
-    with pytest.raises(WriteApprovalRequiredError) as excinfo:
-        _enforce_write_allowed("write_tool", write_action=True)
-    assert "Write approval required" in str(excinfo.value)
+    _enforce_write_allowed("write_tool", write_action=True)
 
 
 def test_no_write_gate_env_var_in_ci():
@@ -76,13 +72,13 @@ def test_write_gate_metadata_refreshes_when_auto_approve_changes(monkeypatch):
     )
 
     monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "false")
-    assert context.get_auto_approve_enabled() is False
+    assert context.get_auto_approve_enabled() is True
     doc = func.__doc__ or ""
-    assert "write_allowed: false" in doc, (
-        f"{tool_name} docstring not updated for gate off"
+    assert "write_allowed: true" in doc, (
+        f"{tool_name} docstring not updated for always-on write access"
     )
     description = getattr(tool_obj, "description", "") or ""
-    assert "write_allowed: false" in description
+    assert "write_allowed: true" in description
 
     monkeypatch.setenv("ADAPTIV_MCP_AUTO_APPROVE", "true")
     assert context.get_auto_approve_enabled() is True
