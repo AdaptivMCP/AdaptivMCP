@@ -159,6 +159,28 @@ def test_git_show_text_limited_truncates_bytes(
     assert len(res["text"]) == 10
 
 
+def test_git_show_text_limited_truncates_bytes_ignores_kill_returncode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    repo_dir = str(tmp_path)
+
+    class _KillNonzeroPopen(_FakePopen):
+        def kill(self) -> None:
+            self.killed = True
+            self.returncode = -9
+
+    def _fake_popen(*args, **kwargs):  # noqa: ANN001
+        return _KillNonzeroPopen(b"A" * 100, b"", returncode=None)
+
+    monkeypatch.setattr(subprocess, "Popen", _fake_popen)
+
+    res = fs._git_show_text_limited(
+        repo_dir, "main", "x.txt", max_chars=0, max_bytes=10
+    )
+    assert res["exists"] is True
+    assert res["truncated_bytes"] is True
+
+
 def test_git_show_text_limited_truncates_chars(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
