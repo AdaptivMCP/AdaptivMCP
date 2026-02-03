@@ -218,22 +218,30 @@ class _RequestContextMiddleware:
         # Correlation id: honor upstream X-Request-Id if provided, else generate.
         request_id: str | None = None
         idempotency_key: str | None = None
-        try:
-            for k, v in scope.get("headers") or []:
-                if (k or b"").lower() == b"x-request-id":
-                    decoded = (v or b"").decode("utf-8", errors="ignore").strip()
-                    if decoded:
-                        request_id = decoded
-                        break
-            for k, v in scope.get("headers") or []:
+        for k, v in scope.get("headers") or []:
+            try:
+                if (k or b"").lower() != b"x-request-id":
+                    continue
+                decoded = (v or b"").decode("utf-8", errors="ignore").strip()
+            except Exception:
+                continue
+            if decoded:
+                request_id = decoded
+                break
+        for k, v in scope.get("headers") or []:
+            try:
                 lk = (k or b"").lower()
-                if lk in {b"idempotency-key", b"x-idempotency-key", b"x-dedupe-key"}:
-                    decoded = (v or b"").decode("utf-8", errors="ignore").strip()
-                    if decoded:
-                        idempotency_key = decoded
-                        break
-        except Exception:
-            request_id = None
+            except Exception:
+                continue
+            if lk not in {b"idempotency-key", b"x-idempotency-key", b"x-dedupe-key"}:
+                continue
+            try:
+                decoded = (v or b"").decode("utf-8", errors="ignore").strip()
+            except Exception:
+                continue
+            if decoded:
+                idempotency_key = decoded
+                break
 
         if not request_id:
             request_id = uuid.uuid4().hex
