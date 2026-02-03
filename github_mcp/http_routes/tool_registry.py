@@ -4,6 +4,7 @@ import asyncio
 import inspect
 import json
 import logging
+import os
 import time
 import uuid
 from collections.abc import Callable, Iterable
@@ -28,6 +29,78 @@ try:
     from github_mcp.config import ERRORS_LOGGER
 except Exception:  # noqa: BLE001
     ERRORS_LOGGER = logging.getLogger("github_mcp")
+
+TOOL_CATALOG_CACHE_SECONDS = max(
+    0,
+    int(
+        str(os.environ.get("ADAPTIV_MCP_TOOL_CATALOG_CACHE_SECONDS", "3")).strip() or 0
+    ),
+)
+
+
+@dataclass(frozen=True)
+class _ToolCatalogCacheEntry:
+    created_at: float
+    signature: tuple[tuple[str, str | None], ...]
+    payload: dict[str, Any]
+
+
+_TOOL_CATALOG_CACHE: dict[
+    tuple[bool, bool | None, str], _ToolCatalogCacheEntry
+] = {}
+
+
+def _tool_catalog_signature() -> tuple[tuple[str, str | None], ...]:
+    signature: list[tuple[str, str | None]] = []
+    for tool, func in mcp_registry._REGISTERED_MCP_TOOLS:
+        name = mcp_registry._registered_tool_name(tool, func)
+        if not name:
+            continue
+        schema_hash = getattr(func, "__mcp_input_schema_hash__", None)
+        signature.append((str(name), str(schema_hash) if schema_hash else None))
+    signature.sort()
+    return tuple(signature)
+
+
+def _cached_tool_catalog(
+    *, include_parameters: bool, compact: bool | None, base_path: str
+) -> dict[str, Any] | None:
+    if TOOL_CATALOG_CACHE_SECONDS <= 0:
+        return None
+    cache_key = (include_parameters, compact, base_path)
+    entry = _TOOL_CATALOG_CACHE.get(cache_key)
+    if entry is None:
+        return None
+    if time.monotonic() - entry.created_at > TOOL_CATALOG_CACHE_SECONDS:
+        return None
+    if entry.signature != _tool_catalog_signature():
+        return None
+    return dict(entry.payload)
+
+
+def _store_tool_catalog_cache(
+    payload: dict[str, Any],
+    *,
+    include_parameters: bool,
+    compact: bool | None,
+    base_path: str,
+) -> None:
+    if TOOL_CATALOG_CACHE_SECONDS <= 0:
+        return
+    cache_key = (include_parameters, compact, base_path)
+    _TOOL_CATALOG_CACHE[cache_key] = _ToolCatalogCacheEntry(
+        created_at=time.monotonic(),
+        signature=_tool_catalog_signature(),
+        payload=dict(payload),
+    )
+
+
+def _catalog_cache_headers() -> dict[str, str] | None:
+    if TOOL_CATALOG_CACHE_SECONDS <= 0:
+        return None
+    return {
+        "Cache-Control": f"public, max-age={int(TOOL_CATALOG_CACHE_SECONDS)}",
+    }
 
 
 def _parse_bool(value: str | None) -> bool | None:
@@ -56,6 +129,14 @@ def _tool_catalog(
     structured error rather than a raw 500 so clients can render a useful
     diagnostic.
     """
+
+    cached = _cached_tool_catalog(
+        include_parameters=include_parameters,
+        compact=compact,
+        base_path=base_path,
+    )
+    if cached is not None:
+        return cached
 
     try:
         from github_mcp.main_tools.introspection import list_all_actions
@@ -105,6 +186,12 @@ def _tool_catalog(
         payload["error"] = catalog_error
     if isinstance(catalog_errors, list) and catalog_errors:
         payload["errors"] = catalog_errors
+    _store_tool_catalog_cache(
+        payload,
+        include_parameters=include_parameters,
+        compact=compact,
+        base_path=base_path,
+    )
     return payload
 
 
@@ -977,13 +1064,12 @@ def build_tool_registry_endpoint() -> Callable[[Request], Response]:
         # former as an alias and normalize base_path stripping for both so the
         # returned `href` fields remain correct.
         base_path = _request_base_path(request, ("/tools", "/list_tools"))
-        return JSONResponse(
-            _tool_catalog(
-                include_parameters=include_parameters,
-                compact=compact,
-                base_path=base_path,
-            )
+        payload = _tool_catalog(
+            include_parameters=include_parameters,
+            compact=compact,
+            base_path=base_path,
         )
+        return JSONResponse(payload, headers=_catalog_cache_headers())
 
     return _endpoint
 
@@ -1023,7 +1109,7 @@ def build_resources_endpoint() -> Callable[[Request], Response]:
         }
         if "error" in catalog:
             payload["error"] = catalog["error"]
-        return JSONResponse(payload)
+        return JSONResponse(payload, headers=_catalog_cache_headers())
 
     return _endpoint
 

@@ -85,9 +85,11 @@ __all__ = [
 
 _CHATGPT_METADATA_HEADERS = {
     "x-openai-assistant-id": "assistant_id",
+    "x-openai-client-request-id": "client_request_id",
     "x-openai-conversation-id": "conversation_id",
     "x-openai-organization-id": "organization_id",
     "x-openai-project-id": "project_id",
+    "x-openai-request-id": "request_id",
     "x-openai-session-id": "session_id",
     "x-openai-user-id": "user_id",
 }
