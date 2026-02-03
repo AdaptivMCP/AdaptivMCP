@@ -1,5 +1,7 @@
 import os
 
+import pytest
+
 
 def test_workspace_safe_join_accepts_absolute_path_inside_repo(tmp_path):
     from github_mcp.workspace_tools import fs
@@ -24,8 +26,8 @@ def test_workspace_safe_join_allows_absolute_path_outside_repo(tmp_path):
     outside.write_text("nope", encoding="utf-8")
 
     abs_outside = os.path.realpath(str(outside))
-    resolved = fs._workspace_safe_join(str(repo_dir), abs_outside)
-    assert os.path.realpath(resolved) == abs_outside
+    with pytest.raises(ValueError, match="within the repository"):
+        fs._workspace_safe_join(str(repo_dir), abs_outside)
 
 
 def test_workspace_safe_join_treats_empty_path_as_repo_root(tmp_path):

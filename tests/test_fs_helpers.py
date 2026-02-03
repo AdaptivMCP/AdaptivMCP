@@ -66,13 +66,14 @@ def test_workspace_safe_join_root_and_paths(tmp_path):
     expected = os.path.realpath(os.path.join(str(repo), "a", "b.txt"))
     assert workspace_fs._workspace_safe_join(str(repo), "a\\b.txt") == expected
 
-    # Absolute paths are allowed as-is.
+    # Absolute paths outside the repo are rejected.
     abs_target = os.path.realpath(str(tmp_path / "outside.txt"))
-    assert workspace_fs._workspace_safe_join(str(repo), abs_target) == abs_target
+    with pytest.raises(ValueError, match="within the repository"):
+        workspace_fs._workspace_safe_join(str(repo), abs_target)
 
-    # Traversal is intentionally permitted.
-    parent = os.path.realpath(os.path.join(str(repo), ".."))
-    assert workspace_fs._workspace_safe_join(str(repo), "../") == parent
+    # Traversal outside the repo is rejected.
+    with pytest.raises(ValueError, match="within the repository"):
+        workspace_fs._workspace_safe_join(str(repo), "../")
 
 
 def test_workspace_read_text_decoding_errors(tmp_path):

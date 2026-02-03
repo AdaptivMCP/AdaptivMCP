@@ -57,13 +57,14 @@ def test_workspace_safe_join_semantics(tmp_path):
     joined = fs._workspace_safe_join(str(repo_dir), "./a//b\\c")
     assert joined.endswith(os.path.join("a", "b", "c"))
 
-    # Intentionally permissive: allow traversal outside repo.
-    outside = fs._workspace_safe_join(str(repo_dir), "../outside.txt")
-    assert outside == os.path.realpath(tmp_path / "outside.txt")
+    # Traversal outside the repo is rejected.
+    with pytest.raises(ValueError, match="within the repository"):
+        fs._workspace_safe_join(str(repo_dir), "../outside.txt")
 
-    # Intentionally permissive: absolute paths pass through.
+    # Absolute paths outside the repo are rejected.
     abs_target = os.path.realpath(tmp_path / "abs.txt")
-    assert fs._workspace_safe_join(str(repo_dir), abs_target) == abs_target
+    with pytest.raises(ValueError, match="within the repository"):
+        fs._workspace_safe_join(str(repo_dir), abs_target)
 
 
 def test_workspace_read_text_limited_text_truncation(tmp_path):
