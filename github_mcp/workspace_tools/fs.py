@@ -778,7 +778,7 @@ def _git_show_text_limited(
         except Exception:  # nosec B110
             pass
 
-    if proc.returncode not in (0, None):
+    if not truncated_bytes and proc.returncode not in (0, None):
         return {
             "exists": False,
             "ref": ref,
