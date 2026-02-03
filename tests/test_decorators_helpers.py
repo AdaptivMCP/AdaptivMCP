@@ -153,3 +153,17 @@ def test_effective_response_mode_override(monkeypatch: pytest.MonkeyPatch) -> No
 
     # Invalid override -> fallback to default
     assert dec._effective_response_mode({"response_mode": "nope"}) == "raw"
+
+
+def test_truncate_text_respects_limit() -> None:
+    value = "alpha beta gamma delta"
+    out = dec._truncate_text(value, limit=10)
+
+    assert out == "alpha bet…"
+    assert len(out) == 10
+
+
+def test_clip_text_zero_lines_no_leading_newline() -> None:
+    out = dec._clip_text("one\ntwo\nthree", max_lines=0, max_chars=100, enabled=False)
+
+    assert out.startswith("… (3 more lines)")

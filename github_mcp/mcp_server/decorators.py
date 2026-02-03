@@ -601,11 +601,12 @@ def _clip_text(
     clipped = lines[:max_lines]
     out = "\n".join(clipped)
     if len(lines) > max_lines:
-        out += "\n" + _ansi(
+        marker = _ansi(
             f"… ({len(lines) - max_lines} more lines)",
             ANSI_DIM,
             enabled=enabled,
         )
+        out = marker if not out else f"{out}\n{marker}"
     if max_chars > 0 and len(out) > max_chars:
         if max_chars < 12:
             out = out[: max_chars - 1] + "…"
@@ -911,6 +912,15 @@ def _truncate_text(value: Any, *, limit: int = 180) -> str:
         s = str(value)
     s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
     s = " ".join(s.split())
+    if limit is not None:
+        try:
+            limit_int = int(limit)
+        except Exception:
+            limit_int = 0
+        if limit_int > 0 and len(s) > limit_int:
+            if limit_int < 4:
+                return s[:limit_int]
+            return s[: limit_int - 1] + "…"
     return s
 
 
