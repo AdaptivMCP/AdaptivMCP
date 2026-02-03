@@ -320,12 +320,10 @@ def _read_lines_excerpt(
 
     try:
         with open(abs_path, encoding="utf-8", errors="replace") as tf:
-            for current, raw in enumerate(tf, start=1):
+            line_iter = enumerate(tf, start=1)
+            for current, raw in line_iter:
                 if current < start_line:
                     continue
-                if len(lines_out) >= max_lines:
-                    truncated = True
-                    break
                 # Strip trailing newline for display while keeping content readable.
                 text = raw.rstrip("\n")
                 # Hard cap total chars.
@@ -340,6 +338,11 @@ def _read_lines_excerpt(
                     break
                 lines_out.append({"line": current, "text": text})
                 collected_chars += len(text)
+                if len(lines_out) >= max_lines:
+                    # Peek ahead to see if more lines exist before declaring truncation.
+                    if next(line_iter, None) is not None:
+                        truncated = True
+                    break
     except UnicodeDecodeError:
         had_decoding_errors = True
     except Exception as exc:
