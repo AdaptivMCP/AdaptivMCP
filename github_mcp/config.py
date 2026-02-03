@@ -662,11 +662,20 @@ def _slugify_app_name(value: str | None) -> str | None:
     return slug or None
 
 
+def _clean_env_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned if cleaned else None
+
+
 def _resolve_app_identity() -> dict[str, str] | None:
-    app_name = os.environ.get("GITHUB_APP_NAME")
-    app_slug = os.environ.get("GITHUB_APP_SLUG") or _slugify_app_name(app_name)
-    app_id = os.environ.get("GITHUB_APP_ID") or os.environ.get(
-        "GITHUB_APP_INSTALLATION_ID"
+    app_name = _clean_env_value(os.environ.get("GITHUB_APP_NAME"))
+    app_slug = _clean_env_value(os.environ.get("GITHUB_APP_SLUG")) or _slugify_app_name(
+        app_name
+    )
+    app_id = _clean_env_value(os.environ.get("GITHUB_APP_ID")) or _clean_env_value(
+        os.environ.get("GITHUB_APP_INSTALLATION_ID")
     )
 
     bot_login = None
@@ -700,10 +709,12 @@ def _resolve_git_identity() -> dict[str, object]:
         app_value: str | None,
         default_value: str,
     ) -> tuple[str, str]:
-        if explicit_env:
-            return explicit_env, "explicit_env"
-        if app_value:
-            return app_value, "app_metadata"
+        cleaned_env = _clean_env_value(explicit_env)
+        cleaned_app = _clean_env_value(app_value)
+        if cleaned_env:
+            return cleaned_env, "explicit_env"
+        if cleaned_app:
+            return cleaned_app, "app_metadata"
         return default_value, "default_placeholder"
 
     author_name, author_name_source = resolve_value(
@@ -717,7 +728,9 @@ def _resolve_git_identity() -> dict[str, object]:
         default_value=DEFAULT_GIT_IDENTITY["author_email"],
     )
 
-    committer_name_env = os.environ.get("ADAPTIV_MCP_GIT_COMMITTER_NAME")
+    committer_name_env = _clean_env_value(
+        os.environ.get("ADAPTIV_MCP_GIT_COMMITTER_NAME")
+    )
     committer_name = None
     committer_name_source = None
     if committer_name_env:
@@ -730,7 +743,9 @@ def _resolve_git_identity() -> dict[str, object]:
         committer_name = author_name
         committer_name_source = "author_fallback"
 
-    committer_email_env = os.environ.get("ADAPTIV_MCP_GIT_COMMITTER_EMAIL")
+    committer_email_env = _clean_env_value(
+        os.environ.get("ADAPTIV_MCP_GIT_COMMITTER_EMAIL")
+    )
     committer_email = None
     committer_email_source = None
     if committer_email_env:
