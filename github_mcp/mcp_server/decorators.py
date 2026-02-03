@@ -3959,12 +3959,16 @@ def mcp_tool(
                 if isinstance(structured_error, Mapping):
                     client_payload = _strip_internal_log_fields(structured_error)
                     try:
-                        client_payload = _merge_invocation_metadata(
-                            client_payload,
-                            func=wrapper,
-                            base_write_action=bool(write_action),
-                            effective_write_action=bool(effective_write_action),
-                        )
+                        if _effective_response_mode(req) not in {
+                            "chatgpt",
+                            "compact",
+                        }:
+                            client_payload = _merge_invocation_metadata(
+                                client_payload,
+                                func=wrapper,
+                                base_write_action=bool(write_action),
+                                effective_write_action=bool(effective_write_action),
+                            )
                     except Exception:  # nosec B110
                         pass
                 else:
@@ -4142,12 +4146,13 @@ def mcp_tool(
             if isinstance(result, Mapping):
                 client_payload = _strip_internal_log_fields(result)
                 try:
-                    client_payload = _merge_invocation_metadata(
-                        client_payload,
-                        func=wrapper,
-                        base_write_action=bool(write_action),
-                        effective_write_action=bool(effective_write_action),
-                    )
+                    if _effective_response_mode(req) not in {"chatgpt", "compact"}:
+                        client_payload = _merge_invocation_metadata(
+                            client_payload,
+                            func=wrapper,
+                            base_write_action=bool(write_action),
+                            effective_write_action=bool(effective_write_action),
+                        )
                 except Exception:  # nosec B110
                     pass
             else:
