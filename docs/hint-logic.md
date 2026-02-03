@@ -47,13 +47,7 @@ message.
  format. The hint is stored in `exc.hint` and kept separate from the main error
  text to avoid repetition/looping by clients.
 
-### 2.3 Sandbox/local file path handling (content_url)
-* When reading `content_url` paths, missing files can emit a hint explaining the
- `sandbox:/` prefix convention. This hint is attached to the error without
- duplicating the primary error message, and it’s preserved even if the server
- rewrites paths for sandbox access.
-
-### 2.4 Default hint inference (fallback behavior)
+### 2.3 Default hint inference (fallback behavior)
 * If an exception does not specify a hint, the error handler can **infer default
  hints** for common problems (e.g., missing file paths). These defaults are only
  applied when no explicit hint is present, ensuring explicit hints take
@@ -94,4 +88,3 @@ message.
 Hints are part of a broader safety and diagnostics strategy. For example, the
 error handler also categorizes errors and sanitizes validation/debug payloads to
 avoid upstream safety blocks while still providing actionable guidance.
-

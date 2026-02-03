@@ -5,10 +5,7 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from .config import (
-    ADAPTIV_MCP_INCLUDE_BASE64_CONTENT,
-    SANDBOX_CONTENT_BASE_URL,
-)
+from .config import ADAPTIV_MCP_INCLUDE_BASE64_CONTENT
 from .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
 from .utils import (
@@ -210,7 +207,7 @@ async def _perform_github_commit(
 
 
 async def _load_body_from_content_url(content_url: str, *, context: str) -> bytes:
-    """Read bytes from a sandbox path, absolute path, HTTP(S) URL, or GitHub URL."""
+    """Read bytes from an absolute path, HTTP(S) URL, or GitHub URL."""
 
     if not isinstance(content_url, str) or not content_url.strip():
         raise ValueError("content_url must be a non-empty string when provided")
@@ -248,7 +245,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             raise GitHubAPIError("github: decoded content did not return bytes")
         return decoded_bytes
 
-    def _read_local(local_path: str, missing_hint: str) -> bytes:
+    def _read_local(local_path: str) -> bytes:
         try:
             with open(local_path, "rb") as f:
                 return f.read()
@@ -256,33 +253,11 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             err = GitHubAPIError(
                 f"{context} content_url path not found at {local_path}."
             )
-            if missing_hint:
-                # Keep hints separate from the primary error message so clients
-                # can render them without triggering repetitive retries.
-                err.hint = str(missing_hint).strip()
             raise err from exc
         except OSError as exc:
             raise GitHubAPIError(
                 f"Failed to read content_url from {local_path}: {exc}"
             ) from exc
-
-    async def _fetch_rewritten_path(local_path: str, *, base_url: str) -> bytes:
-        rewritten_url = base_url.rstrip("/") + "/" + local_path.lstrip("/")
-        client = _external_client_instance()
-        response = await client.get(rewritten_url)
-        if response.status_code >= 400:
-            snippet = response.text
-            raise GitHubAPIError(
-                f"Failed to fetch content from rewritten sandbox URL {rewritten_url}: "
-                f"{response.status_code}. Response: {snippet}"
-            )
-        return response.content
-
-    sandbox_hint = (
-        "In hosted environments, local files live in the runtime sandbox. The "
-        "sandbox:/ prefix allows the host to rewrite the local path into an "
-        "accessible URL when direct filesystem access is unavailable."
-    )
 
     def _is_windows_absolute_path(path: str) -> bool:
         if not isinstance(path, str) or len(path) < 3:
@@ -298,55 +273,14 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             return False
         return path[2] in ("\\", "/")
 
-    if content_url.startswith("sandbox:"):
-        local_path = content_url[len("sandbox:") :]
-        if not local_path.strip():
-            raise GitHubAPIError(
-                "sandbox: content_url must include a file path after the prefix"
-            )
-        rewrite_base = SANDBOX_CONTENT_BASE_URL
-        try:
-            return _read_local(local_path, sandbox_hint)
-        except GitHubAPIError as exc:
-            if rewrite_base and (
-                rewrite_base.startswith("http://")
-                or rewrite_base.startswith("https://")
-            ):
-                return await _fetch_rewritten_path(local_path, base_url=rewrite_base)
-            err = GitHubAPIError(
-                f"{context} content_url sandbox file was not found at {local_path}. "
-                "This indicates a missing file path (not an auth or connectivity problem). "
-                "Provide an http(s) URL that already points to the sandbox file "
-                "or configure SANDBOX_CONTENT_BASE_URL so the server can fetch it "
-                "when direct filesystem access is unavailable."
-            )
-            # Preserve the sandbox hint in a structured field without duplicating
-            # it in the primary error message.
-            err.hint = getattr(exc, "hint", None) or sandbox_hint
-            raise err from exc
-
     if content_url.startswith("/") or _is_windows_absolute_path(content_url):
-        rewrite_base = SANDBOX_CONTENT_BASE_URL
-        missing_hint = (
-            "If this was meant to be a sandbox file, prefix it with sandbox:/ so "
-            "hosts can rewrite it."
-        )
         try:
-            return _read_local(content_url, missing_hint)
+            return _read_local(content_url)
         except GitHubAPIError as exc:
-            if rewrite_base and (
-                rewrite_base.startswith("http://")
-                or rewrite_base.startswith("https://")
-            ):
-                return await _fetch_rewritten_path(content_url, base_url=rewrite_base)
             err = GitHubAPIError(
                 f"{context} content_url local file was not found at {content_url}. "
-                "This is a file-path error (not a network/disconnect issue). "
-                "Configure SANDBOX_CONTENT_BASE_URL or provide an absolute http(s) URL "
-                "so the server can fetch the sandbox file when it is not mounted locally."
+                "This is a file-path error (not a network/disconnect issue)."
             )
-            if missing_hint:
-                err.hint = str(missing_hint).strip()
             raise err from exc
 
     if content_url.startswith("http://") or content_url.startswith("https://"):
@@ -359,10 +293,8 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         return response.content
 
     raise GitHubAPIError(
-        f"{context} content_url must be an absolute http(s) URL, a sandbox:/ path, "
-        "or an absolute local file path. In hosted environments, pass the sandbox "
-        "file path (e.g. sandbox:/mnt/data/file) and the host will rewrite it to a "
-        "real URL before it reaches this server."
+        f"{context} content_url must be an absolute http(s) URL, a github: URL, "
+        "or an absolute local file path."
     )
 
 
