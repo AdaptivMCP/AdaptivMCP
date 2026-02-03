@@ -549,8 +549,8 @@ async def search_workspace(
     """
 
     try:
-        if not isinstance(query, str) or not query:
-            raise ValueError("query must be a non-empty string")
+        if not isinstance(query, str):
+            query = "" if query is None else str(query)
 
         # Searches are always case-insensitive; ignore case_sensitive input.
         case_sensitive = False
@@ -566,9 +566,9 @@ async def search_workspace(
         if max_results is None:
             max_results = 200
         if not isinstance(max_results, int) or max_results < 1:
-            raise ValueError("max_results must be an int >= 1")
+            max_results = 200
         if not isinstance(cursor, int) or cursor < 0:
-            raise ValueError("cursor must be an int >= 0")
+            cursor = 0
 
         root = os.path.realpath(repo_dir)
         normalized_path, start = _resolve_workspace_start(repo_dir, path)
@@ -595,6 +595,24 @@ async def search_workspace(
                     "max_results": max_results,
                     "max_file_bytes": max_file_bytes,
                 }
+
+        if not query:
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": normalized_path if path else "",
+                "query": query,
+                "case_sensitive": case_sensitive,
+                "used_regex": False,
+                "results": [],
+                "truncated": False,
+                "cursor": int(cursor),
+                "next_cursor": None,
+                "files_scanned": 0,
+                "files_skipped": 0,
+                "max_results": max_results,
+                "max_file_bytes": max_file_bytes,
+            }
 
         # Allow searching a single file path.
         single_file = os.path.isfile(start)
@@ -630,7 +648,8 @@ async def search_workspace(
             try:
                 pattern = re.compile(query, flags=flags)
             except re.error as exc:
-                raise ValueError(f"Invalid regex pattern: {exc}") from exc
+                pattern = None
+                used_regex = False
 
         def _match_line(line: str) -> bool:
             try:

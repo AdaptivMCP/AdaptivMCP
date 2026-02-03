@@ -296,13 +296,21 @@ def _python_search(
     max_results: int,
     max_file_bytes: int | None,
 ) -> tuple[list[dict[str, Any]], bool]:
-    if not isinstance(query, str) or not query:
-        raise ValueError("query must be a non-empty string")
+    if not isinstance(query, str):
+        query = "" if query is None else str(query)
+    if not query:
+        return ([], False)
     if not isinstance(max_results, int) or max_results < 1:
-        raise ValueError("max_results must be an int >= 1")
+        max_results = 200
 
     flags = 0 if case_sensitive else re.IGNORECASE
-    pattern = re.compile(query, flags) if regex else None
+    pattern = None
+    if regex:
+        try:
+            pattern = re.compile(query, flags)
+        except re.error:
+            pattern = None
+            regex = False
     needle = query if case_sensitive else query.lower()
 
     matches: list[dict[str, Any]] = []
@@ -537,20 +545,15 @@ async def rg_search_workspace(
         # Searches are always case-insensitive; ignore case_sensitive input.
         case_sensitive = False
 
-        if not isinstance(query, str) or not query.strip():
-            raise ValueError("query must be a non-empty string")
+        if not isinstance(query, str):
+            query = "" if query is None else str(query)
+        query = query.strip()
         if not isinstance(max_results, int) or max_results < 1:
-            raise ValueError("max_results must be an int >= 1")
+            max_results = 200
         if not isinstance(context_lines, int) or context_lines < 0:
-            raise ValueError("context_lines must be an int >= 0")
+            context_lines = 0
 
         max_bytes = _parse_max_file_bytes(max_file_bytes)
-
-        deps = _tw()._workspace_deps()
-        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-        repo_dir = await deps["clone_repo"](
-            full_name, ref=effective_ref, preserve_changes=True
-        )
 
         base_rel = (path or "").strip().lstrip("/")
         globs = _normalize_globs(glob)
@@ -564,6 +567,35 @@ async def rg_search_workspace(
         )
         excl_globs = [*excl_globs, *_exclude_globs_from_paths(excl_paths)]
         base_rel_effective = "" if incl_paths else base_rel
+
+        effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
+        if not query:
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "status": "ok",
+                "ok": True,
+                "engine": "python",
+                "query": query,
+                "path": base_rel,
+                "regex": bool(regex),
+                "case_sensitive": bool(case_sensitive),
+                "include_hidden": bool(include_hidden),
+                "glob": globs,
+                "exclude_glob": excl_globs,
+                "include_paths": incl_paths,
+                "exclude_paths": excl_paths,
+                "max_results": int(max_results),
+                "context_lines": int(context_lines),
+                "max_file_bytes": max_bytes,
+                "matches": [],
+                "truncated": False,
+            }
+
+        deps = _tw()._workspace_deps()
+        repo_dir = await deps["clone_repo"](
+            full_name, ref=effective_ref, preserve_changes=True
+        )
 
         # When include_paths is provided, we run from repo root and pass explicit
         # targets to ripgrep. Otherwise we use `path` as the working directory.
