@@ -220,6 +220,9 @@ async def create_repository(
                 warnings.append(
                     f"owner '{target_owner}' differs from authenticated user '{authenticated_login}'; using user endpoint"
                 )
+                # /user/repos always creates a repository for the authenticated user.
+                # Normalize the owner so fallback metadata (e.g. full_name) matches reality.
+                target_owner = authenticated_login
         else:
             # auto: if caller provided an owner different from auth login, assume org.
             if (
