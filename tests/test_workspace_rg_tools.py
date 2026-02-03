@@ -1,4 +1,6 @@
 import asyncio
+import io
+import json
 import subprocess
 
 from github_mcp.workspace_tools import rg as workspace_rg
@@ -189,6 +191,98 @@ def test_rg_search_workspace_default_excludes_can_be_overridden(tmp_path, monkey
     )
     assert result2.get("error") is None
     assert {m["path"] for m in result2["matches"]} == {"a.txt", ".venv-mcp/venv.txt"}
+
+
+def test_rg_list_workspace_files_include_paths_do_not_duplicate_base_rel(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "subdir").mkdir()
+    (repo_dir / "subdir" / "target.txt").write_text("ok", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_rg, "_tw", lambda: dummy)
+    monkeypatch.setattr(workspace_rg, "_rg_available", lambda: True)
+
+    class DummyCompleted:
+        def __init__(self):
+            self.returncode = 0
+            self.stdout = "subdir/target.txt\n"
+            self.stderr = ""
+
+    monkeypatch.setattr(
+        workspace_rg.subprocess, "run", lambda *args, **kwargs: DummyCompleted()
+    )
+
+    result = asyncio.run(
+        workspace_rg.rg_list_workspace_files(
+            full_name="octo/example",
+            ref="main",
+            path="subdir",
+            include_paths=["subdir/target.txt"],
+            max_results=10,
+        )
+    )
+
+    assert result.get("error") is None
+    assert result["engine"] == "rg"
+    assert result["files"] == ["subdir/target.txt"]
+
+
+def test_rg_search_workspace_include_paths_do_not_duplicate_base_rel(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "subdir").mkdir()
+    (repo_dir / "subdir" / "target.txt").write_text("ok\n", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_rg, "_tw", lambda: dummy)
+    monkeypatch.setattr(workspace_rg, "_rg_available", lambda: True)
+
+    class DummyPopen:
+        def __init__(self, *args, **kwargs):
+            payload = {
+                "type": "match",
+                "data": {
+                    "path": {"text": "subdir/target.txt"},
+                    "line_number": 1,
+                    "submatches": [{"start": 0}],
+                    "lines": {"text": "ok\n"},
+                },
+            }
+            self.stdout = io.StringIO(json.dumps(payload) + "\n")
+            self.stderr = io.StringIO("")
+            self.returncode = 0
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            return None
+
+        def communicate(self, timeout=None):
+            return "", ""
+
+    monkeypatch.setattr(workspace_rg.subprocess, "Popen", DummyPopen)
+
+    result = asyncio.run(
+        workspace_rg.rg_search_workspace(
+            full_name="octo/example",
+            ref="main",
+            query="ok",
+            path="subdir",
+            include_paths=["subdir/target.txt"],
+            max_results=10,
+            context_lines=0,
+        )
+    )
+
+    assert result.get("error") is None
+    assert result["engine"] == "rg"
+    assert result["matches"][0]["path"] == "subdir/target.txt"
 
 
 def test_safe_communicate_kills_on_timeout(monkeypatch):

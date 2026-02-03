@@ -410,6 +410,7 @@ async def rg_list_workspace_files(
             full_name, ref=effective_ref, preserve_changes=True
         )
 
+        base_rel = (path or "").strip().lstrip("/")
         globs = _normalize_globs(glob)
         excl_globs = _normalize_globs(exclude_glob)
         incl_paths = _normalize_paths(include_paths)
@@ -421,6 +422,7 @@ async def rg_list_workspace_files(
         )
         # Ensure exclude_paths are also applied to rg via glob patterns.
         excl_globs = [*excl_globs, *_exclude_globs_from_paths(excl_paths)]
+        base_rel_effective = "" if incl_paths else base_rel
 
         files: list[str] = []
         truncated = False
@@ -437,19 +439,16 @@ async def rg_list_workspace_files(
                 # rg treats negated globs as exclusions.
                 cmd.extend(["--glob", f"!{g}"])
 
-            base_rel = (path or "").strip().lstrip("/")
             # If include_paths is provided, search only those targets from repo root.
             if incl_paths:
-                base_abs = repo_dir
                 for p in incl_paths:
-                    joined = os.path.normpath(os.path.join(base_rel, p)).replace(
-                        "\\", "/"
-                    )
+                    joined = os.path.normpath(p).replace("\\", "/")
                     if joined.startswith("../") or joined == "..":
                         continue
                     cmd.append(joined)
+                base_abs = repo_dir
             else:
-                base_abs = _workspace_safe_join(repo_dir, base_rel or ".")
+                base_abs = _workspace_safe_join(repo_dir, base_rel_effective or ".")
             proc = subprocess.run(  # nosec B603
                 cmd, cwd=base_abs, capture_output=True, text=True, timeout=30
             )
@@ -459,7 +458,9 @@ async def rg_list_workspace_files(
                 if not line:
                     continue
                 # rg emits paths relative to cwd; normalize to repo root.
-                rel = os.path.normpath(os.path.join(base_rel, line)).replace("\\", "/")
+                rel = os.path.normpath(
+                    os.path.join(base_rel_effective, line)
+                ).replace("\\", "/")
                 if not _passes_filters(
                     rel,
                     include_globs=globs,
@@ -475,7 +476,7 @@ async def rg_list_workspace_files(
         else:
             files = _python_walk_files(
                 repo_dir,
-                (path or "").strip().lstrip("/"),
+                base_rel_effective,
                 include_hidden=bool(include_hidden),
                 globs=globs,
                 exclude_globs=excl_globs,
@@ -562,11 +563,14 @@ async def rg_search_workspace(
             normalized_exclude_paths=excl_paths,
         )
         excl_globs = [*excl_globs, *_exclude_globs_from_paths(excl_paths)]
+        base_rel_effective = "" if incl_paths else base_rel
 
         # When include_paths is provided, we run from repo root and pass explicit
         # targets to ripgrep. Otherwise we use `path` as the working directory.
         base_abs = (
-            repo_dir if incl_paths else _workspace_safe_join(repo_dir, base_rel or ".")
+            repo_dir
+            if incl_paths
+            else _workspace_safe_join(repo_dir, base_rel_effective or ".")
         )
 
         matches: list[dict[str, Any]] = []
@@ -595,9 +599,7 @@ async def rg_search_workspace(
 
                 if incl_paths:
                     for p in incl_paths:
-                        joined = os.path.normpath(os.path.join(base_rel, p)).replace(
-                            "\\", "/"
-                        )
+                        joined = os.path.normpath(p).replace("\\", "/")
                         if joined.startswith("../") or joined == "..":
                             continue
                         cmd.append(joined)
@@ -627,7 +629,7 @@ async def rg_search_workspace(
                             continue
                         # Normalize to repo-root relative path.
                         rel_norm = os.path.normpath(
-                            os.path.join(base_rel, rel)
+                            os.path.join(base_rel_effective, rel)
                         ).replace("\\", "/")
                         if not _passes_filters(
                             rel_norm,
@@ -683,7 +685,7 @@ async def rg_search_workspace(
                 # never hard-fails or wedges on a stuck subprocess.
                 matches, truncated = _python_search(
                     repo_dir,
-                    base_rel,
+                    base_rel_effective,
                     query.strip(),
                     regex=bool(regex),
                     case_sensitive=bool(case_sensitive),
@@ -700,7 +702,7 @@ async def rg_search_workspace(
         else:
             matches, truncated = _python_search(
                 repo_dir,
-                base_rel,
+                base_rel_effective,
                 query.strip(),
                 regex=bool(regex),
                 case_sensitive=bool(case_sensitive),
