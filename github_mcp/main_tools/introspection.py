@@ -6,6 +6,7 @@ from typing import Any
 from github_mcp.mcp_server.context import get_auto_approve_enabled
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
 from github_mcp.mcp_server.schemas import _schema_for_callable
+from github_mcp.path_utils import base_path_from_path as _base_path_from_path
 from github_mcp.path_utils import normalize_base_path as _normalize_base_path
 
 from ._main import _main
@@ -423,6 +424,26 @@ def list_resources(
     m = _main()
     compact_mode = m.COMPACT_METADATA_DEFAULT if compact is None else compact
     prefix = _normalize_base_path(base_path)
+    if not prefix:
+        try:
+            from github_mcp.mcp_server.context import REQUEST_PATH
+
+            request_path = REQUEST_PATH.get()
+        except Exception:  # pragma: no cover - context is optional for tests
+            request_path = None
+        if request_path:
+            prefix = _base_path_from_path(
+                request_path,
+                (
+                    "/resources",
+                    "/list_resources",
+                    "/tools",
+                    "/list_tools",
+                    "/messages",
+                    "/mcp",
+                    "/sse",
+                ),
+            )
     href_prefix = f"{prefix}/tools" if prefix else "/tools"
 
     # Normalize pagination inputs.

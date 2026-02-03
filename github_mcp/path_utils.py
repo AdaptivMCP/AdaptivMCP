@@ -80,7 +80,25 @@ def request_base_path(request: Any, suffixes: Iterable[str]) -> str:
     return normalize_base_path(root_path)
 
 
+def base_path_from_path(path: str | None, suffixes: Iterable[str]) -> str:
+    """Best-effort derivation of a base path from a raw path string.
+
+    This mirrors request_base_path() logic for contexts where we only have
+    a request path (for example MCP tool calls without a Request object).
+    """
+
+    if not path:
+        return ""
+    cleaned = str(path)
+    for suffix in suffixes:
+        if suffix and cleaned.endswith(suffix):
+            candidate = cleaned[: -len(suffix)]
+            return normalize_base_path(candidate)
+    return normalize_base_path(cleaned)
+
+
 __all__ = [
     "normalize_base_path",
     "request_base_path",
+    "base_path_from_path",
 ]
