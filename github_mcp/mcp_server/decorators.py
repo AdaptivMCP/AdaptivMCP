@@ -617,6 +617,9 @@ def _clip_text(
                 ANSI_DIM,
                 enabled=enabled,
             )
+            if len(marker) >= max_chars:
+                out = out[: max_chars - 1] + "…"
+                return out
             head = max(1, (max_chars - len(marker)) // 2)
             tail = max(1, max_chars - len(marker) - head)
             if head + tail + len(marker) >= max_chars and tail > 1:
