@@ -2937,11 +2937,11 @@ async def edit_workspace_line(
         else:
             raw = lines[idx]
             _content, line_eol = _line_content_and_eol(raw)
-            # Preserve the existing line ending (or fallback to inferred).
-            effective_eol = line_eol or eol
-            payload = text
-            payload = payload.rstrip("\r\n")
-            payload = payload + effective_eol if effective_eol else payload
+            # Preserve the existing line ending, including when it's empty.
+            effective_eol = line_eol
+            payload = text.rstrip("\r\n")
+            if effective_eol:
+                payload = payload + effective_eol
             lines[idx] = payload
             updated = "".join(lines)
 
