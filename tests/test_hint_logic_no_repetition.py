@@ -44,7 +44,7 @@ index 0000000..1111111 100644
 
 
 @pytest.mark.asyncio
-async def test_load_body_absolute_path_missing_sets_hint_separately(tmp_path):
+async def test_load_body_absolute_path_missing_has_no_hint(tmp_path):
     from github_mcp.exceptions import GitHubAPIError
     from github_mcp.github_content import _load_body_from_content_url
 
@@ -54,33 +54,4 @@ async def test_load_body_absolute_path_missing_sets_hint_separately(tmp_path):
         await _load_body_from_content_url(str(missing), context="test")
 
     exc = excinfo.value
-    hint = getattr(exc, "hint", None)
-    assert isinstance(hint, str)
-    assert "If this was meant to be a sandbox file" in hint
-    # Ensure the hint is not duplicated in the main message.
-    assert "If this was meant to be a sandbox file" not in str(exc)
-
-
-@pytest.mark.asyncio
-async def test_load_body_sandbox_missing_without_rewrite_preserves_sandbox_hint(
-    tmp_path, monkeypatch
-):
-    from github_mcp import github_content
-    from github_mcp.exceptions import GitHubAPIError
-
-    # Ensure rewrite path is not taken.
-    monkeypatch.setattr(github_content, "SANDBOX_CONTENT_BASE_URL", None)
-
-    missing = tmp_path / "does-not-exist.txt"
-
-    with pytest.raises(GitHubAPIError) as excinfo:
-        await github_content._load_body_from_content_url(
-            f"sandbox:{str(missing)}", context="test"
-        )
-
-    exc = excinfo.value
-    hint = getattr(exc, "hint", None)
-    assert isinstance(hint, str)
-    assert "sandbox" in hint.lower()
-    # Keep the detailed sandbox explanation out of the error message.
-    assert "runtime sandbox" not in str(exc).lower()
+    assert getattr(exc, "hint", None) is None

@@ -403,7 +403,7 @@ async def test_update_files_and_open_pr_happy_path(monkeypatch: pytest.MonkeyPat
         title="Update",
         files=[
             {"path": "a.txt", "content": "hello"},
-            {"path": "b.txt", "content_url": "sandbox:/b.txt"},
+            {"path": "b.txt", "content_url": "https://example.com/b.txt"},
         ],
         base_branch="main",
         new_branch=None,
