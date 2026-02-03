@@ -582,7 +582,7 @@ async def _clone_repo(
     q_ref = shlex.quote(effective_ref)
     q_url = shlex.quote(url)
     q_tmpdir = shlex.quote(tmpdir)
-    cmd = f"git clone --depth 1 --branch {q_ref} {q_url} {q_tmpdir}"
+    cmd = f"git clone --branch {q_ref} {q_url} {q_tmpdir}"
     git_timeout = int(getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
     result = await _run_git_with_retry(
         run_shell,
@@ -597,7 +597,7 @@ async def _clone_repo(
             shutil.rmtree(tmpdir, ignore_errors=True)
             tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
             q_tmpdir = shlex.quote(tmpdir)
-            cmd = f"git clone --depth 1 --branch {q_ref} {q_url} {q_tmpdir}"
+            cmd = f"git clone --branch {q_ref} {q_url} {q_tmpdir}"
             result = await _run_git_with_retry(
                 run_shell,
                 cmd,
