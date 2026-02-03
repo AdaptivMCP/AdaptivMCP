@@ -2406,12 +2406,18 @@ def list_resources(
     base_path: str | None = None,
     include_parameters: bool = False,
     compact: bool | None = None,
+    cursor: int | None = 0,
+    limit: int | None = 200,
 ) -> dict[str, Any]:
     """Return a resource catalog derived from registered tools."""
     from github_mcp.main_tools.introspection import list_resources as _impl
 
     return _impl(
-        base_path=base_path, include_parameters=include_parameters, compact=compact
+        base_path=base_path,
+        include_parameters=include_parameters,
+        compact=compact,
+        cursor=cursor,
+        limit=limit,
     )
 
 
