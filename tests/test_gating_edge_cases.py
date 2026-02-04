@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
-
 
 def test_infer_write_action_from_shell_chained_commands() -> None:
     """Ensure common shell separators are handled conservatively but correctly."""
@@ -55,79 +52,17 @@ def test_infer_write_action_from_shell_pipeline_write_stage() -> None:
     assert infer_write_action_from_shell("cat README.md | tee out.txt") is True
 
 
-def _get_resolver(fn: Any) -> Callable[[dict[str, Any]], bool]:
-    resolver = getattr(fn, "__mcp_write_action_resolver__", None)
-    assert callable(resolver), "expected tool to expose a write_action_resolver"
-    return resolver
+def test_tools_do_not_expose_write_action_resolver_metadata() -> None:
+    """Legacy regression: the codebase no longer uses per-call resolver hooks."""
 
-
-def test_terminal_command_write_action_resolver_edge_cases() -> None:
     from github_mcp.workspace_tools.commands import terminal_command
-
-    resolver = _get_resolver(terminal_command)
-
-    assert resolver({"command": "pytest -q", "installing_dependencies": False}) is False
-    assert resolver({"command": "pip check", "installing_dependencies": False}) is False
-    assert (
-        resolver({"command": "python -m pip check", "installing_dependencies": False})
-        is False
-    )
-    assert resolver({"command": 'rg ">" .', "installing_dependencies": False}) is False
-
-    assert resolver({"command": "pip install -r dev-requirements.txt"}) is True
-    assert resolver({"command": "echo hi > out.txt"}) is True
-    # Dependency installation should force write classification.
-    assert resolver({"command": "pytest -q", "installing_dependencies": True}) is True
-
-
-def test_apply_workspace_operations_write_action_resolver_edge_cases() -> None:
     from github_mcp.workspace_tools.fs import apply_workspace_operations
 
-    resolver = _get_resolver(apply_workspace_operations)
-
-    # Preview mode should not require write approval even when the ops are write-capable.
+    assert getattr(terminal_command, "__mcp_write_action_resolver__", None) is None
     assert (
-        resolver(
-            {
-                "preview_only": True,
-                "operations": [{"op": "write", "path": "x.txt", "content": "hi"}],
-            }
-        )
-        is False
+        getattr(apply_workspace_operations, "__mcp_write_action_resolver__", None)
+        is None
     )
-
-    # Pure read_sections operations are read-only.
-    assert (
-        resolver(
-            {
-                "preview_only": False,
-                "operations": [
-                    {"op": "read_sections", "path": "README.md", "start_line": 1},
-                    {"op": "read_sections", "path": "README.md", "start_line": 50},
-                ],
-            }
-        )
-        is False
-    )
-
-    # Mixed operation sets must be treated as write.
-    assert (
-        resolver(
-            {
-                "preview_only": False,
-                "operations": [
-                    {"op": "read_sections", "path": "README.md", "start_line": 1},
-                    {"op": "replace_text", "path": "README.md", "old": "a", "new": "b"},
-                ],
-            }
-        )
-        is True
-    )
-
-    # Malformed or empty operations should conservatively classify as write-capable.
-    assert resolver({"preview_only": False, "operations": []}) is True
-    assert resolver({"preview_only": False, "operations": None}) is True
-    assert resolver({"preview_only": False}) is True
 
 
 def test_core_tool_gating_metadata_is_consistent() -> None:
@@ -154,6 +89,6 @@ def test_core_tool_gating_metadata_is_consistent() -> None:
     assert bool(getattr(run_lint_suite, "__mcp_write_action__", None)) is False
     assert bool(getattr(run_quality_suite, "__mcp_write_action__", None)) is False
 
-    # Command runner is dynamically gated.
+    # Command runner is write-capable (shell execution).
     assert bool(getattr(terminal_command, "__mcp_write_action__", None)) is True
-    assert callable(getattr(terminal_command, "__mcp_write_action_resolver__", None))
+    assert getattr(terminal_command, "__mcp_write_action_resolver__", None) is None

@@ -1579,12 +1579,12 @@ def _dedupe_key_is_read(key: str) -> bool:
 
 def _clear_read_dedupe_caches() -> None:
     async_keys = [key for key in _DEDUPE_ASYNC_CACHE if _dedupe_key_is_read(key[1])]
-    for key in async_keys:
-        _DEDUPE_ASYNC_CACHE.pop(key, None)
+    for async_key in async_keys:
+        _DEDUPE_ASYNC_CACHE.pop(async_key, None)
 
     sync_keys = [key for key in _DEDUPE_SYNC_CACHE if _dedupe_key_is_read(key)]
-    for key in sync_keys:
-        _DEDUPE_SYNC_CACHE.pop(key, None)
+    for sync_key in sync_keys:
+        _DEDUPE_SYNC_CACHE.pop(sync_key, None)
 
 
 def _loop_id(loop: asyncio.AbstractEventLoop) -> int:
@@ -3373,7 +3373,9 @@ def mcp_tool(
                 )
                 try:
                     if _should_enforce_write_gate(req):
-                        _enforce_write_allowed(tool_name, write_action=write_action_value)
+                        _enforce_write_allowed(
+                            tool_name, write_action=write_action_value
+                        )
                 except asyncio.CancelledError as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
                     _log_tool_cancelled(
