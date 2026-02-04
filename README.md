@@ -52,6 +52,31 @@ HTTP registry/diagnostics:
 - `GET /ui/tools` – tool catalog UI
 - `GET /ui.json` – machine-readable service metadata (base-path aware)
 
+## Quickstart
+
+1) **Install dependencies**
+
+```bash
+pip install -r requirements.txt
+```
+
+2) **Set environment variables**
+
+Copy the sample env file and set at least a GitHub token:
+
+```bash
+cp .env.example .env
+# edit .env
+```
+
+3) **Run locally**
+
+```bash
+python main.py
+```
+
+The server will start on the default host/port. Use `GET /healthz` to verify it is running.
+
 ### 1) Configure env vars
 
 Copy the sample env file and set at least a GitHub token:
@@ -149,6 +174,12 @@ The start script expects a working `rg` on `$PATH` and will prefer the vendored 
 ### Reverse proxies / base paths
 
 If you deploy behind a reverse proxy that adds a URL prefix (e.g. `https://host/prefix/...`), use `GET /ui.json` to confirm the derived, prefix-aware endpoints.
+
+## Security & operational notes
+
+- **Principle of least privilege:** use a narrowly scoped GitHub token and Render API key.
+- **Write tool approvals:** keep `ADAPTIV_MCP_AUTO_APPROVE=false` in shared environments and wire an external approval workflow if needed.
+- **Secrets hygiene:** avoid logging sensitive headers or payloads; prefer short log retention in production.
 
 ## Development
 
