@@ -90,14 +90,18 @@ def _normalize_render_api_base(raw_base: str) -> tuple[str, str]:
     return trimmed, "/v1"
 
 
-def _apply_render_version_prefix(path: str) -> str:
+def _apply_render_version_prefix(path: str, prefix_override: str | None = None) -> str:
     """Ensure exactly one version prefix is applied to the request path."""
 
     p = (path or "").strip()
     if not p.startswith("/"):
         p = "/" + p
 
-    prefix = (_render_api_version_prefix or "").strip()
+    prefix_source = (
+        (prefix_override if prefix_override is not None else _render_api_version_prefix)
+        or ""
+    )
+    prefix = prefix_source.strip()
     if not prefix:
         return p
     if not prefix.startswith("/"):
@@ -385,7 +389,7 @@ async def render_request(
 
     token_source = _render_token_source()
     normalized_base, version_prefix = _normalize_render_api_base(RENDER_API_BASE)
-    effective_path = _apply_render_version_prefix(path)
+    effective_path = _apply_render_version_prefix(path, version_prefix)
 
     # START (dev-facing)
     if LOG_RENDER_HTTP:
