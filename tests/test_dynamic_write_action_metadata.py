@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 
 def _set_auto_approve(monkeypatch, enabled: bool | None) -> None:
     """Helper to make auto-approve behavior explicit in tests.
@@ -40,90 +38,8 @@ def test_infer_write_action_from_shell_write_examples() -> None:
     )
 
 
-def test_mcp_tool_dynamic_write_action_is_exposed_in_response(monkeypatch) -> None:
-    """When a resolver is present, mapping outputs include invocation-level metadata."""
-
-    from github_mcp.mcp_server import decorators
-
-    class FakeMCP:
-        def tool(self, *, name=None, description=None, meta=None, annotations=None):
-            def decorator(fn):
-                return {
-                    "fn": fn,
-                    "name": name,
-                    "meta": meta,
-                    "annotations": annotations,
-                }
-
-            return decorator
-
-    monkeypatch.setattr(decorators, "mcp", FakeMCP())
-    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
-
-    def resolver(args):
-        return bool(args.get("mode") == "write")
-
-    @decorators.mcp_tool(
-        name="dyn_tool", write_action=True, write_action_resolver=resolver
-    )
-    def dyn_tool(mode: str = "read") -> dict:
-        return {"mode": mode}
-
-    out_read = dyn_tool(mode="read")
-    assert out_read.get("gating", {}).get("base_write_action") is True
-    assert out_read.get("gating", {}).get("effective_write_action") is False
-
-    out_write = dyn_tool(mode="write")
-    assert out_write.get("gating", {}).get("base_write_action") is True
-    assert out_write.get("gating", {}).get("effective_write_action") is True
-
-
-def test_tool_metadata_annotations_follow_effective_write_action(monkeypatch) -> None:
-    """Invocation metadata should reflect dynamic read/write annotations."""
-
-    _set_auto_approve(monkeypatch, False)
-
-    from github_mcp.mcp_server import decorators
-
-    class FakeMCP:
-        def tool(self, *, name=None, description=None, meta=None, annotations=None):
-            def decorator(fn):
-                return {
-                    "fn": fn,
-                    "name": name,
-                    "meta": meta,
-                    "annotations": annotations,
-                }
-
-            return decorator
-
-    monkeypatch.setattr(decorators, "mcp", FakeMCP())
-    monkeypatch.setattr(decorators, "_REGISTERED_MCP_TOOLS", [])
-
-    def resolver(args: dict[str, Any]) -> bool:
-        return bool(args.get("mode") == "write")
-
-    @decorators.mcp_tool(
-        name="dyn_ann_tool", write_action=False, write_action_resolver=resolver
-    )
-    def dyn_ann_tool(mode: str = "read") -> dict:
-        return {"mode": mode}
-
-    out_read = dyn_ann_tool(mode="read")
-    ann_read = out_read.get("gating", {}).get("annotations", {})
-    assert ann_read.get("readOnlyHint") is False
-    assert ann_read.get("openWorldHint") is False
-
-    out_write = dyn_ann_tool(mode="write")
-    ann_write = out_write.get("gating", {}).get("annotations", {})
-    assert ann_write.get("readOnlyHint") is False
-    assert ann_write.get("openWorldHint") is False
-
-
-def test_http_tool_registry_uses_effective_write_action_for_retries(
-    monkeypatch,
-) -> None:
-    """Read-classified invocations may retry; write-classified invocations must not."""
+def test_http_tool_registry_uses_write_action_for_retries(monkeypatch) -> None:
+    """Read-classified tools may retry; write-classified tools must not."""
 
     _set_auto_approve(monkeypatch, False)
 
@@ -150,16 +66,11 @@ def test_http_tool_registry_uses_effective_write_action_for_retries(
             },
         }
 
-    def resolver(args: dict[str, Any]) -> bool:
-        # Read if the command is 'ls', otherwise write.
-        return str(args.get("command") or "").strip() != "ls"
-
-    # Attach MCP metadata so tool_registry can discover resolver/base classification.
-    flaky_cmd.__mcp_write_action__ = True
-    flaky_cmd.__mcp_write_action_resolver__ = resolver
+    # Attach MCP metadata so tool_registry can discover write_action classification.
+    flaky_cmd.__mcp_write_action__ = False
 
     class ToolObj:
-        write_action = True
+        write_action = False
 
     def fake_find_registered_tool(name: str):
         if name == "flaky_cmd":
@@ -176,13 +87,15 @@ def test_http_tool_registry_uses_effective_write_action_for_retries(
     )
     client = TestClient(app)
 
-    # 1) Read invocation should retry up to max_attempts.
+    # 1) Read tool should retry up to max_attempts.
     calls["n"] = 0
     resp = client.post("/tools/flaky_cmd/invoke?max_attempts=2", json={"command": "ls"})
     assert resp.status_code == 429
     assert calls["n"] == 2
 
-    # 2) Write invocation should NOT retry.
+    # 2) Flip to write tool and ensure it does NOT retry.
+    flaky_cmd.__mcp_write_action__ = True
+    ToolObj.write_action = True
     calls["n"] = 0
     resp2 = client.post(
         "/tools/flaky_cmd/invoke?max_attempts=2",
@@ -218,7 +131,7 @@ def test_auto_approve_suppresses_all_ui_hints(monkeypatch) -> None:
     def hint_suppression_tool() -> dict:
         return {"ok": True}
 
-    out = hint_suppression_tool()
-    ann = out.get("gating", {}).get("annotations", {})
+    tool_obj = hint_suppression_tool.__mcp_tool__
+    ann = tool_obj.get("annotations", {})
     assert ann.get("readOnlyHint") is False
     assert ann.get("openWorldHint") is False

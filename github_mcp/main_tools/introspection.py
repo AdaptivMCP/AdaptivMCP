@@ -294,7 +294,7 @@ def list_all_actions(
         if description:
             tool_info["description"] = description
 
-        # Tool classification is expressed via write_action plus the gating fields.
+        # Tool classification is expressed via write_action plus the write gate state.
 
         if include_parameters:
             # IMPORTANT: compute schemas dynamically from the live callable.

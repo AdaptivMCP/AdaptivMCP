@@ -1456,89 +1456,17 @@ def _tool_annotations(
 def _resolve_invocation_annotations(
     func: Any,
     *,
-    effective_write_action: bool,
+    write_action: bool,
 ) -> dict[str, Any]:
-    """Return dynamic annotations for a specific invocation."""
+    """Return annotations for a tool based on its static classification."""
 
     open_world_hint = getattr(func, "__mcp_open_world_hint__", None)
     read_only_hint = getattr(func, "__mcp_read_only_hint__", None)
     return _tool_annotations(
-        write_action=bool(effective_write_action),
+        write_action=bool(write_action),
         open_world_hint=open_world_hint,
         read_only_hint=read_only_hint,
     )
-
-
-def _merge_invocation_metadata(
-    payload: Mapping[str, Any],
-    *,
-    func: Any,
-    base_write_action: bool,
-    effective_write_action: bool,
-) -> dict[str, Any]:
-    """Attach dynamic tool metadata to a mapping payload."""
-
-    out = dict(payload)
-    gating: dict[str, Any] = {
-        "base_write_action": bool(base_write_action),
-        "effective_write_action": bool(effective_write_action),
-    }
-    annotations = _resolve_invocation_annotations(
-        func, effective_write_action=effective_write_action
-    )
-    if annotations:
-        gating["annotations"] = annotations
-
-    existing = out.get("gating")
-    if isinstance(existing, Mapping):
-        merged = dict(existing)
-        merged.update(gating)
-        out["gating"] = merged
-    else:
-        out["gating"] = gating
-    return out
-
-
-def _refresh_tool_annotations_for_invocation(
-    func: Any, *, effective_write_action: bool
-) -> None:
-    """Best-effort update of tool annotations for the current invocation."""
-
-    try:
-        tool_obj = getattr(func, "__mcp_tool__", None)
-    except Exception:
-        tool_obj = None
-    if tool_obj is None:
-        return
-
-    try:
-        annotations = _resolve_invocation_annotations(
-            func, effective_write_action=effective_write_action
-        )
-        if not annotations:
-            return
-        if not effective_write_action:
-            existing = None
-            try:
-                existing = getattr(tool_obj, "annotations", None)
-            except Exception:
-                existing = None
-            if existing is None and isinstance(tool_obj, Mapping):
-                existing = tool_obj.get("annotations")
-            if existing is None:
-                meta = getattr(tool_obj, "meta", None)
-                if isinstance(meta, Mapping):
-                    existing = meta.get("annotations")
-            if isinstance(existing, Mapping):
-                read_only_hint = existing.get("readOnlyHint")
-                # If a prior invocation has already marked this tool as write-ish,
-                # don't overwrite it with read-only hints.
-                if read_only_hint is False:
-                    return
-        _attach_tool_annotations(tool_obj, annotations)
-    except Exception:
-        # Best-effort: do not interfere with tool execution.
-        return
 
 
 def _schema_summary(schema: Mapping[str, Any], *, max_fields: int = 8) -> str:
@@ -2033,8 +1961,7 @@ def _log_tool_warning(
     *,
     tool_name: str,
     call_id: str,
-    base_write_action: bool,
-    effective_write_action: bool,
+    write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2050,10 +1977,6 @@ def _log_tool_warning(
         shaped_payload = dict(result)
     else:
         shaped_payload = {"status": "success", "ok": True, "result": result}
-    shaped_payload["gating"] = {
-        "base_write_action": bool(base_write_action),
-        "effective_write_action": bool(effective_write_action),
-    }
     report = _llm_dev_report(
         tool_name=tool_name,
         shaped_payload=shaped_payload,
@@ -2064,8 +1987,7 @@ def _log_tool_warning(
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        base_write_action=base_write_action,
-        effective_write_action=effective_write_action,
+        write_action=write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2093,7 +2015,7 @@ def _log_tool_warning(
         _ansi("RES", ANSI_YELLOW)
         + " "
         + _ansi(friendly, ANSI_CYAN)
-        + _write_badge(bool(effective_write_action))
+        + _write_badge(bool(write_action))
     )
     ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
     # Prefer the structured report summary (single surface, no duplication).
@@ -2117,8 +2039,7 @@ def _log_tool_returned_error(
     *,
     tool_name: str,
     call_id: str,
-    base_write_action: bool,
-    effective_write_action: bool,
+    write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2129,10 +2050,6 @@ def _log_tool_returned_error(
     """Log a tool call that returned an error payload without raising."""
 
     shaped_payload = dict(result)
-    shaped_payload["gating"] = {
-        "base_write_action": bool(base_write_action),
-        "effective_write_action": bool(effective_write_action),
-    }
     report = _llm_dev_report(
         tool_name=tool_name,
         shaped_payload=shaped_payload,
@@ -2143,8 +2060,7 @@ def _log_tool_returned_error(
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        base_write_action=base_write_action,
-        effective_write_action=effective_write_action,
+        write_action=write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2170,7 +2086,7 @@ def _log_tool_returned_error(
             _ansi("RES", ANSI_RED)
             + " "
             + _ansi(friendly, ANSI_CYAN)
-            + _write_badge(bool(effective_write_action))
+            + _write_badge(bool(write_action))
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         err_type = _ansi("ReturnedError", ANSI_YELLOW)
@@ -2621,8 +2537,7 @@ def _tool_log_payload(
     *,
     tool_name: str,
     call_id: str,
-    base_write_action: bool,
-    effective_write_action: bool,
+    write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2638,11 +2553,7 @@ def _tool_log_payload(
     if inline:
         payload["log_context"] = inline
 
-    # Align with response payload semantics.
-    payload["gating"] = {
-        "base_write_action": bool(base_write_action),
-        "effective_write_action": bool(effective_write_action),
-    }
+    payload["write_action"] = bool(write_action)
     if LOG_TOOL_VERBOSE_EXTRAS:
         payload["schema_present"] = bool(schema_present)
         payload["schema_hash"] = shorten_token(schema_hash) if schema_present else None
@@ -2660,8 +2571,7 @@ def _log_tool_start(
     *,
     tool_name: str,
     call_id: str,
-    base_write_action: bool,
-    effective_write_action: bool,
+    write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2673,8 +2583,7 @@ def _log_tool_start(
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        base_write_action=base_write_action,
-        effective_write_action=effective_write_action,
+        write_action=write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2689,7 +2598,7 @@ def _log_tool_start(
         _ansi("REQ", ANSI_GREEN)
         + " "
         + _ansi(friendly, ANSI_CYAN)
-        + _write_badge(bool(effective_write_action))
+        + _write_badge(bool(write_action))
     )
     msg = f"{prefix}{_tool_desc_bit(tool_name)}{suffix}"
     if LOG_TOOL_LOG_IDS:
@@ -2704,8 +2613,7 @@ def _log_tool_report(
     *,
     tool_name: str,
     call_id: str,
-    base_write_action: bool,
-    effective_write_action: bool,
+    write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2720,10 +2628,6 @@ def _log_tool_report(
         shaped_payload = dict(result)
     else:
         shaped_payload = {"status": "success", "ok": True, "result": result}
-    shaped_payload["gating"] = {
-        "base_write_action": bool(base_write_action),
-        "effective_write_action": bool(effective_write_action),
-    }
 
     report = _llm_dev_report(
         tool_name=tool_name,
@@ -2735,8 +2639,7 @@ def _log_tool_report(
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        base_write_action=base_write_action,
-        effective_write_action=effective_write_action,
+        write_action=write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2747,7 +2650,7 @@ def _log_tool_report(
         _ansi("REPORT", ANSI_GREEN)
         + " "
         + _ansi(friendly, ANSI_CYAN)
-        + _write_badge(bool(effective_write_action))
+        + _write_badge(bool(write_action))
     )
     # Single-line message for provider logs.
     msg = f"{prefix} {_truncate_text(str(report.get('summary') or ''), limit=220)}"
@@ -2779,8 +2682,7 @@ def _log_tool_summary(
     _log_tool_report(
         tool_name=tool_name,
         call_id=call_id,
-        base_write_action=bool(write_action),
-        effective_write_action=bool(write_action),
+        write_action=bool(write_action),
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2793,8 +2695,7 @@ def _log_tool_success(
     *,
     tool_name: str,
     call_id: str,
-    base_write_action: bool,
-    effective_write_action: bool,
+    write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2810,10 +2711,6 @@ def _log_tool_success(
         shaped_payload = dict(result)
     else:
         shaped_payload = {"status": "success", "ok": True, "result": result}
-    shaped_payload["gating"] = {
-        "base_write_action": bool(base_write_action),
-        "effective_write_action": bool(effective_write_action),
-    }
     report = _llm_dev_report(
         tool_name=tool_name,
         shaped_payload=shaped_payload,
@@ -2824,8 +2721,7 @@ def _log_tool_success(
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        base_write_action=base_write_action,
-        effective_write_action=effective_write_action,
+        write_action=write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2849,7 +2745,7 @@ def _log_tool_success(
             _ansi("RES", ANSI_GREEN)
             + " "
             + _ansi(friendly, ANSI_CYAN)
-            + _write_badge(bool(effective_write_action))
+            + _write_badge(bool(write_action))
             + _tool_desc_bit(tool_name)
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
@@ -2880,8 +2776,7 @@ def _log_tool_failure(
     *,
     tool_name: str,
     call_id: str,
-    base_write_action: bool,
-    effective_write_action: bool,
+    write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -2899,10 +2794,6 @@ def _log_tool_failure(
             "ok": False,
             "error": {"message": str(exc) or exc.__class__.__name__},
         }
-    shaped_payload["gating"] = {
-        "base_write_action": bool(base_write_action),
-        "effective_write_action": bool(effective_write_action),
-    }
     report = _llm_dev_report(
         tool_name=tool_name,
         shaped_payload=shaped_payload,
@@ -2913,8 +2804,7 @@ def _log_tool_failure(
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        base_write_action=base_write_action,
-        effective_write_action=effective_write_action,
+        write_action=write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -2945,7 +2835,7 @@ def _log_tool_failure(
             _ansi("RES", ANSI_RED)
             + " "
             + _ansi(friendly, ANSI_CYAN)
-            + _write_badge(bool(effective_write_action))
+            + _write_badge(bool(write_action))
             + _tool_desc_bit(tool_name)
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
@@ -3031,8 +2921,7 @@ def _log_tool_cancelled(
     *,
     tool_name: str,
     call_id: str,
-    base_write_action: bool,
-    effective_write_action: bool,
+    write_action: bool,
     req: Mapping[str, Any],
     schema_hash: str | None,
     schema_present: bool,
@@ -3060,10 +2949,6 @@ def _log_tool_cancelled(
             "category": "cancelled",
             "code": "CANCELLED",
         },
-        "gating": {
-            "base_write_action": bool(base_write_action),
-            "effective_write_action": bool(effective_write_action),
-        },
     }
 
     report = _llm_dev_report(
@@ -3076,8 +2961,7 @@ def _log_tool_cancelled(
     payload = _tool_log_payload(
         tool_name=tool_name,
         call_id=call_id,
-        base_write_action=base_write_action,
-        effective_write_action=effective_write_action,
+        write_action=write_action,
         req=req,
         schema_hash=schema_hash,
         schema_present=schema_present,
@@ -3099,7 +2983,7 @@ def _log_tool_cancelled(
             _ansi("CANCEL", ANSI_YELLOW)
             + " "
             + _ansi(friendly, ANSI_CYAN)
-            + _write_badge(bool(effective_write_action))
+            + _write_badge(bool(write_action))
         )
         ms = _ansi(f"({duration_ms:.0f}ms)", ANSI_DIM)
         msg = f"{prefix} {ms}{suffix}"
@@ -3471,23 +3355,7 @@ def mcp_tool(
                 req = get_request_context()
                 start = time.perf_counter()
 
-                effective_write_action = bool(write_action)
-                if callable(write_action_resolver):
-                    try:
-                        # Prefer bound args if available; otherwise use raw kwargs.
-                        basis = (
-                            all_args
-                            if isinstance(all_args, Mapping) and all_args
-                            else clean_kwargs
-                        )
-                        effective_write_action = bool(write_action_resolver(basis))
-                    except Exception:
-                        # Best-effort; preserve base classification.
-                        effective_write_action = bool(write_action)
-
-                _refresh_tool_annotations_for_invocation(
-                    wrapper, effective_write_action=effective_write_action
-                )
+                write_action_value = bool(write_action)
 
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
@@ -3497,8 +3365,7 @@ def mcp_tool(
                 _log_tool_start(
                     tool_name=tool_name,
                     call_id=call_id,
-                    base_write_action=bool(write_action),
-                    effective_write_action=effective_write_action,
+                    write_action=write_action_value,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -3506,16 +3373,13 @@ def mcp_tool(
                 )
                 try:
                     if _should_enforce_write_gate(req):
-                        _enforce_write_allowed(
-                            tool_name, write_action=effective_write_action
-                        )
+                        _enforce_write_allowed(tool_name, write_action=write_action_value)
                 except asyncio.CancelledError as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
                     _log_tool_cancelled(
                         tool_name=tool_name,
                         call_id=call_id,
-                        base_write_action=bool(write_action),
-                        effective_write_action=effective_write_action,
+                        write_action=write_action_value,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3529,7 +3393,7 @@ def mcp_tool(
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=effective_write_action,
+                        write_action=write_action_value,
                         start=start,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3540,8 +3404,7 @@ def mcp_tool(
                     _log_tool_failure(
                         tool_name=tool_name,
                         call_id=call_id,
-                        base_write_action=bool(write_action),
-                        effective_write_action=effective_write_action,
+                        write_action=write_action_value,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3552,7 +3415,7 @@ def mcp_tool(
                     )
                     # Return errors through the same client-facing shaping path
                     # as successful results so callers always see a consistent
-                    # envelope (redaction, gating, ok/status normalization).
+                    # envelope (redaction, ok/status normalization).
                     client_payload: Any
                     if isinstance(structured_error, Mapping):
                         client_payload = _strip_internal_log_fields(structured_error)
@@ -3561,12 +3424,7 @@ def mcp_tool(
                                 "chatgpt",
                                 "compact",
                             }:
-                                client_payload = _merge_invocation_metadata(
-                                    client_payload,
-                                    func=wrapper,
-                                    base_write_action=bool(write_action),
-                                    effective_write_action=bool(effective_write_action),
-                                )
+                                client_payload = dict(client_payload)
                         except Exception:  # nosec B110
                             pass
                     else:
@@ -3601,7 +3459,7 @@ def mcp_tool(
                     result: Any
                     if _should_enforce_write_gate(req):
                         ttl_s = _dedupe_ttl_seconds(
-                            write_action=bool(effective_write_action), meta=meta
+                            write_action=write_action_value, meta=meta
                         )
                         if ttl_s > 0:
                             # Include all bound args for the key (positional + kwargs).
@@ -3612,7 +3470,7 @@ def mcp_tool(
                             )
                             dedupe_key = _dedupe_key(
                                 tool_name=tool_name,
-                                write_action=bool(effective_write_action),
+                                write_action=write_action_value,
                                 req=req,
                                 args=key_args,
                             )
@@ -3630,8 +3488,7 @@ def mcp_tool(
                     _log_tool_cancelled(
                         tool_name=tool_name,
                         call_id=call_id,
-                        base_write_action=bool(write_action),
-                        effective_write_action=effective_write_action,
+                        write_action=write_action_value,
                         req=req,
                         schema_hash=schema_hash,
                         schema_present=True,
@@ -3645,7 +3502,7 @@ def mcp_tool(
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
                         call_id=call_id,
-                        write_action=effective_write_action,
+                        write_action=write_action_value,
                         start=start,
                         schema_hash=schema_hash,
                         schema_present=True,
@@ -3656,8 +3513,7 @@ def mcp_tool(
                     _log_tool_failure(
                         tool_name=tool_name,
                         call_id=call_id,
-                        base_write_action=bool(write_action),
-                        effective_write_action=effective_write_action,
+                        write_action=write_action_value,
                         req=req,
                         schema_hash=schema_hash,
                         schema_present=True,
@@ -3674,12 +3530,7 @@ def mcp_tool(
                                 "chatgpt",
                                 "compact",
                             }:
-                                client_payload = _merge_invocation_metadata(
-                                    client_payload,
-                                    func=wrapper,
-                                    base_write_action=bool(write_action),
-                                    effective_write_action=bool(effective_write_action),
-                                )
+                                client_payload = dict(client_payload)
                         except Exception:  # nosec B110
                             pass
                     else:
@@ -3707,7 +3558,7 @@ def mcp_tool(
                         all_args=all_args,
                     )
 
-                if effective_write_action:
+                if write_action_value:
                     _clear_read_dedupe_caches()
 
                 # Preserve scalar return types for tools that naturally return scalars.
@@ -3721,8 +3572,7 @@ def mcp_tool(
                     _log_tool_returned_error(
                         tool_name=tool_name,
                         call_id=call_id,
-                        base_write_action=bool(write_action),
-                        effective_write_action=effective_write_action,
+                        write_action=write_action_value,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3734,8 +3584,7 @@ def mcp_tool(
                     _log_tool_warning(
                         tool_name=tool_name,
                         call_id=call_id,
-                        base_write_action=bool(write_action),
-                        effective_write_action=effective_write_action,
+                        write_action=write_action_value,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3747,8 +3596,7 @@ def mcp_tool(
                     _log_tool_success(
                         tool_name=tool_name,
                         call_id=call_id,
-                        base_write_action=bool(write_action),
-                        effective_write_action=effective_write_action,
+                        write_action=write_action_value,
                         req=req,
                         schema_hash=schema_hash if schema_present else None,
                         schema_present=schema_present,
@@ -3765,12 +3613,7 @@ def mcp_tool(
                             "chatgpt",
                             "compact",
                         }:
-                            client_payload = _merge_invocation_metadata(
-                                client_payload,
-                                func=wrapper,
-                                base_write_action=bool(write_action),
-                                effective_write_action=bool(effective_write_action),
-                            )
+                            client_payload = dict(client_payload)
                     except Exception:  # nosec B110
                         pass
                 else:
@@ -3818,7 +3661,6 @@ def mcp_tool(
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_tool_name__ = tool_name
             wrapper.__mcp_write_action__ = bool(write_action)
-            wrapper.__mcp_write_action_resolver__ = write_action_resolver
             wrapper.__mcp_open_world_hint__ = open_world_hint
             wrapper.__mcp_read_only_hint__ = read_only_hint
             wrapper.__mcp_visibility__ = visibility
@@ -3901,21 +3743,7 @@ def mcp_tool(
             req = get_request_context()
             start = time.perf_counter()
 
-            effective_write_action = bool(write_action)
-            if callable(write_action_resolver):
-                try:
-                    basis = (
-                        all_args
-                        if isinstance(all_args, Mapping) and all_args
-                        else clean_kwargs
-                    )
-                    effective_write_action = bool(write_action_resolver(basis))
-                except Exception:
-                    effective_write_action = bool(write_action)
-
-            _refresh_tool_annotations_for_invocation(
-                wrapper, effective_write_action=effective_write_action
-            )
+            write_action_value = bool(write_action)
 
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
@@ -3925,8 +3753,7 @@ def mcp_tool(
             _log_tool_start(
                 tool_name=tool_name,
                 call_id=call_id,
-                base_write_action=bool(write_action),
-                effective_write_action=effective_write_action,
+                write_action=write_action_value,
                 req=req,
                 schema_hash=schema_hash if schema_present else None,
                 schema_present=schema_present,
@@ -3934,16 +3761,13 @@ def mcp_tool(
             )
             try:
                 if _should_enforce_write_gate(req):
-                    _enforce_write_allowed(
-                        tool_name, write_action=effective_write_action
-                    )
+                    _enforce_write_allowed(tool_name, write_action=write_action_value)
             except asyncio.CancelledError as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
                 _log_tool_cancelled(
                     tool_name=tool_name,
                     call_id=call_id,
-                    base_write_action=bool(write_action),
-                    effective_write_action=effective_write_action,
+                    write_action=write_action_value,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -3957,7 +3781,7 @@ def mcp_tool(
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=effective_write_action,
+                    write_action=write_action_value,
                     start=start,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -3968,8 +3792,7 @@ def mcp_tool(
                 _log_tool_failure(
                     tool_name=tool_name,
                     call_id=call_id,
-                    base_write_action=bool(write_action),
-                    effective_write_action=effective_write_action,
+                    write_action=write_action_value,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -3986,12 +3809,7 @@ def mcp_tool(
                             "chatgpt",
                             "compact",
                         }:
-                            client_payload = _merge_invocation_metadata(
-                                client_payload,
-                                func=wrapper,
-                                base_write_action=bool(write_action),
-                                effective_write_action=bool(effective_write_action),
-                            )
+                            client_payload = dict(client_payload)
                     except Exception:  # nosec B110
                         pass
                 else:
@@ -4024,7 +3842,7 @@ def mcp_tool(
                 result: Any
                 if _should_enforce_write_gate(req):
                     ttl_s = _dedupe_ttl_seconds(
-                        write_action=bool(effective_write_action), meta=meta
+                        write_action=write_action_value, meta=meta
                     )
                     if ttl_s > 0:
                         key_args = (
@@ -4034,7 +3852,7 @@ def mcp_tool(
                         )
                         dedupe_key = _dedupe_key(
                             tool_name=tool_name,
-                            write_action=bool(effective_write_action),
+                            write_action=write_action_value,
                             req=req,
                             args=key_args,
                         )
@@ -4050,8 +3868,7 @@ def mcp_tool(
                 _log_tool_cancelled(
                     tool_name=tool_name,
                     call_id=call_id,
-                    base_write_action=bool(write_action),
-                    effective_write_action=effective_write_action,
+                    write_action=write_action_value,
                     req=req,
                     schema_hash=schema_hash,
                     schema_present=True,
@@ -4065,7 +3882,7 @@ def mcp_tool(
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
                     call_id=call_id,
-                    write_action=effective_write_action,
+                    write_action=write_action_value,
                     start=start,
                     schema_hash=schema_hash,
                     schema_present=True,
@@ -4076,8 +3893,7 @@ def mcp_tool(
                 _log_tool_failure(
                     tool_name=tool_name,
                     call_id=call_id,
-                    base_write_action=bool(write_action),
-                    effective_write_action=effective_write_action,
+                    write_action=write_action_value,
                     req=req,
                     schema_hash=schema_hash,
                     schema_present=True,
@@ -4090,12 +3906,7 @@ def mcp_tool(
                 if isinstance(structured_error, Mapping):
                     client_payload = _strip_internal_log_fields(structured_error)
                     try:
-                        client_payload = _merge_invocation_metadata(
-                            client_payload,
-                            func=wrapper,
-                            base_write_action=bool(write_action),
-                            effective_write_action=bool(effective_write_action),
-                        )
+                        client_payload = dict(client_payload)
                     except Exception:  # nosec B110
                         pass
                 else:
@@ -4130,8 +3941,7 @@ def mcp_tool(
                 _log_tool_returned_error(
                     tool_name=tool_name,
                     call_id=call_id,
-                    base_write_action=bool(write_action),
-                    effective_write_action=effective_write_action,
+                    write_action=write_action_value,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -4143,8 +3953,7 @@ def mcp_tool(
                 _log_tool_warning(
                     tool_name=tool_name,
                     call_id=call_id,
-                    base_write_action=bool(write_action),
-                    effective_write_action=effective_write_action,
+                    write_action=write_action_value,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -4156,8 +3965,7 @@ def mcp_tool(
                 _log_tool_success(
                     tool_name=tool_name,
                     call_id=call_id,
-                    base_write_action=bool(write_action),
-                    effective_write_action=effective_write_action,
+                    write_action=write_action_value,
                     req=req,
                     schema_hash=schema_hash if schema_present else None,
                     schema_present=schema_present,
@@ -4170,12 +3978,7 @@ def mcp_tool(
                 client_payload = _strip_internal_log_fields(result)
                 try:
                     if _effective_response_mode(req) not in {"chatgpt", "compact"}:
-                        client_payload = _merge_invocation_metadata(
-                            client_payload,
-                            func=wrapper,
-                            base_write_action=bool(write_action),
-                            effective_write_action=bool(effective_write_action),
-                        )
+                        client_payload = dict(client_payload)
                 except Exception:  # nosec B110
                     pass
             else:
@@ -4220,7 +4023,6 @@ def mcp_tool(
         wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
         wrapper.__mcp_tool_name__ = tool_name
         wrapper.__mcp_write_action__ = bool(write_action)
-        wrapper.__mcp_write_action_resolver__ = write_action_resolver
         wrapper.__mcp_open_world_hint__ = open_world_hint
         wrapper.__mcp_read_only_hint__ = read_only_hint
         wrapper.__mcp_visibility__ = visibility
@@ -4365,7 +4167,7 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
 
             try:
                 annotations = _resolve_invocation_annotations(
-                    func, effective_write_action=bool(base_write)
+                    func, write_action=bool(base_write)
                 )
                 if annotations:
                     _attach_tool_annotations(tool_obj, annotations)

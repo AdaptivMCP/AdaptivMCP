@@ -187,13 +187,6 @@ def test_mcp_tool_does_not_inject_ui_fields_for_mapping_returns(monkeypatch):
 
     out = mapping_tool()
     # PR #936 began attaching tool metadata to mapping returns.
-    # Preserve the caller payload while tolerating the additional metadata.
+    # Preserve the caller payload while tolerating metadata changes.
     assert out["foo"] == "bar"
-    assert "gating" in out
-    meta = out["gating"]
-    assert meta["base_write_action"] is False
-    assert meta["effective_write_action"] is False
-    assert set(meta["annotations"].keys()) >= {
-        "readOnlyHint",
-        "openWorldHint",
-    }
+    assert "gating" not in out

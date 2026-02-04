@@ -674,25 +674,6 @@ def _is_write_action(tool_obj: Any, func: Any) -> bool:
     return bool(value)
 
 
-def _effective_write_action(tool_obj: Any, func: Any, args: dict[str, Any]) -> bool:
-    """Compute the invocation-level write action classification.
-
-    Tools are registered with a base (inherent) write_action. Some tools (notably
-    command runners) can infer read vs write based on the command payload.
-
-    If a resolver exists, it is authoritative for this invocation.
-    """
-
-    base = _is_write_action(tool_obj, func)
-    resolver = getattr(func, "__mcp_write_action_resolver__", None)
-    if callable(resolver):
-        try:
-            return bool(resolver(args))
-        except Exception:
-            return bool(base)
-    return bool(base)
-
-
 def _looks_like_structured_error(payload: Any) -> dict[str, Any] | None:
     """Return the error object when payload matches our error shape."""
 
@@ -774,7 +755,7 @@ async def _execute_tool(
         return payload, 404, {}
 
     tool_obj, func = resolved
-    write_action = _effective_write_action(tool_obj, func, args)
+    write_action = _is_write_action(tool_obj, func)
 
     try:
         signature: inspect.Signature | None = inspect.signature(func)
