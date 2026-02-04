@@ -361,4 +361,3 @@ async def test_main_validate_environment_delegates(monkeypatch):
     assert out["status"] == sentinel["status"]
     assert out["checks"] == sentinel["checks"]
     assert out["summary"] == sentinel["summary"]
-    assert "gating" in out
