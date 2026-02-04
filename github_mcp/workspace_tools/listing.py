@@ -649,7 +649,7 @@ async def search_workspace(
                 flags |= re.IGNORECASE
             try:
                 pattern = re.compile(query, flags=flags)
-            except re.error as exc:
+            except re.error:
                 pattern = None
                 used_regex = False
 

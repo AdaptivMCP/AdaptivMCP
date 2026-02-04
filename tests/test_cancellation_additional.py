@@ -87,7 +87,9 @@ def test_run_shell_double_cancel_still_terminates_process_group(monkeypatch):
         asyncio.set_event_loop(loop)
 
         async def _scenario() -> None:
-            task = asyncio.create_task(workspace._run_shell("sleep 999", timeout_seconds=0))
+            task = asyncio.create_task(
+                workspace._run_shell("sleep 999", timeout_seconds=0)
+            )
             await started.wait()
 
             # First cancellation triggers the CancelledError handler.
@@ -108,5 +110,7 @@ def test_run_shell_double_cancel_still_terminates_process_group(monkeypatch):
         loop.close()
         asyncio.set_event_loop(None)
 
-    assert killpg_calls, "Expected process group termination even with repeated cancellation"
+    assert killpg_calls, (
+        "Expected process group termination even with repeated cancellation"
+    )
     assert killpg_calls[0][0] == 4545

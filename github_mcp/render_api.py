@@ -98,9 +98,8 @@ def _apply_render_version_prefix(path: str, prefix_override: str | None = None) 
         p = "/" + p
 
     prefix_source = (
-        (prefix_override if prefix_override is not None else _render_api_version_prefix)
-        or ""
-    )
+        prefix_override if prefix_override is not None else _render_api_version_prefix
+    ) or ""
     prefix = prefix_source.strip()
     if not prefix:
         return p

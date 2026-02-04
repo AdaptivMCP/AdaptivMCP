@@ -366,6 +366,7 @@ GITHUB_PAT = os.environ.get("GITHUB_PAT")
 GITHUB_API_BASE = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
 GITHUB_API_BASE_URL = GITHUB_API_BASE
 
+
 # Base directory for persistent repo mirrors used by terminal_command and related tools.
 # This keeps cloned repositories stable across tool invocations so installations
 # and edits survive until explicitly reset or deleted.

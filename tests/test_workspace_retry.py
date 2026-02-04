@@ -32,8 +32,12 @@ async def test_run_git_with_retry_retries_on_rate_limit(monkeypatch):
 
     # Make retries deterministic and fast.
     monkeypatch.setattr(workspace.config, "GITHUB_RATE_LIMIT_RETRY_MAX_ATTEMPTS", 3)
-    monkeypatch.setattr(workspace.config, "GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS", 1)
-    monkeypatch.setattr(workspace.config, "GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS", 10)
+    monkeypatch.setattr(
+        workspace.config, "GITHUB_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS", 1
+    )
+    monkeypatch.setattr(
+        workspace.config, "GITHUB_RATE_LIMIT_RETRY_MAX_WAIT_SECONDS", 10
+    )
     monkeypatch.setattr(workspace, "_jitter_sleep_seconds", lambda delay: 0)
 
     slept = []
