@@ -88,8 +88,7 @@ def test_failure_logs_emit_at_info_level_with_error_severity(
     _log_tool_failure(
         tool_name="unit_test_tool",
         call_id="00000000-0000-0000-0000-000000000000",
-        base_write_action=False,
-        effective_write_action=False,
+        write_action=False,
         req={"path": "/test"},
         schema_hash=None,
         schema_present=False,
@@ -113,8 +112,7 @@ def test_returned_error_logs_emit_at_info_level_with_error_severity(
     _log_tool_returned_error(
         tool_name="unit_test_tool",
         call_id="00000000-0000-0000-0000-000000000000",
-        base_write_action=False,
-        effective_write_action=False,
+        write_action=False,
         req={"path": "/test"},
         schema_hash=None,
         schema_present=False,
