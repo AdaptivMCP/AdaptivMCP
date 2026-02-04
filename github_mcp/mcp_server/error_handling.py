@@ -53,6 +53,18 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return bool(default)
+    raw = raw.strip().lower()
+    if raw in {"1", "true", "yes", "on", "y"}:
+        return True
+    if raw in {"0", "false", "no", "off", "n"}:
+        return False
+    return bool(default)
+
+
 _DEBUG_TRUNCATE_CHARS = max(
     200, _env_int("ADAPTIV_MCP_ERROR_DEBUG_TRUNCATE_CHARS", 4000)
 )
@@ -394,12 +406,17 @@ def _structured_tool_error(
     # blocks in hosted connector environments, sanitize these argument values.
     if args is not None:
         try:
-            error_detail["debug"] = {
-                "args": _sanitize_debug_value(args),
+            debug: dict[str, Any] = {
                 "arg_keys": sorted(str(k) for k in args.keys()),
             }
+            if _env_flag("ADAPTIV_MCP_ERROR_DEBUG_ARGS", default=False):
+                debug["args"] = _sanitize_debug_value(args)
+            error_detail["debug"] = debug
         except Exception:
-            error_detail["debug"] = {"args": {}, "arg_keys": ["<unavailable>"]}
+            debug: dict[str, Any] = {"arg_keys": ["<unavailable>"]}
+            if _env_flag("ADAPTIV_MCP_ERROR_DEBUG_ARGS", default=False):
+                debug["args"] = {}
+            error_detail["debug"] = debug
 
     payload: dict[str, Any] = {
         "status": "error",
