@@ -34,6 +34,8 @@ _WORKSPACE_OPERATION_ALIASES: dict[str, str] = {
     "del": "delete",
     # Moves.
     "mv": "move",
+    # Appends.
+    "append_section": "append_sections",
     # Patches.
     "patch": "apply_patch",
     # Reads.
@@ -3511,6 +3513,7 @@ async def apply_workspace_operations(
     Supported operations (each item in `operations`):
       - {"op": "write", "path": "...", "content": "..."}
       - {"op": "replace_text", "path": "...", "old": "...", "new": "...", "replace_all": bool, "occurrence": int}
+      - {"op": "append_sections", "path": "...", "sections": [...], "separator": "..."}
       - {"op": "edit_range", "path": "...", "start": {"line": int, "col": int}, "end": {"line": int, "col": int}, "replacement": "..."}
       - {"op": "delete_lines", "path": "...", "start_line": int, "end_line": int}
       - {"op": "delete_word", "path": "...", "word": "...", "occurrence": int, "replace_all": bool, "case_sensitive": bool, "whole_word": bool}
@@ -3713,6 +3716,84 @@ async def apply_workspace_operations(
                             "path": path,
                             "status": "ok",
                             "sections": sections,
+                        }
+                    )
+                    continue
+
+                if op_name == "append_sections":
+                    path = op.get("path")
+                    sections = op.get("sections")
+                    separator = op.get("separator", "\n\n")
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError(
+                            "append_sections.path must be a non-empty string"
+                        )
+                    if not isinstance(sections, list) or not sections:
+                        raise ValueError(
+                            "append_sections.sections must be a non-empty list"
+                        )
+                    if not isinstance(separator, str):
+                        raise TypeError("append_sections.separator must be a string")
+
+                    formatted_sections: list[str] = []
+                    for section in sections:
+                        if isinstance(section, str):
+                            text = section
+                        elif isinstance(section, Mapping):
+                            title = section.get("title") or section.get("heading")
+                            body = section.get("body", section.get("content", ""))
+                            if body is None:
+                                body = ""
+                            if not isinstance(title, str) or not title.strip():
+                                raise ValueError(
+                                    "append_sections.sections.title must be a non-empty string"
+                                )
+                            if not isinstance(body, str):
+                                raise TypeError(
+                                    "append_sections.sections.body must be a string"
+                                )
+                            text = f"{title}\n{body}" if body else title
+                        else:
+                            raise TypeError(
+                                "append_sections.sections entries must be strings or objects"
+                            )
+                        if text == "":
+                            raise ValueError(
+                                "append_sections.sections entries must be non-empty"
+                            )
+                        formatted_sections.append(text)
+
+                    abs_path = _workspace_safe_join(repo_dir, path)
+                    _raise_if_directory(abs_path, path)
+                    _backup_path(abs_path)
+                    before_data = current.get(abs_path, backups[abs_path])
+                    before = (
+                        before_data.decode("utf-8", errors="replace")
+                        if before_data
+                        else ""
+                    )
+                    glue = ""
+                    if before and separator:
+                        max_overlap = min(len(separator), len(before))
+                        overlap = 0
+                        for i in range(max_overlap, 0, -1):
+                            if before.endswith(separator[:i]):
+                                overlap = i
+                                break
+                        glue = separator[overlap:]
+                    after = before + glue + separator.join(formatted_sections)
+
+                    if not preview_only and after != before:
+                        _workspace_write_text(
+                            repo_dir, path, after, create_parents=create_parents
+                        )
+                    current[abs_path] = bytes(after, "utf-8")
+                    results.append(
+                        {
+                            "index": idx,
+                            "op": "append_sections",
+                            "path": path,
+                            "status": "ok" if after != before else "noop",
                         }
                     )
                     continue

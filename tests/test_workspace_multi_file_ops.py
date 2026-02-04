@@ -210,6 +210,65 @@ def test_apply_workspace_operations_applies_and_moves(tmp_path, monkeypatch):
     assert (repo_dir / "c.txt").read_text(encoding="utf-8") == "two\n"
 
 
+def test_apply_workspace_operations_append_sections(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / "notes.txt").write_text("First line\n", encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.apply_workspace_operations(
+            full_name="octo/example",
+            ref="feature",
+            preview_only=False,
+            operations=[
+                {
+                    "op": "append_sections",
+                    "path": "notes.txt",
+                    "sections": ["Second section\nLine two", "Third section"],
+                }
+            ],
+        )
+    )
+
+    assert result.get("error") is None
+    assert (repo_dir / "notes.txt").read_text(encoding="utf-8") == (
+        "First line\n\nSecond section\nLine two\n\nThird section"
+    )
+
+
+def test_apply_workspace_operations_append_sections_creates_new_file(
+    tmp_path, monkeypatch
+):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(workspace_fs, "_tw", lambda: dummy)
+
+    result = asyncio.run(
+        workspace_fs.apply_workspace_operations(
+            full_name="octo/example",
+            ref="feature",
+            preview_only=False,
+            operations=[
+                {
+                    "op": "append_sections",
+                    "path": "notes.md",
+                    "sections": [{"title": "## New Section", "body": "Details here"}],
+                }
+            ],
+        )
+    )
+
+    assert result.get("error") is None
+    assert (repo_dir / "notes.md").read_text(encoding="utf-8") == (
+        "## New Section\nDetails here"
+    )
+
+
 def test_apply_workspace_operations_rolls_back_on_error(tmp_path, monkeypatch):
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
