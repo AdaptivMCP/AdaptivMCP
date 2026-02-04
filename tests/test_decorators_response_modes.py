@@ -27,6 +27,7 @@ def test_mcp_tool_compact_mode_shape_sync(
 
     assert result["tool"] == "demo"
     assert "data" in result
+    assert result["data"]["keys"] == 3
 
 
 @pytest.mark.anyio
@@ -43,3 +44,4 @@ async def test_mcp_tool_compact_mode_shape_async(
 
     assert result["tool"] == "demo"
     assert "data" in result
+    assert result["data"]["keys"] == 3
