@@ -167,3 +167,31 @@ def test_clip_text_zero_lines_no_leading_newline() -> None:
     out = dec._clip_text("one\ntwo\nthree", max_lines=0, max_chars=100, enabled=False)
 
     assert out.startswith("… (3 more lines)")
+
+
+def test_chatgpt_payload_strips_inputs_highlights_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(dec, "_running_under_pytest", lambda: False)
+    result = {
+        "status": "success",
+        "ok": True,
+        "result": {"value": 1},
+        "provider": {"name": "demo", "server": "test", "connected": True},
+        "workdir": "/tmp/demo",
+    }
+
+    out = dec._chatgpt_friendly_result(
+        result,
+        req={"response_mode": "chatgpt"},
+        tool_name="demo-tool",
+        all_args={"secret": "value"},
+    )
+
+    assert out["tool"] == "demo-tool"
+    assert out["status"] == "success"
+    assert out["data"]["type"] == "dict"
+    assert out["data"]["status"] == "success"
+    assert "inputs" not in out
+    assert "highlights" not in out
+    assert "provider" not in out

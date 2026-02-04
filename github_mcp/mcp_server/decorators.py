@@ -863,20 +863,11 @@ def _llm_scan_friendly_payload(
         "data": report.get("snapshot"),
     }
 
-    # Optional structured fields.
-    for k in ("warnings", "error", "streams", "highlights", "inputs"):
+    # Optional structured fields. Keep only what ChatGPT assistants need.
+    for k in ("warnings", "error", "streams"):
         val = report.get(k)
         if val not in (None, "") and not (isinstance(val, list) and not val):
             out[k] = val
-
-    # Provider metadata.
-    provider = shaped_payload.get("provider")
-    if isinstance(provider, Mapping):
-        out["provider"] = {
-            "name": provider.get("name"),
-            "server": provider.get("server"),
-            "connected": provider.get("connected"),
-        }
 
     # Never echo the raw nested result envelope at the top level.
     out.pop("result", None)
