@@ -21,6 +21,8 @@ async def test_clone_repo_preserve_changes_auth_fallback_on_fetch(
 ):
     """When fetch fails with auth-like stderr, retry with no-auth env and return."""
 
+    monkeypatch.setenv("GITHUB_TOKEN", "token-123")
+
     repo_dir = tmp_path / "repo"
     (repo_dir / ".git").mkdir(parents=True)
 
