@@ -150,3 +150,28 @@ def tool_registry_module(monkeypatch):
 )
 def test_normalize_payload(tool_registry_module, payload, expected):
     assert tool_registry_module._normalize_payload(payload) == expected
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, None),
+        ("true", True),
+        ("TRUE", True),
+        ("1", True),
+        ("yes", True),
+        ("on", True),
+        ("false", False),
+        ("FALSE", False),
+        ("0", False),
+        ("no", False),
+        ("off", False),
+        ("  yes  ", True),
+        ("  off  ", False),
+        ("maybe", None),
+        ("", None),
+        ("  ", None),
+    ],
+)
+def test_parse_bool(tool_registry_module, value, expected):
+    assert tool_registry_module._parse_bool(value) is expected

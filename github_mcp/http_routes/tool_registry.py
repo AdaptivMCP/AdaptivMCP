@@ -104,7 +104,12 @@ def _catalog_cache_headers() -> dict[str, str] | None:
 def _parse_bool(value: str | None) -> bool | None:
     if value is None:
         return None
-    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    cleaned = value.strip().lower()
+    if cleaned in {"1", "true", "yes", "y", "on"}:
+        return True
+    if cleaned in {"0", "false", "no", "n", "off"}:
+        return False
+    return None
 
 
 def _jitter_sleep_seconds(delay_seconds: float, *, respect_min: bool = True) -> float:
