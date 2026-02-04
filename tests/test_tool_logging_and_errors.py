@@ -40,10 +40,43 @@ def test_emit_tool_error_includes_trace_and_args() -> None:
     detail = err.get("error_detail")
     assert isinstance(detail, dict)
     assert detail.get("trace", {}).get("call_id")
+
+    # By default we only emit arg *keys* (sanitized-by-default) to avoid leaking
+    # arbitrary user-provided values (tokens, high-entropy strings, etc.).
+    debug = detail.get("debug")
+    assert isinstance(debug, dict)
+    arg_keys = debug.get("arg_keys")
+    assert isinstance(arg_keys, list)
+    assert set(arg_keys) == {"n", "path"}
+    assert "args" not in debug
+
+
+def test_emit_tool_error_includes_sanitized_args_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.mcp_server.decorators import _emit_tool_error
+
+    monkeypatch.setenv("ADAPTIV_MCP_ERROR_DEBUG_ARGS", "1")
+
+    err = _emit_tool_error(
+        tool_name="unit_test_tool",
+        call_id="00000000-0000-0000-0000-000000000000",
+        write_action=False,
+        start=0.0,
+        schema_hash=None,
+        schema_present=False,
+        req={"path": "/test"},
+        exc=ValueError("bad input"),
+        all_args={"path": "README.md", "n": 1},
+    )
+    assert err.get("status") == "error"
+    detail = err.get("error_detail")
+    assert isinstance(detail, dict)
+
     debug = detail.get("debug")
     assert isinstance(debug, dict)
     assert isinstance(debug.get("args"), dict)
-    assert debug["args"].get("path")
+    assert debug["args"].get("path") == "README.md"
 
 
 def test_failure_logs_emit_at_info_level_with_error_severity(
