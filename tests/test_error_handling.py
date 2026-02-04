@@ -163,7 +163,9 @@ def test_structured_tool_error_bad_args_keys_fallback() -> None:
     assert debug["arg_keys"] == ["<unavailable>"]
 
 
-def test_structured_tool_error_debug_args_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_structured_tool_error_debug_args_opt_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     payload = eh._structured_tool_error(ValueError("bad"), args={"path": "x"})
     debug = payload["error_detail"]["debug"]
     assert "args" not in debug
