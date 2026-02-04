@@ -497,10 +497,9 @@ async def terminal_command(
         if is_pytest:
             cleanup_summary = _cleanup_test_artifacts(repo_dir)
 
-        # Best-effort: if the caller created a new local branch (e.g. via
-        # `git checkout -b foo` / `git switch -c foo`) ensure the corresponding
-        # branch exists on origin so subsequent tool calls that rely on
-        # `origin/<branch>` do not fail.
+        # Best-effort: if git was invoked, ensure the current local branch
+        # exists on origin so subsequent tool calls that rely on `origin/<branch>`
+        # do not fail (including when operating on the default branch).
         auto_push: dict[str, Any] | None = None
         if _cmd_invokes_git(command):
             try:
@@ -521,50 +520,48 @@ async def terminal_command(
                     else ""
                 )
                 if current_branch:
-                    default_branch = _tw()._default_branch_for_repo(full_name)
-                    if current_branch != default_branch:
-                        # If upstream is already configured, do nothing.
-                        upstream = await deps["run_shell"](
-                            "git rev-parse --abbrev-ref --symbolic-full-name @{u}",
+                    # If upstream is already configured, do nothing.
+                    upstream = await deps["run_shell"](
+                        "git rev-parse --abbrev-ref --symbolic-full-name @{u}",
+                        cwd=cwd,
+                        timeout_seconds=t_default,
+                        env=env,
+                    )
+                    has_upstream = bool(
+                        isinstance(upstream, dict)
+                        and upstream.get("exit_code", 0) == 0
+                        and (upstream.get("stdout", "") or "").strip()
+                    )
+                    if not has_upstream:
+                        # Check whether the branch exists on origin.
+                        await deps["run_shell"](
+                            "git fetch --prune origin",
                             cwd=cwd,
                             timeout_seconds=t_default,
                             env=env,
                         )
-                        has_upstream = bool(
-                            isinstance(upstream, dict)
-                            and upstream.get("exit_code", 0) == 0
-                            and (upstream.get("stdout", "") or "").strip()
+                        remote_check = await deps["run_shell"](
+                            f"git ls-remote --heads origin {shlex.quote(current_branch)}",
+                            cwd=cwd,
+                            timeout_seconds=t_default,
+                            env=env,
                         )
-                        if not has_upstream:
-                            # Check whether the branch exists on origin.
-                            await deps["run_shell"](
-                                "git fetch --prune origin",
+                        remote_exists = bool(
+                            isinstance(remote_check, dict)
+                            and (remote_check.get("stdout", "") or "").strip()
+                        )
+                        if not remote_exists:
+                            push_res = await deps["run_shell"](
+                                f"git push -u origin {shlex.quote(current_branch)}",
                                 cwd=cwd,
                                 timeout_seconds=t_default,
                                 env=env,
                             )
-                            remote_check = await deps["run_shell"](
-                                f"git ls-remote --heads origin {shlex.quote(current_branch)}",
-                                cwd=cwd,
-                                timeout_seconds=t_default,
-                                env=env,
-                            )
-                            remote_exists = bool(
-                                isinstance(remote_check, dict)
-                                and (remote_check.get("stdout", "") or "").strip()
-                            )
-                            if not remote_exists:
-                                push_res = await deps["run_shell"](
-                                    f"git push -u origin {shlex.quote(current_branch)}",
-                                    cwd=cwd,
-                                    timeout_seconds=t_default,
-                                    env=env,
-                                )
-                                auto_push = {
-                                    "current_branch": current_branch,
-                                    "remote_check": remote_check,
-                                    "push": push_res,
-                                }
+                            auto_push = {
+                                "current_branch": current_branch,
+                                "remote_check": remote_check,
+                                "push": push_res,
+                            }
             except Exception as _auto_exc:
                 # Do not fail the user's command if auto-push encounters issues.
                 auto_push = {"error": str(_auto_exc)}
