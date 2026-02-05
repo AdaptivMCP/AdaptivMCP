@@ -878,6 +878,8 @@ def _try_mount_streamable_http(app_instance: Any) -> None:
     mcp = getattr(server, "mcp", None)
     http_app_factory = getattr(mcp, "http_app", None)
     if not callable(http_app_factory):
+        http_app_factory = getattr(mcp, "streamable_http_app", None)
+    if not callable(http_app_factory):
         _register_mcp_fallback_route(app_instance)
         return
 
