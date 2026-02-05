@@ -53,7 +53,9 @@ def test_healthz_oneshot_can_be_disabled(monkeypatch) -> None:
     assert second.status_code == 200
 
 
-def test_healthz_token_present_handles_expected_and_unexpected_errors(monkeypatch) -> None:
+def test_healthz_token_present_handles_expected_and_unexpected_errors(
+    monkeypatch,
+) -> None:
     # Exercise both exception branches in _github_token_present.
     monkeypatch.setenv("HEALTHZ_ONESHOT", "0")
     healthz._healthz_served_once = False

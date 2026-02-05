@@ -85,7 +85,9 @@ def test_request_context_uses_query_idempotency_when_header_missing():
 
 
 def test_request_context_does_not_overwrite_app_provided_x_request_id():
-    client = TestClient(_build_app([Route("/context", _context_with_request_id_header)]))
+    client = TestClient(
+        _build_app([Route("/context", _context_with_request_id_header)])
+    )
 
     response = client.get("/context", headers={"x-request-id": "rid-ignored"})
 
