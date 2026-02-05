@@ -148,6 +148,23 @@ def _extract_error_message(payload: Any) -> str:
     return ""
 
 
+def _is_error_payload(payload: Any) -> bool:
+    """Heuristic: does a tool response look like a structured error?"""
+
+    if not isinstance(payload, dict):
+        return False
+    status = payload.get("status")
+    if isinstance(status, str) and status.lower() in {"error", "failed", "cancelled"}:
+        return True
+    if payload.get("ok") is False:
+        return True
+    if "error_detail" in payload:
+        return True
+    if "error" in payload and status not in {"ok", "partial"}:
+        return True
+    return False
+
+
 def _is_missing_remote_ref_error(payload: Any, *, ref: str | None = None) -> bool:
     """Heuristic: does a tool error look like a missing remote ref/branch?"""
 
@@ -741,6 +758,7 @@ async def workspace_change_report(
         )
 
         files: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
         for entry in numstat:
             path = entry.get("path")
             if not isinstance(path, str) or not path:
@@ -794,6 +812,17 @@ async def workspace_change_report(
                         },
                     )
                 )
+                if _is_error_payload(base_excerpt):
+                    errors.append(
+                        {
+                            "path": path,
+                            "git_ref": effective_base,
+                            "stage": "base",
+                            "error": _extract_error_message(base_excerpt)
+                            or "Failed to read base excerpt",
+                            "result": base_excerpt,
+                        }
+                    )
                 head_excerpt = await tw.read_git_file_excerpt(
                     **_filter_kwargs_for_callable(
                         tw.read_git_file_excerpt,
@@ -821,6 +850,17 @@ async def workspace_change_report(
                         },
                     )
                 )
+                if _is_error_payload(head_excerpt):
+                    errors.append(
+                        {
+                            "path": path,
+                            "git_ref": effective_head,
+                            "stage": "head",
+                            "error": _extract_error_message(head_excerpt)
+                            or "Failed to read head excerpt",
+                            "result": head_excerpt,
+                        }
+                    )
 
                 excerpts.append(
                     {
@@ -858,13 +898,16 @@ async def workspace_change_report(
 
         _step(steps, "Assemble", f"Prepared report for {len(files)} file(s).")
 
+        ok = len(errors) == 0
         out: dict[str, Any] = {
-            "status": "ok",
+            "status": "ok" if ok else "partial",
+            "ok": ok,
             "full_name": full_name,
             "base_ref": effective_base,
             "head_ref": effective_head,
             "numstat": numstat,
             "files": files,
+            "errors": errors,
             "truncated": bool(diff_res.get("truncated"))
             if isinstance(diff_res, dict)
             else False,
@@ -931,6 +974,16 @@ async def workspace_read_files_in_sections(
                     max_chars_per_section=int(max_chars_per_section),
                     overlap_lines=int(overlap_lines),
                 )
+                if _is_error_payload(res):
+                    errors.append(
+                        {
+                            "path": p,
+                            "error": _extract_error_message(res)
+                            or "Failed to read file sections",
+                            "result": res,
+                        }
+                    )
+                    continue
                 if not res.get("exists"):
                     missing.append(p)
                     if include_missing:
