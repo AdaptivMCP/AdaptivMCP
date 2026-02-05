@@ -211,6 +211,35 @@ def test_get_workspace_files_contents_globs_and_missing(tmp_path, monkeypatch):
     assert "missing.txt" in out["missing_paths"]
     assert out["summary"]["requested"] == 3
     assert out["summary"]["missing"] >= 1
+    # No truncation expected for a small glob set.
+    assert out["summary"].get("glob_truncated") in {False, None}
+
+
+def test_get_workspace_files_contents_glob_truncation_flag(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    for i in range(10):
+        (repo_dir / f"f{i}.txt").write_text(str(i), encoding="utf-8")
+
+    dummy = DummyWorkspaceTools(str(repo_dir))
+    monkeypatch.setattr(fs, "_tw", lambda: dummy)
+    # Force a tiny cap so we can deterministically hit truncation.
+    monkeypatch.setattr(fs, "_DEFAULT_MAX_GLOB_EXPANSION", 2)
+
+    out = asyncio.run(
+        fs.get_workspace_files_contents(
+            "octo/example",
+            paths=["*.txt"],
+            expand_globs=True,
+            include_missing=False,
+        )
+    )
+
+    assert out["status"] in {"ok", "partial"}
+    assert out["summary"]["glob_truncated"] is True
+    # Cap is enforced (at most 2 resolved matches).
+    returned_paths = [f["path"] for f in out["files"]]
+    assert len([p for p in returned_paths if p.endswith(".txt")]) <= 2
 
 
 def test_read_workspace_file_excerpt_missing_dir_binary_and_text(tmp_path, monkeypatch):
