@@ -697,6 +697,10 @@ async def run_python(
     env: dict[str, str] | None = None
     created_temp_file = False
     created_rel_path: str | None = None
+    created_abs_path: str | None = None
+    repo_dir: str | None = None
+    effective_ref: str = ref
+    deps: dict[str, Any] | None = None
 
     try:
         deps = _tw()._workspace_deps()
@@ -725,6 +729,8 @@ async def run_python(
             abs_path = os.path.realpath(rel_path)
         else:
             abs_path = os.path.realpath(os.path.join(repo_dir, rel_path))
+        if created_temp_file:
+            created_abs_path = abs_path
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
         with open(abs_path, "w", encoding="utf-8") as handle:
             handle.write(script)
@@ -769,19 +775,9 @@ async def run_python(
     finally:
         if cleanup:
             try:
-                deps = _tw()._workspace_deps()
-                effective_ref = _tw()._effective_ref_for_repo(full_name, ref)
-                repo_dir = await deps["clone_repo"](
-                    full_name, ref=effective_ref, preserve_changes=True
-                )
-                if created_temp_file and created_rel_path:
-                    rel_path2 = _safe_repo_relative_path(repo_dir, created_rel_path)
-                    if os.path.isabs(rel_path2):
-                        abs_path2 = os.path.realpath(rel_path2)
-                    else:
-                        abs_path2 = os.path.realpath(os.path.join(repo_dir, rel_path2))
-                    if os.path.isfile(abs_path2):
-                        os.remove(abs_path2)
+                if created_temp_file and created_abs_path:
+                    if os.path.isfile(created_abs_path):
+                        os.remove(created_abs_path)
             except Exception:  # nosec B110
                 # Best-effort cleanup.
                 pass
