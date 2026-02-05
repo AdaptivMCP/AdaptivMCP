@@ -122,6 +122,32 @@ def test_parse_rate_limit_delay_duration_seconds_disallowed_returns_none() -> No
     )
 
 
+def test_parse_rate_limit_delay_allows_zero_duration() -> None:
+    resp = _FakeResp(headers={"Ratelimit-Reset": "0"})
+    assert (
+        parse_rate_limit_delay_seconds(
+            resp,
+            reset_header_names=("Ratelimit-Reset",),
+            allow_duration_seconds=True,
+            now=123.0,
+        )
+        == 0.0
+    )
+
+
+def test_parse_rate_limit_delay_ignores_empty_reset_header() -> None:
+    resp = _FakeResp(headers={"Ratelimit-Reset": "   "})
+    assert (
+        parse_rate_limit_delay_seconds(
+            resp,
+            reset_header_names=("Ratelimit-Reset",),
+            allow_duration_seconds=True,
+            now=0.0,
+        )
+        is None
+    )
+
+
 def test_parse_rate_limit_delay_headers_case_insensitive() -> None:
     now = 1_700_000_000.0
     resp = _FakeResp(headers={"x-ratelimit-reset": str(now + 12.0)})
