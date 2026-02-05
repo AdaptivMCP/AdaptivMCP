@@ -44,6 +44,39 @@ async def test_load_body_from_content_url_github_happy_path(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_load_body_from_content_url_github_bytearray(monkeypatch):
+    from github_mcp import github_content
+
+    async def _fake_decode(*, full_name: str, path: str, ref: str | None = None):
+        return {"decoded_bytes": bytearray(b"abc")}
+
+    monkeypatch.setattr(github_content, "_decode_github_content", _fake_decode)
+
+    body = await github_content._load_body_from_content_url(
+        "github:owner/repo:path/to/file.txt",
+        context="test",
+    )
+    assert body == b"abc"
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_github_non_bytes_raises(monkeypatch):
+    from github_mcp import github_content
+    from github_mcp.exceptions import GitHubAPIError
+
+    async def _fake_decode(*_args, **_kwargs):
+        return {"decoded_bytes": "not-bytes"}
+
+    monkeypatch.setattr(github_content, "_decode_github_content", _fake_decode)
+
+    with pytest.raises(GitHubAPIError):
+        await github_content._load_body_from_content_url(
+            "github:owner/repo:path/to/file.txt",
+            context="test",
+        )
+
+
+@pytest.mark.asyncio
 async def test_load_body_from_content_url_github_invalid_spec_raises():
     from github_mcp.exceptions import GitHubAPIError
     from github_mcp.github_content import _load_body_from_content_url
@@ -65,6 +98,28 @@ async def test_load_body_from_content_url_reads_local_file(tmp_path):
 
     body = await _load_body_from_content_url(str(f), context="test")
     assert body == b"abc123"
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_http_error(monkeypatch):
+    from github_mcp import github_content
+    from github_mcp.exceptions import GitHubAPIError
+
+    class _FakeResponse:
+        status_code = 404
+        content = b"nope"
+
+    class _FakeClient:
+        async def get(self, _url: str):
+            return _FakeResponse()
+
+    monkeypatch.setattr(github_content, "_external_client_instance", _FakeClient)
+
+    with pytest.raises(GitHubAPIError):
+        await github_content._load_body_from_content_url(
+            "https://example.com/file.txt",
+            context="test",
+        )
 
 
 @pytest.mark.asyncio
