@@ -937,8 +937,6 @@ async def _create_invocation(
     async with _INVOCATIONS_LOCK:
         _INVOCATIONS[invocation_id] = invocation
 
-    loop = asyncio.get_running_loop()
-
     def _finalize(fut: asyncio.Future) -> None:
         invocation.finished_at = time.time()
         if fut.cancelled():

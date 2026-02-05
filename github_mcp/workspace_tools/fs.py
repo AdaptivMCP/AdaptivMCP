@@ -23,6 +23,7 @@ from ._shared import _tw
 # Default read limits (legacy).
 _DEFAULT_MAX_READ_BYTES = 8_000_000
 _DEFAULT_MAX_READ_CHARS = 2000000
+_DEFAULT_MAX_GLOB_EXPANSION = 5_000
 # ---------------------------------------------------------------------------
 # Workspace operation normalization
 # ---------------------------------------------------------------------------
@@ -1230,14 +1231,20 @@ async def get_workspace_files_contents(
         )
 
         expanded: list[str] = []
+        glob_truncated = False
         for raw in paths:
             p = (raw or "").strip().replace("\\", "/")
             if not p:
                 continue
             if expand_globs and any(ch in p for ch in ("*", "?", "[")):
                 pat_abs = _workspace_safe_join(repo_dir, p)
-                matches = glob.glob(pat_abs, recursive=True)
-                for m in matches:
+                # Use an iterator + hard cap to avoid glob patterns exploding memory.
+                glob_count = 0
+                for m in glob.iglob(pat_abs, recursive=True):
+                    glob_count += 1
+                    if glob_count > _DEFAULT_MAX_GLOB_EXPANSION:
+                        glob_truncated = True
+                        break
                     try:
                         rel = os.path.relpath(m, repo_dir).replace("\\", "/")
                         _workspace_safe_join(repo_dir, rel)
@@ -1298,6 +1305,7 @@ async def get_workspace_files_contents(
                 "errors": len(errors),
                 "total_chars": sum(len(f.get("text") or "") for f in files),
                 "truncated": bool(truncated),
+                "glob_truncated": bool(glob_truncated),
             },
             "files": files,
             "missing_paths": missing,

@@ -628,6 +628,17 @@ def _clip_text(
     return out
 
 
+def _fast_line_count(text: str) -> int:
+    """Count lines without allocating a full splitlines() list.
+
+    Mirrors len(text.splitlines()) for typical \n-delimited streams.
+    """
+
+    if not text:
+        return 0
+    return text.count("\n") + (0 if text.endswith("\n") else 1)
+
+
 def _inject_stdout_stderr(
     out: dict[str, Any], *, req: Mapping[str, Any] | None = None
 ) -> None:
@@ -660,18 +671,18 @@ def _inject_stdout_stderr(
         mode = _effective_response_mode(req)
         if mode in {"chatgpt", "compact"}:
             stream_max_lines, stream_max_chars = _effective_response_stream_limits(req)
-            if (
-                stream_max_lines > 0 and len(stdout.splitlines()) > stream_max_lines
-            ) or (stream_max_chars > 0 and len(stdout) > stream_max_chars):
-                raw_lines = stdout.splitlines()
-                raw_chars = len(stdout)
+            raw_chars = len(stdout)
+            raw_line_count = _fast_line_count(stdout)
+            if (stream_max_lines > 0 and raw_line_count > stream_max_lines) or (
+                stream_max_chars > 0 and raw_chars > stream_max_chars
+            ):
                 stdout = _clip_text(
                     stdout,
                     max_lines=stream_max_lines,
                     max_chars=stream_max_chars,
                     enabled=False,
                 )
-                out.setdefault("stdout_total_lines", len(raw_lines))
+                out.setdefault("stdout_total_lines", raw_line_count)
                 out.setdefault("stdout_total_chars", raw_chars)
                 out["stdout_truncated"] = True
         out["stdout"] = stdout
@@ -679,18 +690,18 @@ def _inject_stdout_stderr(
         mode = _effective_response_mode(req)
         if mode in {"chatgpt", "compact"}:
             stream_max_lines, stream_max_chars = _effective_response_stream_limits(req)
-            if (
-                stream_max_lines > 0 and len(stderr.splitlines()) > stream_max_lines
-            ) or (stream_max_chars > 0 and len(stderr) > stream_max_chars):
-                raw_lines = stderr.splitlines()
-                raw_chars = len(stderr)
+            raw_chars = len(stderr)
+            raw_line_count = _fast_line_count(stderr)
+            if (stream_max_lines > 0 and raw_line_count > stream_max_lines) or (
+                stream_max_chars > 0 and raw_chars > stream_max_chars
+            ):
                 stderr = _clip_text(
                     stderr,
                     max_lines=stream_max_lines,
                     max_chars=stream_max_chars,
                     enabled=False,
                 )
-                out.setdefault("stderr_total_lines", len(raw_lines))
+                out.setdefault("stderr_total_lines", raw_line_count)
                 out.setdefault("stderr_total_chars", raw_chars)
                 out["stderr_truncated"] = True
         out["stderr"] = stderr
@@ -728,10 +739,10 @@ def _extract_streams_for_report(
             return
         clipped = value
         truncated = False
-        raw_lines = value.splitlines()
+        raw_line_count = _fast_line_count(value)
         raw_chars = len(value)
         if mode in {"chatgpt", "compact"}:
-            if (stream_max_lines > 0 and len(raw_lines) > stream_max_lines) or (
+            if (stream_max_lines > 0 and raw_line_count > stream_max_lines) or (
                 stream_max_chars > 0 and raw_chars > stream_max_chars
             ):
                 clipped = _clip_text(
@@ -743,7 +754,7 @@ def _extract_streams_for_report(
                 truncated = True
 
         out[name] = clipped
-        out[f"{name}_total_lines"] = len(raw_lines)
+        out[f"{name}_total_lines"] = raw_line_count
         out[f"{name}_total_chars"] = raw_chars
         if truncated:
             out[f"{name}_truncated"] = True
