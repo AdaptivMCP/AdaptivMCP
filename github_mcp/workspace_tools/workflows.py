@@ -188,7 +188,7 @@ def _is_missing_remote_ref_error(payload: Any, *, ref: str | None = None) -> boo
         ref_l = ref.lower()
         if f"origin/{ref_l}" in msg:
             return True
-        if ref_l in msg and "origin/" in msg:
+        if ref_l in msg and ("origin/" in msg or "upstream origin" in msg or "origin" in msg):
             return True
         return False
 
