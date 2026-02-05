@@ -40,7 +40,7 @@ def test_register_mcp_method_fallbacks_adds_methods():
             methods_by_path.setdefault(path, set()).update(methods)
 
     assert methods_by_path["/messages"] >= {"GET", "HEAD", "OPTIONS", "POST"}
-    assert methods_by_path["/sse"] >= {"GET", "OPTIONS"}
+    assert methods_by_path["/sse"] >= {"GET", "HEAD", "OPTIONS"}
 
 
 def _count_routes(app, path: str, method: str) -> int:
@@ -75,3 +75,4 @@ def test_register_mcp_method_fallbacks_is_idempotent():
     assert _count_routes(app, "/messages", "HEAD") == 1
     assert _count_routes(app, "/messages", "OPTIONS") == 1
     assert _count_routes(app, "/sse", "OPTIONS") == 1
+    assert _count_routes(app, "/sse", "HEAD") == 1
