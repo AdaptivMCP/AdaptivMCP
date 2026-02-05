@@ -814,6 +814,7 @@ async def workspace_task_execute(
             if isinstance(quality_res, dict) and quality_res.get("status") in {
                 "failed",
                 "error",
+                "passed_with_warnings",
             }:
                 return _error_return(
                     steps=steps,

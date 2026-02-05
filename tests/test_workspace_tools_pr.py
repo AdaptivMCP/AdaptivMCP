@@ -108,6 +108,37 @@ async def test_commit_and_open_pr_quality_suite_failure_short_circuits(
 
 
 @pytest.mark.anyio
+async def test_commit_and_open_pr_quality_suite_warning_short_circuits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeTW(quality_result={"status": "passed_with_warnings"})
+
+    import github_mcp.main_tools.pull_requests as pr_main
+
+    async def _should_not_be_called(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("PR should not be opened when quality warns")
+
+    monkeypatch.setattr(pr_tool, "_tw", lambda: fake)
+    monkeypatch.setattr(pr_tool, "_build_quality_suite_payload", lambda **k: k)
+    monkeypatch.setattr(pr_main, "open_pr_for_existing_branch", _should_not_be_called)
+
+    result = await pr_tool.commit_and_open_pr_from_workspace(
+        full_name="o/r",
+        ref="feature",
+        base="main",
+        run_quality=True,
+        quality_timeout_seconds=1,
+    )
+
+    assert result["status"] == "error"
+    assert result["reason"] == "quality_suite_failed"
+    assert result["ref"] == "eff:feature"
+    assert result["base"] == "eff:main"
+    assert "not committed" in result["message"]
+    assert fake.commit_calls == []
+
+
+@pytest.mark.anyio
 async def test_commit_and_open_pr_commit_failure_returns_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

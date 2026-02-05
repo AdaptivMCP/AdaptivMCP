@@ -53,6 +53,7 @@ async def commit_and_open_pr_from_workspace(
             if isinstance(quality, dict) and quality.get("status") in {
                 "failed",
                 "error",
+                "passed_with_warnings",
             }:
                 return {
                     "status": "error",

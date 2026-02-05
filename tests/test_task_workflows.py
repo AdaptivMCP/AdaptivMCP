@@ -361,3 +361,53 @@ def test_workspace_task_execute_change_report_error(monkeypatch):
     assert result["status"] == "error"
     assert result["reason"] == "change_report_failed"
     assert "steps" in result
+
+
+def test_workspace_task_execute_quality_warnings_short_circuit(monkeypatch):
+    if not context.FASTMCP_AVAILABLE:
+        pytest.skip("FastMCP unavailable; workspace tools are not importable.")
+
+    from github_mcp.workspace_tools import task_workflows
+
+    class FakeTW:
+        uuid = uuid
+
+        def _effective_ref_for_repo(self, full_name: str, ref: str) -> str:
+            return ref
+
+        async def workspace_sync_to_remote(self, **kwargs):
+            return {"status": "ok", "ok": True}
+
+        async def workspace_create_branch(self, **kwargs):
+            return {"status": "ok", "ok": True}
+
+        async def apply_workspace_operations(self, **kwargs):
+            return {"status": "ok", "ok": True, "results": [{"status": "ok"}]}
+
+        async def run_quality_suite(self, **kwargs):
+            return {"status": "passed_with_warnings"}
+
+        async def workspace_change_report(self, **kwargs):
+            raise AssertionError("Change report should not run after quality warnings")
+
+        async def build_pr_summary(self, **kwargs):
+            raise AssertionError("PR summary should not run after quality warnings")
+
+        async def commit_workspace(self, **kwargs):
+            raise AssertionError("Commit should not run after quality warnings")
+
+    monkeypatch.setattr(task_workflows, "_tw", lambda: FakeTW())
+
+    result = asyncio.run(
+        task_workflows.workspace_task_execute(
+            full_name="org/repo",
+            operations=[{"op": "mkdir", "path": "x"}],
+            finalize_mode="commit_only",
+            run_quality=True,
+            commit_message="My commit",
+            include_steps=True,
+        )
+    )
+
+    assert result["status"] == "error"
+    assert result["reason"] == "quality_suite_failed"

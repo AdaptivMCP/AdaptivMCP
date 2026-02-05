@@ -426,6 +426,7 @@ async def workspace_apply_ops_and_open_pr(
             if isinstance(quality_res, dict) and quality_res.get("status") in {
                 "failed",
                 "error",
+                "passed_with_warnings",
             }:
                 return _error_return(
                     steps=steps,
