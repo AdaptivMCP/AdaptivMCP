@@ -940,37 +940,46 @@ async def _create_invocation(
     loop = asyncio.get_running_loop()
 
     def _finalize(fut: asyncio.Future) -> None:
-        async def _update() -> None:
-            invocation.finished_at = time.time()
-            if fut.cancelled():
-                invocation.status = "cancelled"
-                invocation.status_code = 499
-                invocation.headers = {}
-                invocation.result = {
-                    "status": "cancelled",
-                    "ok": False,
-                    "error": "cancelled",
-                    "error_detail": {
-                        "message": "Tool execution cancelled",
-                        "category": "cancelled",
-                        "code": "CANCELLED",
-                    },
-                }
-                return
-            try:
-                payload, status_code, headers = fut.result()
-            except Exception as exc:  # pragma: no cover - defensive
-                invocation.status = "failed"
-                invocation.result = {"error": str(exc)}
-                invocation.status_code = 500
-                invocation.headers = {}
-                return
-            invocation.status_code = int(status_code)
-            invocation.headers = dict(headers)
-            invocation.result = payload
-            invocation.status = "succeeded" if status_code < 400 else "failed"
+        invocation.finished_at = time.time()
+        if fut.cancelled():
+            invocation.status = "cancelled"
+            invocation.status_code = 499
+            invocation.headers = {}
+            invocation.result = {
+                "status": "cancelled",
+                "ok": False,
+                "error": "cancelled",
+                "error_detail": {
+                    "message": "Tool execution cancelled",
+                    "category": "cancelled",
+                    "code": "CANCELLED",
+                },
+            }
+            return
+        try:
+            payload, status_code, headers = fut.result()
+        except Exception as exc:  # pragma: no cover - defensive
+            from github_mcp.mcp_server.error_handling import _structured_tool_error
 
-        loop.create_task(_update())
+            invocation.status = "failed"
+            invocation.result = _structured_tool_error(
+                exc, context="tool_http_async_finalize"
+            )
+            invocation.status_code = 500
+            invocation.headers = {}
+            ERRORS_LOGGER.exception(
+                "Async tool invocation finalize failed",
+                extra={
+                    "event": "tool_http_invocation_finalize_failed",
+                    "tool": tool_name,
+                    "invocation_id": invocation.invocation_id,
+                },
+            )
+            return
+        invocation.status_code = int(status_code)
+        invocation.headers = dict(headers)
+        invocation.result = payload
+        invocation.status = "succeeded" if status_code < 400 else "failed"
 
     task.add_done_callback(_finalize)
     return invocation

@@ -76,6 +76,8 @@ async def test_workspace_change_report_builds_hunks_and_excerpts(
     )
 
     assert res["status"] == "ok"
+    assert res["ok"] is True
+    assert res["errors"] == []
     assert res["base_ref"] == "main"
     assert res["head_ref"] == "feature"
     assert "diff" in res and "@@" in res["diff"]
@@ -126,3 +128,48 @@ async def test_workspace_change_report_omits_diff(
     )
     assert res["status"] == "ok"
     assert "diff" not in res
+
+
+@pytest.mark.anyio
+async def test_workspace_change_report_marks_excerpt_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.workspace_tools import workflows
+
+    fake = _FakeTW()
+
+    async def _bad_excerpt(**kwargs: Any) -> dict[str, Any]:
+        fake.calls.append({"fn": "read_git_file_excerpt", "kwargs": kwargs})
+        if kwargs.get("git_ref") == "feature":
+            return {
+                "status": "error",
+                "ok": False,
+                "error": "excerpt failed",
+                "error_detail": {"message": "nope"},
+            }
+        return {
+            "exists": True,
+            "path": kwargs.get("path"),
+            "git_ref": kwargs.get("git_ref"),
+            "excerpt": {
+                "start_line": kwargs.get("start_line"),
+                "lines": [
+                    {"line": kwargs.get("start_line", 1), "text": "x"},
+                ],
+                "truncated": False,
+            },
+        }
+
+    fake.read_git_file_excerpt = _bad_excerpt  # type: ignore[assignment]
+    monkeypatch.setattr(workflows, "_tw", lambda: fake)
+
+    res = await workflows.workspace_change_report(
+        full_name="octo-org/octo-repo",
+        base_ref="main",
+        head_ref="feature",
+    )
+
+    assert res["status"] == "partial"
+    assert res["ok"] is False
+    assert res["errors"]
+    assert res["errors"][0]["stage"] == "head"

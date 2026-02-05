@@ -28,6 +28,13 @@ class _FakeTW:
                     "truncated": False,
                 },
             }
+        if path == "broken.txt":
+            return {
+                "status": "error",
+                "ok": False,
+                "error": "broken",
+                "error_detail": {"message": "nope"},
+            }
         return {
             "full_name": kwargs.get("full_name"),
             "ref": kwargs.get("ref"),
@@ -80,3 +87,24 @@ async def test_workspace_read_files_in_sections_aggregates(
     assert len(res["files"]) == 2
     assert "missing.txt" in res["missing_paths"]
     assert sum(1 for c in fake.calls if c["fn"] == "read_workspace_file_sections") == 2
+
+
+@pytest.mark.anyio
+async def test_workspace_read_files_in_sections_tracks_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.workspace_tools import workflows
+
+    fake = _FakeTW()
+    monkeypatch.setattr(workflows, "_tw", lambda: fake)
+
+    res = await workflows.workspace_read_files_in_sections(
+        full_name="octo-org/octo-repo",
+        ref="main",
+        paths=["a.txt", "broken.txt"],
+    )
+
+    assert res["ok"] is False
+    assert res["status"] == "partial"
+    assert res["errors"]
+    assert res["errors"][0]["path"] == "broken.txt"
