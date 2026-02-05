@@ -59,9 +59,7 @@ def test_render_external_hosts_reads_env(monkeypatch: pytest.MonkeyPatch) -> Non
         ("\n", "main"),
     ],
 )
-def test_normalize_branch_strips_control_characters(
-    branch: str, expected: str
-) -> None:
+def test_normalize_branch_strips_control_characters(branch: str, expected: str) -> None:
     assert utils._normalize_branch("octo-org/octo-repo", branch) == expected
 
 

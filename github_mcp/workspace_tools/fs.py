@@ -346,7 +346,8 @@ def _read_lines_excerpt(
                 if current < start_line:
                     continue
                 # Strip trailing newline for display while keeping content readable.
-                text = raw.rstrip("\n")
+                # Handle CRLF and CR-only endings to avoid returning stray '\r'.
+                text = raw.rstrip("\n").rstrip("\r")
                 # Hard cap total chars.
                 if collected_chars + len(text) > max_chars:
                     remaining = max_chars - collected_chars
