@@ -69,10 +69,12 @@ def test_mcp_tool_cancellation_propagates():
 
     tool_name = f"cancel_tool_{uuid.uuid4().hex}"
 
+    blocker = asyncio.Event()
+
     @decorators.mcp_tool(name=tool_name, write_action=False)
     async def _tool() -> str:
         started.set()
-        await asyncio.sleep(60)
+        await blocker.wait()
         return "unreachable"
 
     loop = asyncio.new_event_loop()

@@ -63,10 +63,12 @@ def test_async_tool_invocation_cancelled(monkeypatch: Any) -> None:
     started = threading.Event()
     cancelled = threading.Event()
 
+    blocker = asyncio.Event()
+
     async def func(**_kwargs: Any) -> dict[str, Any]:
         started.set()
         try:
-            await asyncio.sleep(3600)
+            await blocker.wait()
         except asyncio.CancelledError:
             cancelled.set()
             raise
