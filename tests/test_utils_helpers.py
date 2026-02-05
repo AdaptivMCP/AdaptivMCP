@@ -52,6 +52,31 @@ def test_render_external_hosts_reads_env(monkeypatch: pytest.MonkeyPatch) -> Non
     ]
 
 
+@pytest.mark.parametrize(
+    ("branch", "expected"),
+    [
+        ("feat\x00ure", "feature"),
+        ("\n", "main"),
+    ],
+)
+def test_normalize_branch_strips_control_characters(
+    branch: str, expected: str
+) -> None:
+    assert utils._normalize_branch("octo-org/octo-repo", branch) == expected
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/", "", ".", "./", "https://github.com/octo-org/octo-repo"],
+)
+def test_normalize_write_context_drops_empty_paths(path: str) -> None:
+    branch, normalized_path = utils._normalize_write_context(
+        "octo-org/octo-repo", "main", path
+    )
+    assert branch == "main"
+    assert normalized_path is None
+
+
 def test_with_numbered_lines_and_whitespace_rendering() -> None:
     numbered = utils._with_numbered_lines("alpha\nbeta")
     assert numbered == [
