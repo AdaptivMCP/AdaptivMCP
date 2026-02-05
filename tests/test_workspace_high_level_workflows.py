@@ -232,3 +232,31 @@ async def test_workspace_apply_ops_and_open_pr_quality_failure_short_circuits(
     assert res.get("reason") == "quality_suite_failed"
     fns = [c["fn"] for c in fake.calls]
     assert "commit_and_open_pr_from_workspace" not in fns
+
+
+@pytest.mark.anyio
+async def test_workspace_apply_ops_and_open_pr_quality_warnings_short_circuits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from github_mcp.workspace_tools import workflows
+
+    class _WarnQuality(_FakeTW):
+        async def run_quality_suite(self, **kwargs: Any) -> dict[str, Any]:
+            self.calls.append({"fn": "run_quality_suite", "kwargs": kwargs})
+            return {"status": "passed_with_warnings"}
+
+    fake = _WarnQuality()
+    monkeypatch.setattr(workflows, "_tw", lambda: fake)
+
+    res = await workflows.workspace_apply_ops_and_open_pr(
+        full_name="octo-org/octo-repo",
+        base_ref="main",
+        operations=[{"op": "write", "path": "README.md", "content": "x"}],
+        commit_message="Update docs",
+        run_quality=True,
+    )
+
+    assert res["status"] == "error"
+    assert res.get("reason") == "quality_suite_failed"
+    fns = [c["fn"] for c in fake.calls]
+    assert "commit_and_open_pr_from_workspace" not in fns
