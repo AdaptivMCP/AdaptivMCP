@@ -97,3 +97,37 @@ def test_request_base_path_falls_back_to_root_path():
     request = DummyRequest(path=None, scope={"root_path": "/root/"})
 
     assert path_utils.request_base_path(request, ["/api"]) == "/root"
+
+
+@pytest.mark.parametrize(
+    ("path", "suffixes", "expected"),
+    [
+        (None, ["/api"], ""),
+        ("/proxy/api", ["", "/api"], "/proxy"),
+        ("proxy", [], "/proxy"),
+        ("/", ["/api"], ""),
+    ],
+)
+def test_base_path_from_path_handles_edge_cases(path, suffixes, expected):
+    from github_mcp import path_utils
+
+    assert path_utils.base_path_from_path(path, suffixes) == expected
+
+
+def test_request_base_path_handles_forwarded_prefix_iterable_with_non_strings():
+    from github_mcp import path_utils
+
+    request = DummyRequest(
+        headers={"x-forwarded-prefix": [None, "  ", "/proxy/", 123]},
+        path="/ignored/api",
+    )
+
+    assert path_utils.request_base_path(request, ["/api"]) == "/proxy"
+
+
+def test_request_base_path_handles_forwarded_prefix_non_iterable():
+    from github_mcp import path_utils
+
+    request = DummyRequest(headers={"x-forwarded-prefix": 123}, path="/ignored/api")
+
+    assert path_utils.request_base_path(request, ["/api"]) == "/123"
