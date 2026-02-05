@@ -147,8 +147,16 @@ async def test_workspace_apply_ops_and_open_pr_reuses_feature_ref(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "error_message",
+    [
+        "fatal: ambiguous argument 'origin/feature/missing': unknown revision",
+        "fatal: Remote branch feature/missing not found in upstream origin",
+    ],
+)
 async def test_workspace_apply_ops_and_open_pr_feature_ref_missing_remote_falls_back_to_create(
     monkeypatch: pytest.MonkeyPatch,
+    error_message: str,
 ) -> None:
     from github_mcp.workspace_tools import workflows
 
@@ -158,7 +166,7 @@ async def test_workspace_apply_ops_and_open_pr_feature_ref_missing_remote_falls_
             if kwargs.get("ref") == "feature/missing":
                 return {
                     "status": "error",
-                    "error": "fatal: ambiguous argument 'origin/feature/missing': unknown revision",
+                    "error": error_message,
                 }
             return {"status": "success"}
 
