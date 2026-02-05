@@ -18,8 +18,19 @@ def test_fast_line_count_matches_splitlines_common_cases() -> None:
         assert dec._fast_line_count(text) == len(text.splitlines())
 
 
+def test_fast_line_count_matches_splitlines_for_crlf_and_cr() -> None:
+    cases = [
+        "one\r\ntwo\r\nthree\r\n",
+        "one\r\ntwo\r\nthree",
+        "one\rtwo\rthree\r",
+        "one\rtwo\rthree",
+        "one\r\n\r\ntwo\nthree\r",
+    ]
+    for text in cases:
+        assert dec._fast_line_count(text) == len(text.splitlines())
+
+
 def test_fast_line_count_large_string_is_linear_and_correct() -> None:
     # Ensure we don't accidentally regress to an allocating implementation.
     text = ("x\n" * 10_000) + "tail"
     assert dec._fast_line_count(text) == len(text.splitlines())
-

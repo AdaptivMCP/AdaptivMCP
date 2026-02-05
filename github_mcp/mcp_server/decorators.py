@@ -636,7 +636,18 @@ def _fast_line_count(text: str) -> int:
 
     if not text:
         return 0
-    return text.count("\n") + (0 if text.endswith("\n") else 1)
+
+    # splitlines() treats \n, \r, and \r\n as line breaks. We avoid allocating
+    # a full list while matching common semantics.
+    n_newlines = text.count("\n")
+    # Count standalone CRs (those not part of CRLF).
+    n_cr = text.count("\r")
+    n_crlf = text.count("\r\n")
+    n_breaks = n_newlines + (n_cr - n_crlf)
+
+    if text.endswith("\n") or text.endswith("\r"):
+        return n_breaks
+    return n_breaks + 1
 
 
 def _inject_stdout_stderr(
