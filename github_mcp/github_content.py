@@ -243,6 +243,8 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         decoded_bytes = decoded.get("decoded_bytes")
         if not isinstance(decoded_bytes, (bytes, bytearray)):
             raise GitHubAPIError("github: decoded content did not return bytes")
+        if isinstance(decoded_bytes, bytearray):
+            return bytes(decoded_bytes)
         return decoded_bytes
 
     def _read_local(local_path: str) -> bytes:
