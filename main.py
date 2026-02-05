@@ -942,7 +942,7 @@ def _try_mount_streamable_http(app_instance: Any) -> None:
         streamable_app.add_route("/", _options, methods=["OPTIONS"])
 
     # Some environments probe /mcp with GET/HEAD.
-    if not _has_method("/", "GET") and not _has_method("/", "HEAD"):
+    if not _has_method("/", "GET") or not _has_method("/", "HEAD"):
 
         async def _probe(_request) -> Response:
             return JSONResponse(
@@ -956,7 +956,10 @@ def _try_mount_streamable_http(app_instance: Any) -> None:
                 headers={"Cache-Control": "no-store"},
             )
 
-        streamable_app.add_route("/", _probe, methods=["GET", "HEAD"])
+        if not _has_method("/", "GET"):
+            streamable_app.add_route("/", _probe, methods=["GET"])
+        if not _has_method("/", "HEAD"):
+            streamable_app.add_route("/", _probe, methods=["HEAD"])
 
 
 def _configure_trusted_hosts(app_instance) -> None:
@@ -1101,6 +1104,9 @@ def _register_mcp_method_fallbacks(app_instance: Any) -> None:
     async def _sse_options(_request) -> Response:
         return _preflight("GET, OPTIONS")
 
+    async def _sse_head(_request) -> Response:
+        return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
     # FastMCP provides /messages (POST) and /sse (GET). Add method-specific
     # fallbacks without overriding the primary handlers.
     missing_messages_methods = [
@@ -1114,6 +1120,8 @@ def _register_mcp_method_fallbacks(app_instance: Any) -> None:
         app_instance.add_route("/messages", _messages_options, methods=["OPTIONS"])
     if not _has_method("/sse", "OPTIONS"):
         app_instance.add_route("/sse", _sse_options, methods=["OPTIONS"])
+    if not _has_method("/sse", "HEAD"):
+        app_instance.add_route("/sse", _sse_head, methods=["HEAD"])
 
 
 _register_mcp_method_fallbacks(app)
