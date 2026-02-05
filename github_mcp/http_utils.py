@@ -96,9 +96,13 @@ def parse_rate_limit_delay_seconds(
     reset_header: str | None = None
     for name in reset_header_names:
         candidate = _get_header(name)
-        if candidate:
-            reset_header = candidate
-            break
+        if candidate is None:
+            continue
+        candidate_str = str(candidate).strip()
+        if not candidate_str:
+            continue
+        reset_header = candidate_str
+        break
 
     if not reset_header:
         return None
