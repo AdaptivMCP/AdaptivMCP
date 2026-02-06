@@ -88,6 +88,7 @@ Examples:
 
 <img width="532" height="450" alt="{159AC69A-6757-4172-9468-00BC07E84824}" src="https://github.com/user-attachments/assets/f86d3031-d387-40b2-95f8-efcadd1b4ae6" />
 
+<img width="907" height="373" alt="{49256559-D385-4015-8B49-88551D709270}" src="https://github.com/user-attachments/assets/5cbc3d7e-0df2-4c08-bd3a-a5db535154e1" />
 
 
 ## Configuration
