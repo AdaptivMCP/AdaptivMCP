@@ -2,8 +2,6 @@
 
 This document provides practical, high-confidence “happy path” workflows for using Adaptiv MCP with ChatGPT.
 
-> **Goal:** copy/paste-ready usage patterns that reliably work when your GitHub/Render tokens and workspace mirror are configured.
-
 ## 0) First-run sanity checks
 
 ### Happy path: Verify environment and tool availability
