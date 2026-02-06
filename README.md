@@ -6,10 +6,10 @@ It’s designed to work cleanly with **ChatGPT / OpenAI MCP connectors** (includ
 
 ## What you get
 
-You can use this App to use ChatGPT to find/update bugs, issues, tests, PR etc.
-You can use this App to create brand new Apps etc. without any knowledge of coding to begin with.
-You can use this App as a Professional Developer who uses ChatGPT in everyday workflows.
-You can FULLY customize this APP by modifying the code and adding new MCP tools for new endpoints for different uses other than just Github/Render/Coding etc.
+- You can use this App to use ChatGPT to find/update bugs, issues, tests, PR etc.
+- You can use this App to create brand new Apps etc. without any knowledge of coding to begin with.
+- You can use this App as a Professional Developer who uses ChatGPT in everyday workflows.
+- You can FULLY customize this APP by modifying the code and adding new MCP tools for new endpoints for different uses other than just Github/Render/Coding etc.
 
 ### Tooling
 
