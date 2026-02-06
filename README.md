@@ -52,45 +52,11 @@ HTTP registry/diagnostics:
 - `GET /ui/tools` – tool catalog UI
 - `GET /ui.json` – machine-readable service metadata (base-path aware)
 
-## Quickstart
+## Deploying on Render.com
 
-1) **Install dependencies**
+1) Make a Render.com account and start a Web Service.
+<img width="1896" height="711" alt="{FE34540B-8AE0-41A0-97B3-D91FABA184B9}" src="https://github.com/user-attachments/assets/623f34a6-8aa7-4799-8fb8-f59c223db44f" />
 
-```bash
-pip install -r requirements.txt
-```
-
-2) **Set environment variables**
-
-Copy the sample env file and set at least a GitHub token:
-
-```bash
-cp .env.example .env
-# edit .env
-```
-
-3) **Run locally**
-
-```bash
-python main.py
-```
-
-The server will start on the default host/port. Use `GET /healthz` to verify it is running.
-
-### 1) Configure env vars
-
-Copy the sample env file and set at least a GitHub token:
-
-```bash
-cp .env.example .env
-# edit .env
-```
-
-Notes:
-
-- If `python-dotenv` is installed, the server will load values from `.env` automatically (see `.env.example` comments).
-- You usually only need **one** of the supported GitHub token variables (commonly `GITHUB_TOKEN`).
-- Render tools require a Render API token (`RENDER_API_KEY` or one of its aliases).
 
 ## Configuration
 
