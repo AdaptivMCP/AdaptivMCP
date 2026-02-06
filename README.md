@@ -69,8 +69,10 @@ Example:
 
 4) When AdaptivMCP Deploys, you will be given a URL. Copy that URL to make an App in ChatGPT
 
-5)Open ChatGPT and go to Settings>Apps>Create App
-<img width="179" height="341" alt="{E6854945-C625-4CA1-ABAE-6DA1AC21B2BC}" src="https://github.com/user-attachments/assets/a7559c6a-08c7-4572-8724-6e70439cf6d5" />
+5)Open ChatGPT and go to Settings>Apps>Create App and set it up with the URL you recieved with /sse at the end.
+<img width="447" height="704" alt="{57BA9AF6-612A-4423-82DB-75DBEDBBC3E5}" src="https://github.com/user-attachments/assets/1d9f46b4-c2bb-4a11-8155-42cb389af20a" />
+
+
 
 
 
