@@ -31,8 +31,6 @@ It’s designed to work cleanly with **ChatGPT / OpenAI MCP connectors** (includ
 - **Preflight-safe endpoints** for `OPTIONS` / `HEAD` / `GET` probes
 - **Base-path safe links** via `GET /ui.json` when deployed behind a reverse proxy prefix
 
-See [`docs/chatgpt.md`](docs/chatgpt.md) for practical connector notes.
-
 ## Endpoints
 
 MCP transports:
