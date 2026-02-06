@@ -87,6 +87,8 @@ Examples:
 
 - **Tell ChatGPT Assistant to use validate_environment to make sure everything is setup correctly.**
 
+<img width="867" height="508" alt="{A089C0C5-6C31-45C5-A1D3-B8FC842C6648}" src="https://github.com/user-attachments/assets/ad8179df-5fdd-4add-8669-d8597035105b" />
+
 <img width="891" height="649" alt="{95D17859-C0CF-4BD9-AA77-3C552DC4C43D}" src="https://github.com/user-attachments/assets/ac7bf568-b3d0-4de9-8be0-77c340430206" />
 
 <img width="532" height="450" alt="{159AC69A-6757-4172-9468-00BC07E84824}" src="https://github.com/user-attachments/assets/f86d3031-d387-40b2-95f8-efcadd1b4ae6" />
