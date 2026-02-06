@@ -119,6 +119,22 @@ def test_git_show_text_limited_validates_inputs(tmp_path) -> None:
         )  # type: ignore[arg-type]
 
 
+def test_git_show_text_limited_infers_byte_cap_from_chars(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    repo_dir = str(tmp_path)
+
+    def _fake_popen(*args, **kwargs):  # noqa: ANN001
+        return _FakePopen(b"A" * 100, b"", returncode=None)
+
+    monkeypatch.setattr(subprocess, "Popen", _fake_popen)
+
+    res = fs._git_show_text_limited(repo_dir, "main", "x.txt", max_chars=5)
+    assert res["max_bytes"] == 20
+    assert res["truncated_bytes"] is True
+    assert res["text"] == "A" * 5
+
+
 def test_git_show_text_limited_nonzero_returncode(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
