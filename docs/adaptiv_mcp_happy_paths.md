@@ -1,7 +1,5 @@
 # Adaptiv MCP Happy Paths & Usage Playbook
 
-This document provides practical, high-confidence “happy path” workflows for using Adaptiv MCP with ChatGPT.
-
 ## 1) First-run sanity checks
 
 ### Happy path: Verify environment and tool availability
@@ -245,4 +243,5 @@ This document provides practical, high-confidence “happy path” workflows for
 - “Find the latest failed GitHub Actions run, diagnose root cause from logs, patch in workspace, and open a fix PR.”
 - “Show Render deploy health for `<service-id>`, then restart safely and verify `/healthz`.”
 - “Do a maintainer sweep: stale PRs, blocked issues, failed workflows, and recommended next actions.”
+
 
