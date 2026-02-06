@@ -82,6 +82,15 @@ Example:
 
 6) You can now Clone any Repo and use with the provided Github OAUTH scope which you provide and enter into the environment variables on Render.com
 
+Examples:
+
+<img width="891" height="649" alt="{95D17859-C0CF-4BD9-AA77-3C552DC4C43D}" src="https://github.com/user-attachments/assets/ac7bf568-b3d0-4de9-8be0-77c340430206" />
+
+<img width="532" height="450" alt="{159AC69A-6757-4172-9468-00BC07E84824}" src="https://github.com/user-attachments/assets/f86d3031-d387-40b2-95f8-efcadd1b4ae6" />
+
+<img width="807" height="206" alt="{C79A3571-668F-4B14-AD28-32BC15C271B6}" src="https://github.com/user-attachments/assets/c710598e-7a37-4f46-9180-d63497f89578" />
+
+
 
 ## Configuration
 
