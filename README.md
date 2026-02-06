@@ -57,6 +57,18 @@ HTTP registry/diagnostics:
 1) Make a Render.com account and start a Web Service.
 <img width="1896" height="711" alt="{FE34540B-8AE0-41A0-97B3-D91FABA184B9}" src="https://github.com/user-attachments/assets/623f34a6-8aa7-4799-8fb8-f59c223db44f" />
 
+2) Use these Start/Build Commands
+<img width="1415" height="389" alt="{B62E07CF-D6AB-413F-8181-D5484E7FC75C}" src="https://github.com/user-attachments/assets/570d7dae-b4f3-4e8e-86eb-ddbd0805a71c" />
+
+3)Setup Evironment Variables
+Example:
+<img width="1678" height="481" alt="{E012574C-E7BA-4AC5-BFA6-2BD653EBACEC}" src="https://github.com/user-attachments/assets/ece377be-f91f-410b-8db7-9e7d7cae3d43" />
+(ADAPTIV_MCP_CONTROLLER_REPO set to your mainly worked on Repo. can still see all repos scoped in the Github PAT.)
+<img width="1569" height="223" alt="{B25AF1F7-6B36-4E12-BAA0-22BB501F67B9}" src="https://github.com/user-attachments/assets/4e8aaf36-2783-470d-afae-f4a3d01c695b" />
+<img width="1567" height="348" alt="{63A3218A-C64F-4551-B8E2-9E23ADEFFABE}" src="https://github.com/user-attachments/assets/0906c70d-f50a-4d81-8471-72a2d7a00916" />
+
+4)
+
 
 ## Configuration
 
