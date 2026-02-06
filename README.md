@@ -72,12 +72,15 @@ Example:
 
 <img width="1567" height="348" alt="{63A3218A-C64F-4551-B8E2-9E23ADEFFABE}" src="https://github.com/user-attachments/assets/0906c70d-f50a-4d81-8471-72a2d7a00916" />
 
-4)Open ChatGPT and go to Settings>Apps>Create App and set it up with the URL you recieved with /sse at the end.
+4) Open ChatGPT and go to Settings>Apps>Create App and set it up with the URL you recieved with /sse at the end.
 
 <img width="447" height="704" alt="{57BA9AF6-612A-4423-82DB-75DBEDBBC3E5}" src="https://github.com/user-attachments/assets/1d9f46b4-c2bb-4a11-8155-42cb389af20a" />
 
+5) Connect your chat message in ChatGPT with your custom made App.
 
+<img width="784" height="114" alt="{6DD876A1-130F-4B17-BBFD-9035C74B3F31}" src="https://github.com/user-attachments/assets/451b85f2-ef83-4a14-bed2-ffd7ea290e38" />
 
+6) You can now Clone any Repo and use with the provided Github OAUTH scope which you provide and enter into the environment variables on Render.com
 
 
 ## Configuration
@@ -158,38 +161,3 @@ This repo includes Render-friendly scripts:
 - `scripts/render-start.sh` – validates a vendored `rg` binary, normalizes log level for uvicorn, and starts the server
 
 The start script expects a working `rg` on `$PATH` and will prefer the vendored binaries under `vendor/rg/...`.
-
-### Reverse proxies / base paths
-
-If you deploy behind a reverse proxy that adds a URL prefix (e.g. `https://host/prefix/...`), use `GET /ui.json` to confirm the derived, prefix-aware endpoints.
-
-## Security & operational notes
-
-- **Principle of least privilege:** use a narrowly scoped GitHub token and Render API key.
-- **Write tool approvals:** keep `ADAPTIV_MCP_AUTO_APPROVE=false` in shared environments and wire an external approval workflow if needed.
-- **Secrets hygiene:** avoid logging sensitive headers or payloads; prefer short log retention in production.
-
-## Development
-
-```bash
-pip install -r dev-requirements.txt
-
-pytest -q
-ruff check .
-ruff format .
-```
-
-## Troubleshooting
-
-- **404 on `/mcp`**: confirm your proxy routes `/mcp` to the service.
-- **405 on transport endpoints**: some load balancers probe with `OPTIONS`/`HEAD`; the server includes fallbacks to reduce noisy failures.
-- **CORS / browser clients**: key transport endpoints handle permissive `OPTIONS`.
-- **Write tools not available / blocked**: check write gating configuration (see `ADAPTIV_MCP_AUTO_APPROVE`).
-
-## Tool catalog
-
-The fastest way to see what’s enabled on a running instance:
-
-- `GET /ui/tools` (human-friendly)
-- `GET /tools` (connector-friendly)
-- `GET /resources` (resource discovery)
