@@ -2,7 +2,7 @@
 
 Adaptiv MCP is a self-hosted, connector-oriented **Model Context Protocol (MCP)** server that exposes **GitHub** and **Render** automation as MCP tools, plus a small HTTP registry/UI surface for discovery and debugging.
 
-It’s designed to work cleanly with **ChatGPT / OpenAI MCP connectors** (including common preflight/probe behavior), while still supporting legacy MCP transports.
+It’s designed to work cleanly with **ChatGPT / OpenAI MCP connectors** (including common preflight/probe behavior).
 
 ## What you get
 
