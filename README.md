@@ -114,7 +114,6 @@ Set one token variable:
 Workspace tools operate on a **persistent** server-side repo mirror (git working copy). Useful settings:
 
 - `MCP_WORKSPACE_BASE_DIR` – where mirrors are stored (defaults under your cache directory)
-- `MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS` – safety timeout for patch application
 
 ## Deployment notes
 
