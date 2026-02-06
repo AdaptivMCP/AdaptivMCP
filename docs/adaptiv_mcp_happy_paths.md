@@ -2,7 +2,7 @@
 
 This document provides practical, high-confidence “happy path” workflows for using Adaptiv MCP with ChatGPT.
 
-## 0) First-run sanity checks
+## 1) First-run sanity checks
 
 ### Happy path: Verify environment and tool availability
 1. Ask ChatGPT to run `validate_environment`.
@@ -14,7 +14,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 1) Repository discovery and triage (GitHub API)
+## 2) Repository discovery and triage (GitHub API)
 
 ### Happy path: Understand a repo before making changes
 1. Identify the target repo.
@@ -35,7 +35,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 2) Workspace mirror bootstrap
+## 3) Workspace mirror bootstrap
 
 ### Happy path: Clone and prep local mirror for coding
 1. Create/refresh workspace mirror for `<owner>/<repo>`.
@@ -54,7 +54,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 3) Safe file edits
+## 4) Safe file edits
 
 ### Happy path: Single-file bug fix
 1. Read target file.
@@ -76,7 +76,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 4) Quality checks in the mirror
+## 5) Quality checks in the mirror
 
 ### Happy path: Run targeted tests first
 1. Run narrow tests for changed module.
@@ -96,7 +96,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 5) Branching, commit, push, and PR (mirror-first)
+## 6) Branching, commit, push, and PR (mirror-first)
 
 ### Happy path: Feature branch workflow
 1. Create a branch (`feat/...` or `fix/...`).
@@ -119,7 +119,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 6) Pull request operations (GitHub)
+## 7) Pull request operations (GitHub)
 
 ### Happy path: Reviewer support loop
 1. Read review comments.
@@ -139,7 +139,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 7) GitHub Actions workflows
+## 8) GitHub Actions workflows
 
 ### Happy path: Trigger a workflow_dispatch
 1. List workflows.
@@ -161,7 +161,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 8) Render operations
+## 9) Render operations
 
 ### Happy path: Service and deploy visibility
 1. List Render services.
@@ -189,7 +189,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 9) End-to-end release flow
+## 10) End-to-end release flow
 
 ### Happy path: Issue → code → tests → PR → merge → deploy
 1. Select issue.
@@ -205,7 +205,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 10) High-value “assistant macros” you can reuse
+## 11) High-value “assistant macros” you can reuse
 
 ### Macro A: “Daily maintainer sweep”
 - Review open issues, stale PRs, and failed workflows.
@@ -227,7 +227,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 11) Best practices to preserve happy paths
+## 12) Best practices to preserve happy paths
 
 - Keep prompts explicit about **repo**, **branch**, and **scope boundaries**.
 - Ask for a **plan first**, then execution.
@@ -238,7 +238,7 @@ This document provides practical, high-confidence “happy path” workflows for
 
 ---
 
-## 12) Copy/paste prompt starter pack
+## 13) Copy/paste prompt starter pack
 
 - “Validate environment, then tell me exactly what Adaptiv MCP capabilities are available right now.”
 - “Sync workspace for `<owner>/<repo>`, inspect issue #`<n>`, implement the fix, run related tests, and open a PR.”
