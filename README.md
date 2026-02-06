@@ -91,6 +91,8 @@ Examples:
 
 <img width="907" height="373" alt="{49256559-D385-4015-8B49-88551D709270}" src="https://github.com/user-attachments/assets/5cbc3d7e-0df2-4c08-bd3a-a5db535154e1" />
 
+- **Tell ChatGPT Assistant to use validate_environment to make sure everything is setup correctly.**
+
 ### GitHub auth
 
 Set **at least one** token variable:
