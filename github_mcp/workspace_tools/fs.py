@@ -202,6 +202,12 @@ def _workspace_read_text(repo_dir: str, path: str) -> dict[str, Any]:
     }
 
 
+def _infer_max_bytes_from_chars(max_chars: int) -> int:
+    """Infer a reasonable byte cap from a character limit."""
+
+    return max_chars * 4
+
+
 def _workspace_read_text_limited(
     repo_dir: str,
     path: str,
@@ -227,7 +233,7 @@ def _workspace_read_text_limited(
         max_bytes = None
     if max_bytes is None and max_chars > 0:
         # Heuristic: assume up to ~4 bytes per char for UTF-8.
-        max_bytes = max(_DEFAULT_MAX_READ_BYTES, max_chars * 4)
+        max_bytes = _infer_max_bytes_from_chars(max_chars)
 
     abs_path = _workspace_safe_join(repo_dir, path)
     if not os.path.exists(abs_path):
@@ -736,7 +742,7 @@ def _git_show_text_limited(
     if max_bytes is not None and max_bytes <= 0:
         max_bytes = None
     if max_bytes is None and max_chars > 0:
-        max_bytes = max(_DEFAULT_MAX_READ_BYTES, max_chars * 4)
+        max_bytes = _infer_max_bytes_from_chars(max_chars)
 
     ref = _sanitize_git_ref(git_ref)
     rel = _sanitize_git_path(path)

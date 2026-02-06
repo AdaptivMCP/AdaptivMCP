@@ -56,6 +56,19 @@ def test_workspace_read_text_limited_text_decode_and_truncation(
     assert len(res["text"]) == 6
 
 
+def test_workspace_read_text_limited_infers_byte_cap_from_chars(
+    tmp_path: pytest.TempPathFactory,
+) -> None:
+    repo_dir = str(tmp_path)
+    p = os.path.join(repo_dir, "big.txt")
+    with open(p, "w", encoding="utf-8") as f:
+        f.write("a" * 100)
+
+    res = fs._workspace_read_text_limited(repo_dir, "big.txt", max_chars=5)
+    assert res["max_bytes"] == 20
+    assert res["truncated_bytes"] is True
+
+
 def test_read_lines_excerpt_truncates_on_char_budget(
     tmp_path: pytest.TempPathFactory,
 ) -> None:
