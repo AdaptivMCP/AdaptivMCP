@@ -90,11 +90,6 @@ Examples:
 
 <img width="907" height="373" alt="{49256559-D385-4015-8B49-88551D709270}" src="https://github.com/user-attachments/assets/5cbc3d7e-0df2-4c08-bd3a-a5db535154e1" />
 
-
-## Configuration
-
-The authoritative list of knobs is documented in [`.env.example`](.env.example). Highlights:
-
 ### GitHub auth
 
 Set **at least one** token variable:
@@ -113,51 +108,12 @@ Set one token variable:
 - `RENDER_API_KEY` (common)
 - `RENDER_API_TOKEN`, `RENDER_TOKEN` (alternates)
 
-Optional:
-
-- `RENDER_API_BASE` – override (defaults to `https://api.render.com`)
-
 ### Workspace / repo mirror
 
 Workspace tools operate on a **persistent** server-side repo mirror (git working copy). Useful settings:
 
 - `MCP_WORKSPACE_BASE_DIR` – where mirrors are stored (defaults under your cache directory)
 - `MCP_WORKSPACE_APPLY_DIFF_TIMEOUT_SECONDS` – safety timeout for patch application
-
-### Write gating (important)
-
-This server distinguishes **read** vs **write** tools and can require explicit approval for write actions.
-
-- `ADAPTIV_MCP_AUTO_APPROVE=true|false` – when enabled, write-capable tools are allowed without an external approval step.
-
-If you’re deploying this in a shared environment, keep auto-approve off unless you understand the implications.
-
-### Logging and timeouts
-
-See `.env.example` for:
-
-- log verbosity + payload truncation controls
-- HTTP client timeouts and connection pool limits
-- tool execution timeouts
-- git author/committer identity used by workspace commits
-
-## Using with ChatGPT / OpenAI MCP connectors
-
-Most OpenAI / ChatGPT MCP connector flows expect the **Streamable HTTP** endpoint.
-
-- **Connector URL / server_url:** `https://<your-host>/mcp`
-
-If you have an older MCP client wired to SSE, it can continue to use:
-
-- `https://<your-host>/sse` (plus `POST https://<your-host>/messages`)
-
-Connector diagnostics:
-
-- `GET /ui.json` – confirms what endpoints the server believes it is serving (including reverse-proxy base paths)
-- `GET /tools` – confirms tool discovery
-- `GET /healthz` – confirms deployment health
-
-More details: [`docs/chatgpt.md`](docs/chatgpt.md).
 
 ## Deployment notes
 
