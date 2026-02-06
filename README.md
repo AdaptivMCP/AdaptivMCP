@@ -67,7 +67,7 @@ Example:
 <img width="1569" height="223" alt="{B25AF1F7-6B36-4E12-BAA0-22BB501F67B9}" src="https://github.com/user-attachments/assets/4e8aaf36-2783-470d-afae-f4a3d01c695b" />
 <img width="1567" height="348" alt="{63A3218A-C64F-4551-B8E2-9E23ADEFFABE}" src="https://github.com/user-attachments/assets/0906c70d-f50a-4d81-8471-72a2d7a00916" />
 
-4) When AdaptivMCP Deploys, you will be given a URL. Copy that URL to make an App in ChatGPT
+4) When AdaptivMCP Deploys, you will be given a URL on Render.com, Copy that URL to make an App in ChatGPT.
 
 5)Open ChatGPT and go to Settings>Apps>Create App and set it up with the URL you recieved with /sse at the end.
 <img width="447" height="704" alt="{57BA9AF6-612A-4423-82DB-75DBEDBBC3E5}" src="https://github.com/user-attachments/assets/1d9f46b4-c2bb-4a11-8155-42cb389af20a" />
