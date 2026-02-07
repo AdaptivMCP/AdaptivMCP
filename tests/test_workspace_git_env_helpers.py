@@ -60,3 +60,30 @@ def test_raise_git_auth_error_raises_for_auth_like_messages():
 
     # Non-auth errors should not raise.
     workspace._raise_git_auth_error("clone", "fatal: not a git repository")
+
+
+def test_git_auth_env_without_token_returns_prompt_setting(monkeypatch):
+    from github_mcp import workspace
+    from github_mcp.exceptions import GitHubAuthError
+
+    def raise_auth_error() -> str:
+        raise GitHubAuthError("missing token")
+
+    monkeypatch.setattr(workspace, "_get_github_token", raise_auth_error)
+
+    env = workspace._git_auth_env()
+    assert env == {"GIT_TERMINAL_PROMPT": "0"}
+
+
+def test_git_auth_env_sets_http_header_and_config(monkeypatch):
+    from github_mcp import workspace
+
+    monkeypatch.setattr(workspace, "_get_github_token", lambda: "secret-token")
+
+    env = workspace._git_auth_env()
+
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    assert env["GIT_HTTP_EXTRAHEADER"].startswith("Authorization: Basic ")
+    assert env["GIT_CONFIG_COUNT"] == "1"
+    assert env["GIT_CONFIG_KEY_0"] == "http.extraHeader"
+    assert env["GIT_CONFIG_VALUE_0"] == env["GIT_HTTP_EXTRAHEADER"]
