@@ -1,4 +1,4 @@
-# Adaptiv MCP (GitHub + Render)
+# Adaptiv MCP
 
 Adaptiv MCP is a self-hosted, connector-oriented **Model Context Protocol (MCP)** server that exposes **GitHub, Git** and **Render** automation as MCP tools, plus a small HTTP registry/UI surface for discovery and debugging.
 
