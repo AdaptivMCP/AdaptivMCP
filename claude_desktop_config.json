@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "AdaptivMCP": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://YOUR-ADAPTIV-MCP-URL/mcp"
+      ]
+    }
+  }
+}
