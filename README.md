@@ -15,7 +15,7 @@ It’s designed to work cleanly with **ChatGPT / OpenAI MCP connectors** (includ
 
 - **Total MCP tools:** AdaptivMCP currently exposes **201 different tools** across GitHub automation, Render deployment workflows, and workspace/repo mirror operations.
 
-- **Quick start examples:** See **[Starter Tools: (docs/starter_tools.md)** for prompt + output examples.
+- **Quick start examples:** See **[Starter Tools: ] (docs/starter_tools.md)** for prompt + output examples.
 
 - **GitHub automation**
   - repos, branches, files
