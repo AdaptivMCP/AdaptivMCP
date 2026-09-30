@@ -132,3 +132,11 @@ async def test_dynamic_write_classification_controls_runtime_capability_gate():
     finally:
         REQUEST_CAPABILITIES.reset(cap_token)
         REQUEST_PATH.reset(path_token)
+
+
+
+def test_tool_outputs_are_redacted_in_all_response_modes() -> None:
+    from github_mcp.mcp_server import decorators as d
+
+    assert d._effective_redact_tool_outputs(None) is True
+    assert d._effective_redact_tool_outputs({"response_mode": "raw"}) is True
