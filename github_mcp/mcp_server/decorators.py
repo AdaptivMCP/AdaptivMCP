@@ -1583,6 +1583,25 @@ def _default_capabilities(tool_name: str, write_action: bool) -> frozenset[str]:
     return frozenset({"workspace.write"})
 
 
+def _resolve_write_action(
+    tool_name: str,
+    default_write_action: bool,
+    resolver: Callable[[Mapping[str, Any]], bool] | None,
+    call_args: Mapping[str, Any],
+) -> bool:
+    """Resolve runtime mutation intent; failures fail closed as writes."""
+    if resolver is None:
+        return bool(default_write_action)
+    try:
+        return bool(resolver(call_args))
+    except Exception as exc:
+        LOGGER.warning(
+            "Dynamic tool classification failed closed as write",
+            extra={"event": "tool_classification_failed", "tool": tool_name},
+            exc_info=exc if LOG_TOOL_EXC_INFO else None,
+        )
+        return True
+
 def _enforce_capabilities(
     tool_name: str,
     *,
@@ -3407,15 +3426,17 @@ def mcp_tool(
                 call_id = str(uuid.uuid4())
                 meta = _extract_tool_meta(kwargs)
                 clean_kwargs = _strip_tool_meta(kwargs)
-                all_args = (
-                    _bind_call_args(signature, args, clean_kwargs)
-                    if LOG_TOOL_CALLS
-                    else {}
-                )
+                call_args = _bind_call_args(signature, args, clean_kwargs)
+                all_args = call_args if LOG_TOOL_CALLS else {}
                 req = get_request_context()
                 start = time.perf_counter()
 
-                write_action_value = bool(write_action)
+                write_action_value = _resolve_write_action(
+                    tool_name,
+                    bool(write_action),
+                    write_action_resolver,
+                    call_args,
+                )
 
                 schema = getattr(wrapper, "__mcp_input_schema__", None)
                 schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
@@ -3802,13 +3823,17 @@ def mcp_tool(
             call_id = str(uuid.uuid4())
             meta = _extract_tool_meta(kwargs)
             clean_kwargs = _strip_tool_meta(kwargs)
-            all_args = (
-                _bind_call_args(signature, args, clean_kwargs) if LOG_TOOL_CALLS else {}
-            )
+            call_args = _bind_call_args(signature, args, clean_kwargs)
+            all_args = call_args if LOG_TOOL_CALLS else {}
             req = get_request_context()
             start = time.perf_counter()
 
-            write_action_value = bool(write_action)
+            write_action_value = _resolve_write_action(
+                tool_name,
+                bool(write_action),
+                write_action_resolver,
+                call_args,
+            )
 
             schema = getattr(wrapper, "__mcp_input_schema__", None)
             schema_hash = getattr(wrapper, "__mcp_input_schema_hash__", None)
