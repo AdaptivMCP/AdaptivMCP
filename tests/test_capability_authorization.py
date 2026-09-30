@@ -109,3 +109,13 @@ def test_concurrent_requests_do_not_share_capabilities():
     first, second = asyncio.run(run())
     assert first == frozenset({"git.push"})
     assert second == frozenset({"github.write"})
+
+
+def test_command_resolver_is_rejected_as_an_authorization_bypass() -> None:
+    from github_mcp.mcp_server import decorators
+
+    with pytest.raises(TypeError, match="write_action_resolver is no longer supported"):
+        decorators.mcp_tool(
+            write_action=False,
+            write_action_resolver=lambda _args: True,
+        )
