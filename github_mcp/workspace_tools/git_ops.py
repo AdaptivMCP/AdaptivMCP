@@ -74,6 +74,7 @@ async def _workspace_sync_snapshot(
         "git fetch --prune origin",
         cwd=repo_dir,
         timeout_seconds=t_default,
+        runner="run_git",
     )
     remote_ref = f"origin/{branch}"
     head = await _run_shell_ok(
@@ -643,6 +644,7 @@ async def workspace_self_heal_branch(
             f"git push -u origin {shlex.quote(candidate)}",
             cwd=base_repo_dir,
             timeout_seconds=t_default,
+            runner="run_git",
         )
 
         # The freshly checked out local repo mirror is used for the new branch.
