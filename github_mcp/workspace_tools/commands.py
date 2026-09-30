@@ -651,7 +651,6 @@ async def run_command_alias(
 @mcp_tool(
     write_action=True,
     name="run_shell",
-    write_action_resolver=_terminal_command_write_action,
     open_world_hint=True,
 )
 async def run_shell_alias(
@@ -684,7 +683,6 @@ async def run_shell_alias(
 @mcp_tool(
     write_action=True,
     name="terminal_commands",
-    write_action_resolver=_terminal_command_write_action,
     open_world_hint=True,
 )
 async def terminal_commands_alias(
@@ -717,7 +715,6 @@ async def terminal_commands_alias(
 @mcp_tool(
     write_action=True,
     name="run_terminal_commands",
-    write_action_resolver=_terminal_command_write_action,
     open_world_hint=True,
 )
 async def run_terminal_commands_alias(
