@@ -6,6 +6,7 @@ import pytest
 
 from github_mcp.mcp_server.context import (
     REQUEST_CAPABILITIES,
+    REQUEST_PATH,
     get_request_capabilities,
     set_request_capabilities,
 )
@@ -120,7 +121,7 @@ async def test_dynamic_write_classification_controls_runtime_capability_gate():
     async def dynamic_tool(mutate: bool = False):
         return {"mutate": mutate}
 
-    path_token = __import__("github_mcp.mcp_server.context", fromlist=["REQUEST_PATH"]).REQUEST_PATH.set("/messages")
+    path_token = REQUEST_PATH.set("/messages")
     cap_token = REQUEST_CAPABILITIES.set(frozenset())
     try:
         assert await dynamic_tool(mutate=False) == {"mutate": False}
@@ -130,4 +131,4 @@ async def test_dynamic_write_classification_controls_runtime_capability_gate():
         assert await dynamic_tool(mutate=True) == {"mutate": True}
     finally:
         REQUEST_CAPABILITIES.reset(cap_token)
-        __import__("github_mcp.mcp_server.context", fromlist=["REQUEST_PATH"]).REQUEST_PATH.reset(path_token)
+        REQUEST_PATH.reset(path_token)
