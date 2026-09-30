@@ -18,10 +18,10 @@ def _request_identity() -> tuple[str, str]:
         context = get_request_context()
     except Exception:
         context = {}
-    chatgpt = context.get("chatgpt")
-    if not isinstance(chatgpt, dict):
-        chatgpt = {}
-    principal = str(chatgpt.get("user_id") or chatgpt.get("organization_id") or "anonymous")
+    principal = str(context.get("principal") or "")
+    if not principal:
+        # Internal callers outside HTTP transport remain isolated by process.
+        principal = f"internal-pid:{os.getpid()}"
     session = str(context.get("session_id") or context.get("request_id") or "")
     if not session:
         session = f"internal-{os.getpid()}"
