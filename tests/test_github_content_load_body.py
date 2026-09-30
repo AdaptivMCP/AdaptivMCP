@@ -110,9 +110,10 @@ async def test_load_body_from_content_url_http_error(monkeypatch):
         content = b"nope"
 
     class _FakeClient:
-        async def get(self, _url: str):
+        async def get(self, _url: str, **_kwargs):
             return _FakeResponse()
 
+    monkeypatch.setenv("ADAPTIV_MCP_ALLOWED_CONTENT_HOSTS", "example.com")
     monkeypatch.setattr(github_content, "_external_client_instance", _FakeClient)
 
     with pytest.raises(GitHubAPIError):
@@ -166,3 +167,78 @@ async def test_perform_github_commit_typecheck_and_strips_payload(monkeypatch):
     assert cleaned["content"].get("content") is None
     assert cleaned["content"].get("encoding") is None
     assert cleaned["commit"]["sha"] == "c"
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_rejects_unapproved_host(monkeypatch):
+    from github_mcp import github_content
+    from github_mcp.exceptions import GitHubAPIError
+
+    client_called = False
+
+    class _FakeClient:
+        async def get(self, _url: str, **_kwargs):
+            nonlocal client_called
+            client_called = True
+            raise AssertionError("network client must not be called")
+
+    monkeypatch.setattr(github_content, "_external_client_instance", _FakeClient)
+
+    with pytest.raises(GitHubAPIError, match="host is not allowed"):
+        await github_content._load_body_from_content_url(
+            "https://attacker.example/file.txt", context="test"
+        )
+    assert client_called is False
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_rejects_private_dns_result(monkeypatch):
+    from github_mcp import github_content
+    from github_mcp.exceptions import GitHubAPIError
+
+    monkeypatch.setenv("ADAPTIV_MCP_ALLOWED_CONTENT_HOSTS", "example.com")
+    monkeypatch.setattr(
+        github_content.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (2, 1, 6, "", ("127.0.0.1", 443)),
+        ],
+    )
+
+    with pytest.raises(GitHubAPIError, match="non-public IP"):
+        await github_content._load_body_from_content_url(
+            "https://example.com/file.txt", context="test"
+        )
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_disables_redirects(monkeypatch):
+    from github_mcp import github_content
+
+    monkeypatch.setenv("ADAPTIV_MCP_ALLOWED_CONTENT_HOSTS", "example.com")
+
+    class _FakeResponse:
+        status_code = 200
+        content = b"ok"
+
+    calls = []
+
+    class _FakeClient:
+        async def get(self, url: str, **kwargs):
+            calls.append((url, kwargs))
+            return _FakeResponse()
+
+    monkeypatch.setattr(
+        github_content.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [(2, 1, 6, "", ("93.184.216.34", 443))],
+    )
+    monkeypatch.setattr(github_content, "_external_client_instance", _FakeClient)
+
+    body = await github_content._load_body_from_content_url(
+        "https://example.com/file.txt", context="test"
+    )
+    assert body == b"ok"
+    assert calls == [
+        ("https://example.com/file.txt", {"follow_redirects": False})
+    ]
