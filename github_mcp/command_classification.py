@@ -195,7 +195,7 @@ def _has_unquoted_output_redirection(cmd: str) -> bool:
     return False
 
 
-_READ_ONLY_DEV_BINARIES: set[str] = {
+_REPO_EXECUTION_BINARIES: set[str] = {
     "pytest",
     "py.test",
     "mypy",
@@ -236,14 +236,14 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
     if prog in {"poetry", "pipenv", "uv"} and len(parts) > 2 and parts[1] == "run":
         return _infer_write_action_from_parts(parts[2:])
 
-    # `make <target>`: treat common verification targets as read-ish.
-    if prog == "make" and len(parts) > 1:
-        if parts[1] in {"test", "lint", "check", "typecheck", "ci"}:
-            return False
+    # Makefiles are executable repository-controlled programs.
+    if prog == "make":
+        return True
 
-    # Common dev/test commands (generally safe; may still create ephemeral caches).
-    if prog in _READ_ONLY_DEV_BINARIES:
-        return False
+    # Test/lint/type-check runners execute repository-controlled code/configuration.
+    # Treat them as privileged execution for authorization purposes.
+    if prog in _REPO_EXECUTION_BINARIES:
+        return True
 
     # pip: some subcommands are read-only.
     if prog == "pip" and len(parts) > 1:
@@ -289,25 +289,9 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
     if prog == "prettier":
         return "--write" in parts
 
-    # Node package managers: allow common verification commands to be treated as read-ish.
-    if prog in {"npm", "pnpm", "yarn"} and len(parts) > 1:
-        sub = parts[1]
-        if sub == "test":
-            return False
-        if (
-            sub == "run"
-            and len(parts) > 2
-            and parts[2]
-            in {
-                "test",
-                "lint",
-                "typecheck",
-                "check",
-                "ci",
-            }
-        ):
-            return False
-        # Installs and other mutations remain write.
+    # Package-manager commands can execute repository scripts (for example
+    # `npm test`, `npm run lint`, or lifecycle hooks). Keep them privileged.
+    if prog in {"npm", "pnpm", "yarn"}:
         return True
 
     # sed is read-only unless -i (in-place) is used.
