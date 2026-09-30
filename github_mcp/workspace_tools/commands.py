@@ -610,7 +610,6 @@ async def run_python(
 @mcp_tool(
     write_action=True,
     name="run_command",
-    write_action_resolver=_terminal_command_write_action,
     # Match the behavioral/safety hints from `terminal_command`.
     open_world_hint=True,
 )
