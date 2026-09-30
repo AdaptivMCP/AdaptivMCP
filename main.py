@@ -124,6 +124,13 @@ class _TransportAuthMiddleware:
 
         path = scope.get("path", "") or ""
         method = str(scope.get("method", "")).upper()
+
+        # Clear security context before every request so ASGI task reuse cannot
+        # carry an authenticated principal or capabilities into another request.
+        REQUEST_PRINCIPAL.set(None)
+        REQUEST_AUTHENTICATED.set(False)
+        set_request_capabilities(())
+
         if is_public_path(path) or method == "OPTIONS":
             return await self.app(scope, receive, send)
 
