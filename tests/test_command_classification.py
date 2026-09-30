@@ -12,7 +12,7 @@ from github_mcp.command_classification import infer_write_action_from_shell
         ("ls -la", False),
         ("cat README.md", False),
         ("rg foo .", False),
-        ("rg foo . | wc -l", False),
+        ("rg foo . | wc -l", True),
         ("echo hi > out.txt", True),
         ("echo hi 2>err.txt", True),
         ("echo hi 2>>err.txt", True),
@@ -55,3 +55,25 @@ def test_infer_write_action_uses_command_lines_when_command_empty() -> None:
         )
         is False
     )
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("ls -la; whoami", True),
+        ("ls -la && echo done", True),
+        ("ls -la | wc -l", True),
+        ("echo 'a; b'", False),
+        ("echo \"a && b\"", False),
+        ("echo $(whoami)", True),
+        ("echo `whoami`", True),
+        ("git remote -v", False),
+        ("git remote add origin https://example.invalid/repo.git", True),
+        ("git config user.name", False),
+        ("git config user.name attacker", True),
+        ("git branch -m renamed", True),
+    ],
+)
+def test_shell_classification_is_conservative_for_compound_and_mutating_commands(
+    command: str, expected: bool
+) -> None:
+    assert infer_write_action_from_shell(command) is expected
