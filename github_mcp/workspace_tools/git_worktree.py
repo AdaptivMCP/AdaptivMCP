@@ -1742,7 +1742,7 @@ async def workspace_git_pull(
         else:
             pull_cmd = f"git pull origin {shlex.quote(effective_ref)}"
 
-        pull = await deps["run_shell"](
+        pull = await deps["run_git"](
             pull_cmd, cwd=repo_dir, timeout_seconds=t_default
         )
         if pull.get("exit_code", 0) != 0:
