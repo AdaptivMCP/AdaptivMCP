@@ -90,14 +90,67 @@ async def test_load_body_from_content_url_github_invalid_spec_raises():
 
 
 @pytest.mark.asyncio
-async def test_load_body_from_content_url_reads_local_file(tmp_path):
+async def test_load_body_from_content_url_reads_local_file(tmp_path, monkeypatch):
     from github_mcp.github_content import _load_body_from_content_url
 
     f = tmp_path / "payload.bin"
     f.write_bytes(b"abc123")
+    monkeypatch.setenv("ADAPTIV_MCP_ALLOWED_LOCAL_CONTENT_ROOTS", str(tmp_path))
 
     body = await _load_body_from_content_url(str(f), context="test")
     assert body == b"abc123"
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_rejects_local_file_by_default(tmp_path, monkeypatch):
+    from github_mcp.github_content import _load_body_from_content_url
+    from github_mcp.exceptions import GitHubAPIError
+
+    f = tmp_path / "secret.txt"
+    f.write_text("secret")
+    monkeypatch.delenv("ADAPTIV_MCP_ALLOWED_LOCAL_CONTENT_ROOTS", raising=False)
+
+    with pytest.raises(GitHubAPIError, match="local content_url reads are disabled"):
+        await _load_body_from_content_url(str(f), context="test")
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_rejects_local_file_outside_allowed_root(
+    tmp_path, monkeypatch
+):
+    from github_mcp.github_content import _load_body_from_content_url
+    from github_mcp.exceptions import GitHubAPIError
+
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    f = outside / "secret.txt"
+    f.write_text("secret")
+    monkeypatch.setenv("ADAPTIV_MCP_ALLOWED_LOCAL_CONTENT_ROOTS", str(allowed))
+
+    with pytest.raises(GitHubAPIError, match="outside the configured local content roots"):
+        await _load_body_from_content_url(str(f), context="test")
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_rejects_symlink_escape(tmp_path, monkeypatch):
+    from github_mcp.github_content import _load_body_from_content_url
+    from github_mcp.exceptions import GitHubAPIError
+
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    secret = outside / "secret.txt"
+    secret.write_text("secret")
+    link = allowed / "link.txt"
+    link.symlink_to(secret)
+
+    monkeypatch.setenv("ADAPTIV_MCP_ALLOWED_LOCAL_CONTENT_ROOTS", str(allowed))
+
+    with pytest.raises(GitHubAPIError, match="outside the configured local content roots"):
+        await _load_body_from_content_url(str(link), context="test")
 
 
 @pytest.mark.asyncio
