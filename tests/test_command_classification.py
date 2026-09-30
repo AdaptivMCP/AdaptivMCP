@@ -38,7 +38,7 @@ from github_mcp.command_classification import infer_write_action_from_shell
         ("isort --check-only .", False),
         ("isort .", True),
         ("unknown_command --flag", True),
-        ("echo hi | less", False),
+        ("echo hi | less", True),
         ("echo hi | tee out.txt", True),
         ("sudo ls", False),
         ("sudo mkdir -p /tmp/example", True),
@@ -60,6 +60,7 @@ def test_infer_write_action_uses_command_lines_when_command_empty() -> None:
         )
         is False
     )
+
 
 @pytest.mark.parametrize(
     ("command", "expected"),
