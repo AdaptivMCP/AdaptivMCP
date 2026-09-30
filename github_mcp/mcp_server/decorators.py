@@ -3325,7 +3325,6 @@ def mcp_tool(
     *,
     name: str | None = None,
     write_action: bool,
-    write_action_resolver: Callable[[Mapping[str, Any]], bool] | None = None,
     required_capabilities: Iterable[str] | None = None,
     open_world_hint: bool | None = None,
     read_only_hint: bool | None = None,
@@ -3340,11 +3339,17 @@ def mcp_tool(
 
     Args:
       name: Optional override for the tool name (defaults to function __name__).
-      write_action: Whether the tool performs mutations (e.g., git push, PR creation).
+      write_action: Whether the tool performs mutations or executes privileged workspace code.
       description: Optional description (defaults to func.__doc__).
       visibility: Accepted for compatibility; reported via introspection.
       tags: Optional metadata labels reported via introspection.
     """
+
+    if "write_action_resolver" in _ignored:
+        raise TypeError(
+            "write_action_resolver is no longer supported; classify command-executing "
+            "tools statically with write_action=True"
+        )
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         try:
