@@ -18,9 +18,9 @@ import anyio
 import httpx  # noqa: F401
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.staticfiles import StaticFiles
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 import github_mcp.server as server  # noqa: F401
 import github_mcp.tools_main as tools_main  # noqa: F401
