@@ -39,6 +39,7 @@ from github_mcp.mcp_server.context import (
     get_request_context,
     mcp,
     peek_auto_approve_enabled,
+    get_request_capabilities,
 )
 from github_mcp.mcp_server.error_handling import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
@@ -1564,19 +1565,53 @@ def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
     return False
 
 
+def _default_capabilities(tool_name: str, write_action: bool) -> frozenset[str]:
+    """Map legacy write metadata to a least-privilege capability."""
+    if not write_action:
+        return frozenset()
+    name = tool_name.lower()
+    if "push" in name:
+        return frozenset({"git.push"})
+    if "commit" in name:
+        return frozenset({"git.commit"})
+    if "merge" in name:
+        return frozenset({"github.merge"})
+    if name.startswith(("create_", "update_", "delete_", "close_", "open_")):
+        return frozenset({"github.write"})
+    if "render" in name or name.startswith(("deploy_", "restart_")):
+        return frozenset({"render.write"})
+    return frozenset({"workspace.write"})
+
+
+def _enforce_capabilities(
+    tool_name: str,
+    *,
+    write_action: bool,
+    required_capabilities: frozenset[str],
+) -> None:
+    if not write_action or not required_capabilities:
+        return
+    granted = get_request_capabilities()
+    if required_capabilities.issubset(granted):
+        return
+    missing = sorted(required_capabilities.difference(granted))
+    exc = WriteApprovalRequiredError(
+        f"Capability required to run tool {tool_name!r}: {', '.join(missing)}."
+    )
+    exc.hint = "Grant the required capability to the authenticated request."
+    exc.missing_capabilities = missing
+    raise exc
+
+
 def _enforce_write_allowed(tool_name: str, write_action: bool) -> None:
-    """
-    Compatibility shim: write approvals are always allowed.
-    """
+    """Backward-compatible direct-call shim for non-transport callers."""
     if not write_action:
         return
     if get_write_allowed():
         return
-    exc = WriteApprovalRequiredError(
+    raise WriteApprovalRequiredError(
         f"Write approval required to run tool {tool_name!r}."
     )
-    exc.hint = "Approve the action in the client UI or enable auto-approve to allow write tools."
-    raise exc
 
 
 # -----------------------------------------------------------------------------
@@ -3291,6 +3326,7 @@ def mcp_tool(
     name: str | None = None,
     write_action: bool,
     write_action_resolver: Callable[[Mapping[str, Any]], bool] | None = None,
+    required_capabilities: Iterable[str] | None = None,
     open_world_hint: bool | None = None,
     read_only_hint: bool | None = None,
     ui: Mapping[str, Any] | None = None,
@@ -3317,6 +3353,8 @@ def mcp_tool(
             signature = None
 
         tool_name = name or getattr(func, "__name__", "tool")
+        required_caps = frozenset(required_capabilities or _default_capabilities(tool_name, bool(write_action)))
+
         annotations = _tool_annotations(
             write_action=bool(write_action),
             open_world_hint=open_world_hint,
@@ -3395,8 +3433,10 @@ def mcp_tool(
                 )
                 try:
                     if _should_enforce_write_gate(req):
-                        _enforce_write_allowed(
-                            tool_name, write_action=write_action_value
+                        _enforce_capabilities(
+                            tool_name,
+                            write_action=write_action_value,
+                            required_capabilities=required_caps,
                         )
                 except asyncio.CancelledError as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
@@ -3685,6 +3725,7 @@ def mcp_tool(
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_tool_name__ = tool_name
             wrapper.__mcp_write_action__ = bool(write_action)
+        wrapper.__mcp_required_capabilities__ = required_caps
             wrapper.__mcp_open_world_hint__ = open_world_hint
             wrapper.__mcp_read_only_hint__ = read_only_hint
             wrapper.__mcp_visibility__ = visibility
