@@ -326,7 +326,7 @@ async def workspace_create_branch(
 
         push_result = None
         if push:
-            push_result = await deps["run_shell"](
+            push_result = await deps["run_git"](
                 f"git push -u origin {shlex.quote(new_branch)}",
                 cwd=repo_dir,
                 timeout_seconds=t_default,
@@ -422,7 +422,7 @@ async def workspace_delete_branch(
             raise _shell_error("git checkout", checkout)
 
         # Delete remote first; if the remote delete fails, surface that.
-        delete_remote = await deps["run_shell"](
+        delete_remote = await deps["run_git"](
             f"git push origin --delete {shlex.quote(branch)}",
             cwd=repo_dir,
             timeout_seconds=t_default,
