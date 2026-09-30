@@ -15,6 +15,7 @@ from github_mcp.workspace import (
     _git_auth_env,
     _prepare_temp_virtualenv,
     _run_shell,
+    _run_git_authenticated,
     _stop_workspace_virtualenv,
     _workspace_virtualenv_status,
 )
@@ -178,9 +179,14 @@ def _safe_branch_slug(value: str) -> str:
 
 
 async def _run_shell_ok(
-    deps: dict[str, Any], cmd: str, *, cwd: str, timeout_seconds: int
+    deps: dict[str, Any],
+    cmd: str,
+    *,
+    cwd: str,
+    timeout_seconds: int,
+    runner: str = "run_shell",
 ) -> dict[str, Any]:
-    res = await deps["run_shell"](cmd, cwd=cwd, timeout_seconds=timeout_seconds)
+    res = await deps[runner](cmd, cwd=cwd, timeout_seconds=timeout_seconds)
     if res.get("exit_code", 0) != 0:
         exit_code = res.get("exit_code")
         timed_out = bool(res.get("timed_out", False))
@@ -376,7 +382,7 @@ async def _delete_branch_via_workspace(
         ),
     )
 
-    delete_remote = await deps["run_shell"](
+    delete_remote = await deps["run_git"](
         f"git push origin --delete {shlex.quote(branch)}",
         cwd=repo_dir,
         timeout_seconds=_normalize_timeout_seconds(
@@ -403,16 +409,19 @@ async def _delete_branch_via_workspace(
 
 
 def _workspace_deps() -> dict[str, Any]:
-    """
-    Return workspace dependencies.
+    """Return isolated workspace dependencies.
 
-    Important change: wrap run_shell so that any git command automatically
-    receives the GitHub auth header env (GIT_HTTP_EXTRAHEADER + config-env),
-    enabling `git push`/`git fetch` in non-interactive environments.
+    run_shell never receives GitHub credentials. Authenticated Git is
+    exposed separately as run_git and is implemented by the trusted Git
+    service. This prevents a model-controlled shell from inheriting the token
+    or from composing arbitrary shell syntax around an authenticated Git call.
     """
     main_module = _get_main_module()
     clone_repo_fn = getattr(main_module, "_clone_repo", _clone_repo)
     base_run_shell = getattr(main_module, "_run_shell", _run_shell)
+    run_git_fn = getattr(
+        main_module, "_run_git_authenticated", _run_git_authenticated
+    )
     prepare_venv_fn = getattr(
         main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv
     )
@@ -423,37 +432,43 @@ def _workspace_deps() -> dict[str, Any]:
         main_module, "_workspace_virtualenv_status", _workspace_virtualenv_status
     )
 
-    async def run_shell_with_git_auth(
+    async def run_shell_isolated(
         cmd: str,
         *,
         cwd: str | None = None,
         timeout_seconds: int = 0,
         env: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        if _cmd_invokes_git(cmd):
+            # Local, single git commands may run without credentials. Any
+            # command that composes git with shell syntax is denied. Remote
+            # operations that need credentials use run_git explicitly.
+            if any(sep in cmd for sep in ("\n", "&&", "||", ";", "|")):
+                return {
+                    "exit_code": 126,
+                    "timed_out": False,
+                    "stdout": "",
+                    "stderr": (
+                        "Git commands may not be composed with shell syntax; "
+                        "use the isolated Git service."
+                    ),
+                }
         timeout_seconds = _normalize_timeout_seconds(
             timeout_seconds,
             config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
         )
-        merged: dict[str, str] = {}
-        if env:
-            merged.update(env)
-
-        # Only inject auth for git commands (keeps non-git commands untouched).
-        if _cmd_invokes_git(cmd):
-            for k, v in _git_auth_env().items():
-                merged.setdefault(k, v)
-
         return await base_run_shell(
             cmd,
             cwd=cwd,
             timeout_seconds=timeout_seconds,
-            env=(merged if merged else None),
+            env=env,
         )
 
     return {
         "clone_repo": clone_repo_fn,
-        "run_shell": run_shell_with_git_auth,
-        "prepare_temp_virtualenv": prepare_venv_fn,
+        "run_shell": run_shell_isolated,
+        "run_git": run_git_fn,
+        "prepare_temp_venv": prepare_venv_fn,
         "stop_virtualenv": stop_venv_fn,
         "virtualenv_status": venv_status_fn,
         "apply_patch_to_repo": _apply_patch_to_repo,

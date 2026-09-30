@@ -70,7 +70,7 @@ async def commit_workspace(
             raise GitHubAPIError("No changes to commit in repo mirror")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](
+        commit_result = await deps["run_git"](
             commit_cmd, cwd=repo_dir, timeout_seconds=t_default
         )
         if commit_result["exit_code"] != 0:
@@ -80,7 +80,7 @@ async def commit_workspace(
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](
+            push_result = await deps["run_git"](
                 push_cmd, cwd=repo_dir, timeout_seconds=t_default
             )
             if push_result["exit_code"] != 0:
@@ -160,7 +160,7 @@ async def commit_workspace_files(
             raise GitHubAPIError("No staged changes to commit for provided files")
 
         commit_cmd = f"git commit -m {shlex.quote(message)}"
-        commit_result = await deps["run_shell"](
+        commit_result = await deps["run_git"](
             commit_cmd, cwd=repo_dir, timeout_seconds=t_default
         )
         if commit_result["exit_code"] != 0:
@@ -170,7 +170,7 @@ async def commit_workspace_files(
         push_result = None
         if push:
             push_cmd = f"git push origin HEAD:{effective_ref}"
-            push_result = await deps["run_shell"](
+            push_result = await deps["run_git"](
                 push_cmd, cwd=repo_dir, timeout_seconds=t_default
             )
             if push_result["exit_code"] != 0:

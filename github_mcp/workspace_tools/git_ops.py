@@ -74,6 +74,7 @@ async def _workspace_sync_snapshot(
         "git fetch --prune origin",
         cwd=repo_dir,
         timeout_seconds=t_default,
+        runner="run_git",
     )
     remote_ref = f"origin/{branch}"
     head = await _run_shell_ok(
@@ -326,7 +327,7 @@ async def workspace_create_branch(
 
         push_result = None
         if push:
-            push_result = await deps["run_shell"](
+            push_result = await deps["run_git"](
                 f"git push -u origin {shlex.quote(new_branch)}",
                 cwd=repo_dir,
                 timeout_seconds=t_default,
@@ -422,7 +423,7 @@ async def workspace_delete_branch(
             raise _shell_error("git checkout", checkout)
 
         # Delete remote first; if the remote delete fails, surface that.
-        delete_remote = await deps["run_shell"](
+        delete_remote = await deps["run_git"](
             f"git push origin --delete {shlex.quote(branch)}",
             cwd=repo_dir,
             timeout_seconds=t_default,
@@ -643,6 +644,7 @@ async def workspace_self_heal_branch(
             f"git push -u origin {shlex.quote(candidate)}",
             cwd=base_repo_dir,
             timeout_seconds=t_default,
+            runner="run_git",
         )
 
         # The freshly checked out local repo mirror is used for the new branch.
@@ -897,7 +899,7 @@ async def workspace_sync_bidirectional(
 
         if push and snapshot["ahead"] > 0:
             push_cmd = f"git push origin HEAD:{shlex.quote(effective_ref)}"
-            push_result = await deps["run_shell"](
+            push_result = await deps["run_git"](
                 push_cmd, cwd=repo_dir, timeout_seconds=t_default
             )
             if push_result.get("exit_code", 0) != 0:
