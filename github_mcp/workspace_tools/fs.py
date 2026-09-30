@@ -3229,7 +3229,7 @@ async def _apply_patch_impl(
 
                 # Push to the requested ref name.
                 push_cmd = f"git push origin {shlex.quote(f'HEAD:{effective_ref}')}"
-                push_result = await deps["run_shell"](
+                push_result = await deps["run_git"](
                     push_cmd, cwd=repo_dir, timeout_seconds=t_default
                 )
                 if push_result.get("exit_code") != 0:
