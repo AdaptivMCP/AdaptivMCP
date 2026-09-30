@@ -17,8 +17,8 @@ function Write-Step([string]$Message) { Write-Host "==> $Message" -ForegroundCol
 function Get-PythonCommand {
     if (Get-Command py -ErrorAction SilentlyContinue) {
         try {
-            & py -3.12 -c "import sys; print(sys.version_info[:2] == (3, 12))" 2>$null
-            if ($LASTEXITCODE -eq 0) { return @("py", "-3.12") }
+            $ok = & py -3.12 -c "import sys; print(sys.version_info[:2] == (3, 12))" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $ok -eq "True") { return @("py", "-3.12") }
         } catch {}
     }
     if (Get-Command python -ErrorAction SilentlyContinue) {
@@ -59,7 +59,10 @@ function Ensure-EnvFile {
         return
     }
     Write-Step "Creating local .env configuration"
-    $githubToken = Read-Host "GitHub token (required; input is hidden)"
+    $secureToken = Read-Host "GitHub token (required; input is hidden)" -AsSecureString
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+    try { $githubToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
     if ([string]::IsNullOrWhiteSpace($githubToken)) { throw "A GitHub token is required." }
     $authToken = & $VenvPython -c "import secrets; print(secrets.token_urlsafe(32))"
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($authToken)) { throw "Could not generate the local MCP authentication token." }
