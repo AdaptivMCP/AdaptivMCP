@@ -3851,7 +3851,11 @@ def mcp_tool(
             )
             try:
                 if _should_enforce_write_gate(req):
-                    _enforce_write_allowed(tool_name, write_action=write_action_value)
+                    _enforce_capabilities(
+                        tool_name,
+                        write_action=write_action_value,
+                        required_capabilities=required_caps,
+                    )
             except asyncio.CancelledError as exc:
                 duration_ms = (time.perf_counter() - start) * 1000
                 _log_tool_cancelled(
