@@ -261,6 +261,51 @@ def _append_git_config_env(env: dict[str, str], key: str, value: str) -> None:
     env[f"GIT_CONFIG_VALUE_{idx}"] = value
 
 
+def _authenticated_git_command(cmd: str) -> str:
+    """Return a shell-safe git command with untrusted-repo hooks disabled."""
+    try:
+        tokens = shlex.split(cmd)
+    except ValueError as exc:
+        raise GitHubAPIError(f"Invalid git command: {exc}") from exc
+    if not tokens or os.path.basename(tokens[0]) not in {"git", "git.exe"}:
+        raise GitHubAPIError("Authenticated GitService accepts only git commands")
+    if any(
+        token in {"-c", "--config", "--config-env"} or token.startswith("--config=")
+        for token in tokens[1:]
+    ):
+        raise GitHubAPIError("Authenticated git commands cannot override Git configuration")
+    safe_tokens = [
+        tokens[0],
+        "-c", "core.hooksPath=/dev/null",
+        "-c", "core.fsmonitor=false",
+        "-c", "core.pager=cat",
+        *tokens[1:],
+    ]
+    return " ".join(shlex.quote(token) for token in safe_tokens)
+
+
+async def _run_git_authenticated(
+    cmd: str,
+    *,
+    cwd: str | None = None,
+    timeout_seconds: int = 0,
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Run one trusted Git operation with GitHub credentials only in its env."""
+    merged = dict(env or {})
+    merged.update(_git_auth_env())
+    merged["GIT_CONFIG_NOSYSTEM"] = "1"
+    merged["GIT_CONFIG_GLOBAL"] = os.devnull
+    merged.pop("GIT_ASKPASS", None)
+    merged.pop("SSH_ASKPASS", None)
+    return await _run_shell(
+        _authenticated_git_command(cmd),
+        cwd=cwd,
+        timeout_seconds=timeout_seconds,
+        env=merged,
+    )
+
+
 def _git_auth_env() -> dict[str, str]:
     env: dict[str, str] = {"GIT_TERMINAL_PROMPT": "0"}
     try:
@@ -433,9 +478,7 @@ async def _clone_repo(
 
     main_module = _get_main_module()
     run_shell = getattr(main_module, "_run_shell", _run_shell)
-    auth_env = _git_auth_env()
-    no_auth_env = _git_no_auth_env()
-    git_env = auth_env
+    run_git = getattr(main_module, "_run_git_authenticated", _run_git_authenticated)
 
     if os.path.isdir(os.path.join(workspace_dir, ".git")):
         git_timeout = int(
@@ -456,30 +499,15 @@ async def _clone_repo(
             # resets, but we still enforce the requested branch when the repo mirror
             # is clean.
             fetch_result = await _run_git_with_retry(
-                run_shell,
+                run_git,
                 "git fetch origin --prune",
                 cwd=workspace_dir,
                 timeout_seconds=git_timeout,
-                env=git_env,
             )
             if fetch_result["exit_code"] != 0:
                 stderr = fetch_result.get("stderr", "") or fetch_result.get(
                     "stdout", ""
                 )
-                if _is_git_auth_error(stderr) and _git_env_has_auth_header(git_env):
-                    fetch_result = await _run_git_with_retry(
-                        run_shell,
-                        "git fetch origin --prune",
-                        cwd=workspace_dir,
-                        timeout_seconds=git_timeout,
-                        env=no_auth_env,
-                    )
-                    if fetch_result["exit_code"] == 0:
-                        git_env = no_auth_env
-                        return workspace_dir
-                    stderr = fetch_result.get("stderr", "") or fetch_result.get(
-                        "stdout", ""
-                    )
                 _raise_git_auth_error("Repo mirror fetch", stderr)
                 raise GitHubAPIError(
                     f"Repo mirror fetch failed for {full_name}@{effective_ref}: {stderr}"
@@ -513,7 +541,6 @@ async def _clone_repo(
                     f"git checkout {q_ref}",
                     cwd=workspace_dir,
                     timeout_seconds=git_timeout,
-                    env=git_env,
                 )
                 if checkout.get("exit_code", 0) != 0:
                     # If the local branch is missing, create/reset it from origin.
@@ -522,7 +549,6 @@ async def _clone_repo(
                         f"git checkout -B {q_ref} origin/{q_ref}",
                         cwd=workspace_dir,
                         timeout_seconds=git_timeout,
-                        env=git_env,
                     )
                     if checkout.get("exit_code", 0) != 0:
                         stderr = checkout.get("stderr", "") or checkout.get(
@@ -546,27 +572,15 @@ async def _clone_repo(
         ]
 
         for cmd, timeout in refresh_steps:
+            runner = run_git if cmd.startswith("git fetch ") else run_shell
             result = await _run_git_with_retry(
-                run_shell,
+                runner,
                 cmd,
                 cwd=workspace_dir,
                 timeout_seconds=timeout,
-                env=git_env,
             )
             if result["exit_code"] != 0:
                 stderr = result.get("stderr", "") or result.get("stdout", "")
-                if _is_git_auth_error(stderr) and _git_env_has_auth_header(git_env):
-                    result = await _run_git_with_retry(
-                        run_shell,
-                        cmd,
-                        cwd=workspace_dir,
-                        timeout_seconds=timeout,
-                        env=no_auth_env,
-                    )
-                    if result["exit_code"] == 0:
-                        git_env = no_auth_env
-                        continue
-                    stderr = result.get("stderr", "") or result.get("stdout", "")
                 _raise_git_auth_error("Repo mirror refresh", stderr)
                 raise GitHubAPIError(
                     f"Repo mirror refresh failed for {full_name}@{effective_ref}: {stderr}"
@@ -585,30 +599,13 @@ async def _clone_repo(
     cmd = f"git clone --branch {q_ref} {q_url} {q_tmpdir}"
     git_timeout = int(getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
     result = await _run_git_with_retry(
-        run_shell,
+        run_git,
         cmd,
         cwd=None,
         timeout_seconds=git_timeout,
-        env=git_env,
     )
     if result["exit_code"] != 0:
         stderr = result.get("stderr", "") or result.get("stdout", "")
-        if _is_git_auth_error(stderr) and _git_env_has_auth_header(git_env):
-            shutil.rmtree(tmpdir, ignore_errors=True)
-            tmpdir = tempfile.mkdtemp(prefix="mcp-github-")
-            q_tmpdir = shlex.quote(tmpdir)
-            cmd = f"git clone --branch {q_ref} {q_url} {q_tmpdir}"
-            result = await _run_git_with_retry(
-                run_shell,
-                cmd,
-                cwd=None,
-                timeout_seconds=git_timeout,
-                env=no_auth_env,
-            )
-            if result["exit_code"] == 0:
-                shutil.move(tmpdir, workspace_dir)
-                return workspace_dir
-            stderr = result.get("stderr", "") or result.get("stdout", "")
         _raise_git_auth_error("git clone", stderr)
         raise GitHubAPIError(f"git clone failed: {stderr}")
 
@@ -618,7 +615,6 @@ async def _clone_repo(
         workspace_dir,
         full_name,
         timeout_seconds=git_timeout,
-        env=git_env,
     )
     return workspace_dir
 
