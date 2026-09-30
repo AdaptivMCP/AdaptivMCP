@@ -87,6 +87,7 @@ def get_request_context() -> dict[str, Any]:
         "message_id": REQUEST_MESSAGE_ID.get(),
         "idempotency_key": REQUEST_IDEMPOTENCY_KEY.get(),
         "chatgpt": REQUEST_CHATGPT_METADATA.get(),
+        "capabilities": sorted(REQUEST_CAPABILITIES.get()),
     }
 
 
