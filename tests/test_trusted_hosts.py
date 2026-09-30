@@ -17,7 +17,7 @@ def _load_dependencies():
     return Starlette, main
 
 
-def test_configure_trusted_hosts_is_noop(monkeypatch):
+def test_configure_trusted_hosts_adds_allowlist(monkeypatch):
     Starlette, main = _load_dependencies()
 
     monkeypatch.setenv("ALLOWED_HOSTS", "localhost")
