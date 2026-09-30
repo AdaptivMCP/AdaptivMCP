@@ -50,12 +50,7 @@ from github_mcp.mcp_server.schemas import (
     _schema_from_signature,
 )
 
-try:
-    from github_mcp.redaction import redact_any
-except Exception:  # noqa: BLE001
-
-    def redact_any(value: Any, *args: Any, **kwargs: Any) -> Any:
-        return value
+from github_mcp.redaction import redact_any
 
 
 # Intentionally short logger name; config's formatter further shortens/colorizes.
@@ -346,8 +341,8 @@ def _parse_bool(value: object) -> bool | None:
 
 def _effective_redact_tool_outputs(req: Mapping[str, Any] | None) -> bool:
     """Determine whether to redact client-facing tool outputs."""
-    # Explicitly always return False: redaction is disabled.
-    return False
+    # Redaction is a mandatory output boundary; callers cannot disable it.
+    return True
 
 
 ANSI_RESET = "\x1b[0m"
@@ -2071,7 +2066,7 @@ def _log_tool_warning(
     payload["duration_ms"] = duration_ms
     payload["report"] = report
     if LOG_TOOL_PAYLOADS:
-        payload["raw"] = result
+        payload["raw"] = redact_any(result)
 
     if not HUMAN_LOGS:
         LOGGER.info(
@@ -2152,7 +2147,7 @@ def _log_tool_returned_error(
 
     payload["report"] = report
     if LOG_TOOL_PAYLOADS:
-        payload["raw"] = result
+        payload["raw"] = redact_any(result)
 
     if HUMAN_LOGS:
         friendly = _friendly_tool_name(tool_name)
@@ -2809,7 +2804,7 @@ def _log_tool_success(
         try:
             from github_mcp.mcp_server.schemas import _jsonable
 
-            payload["raw"] = _jsonable(result)
+            payload["raw"] = redact_any(_jsonable(result))
         except Exception:
             payload["raw"] = result
 
@@ -2901,7 +2896,7 @@ def _log_tool_failure(
         elif isinstance(err, str):
             payload["error_message"] = err
         if LOG_TOOL_PAYLOADS:
-            payload["raw"] = structured_error
+            payload["raw"] = redact_any(structured_error)
 
     if HUMAN_LOGS:
         friendly = _friendly_tool_name(tool_name)
@@ -3514,22 +3509,8 @@ def mcp_tool(
                             pass
                     else:
                         client_payload = structured_error
-                    if _effective_redact_tool_outputs(req) and _effective_response_mode(
-                        req
-                    ) in {
-                        "chatgpt",
-                        "compact",
-                    }:
-                        try:
-                            client_payload = redact_any(client_payload)
-                        except Exception as exc2:
-                            _log_once(
-                                "tool_output_redaction_failed",
-                                logging.WARNING,
-                                "Tool output redaction failed; returning unredacted payload",
-                                exc=exc2,
-                                extra={"event": "tool_output_redaction_failed"},
-                            )
+                    if _effective_redact_tool_outputs(req):
+                        client_payload = redact_any(client_payload)
                     return _chatgpt_friendly_result(
                         client_payload,
                         req=req,
@@ -3620,22 +3601,8 @@ def mcp_tool(
                             pass
                     else:
                         client_payload = structured_error
-                    if _effective_redact_tool_outputs(req) and _effective_response_mode(
-                        req
-                    ) in {
-                        "chatgpt",
-                        "compact",
-                    }:
-                        try:
-                            client_payload = redact_any(client_payload)
-                        except Exception as exc2:
-                            _log_once(
-                                "tool_output_redaction_failed",
-                                logging.WARNING,
-                                "Tool output redaction failed; returning unredacted payload",
-                                exc=exc2,
-                                extra={"event": "tool_output_redaction_failed"},
-                            )
+                    if _effective_redact_tool_outputs(req):
+                        client_payload = redact_any(client_payload)
                     return _chatgpt_friendly_result(
                         client_payload,
                         req=req,
@@ -3703,23 +3670,9 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = result
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(
-                    req
-                ) in {
-                    "chatgpt",
-                    "compact",
-                }:
-                    try:
-                        client_payload = redact_any(client_payload)
-                    except Exception as exc:
-                        # Best-effort: never break tool behavior, but do not hide failures.
-                        _log_once(
-                            "tool_output_redaction_failed",
-                            logging.WARNING,
-                            "Tool output redaction failed; returning unredacted payload",
-                            exc=exc,
-                            extra={"event": "tool_output_redaction_failed"},
-                        )
+                if _effective_redact_tool_outputs(req):
+                    client_payload = redact_any(client_payload)
+
                 return _chatgpt_friendly_result(
                     client_payload,
                     req=req,
@@ -3908,22 +3861,8 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = structured_error
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(
-                    req
-                ) in {
-                    "chatgpt",
-                    "compact",
-                }:
-                    try:
-                        client_payload = redact_any(client_payload)
-                    except Exception as exc2:
-                        _log_once(
-                            "tool_output_redaction_failed",
-                            logging.WARNING,
-                            "Tool output redaction failed; returning unredacted payload",
-                            exc=exc2,
-                            extra={"event": "tool_output_redaction_failed"},
-                        )
+                if _effective_redact_tool_outputs(req):
+                    client_payload = redact_any(client_payload)
                 return _chatgpt_friendly_result(
                     client_payload,
                     req=req,
@@ -4005,22 +3944,8 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = structured_error
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(
-                    req
-                ) in {
-                    "chatgpt",
-                    "compact",
-                }:
-                    try:
-                        client_payload = redact_any(client_payload)
-                    except Exception as exc2:
-                        _log_once(
-                            "tool_output_redaction_failed",
-                            logging.WARNING,
-                            "Tool output redaction failed; returning unredacted payload",
-                            exc=exc2,
-                            extra={"event": "tool_output_redaction_failed"},
-                        )
+                if _effective_redact_tool_outputs(req):
+                    client_payload = redact_any(client_payload)
                 return _chatgpt_friendly_result(
                     client_payload,
                     req=req,
@@ -4077,22 +4002,8 @@ def mcp_tool(
                     pass
             else:
                 client_payload = result
-            if _effective_redact_tool_outputs(req) and _effective_response_mode(
-                req
-            ) in {
-                "chatgpt",
-                "compact",
-            }:
-                try:
-                    client_payload = redact_any(client_payload)
-                except Exception as exc:
-                    _log_once(
-                        "tool_output_redaction_failed",
-                        logging.WARNING,
-                        "Tool output redaction failed; returning unredacted payload",
-                        exc=exc,
-                        extra={"event": "tool_output_redaction_failed"},
-                    )
+            if _effective_redact_tool_outputs(req):
+                client_payload = redact_any(client_payload)
             return _chatgpt_friendly_result(
                 client_payload,
                 req=req,

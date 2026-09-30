@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from github_mcp.mcp_server.schemas import _jsonable
+from github_mcp.redaction import redact_any
 
 if importlib.util.find_spec("dotenv"):
     from dotenv import load_dotenv
@@ -101,7 +102,7 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
         )
 
     if full_fidelity:
-        return _jsonable(value)
+        return redact_any(_jsonable(value))
 
     max_depth_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_DEPTH", "10") or "10")
     max_list_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_LIST", "500") or "500")
@@ -189,7 +190,7 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
             return "…"
 
     try:
-        jsonable = _jsonable(value)
+        jsonable = redact_any(_jsonable(value))
     except Exception:
         jsonable = value
     return walk(jsonable, depth)

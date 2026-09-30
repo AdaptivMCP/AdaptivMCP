@@ -29,6 +29,8 @@ else:
 
     httpx = _HttpxModule()
 
+from github_mcp.redaction import redact_any
+
 from github_mcp.exceptions import (
     APIError,
     GitHubAPIError,
@@ -439,4 +441,7 @@ def _structured_tool_error(
     if tool_descriptor_text is not None:
         payload["tool_descriptor_text"] = tool_descriptor_text
 
-    return payload
+    # Error messages, upstream payloads, paths, and debug details can contain
+    # credentials returned by subprocesses or upstream APIs. Redact the complete
+    # structured envelope at this final client-facing boundary.
+    return redact_any(payload)
