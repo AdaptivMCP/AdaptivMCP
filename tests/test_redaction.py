@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 import pytest
 
 from github_mcp.mcp_server.error_handling import _structured_tool_error
