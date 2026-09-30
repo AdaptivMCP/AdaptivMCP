@@ -990,7 +990,7 @@ async def workspace_git_checkout(
             cmd_parts = ["git", "checkout", *flags, target]
 
         cmd = " ".join(shlex.quote(p) for p in cmd_parts)
-        checkout = await deps["run_shell"](cmd, cwd=repo_dir, timeout_seconds=t_default)
+        checkout = await deps["run_git"](cmd, cwd=repo_dir, timeout_seconds=t_default)
         if checkout.get("exit_code", 0) != 0:
             stderr = checkout.get("stderr", "") or checkout.get("stdout", "")
             raise GitHubAPIError(f"git checkout failed: {stderr}")
@@ -998,7 +998,7 @@ async def workspace_git_checkout(
         push_res = None
         if push:
             push_cmd = f"git push -u origin {shlex.quote(target)}"
-            push_res = await deps["run_shell"](
+            push_res = await deps["run_git"](
                 push_cmd, cwd=repo_dir, timeout_seconds=t_default
             )
             if push_res.get("exit_code", 0) != 0:
@@ -1179,7 +1179,7 @@ async def workspace_git_fetch(
             config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
         )
 
-        await deps["run_shell"](
+        await deps["run_git"](
             f"git checkout {shlex.quote(effective_ref)}",
             cwd=repo_dir,
             timeout_seconds=t_default,
@@ -1191,7 +1191,7 @@ async def workspace_git_fetch(
         if tags:
             flags.append("--tags")
         cmd = "git fetch " + " ".join([*flags, remote]).strip()
-        res = await deps["run_shell"](cmd, cwd=repo_dir, timeout_seconds=t_default)
+        res = await deps["run_git"](cmd, cwd=repo_dir, timeout_seconds=t_default)
         if res.get("exit_code", 0) != 0:
             stderr = res.get("stderr", "") or res.get("stdout", "")
             raise GitHubAPIError(f"git fetch failed: {stderr}")
@@ -1720,13 +1720,13 @@ async def workspace_git_pull(
         if strategy not in allowed:
             raise ValueError(f"strategy must be one of {sorted(allowed)}")
 
-        await deps["run_shell"](
+        await deps["run_git"](
             f"git checkout {shlex.quote(effective_ref)}",
             cwd=repo_dir,
             timeout_seconds=t_default,
         )
 
-        fetch = await deps["run_shell"](
+        fetch = await deps["run_git"](
             "git fetch --prune origin",
             cwd=repo_dir,
             timeout_seconds=t_default,
@@ -1794,7 +1794,7 @@ async def workspace_git_push(
             config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS, 0
         )
 
-        await deps["run_shell"](
+        await deps["run_git"](
             f"git checkout {shlex.quote(effective_ref)}",
             cwd=repo_dir,
             timeout_seconds=t_default,
@@ -1808,7 +1808,7 @@ async def workspace_git_push(
         flag_str = " ".join(flags)
         push_cmd = f"git push {flag_str} origin HEAD".strip()
 
-        push = await deps["run_shell"](
+        push = await deps["run_git"](
             push_cmd, cwd=repo_dir, timeout_seconds=t_default
         )
         if push.get("exit_code", 0) != 0:
