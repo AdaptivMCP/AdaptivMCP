@@ -179,9 +179,14 @@ def _safe_branch_slug(value: str) -> str:
 
 
 async def _run_shell_ok(
-    deps: dict[str, Any], cmd: str, *, cwd: str, timeout_seconds: int
+    deps: dict[str, Any],
+    cmd: str,
+    *,
+    cwd: str,
+    timeout_seconds: int,
+    runner: str = "run_shell",
 ) -> dict[str, Any]:
-    res = await deps["run_shell"](cmd, cwd=cwd, timeout_seconds=timeout_seconds)
+    res = await deps[runner](cmd, cwd=cwd, timeout_seconds=timeout_seconds)
     if res.get("exit_code", 0) != 0:
         exit_code = res.get("exit_code")
         timed_out = bool(res.get("timed_out", False))
