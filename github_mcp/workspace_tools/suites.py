@@ -245,7 +245,7 @@ async def _run_named_step(
     return step
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=True)
 async def run_tests(
     full_name: str,
     ref: str = "main",
@@ -264,6 +264,9 @@ async def run_tests(
     timeout_per_test_seconds: int | None = None,
 ) -> dict[str, Any]:
     """Run tests in the repo mirror.
+
+    Executing tests is a write-capable operation because repository-controlled
+    test/build configuration and dependencies may execute arbitrary code.
 
     Refactor note: uses the same step executor as the quality suite so outputs
     (duration, stdout/stderr stats, etc.) are consistent across tools.
@@ -343,7 +346,7 @@ async def run_tests(
     }
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=True)
 async def run_lint_suite(
     full_name: str,
     ref: str = "main",
@@ -358,6 +361,10 @@ async def run_lint_suite(
     include_raw_step_outputs: bool = False,
 ) -> dict[str, Any]:
     """Run formatting + lint checks.
+
+    These commands execute repository-controlled tooling and therefore require
+    the workspace.write capability even when a particular command appears
+    read-only.
 
     Industry-standard default: include a formatting check alongside lint.
 
@@ -554,7 +561,7 @@ async def run_lint_suite(
     return await _run_multi_command_suite()
 
 
-@mcp_tool(write_action=False)
+@mcp_tool(write_action=True)
 async def run_quality_suite(
     full_name: str,
     ref: str = "main",
