@@ -3510,7 +3510,7 @@ def mcp_tool(
                     else:
                         client_payload = structured_error
                     if _effective_redact_tool_outputs(req):
-                client_payload = redact_any(client_payload)
+                        client_payload = redact_any(client_payload)
                     return _chatgpt_friendly_result(
                         client_payload,
                         req=req,
@@ -3671,7 +3671,7 @@ def mcp_tool(
                 else:
                     client_payload = result
                 if _effective_redact_tool_outputs(req):
-                client_payload = redact_any(client_payload)
+                    client_payload = redact_any(client_payload)
 
                 return _chatgpt_friendly_result(
                     client_payload,
@@ -3862,7 +3862,7 @@ def mcp_tool(
                 else:
                     client_payload = structured_error
                 if _effective_redact_tool_outputs(req):
-                        client_payload = redact_any(client_payload)
+                    client_payload = redact_any(client_payload)
                 return _chatgpt_friendly_result(
                     client_payload,
                     req=req,
@@ -3945,7 +3945,7 @@ def mcp_tool(
                 else:
                     client_payload = structured_error
                 if _effective_redact_tool_outputs(req):
-                        client_payload = redact_any(client_payload)
+                    client_payload = redact_any(client_payload)
                 return _chatgpt_friendly_result(
                     client_payload,
                     req=req,
@@ -4003,7 +4003,7 @@ def mcp_tool(
             else:
                 client_payload = result
             if _effective_redact_tool_outputs(req):
-                        client_payload = redact_any(client_payload)
+                client_payload = redact_any(client_payload)
             return _chatgpt_friendly_result(
                 client_payload,
                 req=req,
