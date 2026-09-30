@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+import pytest
+
 from github_mcp.mcp_server.error_handling import _structured_tool_error
 from github_mcp.redaction import REDACTED, redact_any, redact_url
 
@@ -79,3 +81,24 @@ def test_config_log_sanitizer_redacts_secrets(monkeypatch) -> None:
 def test_redaction_does_not_replace_short_orordinary_values() -> None:
     assert redact_any("abc123") == "abc123"
     assert redact_any("0123456789abcdef" * 3) == "0123456789abcdef" * 3
+
+
+@pytest.mark.anyio
+async def test_mcp_tool_redacts_raw_response_payloads() -> None:
+    from github_mcp.mcp_server.decorators import mcp_tool
+    from github_mcp.mcp_server.context import REQUEST_PATH
+
+    secret = "ghp_" + "E" * 32
+
+    @mcp_tool(write_action=False)
+    async def returns_secret() -> dict[str, str]:
+        return {"token": secret, "message": "safe"}
+
+    token = REQUEST_PATH.set("/messages")
+    try:
+        result = await returns_secret()
+    finally:
+        REQUEST_PATH.reset(token)
+
+    assert result["token"] == REDACTED
+    assert result["message"] == "safe"
