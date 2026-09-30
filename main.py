@@ -308,6 +308,7 @@ class _RequestContextMiddleware:
             pass
 
         started = False
+
         async def send_wrapper(message):
             nonlocal started
             if message.get("type") == "http.response.start":
@@ -606,7 +607,8 @@ class _RequestContextMiddleware:
             await _drain_body()
             body = b"".join(body_chunks)
             if LOG_HTTP_BODIES:
-                limit = max(0, int(LOG_HTTP_MAX_BODY_BYTES))                if limit and len(body) > limit:
+                limit = max(0, int(LOG_HTTP_MAX_BODY_BYTES))
+                if limit and len(body) > limit:
                     captured_body = body[:limit]
                     captured_body_truncated = True
                 else:
@@ -905,7 +907,8 @@ def _register_mcp_fallback_route(app_instance: Any) -> None:
             headers={"Cache-Control": "no-store"},
         )
 
-    for path in ("/mcp", "/mcp/"):        app_instance.add_route(path, _mcp_options, methods=["OPTIONS"])
+    for path in ("/mcp", "/mcp/"):
+        app_instance.add_route(path, _mcp_options, methods=["OPTIONS"])
         app_instance.add_route(path, _mcp_probe, methods=["GET", "HEAD"])
         app_instance.add_route(path, _mcp_not_supported, methods=["POST"])
 
@@ -1208,7 +1211,8 @@ async def terminal_command(
         ref=ref,
         command=command,
         timeout_seconds=timeout_seconds,
-        workdir=workdir,        use_temp_venv=use_temp_venv,
+        workdir=workdir,
+        use_temp_venv=use_temp_venv,
         installing_dependencies=installing_dependencies,
     )
 
@@ -1507,6 +1511,7 @@ async def patch_render_service(
     service_id: str, patch: dict[str, Any]
 ) -> dict[str, Any]:
     """Patch a Render service."""
+
     from github_mcp.main_tools.render import patch_render_service as _impl
 
     return await _impl(service_id=service_id, patch=patch)
@@ -1806,7 +1811,8 @@ async def render_list_logs(
         method=method,
         status_code=status_code,
         path=path,
-        text=text,        log_type=log_type,
+        text=text,
+        log_type=log_type,
     )
 
 
@@ -2105,7 +2111,8 @@ def list_write_tools() -> dict[str, Any]:
 )
 def list_write_actions(
     include_parameters: bool = False, compact: bool | None = None
-) -> dict[str, Any]:    """Enumerate write-capable MCP tools with optional schemas."""
+) -> dict[str, Any]:
+    """Enumerate write-capable MCP tools with optional schemas."""
     from github_mcp.main_tools.introspection import list_write_actions as _impl
 
     return _impl(include_parameters=include_parameters, compact=compact)
@@ -2404,7 +2411,8 @@ async def list_workflow_runs_graphql(
     )
 
     return await _impl(
-        full_name=full_name,        per_page=per_page,
+        full_name=full_name,
+        per_page=per_page,
         cursor=cursor,
         branch=branch,
     )
@@ -2703,7 +2711,8 @@ async def merge_pull_request(
     from github_mcp.main_tools.pull_requests import merge_pull_request as _impl
 
     return await _impl(
-        full_name=full_name,        number=number,
+        full_name=full_name,
+        number=number,
         merge_method=merge_method,
         commit_title=commit_title,
         commit_message=commit_message,
@@ -3002,7 +3011,8 @@ async def update_files_and_open_pr(
     body: str | None = None,
     draft: bool = False,
 ) -> dict[str, Any]:
-    """Commit multiple files, verify each, then open a PR in one call."""    from github_mcp.main_tools.pull_requests import update_files_and_open_pr as _impl
+    """Commit multiple files, verify each, then open a PR in one call."""
+    from github_mcp.main_tools.pull_requests import update_files_and_open_pr as _impl
 
     return await _impl(
         full_name=full_name,
