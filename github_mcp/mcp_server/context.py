@@ -296,20 +296,32 @@ def _split_host_list(value: str | None) -> list[str]:
 
 
 def _resolve_transport_security() -> Any:
-    """Server-side transport security settings.
-
-    This project is typically deployed behind a trusted reverse proxy (e.g.,
-    Render) and uses explicit authentication/authorization on the tool layer.
-
-    Per operator request, we disable FastMCP transport security enforcement
-    (allowed hosts/origins, DNS rebinding protection) so it cannot block
-    long-running workflows or internal tooling.
-    """
-
-    # NOTE: This does not and cannot disable any platform-level safety systems.
+    """Enable MCP Host/Origin validation with an explicit deployment allowlist."""
     if TransportSecuritySettings is None:
         return None
-    return TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+    hosts = _split_host_list(
+        os.environ.get("ADAPTIV_MCP_ALLOWED_HOSTS")
+        or os.environ.get("ALLOWED_HOSTS")
+        or os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+    )
+    if not hosts:
+        hosts = ["localhost:*", "127.0.0.1:*", "[::1]:*"]
+
+    origins = _split_host_list(os.environ.get("ADAPTIV_MCP_ALLOWED_ORIGINS"))
+    if not origins:
+        for host in hosts:
+            bare = host.removesuffix(":*")
+            if bare in {"localhost", "127.0.0.1", "[::1]"}:
+                origins.extend([f"http://{bare}", f"https://{bare}"])
+            else:
+                origins.extend([f"https://{bare}", f"http://{bare}"])
+
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
+    )
 
 
 # ------------------------------------------------------------------------------
