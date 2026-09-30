@@ -15,6 +15,7 @@ from . import config
 from .exceptions import GitHubAPIError, GitHubAuthError
 from .http_clients import _get_github_token
 from .utils import _get_main_module, _parse_github_remote_repo
+from .workspace_leases import workspace_identity_path, workspace_lease
 
 
 def _is_git_rate_limit_error(message: str) -> bool:
@@ -387,17 +388,10 @@ def _raise_git_auth_error(operation: str, stderr: str) -> None:
 
 
 def _workspace_path(full_name: str, ref: str) -> str:
-    repo_key = full_name.replace("/", "__")
-
     main_module = _get_main_module()
     base_dir = getattr(main_module, "WORKSPACE_BASE_DIR", config.WORKSPACE_BASE_DIR)
-
     safe_ref = _sanitize_workspace_ref(ref)
-
-    workspace_dir = os.path.join(base_dir, repo_key, safe_ref)
-
-    return workspace_dir
-
+    return workspace_identity_path(base_dir, full_name, safe_ref)
 
 def _sanitize_workspace_ref(ref: str) -> str:
     """Convert an arbitrary ref string into a safe workspace directory name."""
@@ -484,7 +478,7 @@ async def _ensure_repo_remote(
         raise GitHubAPIError(f"Failed to reset origin remote for {full_name}: {stderr}")
 
 
-async def _clone_repo(
+async def _clone_repo_unlocked(
     full_name: str, ref: str | None = None, *, preserve_changes: bool = False
 ) -> str:
     """Create or return a persistent repo mirror for ``full_name``/``ref``."""
@@ -636,6 +630,19 @@ async def _clone_repo(
     )
     return workspace_dir
 
+
+async def _clone_repo(
+    full_name: str, ref: str | None = None, *, preserve_changes: bool = False
+) -> str:
+    from .utils import _effective_ref_for_repo
+
+    effective_ref = _effective_ref_for_repo(full_name, ref)
+    workspace_dir = _workspace_path(full_name, effective_ref)
+    timeout = int(getattr(config, "ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS", 0) or 0)
+    async with workspace_lease(workspace_dir, timeout_seconds=timeout):
+        return await _clone_repo_unlocked(
+            full_name, ref=ref, preserve_changes=preserve_changes
+        )
 
 async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
     """Ensure the workspace virtualenv exists and return env vars that activate it.
