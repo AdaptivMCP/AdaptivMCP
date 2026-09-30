@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import ipaddress
+import os
+import socket
 from typing import Any
+from urllib.parse import urlsplit
 
 from .config import ADAPTIV_MCP_INCLUDE_BASE64_CONTENT
 from .exceptions import GitHubAPIError
@@ -206,6 +211,75 @@ async def _perform_github_commit(
     return _strip_large_fields_from_commit_response(result["json"])
 
 
+def _allowed_content_hosts() -> set[str]:
+    raw = os.getenv("ADAPTIV_MCP_ALLOWED_CONTENT_HOSTS", "")
+    configured = {
+        host.strip().lower().rstrip(".")
+        for host in raw.replace(",", " ").split()
+        if host.strip()
+    }
+    # GitHub content hosts are the only built-in remote destinations. Additional
+    # destinations must be explicitly configured; arbitrary LLM-supplied URLs
+    # are not trusted by default.
+    return configured | {"github.com", "raw.githubusercontent.com"}
+
+
+async def _validate_content_url(content_url: str) -> str:
+    """Validate a remote content URL before the server makes an outbound request.
+
+    This is an SSRF boundary: only HTTP(S), approved hosts, no URL userinfo,
+    and public DNS results are permitted. Redirects are disabled separately
+    at the HTTP client call site.
+    """
+    try:
+        parsed = urlsplit(content_url)
+    except ValueError as exc:
+        raise GitHubAPIError("Invalid content_url") from exc
+
+    if parsed.scheme.lower() not in {"http", "https"}:
+        raise GitHubAPIError("content_url must use http or https")
+    if parsed.username is not None or parsed.password is not None:
+        raise GitHubAPIError("content_url must not contain credentials")
+    hostname = (parsed.hostname or "").lower().rstrip(".")
+    if not hostname or hostname not in _allowed_content_hosts():
+        raise GitHubAPIError(
+            f"content_url host is not allowed: {hostname or '<missing>'}"
+        )
+    if parsed.port not in (None, 80, 443):
+        raise GitHubAPIError("content_url must use the default HTTP(S) port")
+
+    try:
+        addresses = await asyncio.to_thread(
+            socket.getaddrinfo,
+            hostname,
+            parsed.port or (443 if parsed.scheme.lower() == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
+    except OSError as exc:
+        raise GitHubAPIError("content_url hostname could not be resolved") from exc
+
+    ips = {item[4][0] for item in addresses if item[4]}
+    if not ips:
+        raise GitHubAPIError("content_url hostname did not resolve")
+
+    for raw_ip in ips:
+        try:
+            ip = ipaddress.ip_address(raw_ip)
+        except ValueError as exc:
+            raise GitHubAPIError("content_url resolved to an invalid IP") from exc
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_unspecified
+            or ip.is_reserved
+        ):
+            raise GitHubAPIError("content_url resolved to a non-public IP")
+
+    return content_url
+
+
 async def _load_body_from_content_url(content_url: str, *, context: str) -> bytes:
     """Read bytes from an absolute path, HTTP(S) URL, or GitHub URL."""
 
@@ -286,8 +360,9 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
             raise err from exc
 
     if content_url.startswith("http://") or content_url.startswith("https://"):
+        validated_url = await _validate_content_url(content_url)
         client = _external_client_instance()
-        response = await client.get(content_url)
+        response = await client.get(validated_url, follow_redirects=False)
         if response.status_code >= 400:
             raise GitHubAPIError(
                 f"Failed to fetch content from {content_url}: {response.status_code}"
