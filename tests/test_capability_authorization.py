@@ -81,6 +81,9 @@ def test_capabilities_are_not_satisfied_by_a_different_capability():
         ("merge_pull_request", "github.merge"),
         ("create_pull_request", "github.write"),
         ("render_deploy_service", "render.write"),
+        ("run_tests", "workspace.write"),
+        ("run_lint_suite", "workspace.write"),
+        ("run_quality_suite", "workspace.write"),
     ],
 )
 def test_default_capability_mapping(tool_name, expected):
