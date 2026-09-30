@@ -57,6 +57,20 @@ HTTP registry/diagnostics:
 - `GET /ui/tools` – tool catalog UI
 - `GET /ui.json` – machine-readable service metadata (base-path aware)
 
+## Windows 11 local launch
+
+The easiest Windows 11 setup is the included launcher. It requires Python 3.12.x and Git for Windows, creates the virtual environment and local configuration automatically, and starts the server on localhost.
+
+**Double-click:** `scripts\\launch-windows.cmd`
+
+Or from PowerShell:
+
+```powershell
+.\\scripts\\windows-start.ps1
+```
+
+See **[docs/windows.md](docs/windows.md)** for setup, configuration, troubleshooting, and alternate-port instructions.
+
 ## Deploying on Render.com
 
 1) Make a Render.com account and start a Web Service.
