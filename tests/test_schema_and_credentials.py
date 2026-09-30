@@ -34,7 +34,7 @@ def test_cmd_invokes_git_detects_wrapped_git_commands() -> None:
     assert not _cmd_invokes_git("echo git status")
 
 
-def test_workspace_deps_injects_git_auth_env(monkeypatch) -> None:
+def test_workspace_deps_does_not_inject_git_auth_into_shell(monkeypatch) -> None:
     import main
     from github_mcp.workspace_tools import _shared
 
@@ -68,6 +68,6 @@ def test_workspace_deps_injects_git_auth_env(monkeypatch) -> None:
     )
 
     assert calls[0].get("EXISTING") == "1"
-    assert calls[0].get("GIT_HTTP_EXTRAHEADER") == "auth"
+    assert "GIT_HTTP_EXTRAHEADER" not in calls[0]
     assert calls[1].get("EXISTING") == "2"
     assert "GIT_HTTP_EXTRAHEADER" not in calls[1]
