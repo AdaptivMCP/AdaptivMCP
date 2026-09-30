@@ -102,7 +102,7 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
         )
 
     if full_fidelity:
-        return _jsonable(value)
+        return redact_any(_jsonable(value))
 
     max_depth_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_DEPTH", "10") or "10")
     max_list_cfg = int(os.environ.get("ADAPTIV_MCP_LOG_MAX_LIST", "500") or "500")
@@ -112,29 +112,20 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
         # Keep provider logs strictly single-line and scan-friendly.
         # - Normalize newlines
         # - Collapse all whitespace runs (incl. newlines/tabs) into single spaces
-        # - Normalize common escaped sequences ("\
-", "\\t", ...) which frequently
+        # - Normalize common escaped sequences ("\\n", "\\t", ...) which frequently
         #   show up in JSON-encoded payloads.
-        # This avoids log viewers showing escaped 
- or other backslash-heavy sequences.
+        # This avoids log viewers showing escaped \n or other backslash-heavy sequences.
         s = s.replace("`", "'")
-        s = s.replace("\r
-", "
-").replace("\r", "
-")
-        # If payloads already contain escaped sequences (e.g. "foo\
-bar"),
+        s = s.replace("\r\n", "\n").replace("\r", "\n")
+        # If payloads already contain escaped sequences (e.g. "foo\\nbar"),
         # normalize them to keep provider logs readable.
         s = (
-            s.replace(r"\r
-", " ")
+            s.replace(r"\r\n", " ")
             .replace(r"\r", " ")
-            .replace(r"
-", " ")
+            .replace(r"\n", " ")
             .replace(r"\t", " ")
         )
-        s = s.replace("
-", " ").replace("\t", " ")
+        s = s.replace("\n", " ").replace("\t", " ")
         s = re.sub(r"\s+", " ", s).strip()
         if max_str_cfg > 0 and len(s) > max_str_cfg:
             return s[: max(0, max_str_cfg - 1)] + "…"
@@ -148,15 +139,13 @@ bar"),
             # If that produced replacement characters or embedded control chars
             # (common with binary payloads), keep logs compact.
             if "\ufffd" in v or any(
-                (ord(ch) < 32 and ch not in ("\t", "
-", "\r")) or ord(ch) == 127
+                (ord(ch) < 32 and ch not in ("\t", "\n", "\r")) or ord(ch) == 127
                 for ch in v
             ):
                 return f"<bytes len={len(v)}>"
             return _clip_str(v)
 
-        # Avoid Python's bytes repr (e.g. b"foo\
-bar") which is noisy in logs
+        # Avoid Python's bytes repr (e.g. b"foo\\nbar") which is noisy in logs
         # and tends to introduce lots of backslashes/escape sequences.
         if isinstance(v, (bytes, bytearray, memoryview)):
             try:
