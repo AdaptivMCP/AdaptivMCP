@@ -310,7 +310,10 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
             return True
         if sub in _GIT_READ_SUBCOMMANDS:
             # Branch deletion/move/copy mutate refs.
-            if sub == "branch" and any(x in parts for x in {"-d", "-D", "--delete", "-m", "-M", "-c", "-C", "--move", "--copy"}):
+            if sub == "branch" and any(
+                x in parts
+                for x in {"-d", "-D", "--delete", "-m", "-M", "-c", "-C", "--move", "--copy"}
+            ):
                 return True
             # `git config <key>` reads; `git config <key> <value>` writes.
             if sub == "config" and len(parts) >= 4:
@@ -318,7 +321,13 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
             # Remote management mutates unless it is explicitly read-only.
             if sub == "remote" and len(parts) > 2:
                 remote_sub = parts[2]
-                if remote_sub not in {"-v", "--verbose", "show", "get-url", "get-branches"}:
+                if remote_sub not in {
+                    "-v",
+                    "--verbose",
+                    "show",
+                    "get-url",
+                    "get-branches",
+                }:
                     return True
             return False
         # Unknown git subcommand -> conservative.
@@ -351,9 +360,9 @@ def infer_write_action_from_shell(
     confidently identify the invocation as read-only.
 
     Notes:
-    - The classification is best-effort and heuristic.
-    - The goal is to provide *dynamic metadata* and safer retry behavior,
-      not a perfect isolation-level guarantee.
+    - The classifier is intentionally conservative and remains heuristic.
+    - Runtime tool authorization consumes this result; it is not only UI metadata.
+    - Unknown, malformed, or compound shell syntax is classified as a write.
     """
 
     if installing_dependencies:
