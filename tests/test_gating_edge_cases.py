@@ -84,10 +84,12 @@ def test_core_tool_gating_metadata_is_consistent() -> None:
         is True
     )
 
-    # Suites are explicitly read-gated even though they may execute commands.
-    assert bool(getattr(run_tests, "__mcp_write_action__", None)) is False
-    assert bool(getattr(run_lint_suite, "__mcp_write_action__", None)) is False
-    assert bool(getattr(run_quality_suite, "__mcp_write_action__", None)) is False
+    # Command-executing suites are capability-gated even when their default
+    # commands are normally read-only. Repository-controlled test/build hooks
+    # can execute arbitrary code.
+    assert bool(getattr(run_tests, "__mcp_write_action__", None)) is True
+    assert bool(getattr(run_lint_suite, "__mcp_write_action__", None)) is True
+    assert bool(getattr(run_quality_suite, "__mcp_write_action__", None)) is True
 
     # Command runner is write-capable (shell execution).
     assert bool(getattr(terminal_command, "__mcp_write_action__", None)) is True
