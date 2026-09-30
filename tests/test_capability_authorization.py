@@ -6,12 +6,14 @@ import pytest
 
 from github_mcp.mcp_server.context import (
     REQUEST_CAPABILITIES,
+    REQUEST_PATH,
     get_request_capabilities,
     set_request_capabilities,
 )
 from github_mcp.mcp_server.decorators import (
     _default_capabilities,
     _enforce_capabilities,
+    mcp_tool,
 )
 from github_mcp.exceptions import WriteApprovalRequiredError
 
@@ -109,3 +111,24 @@ def test_concurrent_requests_do_not_share_capabilities():
     first, second = asyncio.run(run())
     assert first == frozenset({"git.push"})
     assert second == frozenset({"github.write"})
+
+@pytest.mark.anyio
+async def test_dynamic_write_classification_controls_runtime_capability_gate():
+    @mcp_tool(
+        write_action=True,
+        write_action_resolver=lambda args: bool(args.get("mutate")),
+    )
+    async def dynamic_tool(mutate: bool = False):
+        return {"mutate": mutate}
+
+    path_token = REQUEST_PATH.set("/messages")
+    cap_token = REQUEST_CAPABILITIES.set(frozenset())
+    try:
+        assert await dynamic_tool(mutate=False) == {"mutate": False}
+        with pytest.raises(WriteApprovalRequiredError):
+            await dynamic_tool(mutate=True)
+        REQUEST_CAPABILITIES.set(frozenset({"workspace.write"}))
+        assert await dynamic_tool(mutate=True) == {"mutate": True}
+    finally:
+        REQUEST_CAPABILITIES.reset(cap_token)
+        REQUEST_PATH.reset(path_token)

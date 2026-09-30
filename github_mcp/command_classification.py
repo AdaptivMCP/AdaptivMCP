@@ -97,6 +97,42 @@ _SED_INPLACE = re.compile(r"(^|\s)-i(\s|$)")
 _SHELL_REDIRECT_RE = re.compile(r"(^|\s)(?:\d*>>?|&>|2>|1>)")
 
 
+def _has_unquoted_shell_control_syntax(cmd: str) -> bool:
+    """Return True when unquoted shell syntax can change execution semantics."""
+    if not isinstance(cmd, str) or not cmd:
+        return False
+    in_single = False
+    in_double = False
+    escape = False
+    i = 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if escape:
+            escape = False
+            i += 1
+            continue
+        if ch == "\\" and not in_single:
+            escape = True
+            i += 1
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            i += 1
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            i += 1
+            continue
+        if not in_single and not in_double:
+            if ch in "\r\n;|&`":
+                return True
+            if ch == "$" and i + 1 < len(cmd) and cmd[i + 1] in "({":
+                return True
+            if ch in "<>" and i + 1 < len(cmd) and cmd[i + 1] == "(":
+                return True
+        i += 1
+    return False
+
 def _has_unquoted_output_redirection(cmd: str) -> bool:
     """Return True if cmd contains an unquoted output redirection operator.
 
@@ -159,7 +195,7 @@ def _has_unquoted_output_redirection(cmd: str) -> bool:
     return False
 
 
-_READ_ONLY_DEV_BINARIES: set[str] = {
+_REPO_EXECUTION_BINARIES: set[str] = {
     "pytest",
     "py.test",
     "mypy",
@@ -200,14 +236,14 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
     if prog in {"poetry", "pipenv", "uv"} and len(parts) > 2 and parts[1] == "run":
         return _infer_write_action_from_parts(parts[2:])
 
-    # `make <target>`: treat common verification targets as read-ish.
-    if prog == "make" and len(parts) > 1:
-        if parts[1] in {"test", "lint", "check", "typecheck", "ci"}:
-            return False
+    # Makefiles are executable repository-controlled programs.
+    if prog == "make":
+        return True
 
-    # Common dev/test commands (generally safe; may still create ephemeral caches).
-    if prog in _READ_ONLY_DEV_BINARIES:
-        return False
+    # Test/lint/type-check runners execute repository-controlled code/configuration.
+    # Treat them as privileged execution for authorization purposes.
+    if prog in _REPO_EXECUTION_BINARIES:
+        return True
 
     # pip: some subcommands are read-only.
     if prog == "pip" and len(parts) > 1:
@@ -253,25 +289,9 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
     if prog == "prettier":
         return "--write" in parts
 
-    # Node package managers: allow common verification commands to be treated as read-ish.
-    if prog in {"npm", "pnpm", "yarn"} and len(parts) > 1:
-        sub = parts[1]
-        if sub == "test":
-            return False
-        if (
-            sub == "run"
-            and len(parts) > 2
-            and parts[2]
-            in {
-                "test",
-                "lint",
-                "typecheck",
-                "check",
-                "ci",
-            }
-        ):
-            return False
-        # Installs and other mutations remain write.
+    # Package-manager commands can execute repository scripts (for example
+    # `npm test`, `npm run lint`, or lifecycle hooks). Keep them privileged.
+    if prog in {"npm", "pnpm", "yarn"}:
         return True
 
     # sed is read-only unless -i (in-place) is used.
@@ -289,13 +309,25 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
         if sub in _GIT_WRITE_SUBCOMMANDS:
             return True
         if sub in _GIT_READ_SUBCOMMANDS:
-            # `git branch -d/-D` and friends are write actions.
-            if sub == "branch" and any(x in parts for x in {"-d", "-D", "--delete"}):
+            # Branch deletion/move/copy mutate refs.
+            if sub == "branch" and any(
+                x in parts
+                for x in {"-d", "-D", "--delete", "-m", "-M", "-c", "-C", "--move", "--copy"}
+            ):
                 return True
-            # `git config` can mutate; treat `--global/--system` with set as write.
-            if sub == "config" and any(x in parts for x in {"--global", "--system"}):
-                # If caller is setting a key, it's a mutation.
-                if len(parts) >= 4:
+            # `git config <key>` reads; `git config <key> <value>` writes.
+            if sub == "config" and len(parts) >= 4:
+                return True
+            # Remote management mutates unless it is explicitly read-only.
+            if sub == "remote" and len(parts) > 2:
+                remote_sub = parts[2]
+                if remote_sub not in {
+                    "-v",
+                    "--verbose",
+                    "show",
+                    "get-url",
+                    "get-branches",
+                }:
                     return True
             return False
         # Unknown git subcommand -> conservative.
@@ -328,9 +360,9 @@ def infer_write_action_from_shell(
     confidently identify the invocation as read-only.
 
     Notes:
-    - The classification is best-effort and heuristic.
-    - The goal is to provide *dynamic metadata* and safer retry behavior,
-      not a perfect isolation-level guarantee.
+    - The classifier is intentionally conservative and remains heuristic.
+    - Runtime tool authorization consumes this result; it is not only UI metadata.
+    - Unknown, malformed, or compound shell syntax is classified as a write.
     """
 
     if installing_dependencies:
@@ -343,6 +375,11 @@ def infer_write_action_from_shell(
     if not cmd and command_lines:
         cmd = _first_non_empty(command_lines)
     if not cmd:
+        return True
+
+    # Check source-level shell syntax before shlex tokenization.
+    # shlex.split() does not make shell punctuation a first-class token by default.
+    if _has_unquoted_shell_control_syntax(cmd):
         return True
 
     # Tokenize for best-effort classification.
