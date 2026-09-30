@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import ipaddress
 import os
@@ -248,7 +249,7 @@ async def _validate_content_url(content_url: str) -> str:
         raise GitHubAPIError("content_url must use the default HTTP(S) port")
 
     try:
-        addresses = await __import__("asyncio").to_thread(
+        addresses = await asyncio.to_thread(
             socket.getaddrinfo,
             hostname,
             parsed.port or (443 if parsed.scheme.lower() == "https" else 80),
