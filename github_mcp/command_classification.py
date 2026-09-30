@@ -97,6 +97,42 @@ _SED_INPLACE = re.compile(r"(^|\s)-i(\s|$)")
 _SHELL_REDIRECT_RE = re.compile(r"(^|\s)(?:\d*>>?|&>|2>|1>)")
 
 
+def _has_unquoted_shell_control_syntax(cmd: str) -> bool:
+    """Return True when unquoted shell syntax can change execution semantics."""
+    if not isinstance(cmd, str) or not cmd:
+        return False
+    in_single = False
+    in_double = False
+    escape = False
+    i = 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if escape:
+            escape = False
+            i += 1
+            continue
+        if ch == "\\" and not in_single:
+            escape = True
+            i += 1
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            i += 1
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            i += 1
+            continue
+        if not in_single and not in_double:
+            if ch in "\r\n;|&`":
+                return True
+            if ch == "$" and i + 1 < len(cmd) and cmd[i + 1] in "({":
+                return True
+            if ch in "<>" and i + 1 < len(cmd) and cmd[i + 1] == "(":
+                return True
+        i += 1
+    return False
+
 def _has_unquoted_output_redirection(cmd: str) -> bool:
     """Return True if cmd contains an unquoted output redirection operator.
 
@@ -289,13 +325,16 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
         if sub in _GIT_WRITE_SUBCOMMANDS:
             return True
         if sub in _GIT_READ_SUBCOMMANDS:
-            # `git branch -d/-D` and friends are write actions.
-            if sub == "branch" and any(x in parts for x in {"-d", "-D", "--delete"}):
+            # Branch deletion/move/copy mutate refs.
+            if sub == "branch" and any(x in parts for x in {"-d", "-D", "--delete", "-m", "-M", "-c", "-C", "--move", "--copy"}):
                 return True
-            # `git config` can mutate; treat `--global/--system` with set as write.
-            if sub == "config" and any(x in parts for x in {"--global", "--system"}):
-                # If caller is setting a key, it's a mutation.
-                if len(parts) >= 4:
+            # `git config <key>` reads; `git config <key> <value>` writes.
+            if sub == "config" and len(parts) >= 4:
+                return True
+            # Remote management mutates unless it is explicitly read-only.
+            if sub == "remote" and len(parts) > 2:
+                remote_sub = parts[2]
+                if remote_sub not in {"-v", "--verbose", "show", "get-url", "get-branches"}:
                     return True
             return False
         # Unknown git subcommand -> conservative.
@@ -345,7 +384,7 @@ def infer_write_action_from_shell(
     if not cmd:
         return True
 
-    # Tokenize for best-effort classification.
+    # Check source-level shell syntax before shlex tokenization.\n    # shlex.split() does not make shell punctuation a first-class token by default.\n    if _has_unquoted_shell_control_syntax(cmd):\n        return True\n\n    # Tokenize for best-effort classification.
     try:
         parts = shlex.split(cmd)
     except Exception:
