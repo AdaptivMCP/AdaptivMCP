@@ -108,3 +108,13 @@ async def test_transport_middleware_binds_and_clears_principal(monkeypatch):
     assert seen[-1]["authenticated"] is False
     assert seen[-1]["principal"] is None
     assert get_request_capabilities() == frozenset()
+
+
+def test_application_wires_transport_auth_and_trusted_host_middleware(monkeypatch):
+    monkeypatch.setenv("ADAPTIV_MCP_AUTH_TOKEN", "server-secret")
+    import main
+
+    assert main.app is not None
+    middleware_names = [m.cls.__name__ for m in main.app.user_middleware]
+    assert "_TransportAuthMiddleware" in middleware_names
+    assert "TrustedHostMiddleware" in middleware_names

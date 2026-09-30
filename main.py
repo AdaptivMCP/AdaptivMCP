@@ -18,6 +18,7 @@ import anyio
 import httpx  # noqa: F401
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.staticfiles import StaticFiles
 
@@ -85,7 +86,16 @@ from github_mcp.mcp_server.context import (
     REQUEST_PATH,
     REQUEST_RECEIVED_AT,
     REQUEST_SESSION_ID,
+    REQUEST_PRINCIPAL,
+    REQUEST_AUTHENTICATED,
     _extract_chatgpt_metadata,
+    set_request_capabilities,
+)
+from github_mcp.mcp_server.transport_auth import (
+    authenticate_request,
+    auth_configuration_present,
+    authentication_error,
+    is_public_path,
 )
 from github_mcp.server import (
     _REGISTERED_MCP_TOOLS,  # noqa: F401
@@ -1031,6 +1041,10 @@ if app is not None:
     app.add_middleware(_RequestContextMiddleware)
 if app is not None:
     app.add_middleware(_SuppressClientDisconnectMiddleware)
+if app is not None:
+    # Auth must be the outermost application middleware so every non-public
+    # HTTP route is authenticated before it reaches MCP or tool handlers.
+    app.add_middleware(_TransportAuthMiddleware)
 
 
 async def _handle_value_error(request, exc):
