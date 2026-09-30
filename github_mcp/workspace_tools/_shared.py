@@ -489,13 +489,34 @@ def _workspace_deps() -> dict[str, Any]:
             cmd, cwd=cwd, timeout_seconds=timeout_seconds, env=env
         )
 
+    async def prepare_venv_leased(repo_dir: str) -> dict[str, str]:
+        async with workspace_lease(
+            repo_dir,
+            timeout_seconds=config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
+        ):
+            return await prepare_venv_fn(repo_dir)
+
+    async def stop_venv_leased(repo_dir: str) -> dict[str, Any]:
+        async with workspace_lease(
+            repo_dir,
+            timeout_seconds=config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
+        ):
+            return await stop_venv_fn(repo_dir)
+
+    async def venv_status_leased(repo_dir: str) -> dict[str, Any]:
+        async with workspace_lease(
+            repo_dir,
+            timeout_seconds=config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
+        ):
+            return await venv_status_fn(repo_dir)
+
     return {
         "clone_repo": clone_repo_fn,
         "run_shell": run_shell_isolated,
         "run_git": run_git_leased,
-        "prepare_temp_venv": prepare_venv_fn,
-        "stop_virtualenv": stop_venv_fn,
-        "virtualenv_status": venv_status_fn,
+        "prepare_temp_venv": prepare_venv_leased,
+        "stop_virtualenv": stop_venv_leased,
+        "virtualenv_status": venv_status_leased,
         "apply_patch_to_repo": _apply_patch_to_repo,
     }
 
