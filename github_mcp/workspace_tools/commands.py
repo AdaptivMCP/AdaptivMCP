@@ -6,7 +6,6 @@ import uuid
 from typing import Any
 
 from github_mcp import config
-from github_mcp.command_classification import infer_write_action_from_shell
 from github_mcp.server import (
     _structured_tool_error,
     mcp_tool,
@@ -166,129 +165,6 @@ def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
     }
 
 
-def _terminal_command_write_action(args: dict[str, Any]) -> bool:
-    """Infer the write/read classification for terminal_command invocations."""
-
-    command = str(args.get("command") or "")
-    command_lines = args.get("command_lines")
-    lines = command_lines if isinstance(command_lines, list) else None
-    installing = bool(args.get("installing_dependencies", False))
-    return infer_write_action_from_shell(
-        command, command_lines=lines, installing_dependencies=installing
-    )
-
-
-def _always_write(_args: dict[str, Any]) -> bool:
-    """Resolver for tools that are inherently write actions."""
-
-    return True
-
-
-def _normalize_command_payload(
-    command: str,
-    command_lines: list[str] | None,
-) -> tuple[str, list[str]]:
-    """Normalize command inputs.
-
-    Returns:
-    - requested_command: the raw intended command (may contain newlines)
-    - command_lines_out: list of command lines (never contains newlines)
-    """
-
-    # Prefer permissive coercion over raising on common client mistakes.
-    requested = (
-        command
-        if isinstance(command, str)
-        else (str(command) if command is not None else "")
-    )
-    if command_lines is not None:
-        # Accept strings, list/tuples, or any iterable. Coerce each element to str.
-        if isinstance(command_lines, str):
-            raw_lines: list[str] = command_lines.splitlines()
-        elif isinstance(command_lines, (list, tuple)):
-            raw_lines = [
-                line if isinstance(line, str) else str(line) for line in command_lines
-            ]
-        else:
-            try:
-                raw_lines = [str(line) for line in list(command_lines)]  # type: ignore[arg-type]
-            except Exception:
-                raw_lines = []
-
-        # Ensure the output list never contains embedded newlines.
-        lines_out: list[str] = []
-        for line in raw_lines:
-            split = (line or "").splitlines()
-            lines_out.extend(split if split else [""])
-        requested = "\n".join(lines_out)
-    else:
-        lines_out = requested.splitlines() if requested else []
-
-    return requested, lines_out
-
-
-def _compact_command_payload(
-    payload: dict[str, Any],
-    *,
-    command_lines_out: list[str],
-) -> dict[str, Any]:
-    """Remove redundant command fields from tool payloads."""
-
-    if payload.get("command_input") == payload.get("command"):
-        payload.pop("command_input", None)
-
-    if not command_lines_out:
-        payload.pop("command_lines", None)
-        return payload
-
-    if len(command_lines_out) == 1:
-        command = payload.get("command")
-        if command is None or str(command) == str(command_lines_out[0]):
-            payload.pop("command_lines", None)
-            return payload
-
-    payload["command_lines"] = command_lines_out
-    return payload
-
-
-def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
-    """Resolve a command working directory without escaping the repository.
-
-    Both the repository root and candidate path are resolved through symlinks
-    before the containment check. Absolute paths are allowed only when they
-    resolve underneath the repository mirror; relative ``..`` traversal and
-    symlink escapes are rejected.
-    """
-    repo_real = os.path.realpath(repo_dir)
-    if not workdir:
-        return repo_real
-    if not isinstance(workdir, str):
-        try:
-            workdir = str(workdir)
-        except Exception as exc:
-            raise ValueError("workdir must resolve inside the repository workspace") from exc
-
-    normalized = workdir.strip().replace("\\", "/")
-    if not normalized or normalized in {".", "./"}:
-        return repo_real
-
-    candidate = (
-        os.path.realpath(normalized)
-        if os.path.isabs(normalized)
-        else os.path.realpath(os.path.join(repo_real, normalized))
-    )
-
-    try:
-        common = os.path.commonpath((repo_real, candidate))
-    except ValueError as exc:
-        raise ValueError("workdir must resolve inside the repository workspace") from exc
-
-    if common != repo_real:
-        raise ValueError("workdir must resolve inside the repository workspace")
-    if not os.path.isdir(candidate):
-        raise ValueError("workdir must be an existing directory inside the repository workspace")
-    return candidate
-
 @mcp_tool(write_action=True)
 async def render_shell(
     full_name: str,
@@ -409,7 +285,6 @@ async def render_shell(
 
 @mcp_tool(
     write_action=True,
-    write_action_resolver=_terminal_command_write_action,
     # terminal commands execute in the workspace environment.
     open_world_hint=True,
     ui={
@@ -583,7 +458,6 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
 
 @mcp_tool(
     write_action=True,
-    write_action_resolver=_always_write,
     open_world_hint=True,
     ui={
         "group": "workspace",
