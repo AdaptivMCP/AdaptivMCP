@@ -384,7 +384,12 @@ def infer_write_action_from_shell(
     if not cmd:
         return True
 
-    # Check source-level shell syntax before shlex tokenization.\n    # shlex.split() does not make shell punctuation a first-class token by default.\n    if _has_unquoted_shell_control_syntax(cmd):\n        return True\n\n    # Tokenize for best-effort classification.
+    # Check source-level shell syntax before shlex tokenization.
+    # shlex.split() does not make shell punctuation a first-class token by default.
+    if _has_unquoted_shell_control_syntax(cmd):
+        return True
+
+    # Tokenize for best-effort classification.
     try:
         parts = shlex.split(cmd)
     except Exception:
