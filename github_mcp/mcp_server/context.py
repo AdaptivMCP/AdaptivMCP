@@ -40,6 +40,11 @@ REQUEST_CAPABILITIES: ContextVar[frozenset[str]] = ContextVar(
     "REQUEST_CAPABILITIES", default=frozenset()
 )
 
+# Authenticated transport principal. This is set only by the transport auth
+# middleware and is never derived from client-supplied ChatGPT metadata.
+REQUEST_PRINCIPAL: ContextVar[str | None] = ContextVar("REQUEST_PRINCIPAL", default=None)
+REQUEST_AUTHENTICATED: ContextVar[bool] = ContextVar("REQUEST_AUTHENTICATED", default=False)
+
 
 # Legacy flag retained for backward compatibility; write approvals are always enabled.
 REQUEST_WRITE_APPROVED: ContextVar[bool | None] = ContextVar(
@@ -88,6 +93,8 @@ def get_request_context() -> dict[str, Any]:
         "idempotency_key": REQUEST_IDEMPOTENCY_KEY.get(),
         "chatgpt": REQUEST_CHATGPT_METADATA.get(),
         "capabilities": sorted(REQUEST_CAPABILITIES.get()),
+        "principal": REQUEST_PRINCIPAL.get(),
+        "authenticated": REQUEST_AUTHENTICATED.get(),
     }
 
 
@@ -105,6 +112,8 @@ __all__ = [
     "REQUEST_IDEMPOTENCY_KEY",
     "REQUEST_CHATGPT_METADATA",
     "REQUEST_CAPABILITIES",
+    "REQUEST_PRINCIPAL",
+    "REQUEST_AUTHENTICATED",
     "REQUEST_WRITE_APPROVED",
     "get_request_context",
     "get_request_capabilities",
