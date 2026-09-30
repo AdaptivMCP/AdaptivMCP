@@ -126,10 +126,8 @@ def _sanitize_debug_value(
         # value is clearly associated with a secret-bearing key.
         if key_is_secret and len(s) >= 48 and _HIGH_ENTROPY_RE.match(s):
             h, t = _preview_text(s)
-            h = h.replace("\r", " ").replace("
-", " ").replace("\t", " ")
-            t = t.replace("\r", " ").replace("
-", " ").replace("\t", " ")
+            h = h.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+            t = t.replace("\r", " ").replace("\n", " ").replace("\t", " ")
             return f"<REDACTED_VALUE len={len(s)} head={h!r} tail={t!r}>"
 
         # Avoid emitting very long strings (diffs, blobs, etc.) while keeping
@@ -175,8 +173,7 @@ def _sanitize_debug_value(
 
 
 _MISSING_PATH_RE = re.compile(
-    r"(?i)(?:\[errno\s*2\]\s*)?(?:no such file or directory|file not found|path not found)[:\s]+['\"]?(?P<path>[^'\"
-]+)['\"]?"
+    r"(?i)(?:\[errno\s*2\]\s*)?(?:no such file or directory|file not found|path not found)[:\s]+['\"]?(?P<path>[^'\"\n]+)['\"]?"
 )
 
 
