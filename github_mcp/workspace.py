@@ -96,6 +96,24 @@ async def _run_shell(
     if env is not None:
         proc_env.update(env)
 
+    # Generic shell children must never inherit GitHub credentials or Git's
+    # credential-bearing configuration environment. Authenticated Git gets a
+    # private environment through _run_git_authenticated instead.
+    for key in (
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
+        "GITHUB_PAT",
+        "GITHUB_OAUTH_TOKEN",
+        "GIT_HTTP_EXTRAHEADER",
+        "GIT_ASKPASS",
+        "SSH_ASKPASS",
+    ):
+        proc_env.pop(key, None)
+    for key in list(proc_env):
+        if key.startswith("GIT_CONFIG_KEY_") or key.startswith("GIT_CONFIG_VALUE_"):
+            proc_env.pop(key, None)
+    proc_env.pop("GIT_CONFIG_COUNT", None)
+
     # Ensure bundled ripgrep (vendor/rg) is available as `rg` in repo mirror shells.
     # This avoids reliance on system packages in provider environments.
     if cwd and os.name != "nt" and sys.platform.startswith("linux"):
