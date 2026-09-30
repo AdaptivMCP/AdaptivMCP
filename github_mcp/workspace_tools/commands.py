@@ -14,7 +14,6 @@ from github_mcp.server import (
 from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import (
-    _cmd_invokes_git,
     _maybe_install_dev_requirements,
     _tw,
 )
@@ -253,36 +252,42 @@ def _compact_command_payload(
 
 
 def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
-    """Resolve a working directory for command execution.
+    """Resolve a command working directory without escaping the repository.
 
-    Intentionally permissive:
-    - Accept absolute paths (including outside the repo mirror).
-    - Allow relative traversal via "..".
-    - If the resolved path is not a directory, fall back to the repo root.
+    Both the repository root and candidate path are resolved through symlinks
+    before the containment check. Absolute paths are allowed only when they
+    resolve underneath the repository mirror; relative ``..`` traversal and
+    symlink escapes are rejected.
     """
-
     repo_real = os.path.realpath(repo_dir)
     if not workdir:
         return repo_real
     if not isinstance(workdir, str):
         try:
             workdir = str(workdir)
-        except Exception:
-            return repo_real
+        except Exception as exc:
+            raise ValueError("workdir must resolve inside the repository workspace") from exc
 
     normalized = workdir.strip().replace("\\", "/")
-    if not normalized or normalized in {".", "./", "/"}:
+    if not normalized or normalized in {".", "./"}:
         return repo_real
 
-    if os.path.isabs(normalized):
-        candidate = os.path.realpath(normalized)
-    else:
-        candidate = os.path.realpath(os.path.join(repo_real, normalized))
+    candidate = (
+        os.path.realpath(normalized)
+        if os.path.isabs(normalized)
+        else os.path.realpath(os.path.join(repo_real, normalized))
+    )
 
-    if os.path.isdir(candidate):
-        return candidate
-    return repo_real
+    try:
+        common = os.path.commonpath((repo_real, candidate))
+    except ValueError as exc:
+        raise ValueError("workdir must resolve inside the repository workspace") from exc
 
+    if common != repo_real:
+        raise ValueError("workdir must resolve inside the repository workspace")
+    if not os.path.isdir(candidate):
+        raise ValueError("workdir must be an existing directory inside the repository workspace")
+    return candidate
 
 @mcp_tool(write_action=True)
 async def render_shell(
@@ -497,75 +502,9 @@ async def terminal_command(
         if is_pytest:
             cleanup_summary = _cleanup_test_artifacts(repo_dir)
 
-        # Best-effort: if git was invoked, ensure the current local branch
-        # exists on origin so subsequent tool calls that rely on `origin/<branch>`
-        # do not fail (including when operating on the default branch).
-        auto_push: dict[str, Any] | None = None
-        if _cmd_invokes_git(command):
-            try:
-                t_default = _normalize_timeout_seconds(
-                    config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
-                    timeout_seconds,
-                )
-                # Only attempt when we are on a named branch (not detached).
-                cur = await deps["run_shell"](
-                    "git symbolic-ref --quiet --short HEAD",
-                    cwd=cwd,
-                    timeout_seconds=t_default,
-                    env=env,
-                )
-                current_branch = (
-                    (cur.get("stdout", "") or "").strip()
-                    if isinstance(cur, dict)
-                    else ""
-                )
-                if current_branch:
-                    # If upstream is already configured, do nothing.
-                    upstream = await deps["run_shell"](
-                        "git rev-parse --abbrev-ref --symbolic-full-name @{u}",
-                        cwd=cwd,
-                        timeout_seconds=t_default,
-                        env=env,
-                    )
-                    has_upstream = bool(
-                        isinstance(upstream, dict)
-                        and upstream.get("exit_code", 0) == 0
-                        and (upstream.get("stdout", "") or "").strip()
-                    )
-                    if not has_upstream:
-                        # Check whether the branch exists on origin.
-                        await deps["run_shell"](
-                            "git fetch --prune origin",
-                            cwd=cwd,
-                            timeout_seconds=t_default,
-                            env=env,
-                        )
-                        remote_check = await deps["run_shell"](
-                            f"git ls-remote --heads origin {shlex.quote(current_branch)}",
-                            cwd=cwd,
-                            timeout_seconds=t_default,
-                            env=env,
-                        )
-                        remote_exists = bool(
-                            isinstance(remote_check, dict)
-                            and (remote_check.get("stdout", "") or "").strip()
-                        )
-                        if not remote_exists:
-                            push_res = await deps["run_shell"](
-                                f"git push -u origin {shlex.quote(current_branch)}",
-                                cwd=cwd,
-                                timeout_seconds=t_default,
-                                env=env,
-                            )
-                            auto_push = {
-                                "current_branch": current_branch,
-                                "remote_check": remote_check,
-                                "push": push_res,
-                            }
-            except Exception as _auto_exc:
-                # Do not fail the user's command if auto-push encounters issues.
-                auto_push = {"error": str(_auto_exc)}
-
+        # terminal_command is side-effect bounded: it executes only the
+        # command requested by the caller. It never performs an implicit
+        # fetch or push after a command that happens to invoke git.
         exit_code = 0
         timed_out = False
         if isinstance(result, dict):
@@ -600,7 +539,6 @@ async def terminal_command(
             "install": install_result,
             "install_steps": install_steps,
             "result": result,
-            **({"auto_push_branch": auto_push} if auto_push is not None else {}),
             **({"test_artifact_cleanup": cleanup_summary} if cleanup_summary else {}),
         }
         return _compact_command_payload(out, command_lines_out=command_lines_out)
