@@ -112,6 +112,47 @@ from github_mcp.workspace import (
 )
 
 
+class _TransportAuthMiddleware:
+    """Require an explicit bearer credential for MCP-facing HTTP routes."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+
+        path = scope.get("path", "") or ""
+        method = str(scope.get("method", "")).upper()
+
+        # Clear security context before every request so ASGI task reuse cannot
+        # carry an authenticated principal or capabilities into another request.
+        REQUEST_PRINCIPAL.set(None)
+        REQUEST_AUTHENTICATED.set(False)
+        set_request_capabilities(())
+
+        if is_public_path(path) or method == "OPTIONS":
+            return await self.app(scope, receive, send)
+
+        if not auth_configuration_present():
+            response = authentication_error(configuration_error=True)
+            await response(scope, receive, send)
+            return
+
+        authenticated, principal, capabilities = authenticate_request(
+            scope.get("headers") or []
+        )
+        if not authenticated or principal is None:
+            response = authentication_error()
+            await response(scope, receive, send)
+            return
+
+        REQUEST_PRINCIPAL.set(principal)
+        REQUEST_AUTHENTICATED.set(True)
+        set_request_capabilities(capabilities)
+        return await self.app(scope, receive, send)
+
+
 class _CacheControlMiddleware:
     """ASGI middleware to control Cache-Control headers safely for streaming.
 
@@ -965,15 +1006,19 @@ def _try_mount_streamable_http(app_instance: Any) -> None:
 
 
 def _configure_trusted_hosts(app_instance) -> None:
-    """Configure trusted host protection when applicable.
-
-    The hosted deployment and the Starlette app are wrapped by external
-    infrastructure that already enforces host validation, so this hook is a
-    no-op today. Keeping the stub allows tests and future deployments to attach
-    a TrustedHostMiddleware without changing the import surface.
-    """
-    del app_instance
-    return
+    """Apply a fail-closed Host allowlist to the entire ASGI application."""
+    if app_instance is None:
+        return
+    raw = (
+        os.environ.get("ADAPTIV_MCP_ALLOWED_HOSTS")
+        or os.environ.get("ALLOWED_HOSTS")
+        or os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        or ""
+    )
+    allowed_hosts = [part.strip() for part in raw.replace(",", " ").split() if part.strip()]
+    if not allowed_hosts:
+        allowed_hosts = ["localhost", "127.0.0.1", "[::1]"]
+    app_instance.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 
 if app is not None:
