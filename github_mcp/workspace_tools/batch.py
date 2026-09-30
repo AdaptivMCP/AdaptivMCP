@@ -88,7 +88,7 @@ async def _remote_branch_exists(full_name: str, *, base_ref: str, branch: str) -
     )
     q_branch = shlex.quote(branch)
 
-    res = await deps["run_shell"](
+    res = await deps["run_git"](
         f"git ls-remote --heads origin {q_branch}",
         cwd=repo_dir,
         timeout_seconds=t_default,
