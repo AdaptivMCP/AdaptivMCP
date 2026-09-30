@@ -24,7 +24,9 @@ def test_configure_trusted_hosts_adds_allowlist(monkeypatch):
     monkeypatch.setenv("RENDER_EXTERNAL_HOSTNAME", "chatgpt-mcp.onrender.com")
 
     app = Starlette()
-    app.user_middleware.append(object())
     main._configure_trusted_hosts(app)
 
     assert len(app.user_middleware) == 1
+    middleware = app.user_middleware[0]
+    assert middleware.cls.__name__ == "TrustedHostMiddleware"
+    assert middleware.options["allowed_hosts"] == ["localhost"]
