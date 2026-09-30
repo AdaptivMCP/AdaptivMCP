@@ -2147,7 +2147,7 @@ def _log_tool_returned_error(
 
     payload["report"] = report
     if LOG_TOOL_PAYLOADS:
-        payload["raw"] = result
+        payload["raw"] = redact_any(result)
 
     if HUMAN_LOGS:
         friendly = _friendly_tool_name(tool_name)
@@ -2804,7 +2804,7 @@ def _log_tool_success(
         try:
             from github_mcp.mcp_server.schemas import _jsonable
 
-            payload["raw"] = _jsonable(result)
+            payload["raw"] = redact_any(_jsonable(result))
         except Exception:
             payload["raw"] = result
 
@@ -3510,7 +3510,7 @@ def mcp_tool(
                     else:
                         client_payload = structured_error
                     if _effective_redact_tool_outputs(req):
-                        client_payload = redact_any(client_payload)
+                client_payload = redact_any(client_payload)
                     return _chatgpt_friendly_result(
                         client_payload,
                         req=req,
@@ -3670,23 +3670,9 @@ def mcp_tool(
                         pass
                 else:
                     client_payload = result
-                if _effective_redact_tool_outputs(req) and _effective_response_mode(
-                    req
-                ) in {
-                    "chatgpt",
-                    "compact",
-                }:
-                    try:
-                        client_payload = redact_any(client_payload)
-                    except Exception as exc:
-                        # Best-effort: never break tool behavior, but do not hide failures.
-                        _log_once(
-                            "tool_output_redaction_failed",
-                            logging.WARNING,
-                            "Tool output redaction failed; returning unredacted payload",
-                            exc=exc,
-                            extra={"event": "tool_output_redaction_failed"},
-                        )
+                if _effective_redact_tool_outputs(req):
+                client_payload = redact_any(client_payload)
+
                 return _chatgpt_friendly_result(
                     client_payload,
                     req=req,
