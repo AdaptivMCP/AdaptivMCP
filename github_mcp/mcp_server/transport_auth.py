@@ -6,7 +6,6 @@ import hmac
 import os
 import re
 from collections.abc import Iterable
-from typing import Any
 
 from starlette.responses import JSONResponse, Response
 
@@ -32,7 +31,7 @@ def _configured_capabilities() -> frozenset[str]:
     raw = os.environ.get(CAPABILITY_ENV, "")
     return frozenset(
         item.strip()
-        for item in re.split(r"[,\\s]+", raw)
+        for item in re.split(r"[,\s]+", raw)
         if item.strip()
     )
 
