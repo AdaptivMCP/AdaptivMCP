@@ -435,15 +435,19 @@ def _workspace_deps() -> dict[str, Any]:
         env: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         if _cmd_invokes_git(cmd):
-            return {
-                "exit_code": 126,
-                "timed_out": False,
-                "stdout": "",
-                "stderr": (
-                    "Git commands must use the isolated Git service; "
-                    "shell composition with Git is not permitted."
-                ),
-            }
+            # Local, single git commands may run without credentials. Any
+            # command that composes git with shell syntax is denied. Remote
+            # operations that need credentials use run_git explicitly.
+            if any(sep in cmd for sep in ("\n", "&&", "||", ";", "|")):
+                return {
+                    "exit_code": 126,
+                    "timed_out": False,
+                    "stdout": "",
+                    "stderr": (
+                        "Git commands may not be composed with shell syntax; "
+                        "use the isolated Git service."
+                    ),
+                }
         timeout_seconds = _normalize_timeout_seconds(
             timeout_seconds,
             config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
