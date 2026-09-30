@@ -34,6 +34,13 @@ REQUEST_CHATGPT_METADATA: ContextVar[dict[str, str] | None] = ContextVar(
     "REQUEST_CHATGPT_METADATA", default=None
 )
 
+# Fine-grained request capabilities. An empty set is the secure default for
+# inbound requests; capabilities never cross request/task boundaries.
+REQUEST_CAPABILITIES: ContextVar[frozenset[str]] = ContextVar(
+    "REQUEST_CAPABILITIES", default=frozenset()
+)
+
+
 # Legacy flag retained for backward compatibility; write approvals are always enabled.
 REQUEST_WRITE_APPROVED: ContextVar[bool | None] = ContextVar(
     "REQUEST_WRITE_APPROVED", default=None
@@ -48,6 +55,27 @@ REQUEST_PATH: ContextVar[str | None] = ContextVar("REQUEST_PATH", default=None)
 REQUEST_RECEIVED_AT: ContextVar[float | None] = ContextVar(
     "REQUEST_RECEIVED_AT", default=None
 )
+
+
+def get_request_capabilities() -> frozenset[str]:
+    """Return the immutable capabilities granted to the current request."""
+    return REQUEST_CAPABILITIES.get()
+
+
+def set_request_capabilities(capabilities: Any) -> frozenset[str]:
+    """Set request-scoped capabilities and return the normalized set."""
+    if capabilities is None:
+        normalized = frozenset()
+    elif isinstance(capabilities, str):
+        normalized = frozenset({capabilities.strip()}) if capabilities.strip() else frozenset()
+    else:
+        normalized = frozenset(str(cap).strip() for cap in capabilities if str(cap).strip())
+    REQUEST_CAPABILITIES.set(normalized)
+    return normalized
+
+
+def has_request_capabilities(required: set[str] | frozenset[str]) -> bool:
+    return set(required).issubset(REQUEST_CAPABILITIES.get())
 
 
 def get_request_context() -> dict[str, Any]:
@@ -75,8 +103,12 @@ __all__ = [
     "REQUEST_SESSION_ID",
     "REQUEST_IDEMPOTENCY_KEY",
     "REQUEST_CHATGPT_METADATA",
+    "REQUEST_CAPABILITIES",
     "REQUEST_WRITE_APPROVED",
     "get_request_context",
+    "get_request_capabilities",
+    "set_request_capabilities",
+    "has_request_capabilities",
     "get_request_id",
     "get_auto_approve_enabled",
     "peek_auto_approve_enabled",
