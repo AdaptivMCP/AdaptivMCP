@@ -385,10 +385,13 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         except (OSError, ValueError) as exc:
             raise GitHubAPIError("Invalid local content_url path") from exc
 
-        if not any(
-            resolved_path == root or resolved_path.startswith(root + os.sep)
-            for root in allowed_roots
-        ):
+        def _within_root(path: str, root: str) -> bool:
+            try:
+                return os.path.commonpath((path, root)) == root
+            except ValueError:
+                return False
+
+        if not any(_within_root(resolved_path, root) for root in allowed_roots):
             raise GitHubAPIError(
                 "content_url local file is outside the configured local content roots"
             )
