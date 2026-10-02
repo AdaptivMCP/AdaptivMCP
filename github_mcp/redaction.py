@@ -79,8 +79,16 @@ def _redact_string(value: str, *, key: str | None = None) -> str:
         return REDACTED
 
     out = value
-    out = _AUTH_HEADER_RE.sub(lambda m: m.group(1) + REDACTED, out)
-    out = _BEARER_RE.sub(lambda m: m.group(1) + REDACTED, out)
+
+    def _redact_auth_header(match: re.Match[str]) -> str:
+        prefix = match.group(1)
+        raw_value = match.group(2)
+        scheme, separator, _credential = raw_value.partition(" ")
+        if separator and scheme.lower() == "bearer":
+            return prefix + "Bearer " + REDACTED
+        return prefix + REDACTED
+
+    out = _AUTH_HEADER_RE.sub(_redact_auth_header, out)    out = _BEARER_RE.sub(lambda m: m.group(1) + REDACTED, out)
     out = _ENV_ASSIGNMENT_RE.sub(lambda m: m.group(1) + REDACTED, out)
     out = _CREDENTIAL_URL_RE.sub(lambda m: m.group("prefix") + REDACTED + "@", out)
     out = _TOKEN_RE.sub(REDACTED, out)
