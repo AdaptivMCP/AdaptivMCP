@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import httpcore
+import httpx
 import ipaddress
 import os
 import socket
 from typing import Any
 from urllib.parse import urlsplit
 
-from .config import ADAPTIV_MCP_INCLUDE_BASE64_CONTENT
+from .config import ADAPTIV_MCP_INCLUDE_BASE64_CONTENT, HTTPX_TIMEOUT
 from .exceptions import GitHubAPIError
 from .http_clients import _external_client_instance, _github_request
 from .utils import (
@@ -224,7 +226,47 @@ def _allowed_content_hosts() -> set[str]:
     return configured | {"github.com", "raw.githubusercontent.com"}
 
 
-async def _validate_content_url(content_url: str) -> str:
+class _PinnedDNSBackend(httpcore.AsyncNetworkBackend):
+    """Connect to an already-validated address while preserving HTTP Host/SNI."""
+
+    def __init__(self, ip: str) -> None:
+        self._ip = ip
+        self._backend = httpcore.AnyIOBackend()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Any = None,
+    ) -> httpcore.AsyncNetworkStream:
+        return await self._backend.connect_tcp(
+            self._ip,
+            port,
+            timeout=timeout,
+            local_address=local_address,
+            socket_options=socket_options,
+        )
+
+    async def connect_unix_socket(
+        self, path: str, timeout: float | None = None
+    ) -> httpcore.AsyncNetworkStream:
+        return await self._backend.connect_unix_socket(path, timeout=timeout)
+
+    async def sleep(self, seconds: float = 0.0) -> None:
+        await self._backend.sleep(seconds)
+
+
+class _PinnedHTTPTransport(httpx.AsyncHTTPTransport):
+    """HTTPX transport that pins TCP connections to a validated DNS address."""
+
+    def __init__(self, ip: str) -> None:
+        super().__init__()
+        self._pool._network_backend = _PinnedDNSBackend(ip)
+
+
+async def _resolve_content_url(content_url: str) -> tuple[str, str]:
     """Validate a remote content URL before the server makes an outbound request.
 
     This is an SSRF boundary: only HTTP(S), approved hosts, no URL userinfo,
@@ -267,17 +309,15 @@ async def _validate_content_url(content_url: str) -> str:
             ip = ipaddress.ip_address(raw_ip)
         except ValueError as exc:
             raise GitHubAPIError("content_url resolved to an invalid IP") from exc
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_unspecified
-            or ip.is_reserved
-        ):
+        if not ip.is_global:
             raise GitHubAPIError("content_url resolved to a non-public IP")
 
-    return content_url
+    return content_url, sorted(ips)[0]
+
+
+async def _validate_content_url(content_url: str) -> str:
+    validated_url, _ = await _resolve_content_url(content_url)
+    return validated_url
 
 
 async def _load_body_from_content_url(content_url: str, *, context: str) -> bytes:
@@ -381,19 +421,22 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
         return path[2] in ("\\", "/")
 
     if content_url.startswith("/") or _is_windows_absolute_path(content_url):
-        try:
-            return _read_local(content_url)
-        except GitHubAPIError as exc:
-            err = GitHubAPIError(
-                f"{context} content_url local file was not found at {content_url}. "
-                "This is a file-path error (not a network/disconnect issue)."
-            )
-            raise err from exc
+        return _read_local(content_url)
 
     if content_url.startswith("http://") or content_url.startswith("https://"):
-        validated_url = await _validate_content_url(content_url)
+        validated_url, validated_ip = await _resolve_content_url(content_url)
         client = _external_client_instance()
-        response = await client.get(validated_url, follow_redirects=False)
+        if isinstance(client, httpx.AsyncClient):
+            async with httpx.AsyncClient(
+                transport=_PinnedHTTPTransport(validated_ip),
+                timeout=HTTPX_TIMEOUT,
+            ) as pinned_client:
+                response = await pinned_client.get(
+                    validated_url, follow_redirects=False
+                )
+        else:
+            # Preserve injectable test clients and other compatible clients.
+            response = await client.get(validated_url, follow_redirects=False)
         if response.status_code >= 400:
             raise GitHubAPIError(
                 f"Failed to fetch content from {content_url}: {response.status_code}"
