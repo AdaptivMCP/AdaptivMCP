@@ -28,6 +28,7 @@ if not hasattr(datetime, "UTC"):
     datetime.UTC = timezone.utc  # type: ignore[attr-defined]
 
 os.environ.setdefault("ADAPTIV_MCP_AUTH_TOKEN", "pytest-test-token")
+os.environ.setdefault("ADAPTIV_MCP_ALLOWED_HOSTS", "testserver,localhost,127.0.0.1,[::1]")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
