@@ -8,6 +8,7 @@ single place so clients can see how to interact with the server.
 import base64
 import hashlib
 import json
+import os
 import time
 import uuid
 from pathlib import Path
