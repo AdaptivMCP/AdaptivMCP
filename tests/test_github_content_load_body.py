@@ -296,3 +296,57 @@ async def test_load_body_from_content_url_disables_redirects(monkeypatch):
     assert calls == [
         ("https://example.com/file.txt", {"follow_redirects": False})
     ]
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_rejects_shared_address_range(monkeypatch):
+    from github_mcp import github_content
+    from github_mcp.exceptions import GitHubAPIError
+
+    monkeypatch.setenv("ADAPTIV_MCP_ALLOWED_CONTENT_HOSTS", "example.com")
+    monkeypatch.setattr(
+        github_content.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (2, 1, 6, "", ("100.64.0.1", 443)),
+        ],
+    )
+
+    with pytest.raises(GitHubAPIError, match="non-public IP"):
+        await github_content._load_body_from_content_url(
+            "https://example.com/file.txt", context="test"
+        )
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_preserves_local_policy_error(
+    tmp_path, monkeypatch
+):
+    from github_mcp.github_content import _load_body_from_content_url
+    from github_mcp.exceptions import GitHubAPIError
+
+    f = tmp_path / "secret.txt"
+    f.write_text("secret")
+    monkeypatch.setenv(
+        "ADAPTIV_MCP_ALLOWED_LOCAL_CONTENT_ROOTS", str(tmp_path / "other")
+    )
+
+    with pytest.raises(
+        GitHubAPIError, match="outside the configured local content roots"
+    ):
+        await _load_body_from_content_url(str(f), context="test")
+
+
+@pytest.mark.asyncio
+async def test_load_body_from_content_url_allows_filesystem_root(monkeypatch, tmp_path):
+    from github_mcp.github_content import _load_body_from_content_url
+
+    if __import__("os").name != "posix":
+        pytest.skip("Filesystem-root semantics in this regression are POSIX-specific")
+
+    f = tmp_path / "payload.bin"
+    f.write_bytes(b"root-ok")
+    monkeypatch.setenv("ADAPTIV_MCP_ALLOWED_LOCAL_CONTENT_ROOTS", "/")
+
+    body = await _load_body_from_content_url(str(f), context="test")
+    assert body == b"root-ok"

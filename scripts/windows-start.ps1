@@ -29,7 +29,7 @@ function Get-PythonCommand {
 }
 
 function Invoke-Python([string[]]$Arguments) {
-    $cmd = Get-PythonCommand
+    $cmd = @(Get-PythonCommand)
     if ($cmd.Count -eq 1) { & $cmd[0] @Arguments }
     else { & $cmd[0] $cmd[1] @Arguments }
     if ($LASTEXITCODE -ne 0) { throw "Python command failed with exit code $LASTEXITCODE." }
@@ -71,7 +71,7 @@ function Ensure-EnvFile {
         "ADAPTIV_MCP_AUTH_TOKEN=$authToken",
         "GITHUB_TOKEN=$githubToken",
         "GITHUB_API_BASE=https://api.github.com",
-        "ADAPTIV_MCP_ALLOWED_HOSTS=127.0.0.1,localhost",
+        "ADAPTIV_MCP_ALLOWED_HOSTS=127.0.0.1:*,localhost:*",
         "ADAPTIV_MCP_ALLOWED_ORIGINS=http://127.0.0.1:$Port,http://localhost:$Port",
         "MCP_WORKSPACE_BASE_DIR=$([Environment]::GetFolderPath('LocalApplicationData'))\AdaptivMCP\workspaces",
         "PORT=$Port"
