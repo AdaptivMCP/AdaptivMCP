@@ -7,6 +7,7 @@ import asyncio
 import inspect
 from datetime import timezone
 import datetime
+import os
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,8 @@ if Required is not None and not hasattr(typing, "Required"):
 
 if not hasattr(datetime, "UTC"):
     datetime.UTC = timezone.utc  # type: ignore[attr-defined]
+
+os.environ.setdefault("ADAPTIV_MCP_AUTH_TOKEN", "pytest-test-token")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
