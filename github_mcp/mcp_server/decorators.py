@@ -3699,7 +3699,7 @@ def mcp_tool(
             wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
             wrapper.__mcp_tool_name__ = tool_name
             wrapper.__mcp_write_action__ = bool(write_action)
-        wrapper.__mcp_required_capabilities__ = required_caps
+            wrapper.__mcp_required_capabilities__ = required_caps
             wrapper.__mcp_open_world_hint__ = open_world_hint
             wrapper.__mcp_read_only_hint__ = read_only_hint
             wrapper.__mcp_visibility__ = visibility
