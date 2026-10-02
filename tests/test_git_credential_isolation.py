@@ -11,7 +11,7 @@ def test_shell_children_scrub_github_credentials(monkeypatch):
 
     result = asyncio.run(
         workspace._run_shell(
-            "python -c 'import os; print(os.getenv("GITHUB_TOKEN")); print(os.getenv("GH_TOKEN"))'",
+            "python -c 'import os; print(os.getenv(\"GITHUB_TOKEN\")); print(os.getenv(\"GH_TOKEN\"))'",
             timeout_seconds=10,
         )
     )
