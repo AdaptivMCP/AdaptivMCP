@@ -124,7 +124,9 @@ def _has_unquoted_shell_control_syntax(cmd: str) -> bool:
             i += 1
             continue
         if not in_single and not in_double:
-            if ch in "\r\n;|&`":
+            # Separators and pipes are handled after tokenization so read-only
+            # chains/pipelines remain read-only when every stage is read-only.
+            if ch == "`":
                 return True
             if ch == "$" and i + 1 < len(cmd) and cmd[i + 1] in "({":
                 return True
