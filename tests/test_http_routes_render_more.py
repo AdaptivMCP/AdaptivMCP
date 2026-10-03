@@ -11,7 +11,7 @@ def test_render_owners_invalid_limit_returns_400(monkeypatch) -> None:
 
     monkeypatch.setattr("github_mcp.main_tools.render.list_render_owners", _owners)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get("/render/owners?limit=abc")
     assert resp.status_code == 400
     payload = resp.json()
@@ -25,7 +25,7 @@ def test_render_services_invalid_limit_returns_400(monkeypatch) -> None:
 
     monkeypatch.setattr("github_mcp.main_tools.render.list_render_services", _services)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get("/render/services?limit=notanint")
     assert resp.status_code == 400
     payload = resp.json()
@@ -39,7 +39,7 @@ def test_render_deploys_invalid_limit_returns_400(monkeypatch) -> None:
 
     monkeypatch.setattr("github_mcp.main_tools.render.list_render_deploys", _deploys)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get("/render/services/svc123/deploys?limit=oops")
     assert resp.status_code == 400
     payload = resp.json()
@@ -65,7 +65,7 @@ def test_render_deploy_create_invalid_json_body_defaults(monkeypatch) -> None:
 
     monkeypatch.setattr("github_mcp.main_tools.render.create_render_deploy", _create)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post(
         "/render/services/svc123/deploys",
         content="not-json",
@@ -80,7 +80,7 @@ def test_render_deploy_create_invalid_json_body_defaults(monkeypatch) -> None:
 
 
 def test_render_logs_requires_owner_and_resources() -> None:
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get("/render/logs")
     assert resp.status_code == 400
     detail = (resp.json().get("error_detail") or {}).get("category")
@@ -98,7 +98,7 @@ def test_render_logs_resources_parsing_comma_separated(monkeypatch) -> None:
 
     monkeypatch.setattr("github_mcp.main_tools.render.list_render_logs", _logs)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get("/render/logs?owner_id=o1&resources=r1,%20r2&limit=2")
     assert resp.status_code == 200
     assert observed["owner_id"] == "o1"
@@ -117,14 +117,14 @@ def test_render_logs_resources_parsing_repeated_params(monkeypatch) -> None:
 
     monkeypatch.setattr("github_mcp.main_tools.render.list_render_logs", _logs)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get("/render/logs?owner_id=o1&resources=r1&resources=r2")
     assert resp.status_code == 200
     assert observed["resources"] == ["r1", "r2"]
 
 
 def test_render_logs_invalid_status_code_returns_400() -> None:
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get("/render/logs?owner_id=o1&resources=r1&status_code=bad")
     assert resp.status_code == 400
     payload = resp.json()

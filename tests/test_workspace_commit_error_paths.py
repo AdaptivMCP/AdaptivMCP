@@ -15,7 +15,7 @@ def _mk_dummy_tw(*, run_shell_impl):
 
     class DummyTW:
         def _workspace_deps(self):
-            return {"clone_repo": deps.clone_repo, "run_shell": deps.run_shell}
+            return {"clone_repo": deps.clone_repo, "run_git": deps.run_shell, "run_shell": deps.run_shell}
 
         def _resolve_full_name(self, full_name, *, owner=None, repo=None):
             return full_name

@@ -33,9 +33,13 @@ def test_capability_set_is_request_scoped():
 
 
 def test_set_request_capabilities_normalizes_values():
-    assert set_request_capabilities([" git.push ", "", "workspace.write"]) == frozenset(
-        {"git.push", "workspace.write"}
-    )
+    token = REQUEST_CAPABILITIES.set(frozenset())
+    try:
+        assert set_request_capabilities([" git.push ", "", "workspace.write"]) == frozenset(
+            {"git.push", "workspace.write"}
+        )
+    finally:
+        REQUEST_CAPABILITIES.reset(token)
 
 
 def test_missing_capability_is_denied():
@@ -125,8 +129,9 @@ async def test_dynamic_write_classification_controls_runtime_capability_gate():
     cap_token = REQUEST_CAPABILITIES.set(frozenset())
     try:
         assert await dynamic_tool(mutate=False) == {"mutate": False}
-        with pytest.raises(WriteApprovalRequiredError):
-            await dynamic_tool(mutate=True)
+        denied = await dynamic_tool(mutate=True)
+        assert denied["ok"] is False
+        assert "workspace.write" in denied["error"]
         REQUEST_CAPABILITIES.set(frozenset({"workspace.write"}))
         assert await dynamic_tool(mutate=True) == {"mutate": True}
     finally:

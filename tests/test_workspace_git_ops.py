@@ -35,7 +35,7 @@ class _FakeTW:
     deps: _FakeDeps
 
     def _workspace_deps(self) -> dict[str, Any]:
-        return {"clone_repo": self.deps.clone_repo, "run_shell": self.deps.run_shell}
+        return {"clone_repo": self.deps.clone_repo, "run_git": self.deps.run_shell, "run_shell": self.deps.run_shell}
 
     def _effective_ref_for_repo(self, full_name: str, ref: str) -> str:
         _ = full_name

@@ -100,3 +100,17 @@ async def test_mcp_tool_redacts_raw_response_payloads() -> None:
 
     assert result["token"] == REDACTED
     assert result["message"] == "safe"
+
+
+def test_redaction_preserves_author_and_long_workspace_paths() -> None:
+    path = "/tmp/pytest-of-root/pytest-0/test_delete_workspace_paths_re0/outside.txt"
+    assert redact_any({"author": "Alice", "path": path}) == {"author": "Alice", "path": path}
+    assert redact_any({"auth": "secret", "authentication": "secret"}) == {
+        "auth": REDACTED, "authentication": REDACTED,
+    }
+
+
+def test_redaction_still_scrubs_long_base64_credentials() -> None:
+    value = "Ab9/" * 20 + "=="
+    assert redact_any(value) == REDACTED
+    assert redact_any({"path": "ghp_" + "A" * 32})["path"] == REDACTED

@@ -289,7 +289,7 @@ def _authenticated_git_command(cmd: str) -> str:
     if not tokens or os.path.basename(tokens[0]) not in {"git", "git.exe"}:
         raise GitHubAPIError("Authenticated GitService accepts only git commands")
     if any(
-        token in {"-c", "--config", "--config-env"} or token.startswith("--config=")
+        token in {"-c", "--config", "--config-env"} or token.startswith(("--config=", "--config-env=", "-c"))
         for token in tokens[1:]
     ):
         raise GitHubAPIError("Authenticated git commands cannot override Git configuration")
@@ -501,7 +501,7 @@ async def _clone_repo_unlocked(
             workspace_dir,
             full_name,
             timeout_seconds=git_timeout,
-            env=git_env,
+            env=None,
         )
         if preserve_changes:
             # Workspace directories are keyed by ref, so callers expect the repo mirror

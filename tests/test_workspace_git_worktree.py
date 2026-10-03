@@ -56,7 +56,7 @@ def test_workspace_git_log_clips_and_parses(monkeypatch):
 
     class DummyTW:
         def _workspace_deps(self):
-            return {"clone_repo": deps.clone_repo, "run_shell": deps.run_shell}
+            return {"clone_repo": deps.clone_repo, "run_git": deps.run_shell, "run_shell": deps.run_shell}
 
         def _effective_ref_for_repo(self, full_name: str, ref: str):
             return ref
@@ -106,7 +106,7 @@ def test_workspace_git_checkout_rekeys_workspace(monkeypatch):
 
         class DummyTW:
             def _workspace_deps(self):
-                return {"clone_repo": deps.clone_repo, "run_shell": deps.run_shell}
+                return {"clone_repo": deps.clone_repo, "run_git": deps.run_shell, "run_shell": deps.run_shell}
 
             def _effective_ref_for_repo(self, full_name: str, ref: str):
                 return ref
@@ -146,7 +146,7 @@ def test_workspace_git_checkout_rejects_invalid_target(monkeypatch):
 
     class DummyTW:
         def _workspace_deps(self):
-            return {"clone_repo": deps.clone_repo, "run_shell": deps.run_shell}
+            return {"clone_repo": deps.clone_repo, "run_git": deps.run_shell, "run_shell": deps.run_shell}
 
         def _effective_ref_for_repo(self, full_name: str, ref: str):
             return ref

@@ -16,7 +16,7 @@ REDACTED = "<REDACTED_SECRET>"
 
 _SECRET_KEY_RE = re.compile(
     r"(?i)(?:"
-    r"access[_-]?token|api[_-]?key|auth(?:entication)?|authorization|"
+    r"access[_-]?token|api[_-]?key|auth(?:entication)?(?:$|[_-])|authorization|"
     r"bearer|client[_-]?secret|credential|gh[_-]?(?:token|pat)|"
     r"password|passwd|private[_-]?key|refresh[_-]?token|secret|token|"
     r"webhook[_-]?secret"
@@ -88,7 +88,8 @@ def _redact_string(value: str, *, key: str | None = None) -> str:
             return prefix + "Bearer " + REDACTED
         return prefix + REDACTED
 
-    out = _AUTH_HEADER_RE.sub(_redact_auth_header, out)    out = _BEARER_RE.sub(lambda m: m.group(1) + REDACTED, out)
+    out = _AUTH_HEADER_RE.sub(_redact_auth_header, out)
+    out = _BEARER_RE.sub(lambda m: m.group(1) + REDACTED, out)
     out = _ENV_ASSIGNMENT_RE.sub(lambda m: m.group(1) + REDACTED, out)
     out = _CREDENTIAL_URL_RE.sub(lambda m: m.group("prefix") + REDACTED + "@", out)
     out = _TOKEN_RE.sub(REDACTED, out)
@@ -98,6 +99,13 @@ def _redact_string(value: str, *, key: str | None = None) -> str:
     # commit IDs, and user data merely because they are long.
     def _generic(match: re.Match[str]) -> str:
         candidate = match.group("secret")
+        # Paths and hexadecimal object IDs are ordinary workspace metadata.
+        if (
+            candidate.startswith(("/", "./", "../"))
+            and candidate.count("/") >= 2
+            and "=" not in candidate
+        ) or re.fullmatch(r"[0-9a-fA-F]+", candidate):
+            return candidate
         if (
             any(ch.isalpha() for ch in candidate)
             and any(ch.isdigit() for ch in candidate)

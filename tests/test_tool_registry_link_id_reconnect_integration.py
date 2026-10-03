@@ -17,7 +17,7 @@ def test_tool_registry_uris_survive_forwarded_prefix_changes() -> None:
     import main
     from starlette.testclient import TestClient
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
 
     resp_a = client.get(
         "/tools",

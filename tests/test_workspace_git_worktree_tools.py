@@ -49,7 +49,7 @@ async def test_workspace_git_status_parses_porcelain(
             return ref
 
         def _workspace_deps(self) -> dict[str, Any]:
-            return {"clone_repo": clone_repo, "run_shell": run_shell}
+            return {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
     monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
 
@@ -105,7 +105,7 @@ async def test_workspace_git_log_parses_commits(
             return ref
 
         def _workspace_deps(self) -> dict[str, Any]:
-            return {"clone_repo": clone_repo, "run_shell": run_shell}
+            return {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
     monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
 
@@ -157,7 +157,7 @@ async def test_workspace_git_branches_parses_refs(
             return ref
 
         def _workspace_deps(self) -> dict[str, Any]:
-            return {"clone_repo": clone_repo, "run_shell": run_shell}
+            return {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
     monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
 
@@ -222,7 +222,7 @@ async def test_workspace_git_checkout_rekeys_workspace(
                 return {"exit_code": 0, "stdout": "", "stderr": ""}
             return {"exit_code": 0, "stdout": "ok", "stderr": ""}
 
-        deps: dict[str, Any] = {"clone_repo": clone_repo, "run_shell": run_shell}
+        deps: dict[str, Any] = {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
         monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
         monkeypatch.setattr(
@@ -279,7 +279,7 @@ async def test_workspace_git_restore_builds_command(
             return ref
 
         def _workspace_deps(self) -> dict[str, Any]:
-            return {"clone_repo": clone_repo, "run_shell": run_shell}
+            return {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
     monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
 
@@ -361,7 +361,7 @@ async def test_workspace_git_tags_parses_rows(
             return ref
 
         def _workspace_deps(self) -> dict[str, Any]:
-            return {"clone_repo": clone_repo, "run_shell": run_shell}
+            return {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
     monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
 
@@ -415,7 +415,7 @@ async def test_workspace_git_stash_list_parses_entries(
             return ref
 
         def _workspace_deps(self) -> dict[str, Any]:
-            return {"clone_repo": clone_repo, "run_shell": run_shell}
+            return {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
     monkeypatch.setattr(git_worktree, "_tw", lambda: _TW())
 

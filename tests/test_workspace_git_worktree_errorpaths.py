@@ -34,7 +34,7 @@ def _mk_tw(*, clone_repo: Any, run_shell: Any):
             return ref
 
         def _workspace_deps(self) -> dict[str, Any]:
-            return {"clone_repo": clone_repo, "run_shell": run_shell}
+            return {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
     return _TW()
 
@@ -225,7 +225,7 @@ async def test_workspace_git_stash_save_and_apply_like_helper(
             full_name="o/r",
             effective_ref="main",
             repo_dir=str(repo_dir),
-            deps={"run_shell": run_shell},
+            deps={"run_git": run_shell, "run_shell": run_shell},
             t_default=0,
             stash_ref="stash@{0}",
         )
