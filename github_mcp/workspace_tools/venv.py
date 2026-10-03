@@ -62,7 +62,7 @@ async def workspace_venv_start(
             ),
             "install_log": install_log,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_venv_start")
 
 
@@ -87,7 +87,7 @@ async def workspace_venv_stop(
             "stopped": stopped,
             "venv": status,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_venv_stop")
 
 
@@ -109,5 +109,5 @@ async def workspace_venv_status(
             "ref": effective_ref,
             "venv": status,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_venv_status")

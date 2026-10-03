@@ -144,7 +144,7 @@ async def workspace_git_status(
             **parsed,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_status")
 
 
@@ -206,7 +206,7 @@ async def workspace_git_stage(
             "staged_files": staged_files,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_stage")
 
 
@@ -265,7 +265,7 @@ async def workspace_git_unstage(
             "staged_files": staged_files,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_unstage")
 
 
@@ -304,8 +304,7 @@ async def workspace_git_log(
         n = int(max_entries)
         if n <= 0:
             n = 1
-        if n > 500:
-            n = 500
+        n = min(n, 500)
 
         await deps["run_shell"](
             f"git checkout {shlex.quote(effective_ref)}",
@@ -352,7 +351,7 @@ async def workspace_git_log(
             "truncated": truncated,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_log")
 
 
@@ -418,7 +417,7 @@ async def workspace_git_show(
             "truncated": truncated,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_show")
 
 
@@ -465,8 +464,7 @@ async def workspace_git_blame(
             e = s + max(1, int(max_lines)) - 1
         else:
             e = int(end_line)
-        if e < s:
-            e = s
+        e = max(e, s)
         # Keep payloads bounded.
         if e - s + 1 > 2000:
             e = s + 2000 - 1
@@ -502,7 +500,7 @@ async def workspace_git_blame(
             "lines": lines,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_blame")
 
 
@@ -580,7 +578,7 @@ async def workspace_git_branches(
             "branches": branches_out,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_branches")
 
 
@@ -617,8 +615,7 @@ async def workspace_git_tags(
         n = int(max_entries)
         if n <= 0:
             n = 1
-        if n > 2000:
-            n = 2000
+        n = min(n, 2000)
 
         fmt = "%(refname:strip=2)\t%(objectname)\t%(creatordate:iso-strict)"
         cmd = (
@@ -649,7 +646,7 @@ async def workspace_git_tags(
             "tags": tags,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_tags")
 
 
@@ -686,8 +683,7 @@ async def workspace_git_stash_list(
         n = int(max_entries)
         if n <= 0:
             n = 1
-        if n > 500:
-            n = 500
+        n = min(n, 500)
 
         cmd = f"git stash list --date=iso-strict | head -n {n}"
         res = await deps["run_shell"](cmd, cwd=repo_dir, timeout_seconds=t_default)
@@ -715,7 +711,7 @@ async def workspace_git_stash_list(
             "stashes": stashes,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_stash_list")
 
 
@@ -774,7 +770,7 @@ async def workspace_git_stash_save(
             "stdout": stdout,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_stash_save")
 
 
@@ -841,7 +837,7 @@ async def workspace_git_stash_pop(
             t_default=t_default,
             stash_ref=stash_ref,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_stash_pop")
 
 
@@ -882,7 +878,7 @@ async def workspace_git_stash_apply(
             t_default=t_default,
             stash_ref=stash_ref,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_stash_apply")
 
 
@@ -923,7 +919,7 @@ async def workspace_git_stash_drop(
             t_default=t_default,
             stash_ref=stash_ref,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_stash_drop")
 
 
@@ -1053,7 +1049,7 @@ async def workspace_git_checkout(
             else None,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_checkout")
 
 
@@ -1149,7 +1145,7 @@ async def workspace_git_commit(
             "sha": sha,
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_commit")
 
 
@@ -1207,7 +1203,7 @@ async def workspace_git_fetch(
             "stderr": (res.get("stderr", "") or "").strip(),
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_fetch")
 
 
@@ -1272,7 +1268,7 @@ async def workspace_git_reset(
             "stderr": (res.get("stderr", "") or "").strip(),
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_reset")
 
 
@@ -1331,7 +1327,7 @@ async def workspace_git_clean(
             "stderr": (res.get("stderr", "") or "").strip(),
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_clean")
 
 
@@ -1407,7 +1403,7 @@ async def workspace_git_restore(
             "stderr": (res.get("stderr", "") or "").strip(),
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_restore")
 
 
@@ -1478,7 +1474,7 @@ async def workspace_git_merge(
             "stderr": (res.get("stderr", "") or "").strip(),
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_merge")
 
 
@@ -1550,7 +1546,7 @@ async def workspace_git_rebase(
             "stderr": (res.get("stderr", "") or "").strip(),
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_rebase")
 
 
@@ -1618,7 +1614,7 @@ async def workspace_git_cherry_pick(
             "stderr": (res.get("stderr", "") or "").strip(),
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_cherry_pick")
 
 
@@ -1682,7 +1678,7 @@ async def workspace_git_revert(
             "stderr": (res.get("stderr", "") or "").strip(),
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_revert")
 
 
@@ -1742,9 +1738,7 @@ async def workspace_git_pull(
         else:
             pull_cmd = f"git pull origin {shlex.quote(effective_ref)}"
 
-        pull = await deps["run_git"](
-            pull_cmd, cwd=repo_dir, timeout_seconds=t_default
-        )
+        pull = await deps["run_git"](pull_cmd, cwd=repo_dir, timeout_seconds=t_default)
         if pull.get("exit_code", 0) != 0:
             stderr = pull.get("stderr", "") or pull.get("stdout", "")
             raise GitHubAPIError(f"git pull failed: {stderr}")
@@ -1765,7 +1759,7 @@ async def workspace_git_pull(
             },
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_pull")
 
 
@@ -1808,9 +1802,7 @@ async def workspace_git_push(
         flag_str = " ".join(flags)
         push_cmd = f"git push {flag_str} origin HEAD".strip()
 
-        push = await deps["run_git"](
-            push_cmd, cwd=repo_dir, timeout_seconds=t_default
-        )
+        push = await deps["run_git"](push_cmd, cwd=repo_dir, timeout_seconds=t_default)
         if push.get("exit_code", 0) != 0:
             stderr = push.get("stderr", "") or push.get("stdout", "")
             raise GitHubAPIError(f"git push failed: {stderr}")
@@ -1826,7 +1818,7 @@ async def workspace_git_push(
             },
             "ok": True,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_push")
 
 
@@ -1854,5 +1846,5 @@ async def workspace_open_pr_from_workspace(
             body=body,
             draft=draft,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_open_pr_from_workspace")

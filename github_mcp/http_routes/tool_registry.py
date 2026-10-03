@@ -14,15 +14,14 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from github_mcp.path_utils import normalize_base_path as _normalize_base_path
-from github_mcp.path_utils import request_base_path as _request_base_path
-
 from github_mcp.mcp_server import registry as mcp_registry
 from github_mcp.mcp_server.context import REQUEST_CHATGPT_METADATA
 from github_mcp.mcp_server.suggestions import (
     augment_structured_error_for_bad_args,
     build_unknown_tool_payload,
 )
+from github_mcp.path_utils import normalize_base_path as _normalize_base_path
+from github_mcp.path_utils import request_base_path as _request_base_path
 from github_mcp.server import _find_registered_tool
 
 try:
@@ -150,7 +149,7 @@ def _tool_catalog(
         tools = list(catalog.get("tools") or [])
         catalog_error: str | None = None
         catalog_errors = catalog.get("errors")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         tools = []
         catalog_error = str(exc) or "Failed to build tool catalog."
         catalog_errors = None
@@ -434,7 +433,7 @@ def _log_http_structured_error(
                 "error_detail": error_detail,
             },
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return
 
 
@@ -524,7 +523,7 @@ def _default_include_parameters(request: Request) -> bool:
     try:
         if REQUEST_CHATGPT_METADATA.get():
             return True
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     # Fallback: detect headers directly (in case middleware is disabled).
@@ -539,7 +538,7 @@ def _default_include_parameters(request: Request) -> bool:
         ):
             if request.headers.get(hdr):
                 return True
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     return False
@@ -559,7 +558,7 @@ def _is_openai_client(request: Request) -> bool:
     try:
         if REQUEST_CHATGPT_METADATA.get():
             return True
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     try:
@@ -573,7 +572,7 @@ def _is_openai_client(request: Request) -> bool:
         ):
             if request.headers.get(hdr):
                 return True
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     return False
@@ -647,7 +646,7 @@ def _log_http_tool_cancelled(
                 "invocation_id": invocation_id,
             },
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return
 
 
@@ -749,7 +748,7 @@ async def _execute_tool(
                 name = mcp_registry._registered_tool_name(tool_obj, func)
                 if name:
                     available.append(name)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             available = []
         payload = build_unknown_tool_payload(tool_name, available)
         return payload, 404, {}
@@ -759,7 +758,7 @@ async def _execute_tool(
 
     try:
         signature: inspect.Signature | None = inspect.signature(func)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         signature = None
 
     if max_attempts is not None:
@@ -828,12 +827,12 @@ async def _execute_tool(
                     )
                     return normalized_payload, status_code, headers
 
-            payload = result if isinstance(result, dict) else result
+            payload = result
             return payload, 200, {}
         except asyncio.CancelledError as exc:
             _log_http_tool_cancelled(tool_name=tool_name, invocation_id=None, exc=exc)
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             from github_mcp.mcp_server.error_handling import _structured_tool_error
 
             structured = _structured_tool_error(
@@ -1081,7 +1080,7 @@ def build_resources_endpoint() -> Callable[[Request], Response]:
             try:
                 if REQUEST_CHATGPT_METADATA.get():
                     compact = False
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
         # Support legacy discovery paths used by some client runtimes.
         #
@@ -1135,14 +1134,14 @@ def build_tool_invoke_endpoint() -> Callable[[Request], Response]:
             max_attempts = request.query_params.get("max_attempts")
             if max_attempts is not None:
                 max_attempts = int(max_attempts)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             max_attempts = None
 
         payload: Any = {}
         if request.method in {"POST", "PUT", "PATCH"}:
             try:
                 payload = await request.json()
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 payload = {}
         args = _normalize_payload(payload)
         return await _invoke_tool(request, tool_name, args, max_attempts=max_attempts)
@@ -1160,14 +1159,14 @@ def build_tool_invoke_async_endpoint() -> Callable[[Request], Response]:
             max_attempts = request.query_params.get("max_attempts")
             if max_attempts is not None:
                 max_attempts = int(max_attempts)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             max_attempts = None
 
         payload: Any = {}
         if request.method in {"POST", "PUT", "PATCH"}:
             try:
                 payload = await request.json()
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 payload = {}
         args = _normalize_payload(payload)
         invocation = await _create_invocation(

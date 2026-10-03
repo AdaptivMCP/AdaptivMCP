@@ -23,7 +23,7 @@ def _iso_utc(ts: float | None) -> str | None:
         return None
     try:
         return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(float(ts)))
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return None
 
 

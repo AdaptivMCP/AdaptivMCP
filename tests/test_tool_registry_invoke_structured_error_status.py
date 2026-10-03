@@ -11,7 +11,7 @@ import main
 def test_invoke_endpoint_maps_structured_error_status(monkeypatch: Any) -> None:
     """Tool wrappers may return raw error payloads instead of raising."""
 
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "fake_tool"
@@ -39,7 +39,7 @@ def test_invoke_endpoint_maps_structured_error_status(monkeypatch: Any) -> None:
 def test_invoke_endpoint_wraps_bare_error_detail(monkeypatch: Any) -> None:
     """Legacy tools may return the error_detail dict directly."""
 
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "detail_only"
@@ -65,7 +65,7 @@ def test_invoke_endpoint_wraps_bare_error_detail(monkeypatch: Any) -> None:
 def test_invoke_endpoint_does_not_double_wrap_error_envelopes(monkeypatch: Any) -> None:
     """If a tool returns an error envelope without error_detail, normalize safely."""
 
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "enveloped"
@@ -108,7 +108,7 @@ def test_invoke_endpoint_does_not_double_wrap_error_envelopes(monkeypatch: Any) 
 def test_invoke_endpoint_maps_uppercase_rate_limit_codes(monkeypatch: Any) -> None:
     """Error code mapping should be case-insensitive."""
 
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "ratey"
@@ -129,7 +129,7 @@ def test_invoke_endpoint_maps_uppercase_rate_limit_codes(monkeypatch: Any) -> No
 
 
 def test_invoke_endpoint_retries_retryable_structured_errors(monkeypatch: Any) -> None:
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "flaky_tool"
@@ -159,7 +159,7 @@ def test_invoke_endpoint_retries_retryable_structured_errors(monkeypatch: Any) -
 
 
 def test_invoke_endpoint_does_not_retry_write_tools(monkeypatch: Any) -> None:
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "writey"
@@ -194,7 +194,7 @@ def test_invoke_endpoint_returns_200_for_openai_clients_on_structured_errors(
     include the original status in a header.
     """
 
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "bad_tool"

@@ -429,7 +429,7 @@ def list_resources(
             from github_mcp.mcp_server.context import REQUEST_PATH
 
             request_path = REQUEST_PATH.get()
-        except Exception:  # pragma: no cover - context is optional for tests
+        except Exception:  # pragma: no cover - context is optional for tests  # noqa: BLE001 - handle optional metadata or report a boundary failure
             request_path = None
         if request_path:
             prefix = _base_path_from_path(

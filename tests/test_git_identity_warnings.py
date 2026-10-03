@@ -5,7 +5,7 @@ import importlib
 
 def _reload_config(monkeypatch, env: dict[str, str | None]):
     # Ensure a clean import each time so module-level identity resolution reruns.
-    import github_mcp.config as config
+    from github_mcp import config
 
     for key in list(env.keys()):
         if env[key] is None:

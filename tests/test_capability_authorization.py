@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 
+from github_mcp.exceptions import WriteApprovalRequiredError
 from github_mcp.mcp_server.context import (
     REQUEST_CAPABILITIES,
     REQUEST_PATH,
@@ -15,7 +16,6 @@ from github_mcp.mcp_server.decorators import (
     _enforce_capabilities,
     mcp_tool,
 )
-from github_mcp.exceptions import WriteApprovalRequiredError
 
 
 def test_capabilities_default_to_empty():
@@ -35,9 +35,9 @@ def test_capability_set_is_request_scoped():
 def test_set_request_capabilities_normalizes_values():
     token = REQUEST_CAPABILITIES.set(frozenset())
     try:
-        assert set_request_capabilities([" git.push ", "", "workspace.write"]) == frozenset(
-            {"git.push", "workspace.write"}
-        )
+        assert set_request_capabilities(
+            [" git.push ", "", "workspace.write"]
+        ) == frozenset({"git.push", "workspace.write"})
     finally:
         REQUEST_CAPABILITIES.reset(token)
 
@@ -116,6 +116,7 @@ def test_concurrent_requests_do_not_share_capabilities():
     assert first == frozenset({"git.push"})
     assert second == frozenset({"github.write"})
 
+
 @pytest.mark.anyio
 async def test_dynamic_write_classification_controls_runtime_capability_gate():
     @mcp_tool(
@@ -137,7 +138,6 @@ async def test_dynamic_write_classification_controls_runtime_capability_gate():
     finally:
         REQUEST_CAPABILITIES.reset(cap_token)
         REQUEST_PATH.reset(path_token)
-
 
 
 def test_tool_outputs_are_redacted_in_all_response_modes() -> None:

@@ -36,13 +36,13 @@ def test_run_shell_timeout_collect_output_is_bounded(monkeypatch):
             # This is the bounded output-collection path.
             try:
                 coro.close()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
             raise asyncio.TimeoutError()
         if timeout == 0.01:
             try:
                 coro.close()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
             raise asyncio.TimeoutError()
         return await coro

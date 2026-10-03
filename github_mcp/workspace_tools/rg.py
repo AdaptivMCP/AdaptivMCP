@@ -14,6 +14,7 @@ These tools:
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import json
 import os
@@ -26,7 +27,6 @@ from github_mcp.server import _structured_tool_error, mcp_tool
 
 from ._shared import _tw
 from .fs import _is_probably_binary, _read_lines_excerpt, _workspace_safe_join
-
 
 _RG_AVAILABLE: bool | None = None
 
@@ -80,7 +80,7 @@ def _rg_available() -> bool:
         return _RG_AVAILABLE
     try:
         _RG_AVAILABLE = os.access(path, os.X_OK)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         _RG_AVAILABLE = False
     return _RG_AVAILABLE
 
@@ -101,17 +101,17 @@ def _safe_communicate(
     except subprocess.TimeoutExpired:
         try:
             proc.kill()
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
         try:
             out, err = proc.communicate(timeout=timeout)
             return out or "", err or ""
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             # Final fallback: best-effort drain without a timeout.
             try:
                 out, err = proc.communicate()
                 return out or "", err or ""
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 return "", ""
 
 
@@ -206,12 +206,10 @@ def _passes_filters(
     # Exclude filters.
     if exclude_paths and _passes_path_prefixes(rel_path, exclude_paths):
         return False
-    if exclude_globs and any(
-        fnmatch.fnmatch(rel_path.replace("\\", "/"), g) for g in exclude_globs
-    ):
-        return False
-
-    return True
+    return not (
+        exclude_globs
+        and any(fnmatch.fnmatch(rel_path.replace("\\", "/"), g) for g in exclude_globs)
+    )
 
 
 def _exclude_globs_from_paths(exclude_paths: list[str]) -> list[str]:
@@ -263,7 +261,7 @@ def _python_walk_files(
             abs_path = os.path.join(root, f)
             try:
                 rel_path = os.path.relpath(abs_path, repo_dir).replace("\\", "/")
-            except Exception:  # nosec B112
+            except Exception:  # nosec B112  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
                 continue
             if rel_path == "." or rel_path.startswith(".."):
                 continue
@@ -337,7 +335,7 @@ def _python_search(
                 continue
             if _is_probably_binary(abs_path):
                 continue
-        except Exception:  # nosec B112
+        except Exception:  # nosec B112  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
             continue
 
         try:
@@ -367,7 +365,7 @@ def _python_search(
                     if len(matches) >= max_results:
                         truncated = True
                         return matches, truncated
-        except Exception:  # nosec B112
+        except Exception:  # nosec B112  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
             continue
 
     return matches, truncated
@@ -457,8 +455,14 @@ async def rg_list_workspace_files(
                 base_abs = repo_dir
             else:
                 base_abs = _workspace_safe_join(repo_dir, base_rel_effective or ".")
-            proc = subprocess.run(  # nosec B603
-                cmd, cwd=base_abs, capture_output=True, text=True, timeout=30
+            proc = await asyncio.to_thread(
+                subprocess.run,  # nosec B603
+                cmd,
+                cwd=base_abs,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
             )
             if proc.returncode not in (0, 1):
                 raise RuntimeError((proc.stderr or proc.stdout or "rg failed").strip())
@@ -482,7 +486,8 @@ async def rg_list_workspace_files(
                     truncated = True
                     break
         else:
-            files = _python_walk_files(
+            files = await asyncio.to_thread(
+                _python_walk_files,
                 repo_dir,
                 base_rel_effective,
                 include_hidden=bool(include_hidden),
@@ -510,7 +515,7 @@ async def rg_list_workspace_files(
             "truncated": bool(truncated),
             "max_results": int(max_results),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="rg_list_workspace_files")
 
 
@@ -636,86 +641,95 @@ async def rg_search_workspace(
                             continue
                         cmd.append(joined)
 
-                proc = subprocess.Popen(  # nosec B603
-                    cmd,
-                    cwd=base_abs,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-                assert proc.stdout is not None  # nosec B101
-                try:
-                    for raw in proc.stdout:
-                        raw = raw.strip()
-                        if not raw:
-                            continue
-                        try:
-                            evt = json.loads(raw)
-                        except Exception:  # nosec B112
-                            continue
-                        if evt.get("type") != "match":
-                            continue
-                        data = evt.get("data") or {}
-                        rel = data.get("path", {}).get("text")
-                        if not isinstance(rel, str) or not rel:
-                            continue
-                        # Normalize to repo-root relative path.
-                        rel_norm = os.path.normpath(
-                            os.path.join(base_rel_effective, rel)
-                        ).replace("\\", "/")
-                        if not _passes_filters(
-                            rel_norm,
-                            include_globs=globs,
-                            exclude_globs=excl_globs,
-                            include_paths=incl_paths,
-                            exclude_paths=excl_paths,
-                        ):
-                            continue
-                        line_no = int(data.get("line_number") or 0)
-                        sub = data.get("submatches") or []
-                        col = 1
-                        if sub and isinstance(sub, list) and isinstance(sub[0], dict):
+                def _collect_rg_matches() -> None:
+                    nonlocal matches, truncated
+                    proc = subprocess.Popen(  # nosec B603
+                        cmd,
+                        cwd=base_abs,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                    assert proc.stdout is not None  # nosec B101
+                    try:
+                        for raw in proc.stdout:
+                            raw = raw.strip()
+                            if not raw:
+                                continue
                             try:
-                                col = int(sub[0].get("start", 0)) + 1
-                            except Exception:
-                                col = 1
-                        text_line = (data.get("lines", {}) or {}).get("text")
-                        if not isinstance(text_line, str):
-                            text_line = ""
-                        text_line = text_line.rstrip("\n")
-                        matches.append(
-                            {
-                                "path": rel_norm,
-                                "line": int(line_no),
-                                "column": int(col),
-                                "text": text_line,
-                            }
-                        )
-                        if len(matches) >= max_results:
-                            truncated = True
-                            break
-                finally:
-                    try:
-                        if truncated and proc.poll() is None:
-                            proc.kill()
-                    except Exception:  # nosec B110
-                        pass
-                    _safe_communicate(proc, timeout=5)
+                                evt = json.loads(raw)
+                            except Exception:  # nosec B112  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
+                                continue
+                            if evt.get("type") != "match":
+                                continue
+                            data = evt.get("data") or {}
+                            rel = data.get("path", {}).get("text")
+                            if not isinstance(rel, str) or not rel:
+                                continue
+                            # Normalize to repo-root relative path.
+                            rel_norm = os.path.normpath(
+                                os.path.join(base_rel_effective, rel)
+                            ).replace("\\", "/")
+                            if not _passes_filters(
+                                rel_norm,
+                                include_globs=globs,
+                                exclude_globs=excl_globs,
+                                include_paths=incl_paths,
+                                exclude_paths=excl_paths,
+                            ):
+                                continue
+                            line_no = int(data.get("line_number") or 0)
+                            sub = data.get("submatches") or []
+                            col = 1
+                            if (
+                                sub
+                                and isinstance(sub, list)
+                                and isinstance(sub[0], dict)
+                            ):
+                                try:
+                                    col = int(sub[0].get("start", 0)) + 1
+                                except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
+                                    col = 1
+                            text_line = (data.get("lines", {}) or {}).get("text")
+                            if not isinstance(text_line, str):
+                                text_line = ""
+                            text_line = text_line.rstrip("\n")
+                            matches.append(
+                                {
+                                    "path": rel_norm,
+                                    "line": int(line_no),
+                                    "column": int(col),
+                                    "text": text_line,
+                                }
+                            )
+                            if len(matches) >= max_results:
+                                truncated = True
+                                break
+                    finally:
+                        try:
+                            if truncated and proc.poll() is None:
+                                proc.kill()
+                        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
+                            pass
+                        _safe_communicate(proc, timeout=5)
 
-                # rg returns 1 when no matches.
-                if proc.returncode not in (0, 1, None):
-                    stderr = ""
-                    try:
-                        stderr = proc.stderr.read() if proc.stderr else ""
-                    except Exception:
+                    # rg returns 1 when no matches.
+                    if proc.returncode not in (0, 1, None):
                         stderr = ""
-                    raise RuntimeError((stderr or "rg failed").strip())
+                        try:
+                            stderr = proc.stderr.read() if proc.stderr else ""
+                        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
+                            stderr = ""
+                        raise RuntimeError((stderr or "rg failed").strip())
 
-            except Exception:
+                await asyncio.to_thread(_collect_rg_matches)
+
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 # If rg is present but fails to execute (PATH issues, permission,
                 # incompatible binary, etc.), fall back to Python so the tool
                 # never hard-fails or wedges on a stuck subprocess.
-                matches, truncated = _python_search(
+                matches, truncated = await asyncio.to_thread(
+                    _python_search,
                     repo_dir,
                     base_rel_effective,
                     query.strip(),
@@ -732,7 +746,8 @@ async def rg_search_workspace(
                 engine = "python"
 
         else:
-            matches, truncated = _python_search(
+            matches, truncated = await asyncio.to_thread(
+                _python_search,
                 repo_dir,
                 base_rel_effective,
                 query.strip(),
@@ -761,7 +776,7 @@ async def rg_search_workspace(
                         max_chars=2000000,
                     )
                     m["excerpt"] = excerpt
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                     # Best-effort; omit excerpt if anything fails.
                     pass
 
@@ -786,5 +801,5 @@ async def rg_search_workspace(
             "matches": matches,
             "truncated": bool(truncated),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="rg_search_workspace")

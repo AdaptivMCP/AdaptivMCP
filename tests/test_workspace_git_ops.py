@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 
-import github_mcp.workspace_tools.git_ops as git_ops
+from github_mcp.workspace_tools import git_ops
 
 
 @dataclass
@@ -21,7 +22,7 @@ class _FakeDeps:
         return self.repo_dir
 
     async def run_shell(
-        self, cmd: str, *, cwd: str, timeout_seconds: int | float | None = None
+        self, cmd: str, *, cwd: str, timeout_seconds: float | None = None
     ):
         self.run_shell_calls.append(
             {"cmd": cmd, "cwd": cwd, "timeout_seconds": timeout_seconds}
@@ -35,7 +36,11 @@ class _FakeTW:
     deps: _FakeDeps
 
     def _workspace_deps(self) -> dict[str, Any]:
-        return {"clone_repo": self.deps.clone_repo, "run_git": self.deps.run_shell, "run_shell": self.deps.run_shell}
+        return {
+            "clone_repo": self.deps.clone_repo,
+            "run_git": self.deps.run_shell,
+            "run_shell": self.deps.run_shell,
+        }
 
     def _effective_ref_for_repo(self, full_name: str, ref: str) -> str:
         _ = full_name

@@ -1,4 +1,5 @@
 """Explicit HTTP authentication and principal binding for MCP transport."""
+
 from __future__ import annotations
 
 import hashlib
@@ -29,11 +30,7 @@ def _configured_auth_token() -> str | None:
 
 def _configured_capabilities() -> frozenset[str]:
     raw = os.environ.get(CAPABILITY_ENV, "")
-    return frozenset(
-        item.strip()
-        for item in re.split(r"[,\s]+", raw)
-        if item.strip()
-    )
+    return frozenset(item.strip() for item in re.split(r"[,\s]+", raw) if item.strip())
 
 
 def _token_principal(token: str) -> str:
@@ -69,7 +66,9 @@ def authenticate_request(
 
 
 def is_public_path(path: str) -> bool:
-    return path in PUBLIC_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_PATH_PREFIXES)
+    return path in PUBLIC_PATHS or any(
+        path.startswith(prefix) for prefix in PUBLIC_PATH_PREFIXES
+    )
 
 
 def authentication_error(*, configuration_error: bool = False) -> Response:
@@ -96,8 +95,8 @@ def auth_configuration_present() -> bool:
 __all__ = [
     "AUTH_TOKEN_ENV_VARS",
     "CAPABILITY_ENV",
-    "authenticate_request",
     "auth_configuration_present",
+    "authenticate_request",
     "authentication_error",
     "is_public_path",
 ]

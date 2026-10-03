@@ -207,7 +207,7 @@ async def get_workflow_run_overview(
             if value.endswith("Z"):
                 value = value[:-1] + "+00:00"
             return datetime.fromisoformat(value)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return None
 
     jobs: list[dict[str, Any]] = []
@@ -229,7 +229,7 @@ async def get_workflow_run_overview(
 
     while fetched < max_jobs:
         remaining = max_jobs - fetched
-        page_per_page = per_page if remaining >= per_page else remaining
+        page_per_page = min(per_page, remaining)
 
         jobs_resp = await m.list_workflow_run_jobs(
             full_name, run_id, per_page=page_per_page, page=page
@@ -392,13 +392,13 @@ async def wait_for_workflow_run(
     # Defensive parameter validation to avoid tight loops or negative timeouts
     try:
         timeout_seconds = int(timeout_seconds)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         timeout_seconds = 900
     timeout_seconds = max(1, timeout_seconds)
 
     try:
         poll_interval_seconds = int(poll_interval_seconds)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         poll_interval_seconds = 10
     poll_interval_seconds = max(1, poll_interval_seconds)
 
@@ -536,7 +536,7 @@ async def trigger_and_wait_for_workflow(
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=UTC)
                 return dt.astimezone(UTC)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 return None
 
         candidates: list[dict[str, Any]] = []

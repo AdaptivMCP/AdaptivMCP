@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable, Mapping
 from datetime import timezone
 from email.utils import parsedate_to_datetime
-from collections.abc import Iterable, Mapping
 from typing import Any
 
 
@@ -43,7 +43,7 @@ def extract_response_json(resp: Any) -> Any | None:
         return None
     try:
         return json_method()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         _ = exc
         return None
 

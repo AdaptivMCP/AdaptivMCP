@@ -297,7 +297,7 @@ def _jsonable(value: Any) -> Any:
     if isinstance(value, (bytes, bytearray)):
         try:
             return bytes(value).decode("utf-8", errors="replace")
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return str(value)
 
     # Mappings: coerce keys to strings.
@@ -306,7 +306,7 @@ def _jsonable(value: Any) -> Any:
         for k, v in value.items():
             try:
                 key = k if isinstance(k, str) else str(k)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 key = "<unprintable_key>"
             out[key] = _jsonable(v)
         return out
@@ -321,7 +321,7 @@ def _jsonable(value: Any) -> Any:
 
         if dataclasses.is_dataclass(value):
             return _jsonable(dataclasses.asdict(value))
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     # Pydantic v2 models.
@@ -329,7 +329,7 @@ def _jsonable(value: Any) -> Any:
         dump = getattr(value, "model_dump", None)
         if callable(dump):
             return _jsonable(dump(mode="json"))
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     # Exceptions.
@@ -340,10 +340,10 @@ def _jsonable(value: Any) -> Any:
     try:
         json.dumps(value, ensure_ascii=False)
         return value
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         try:
             return str(value)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return f"<{type(value).__name__}>"
 
 
@@ -380,7 +380,7 @@ def _normalize_strings_for_logs(value: Any) -> Any:
         for k, v in value.items():
             try:
                 key = k if isinstance(k, str) else str(k)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 key = "<unprintable_key>"
             out[key] = _normalize_strings_for_logs(v)
         return out
@@ -394,15 +394,15 @@ def _repr_for_docs(value: Any) -> str:
 
     try:
         value = _normalize_strings_for_logs(value)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     try:
         return repr(value)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         try:
             return repr(str(value))
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return f"<{type(value).__name__}>"
 
 
@@ -503,7 +503,7 @@ def _normalize_tool_description(
     sig = ""
     try:
         sig = str(signature) if signature is not None else ""
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         sig = ""
 
     if sig:
@@ -618,7 +618,7 @@ def _build_tool_docstring(
 
     if isinstance(props, Mapping) and props:
         lines += ["", "Parameters:"]
-        for name in sorted([k for k in props.keys() if isinstance(k, str)]):
+        for name in sorted([k for k in props if isinstance(k, str)]):
             prop = props.get(name)
             if not isinstance(prop, Mapping):
                 lines.append(f"- {name}: (unknown)")
@@ -701,7 +701,7 @@ def _normalize_input_schema(tool_obj: Any) -> dict[str, Any] | None:
             val = getattr(tool_obj, attr, None)
             if isinstance(val, dict):
                 return _normalize_required_properties(val)
-        except Exception:  # nosec B112
+        except Exception:  # nosec B112  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
             continue
 
     # Some frameworks store it inside meta.
@@ -712,7 +712,7 @@ def _normalize_input_schema(tool_obj: Any) -> dict[str, Any] | None:
                 v = meta.get(k)
                 if isinstance(v, dict):
                     return _normalize_required_properties(v)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     return None
@@ -881,7 +881,7 @@ def _stringify_annotation(annotation: Any) -> str:
         return ""
     try:
         return str(annotation)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return f"<{type(annotation).__name__}>"
 
 
@@ -896,7 +896,7 @@ def _schema_for_callable(
     schema: Any = None
     try:
         schema = _schema_from_signature(inspect.signature(func), tool_name=tool_name)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         schema = None
 
     if not isinstance(schema, Mapping):
@@ -931,5 +931,5 @@ def _preflight_tool_args(
         # Compact mode no longer produces a string preview (which can be re-escaped
         # by downstream layers). Return the JSONable object directly.
         return payload
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return {"tool": tool_name, "preview": "<unprintable_args>"}

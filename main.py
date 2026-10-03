@@ -12,23 +12,25 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 from urllib.parse import parse_qs
 
 import anyio
-import httpx  # noqa: F401
+import httpx
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.staticfiles import StaticFiles
 
-import github_mcp.server as server  # noqa: F401
-import github_mcp.tools_main as tools_main  # noqa: F401
-import github_mcp.tools_workspace as tools_workspace  # noqa: F401
 from github_mcp import http_clients as _http_clients  # noqa: F401
+from github_mcp import (
+    server,
+    tools_main,  # noqa: F401
+    tools_workspace,
+)
 from github_mcp.config import (
-    BASE_LOGGER,  # noqa: F401
+    BASE_LOGGER,
     FETCH_FILES_CONCURRENCY,
     FILE_CACHE_MAX_BYTES,  # noqa: F401
     FILE_CACHE_MAX_ENTRIES,  # noqa: F401
@@ -49,11 +51,11 @@ from github_mcp.config import (
     shorten_token,
 )
 from github_mcp.exceptions import (
-    GitHubAPIError,  # noqa: F401
+    GitHubAPIError,
     GitHubAuthError,
-    GitHubRateLimitError,  # noqa: F401
-    WriteApprovalRequiredError,  # noqa: F401
-    WriteNotAuthorizedError,  # noqa: F401
+    GitHubRateLimitError,
+    WriteApprovalRequiredError,
+    WriteNotAuthorizedError,
 )
 from github_mcp.file_cache import (
     clear_cache,
@@ -80,21 +82,21 @@ from github_mcp.http_routes.tool_registry import (
 )
 from github_mcp.http_routes.ui import register_ui_routes
 from github_mcp.mcp_server.context import (
+    REQUEST_AUTHENTICATED,
     REQUEST_CHATGPT_METADATA,
     REQUEST_ID,
     REQUEST_IDEMPOTENCY_KEY,
     REQUEST_MESSAGE_ID,
     REQUEST_PATH,
+    REQUEST_PRINCIPAL,
     REQUEST_RECEIVED_AT,
     REQUEST_SESSION_ID,
-    REQUEST_PRINCIPAL,
-    REQUEST_AUTHENTICATED,
     _extract_chatgpt_metadata,
     set_request_capabilities,
 )
 from github_mcp.mcp_server.transport_auth import (
-    authenticate_request,
     auth_configuration_present,
+    authenticate_request,
     authentication_error,
     is_public_path,
 )
@@ -106,7 +108,7 @@ from github_mcp.server import (
     _find_registered_tool,
     _github_request,
     _normalize_input_schema,
-    _structured_tool_error,  # noqa: F401
+    _structured_tool_error,
     mcp_tool,
     register_extra_tools_if_available,
 )
@@ -275,7 +277,7 @@ class _RequestContextMiddleware:
                 if (k or b"").lower() != b"x-request-id":
                     continue
                 decoded = (v or b"").decode("utf-8", errors="ignore").strip()
-            except Exception:
+            except Exception:  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
                 continue
             if decoded:
                 request_id = decoded
@@ -283,13 +285,13 @@ class _RequestContextMiddleware:
         for k, v in scope.get("headers") or []:
             try:
                 lk = (k or b"").lower()
-            except Exception:
+            except Exception:  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
                 continue
             if lk not in {b"idempotency-key", b"x-idempotency-key", b"x-dedupe-key"}:
                 continue
             try:
                 decoded = (v or b"").decode("utf-8", errors="ignore").strip()
-            except Exception:
+            except Exception:  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
                 continue
             if decoded:
                 idempotency_key = decoded
@@ -305,7 +307,7 @@ class _RequestContextMiddleware:
             metadata = _extract_chatgpt_metadata(list(scope.get("headers") or []))
             if metadata:
                 REQUEST_CHATGPT_METADATA.set(metadata)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
 
         started = False
@@ -328,7 +330,7 @@ class _RequestContextMiddleware:
                         (hk or b"").lower() == b"x-server-anchor" for hk, _ in headers
                     ):
                         headers.append((b"x-server-anchor", anchor.encode("utf-8")))
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                     pass
                 message["headers"] = headers
             await send(message)
@@ -346,7 +348,7 @@ class _RequestContextMiddleware:
                 )[0]
                 if qs_idempotency:
                     REQUEST_IDEMPOTENCY_KEY.set(str(qs_idempotency))
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
 
         # HTTP access logging (provider logs). We log at response.start and capture
@@ -498,7 +500,7 @@ class _RequestContextMiddleware:
                                 payload["request_json"] = _sanitize_for_logs(
                                     json.loads(decoded)
                                 )
-                            except Exception:
+                            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                                 # Keep binary/garbage bodies compact.
                                 if "\x00" in decoded or "\ufffd" in decoded:
                                     payload["request_body"] = (
@@ -508,13 +510,13 @@ class _RequestContextMiddleware:
                                     payload["request_body"] = _sanitize_for_logs(
                                         decoded
                                     )
-                        except Exception:
+                        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                             # As a last resort, don't dump repr(...) into logs.
                             try:
                                 payload["request_body"] = (
                                     f"<bytes len={len(captured_body)}>"
                                 )
-                            except Exception:
+                            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                                 payload["request_body"] = "<bytes>"
                         if captured_body_truncated:
                             payload["request_body_truncated"] = True
@@ -527,7 +529,7 @@ class _RequestContextMiddleware:
                                 payload["response_json"] = _sanitize_for_logs(
                                     json.loads(decoded)
                                 )
-                            except Exception:
+                            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                                 if "\x00" in decoded or "\ufffd" in decoded:
                                     payload["response_body"] = (
                                         f"<bytes len={len(resp_bytes)}>"
@@ -536,12 +538,12 @@ class _RequestContextMiddleware:
                                     payload["response_body"] = _sanitize_for_logs(
                                         decoded
                                     )
-                        except Exception:
+                        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                             try:
                                 payload["response_body"] = (
                                     f"<bytes len={len(resp_bytes)}>"
                                 )
-                            except Exception:
+                            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                                 payload["response_body"] = "<bytes>"
                         if response_body_truncated:
                             payload["response_body_truncated"] = True
@@ -572,7 +574,7 @@ class _RequestContextMiddleware:
                 canonical = json.dumps(
                     payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 canonical = repr(payload)
             digest = hashlib.sha256(
                 f"{path}|{canonical}".encode("utf-8", errors="ignore")
@@ -630,7 +632,7 @@ class _RequestContextMiddleware:
                             REQUEST_IDEMPOTENCY_KEY.set(
                                 _auto_idempotency_for_tool(path, payload)
                             )
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
 
             # Replay the drained body to downstream consumers.
@@ -691,11 +693,14 @@ class _SuppressClientDisconnectMiddleware:
             # import time. To remain compatible, detect "exception group" shape
             # via duck-typing rather than referencing ExceptionGroup directly.
             excs = getattr(exc, "exceptions", None)
-            if exc.__class__.__name__ in {
-                "ExceptionGroup",
-                "BaseExceptionGroup",
-            } and isinstance(excs, tuple):
-                if all(
+            if (
+                exc.__class__.__name__
+                in {
+                    "ExceptionGroup",
+                    "BaseExceptionGroup",
+                }
+                and isinstance(excs, tuple)
+                and all(
                     isinstance(
                         err,
                         (
@@ -705,26 +710,27 @@ class _SuppressClientDisconnectMiddleware:
                         ),
                     )
                     for err in excs
-                ):
-                    return
+                )
+            ):
+                return
             raise
 
 
 # Re-exported symbols used by helper modules and tests that import `main`.
 __all__ = [
+    "CONTROLLER_DEFAULT_BRANCH",
+    "CONTROLLER_REPO",
+    "FETCH_FILES_CONCURRENCY",
+    "GITHUB_API_BASE",
+    "HTTPX_MAX_CONNECTIONS",
+    "HTTPX_MAX_KEEPALIVE",
+    "HTTPX_TIMEOUT",
+    "MAX_CONCURRENCY",
     "GitHubAPIError",
     "GitHubAuthError",
     "GitHubRateLimitError",
     "WriteApprovalRequiredError",
     "WriteNotAuthorizedError",
-    "GITHUB_API_BASE",
-    "HTTPX_TIMEOUT",
-    "HTTPX_MAX_CONNECTIONS",
-    "HTTPX_MAX_KEEPALIVE",
-    "MAX_CONCURRENCY",
-    "FETCH_FILES_CONCURRENCY",
-    "CONTROLLER_REPO",
-    "CONTROLLER_DEFAULT_BRANCH",
     "_github_request",
 ]
 # Exposed for tests that monkeypatch the external HTTP client used for URL fetches.
@@ -935,7 +941,7 @@ def _try_mount_streamable_http(app_instance: Any) -> None:
         _register_mcp_fallback_route(app_instance)
         return
 
-    def _build_streamable_app() -> Optional[Any]:
+    def _build_streamable_app() -> Any | None:
         # Different SDK versions have used different transport names.
         for transport in ("streamable-http", "streamable_http", "http"):
             # Prefer an app rooted at '/' so it can be mounted under '/mcp'.
@@ -949,7 +955,7 @@ def _try_mount_streamable_http(app_instance: Any) -> None:
                     return http_app_factory(**kwargs)
                 except TypeError:
                     continue
-                except Exception:
+                except Exception:  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
                     continue
         return None
 
@@ -965,7 +971,7 @@ def _try_mount_streamable_http(app_instance: Any) -> None:
 
     try:
         app_instance.mount("/mcp", streamable_app, name="mcp")
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         _register_mcp_fallback_route(app_instance)
         return
 
@@ -1026,7 +1032,9 @@ def _configure_trusted_hosts(app_instance) -> None:
         or os.environ.get("RENDER_EXTERNAL_HOSTNAME")
         or ""
     )
-    allowed_hosts = [part.strip() for part in raw.replace(",", " ").split() if part.strip()]
+    allowed_hosts = [
+        part.strip() for part in raw.replace(",", " ").split() if part.strip()
+    ]
     if not allowed_hosts:
         allowed_hosts = ["localhost", "127.0.0.1", "[::1]"]
     app_instance.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
@@ -1086,7 +1094,7 @@ async def _handle_unexpected_error(request, exc):
     LOGGER.info(
         "Unhandled exception",
         extra={"severity": "error", "path": request.url.path},
-        exc_info=True,
+        exc_info=(type(exc), exc, exc.__traceback__),
     )
     return JSONResponse(structured, status_code=status_code, headers=headers)
 
@@ -1100,7 +1108,7 @@ try:
     # (e.g., running via uvicorn, pytest, or hosted platforms like Render).
     _assets_dir = Path(__file__).resolve().parent / "assets"
     app.mount("/static", StaticFiles(directory=str(_assets_dir)), name="static")
-except Exception:
+except Exception:  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
     # Static assets are optional; failures should not prevent server startup.
     pass
 

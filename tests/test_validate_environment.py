@@ -25,8 +25,8 @@ class DummyMainNoNetwork:
 
 @pytest.mark.anyio
 async def test_validate_environment_missing_tokens_marks_error(monkeypatch):
-    import github_mcp.main_tools.env as env
     from github_mcp.config import GITHUB_TOKEN_ENV_VARS, RENDER_TOKEN_ENV_VARS
+    from github_mcp.main_tools import env
 
     # Force a deterministic "no token" environment even when running in CI.
     monkeypatch.setattr(
@@ -52,8 +52,8 @@ async def test_validate_environment_missing_tokens_marks_error(monkeypatch):
 
 @pytest.mark.anyio
 async def test_validate_environment_flags_unsupported_python(monkeypatch):
-    import github_mcp.main_tools.env as env
     from github_mcp.config import GITHUB_TOKEN_ENV_VARS, RENDER_TOKEN_ENV_VARS
+    from github_mcp.main_tools import env
 
     monkeypatch.setattr(
         env.sys, "version_info", SimpleNamespace(major=3, minor=11, micro=9)
@@ -166,7 +166,7 @@ class DummyMainAllGreen:
 
 @pytest.mark.anyio
 async def test_validate_environment_happy_path_ok(monkeypatch):
-    import github_mcp.main_tools.env as env
+    from github_mcp.main_tools import env
 
     # Avoid identity placeholder warnings in this unit test.
     monkeypatch.setattr(
@@ -228,7 +228,7 @@ async def test_validate_environment_happy_path_ok(monkeypatch):
     for name in GITHUB_TOKEN_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
 
-    token_env = list(GITHUB_TOKEN_ENV_VARS)[0]
+    token_env = next(iter(GITHUB_TOKEN_ENV_VARS))
     monkeypatch.setenv(token_env, "test-token")
 
     # Force controller repo/branch config to match the dummy main object.
@@ -257,7 +257,7 @@ async def test_validate_environment_happy_path_ok(monkeypatch):
 
 @pytest.mark.anyio
 async def test_validate_environment_skips_empty_github_pat(monkeypatch):
-    import github_mcp.main_tools.env as env
+    from github_mcp.main_tools import env
 
     # Avoid identity placeholder warnings in this unit test.
     monkeypatch.setattr(

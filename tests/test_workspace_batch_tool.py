@@ -28,7 +28,7 @@ class DummyDeps:
 
 
 def test_workspace_batch_stage_only(monkeypatch):
-    import github_mcp.workspace_tools.batch as batch
+    from github_mcp.workspace_tools import batch
 
     deps = DummyDeps()
 
@@ -53,7 +53,7 @@ def test_workspace_batch_stage_only(monkeypatch):
 
 
 def test_workspace_batch_passes_dynamic_step_kwargs(monkeypatch):
-    import github_mcp.workspace_tools.batch as batch
+    from github_mcp.workspace_tools import batch
 
     called = {}
 

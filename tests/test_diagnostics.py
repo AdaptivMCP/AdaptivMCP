@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import uuid as _stdlib_uuid
 from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
 
 from github_mcp.main_tools import diagnostics
-import uuid as _stdlib_uuid
 
 
 @dataclass
@@ -24,11 +24,11 @@ class _FakeMain:
 
     # Match the interface used by diagnostics.pr_smoke_test
     @property
-    def CONTROLLER_REPO(self) -> str:  # noqa: N802
+    def CONTROLLER_REPO(self) -> str:
         return self.controller_repo
 
     @property
-    def CONTROLLER_DEFAULT_BRANCH(self) -> str:  # noqa: N802
+    def CONTROLLER_DEFAULT_BRANCH(self) -> str:
         return self.controller_default_branch
 
     async def get_repo_defaults(

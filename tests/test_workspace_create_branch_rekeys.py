@@ -38,7 +38,7 @@ async def test_workspace_create_branch_rekeys_workspace_dir(
 
         os.makedirs(base_dir, exist_ok=True)
         # Simulate an uncommitted local edit.
-        with open(os.path.join(base_dir, "local.txt"), "w", encoding="utf-8") as f:
+        with open(os.path.join(base_dir, "local.txt"), "w", encoding="utf-8") as f:  # noqa: ASYNC230 - small fixture file
             f.write("hello")
 
         async def clone_repo(
@@ -51,7 +51,7 @@ async def test_workspace_create_branch_rekeys_workspace_dir(
                     shutil.rmtree(base_dir, ignore_errors=True)
                 os.makedirs(base_dir, exist_ok=True)
                 if not preserve_changes:
-                    with open(
+                    with open(  # noqa: ASYNC230 - small fixture file
                         os.path.join(base_dir, "clean.txt"), "w", encoding="utf-8"
                     ) as f:
                         f.write("clean")
@@ -70,7 +70,11 @@ async def test_workspace_create_branch_rekeys_workspace_dir(
                 return {"exit_code": 0, "stdout": "", "stderr": ""}
             raise AssertionError(f"Unexpected command: {command}")
 
-        deps: dict[str, Any] = {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
+        deps: dict[str, Any] = {
+            "clone_repo": clone_repo,
+            "run_git": run_shell,
+            "run_shell": run_shell,
+        }
 
         monkeypatch.setattr(git_ops, "_tw", lambda: _TW())
 
@@ -133,7 +137,11 @@ async def test_workspace_create_branch_errors_if_target_mirror_exists(
                 return {"exit_code": 0, "stdout": "", "stderr": ""}
             return {"exit_code": 0, "stdout": "", "stderr": ""}
 
-        deps: dict[str, Any] = {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
+        deps: dict[str, Any] = {
+            "clone_repo": clone_repo,
+            "run_git": run_shell,
+            "run_shell": run_shell,
+        }
 
         monkeypatch.setattr(git_ops, "_tw", lambda: _TW())
         monkeypatch.setattr(

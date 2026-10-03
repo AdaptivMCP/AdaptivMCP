@@ -31,8 +31,6 @@ class GitHubAPIError(APIError):
 class GitHubRateLimitError(GitHubAPIError):
     """Raised when GitHub responds with a rate limit error."""
 
-    pass
-
 
 class RenderAuthError(Exception):
     """Raised when Render API authentication is missing or invalid."""
@@ -67,8 +65,6 @@ class UsageError(Exception):
 
     This is intended to surface a clear, single-line message to the caller.
     """
-
-    pass
 
 
 class ToolOperationError(Exception):
@@ -105,9 +101,9 @@ __all__ = [
     "GitHubRateLimitError",
     "RenderAPIError",
     "RenderAuthError",
-    "WriteNotAuthorizedError",
-    "WriteApprovalRequiredError",
+    "ToolOperationError",
     "ToolPreflightValidationError",
     "UsageError",
-    "ToolOperationError",
+    "WriteApprovalRequiredError",
+    "WriteNotAuthorizedError",
 ]

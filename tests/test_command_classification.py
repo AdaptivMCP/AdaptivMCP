@@ -69,7 +69,7 @@ def test_infer_write_action_uses_command_lines_when_command_empty() -> None:
         ("ls -la && echo done", True),
         ("ls -la | wc -l", True),
         ("echo 'a; b'", False),
-        ("echo \"a && b\"", False),
+        ('echo "a && b"', False),
         ("echo $(whoami)", True),
         ("echo `whoami`", True),
         ("git remote -v", False),

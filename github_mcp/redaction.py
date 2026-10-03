@@ -41,9 +41,7 @@ _TOKEN_RE = re.compile(
     r")(?![A-Za-z0-9_])"
 )
 
-_BEARER_RE = re.compile(
-    r"(?i)(\bBearer\s+)([^\s,;]+)"
-)
+_BEARER_RE = re.compile(r"(?i)(\bBearer\s+)([^\s,;]+)")
 
 _AUTH_HEADER_RE = re.compile(
     r"(?im)(\b(?:Authorization|Proxy-Authorization)\s*:\s*)"
@@ -56,9 +54,7 @@ _ENV_ASSIGNMENT_RE = re.compile(
     r"RENDER_TOKEN)\s*=\s*)([^\s'\"]+)"
 )
 
-_CREDENTIAL_URL_RE = re.compile(
-    r"(?P<prefix>https?://)(?P<userinfo>[^/@\s]+@)"
-)
+_CREDENTIAL_URL_RE = re.compile(r"(?P<prefix>https?://)(?P<userinfo>[^/@\s]+@)")
 
 _GENERIC_LONG_SECRET_RE = re.compile(
     r"(?<![A-Za-z0-9])"
@@ -133,10 +129,7 @@ def redact_any(value: Any, *, key: str | None = None) -> Any:
         if isinstance(value, bytes | bytearray):
             return "<REDACTED_BYTES>"
         if isinstance(value, Mapping):
-            return {
-                str(k): redact_any(v, key=str(k))
-                for k, v in value.items()
-            }
+            return {str(k): redact_any(v, key=str(k)) for k, v in value.items()}
         if isinstance(value, list):
             return [redact_any(v, key=key) for v in value]
         if isinstance(value, tuple):
@@ -144,7 +137,7 @@ def redact_any(value: Any, *, key: str | None = None) -> Any:
         if isinstance(value, set):
             return {redact_any(v, key=key) for v in value}
         return _redact_string(str(value), key=key)
-    except Exception:
+    except Exception:  # noqa: BLE001 - redaction fails closed for unknown value types
         # Never let redaction become a new data-leak path. If an unexpected
         # object cannot be traversed safely, expose only a fixed marker.
         return REDACTED
@@ -165,8 +158,10 @@ def redact_url(value: str) -> str:
         netloc = f"{REDACTED}@{host}"
         if parts.port is not None:
             netloc += f":{parts.port}"
-        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
-    except Exception:
+        return urlunsplit(
+            (parts.scheme, netloc, parts.path, parts.query, parts.fragment)
+        )
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return _redact_string(value)
 
 

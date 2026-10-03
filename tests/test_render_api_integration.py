@@ -42,7 +42,7 @@ async def test_render_request_success_payload(monkeypatch):
 async def test_render_request_auto_applies_v1_prefix(monkeypatch):
     import httpx
 
-    import github_mcp.render_api as render_api
+    from github_mcp import render_api
 
     monkeypatch.setenv("RENDER_API_KEY", "test-token")
 
@@ -66,7 +66,7 @@ async def test_render_request_auto_applies_v1_prefix(monkeypatch):
 async def test_render_request_does_not_double_prefix(monkeypatch):
     import httpx
 
-    import github_mcp.render_api as render_api
+    from github_mcp import render_api
 
     monkeypatch.setenv("RENDER_API_KEY", "test-token")
 
@@ -90,7 +90,7 @@ async def test_render_request_does_not_double_prefix(monkeypatch):
 async def test_render_request_uses_normalized_prefix_when_global_stale(monkeypatch):
     import httpx
 
-    import github_mcp.render_api as render_api
+    from github_mcp import render_api
 
     monkeypatch.setenv("RENDER_API_KEY", "test-token")
 

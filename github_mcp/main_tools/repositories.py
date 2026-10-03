@@ -229,9 +229,7 @@ async def create_repository(
                 target_owner
                 and authenticated_login
                 and target_owner != authenticated_login
-            ):
-                use_org_endpoint = True
-            elif authenticated_account_type == "app":
+            ) or authenticated_account_type == "app":
                 use_org_endpoint = True
 
         create_target_desc = (
@@ -307,9 +305,8 @@ async def create_repository(
 
         repo_json = created_resp.get("json") if isinstance(created_resp, dict) else None
         full_name = repo_json.get("full_name") if isinstance(repo_json, dict) else None
-        if not isinstance(full_name, str) or not full_name:
-            if target_owner:
-                full_name = f"{target_owner}/{name}"
+        if (not isinstance(full_name, str) or not full_name) and target_owner:
+            full_name = f"{target_owner}/{name}"
 
         updated_resp = None
         if update_payload_overrides and full_name:
@@ -350,5 +347,5 @@ async def create_repository(
             "steps": steps,
             "warnings": warnings,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return m._structured_tool_error(exc, context="create_repository")

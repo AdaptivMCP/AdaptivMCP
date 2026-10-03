@@ -288,7 +288,7 @@ async def create_pull_request(
                     effective_base=effective_base,
                     draft=draft,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 # If the helper fails for any reason, fall back to whatever the
                 # caller provided (including None) instead of blocking PR
                 # creation entirely.
@@ -308,7 +308,7 @@ async def create_pull_request(
             f"/repos/{full_name}/pulls",
             json_body=payload,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         # Include a lightweight path-style hint so callers can see which
         # repository and head/base pair failed without scraping the message.
         path_hint = f"{full_name} {head}->{base}"
@@ -431,7 +431,7 @@ async def open_pr_for_existing_branch(
             page=1,
         )
         existing_json = existing_resp.get("json") or []
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return m._structured_tool_error(
             exc,
             context="open_pr_for_existing_branch:list_pull_requests",
@@ -531,7 +531,7 @@ async def update_files_and_open_pr(
                             f"update_files_and_open_pr({full_name}/{current_path})"
                         ),
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
                     return m._structured_tool_error(
                         exc,
                         context="update_files_and_open_pr.load_content",
@@ -551,7 +551,7 @@ async def update_files_and_open_pr(
                     body_bytes=body_bytes,
                     sha=sha,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
                 return m._structured_tool_error(
                     exc,
                     context="update_files_and_open_pr.commit_file",
@@ -571,7 +571,7 @@ async def update_files_and_open_pr(
                 verification = await m._verify_file_on_branch(
                     full_name, current_path, branch
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
                 return m._structured_tool_error(
                     exc,
                     context="update_files_and_open_pr.verify_file",
@@ -590,7 +590,7 @@ async def update_files_and_open_pr(
                 body=body,
                 draft=draft,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return m._structured_tool_error(
                 exc, context="update_files_and_open_pr.create_pr", path=current_path
             )
@@ -602,7 +602,7 @@ async def update_files_and_open_pr(
             "verifications": verifications,
         }
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return m._structured_tool_error(
             exc, context="update_files_and_open_pr", path=current_path
         )
@@ -659,7 +659,7 @@ async def get_pr_overview(full_name: str, pull_number: int) -> dict[str, Any]:
                         "changes": f.get("changes"),
                     }
                 )
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         files = []
 
     status_checks: dict[str, Any] | None = None
@@ -669,7 +669,7 @@ async def get_pr_overview(full_name: str, pull_number: int) -> dict[str, Any]:
         try:
             status_resp = await m.get_commit_combined_status(full_name, head_sha)
             status_checks = status_resp.get("json") or {}
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             status_checks = None
 
     workflow_runs: list[dict[str, Any]] = []
@@ -705,7 +705,7 @@ async def get_pr_overview(full_name: str, pull_number: int) -> dict[str, Any]:
                         "updated_at": run.get("updated_at"),
                     }
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             workflow_runs = []
 
     return {

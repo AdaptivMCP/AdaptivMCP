@@ -80,7 +80,7 @@ FILE_CACHE = FileCache(
 
 
 def cache_key(full_name: str, ref: str, path: str) -> str:
-    return "|".join([full_name, ref, path])
+    return f"{full_name}|{ref}|{path}"
 
 
 def cache_payload(

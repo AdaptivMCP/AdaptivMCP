@@ -3,12 +3,13 @@ from __future__ import annotations
 import importlib
 
 import pytest
+
 from github_mcp.mcp_server.registry import _registered_tool_name
 
 
 def _reload_context():
     """Reload github_mcp.mcp_server.context to refresh module state."""
-    import github_mcp.mcp_server.context as context
+    from github_mcp.mcp_server import context
 
     return importlib.reload(context)
 
@@ -46,7 +47,8 @@ def test_no_write_gate_env_var_in_ci():
     if not os.path.exists(".github/workflows/ci.yml"):
         pytest.skip("CI workflow file not present in this checkout")
 
-    ci = open(".github/workflows/ci.yml", encoding="utf-8").read()
+    with open(".github/workflows/ci.yml", encoding="utf-8") as handle:
+        ci = handle.read()
     assert "ADAPTIV_MCP_WRITE_ALLOWED" not in ci
     # Guard against introducing legacy gates like MCP_WRITE_ALLOWED or WRITE_ALLOWED.
     import re

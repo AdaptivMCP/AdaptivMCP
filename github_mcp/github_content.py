@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import httpcore
-import httpx
 import ipaddress
 import os
 import socket
 from typing import Any
 from urllib.parse import urlsplit
+
+import httpcore
+import httpx
 
 from .config import ADAPTIV_MCP_INCLUDE_BASE64_CONTENT, HTTPX_TIMEOUT
 from .exceptions import GitHubAPIError
@@ -113,7 +114,7 @@ async def _decode_github_content(
     if stored_bytes is not None:
         try:
             text = stored_bytes.decode("utf-8")
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             text = None
 
     response: dict[str, Any] = {
@@ -250,9 +251,11 @@ class _PinnedDNSBackend(httpcore.AsyncNetworkBackend):
         )
 
     async def connect_unix_socket(
-        self, path: str, timeout: float | None = None
+        self, path: str, timeout: float | None = None, socket_options: Any = None
     ) -> httpcore.AsyncNetworkStream:
-        return await self._backend.connect_unix_socket(path, timeout=timeout)
+        return await self._backend.connect_unix_socket(
+            path, timeout=timeout, socket_options=socket_options
+        )
 
     async def sleep(self, seconds: float = 0.0) -> None:
         await self._backend.sleep(seconds)
@@ -312,7 +315,7 @@ async def _resolve_content_url(content_url: str) -> tuple[str, str]:
         if not ip.is_global:
             raise GitHubAPIError("content_url resolved to a non-public IP")
 
-    return content_url, sorted(ips)[0]
+    return content_url, min(ips)
 
 
 async def _validate_content_url(content_url: str) -> str:
@@ -426,7 +429,7 @@ async def _load_body_from_content_url(content_url: str, *, context: str) -> byte
     if content_url.startswith("/") or _is_windows_absolute_path(content_url):
         return _read_local(content_url)
 
-    if content_url.startswith("http://") or content_url.startswith("https://"):
+    if content_url.startswith(("http://", "https://")):
         validated_url, validated_ip = await _resolve_content_url(content_url)
         client = _external_client_instance()
         if isinstance(client, httpx.AsyncClient):

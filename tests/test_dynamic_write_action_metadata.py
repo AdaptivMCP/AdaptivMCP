@@ -47,7 +47,7 @@ def test_http_tool_registry_uses_write_action_for_retries(monkeypatch) -> None:
     from starlette.routing import Route
     from starlette.testclient import TestClient
 
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     # Avoid real sleeps in retry loops.
     monkeypatch.setattr(tool_registry, "_jitter_sleep_seconds", lambda *_a, **_k: 0.0)

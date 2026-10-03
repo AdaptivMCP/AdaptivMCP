@@ -13,15 +13,15 @@ def _main() -> ModuleType:
 
     try:
         return importlib.import_module("main")
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         # Lightweight fallback surface.
         # Ensure tools are registered even if `main` cannot be imported.
         try:
             importlib.import_module("github_mcp.tools_workspace")
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
         try:
             importlib.import_module("github_mcp.tools_main")
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
         return importlib.import_module("github_mcp.server")

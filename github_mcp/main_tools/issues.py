@@ -305,11 +305,7 @@ async def get_issue_overview(full_name: str, issue_number: int) -> dict[str, Any
         items: list[dict[str, Any]] = []
         for raw_line in text.splitlines():
             line = raw_line.lstrip()
-            if (
-                line.startswith("- [ ")
-                or line.startswith("- [")
-                or line.startswith("* [")
-            ):
+            if line.startswith(("- [ ", "- [", "* [")):
                 checked = "[x]" in line.lower() or "[X]" in line
                 # Strip the leading marker (e.g. "- [ ]" / "- [x]")
                 after = line.split("]", 1)

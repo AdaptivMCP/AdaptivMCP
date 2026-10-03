@@ -3,6 +3,7 @@ import asyncio
 import os
 import shlex
 import uuid
+from pathlib import Path
 from typing import Any
 
 from github_mcp import config
@@ -17,7 +18,6 @@ from ._shared import (
     _maybe_install_dev_requirements,
     _tw,
 )
-
 
 _TEST_ARTIFACT_DIRS = {
     ".pytest_cache",
@@ -92,19 +92,19 @@ def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
                     for fn in files:
                         try:
                             os.remove(os.path.join(root, fn))
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                             errors.append(
                                 f"remove_file:{os.path.relpath(os.path.join(root, fn), repo_real)}:{exc}"
                             )
                     for dn in dirs:
                         try:
                             os.rmdir(os.path.join(root, dn))
-                        except Exception:  # nosec B110
+                        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                             # Directory may not be empty; continue best-effort.
                             pass
                 os.rmdir(p)
                 removed_dirs += 1
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 errors.append(f"remove_dir:{d}:{exc}")
 
     for f in sorted(_TEST_ARTIFACT_FILES):
@@ -113,7 +113,7 @@ def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
             try:
                 os.remove(p)
                 removed_files += 1
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 errors.append(f"remove_file:{f}:{exc}")
 
     # Sweep: remove __pycache__ dirs and *.pyc/*.pyo files (excluding venv/git).
@@ -123,11 +123,11 @@ def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
 
         # Remove stray bytecode files.
         for fn in list(files):
-            if fn.endswith(".pyc") or fn.endswith(".pyo"):
+            if fn.endswith((".pyc", ".pyo")):
                 try:
                     os.remove(os.path.join(root, fn))
                     removed_files += 1
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                     errors.append(
                         f"remove_file:{os.path.relpath(os.path.join(root, fn), repo_real)}:{exc}"
                     )
@@ -140,18 +140,18 @@ def _cleanup_test_artifacts(repo_dir: str) -> dict[str, Any]:
                     for fn in f2:
                         try:
                             os.remove(os.path.join(r2, fn))
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                             errors.append(
                                 f"remove_file:{os.path.relpath(os.path.join(r2, fn), repo_real)}:{exc}"
                             )
                     for dn in d2:
                         try:
                             os.rmdir(os.path.join(r2, dn))
-                        except Exception:  # nosec B110
+                        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                             pass
                 os.rmdir(pyc_dir)
                 removed_dirs += 1
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 errors.append(f"remove_dir:{os.path.relpath(pyc_dir, repo_real)}:{exc}")
             try:
                 dirs.remove("__pycache__")
@@ -212,7 +212,7 @@ def _normalize_command_payload(
         else:
             try:
                 raw_lines = [str(line) for line in list(command_lines)]  # type: ignore[arg-type]
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 raw_lines = []
 
         # Ensure the output list never contains embedded newlines.
@@ -266,7 +266,9 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
         try:
             workdir = str(workdir)
         except Exception as exc:
-            raise ValueError("workdir must resolve inside the repository workspace") from exc
+            raise ValueError(
+                "workdir must resolve inside the repository workspace"
+            ) from exc
 
     normalized = workdir.strip().replace("\\", "/")
     if not normalized or normalized in {".", "./"}:
@@ -281,13 +283,18 @@ def _resolve_workdir(repo_dir: str, workdir: str | None) -> str:
     try:
         common = os.path.commonpath((repo_real, candidate))
     except ValueError as exc:
-        raise ValueError("workdir must resolve inside the repository workspace") from exc
+        raise ValueError(
+            "workdir must resolve inside the repository workspace"
+        ) from exc
 
     if common != repo_real:
         raise ValueError("workdir must resolve inside the repository workspace")
     if not os.path.isdir(candidate):
-        raise ValueError("workdir must be an existing directory inside the repository workspace")
+        raise ValueError(
+            "workdir must be an existing directory inside the repository workspace"
+        )
     return candidate
+
 
 @mcp_tool(write_action=True)
 async def render_shell(
@@ -401,7 +408,7 @@ async def render_shell(
         return _compact_command_payload(out, command_lines_out=command_lines_out)
     except asyncio.CancelledError:
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc, context="render_shell", tool_surface="render_shell"
         )
@@ -510,7 +517,7 @@ async def terminal_command(
         if isinstance(result, dict):
             try:
                 exit_code = int(result.get("exit_code", 0) or 0)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 exit_code = 0
             timed_out = bool(result.get("timed_out", False))
 
@@ -544,7 +551,7 @@ async def terminal_command(
         return _compact_command_payload(out, command_lines_out=command_lines_out)
     except asyncio.CancelledError:
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc, context="terminal_command", tool_surface="terminal_command"
         )
@@ -560,7 +567,7 @@ def _safe_repo_relative_path(repo_dir: str, path: str) -> str:
     if not isinstance(path, str):
         try:
             path = str(path)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             path = ""
 
     normalized = (path or "").strip().replace("\\", "/")
@@ -618,7 +625,7 @@ async def run_python(
     if not isinstance(script, str):
         try:
             script = str(script)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             script = ""
 
     if args is not None:
@@ -629,12 +636,11 @@ async def run_python(
         else:
             try:
                 args = [str(a) for a in list(args)]  # type: ignore[arg-type]
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 args = None
 
     env: dict[str, str] | None = None
     created_temp_file = False
-    created_rel_path: str | None = None
     created_abs_path: str | None = None
     repo_dir: str | None = None
     effective_ref: str = ref
@@ -660,7 +666,6 @@ async def run_python(
         created_temp_file = filename is None or not (
             isinstance(filename, str) and filename.strip()
         )
-        created_rel_path = rel_path
 
         rel_path = _safe_repo_relative_path(repo_dir, rel_path)
         if os.path.isabs(rel_path):
@@ -670,8 +675,7 @@ async def run_python(
         if created_temp_file:
             created_abs_path = abs_path
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-        with open(abs_path, "w", encoding="utf-8") as handle:
-            handle.write(script)
+        await asyncio.to_thread(Path(abs_path).write_text, script, encoding="utf-8")
 
         install_result, install_steps = await _maybe_install_dev_requirements(
             deps,
@@ -706,17 +710,18 @@ async def run_python(
         }
     except asyncio.CancelledError:
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc, context="run_python", tool_surface="run_python"
         )
     finally:
         if cleanup:
             try:
-                if created_temp_file and created_abs_path:
-                    if os.path.isfile(created_abs_path):
-                        os.remove(created_abs_path)
-            except Exception:  # nosec B110
+                if (created_temp_file and created_abs_path) and (
+                    os.path.isfile(created_abs_path)
+                ):
+                    os.remove(created_abs_path)
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 # Best-effort cleanup.
                 pass
 

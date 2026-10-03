@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from github_mcp.exceptions import GitHubAPIError
 from github_mcp import workspace
+from github_mcp.exceptions import GitHubAPIError
 
 
 def test_parse_rangeless_git_patch_parses_update_and_move_to() -> None:

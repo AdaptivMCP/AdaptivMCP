@@ -14,8 +14,9 @@ def test_tool_registry_uris_survive_forwarded_prefix_changes() -> None:
        underlying "/tools/{tool_name}" endpoint.
     """
 
-    import main
     from starlette.testclient import TestClient
+
+    import main
 
     client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
 

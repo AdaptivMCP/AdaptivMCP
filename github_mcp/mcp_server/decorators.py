@@ -35,11 +35,11 @@ from github_mcp.exceptions import UsageError, WriteApprovalRequiredError
 from github_mcp.mcp_server.context import (
     FASTMCP_AVAILABLE,
     WRITE_ALLOWED,
-    get_write_allowed,
+    get_request_capabilities,
     get_request_context,
+    get_write_allowed,
     mcp,
     peek_auto_approve_enabled,
-    get_request_capabilities,
 )
 from github_mcp.mcp_server.error_handling import _structured_tool_error
 from github_mcp.mcp_server.registry import _REGISTERED_MCP_TOOLS, _registered_tool_name
@@ -49,9 +49,7 @@ from github_mcp.mcp_server.schemas import (
     _normalize_tool_description,
     _schema_from_signature,
 )
-
 from github_mcp.redaction import redact_any
-
 
 # Intentionally short logger name; config's formatter further shortens/colorizes.
 LOGGER = BASE_LOGGER.getChild("mcp")
@@ -85,7 +83,7 @@ def _log_once(
             extra=payload,
             exc_info=exc if (exc and LOG_TOOL_EXC_INFO) else None,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return
 
 
@@ -113,7 +111,7 @@ def _env_int(name: str, *, default: int) -> int:
         return int(default)
     try:
         return int(str(raw).strip())
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return int(default)
 
 
@@ -291,7 +289,7 @@ def _effective_int_override(
     raw = cg.get(cg_key)
     try:
         val = int(raw)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return base
     if val <= 0:
         return base
@@ -385,7 +383,7 @@ def _inline_context(req: Mapping[str, Any]) -> str:
         return ""
     try:
         return format_log_context(req) or ""
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         # Best-effort: do not break tool logging, but make failures visible.
         try:
             LOGGER.info(
@@ -393,7 +391,7 @@ def _inline_context(req: Mapping[str, Any]) -> str:
                 extra={"severity": "warning"},
                 exc_info=exc,
             )
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
         return ""
 
@@ -641,7 +639,7 @@ def _fast_line_count(text: str) -> int:
     n_crlf = text.count("\r\n")
     n_breaks = n_newlines + (n_cr - n_crlf)
 
-    if text.endswith("\n") or text.endswith("\r"):
+    if text.endswith(("\n", "\r")):
         return n_breaks
     return n_breaks + 1
 
@@ -748,17 +746,17 @@ def _extract_streams_for_report(
         truncated = False
         raw_line_count = _fast_line_count(value)
         raw_chars = len(value)
-        if mode in {"chatgpt", "compact"}:
-            if (stream_max_lines > 0 and raw_line_count > stream_max_lines) or (
-                stream_max_chars > 0 and raw_chars > stream_max_chars
-            ):
-                clipped = _clip_text(
-                    value,
-                    max_lines=stream_max_lines,
-                    max_chars=stream_max_chars,
-                    enabled=False,
-                )
-                truncated = True
+        if (mode in {"chatgpt", "compact"}) and (
+            (stream_max_lines > 0 and raw_line_count > stream_max_lines)
+            or (stream_max_chars > 0 and raw_chars > stream_max_chars)
+        ):
+            clipped = _clip_text(
+                value,
+                max_lines=stream_max_lines,
+                max_chars=stream_max_chars,
+                enabled=False,
+            )
+            truncated = True
 
         out[name] = clipped
         out[f"{name}_total_lines"] = raw_line_count
@@ -920,14 +918,14 @@ def _truncate_text(value: Any, *, limit: int = 180) -> str:
                 s = f"[{items}]"
         else:
             s = str(value)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         s = str(value)
     s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
     s = " ".join(s.split())
     if limit is not None:
         try:
             limit_int = int(limit)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             limit_int = 0
         if limit_int > 0 and len(s) > limit_int:
             if limit_int < 4:
@@ -1071,7 +1069,7 @@ class _ToolStub:
     resolve names and descriptions consistently.
     """
 
-    __slots__ = ("name", "description", "input_schema", "meta", "annotations")
+    __slots__ = ("annotations", "description", "input_schema", "meta", "name")
 
     def __init__(
         self,
@@ -1135,7 +1133,7 @@ def _schema_needs_update(
 
     try:
         return _schema_hash(existing) != _schema_hash(desired)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         # Best-effort fallback for non-JSONable schema variants.
         pass
 
@@ -1157,11 +1155,11 @@ def _schema_needs_update(
 def _apply_tool_metadata(
     tool_obj: Any,
     schema: Mapping[str, Any],
-    visibility: str,  # noqa: ARG001
+    visibility: str,
     tags: Iterable[str] | None = None,
     *,
-    write_action: bool | None = None,  # noqa: ARG001
-    write_allowed: bool | None = None,  # noqa: ARG001
+    write_action: bool | None = None,
+    write_allowed: bool | None = None,
     ui: Mapping[str, Any] | None = None,
 ) -> None:
     """Attach metadata onto the registered tool object.
@@ -1331,7 +1329,7 @@ def _apply_tool_metadata(
             try:
                 meta = {}
                 tool_obj.meta = meta
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 meta = None
 
     existing_schema = _normalize_input_schema(tool_obj)
@@ -1344,9 +1342,9 @@ def _apply_tool_metadata(
             # Some clients/framework versions prefer camelCase.
             try:
                 tool_obj.inputSchema = schema
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             meta = getattr(tool_obj, "meta", None)
             if isinstance(meta, dict):
                 meta.setdefault("input_schema", schema)
@@ -1359,7 +1357,7 @@ def _apply_tool_metadata(
     # it. Visibility remains non-authoritative (the wrapper enforces behavior).
     try:
         tool_obj.__mcp_visibility__ = str(visibility)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         if isinstance(meta, dict):
             meta.setdefault("visibility", str(visibility))
 
@@ -1368,9 +1366,8 @@ def _apply_tool_metadata(
 
     if tags:
         tag_list = [str(t) for t in tags if t is not None and str(t).strip()]
-        if tag_list:
-            if isinstance(meta, dict):
-                meta["tags"] = tag_list
+        if tag_list and isinstance(meta, dict):
+            meta["tags"] = tag_list
 
     # Version + levels (tool discovery hints)
     if isinstance(meta, dict):
@@ -1378,7 +1375,7 @@ def _apply_tool_metadata(
         if "levels" not in meta:
             try:
                 tool_name = getattr(tool_obj, "name", None)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 tool_name = None
             if not tool_name and isinstance(tool_obj, Mapping):
                 tool_name = tool_obj.get("name")  # type: ignore[assignment]
@@ -1415,7 +1412,7 @@ def _attach_tool_annotations(tool_obj: Any, annotations: Mapping[str, Any]) -> N
     try:
         tool_obj.annotations = ann
         return
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     # Mapping style (used by tests / some stubs)
@@ -1423,9 +1420,9 @@ def _attach_tool_annotations(tool_obj: Any, annotations: Mapping[str, Any]) -> N
         if isinstance(tool_obj, Mapping):
             try:
                 tool_obj["annotations"] = ann  # type: ignore[index]
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     # As a final fallback, stash under meta.
@@ -1520,7 +1517,7 @@ def _schema_summary(schema: Mapping[str, Any], *, max_fields: int = 8) -> str:
         extra = len(props) - len(items)
         tail = f", +{extra} more" if extra > 0 else ""
         return ", ".join(items) + tail
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return ""
 
 
@@ -1555,9 +1552,7 @@ def _should_enforce_write_gate(req: Mapping[str, Any]) -> bool:
         return True
     if req.get("session_id"):
         return True
-    if req.get("message_id"):
-        return True
-    return False
+    return bool(req.get("message_id"))
 
 
 def _default_capabilities(tool_name: str, write_action: bool) -> frozenset[str]:
@@ -1596,6 +1591,7 @@ def _resolve_write_action(
             exc_info=exc if LOG_TOOL_EXC_INFO else None,
         )
         return True
+
 
 def _enforce_capabilities(
     tool_name: str,
@@ -1721,7 +1717,7 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
                     return await fut
                 else:
                     _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 # If the cached future is in an unexpected state, drop it and recompute.
                 _DEDUPE_ASYNC_CACHE.pop(cache_key, None)
 
@@ -1743,7 +1739,7 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
                         return
                     try:
                         exc = task.exception()
-                    except Exception:
+                    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                         exc = Exception("Failed to resolve task exception")
                     if exc is not None:
                         # Failures are not cached.
@@ -1754,13 +1750,13 @@ async def _maybe_dedupe_call(dedupe_key: str, work: Any, ttl_s: float = 5.0) -> 
 
             try:
                 loop.create_task(_finalize_async())
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 # Best-effort; if scheduling fails (e.g. loop closing), do nothing.
                 return
 
         try:
             fut.add_done_callback(_finalize_done)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
 
     # Await the shared task. If the caller is cancelled (e.g. upstream disconnect),
@@ -1804,7 +1800,7 @@ def _bind_call_args(
     try:
         bound = signature.bind_partial(*args, **kwargs)
         return dict(bound.arguments)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return dict(kwargs)
 
 
@@ -1824,7 +1820,7 @@ def _strip_internal_log_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
     Set ADAPTIV_MCP_STRIP_INTERNAL_LOG_FIELDS=0 to preserve them.
     """
 
-    out = dict(payload) if isinstance(payload, Mapping) else dict(payload)
+    out = dict(payload)
     if not STRIP_INTERNAL_LOG_FIELDS:
         return out
     for k in list(out.keys()):
@@ -2006,7 +2002,7 @@ def _chatgpt_friendly_result(
             all_args=all_args,
             req=req,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         # Best-effort: never break tool behavior if the shaper fails.
         # However, failures here are otherwise invisible and can look like
         # "errors being swallowed" to operators and clients.
@@ -2023,7 +2019,7 @@ def _chatgpt_friendly_result(
                 },
                 exc_info=exc if LOG_TOOL_EXC_INFO else None,
             )
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
         return result
 
@@ -2278,7 +2274,7 @@ def _dedupe_ttl_seconds(*, write_action: bool, meta: Mapping[str, Any]) -> float
 
     try:
         return max(0.0, float(str(raw).strip()))
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         # If misconfigured, fall back to safe defaults.
         return 300.0 if write_action else 30.0
 
@@ -2328,7 +2324,7 @@ def _dedupe_key(
         args_json = json.dumps(
             args, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         args_json = str(dict(args))
 
     digest = hashlib.sha256(args_json.encode("utf-8", errors="replace")).hexdigest()
@@ -2357,7 +2353,7 @@ def _extract_context(all_args: Mapping[str, Any]) -> dict[str, Any]:
                 if isinstance(preflight, Mapping)
                 else dict(all_args)
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             args = dict(all_args)
         return {"tool_args": args}
 
@@ -2452,7 +2448,7 @@ def _result_snapshot(result: Any) -> dict[str, Any]:
                 ):
                     if key in inner_payload and inner_payload.get(key) is not None:
                         out[key] = inner_payload.get(key)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             # Best-effort only; snapshot must not raise.
             pass
 
@@ -2805,7 +2801,7 @@ def _log_tool_success(
             from github_mcp.mcp_server.schemas import _jsonable
 
             payload["raw"] = redact_any(_jsonable(result))
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             payload["raw"] = result
 
     if HUMAN_LOGS:
@@ -3186,7 +3182,7 @@ def _register_with_fastmcp(
         if isinstance(annotations, Mapping):
             try:
                 tool_obj.annotations = dict(annotations)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
         _REGISTERED_MCP_TOOLS[:] = [
             (t, f)
@@ -3215,12 +3211,10 @@ def _register_with_fastmcp(
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
         ):
             return False
-        if p1.kind not in (
+        return p1.kind in (
             inspect.Parameter.POSITIONAL_ONLY,
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        ):
-            return False
-        return True
+        )
 
     # Build kwargs in descending compatibility order.
 
@@ -3363,11 +3357,14 @@ def mcp_tool(
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         try:
             signature: inspect.Signature | None = inspect.signature(func)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             signature = None
 
         tool_name = name or getattr(func, "__name__", "tool")
-        required_caps = frozenset(required_capabilities or _default_capabilities(tool_name, bool(write_action)))
+        required_caps = frozenset(
+            required_capabilities
+            or _default_capabilities(tool_name, bool(write_action))
+        )
 
         annotations = _tool_annotations(
             write_action=bool(write_action),
@@ -3379,7 +3376,7 @@ def mcp_tool(
         if isinstance(ui, Mapping) and ui:
             try:
                 ui_meta.update(dict(ui))
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
         if not ui_meta:
             # Heuristic defaults for better tool discoverability in MCP clients.
@@ -3397,7 +3394,7 @@ def mcp_tool(
                 "delete_workspace_folders",
             } or tool_name.startswith("workspace_"):
                 group, icon = "workspace", "🧩"
-            elif tool_name.startswith("list_") or tool_name.startswith("get_"):
+            elif tool_name.startswith(("list_", "get_")):
                 group, icon = "github", "📖"
             ui_meta = {
                 "group": group,
@@ -3468,7 +3465,7 @@ def mcp_tool(
                         all_args=all_args,
                     )
                     raise
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                     duration_ms = (time.perf_counter() - start) * 1000
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
@@ -3505,7 +3502,7 @@ def mcp_tool(
                                 "compact",
                             }:
                                 client_payload = dict(client_payload)
-                        except Exception:  # nosec B110
+                        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                             pass
                     else:
                         client_payload = structured_error
@@ -3563,7 +3560,7 @@ def mcp_tool(
                         all_args=all_args,
                     )
                     raise
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                     duration_ms = (time.perf_counter() - start) * 1000
                     structured_error = _emit_tool_error(
                         tool_name=tool_name,
@@ -3597,7 +3594,7 @@ def mcp_tool(
                                 "compact",
                             }:
                                 client_payload = dict(client_payload)
-                        except Exception:  # nosec B110
+                        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                             pass
                     else:
                         client_payload = structured_error
@@ -3666,7 +3663,7 @@ def mcp_tool(
                             "compact",
                         }:
                             client_payload = dict(client_payload)
-                    except Exception:  # nosec B110
+                    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                         pass
                 else:
                     client_payload = result
@@ -3712,7 +3709,7 @@ def mcp_tool(
             if show_schema_in_description:
                 try:
                     schema_inline = _schema_summary(schema)
-                except Exception:
+                except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                     schema_inline = ""
                 if schema_inline:
                     normalized_description = (normalized_description or "").strip()
@@ -3754,11 +3751,11 @@ def mcp_tool(
                     tags=tag_list,
                     ui=ui_meta or None,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 # Best-effort; do not break tool registration.
                 try:
                     wrapper.__doc__ = normalized_description
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                     pass
 
             # Keep the tool registry description aligned with the docstring.
@@ -3766,7 +3763,7 @@ def mcp_tool(
                 wrapper.__mcp_tool__.description = (
                     wrapper.__doc__ or normalized_description
                 )
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
 
             return wrapper
@@ -3823,7 +3820,7 @@ def mcp_tool(
                     all_args=all_args,
                 )
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 duration_ms = (time.perf_counter() - start) * 1000
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
@@ -3857,7 +3854,7 @@ def mcp_tool(
                             "compact",
                         }:
                             client_payload = dict(client_payload)
-                    except Exception:  # nosec B110
+                    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                         pass
                 else:
                     client_payload = structured_error
@@ -3910,7 +3907,7 @@ def mcp_tool(
                     all_args=all_args,
                 )
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 duration_ms = (time.perf_counter() - start) * 1000
                 structured_error = _emit_tool_error(
                     tool_name=tool_name,
@@ -3940,7 +3937,7 @@ def mcp_tool(
                     client_payload = _strip_internal_log_fields(structured_error)
                     try:
                         client_payload = dict(client_payload)
-                    except Exception:  # nosec B110
+                    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                         pass
                 else:
                     client_payload = structured_error
@@ -3998,7 +3995,7 @@ def mcp_tool(
                 try:
                     if _effective_response_mode(req) not in {"chatgpt", "compact"}:
                         client_payload = dict(client_payload)
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                     pass
             else:
                 client_payload = result
@@ -4023,7 +4020,7 @@ def mcp_tool(
         if not isinstance(schema, Mapping):
             schema = _normalize_input_schema(wrapper.__mcp_tool__)
         if not isinstance(schema, Mapping):
-            raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")
+            raise RuntimeError(f"Failed to derive input schema for tool {tool_name!r}.")  # noqa: TRY004 - preserve the validation error contract
         wrapper.__mcp_input_schema__ = schema
         wrapper.__mcp_input_schema_hash__ = _schema_hash(schema)
         wrapper.__mcp_tool_name__ = tool_name
@@ -4038,7 +4035,7 @@ def mcp_tool(
         if show_schema_in_description:
             try:
                 schema_inline = _schema_summary(schema)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 schema_inline = ""
             if schema_inline:
                 normalized_description = (normalized_description or "").strip()
@@ -4080,16 +4077,16 @@ def mcp_tool(
                 tags=tag_list,
                 ui=ui_meta or None,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             try:
                 wrapper.__doc__ = normalized_description
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
 
         # Keep the tool registry description aligned with the docstring.
         try:
             wrapper.__mcp_tool__.description = wrapper.__doc__ or normalized_description
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
 
         return wrapper
@@ -4110,11 +4107,11 @@ def register_extra_tools_if_available() -> None:
         mod = importlib.import_module("extra_tools")
         register_extra_tools = getattr(mod, "register_extra_tools", None)
         if not callable(register_extra_tools):
-            return None
+            return
         register_extra_tools(mcp_tool)
     except ModuleNotFoundError:
         # Optional module; safe to ignore.
-        return None
+        return
     except Exception as exc:
         # Keep best-effort behavior, but ensure operators can see why optional
         # tools were skipped.
@@ -4123,7 +4120,7 @@ def register_extra_tools_if_available() -> None:
             extra={"severity": "warning"},
             exc_info=exc,
         )
-        return None
+        return
 
 
 def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
@@ -4152,12 +4149,12 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
             ui = None
             try:
                 ui = getattr(func, "__mcp_ui__", None)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 ui = None
             tags = None
             try:
                 tags = getattr(func, "__mcp_tags__", None)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 tags = None
 
             _apply_tool_metadata(
@@ -4176,7 +4173,7 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                 )
                 if annotations:
                     _attach_tool_annotations(tool_obj, annotations)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
 
             description = getattr(func, "__mcp_description__", None)
@@ -4198,13 +4195,13 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                     tags=tags if isinstance(tags, (list, tuple)) else None,
                     ui=ui if isinstance(ui, Mapping) else None,
                 )
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
 
             try:
                 if getattr(func, "__doc__", None):
                     tool_obj.description = func.__doc__
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
 
             # Keep the tool description aligned (for UIs that only render description).
@@ -4217,13 +4214,13 @@ def refresh_registered_tool_metadata(_write_allowed: object = None) -> None:
                             first, *rest = desc.splitlines()
                             first = (first or "").strip() + f"  Schema: {schema_inline}"
                             tool_obj.description = "\n".join([first] + rest).strip()
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                     pass
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - report or skip an invalid item without aborting the batch
             name = None
             try:
                 name = _registered_tool_name(tool_obj, func)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 name = getattr(tool_obj, "name", None) or getattr(
                     func, "__name__", None
                 )

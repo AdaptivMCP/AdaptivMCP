@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-import github_mcp.workspace_tools.fs as fs
+from github_mcp.workspace_tools import fs
 
 
 def test_normalize_workspace_operation_aliases_and_mkdirp_defaults():

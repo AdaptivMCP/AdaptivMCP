@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import github_mcp.workspace_tools.suites as suites
+from github_mcp.workspace_tools import suites
 
 
 def _runner_stdout(step_results: dict[str, tuple[int, str]]) -> str:

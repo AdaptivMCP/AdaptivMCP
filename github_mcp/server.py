@@ -15,8 +15,8 @@ Tool authorship notes:
 
 from __future__ import annotations
 
-from github_mcp.http_clients import _github_request  # noqa: F401
-from github_mcp.mcp_server.context import (  # noqa: F401
+from github_mcp.http_clients import _github_request
+from github_mcp.mcp_server.context import (
     _TOOL_EXAMPLES,
     COMPACT_METADATA_DEFAULT,
     WRITE_ALLOWED,
@@ -27,22 +27,26 @@ from github_mcp.mcp_server.error_handling import _structured_tool_error
 from github_mcp.mcp_server.registry import (
     _REGISTERED_MCP_TOOLS,
     _find_registered_tool,
-)  # noqa: F401
+)
 from github_mcp.mcp_server.schemas import (  # noqa: F401
     _normalize_input_schema,
     _normalize_tool_description,
     _preflight_tool_args,
     _stringify_annotation,
 )
-from github_mcp.utils import CONTROLLER_DEFAULT_BRANCH, CONTROLLER_REPO, _env_flag  # noqa: F401
+from github_mcp.utils import (  # noqa: F401
+    CONTROLLER_DEFAULT_BRANCH,
+    CONTROLLER_REPO,
+    _env_flag,
+)
 
 __all__ = [
     "COMPACT_METADATA_DEFAULT",
     "CONTROLLER_DEFAULT_BRANCH",
     "CONTROLLER_REPO",
     "WRITE_ALLOWED",
-    "_TOOL_EXAMPLES",
     "_REGISTERED_MCP_TOOLS",
+    "_TOOL_EXAMPLES",
     "_find_registered_tool",
     "_github_request",
     "_normalize_input_schema",

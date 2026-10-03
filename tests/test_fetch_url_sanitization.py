@@ -38,7 +38,7 @@ class _DummyExternalClient:
 
 @pytest.mark.anyio
 async def test_fetch_url_caps_and_sanitizes_headers(monkeypatch):
-    import github_mcp.main_tools.querying as querying
+    from github_mcp.main_tools import querying
 
     body = b"hello world"  # 11 bytes
     resp = _DummyStreamResponse(

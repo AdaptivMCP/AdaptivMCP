@@ -57,19 +57,17 @@ def test_missing_server_credential_fails_closed(monkeypatch):
 async def test_transport_middleware_binds_and_clears_principal(monkeypatch):
     monkeypatch.setenv("ADAPTIV_MCP_AUTH_TOKEN", "server-secret")
 
+    import main
     from github_mcp.mcp_server.context import (
         get_request_capabilities,
         get_request_context,
     )
-    import main
 
     seen = []
 
     async def app(scope, receive, send):
         seen.append(get_request_context())
-        await send(
-            {"type": "http.response.start", "status": 200, "headers": []}
-        )
+        await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"ok"})
 
     middleware = main._TransportAuthMiddleware(app)

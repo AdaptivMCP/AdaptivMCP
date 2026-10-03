@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-import github_mcp.mcp_server.context as context
+from github_mcp.mcp_server import context
 
 
 def test_task_workflows_summarizers():

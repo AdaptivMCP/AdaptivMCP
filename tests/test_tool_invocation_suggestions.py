@@ -8,7 +8,7 @@ import main
 
 
 def test_unknown_tool_includes_suggested_tool_and_warnings(monkeypatch: Any) -> None:
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
     from github_mcp.mcp_server import registry as mcp_registry
 
     class Tool:
@@ -38,7 +38,7 @@ def test_unknown_tool_ambiguous_does_not_force_single_suggestion(
 ) -> None:
     """When multiple close matches exist, avoid anchoring on a single tool."""
 
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
     from github_mcp.mcp_server import registry as mcp_registry
 
     class ToolA:
@@ -77,7 +77,7 @@ def test_unknown_tool_ambiguous_does_not_force_single_suggestion(
 
 
 def test_invalid_tool_args_includes_expected_args_warning(monkeypatch: Any) -> None:
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "fake_sig"
@@ -109,7 +109,7 @@ def test_invalid_tool_args_includes_expected_args_warning(monkeypatch: Any) -> N
 
 
 def test_expected_args_excludes_positional_only(monkeypatch: Any) -> None:
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "positional_only_sig"

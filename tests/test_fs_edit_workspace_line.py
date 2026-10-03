@@ -1,6 +1,6 @@
 import asyncio
 
-import github_mcp.workspace_tools.fs as fs
+from github_mcp.workspace_tools import fs
 
 
 class DummyWorkspaceTools:

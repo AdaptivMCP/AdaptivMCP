@@ -19,7 +19,6 @@ from github_mcp.utils import _normalize_timeout_seconds
 
 from ._shared import _tw
 
-
 # Default read limits (legacy).
 _DEFAULT_MAX_READ_BYTES = 8_000_000
 _DEFAULT_MAX_READ_CHARS = 2000000
@@ -125,7 +124,7 @@ def _is_within_dir(path: str, root: str) -> bool:
         root_real = os.path.realpath(root)
         path_real = os.path.realpath(path)
         return os.path.commonpath([root_real, path_real]) == root_real
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return False
 
 
@@ -224,9 +223,8 @@ def _workspace_read_text_limited(
     """
 
     if not isinstance(max_chars, int):
-        raise ValueError("max_chars must be an int")
-    if max_chars <= 0:
-        max_chars = 0
+        raise ValueError("max_chars must be an int")  # noqa: TRY004 - preserve the validation error contract
+    max_chars = max(0, max_chars)
     if max_bytes is not None and not isinstance(max_bytes, int):
         raise ValueError("max_bytes must be an int or None")
     if max_bytes is not None and max_bytes <= 0:
@@ -257,7 +255,7 @@ def _workspace_read_text_limited(
             with open(abs_path, "rb") as bf:
                 limit = 4096 if max_bytes is None else min(4096, int(max_bytes))
                 sample = bf.read(limit)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             sample = b""
 
         digest = hashlib.blake2s(sample, digest_size=4).hexdigest() if sample else None
@@ -319,7 +317,7 @@ def _is_probably_binary(abs_path: str) -> bool:
         with open(abs_path, "rb") as bf:
             sample = bf.read(4096)
         return b"\x00" in sample
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return False
 
 
@@ -373,8 +371,8 @@ def _read_lines_excerpt(
                     break
     except UnicodeDecodeError:
         had_decoding_errors = True
-    except Exception as exc:
-        raise exc
+    except Exception:
+        raise
 
     end_line = start_line + len(lines_out) - 1 if lines_out else start_line
     return {
@@ -539,9 +537,12 @@ def _sections_from_line_iter(
         # If adding this line would overflow the section, finalize and start a
         # new section (with optional overlap).
         would_overflow = False
-        if current_lines and len(current_lines) >= max_lines_per_section:
-            would_overflow = True
-        elif current_lines and (current_chars + len(text) + 1) > max_chars_per_section:
+        if (
+            current_lines
+            and len(current_lines) >= max_lines_per_section
+            or current_lines
+            and (current_chars + len(text) + 1) > max_chars_per_section
+        ):
             would_overflow = True
 
         if would_overflow:
@@ -686,6 +687,7 @@ def _git_show_text(repo_dir: str, git_ref: str, path: str) -> dict[str, Any]:
         ["git", "show", f"{ref}:{rel}"],
         cwd=repo_dir,
         capture_output=True,
+        check=False,
         timeout=20,
     )
     if proc.returncode != 0:
@@ -734,9 +736,8 @@ def _git_show_text_limited(
     """
 
     if not isinstance(max_chars, int):
-        raise ValueError("max_chars must be an int")
-    if max_chars <= 0:
-        max_chars = 0
+        raise ValueError("max_chars must be an int")  # noqa: TRY004 - preserve the validation error contract
+    max_chars = max(0, max_chars)
     if max_bytes is not None and not isinstance(max_bytes, int):
         raise ValueError("max_bytes must be an int or None")
     if max_bytes is not None and max_bytes <= 0:
@@ -777,7 +778,7 @@ def _git_show_text_limited(
                 truncated_bytes = True
                 try:
                     proc.kill()
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                     pass
         try:
             _out, _err = proc.communicate(timeout=10)
@@ -787,26 +788,26 @@ def _git_show_text_limited(
             if not truncated_bytes and _out:
                 stdout += _out
             stderr = _err or b""
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             try:
                 proc.kill()
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
             try:
                 _out, _err = proc.communicate(timeout=5)
                 if not truncated_bytes and _out:
                     stdout += _out
                 stderr = _err or b""
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
     finally:
         try:
             proc.stdout.close() if proc.stdout else None
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
         try:
             proc.stderr.close() if proc.stderr else None
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
 
     if not truncated_bytes and proc.returncode not in (0, None):
@@ -1001,7 +1002,7 @@ async def create_workspace_folders(
                 else:
                     os.mkdir(abs_path)
                 created.append(rel_path)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 failed.append({"path": rel_path, "error": str(exc)})
 
         return {
@@ -1012,7 +1013,7 @@ async def create_workspace_folders(
             "failed": failed,
             "ok": len(failed) == 0,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="create_workspace_folders")
 
 
@@ -1071,7 +1072,7 @@ async def delete_workspace_paths(
                     os.remove(abs_path)
 
                 removed.append(rel_path)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 failed.append({"path": rel_path, "error": str(exc)})
 
         return {
@@ -1082,7 +1083,7 @@ async def delete_workspace_paths(
             "failed": failed,
             "ok": len(failed) == 0,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="delete_workspace_paths")
 
 
@@ -1137,7 +1138,7 @@ async def delete_workspace_folders(
                 else:
                     os.rmdir(abs_path)
                 removed.append(rel_path)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 failed.append({"path": rel_path, "error": str(exc)})
 
         return {
@@ -1148,7 +1149,7 @@ async def delete_workspace_folders(
             "failed": failed,
             "ok": len(failed) == 0,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="delete_workspace_folders")
 
 
@@ -1188,7 +1189,7 @@ async def get_workspace_file_contents(
         )
         info.update({"full_name": full_name, "ref": effective_ref})
         return info
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc, context="get_workspace_file_contents", path=path
         )
@@ -1256,7 +1257,7 @@ async def get_workspace_files_contents(
                         rel = os.path.relpath(m, repo_dir).replace("\\", "/")
                         _workspace_safe_join(repo_dir, rel)
                         expanded.append(rel)
-                    except Exception:  # nosec B112
+                    except Exception:  # nosec B112  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
                         continue
             else:
                 _workspace_safe_join(repo_dir, p)
@@ -1290,7 +1291,7 @@ async def get_workspace_files_contents(
                     if include_missing:
                         files.append(info)
                     missing.append(p)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 errors.append({"path": p, "error": str(exc)})
 
         ok = len(errors) == 0
@@ -1318,7 +1319,7 @@ async def get_workspace_files_contents(
             "missing_paths": missing,
             "errors": errors,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="get_workspace_files_contents")
 
 
@@ -1406,7 +1407,7 @@ async def read_workspace_file_excerpt(
             "size_bytes": os.path.getsize(abs_path),
             "excerpt": excerpt,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc, context="read_workspace_file_excerpt", path=path
         )
@@ -1509,7 +1510,7 @@ async def read_workspace_file_sections(
             "size_bytes": os.path.getsize(abs_path),
             "sections": sections,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc, context="read_workspace_file_sections", path=path
         )
@@ -1679,7 +1680,7 @@ async def read_workspace_file_with_line_numbers(
                 "had_decoding_errors": bool(excerpt.get("had_decoding_errors")),
             },
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc, context="read_workspace_file_with_line_numbers", path=path
         )
@@ -1741,10 +1742,10 @@ def _git_show_lines_excerpt_limited(
             proc.terminate()
         try:
             _, stderr = proc.communicate(timeout=2)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             try:
                 proc.kill()
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
             _, stderr = proc.communicate()
 
@@ -1809,10 +1810,10 @@ def _git_show_lines_sections_limited(
             proc.terminate()
         try:
             _, stderr = proc.communicate(timeout=2)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             try:
                 proc.kill()
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
             _, stderr = proc.communicate()
 
@@ -1903,7 +1904,7 @@ async def read_git_file_excerpt(
                 "max_chars": int(max_chars),
             },
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc,
             context="read_git_file_excerpt",
@@ -1994,7 +1995,7 @@ async def read_git_file_sections(
             "exists": True,
             "sections": sections,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc,
             context="read_git_file_sections",
@@ -2182,11 +2183,12 @@ async def compare_workspace_files(
                 partial = bool(partial) or bool(left_truncated or right_truncated)
 
                 truncated = False
-                if max_diff_chars is not None and diff_full:
-                    if len(diff_full) > int(max_diff_chars):
-                        diff_full = diff_full[: int(max_diff_chars)]
-                        truncated = True
-                        partial = True
+                if (max_diff_chars is not None and diff_full) and (
+                    len(diff_full) > int(max_diff_chars)
+                ):
+                    diff_full = diff_full[: int(max_diff_chars)]
+                    truncated = True
+                    partial = True
 
                 stats_obj: dict[str, int] | None = None
                 if include_stats:
@@ -2206,7 +2208,7 @@ async def compare_workspace_files(
                         "diff": diff_full,
                     }
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 errors.append({"index": idx, "error": str(exc), "spec": spec})
                 out.append({"index": idx, "status": "error", "error": str(exc)})
 
@@ -2225,7 +2227,7 @@ async def compare_workspace_files(
                 "include_stats": bool(include_stats),
             },
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="compare_workspace_files")
 
 
@@ -2360,7 +2362,7 @@ async def make_workspace_diff(
             fromfile=fromfile,
             tofile=tofile,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="make_workspace_diff", path=path)
 
 
@@ -2398,7 +2400,7 @@ async def make_workspace_patch(
         patch = payload.pop("diff", "")
         payload["patch"] = patch
         return payload
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="make_workspace_patch", path=path)
 
 
@@ -2433,7 +2435,7 @@ async def make_diff(
             fromfile=fromfile,
             tofile=tofile,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="make_diff", path=path)
 
 
@@ -2471,7 +2473,7 @@ async def make_patch(
         patch = payload.pop("diff", "")
         payload["patch"] = patch
         return payload
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="make_patch", path=path)
 
 
@@ -2515,7 +2517,7 @@ async def set_workspace_file_contents(
             "status": "written",
             **write_info,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc, context="set_workspace_file_contents", path=path
         )
@@ -2588,7 +2590,7 @@ async def edit_workspace_text_range(
             "bytes_after": len(updated.encode("utf-8")),
             **write_info,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc,
             context="edit_workspace_text_range",
@@ -2673,7 +2675,7 @@ async def delete_workspace_lines(
             "line_count_after": len(_split_lines_keepends(updated)),
             **write_info,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc,
             context="delete_workspace_lines",
@@ -2747,7 +2749,7 @@ async def delete_workspace_char(
             "bytes_after": len(updated.encode("utf-8")),
             **write_info,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc,
             context="delete_workspace_char",
@@ -2843,7 +2845,7 @@ async def delete_workspace_word(
             "removed_span": removed_span,
             **write_info,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc,
             context="delete_workspace_word",
@@ -2912,7 +2914,7 @@ async def edit_workspace_line(
             raise ValueError("line_number out of range")
 
         def _ensure_eol(s: str) -> str:
-            if s.endswith("\r\n") or s.endswith("\n") or s.endswith("\r"):
+            if s.endswith(("\r\n", "\n", "\r")):
                 return s
             return s + eol
 
@@ -2999,7 +3001,7 @@ async def edit_workspace_line(
             "line_count_after": len(_split_lines_keepends(updated)),
             **write_info,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc,
             context="edit_workspace_line",
@@ -3093,7 +3095,7 @@ async def replace_workspace_text(
             "occurrence": int(occurrence),
             **write_info,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc,
             context="replace_workspace_text",
@@ -3143,7 +3145,7 @@ async def _apply_patch_impl(
                 raise ValueError("patch list entries must be non-empty strings")
             patches = patch
         else:
-            raise ValueError("patch must be a non-empty string or list of strings")
+            raise ValueError("patch must be a non-empty string or list of strings")  # noqa: TRY004 - preserve the validation error contract
 
         # Record patch digests for safe debugging.
         from github_mcp.diff_utils import diff_stats as _diff_stats
@@ -3257,7 +3259,7 @@ async def _apply_patch_impl(
             response["push"] = push_result
         return response
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context=context, args=debug_args)
 
 
@@ -3449,7 +3451,7 @@ async def move_workspace_paths(
 
                 shutil.move(abs_src, abs_dst)
                 moved.append({"src": src, "dst": dst})
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 failed.append({"src": src, "dst": dst, "error": str(exc)})
 
         return {
@@ -3459,7 +3461,7 @@ async def move_workspace_paths(
             "failed": failed,
             "ok": len(failed) == 0,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="move_workspace_paths")
 
 
@@ -3494,17 +3496,14 @@ def _apply_workspace_operations_write_action_resolver(
             return True
         try:
             norm = _normalize_workspace_operation(op)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return True
         name = norm.get("op")
         if not isinstance(name, str) or not name.strip():
             return True
         op_names.append(name.strip())
 
-    if op_names and all(name in _WORKSPACE_READ_ONLY_OPS for name in op_names):
-        return False
-
-    return True
+    return not (op_names and all(name in _WORKSPACE_READ_ONLY_OPS for name in op_names))
 
 
 @mcp_tool(
@@ -3605,7 +3604,7 @@ async def apply_workspace_operations(
                             os.remove(abs_path)
                     continue
                 _write_bytes(abs_path, data)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 # Best-effort rollback.
                 pass
 
@@ -4321,10 +4320,10 @@ async def apply_workspace_operations(
             "results": results,
         }
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         if rollback_on_error and backups:
             try:
                 _restore_backups()
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
         return _structured_tool_error(exc, context="apply_workspace_operations")

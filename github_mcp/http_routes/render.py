@@ -57,7 +57,7 @@ def _error_response(exc: Exception, *, context: str) -> Response:
 async def _json_body(request: Request) -> dict[str, Any]:
     try:
         payload = await request.json()
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return {}
     return payload if isinstance(payload, dict) else {}
 
@@ -86,7 +86,7 @@ def register_render_routes(app: Any) -> None:
             )
             result = await list_render_owners(cursor=cursor, limit=limit)
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_owners")
 
     async def services(request: Request) -> Response:
@@ -106,7 +106,7 @@ def register_render_routes(app: Any) -> None:
                 owner_id=owner_id, cursor=cursor, limit=limit
             )
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_services")
 
     async def service_detail(request: Request) -> Response:
@@ -120,7 +120,7 @@ def register_render_routes(app: Any) -> None:
         try:
             result = await get_render_service(service_id=service_id)
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_service")
 
     async def deploys(request: Request) -> Response:
@@ -145,7 +145,7 @@ def register_render_routes(app: Any) -> None:
                 service_id=service_id, cursor=cursor, limit=limit
             )
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_deploys")
 
     async def deploy_detail(request: Request) -> Response:
@@ -161,7 +161,7 @@ def register_render_routes(app: Any) -> None:
         try:
             result = await get_render_deploy(service_id=service_id, deploy_id=deploy_id)
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_deploy")
 
     async def deploy_create(request: Request) -> Response:
@@ -187,7 +187,7 @@ def register_render_routes(app: Any) -> None:
                 image_url=image_url,
             )
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_create_deploy")
 
     async def deploy_cancel(request: Request) -> Response:
@@ -205,7 +205,7 @@ def register_render_routes(app: Any) -> None:
                 service_id=service_id, deploy_id=deploy_id
             )
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_cancel_deploy")
 
     async def deploy_rollback(request: Request) -> Response:
@@ -223,7 +223,7 @@ def register_render_routes(app: Any) -> None:
                 service_id=service_id, deploy_id=deploy_id
             )
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_rollback_deploy")
 
     async def service_restart(request: Request) -> Response:
@@ -238,7 +238,7 @@ def register_render_routes(app: Any) -> None:
         try:
             result = await restart_render_service(service_id=service_id)
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_restart_service")
 
     async def logs(request: Request) -> Response:
@@ -273,7 +273,7 @@ def register_render_routes(app: Any) -> None:
                 resources.extend(
                     [r for r in request.query_params.getlist("resources") if r]
                 )
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
             if not resources:
                 raw_resources = _parse_str(request.query_params.get("resources"))
@@ -312,7 +312,7 @@ def register_render_routes(app: Any) -> None:
             if status_code_raw:
                 try:
                     status_code = int(status_code_raw)
-                except Exception:
+                except Exception:  # noqa: BLE001 - tool boundary translates dependency errors
                     return _error_response(
                         UsageError("status_code must be an integer"),
                         context="http:render_list_logs",
@@ -343,7 +343,7 @@ def register_render_routes(app: Any) -> None:
                 log_type=log_type,
             )
             return JSONResponse(result)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
             return _error_response(exc, context="http:render_list_logs")
 
     app.add_route("/render/owners", owners, methods=["GET"])

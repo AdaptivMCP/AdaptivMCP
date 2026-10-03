@@ -24,7 +24,7 @@ def test_package_getattr_imports_tools_workspace() -> None:
     except AttributeError:
         pass
 
-    module = getattr(github_mcp, "tools_workspace")
+    module = github_mcp.tools_workspace
     assert isinstance(module, types.ModuleType)
     assert module.__name__ == "github_mcp.tools_workspace"
     # Sanity check: tools_workspace re-exports CONTROLLER_REPO from github_mcp.server.
@@ -33,4 +33,4 @@ def test_package_getattr_imports_tools_workspace() -> None:
 
 def test_package_getattr_unknown_raises_attribute_error() -> None:
     with pytest.raises(AttributeError):
-        getattr(github_mcp, "definitely_not_real")
+        _ = github_mcp.definitely_not_real

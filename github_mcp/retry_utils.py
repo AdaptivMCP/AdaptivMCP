@@ -29,7 +29,7 @@ def jitter_sleep_seconds(
 
     try:
         delay = float(delay_seconds)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return 0.0
 
     if delay <= 0 or not math.isfinite(delay):
@@ -43,7 +43,7 @@ def jitter_sleep_seconds(
         cap = 0.0
         try:
             cap = float(cap_seconds)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             cap = 0.0
         if cap <= 0:
             cap = 0.0

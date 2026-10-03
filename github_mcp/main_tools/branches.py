@@ -5,7 +5,6 @@ from typing import Any
 
 from ._main import _main
 
-
 _SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 
 
@@ -122,7 +121,7 @@ async def get_branch_summary(
             return await m.list_pull_requests(
                 full_name, state=state, head=head_param, base=effective_base
             )
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:  # pragma: no cover  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return {"error": str(exc), "json": []}
 
     open_prs_resp = await _safe_list_prs("open")
@@ -141,7 +140,7 @@ async def get_branch_summary(
         runs = runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
         if runs:
             latest_workflow_run = runs[0]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         workflow_error = str(exc)
 
     return {

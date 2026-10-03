@@ -279,9 +279,10 @@ def _is_missing_remote_ref_error(payload: Any, *, ref: str | None = None) -> boo
         ref_l = ref.lower()
         if f"origin/{ref_l}" in msg:
             return True
-        if ref_l in msg and ("origin/" in msg or "upstream origin" in msg or "origin" in msg):
-            return True
-        return False
+        return bool(
+            ref_l in msg
+            and ("origin/" in msg or "upstream origin" in msg or "origin" in msg)
+        )
 
     return True
 
@@ -415,7 +416,7 @@ async def workspace_task_plan(
             **({"tree": tree, "searches": searches} if include_details else {}),
             **({"steps": steps} if include_steps else {}),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         _step(
             steps,
             "Error",
@@ -515,7 +516,7 @@ async def workspace_task_apply_edits(
             **({"operations": res} if include_details else {}),
             **({"steps": steps} if include_steps else {}),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         _step(
             steps,
             "Error",
@@ -994,7 +995,7 @@ async def workspace_task_execute(
             ),
             **({"steps": steps} if include_steps else {}),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         _step(
             steps,
             "Error",

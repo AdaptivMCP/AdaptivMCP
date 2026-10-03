@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any
 
 import pytest
 
@@ -11,11 +11,11 @@ class DummyResponse:
         self,
         status_code: int,
         *,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         text: str = "",
         body: Any = None,
         include_is_error: bool = True,
-        is_error: Optional[bool] = None,
+        is_error: bool | None = None,
     ) -> None:
         self.status_code = status_code
         self.headers = headers or {}
@@ -27,7 +27,7 @@ class DummyResponse:
 
 
 class DummyAsyncClient:
-    def __init__(self, responses: List[DummyResponse]) -> None:
+    def __init__(self, responses: list[DummyResponse]) -> None:
         self._responses = list(responses)
         self.calls: list[tuple[str, str]] = []
 

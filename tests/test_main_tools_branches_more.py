@@ -123,7 +123,7 @@ async def test_create_branch_accepts_sha_when_base_ref_missing(monkeypatch):
     # Verify we posted the sha in the create body
     posts = [c for c in client.calls if c[0] == "POST"]
     assert posts
-    method, path, body = posts[-1]
+    _method, path, body = posts[-1]
     assert path == "/repos/o/r/git/refs"
     assert isinstance(body, dict)
     assert body["sha"] == sha

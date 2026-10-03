@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
-
+from typing import Any, ClassVar
 
 from github_mcp.http_utils import extract_response_json, parse_rate_limit_delay_seconds
 
@@ -13,7 +12,7 @@ class _FakeResp:
     _json: Any = None
     _json_raises: Exception | None = None
 
-    def json(self) -> Any:  # noqa: D401
+    def json(self) -> Any:
         if self._json_raises is not None:
             raise self._json_raises
         return self._json
@@ -31,7 +30,7 @@ def test_extract_response_json_failure_returns_none() -> None:
 
 def test_extract_response_json_missing_method_returns_none() -> None:
     class NoJson:
-        headers: dict[str, str] = {}
+        headers: ClassVar[dict[str, str]] = {}
 
     assert extract_response_json(NoJson()) is None
 

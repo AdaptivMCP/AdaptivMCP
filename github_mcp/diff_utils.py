@@ -69,7 +69,7 @@ def diff_stats(diff_text: str) -> DiffStats:
     for line in diff_text.splitlines():
         if not line:
             continue
-        if line.startswith("+++") or line.startswith("---") or line.startswith("@@"):
+        if line.startswith(("+++", "---", "@@")):
             continue
         if line.startswith("+"):
             added += 1
@@ -92,7 +92,7 @@ def colorize_unified_diff(diff_text: str) -> str:
 
     out: list[str] = []
     for line in diff_text.splitlines():
-        if line.startswith("+++") or line.startswith("---"):
+        if line.startswith(("+++", "---")):
             out.append(f"{ANSI_DIM}{line}{ANSI_RESET}")
         elif line.startswith("@@"):
             out.append(f"{ANSI_CYAN}{line}{ANSI_RESET}")
