@@ -8,7 +8,7 @@ import main
 def test_openai_client_unknown_tool_detail_is_llm_safe() -> None:
     """Hosted clients should not receive non-2xx responses for missing tools."""
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get(
         "/tools/definitely_not_a_real_tool",
         headers={"x-openai-assistant-id": "test"},
@@ -21,7 +21,7 @@ def test_openai_client_unknown_tool_detail_is_llm_safe() -> None:
 
 
 def test_openai_client_unknown_invocation_status_is_llm_safe() -> None:
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get(
         "/tool_invocations/not-a-real-invocation-id",
         headers={"x-openai-assistant-id": "test"},
@@ -34,7 +34,7 @@ def test_openai_client_unknown_invocation_status_is_llm_safe() -> None:
 
 
 def test_openai_client_unknown_invocation_cancel_is_llm_safe() -> None:
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post(
         "/tool_invocations/not-a-real-invocation-id/cancel",
         headers={"x-openai-assistant-id": "test"},

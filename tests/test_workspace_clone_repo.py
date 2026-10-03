@@ -16,10 +16,10 @@ class _Call:
 
 
 @pytest.mark.anyio
-async def test_clone_repo_preserve_changes_auth_fallback_on_fetch(
+async def test_clone_repo_preserve_changes_fetch_uses_isolated_git_runner(
     tmp_path, monkeypatch
 ):
-    """When fetch fails with auth-like stderr, retry with no-auth env and return."""
+    """Keep remote authentication confined to the isolated Git runner."""
 
     monkeypatch.setenv("GITHUB_TOKEN", "token-123")
 
@@ -73,23 +73,17 @@ async def test_clone_repo_preserve_changes_auth_fallback_on_fetch(
     ) -> dict[str, Any]:
         calls.append(_Call(cmd=cmd, env=env))
         if cmd == "git fetch origin --prune":
-            # First call with auth env fails in an auth-looking way.
-            if env and env.get("GIT_HTTP_EXTRAHEADER"):
-                return {
-                    "exit_code": 1,
-                    "stdout": "",
-                    "stderr": "fatal: Authentication failed for https://github.com/x/y.git",
-                }
-            # Retry with no-auth env succeeds.
+            assert env is None
             return {"exit_code": 0, "stdout": "ok", "stderr": ""}
         raise AssertionError(f"Unexpected git command: {cmd}")
 
     monkeypatch.setattr(workspace, "_run_git_with_retry", fake_run_git_with_retry)
 
-    # Minimal run_shell for branch/show-current path isn't needed because we return
-    # early after a successful no-auth fetch.
+    # Local branch inspection runs without the remote credentials.
     async def fake_run_shell(*_args, **_kwargs) -> dict[str, Any]:
-        raise AssertionError("run_shell should not be called in this scenario")
+        assert _args[0] == "git branch --show-current"
+        assert not _kwargs.get("env")
+        return {"exit_code": 0, "stdout": "main\n", "stderr": ""}
 
     class _Main:
         _run_shell = staticmethod(fake_run_shell)
@@ -103,13 +97,9 @@ async def test_clone_repo_preserve_changes_auth_fallback_on_fetch(
     assert result_dir == str(repo_dir)
     assert ensure_remote_calls, "expected origin remote to be ensured"
 
-    # We should have attempted fetch twice: auth env then no-auth env.
-    assert [c.cmd for c in calls] == [
-        "git fetch origin --prune",
-        "git fetch origin --prune",
-    ]
-    assert calls[0].env and calls[0].env.get("GIT_HTTP_EXTRAHEADER")
-    assert calls[1].env == {"GIT_TERMINAL_PROMPT": "0"}
+    assert [c.cmd for c in calls] == ["git fetch origin --prune"]
+    assert calls[0].env is None
+    assert ensure_remote_calls[0]["env"] is None
 
 
 @pytest.mark.anyio

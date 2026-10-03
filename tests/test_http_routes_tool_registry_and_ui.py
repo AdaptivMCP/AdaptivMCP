@@ -6,7 +6,7 @@ import main
 
 
 def test_ui_json_includes_core_endpoints():
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
 
     resp = client.get("/ui.json")
     assert resp.status_code == 200
@@ -26,7 +26,7 @@ def test_ui_json_includes_core_endpoints():
 
 
 def test_mcp_endpoint_is_mounted():
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
 
     # We don't assert a specific transport behavior here (it may vary by MCP SDK
     # version). We only require that /mcp is not missing.

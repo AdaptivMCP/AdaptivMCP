@@ -6,10 +6,10 @@ def test_infer_write_action_from_shell_chained_commands() -> None:
 
     from github_mcp.command_classification import infer_write_action_from_shell
 
-    # Pure read chains.
-    assert infer_write_action_from_shell("ls && pwd") is False
-    assert infer_write_action_from_shell("git status ; rg -n foo .") is False
-    assert infer_write_action_from_shell("true || ls") is False
+    # Compound shell commands require write authorization.
+    assert infer_write_action_from_shell("ls && pwd") is True
+    assert infer_write_action_from_shell("git status ; rg -n foo .") is True
+    assert infer_write_action_from_shell("true || ls") is True
 
     # Mixed chains should be classified as write.
     assert infer_write_action_from_shell("ls && rm -f x") is True
@@ -48,7 +48,7 @@ def test_infer_write_action_from_shell_pip_read_only_subcommands() -> None:
 def test_infer_write_action_from_shell_pipeline_write_stage() -> None:
     from github_mcp.command_classification import infer_write_action_from_shell
 
-    assert infer_write_action_from_shell("cat README.md | wc -l") is False
+    assert infer_write_action_from_shell("cat README.md | wc -l") is True
     assert infer_write_action_from_shell("cat README.md | tee out.txt") is True
 
 

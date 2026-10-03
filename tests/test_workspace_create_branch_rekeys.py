@@ -70,7 +70,7 @@ async def test_workspace_create_branch_rekeys_workspace_dir(
                 return {"exit_code": 0, "stdout": "", "stderr": ""}
             raise AssertionError(f"Unexpected command: {command}")
 
-        deps: dict[str, Any] = {"clone_repo": clone_repo, "run_shell": run_shell}
+        deps: dict[str, Any] = {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
         monkeypatch.setattr(git_ops, "_tw", lambda: _TW())
 
@@ -133,7 +133,7 @@ async def test_workspace_create_branch_errors_if_target_mirror_exists(
                 return {"exit_code": 0, "stdout": "", "stderr": ""}
             return {"exit_code": 0, "stdout": "", "stderr": ""}
 
-        deps: dict[str, Any] = {"clone_repo": clone_repo, "run_shell": run_shell}
+        deps: dict[str, Any] = {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
 
         monkeypatch.setattr(git_ops, "_tw", lambda: _TW())
         monkeypatch.setattr(

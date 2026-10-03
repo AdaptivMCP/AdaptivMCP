@@ -6,7 +6,7 @@ import main
 
 
 def test_streamable_http_probe_uses_supported_factory() -> None:
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
 
     response = client.get("/mcp")
     payload = response.json()

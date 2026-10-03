@@ -110,7 +110,7 @@ async def test_load_body_from_content_url_rejects_local_file_by_default(tmp_path
     f.write_text("secret")
     monkeypatch.delenv("ADAPTIV_MCP_ALLOWED_LOCAL_CONTENT_ROOTS", raising=False)
 
-    with pytest.raises(GitHubAPIError, match="local content_url reads are disabled"):
+    with pytest.raises(GitHubAPIError, match="(?i)local content_url reads are disabled"):
         await _load_body_from_content_url(str(f), context="test")
 
 

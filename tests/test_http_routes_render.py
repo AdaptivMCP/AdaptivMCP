@@ -13,7 +13,7 @@ def test_render_owners_route_success(monkeypatch) -> None:
 
     monkeypatch.setattr("github_mcp.main_tools.render.list_render_owners", _owners)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get("/render/owners?cursor=abc&limit=10")
     assert resp.status_code == 200
     assert resp.json()["json"]["owners"] == ["o1"]
@@ -37,7 +37,7 @@ def test_render_deploy_create_route_success(monkeypatch) -> None:
 
     monkeypatch.setattr("github_mcp.main_tools.render.create_render_deploy", _create)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post(
         "/render/services/svc123/deploys",
         json={"clear_cache": True, "commit_id": "deadbeef"},
@@ -58,7 +58,7 @@ def test_render_routes_translate_auth_error_to_401(monkeypatch) -> None:
 
     monkeypatch.setattr("github_mcp.main_tools.render.list_render_owners", _owners)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.get("/render/owners")
     assert resp.status_code == 401
     payload = resp.json()

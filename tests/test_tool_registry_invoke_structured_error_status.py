@@ -24,7 +24,7 @@ def test_invoke_endpoint_maps_structured_error_status(monkeypatch: Any) -> None:
         tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/fake_tool", json={"args": {"x": 1}})
     # "bad args" is treated as a validation error.
     assert resp.status_code == 400
@@ -52,7 +52,7 @@ def test_invoke_endpoint_wraps_bare_error_detail(monkeypatch: Any) -> None:
         tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/detail_only", json={"args": {}})
     assert resp.status_code == 400
     payload = resp.json()
@@ -86,7 +86,7 @@ def test_invoke_endpoint_does_not_double_wrap_error_envelopes(monkeypatch: Any) 
         tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/enveloped", json={"args": {"x": 1}})
     assert resp.status_code == 400
     payload = resp.json()
@@ -123,7 +123,7 @@ def test_invoke_endpoint_maps_uppercase_rate_limit_codes(monkeypatch: Any) -> No
         tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/ratey", json={"args": {}})
     assert resp.status_code == 429
 
@@ -149,7 +149,7 @@ def test_invoke_endpoint_retries_retryable_structured_errors(monkeypatch: Any) -
     )
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post(
         "/tools/flaky_tool", json={"args": {}}, params={"max_attempts": 2}
     )
@@ -179,7 +179,7 @@ def test_invoke_endpoint_does_not_retry_write_tools(monkeypatch: Any) -> None:
     )
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/writey", json={"args": {}}, params={"max_attempts": 3})
     assert resp.status_code == 429
     assert calls["n"] == 1
@@ -212,7 +212,7 @@ def test_invoke_endpoint_returns_200_for_openai_clients_on_structured_errors(
         tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post(
         "/tools/bad_tool",
         json={"args": {"x": 1}},

@@ -22,7 +22,7 @@ def test_unknown_tool_includes_suggested_tool_and_warnings(monkeypatch: Any) -> 
     monkeypatch.setattr(tool_registry, "_find_registered_tool", lambda _name: None)
     monkeypatch.setattr(mcp_registry, "_REGISTERED_MCP_TOOLS", [(Tool(), func)])
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/terminal_comand", json={"args": {}})
     assert resp.status_code == 404
     payload = resp.json()
@@ -58,7 +58,7 @@ def test_unknown_tool_ambiguous_does_not_force_single_suggestion(
         mcp_registry, "_REGISTERED_MCP_TOOLS", [(ToolA(), func), (ToolB(), func)]
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/terminal_comand", json={"args": {}})
     assert resp.status_code == 404
     payload = resp.json()
@@ -90,7 +90,7 @@ def test_invalid_tool_args_includes_expected_args_warning(monkeypatch: Any) -> N
         tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/fake_sig", json={"args": {"aa": 1}})
     assert resp.status_code == 400
     payload = resp.json()
@@ -122,7 +122,7 @@ def test_expected_args_excludes_positional_only(monkeypatch: Any) -> None:
         tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/positional_only_sig", json={"args": {"b": 2}})
     assert resp.status_code == 400
     payload = resp.json()

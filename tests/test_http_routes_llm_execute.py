@@ -6,7 +6,7 @@ import main
 
 
 def test_llm_execute_invalid_json_body_returns_executed_false() -> None:
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
 
     resp = client.post(
         "/llm/execute",
@@ -30,7 +30,7 @@ def test_llm_execute_dry_run_does_not_execute(monkeypatch) -> None:
 
     monkeypatch.setattr(llm_execute, "_execute_tool", _execute_tool)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     text = """```tool
 {"tool":"anything","args":{"x":1}}
 ```"""
@@ -57,7 +57,7 @@ def test_llm_execute_executes_calls_and_resolves_file_blocks(monkeypatch) -> Non
 
     monkeypatch.setattr(llm_execute, "_execute_tool", _execute_tool)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
 
     text = """```file
 path: foo.txt
@@ -100,7 +100,7 @@ def test_llm_execute_messages_format_filters_non_text_and_coerces_max_calls(
 
     monkeypatch.setattr(llm_execute, "extract_tool_calls_from_text", _extract)
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post(
         "/llm/execute",
         json={

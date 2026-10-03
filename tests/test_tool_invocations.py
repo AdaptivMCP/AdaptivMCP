@@ -39,7 +39,7 @@ def test_async_tool_invocation_completes(monkeypatch: Any) -> None:
         tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post(
         "/tools/async_tool/invocations", json={"args": {"value": "hello"}}
     )
@@ -78,7 +78,7 @@ def test_async_tool_invocation_cancelled(monkeypatch: Any) -> None:
         tool_registry, "_find_registered_tool", lambda _name: (Tool(), func)
     )
 
-    client = TestClient(main.app)
+    client = TestClient(main.app, headers={"Authorization": "Bearer pytest-test-token"})
     resp = client.post("/tools/slow_tool/invocations", json={"args": {}})
     assert resp.status_code == 202
     invocation_id = resp.json()["invocation_id"]

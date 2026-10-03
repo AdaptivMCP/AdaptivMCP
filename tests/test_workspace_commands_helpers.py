@@ -53,12 +53,13 @@ def test_resolve_workdir_permits_relative_and_absolute(tmp_path: Path) -> None:
     (repo_dir / "file.txt").write_text("hi", encoding="utf-8")
 
     assert commands._resolve_workdir(str(repo_dir), "sub") == str(subdir.resolve())
-    assert commands._resolve_workdir(str(repo_dir), "file.txt") == str(
-        repo_dir.resolve()
-    )
+    import pytest
+    with pytest.raises(ValueError, match="existing directory"):
+        commands._resolve_workdir(str(repo_dir), "file.txt")
 
-    parent_dir = repo_dir.parent
-    assert commands._resolve_workdir(str(repo_dir), "..") == str(parent_dir.resolve())
+    import pytest
+    with pytest.raises(ValueError, match="inside the repository"):
+        commands._resolve_workdir(str(repo_dir), "..")
 
     abs_path = str(subdir.resolve())
     assert commands._resolve_workdir(str(repo_dir), abs_path) == abs_path

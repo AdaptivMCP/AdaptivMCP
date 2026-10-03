@@ -20,7 +20,7 @@ def _load_dependencies():
 def test_configure_trusted_hosts_adds_allowlist(monkeypatch):
     Starlette, main = _load_dependencies()
 
-    monkeypatch.setenv("ALLOWED_HOSTS", "localhost")
+    monkeypatch.setenv("ADAPTIV_MCP_ALLOWED_HOSTS", "localhost")
     monkeypatch.setenv("RENDER_EXTERNAL_HOSTNAME", "chatgpt-mcp.onrender.com")
 
     app = Starlette()
@@ -29,4 +29,4 @@ def test_configure_trusted_hosts_adds_allowlist(monkeypatch):
     assert len(app.user_middleware) == 1
     middleware = app.user_middleware[0]
     assert middleware.cls.__name__ == "TrustedHostMiddleware"
-    assert middleware.options["allowed_hosts"] == ["localhost"]
+    assert middleware.kwargs["allowed_hosts"] == ["localhost"]

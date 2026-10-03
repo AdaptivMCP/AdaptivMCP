@@ -28,7 +28,7 @@ def test_authenticated_git_command_disables_repo_execution_hooks():
     assert "core.hooksPath=/dev/null" in command
     assert "core.fsmonitor=false" in command
     assert "core.pager=cat" in command
-    assert "git fetch origin --prune" in command
+    assert command.endswith("fetch origin --prune")
 
 
 def test_authenticated_git_command_rejects_config_overrides():
